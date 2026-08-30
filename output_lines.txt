@@ -1,0 +1,214 @@
+  return (
+    <div className="space-y-4 max-w-7xl mx-auto select-none" dir="rtl">
+      
+      {/* ========================================================================= */}
+      {/* FACEBOOK STORIES & QUICK ACTION FOR MOBILE */}
+      {/* ========================================================================= */}
+      <div className="lg:hidden space-y-3">
+        <FacebookStoriesBar
+          onAddStory={() => setIsAddModalOpen(true)}
+          onSelectStory={(id) => {
+            if (id === 'story-1') {
+              const std = students.find(s => s.code === 'A127');
+              if (std) setViewStudent(std);
+            } else if (id === 'story-2') {
+              const std = students.find(s => s.code === 'A124');
+              if (std) setViewStudent(std);
+            }
+          }}
+        />
+
+        <FacebookQuickPostBox
+          onOpenAddStudent={() => setIsAddModalOpen(true)}
+          onOpenScan={() => setIsCameraModalOpen(true)}
+          onOpenAwardStar={() => {
+            if (students.length > 0) {
+              handleAwardStar(students[0].id);
+            }
+          }}
+          onOpenBroadcast={() => setIsWhatsAppBatchModalOpen(true)}
+        />
+      </div>
+
+      {/* ========================================================================= */}
+      {/* TOP HEADER TITLE & ACTION BARS */}
+      {/* ========================================================================= */}
+      <div className="bg-[#0f172a]/70 backdrop-blur-md p-4 sm:p-5 rounded-2xl border border-slate-800 shadow-xl flex flex-col gap-4">
+        
+        {/* Main Title & Action Buttons Row 1 */}
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+          
+          {/* Title with icon and count badge */}
+          <div className="flex items-center gap-3">
+            <div className="w-11 h-11 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-400 flex items-center justify-center shadow-xs shrink-0">
+              <Users className="w-6 h-6" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h1 className="text-lg font-black text-slate-100 font-sans">
+                  إدارة المتدربين والطلاب
+                </h1>
+                <span className="text-xs font-bold px-2.5 py-0.5 bg-amber-500/20 text-amber-400 rounded-md border border-amber-500/40">
+                  {students.length} متدرب
+                </span>
+              </div>
+              <p className="text-xs text-slate-400 font-medium mt-0.5">
+                تسجيل المتدربين، الحسابات المالية، منح النجوم والتحفيز، استيراد وتصدير Excel، وطباعة البطاقات
+              </p>
+            </div>
+          </div>
+
+          {/* Top Actions Row 1 */}
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* View Mode Toggle: Table / Cards */}
+            <div className="flex items-center bg-slate-900 border border-slate-700/80 rounded-xl p-0.5">
+              <button
+                onClick={() => setViewMode('TABLE')}
+                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold flex items-center gap-1 cursor-pointer transition-all ${
+                  viewMode === 'TABLE'
+                    ? 'bg-[#eab308] text-slate-950 shadow-sm'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <span>📑</span>
+                <span>جدول</span>
+              </button>
+              <button
+                onClick={() => setViewMode('CARDS')}
+                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold flex items-center gap-1 cursor-pointer transition-all ${
+                  viewMode === 'CARDS'
+                    ? 'bg-[#eab308] text-slate-950 shadow-sm'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <span>⊞</span>
+                <span>بطاقات</span>
+              </button>
+            </div>
+
+            {/* Selection Delete & Check */}
+            <button
+              onClick={handleDeleteSelected}
+              disabled={selectedIds.length === 0}
+              className={`p-2 rounded-xl border text-xs font-bold flex items-center justify-center transition-all cursor-pointer ${
+                selectedIds.length > 0
+                  ? 'bg-rose-950/60 border-rose-700 text-rose-400 hover:bg-rose-900'
+                  : 'bg-slate-900/60 border-slate-800 text-slate-600 cursor-not-allowed'
+              }`}
+              title="حذف المحدد"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+
+            <button
+              onClick={handleSelectAll}
+              className={`p-2 rounded-xl border text-xs font-bold flex items-center justify-center transition-all cursor-pointer ${
+                selectedIds.length === filteredStudents.length && filteredStudents.length > 0
+                  ? 'bg-emerald-950/60 border-emerald-700 text-emerald-400'
+                  : 'bg-slate-900 border-slate-700 text-slate-400 hover:text-slate-200'
+              }`}
+              title="تحديد الكل"
+            >
+              <Check className="w-4 h-4" />
+            </button>
+
+            {/* Excel Files Dropdown */}
+            <button
+              onClick={() => setIsExcelModalOpen(true)}
+              className="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700 text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-all"
+            >
+              <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
+              <span>ملفات Excel</span>
+              <span className="text-[10px] text-slate-400">⇲</span>
+            </button>
+
+            {/* Portals & Links */}
+            <button
+              onClick={() => setIsPortalsModalOpen(true)}
+              className="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700 text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-all"
+            >
+              <Share2 className="w-4 h-4 text-cyan-400" />
+              <span>بوابات وروابط</span>
+              <span className="text-[10px] text-slate-400">⊞</span>
+            </button>
+
+            {/* Advanced Tools */}
+            <button
+              onClick={() => setIsToolsModalOpen(true)}
+              className="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700 text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-all"
+            >
+              <Zap className="w-4 h-4 text-purple-400" />
+              <span>أدوات متقدمة</span>
+            </button>
+
+            {/* Camera AI Grading */}
+            <button
+              onClick={() => setIsCameraModalOpen(true)}
+              className="px-3.5 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-black flex items-center gap-1.5 cursor-pointer shadow-md shadow-purple-900/30 transition-all"
+            >
+              <Camera className="w-4 h-4" />
+              <span>تصحيح بالكاميرا</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Action Buttons Row 2 */}
+        <div className="flex items-center gap-2.5 flex-wrap pt-2 border-t border-slate-800/80">
+          {/* Add Student Button (Golden) */}
+          <button
+            onClick={() => setIsAddModalOpen(true)}
+            className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs flex items-center gap-1.5 shadow-md shadow-amber-950/40 cursor-pointer transition-all"
+          >
+            <UserPlus className="w-4 h-4 stroke-[2.5]" />
+            <span>إضافة متدرب جديد</span>
+          </button>
+
+          {/* AI Student Insights Button */}
+          <button
+            onClick={() => alert('سيتم تفعيل المساعد الذكي AI لتحليل أداء الطلاب بناءً على الدرجات ونسب الحضور قريباً.')}
+            className="px-3.5 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-md shadow-purple-950/40 cursor-pointer transition-all"
+          >
+            <Bot className="w-4 h-4" />
+            <span>تحليل الأداء (AI)</span>
+          </button>
+
+          {/* ClassDojo Style Behavior Points Button */}
+          <button
+            onClick={() => alert('أداة تقييم السلوك التفاعلية (ClassDojo Style) قيد التطوير.')}
+            className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-md shadow-indigo-950/40 cursor-pointer transition-all"
+          >
+            <HeartHandshake className="w-4 h-4" />
+            <span>تقييم السلوك</span>
+          </button>
+
+          {/* Refresh Button */}
+          <button
+            onClick={() => {
+              confetti({ particleCount: 20, spread: 40 });
+            }}
+            className="p-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-700 cursor-pointer transition-all"
+            title="تحديث البيانات"
+          >
+            <RotateCw className="w-4 h-4" />
+          </button>
+
+          {/* Registration Link & Barcode */}
+          <button
+            onClick={() => setIsRegLinkModalOpen(true)}
+            className="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700 text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-all"
+          >
+            <QrCode className="w-4 h-4 text-cyan-400" />
+            <span>رابط التسجيل</span>
+          </button>
+
+          {/* WhatsApp Batch Dispatch */}
+          <button
+            onClick={() => setIsWhatsAppBatchModalOpen(true)}
+            className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-md shadow-emerald-950/40 cursor-pointer transition-all"
+          >
+            <MessageSquare className="w-4 h-4" />
+            <span>رسائل WhatsApp</span>
+          </button>
+        </div>
+      </div>
+

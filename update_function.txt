@@ -1,0 +1,10 @@
+  const handleAwardStar = (id: string, starsCount: number = 1) => {
+    confetti({
+      particleCount: 50 * starsCount,
+      spread: 60,
+      origin: { y: 0.7 }
+    });
+    setStudents((prev) =>
+      prev.map((s) => (s.id === id ? { ...s, stars: s.stars + starsCount, points: s.points + (50 * starsCount) } : s))
+    );
+  };

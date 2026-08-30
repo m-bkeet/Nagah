@@ -1,0 +1,384 @@
+      {/* ========================================================================= */}
+      {/* TOP HEADER TITLE & ACTION BARS (MATCHING SCREENSHOT) */}
+      {/* ========================================================================= */}
+      <div className="flex flex-col gap-4 mb-4">
+        {/* Main Title & Action Buttons Row 1 */}
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+          
+          {/* Title with icon and count badge */}
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-500 flex items-center justify-center shrink-0">
+              <Users className="w-6 h-6" />
+            </div>
+            <div>
+              <div className="flex items-center gap-3 mb-1">
+                <h1 className="text-xl font-bold text-slate-100">
+                  إدارة المتدربين والطلاب
+                </h1>
+                <span className="text-xs font-bold px-3 py-1 bg-amber-900/40 text-amber-500 rounded-full border border-amber-700/50">
+                  {students.length} متدرب
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-400">
+                تسجيل المتدربين، الحسابات المالية، منح النجوم والتحفيز. استيراد وتصدير Excel، وطباعة البطاقات
+              </p>
+            </div>
+          </div>
+
+          {/* Top Actions Row 1 */}
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* View Mode Toggle: Table / Cards */}
+            <div className="flex items-center bg-[#131b2f] border border-slate-700/80 rounded-xl p-1">
+              <button
+                onClick={() => setViewMode('TABLE')}
+                className={`px-4 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-colors ${
+                  viewMode === 'TABLE'
+                    ? 'bg-amber-500 text-slate-900'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <span>≡</span>
+                <span>جدول</span>
+              </button>
+              <button
+                onClick={() => setViewMode('CARDS')}
+                className={`px-4 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-colors ${
+                  viewMode === 'CARDS'
+                    ? 'bg-amber-500 text-slate-900'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <span>⊞</span>
+                <span>بطاقات</span>
+              </button>
+            </div>
+
+            {/* Delete Selection */}
+            <button
+              onClick={handleDeleteSelected}
+              disabled={selectedIds.length === 0}
+              className={`w-9 h-9 rounded-xl border flex items-center justify-center transition-all cursor-pointer ${
+                selectedIds.length > 0
+                  ? 'bg-rose-950/60 border-rose-700 text-rose-500 hover:bg-rose-900'
+                  : 'bg-[#131b2f] border-slate-700 text-slate-500 cursor-not-allowed'
+              }`}
+              title="حذف المحدد"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+
+            {/* Check All */}
+            <button
+              onClick={handleSelectAll}
+              className={`w-9 h-9 rounded-xl border flex items-center justify-center transition-all cursor-pointer ${
+                selectedIds.length === filteredStudents.length && filteredStudents.length > 0
+                  ? 'bg-emerald-950/60 border-emerald-700 text-emerald-500'
+                  : 'bg-[#131b2f] border-slate-700 text-slate-500 hover:text-slate-300'
+              }`}
+              title="تحديد الكل"
+            >
+              <CheckCircle2 className="w-4 h-4" />
+            </button>
+
+            {/* Excel Files */}
+            <button
+              onClick={() => setIsExcelModalOpen(true)}
+              className="px-3 py-2 rounded-xl bg-[#131b2f] hover:bg-slate-800 text-slate-200 border border-slate-700 text-xs font-bold flex items-center gap-2 cursor-pointer transition-all"
+            >
+              <FileSpreadsheet className="w-4 h-4 text-emerald-500" />
+              <span>ملفات Excel</span>
+            </button>
+
+            {/* Portals & Links */}
+            <button
+              onClick={() => setIsPortalsModalOpen(true)}
+              className="px-3 py-2 rounded-xl bg-[#131b2f] hover:bg-slate-800 text-slate-200 border border-slate-700 text-xs font-bold flex items-center gap-2 cursor-pointer transition-all"
+            >
+              <ExternalLink className="w-4 h-4 text-cyan-400" />
+              <span>بوابات وروابط</span>
+            </button>
+
+            {/* Advanced Tools */}
+            <button
+              onClick={() => setIsToolsModalOpen(true)}
+              className="px-3 py-2 rounded-xl bg-[#131b2f] hover:bg-slate-800 text-slate-200 border border-slate-700 text-xs font-bold flex items-center gap-2 cursor-pointer transition-all"
+            >
+              <Zap className="w-4 h-4 text-rose-400" />
+              <span>أدوات متقدمة</span>
+            </button>
+
+            {/* Camera AI Grading */}
+            <button
+              onClick={() => setIsCameraModalOpen(true)}
+              className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold flex items-center gap-2 cursor-pointer shadow-lg shadow-indigo-900/30 transition-all"
+            >
+              <Camera className="w-4 h-4 text-amber-300" />
+              <span>تصحيح بالكاميرا!</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Action Buttons Row 2 */}
+        <div className="flex flex-wrap items-center gap-3 pt-2">
+          {/* Add Student Button */}
+          <button
+            onClick={() => setIsAddModalOpen(true)}
+            className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-900 font-bold text-xs flex items-center gap-2 shadow-lg shadow-amber-900/20 cursor-pointer transition-all"
+          >
+            <UserPlus className="w-4 h-4" />
+            <span>إضافة متدرب جديد</span>
+          </button>
+          
+          {/* Refresh Button */}
+          <button
+            onClick={() => confetti({ particleCount: 20, spread: 40 })}
+            className="w-9 h-9 rounded-xl bg-[#131b2f] hover:bg-amber-900/20 text-amber-500 border border-amber-500/50 flex items-center justify-center cursor-pointer transition-all"
+            title="تحديث البيانات"
+          >
+            <RotateCw className="w-4 h-4" />
+          </button>
+
+          {/* Registration Link & Barcode */}
+          <button
+            onClick={() => setIsRegLinkModalOpen(true)}
+            className="px-4 py-2 rounded-xl bg-[#131b2f] hover:bg-amber-900/20 text-amber-500 border border-amber-500/50 text-xs font-bold flex items-center gap-2 cursor-pointer transition-all"
+          >
+            <QrCode className="w-4 h-4" />
+            <span>رابط التسجيل والباركود</span>
+          </button>
+
+          {/* Send Cards & Codes */}
+          <button
+            onClick={() => setIsWhatsAppBatchModalOpen(true)}
+            className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold flex items-center gap-2 cursor-pointer shadow-lg shadow-emerald-900/20 transition-all"
+          >
+            <MessageSquare className="w-4 h-4" />
+            <span>إرسال كروت وأكواد الطلاب</span>
+          </button>
+        </div>
+      </div>
+
+      {/* ========================================================================= */}
+      {/* FILTER & SEARCH BAR */}
+      {/* ========================================================================= */}
+      <div className="bg-[#0b101e] p-3 rounded-2xl border border-slate-800 shadow-sm flex flex-col md:flex-row md:items-center gap-3 mb-6">
+        <div className="flex items-center gap-2 flex-wrap">
+          <select 
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value)}
+            className="bg-[#131b2f] border border-slate-700 text-slate-300 rounded-lg px-3 py-2 text-xs focus:border-amber-500 focus:outline-none"
+          >
+            <option value="NEWEST">الأحدث إضافة</option>
+            <option value="NAME">أبجدي (أ-ي)</option>
+            <option value="CODE">حسب الكود</option>
+            <option value="STARS">الأكثر نجوماً</option>
+          </select>
+
+          <select 
+            value={selectedBranch}
+            onChange={(e) => setSelectedBranch(e.target.value)}
+            className="bg-[#131b2f] border border-slate-700 text-slate-300 rounded-lg px-3 py-2 text-xs focus:border-amber-500 focus:outline-none"
+          >
+            <option value="ALL">جميع الفروع</option>
+            <option value="BRANCH_NAGAH">فرع النجاح</option>
+            <option value="BRANCH_BADR">فرع بدر</option>
+          </select>
+
+          <select 
+            value={selectedCourse}
+            onChange={(e) => setSelectedCourse(e.target.value)}
+            className="bg-[#131b2f] border border-slate-700 text-slate-300 rounded-lg px-3 py-2 text-xs focus:border-amber-500 focus:outline-none"
+          >
+            <option value="ALL">جميع الدورات</option>
+            <option value="ICT-S2">ICT-S2</option>
+            <option value="ICT4">ICT4</option>
+            <option value="ICT5">ICT5</option>
+          </select>
+
+          <select 
+            value={selectedGroup}
+            onChange={(e) => setSelectedGroup(e.target.value)}
+            className="bg-[#131b2f] border border-slate-700 text-slate-300 rounded-lg px-3 py-2 text-xs focus:border-amber-500 focus:outline-none"
+          >
+            <option value="ALL">جميع المجموعات</option>
+            <option value="ICT - S2 - A">ICT - S2 - A</option>
+            <option value="ICT5 - B1">ICT5 - B1</option>
+            <option value="ICT4 - 1">ICT4 - 1</option>
+          </select>
+          
+          <select 
+            value={selectedStatus}
+            onChange={(e) => setSelectedStatus(e.target.value)}
+            className="bg-[#131b2f] border border-slate-700 text-slate-300 rounded-lg px-3 py-2 text-xs focus:border-amber-500 focus:outline-none"
+          >
+            <option value="ALL">جميع الحالات</option>
+            <option value="ACTIVE">نشط</option>
+            <option value="INACTIVE">منقطع</option>
+          </select>
+
+          <select 
+            value={selectedSubscription}
+            onChange={(e) => setSelectedSubscription(e.target.value)}
+            className="bg-[#131b2f] border border-slate-700 text-slate-300 rounded-lg px-3 py-2 text-xs focus:border-amber-500 focus:outline-none"
+          >
+            <option value="ALL">جميع الاشتراكات</option>
+            <option value="ACTIVE">اشتراك ساري</option>
+            <option value="EXEMPT">معفى من الاشتراك</option>
+            <option value="EXPIRED">اشتراك منتهي</option>
+          </select>
+        </div>
+
+        <div className="relative flex-1 min-w-[200px] mr-auto">
+          <Search className="w-4 h-4 text-slate-500 absolute right-3 top-1/2 -translate-y-1/2" />
+          <input
+            type="text"
+            placeholder="بحث بالاسم، الكود، الهاتف، القومي..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full pl-3 pr-9 py-2 bg-[#131b2f] border border-slate-700 text-slate-200 rounded-lg text-xs focus:border-amber-500 focus:outline-none transition-colors"
+          />
+        </div>
+      </div>
+
+      {/* ========================================================================= */}
+      {/* DESKTOP & MOBILE CARDS GRID */}
+      {/* ========================================================================= */}
+      <div className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 ${viewMode === 'CARDS' ? 'block' : 'hidden lg:hidden'}`}>
+        {filteredStudents.length === 0 ? (
+          <div className="col-span-full py-12 text-center text-slate-500 font-bold bg-[#131b2f]/70 backdrop-blur-md rounded-2xl border border-slate-800">
+            لا يوجد متدربون يطابقون معايير البحث
+          </div>
+        ) : (
+          filteredStudents.map((st) => {
+            const isChecked = selectedIds.includes(st.id);
+            return (
+              <div
+                key={st.id}
+                className={`bg-[#131b2f] border rounded-2xl p-4 flex flex-col relative overflow-hidden transition-all ${
+                  isChecked ? 'border-amber-500' : 'border-slate-800 hover:border-slate-700'
+                }`}
+              >
+                {/* Top Badges */}
+                <div className="flex justify-between items-center mb-4">
+                  <div className="bg-emerald-900/40 border border-emerald-800/50 text-emerald-400 px-3 py-1 rounded-full text-[10px] font-bold">
+                    نشط
+                  </div>
+                  <div className="flex items-center gap-2.5">
+                    <span className="font-mono font-bold text-amber-500 bg-amber-900/30 border border-amber-700/50 px-2 py-0.5 rounded text-xs">
+                      {st.code}
+                    </span>
+                    <div className="relative">
+                      <input
+                        type="checkbox"
+                        checked={isChecked}
+                        onChange={() => handleToggleSelect(st.id)}
+                        className="w-4 h-4 rounded border border-slate-600 bg-[#0f172a] text-amber-500 focus:ring-amber-500 focus:ring-offset-0 cursor-pointer appearance-none checked:bg-amber-500 checked:border-amber-500"
+                      />
+                      {isChecked && <Check className="w-3 h-3 text-slate-900 absolute top-0.5 right-0.5 pointer-events-none" />}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Profile Section */}
+                <div className="flex flex-row-reverse items-center justify-start gap-4 mb-4">
+                  {/* Avatar on Right */}
+                  <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-xl font-black shrink-0 shadow-lg ${
+                    st.gender === 'FEMALE' ? 'bg-amber-500 text-slate-900' : 'bg-amber-500 text-slate-900'
+                  }`}>
+                    {st.avatarChar}
+                  </div>
+                  {/* Info on Left */}
+                  <div className="text-right flex-1 overflow-hidden">
+                    <h3 className="text-white font-bold text-sm mb-1 truncate">{st.name}</h3>
+                    <p className="text-slate-400 text-[10px] mb-1 truncate">{st.course} • {st.group}</p>
+                    <div className="text-slate-500 text-[9px] font-mono flex items-center justify-end gap-1 flex-wrap" dir="ltr">
+                      <span>{st.phone}</span>
+                      <span>|</span>
+                      <span>و.أ: {st.parentPhone}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Points & Level */}
+                <div className="flex items-center justify-between mb-3 bg-[#0b101e] p-2 rounded-xl border border-slate-800/80">
+                  <div className="flex items-center gap-1.5">
+                    <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
+                    <span className="text-amber-500 font-bold text-xs">{st.stars} نقطة</span>
+                  </div>
+                  <div className="bg-[#1e293b] border border-slate-700 px-2 py-1 rounded-lg flex items-center gap-1">
+                    <span className="text-slate-300 text-[10px] font-bold">مبتدئ صاعد</span>
+                    <Star className="w-3 h-3 text-amber-400 fill-amber-400" />
+                  </div>
+                </div>
+
+                {/* Star Awarding Row */}
+                <div className="flex items-center justify-between gap-1.5 mb-4">
+                  <div className="text-[9px] text-slate-500 leading-tight">منح<br/>نجوم:</div>
+                  <button onClick={() => handleAwardStar(st.id, 1)} className="flex-1 py-1 bg-[#1e293b] hover:bg-slate-700 border border-amber-700/50 text-amber-500 rounded-lg flex flex-col items-center justify-center gap-0.5 transition-colors cursor-pointer active:scale-95">
+                    <span className="text-[10px] font-bold">1+</span>
+                    <Star className="w-2.5 h-2.5 fill-amber-500" />
+                  </button>
+                  <button onClick={() => handleAwardStar(st.id, 2)} className="flex-1 py-1 bg-[#1e293b] hover:bg-slate-700 border border-amber-700/50 text-amber-500 rounded-lg flex flex-col items-center justify-center gap-0.5 transition-colors cursor-pointer active:scale-95">
+                    <span className="text-[10px] font-bold">2+</span>
+                    <Star className="w-2.5 h-2.5 fill-amber-500" />
+                  </button>
+                  <button onClick={() => handleAwardStar(st.id, 5)} className="flex-1 py-1 bg-[#1e293b] hover:bg-slate-700 border border-amber-700/50 text-amber-500 rounded-lg flex flex-col items-center justify-center gap-0.5 transition-colors cursor-pointer active:scale-95">
+                    <span className="text-[10px] font-bold">5+</span>
+                    <Star className="w-2.5 h-2.5 fill-amber-500" />
+                  </button>
+                  <button onClick={() => handleAwardStar(st.id, 1)} className="w-7 h-7 bg-[#1e293b] hover:bg-slate-700 border border-slate-600 text-slate-300 rounded-lg flex items-center justify-center transition-colors cursor-pointer active:scale-95 shrink-0">
+                    <Plus className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+
+                {/* Financials & Subscription */}
+                <div className="mb-4">
+                  <div className="flex justify-between items-center text-[10px] mb-2 px-1">
+                    <span className="text-slate-400">المدفوع / المتبقي:</span>
+                    <div className="font-mono font-bold" dir="ltr">
+                      <span className="text-rose-500">{st.balance}</span>
+                      <span className="text-slate-500 mx-1">/</span>
+                      <span className="text-emerald-500">{st.paid}</span> <span className="text-slate-500 font-sans text-[9px] mr-1">ج.م</span>
+                    </div>
+                  </div>
+                  {st.subscriptionStatus === 'EXEMPT' ? (
+                    <div className="bg-[#1e293b]/60 border border-slate-700/80 text-emerald-500 text-[11px] font-bold py-1.5 rounded-lg text-center flex items-center justify-center gap-1.5">
+                      معفى من الاشتراك 🪄
+                    </div>
+                  ) : (
+                    <div className="bg-emerald-900/40 border border-emerald-800/50 text-emerald-400 text-[11px] font-bold py-1.5 rounded-lg text-center flex items-center justify-center gap-1.5">
+                      اشتراك ساري
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                    </div>
+                  )}
+                </div>
+
+                {/* Footer Icons */}
+                <div className="flex items-center justify-between mt-auto pt-3 border-t border-slate-800/80">
+                  <button className="w-7 h-7 rounded-lg bg-rose-950/40 border border-rose-900/50 hover:bg-rose-900 flex items-center justify-center text-rose-500 transition-colors cursor-pointer" title="حذف">
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                  <button className="w-7 h-7 rounded-lg bg-blue-950/40 border border-blue-900/50 hover:bg-blue-900 flex items-center justify-center text-blue-400 transition-colors cursor-pointer" title="تعديل">
+                    <Edit className="w-3.5 h-3.5" />
+                  </button>
+                  <button onClick={() => setViewStudent(st)} className="w-7 h-7 rounded-lg bg-blue-950/40 border border-blue-900/50 hover:bg-blue-900 flex items-center justify-center text-blue-400 transition-colors cursor-pointer" title="عرض الملف">
+                    <Eye className="w-3.5 h-3.5" />
+                  </button>
+                  <button onClick={() => handleSendWhatsAppDirect(st.parentPhone, st.name)} className="w-7 h-7 rounded-lg bg-emerald-950/40 border border-emerald-900/50 hover:bg-emerald-900 flex items-center justify-center text-emerald-400 transition-colors cursor-pointer" title="واتساب">
+                    <MessageSquare className="w-3.5 h-3.5" />
+                  </button>
+                  <button onClick={() => setIdCardStudent(st)} className="w-7 h-7 rounded-lg bg-blue-950/40 border border-blue-900/50 hover:bg-blue-900 flex items-center justify-center text-blue-400 transition-colors cursor-pointer" title="طباعة">
+                    <Printer className="w-3.5 h-3.5" />
+                  </button>
+                  <button className="w-7 h-7 rounded-lg bg-emerald-950/40 border border-emerald-900/50 hover:bg-emerald-900 flex items-center justify-center text-emerald-400 transition-colors cursor-pointer" title="المدفوعات">
+                    <CreditCard className="w-3.5 h-3.5" />
+                  </button>
+                  <button onClick={() => handleAwardStar(st.id, 1)} className="w-7 h-7 rounded-lg bg-amber-950/40 border border-amber-900/50 hover:bg-amber-900 flex items-center justify-center text-amber-500 transition-colors cursor-pointer" title="منح نجمة">
+                    <Star className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
