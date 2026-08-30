@@ -487,14 +487,19 @@ export const Header: React.FC<HeaderProps> = ({ toggleSidebar, onNavigate }) => 
 
       {/* Left Side: Server IP, Notifications, Clock, User Profile */}
       <div className="flex items-center gap-2.5 sm:gap-3.5">
-        {/* Server IP Info Tag */}
-        <div
-          className="hidden xl:flex items-center gap-1.5 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300/80 dark:border-emerald-800/60 px-2.5 py-1 rounded-lg text-emerald-800 dark:text-emerald-300 text-xs font-mono shadow-sm"
-          title="عنوان السيرفر المحلي للربط الشبكي عبر الأجهزة"
+        {/* Server IP Info Icon Button */}
+        <button
+          type="button"
+          onClick={() => {
+            const ip = (serverIp === '127.0.0.1' || !serverIp) ? window.location.hostname : serverIp;
+            const fullAddress = `http://${ip}:3000`;
+            copyToClipboard(fullAddress, `تم نسخ عنوان الشبكة المحلية: ${fullAddress}`);
+          }}
+          className="p-2 rounded-xl bg-slate-800/90 border border-slate-700 hover:border-emerald-500/50 text-emerald-400 hover:text-emerald-300 transition-all flex items-center justify-center relative group shrink-0"
+          title={`عنوان السيرفر المحلي: ${(serverIp === '127.0.0.1' || !serverIp) ? window.location.hostname : serverIp}:3000 (انقر لنسخ الرابط)`}
         >
-          <Wifi className="w-3.5 h-3.5 animate-pulse text-emerald-600 dark:text-emerald-400" />
-          <span>{(serverIp === '127.0.0.1' || !serverIp) ? window.location.hostname : serverIp}:3000</span>
-        </div>
+          <Wifi className="w-4 h-4 animate-pulse" />
+        </button>
 
         {/* Live Hijri & Gregorian Date / Clock */}
         <div className="hidden lg:flex items-center gap-2.5 text-xs text-slate-300 bg-slate-900/80 border border-slate-700/80 px-3 py-1.5 rounded-xl shadow-inner">

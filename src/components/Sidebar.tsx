@@ -125,19 +125,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   return (
     <>
-      {/* Dim backdrop overlay for mobile view when sidebar drawer is open */}
+      {/* Dim backdrop overlay when sidebar drawer is expanded */}
       {!isCollapsed && (
         <div
           onClick={handleToggle}
-          className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-40 md:hidden transition-all duration-300 animate-fadeIn"
+          className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-40 transition-all duration-300 animate-fadeIn"
         />
       )}
 
       <aside
-        className={`bg-slate-900/95 backdrop-blur-md border-l border-slate-800 transition-all duration-300 flex flex-col justify-between select-none no-print sidebar-container fixed md:sticky top-0 bottom-0 right-0 h-screen max-h-screen overflow-hidden z-50 md:z-20 shrink-0 ${
+        className={`bg-slate-900/95 backdrop-blur-md border-l border-slate-800 transition-all duration-300 flex flex-col justify-between select-none no-print sidebar-container fixed top-0 bottom-0 right-0 h-screen max-h-screen overflow-hidden z-50 shrink-0 ${
           isCollapsed 
-            ? 'w-16 translate-x-full md:translate-x-0' 
-            : 'w-60 xl:w-64 translate-x-0'
+            ? 'w-12 xl:w-14 translate-x-full md:translate-x-0 shadow-lg' 
+            : 'w-60 xl:w-64 translate-x-0 shadow-2xl'
         }`}
       >
       {/* Top Section: Toggle button and Navigation List */}

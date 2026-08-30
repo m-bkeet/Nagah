@@ -218,7 +218,9 @@ const AppContent: React.FC = () => {
         />
 
         {/* Dynamic Main View Area */}
-        <main className="flex-1 overflow-y-auto px-3 sm:px-6 py-4 pb-24 md:pb-8 custom-scrollbar">
+        <main className={`flex-1 min-w-0 overflow-y-auto px-3 sm:px-6 py-4 pb-24 md:pb-8 custom-scrollbar transition-all duration-300 ${
+          isSidebarCollapsed ? 'md:pr-14 xl:pr-16' : ''
+        }`}>
           {renderActiveView()}
         </main>
       </div>
