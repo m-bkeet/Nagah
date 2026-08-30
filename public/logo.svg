@@ -1,0 +1,68 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500" width="500" height="500">
+  <defs>
+    <!-- Curved Path for Top Text -->
+    <path id="textPathTop" d="M 75,250 A 175,175 0 0,1 425,250" />
+    <!-- Curved Path for Bottom Text -->
+    <path id="textPathBottom" d="M 425,250 A 175,175 0 0,1 75,250" />
+    <linearGradient id="handGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FBBF24" />
+      <stop offset="100%" stop-color="#D97706" />
+    </linearGradient>
+    <linearGradient id="purpleGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#6B21A8" />
+      <stop offset="100%" stop-color="#4C1D95" />
+    </linearGradient>
+  </defs>
+
+  <!-- Background Clear Circle -->
+  <circle cx="250" cy="250" r="245" fill="#FFFFFF" />
+
+  <!-- Outer Cyan Outer Arcs -->
+  <circle cx="250" cy="250" r="235" fill="none" stroke="#06B6D4" stroke-width="3.5" />
+  <circle cx="250" cy="250" r="226" fill="none" stroke="#06B6D4" stroke-width="1.5" stroke-dasharray="12,6" opacity="0.6" />
+
+  <!-- Side Stars/Diamonds -->
+  <path d="M 22,250 L 32,242 L 42,250 L 32,258 Z" fill="#06B6D4" />
+  <path d="M 458,250 L 468,242 L 478,250 L 468,258 Z" fill="#06B6D4" />
+
+  <!-- Inner Cyan Circle Ring -->
+  <circle cx="250" cy="250" r="165" fill="none" stroke="#06B6D4" stroke-width="2.5" />
+
+  <!-- Top Curved English Text -->
+  <text font-family="'Times New Roman', Georgia, serif" font-weight="900" font-size="38" fill="url(#purpleGradient)" letter-spacing="7">
+    <textPath href="#textPathTop" startOffset="50%" text-anchor="middle">N G A H   T &amp; C N</textPath>
+  </text>
+
+  <!-- Bottom Curved Arabic Text -->
+  <text font-family="'Cairo', 'Segoe UI', Arial, sans-serif" font-weight="900" font-size="33" fill="url(#purpleGradient)">
+    <textPath href="#textPathBottom" startOffset="50%" text-anchor="middle">النجاح للتدريب والاستشارات</textPath>
+  </text>
+
+  <!-- CENTER EMBLEM -->
+  <g transform="translate(0, -5)">
+    <!-- Trainer Head -->
+    <circle cx="250" cy="155" r="28" fill="#1E293B" />
+    
+    <!-- Trainer Body -->
+    <path d="M 205,225 C 205,192 295,192 295,225 L 290,240 L 210,240 Z" fill="#1E293B" />
+    
+    <!-- Tie -->
+    <polygon points="250,198 255,212 250,234 245,212" fill="#2563EB" />
+    
+    <!-- Laptop Screen -->
+    <polygon points="170,230 238,188 238,230 170,230" fill="#3B82F6" />
+    <polygon points="176,227 233,193 233,227" fill="#EFF6FF" />
+    
+    <!-- Laptop Base/Desk -->
+    <rect x="165" y="235" width="170" height="15" rx="3" fill="#2563EB" />
+  </g>
+
+  <!-- SUPPORTING HANDS -->
+  <g>
+    <!-- Left Hand -->
+    <path d="M 92,220 C 92,315 185,385 242,385 C 210,385 130,325 130,258 C 130,238 115,220 102,220 Z" fill="url(#handGradient)" />
+    
+    <!-- Right Hand -->
+    <path d="M 408,220 C 408,315 315,385 258,385 C 290,385 370,325 370,258 C 370,238 385,220 398,220 Z" fill="url(#handGradient)" />
+  </g>
+</svg>

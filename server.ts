@@ -27,6 +27,8 @@ import { student360Service } from "./src/server/student360Service";
 import { centerKnowledgeService } from "./src/server/centerKnowledgeService";
 import { aiMemoryService } from "./src/server/aiMemoryService";
 import { aiFeedbackService } from "./src/server/aiFeedbackService";
+import { domainRouter } from "./src/server/domainRoutes";
+import { apiRouter } from "./server/routes";
 
 const { Pool } = pg;
 
@@ -35,6 +37,8 @@ const PORT = 3000;
 
 app.use(express.json({ limit: "100mb" }));
 app.use(express.urlencoded({ extended: true, limit: "100mb" }));
+app.use("/api/domain", domainRouter);
+app.use("/api", apiRouter);
 
 // Initialize PostgreSQL Pool
 let dbPool: pg.Pool | null = null;
@@ -203,11 +207,11 @@ app.post("/api/auth/logout", (req, res) => {
 });
 
 
-// Students API (PostgreSQL / Supabase Adapter)
-app.get("/api/students", async (req, res) => {
+// Students API (PostgreSQL / Supabase Adapter with local fallback)
+app.get("/api/students", async (req, res, next) => {
   const pool = getDbPool();
   if (!pool) {
-    return sendResponse(res, false, null, "DATABASE_URL not configured", 500);
+    return next();
   }
 
   const { search, limit = 200, offset = 0, studentCode } = req.query;
@@ -254,11 +258,11 @@ app.get("/api/students", async (req, res) => {
       client.release();
     }
   } catch (err: any) {
-    sendResponse(res, false, null, "Failed fetching students from PostgreSQL: " + err.message, 500);
+    return next();
   }
 });
 
-app.post("/api/students", (req, res) => {
+app.post("/api/students", (req, res, next) => {
   const { studentCode, fullName, branch, course } = req.body;
   // Validate student code format: Capital Letter + 3 Digits (e.g., A001)
   const codeRegex = /^[A-Z]\d{3}$/;
@@ -279,10 +283,10 @@ app.post("/api/students", (req, res) => {
 });
 
 // Courses API
-app.get("/api/courses", async (req, res) => {
+app.get("/api/courses", async (req, res, next) => {
   const pool = getDbPool();
   if (!pool) {
-    return sendResponse(res, false, null, "DATABASE_URL not configured", 500);
+    return next();
   }
 
   try {
@@ -302,15 +306,15 @@ app.get("/api/courses", async (req, res) => {
       client.release();
     }
   } catch (err: any) {
-    sendResponse(res, false, null, "Failed fetching courses from PostgreSQL: " + err.message, 500);
+    return next();
   }
 });
 
 // Groups API
-app.get("/api/groups", async (req, res) => {
+app.get("/api/groups", async (req, res, next) => {
   const pool = getDbPool();
   if (!pool) {
-    return sendResponse(res, false, null, "DATABASE_URL not configured", 500);
+    return next();
   }
 
   try {
@@ -338,15 +342,15 @@ app.get("/api/groups", async (req, res) => {
       client.release();
     }
   } catch (err: any) {
-    sendResponse(res, false, null, "Failed fetching groups from PostgreSQL: " + err.message, 500);
+    return next();
   }
 });
 
 // Attendance API
-app.get("/api/attendance", async (req, res) => {
+app.get("/api/attendance", async (req, res, next) => {
   const pool = getDbPool();
   if (!pool) {
-    return sendResponse(res, false, null, "DATABASE_URL not configured", 500);
+    return next();
   }
 
   try {
@@ -374,15 +378,15 @@ app.get("/api/attendance", async (req, res) => {
       client.release();
     }
   } catch (err: any) {
-    sendResponse(res, false, null, "Failed fetching attendance from PostgreSQL: " + err.message, 500);
+    return next();
   }
 });
 
 // Payments API
-app.get("/api/payments", async (req, res) => {
+app.get("/api/payments", async (req, res, next) => {
   const pool = getDbPool();
   if (!pool) {
-    return sendResponse(res, false, null, "DATABASE_URL not configured", 500);
+    return next();
   }
 
   try {
@@ -412,15 +416,15 @@ app.get("/api/payments", async (req, res) => {
       client.release();
     }
   } catch (err: any) {
-    sendResponse(res, false, null, "Failed fetching payments from PostgreSQL: " + err.message, 500);
+    return next();
   }
 });
 
 // Trainers API
-app.get("/api/trainers", async (req, res) => {
+app.get("/api/trainers", async (req, res, next) => {
   const pool = getDbPool();
   if (!pool) {
-    return sendResponse(res, false, null, "DATABASE_URL not configured", 500);
+    return next();
   }
 
   try {
@@ -448,7 +452,7 @@ app.get("/api/trainers", async (req, res) => {
       client.release();
     }
   } catch (err: any) {
-    sendResponse(res, false, null, "Failed fetching trainers from PostgreSQL: " + err.message, 500);
+    return next();
   }
 });
 
@@ -1909,10 +1913,10 @@ app.post("/api/realtime/broadcast", (req, res) => {
 });
 
 // Audit Logs Endpoint
-app.get("/api/audit-logs", async (req, res) => {
+app.get("/api/audit-logs", async (req, res, next) => {
   const pool = getDbPool();
   if (!pool) {
-    return sendResponse(res, false, null, "DATABASE_URL not configured", 500);
+    return next();
   }
 
   try {
@@ -1929,7 +1933,7 @@ app.get("/api/audit-logs", async (req, res) => {
       client.release();
     }
   } catch (err: any) {
-    sendResponse(res, false, null, "Failed fetching audit logs from PostgreSQL: " + err.message, 500);
+    return next();
   }
 });
 
@@ -4530,6 +4534,15 @@ app.post("/api/trainees/execute-code-fix", async (req, res) => {
     executedAt: new Date().toISOString(),
     status: "COMPLETED"
   }, `تم توحيد وأعتماد ${updatedCount} كود متدرب بنجاح وتوثيق العملية في سجلات التدقيق 🏆`);
+});
+
+// JSON 404 Handler for all unhandled /api requests to avoid serving HTML for API endpoints
+app.use("/api", (req, res) => {
+  res.status(404).json({
+    success: false,
+    error: `API endpoint not found: ${req.method} ${req.originalUrl || req.url}`,
+    code: 404,
+  });
 });
 
 async function startServer() {

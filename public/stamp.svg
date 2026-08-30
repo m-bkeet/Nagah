@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500" width="500" height="500">
+  <defs>
+    <path id="stampTextPathTop" d="M 75,250 A 175,175 0 0,1 425,250" />
+    <path id="stampTextPathBottom" d="M 425,250 A 175,175 0 0,1 75,250" />
+    <filter id="stampFilter" x="-10%" y="-10%" width="120%" height="120%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.03" numOctaves="2" result="noise" />
+      <feDisplacementMap in="SourceGraphic" in2="noise" scale="1.5" xChannelSelector="R" yChannelSelector="G" />
+    </filter>
+  </defs>
+
+  <g filter="url(#stampFilter)" transform="rotate(-4, 250, 250)">
+    <!-- Outer Cyan Outer Arcs -->
+    <circle cx="250" cy="250" r="238" fill="none" stroke="#0284C7" stroke-width="4.5" opacity="0.9" />
+    <circle cx="250" cy="250" r="228" fill="none" stroke="#0284C7" stroke-width="1.8" stroke-dasharray="10,5" opacity="0.85" />
+
+    <!-- Side Stars/Diamonds -->
+    <path d="M 22,250 L 32,242 L 42,250 L 32,258 Z" fill="#0284C7" opacity="0.9" />
+    <path d="M 458,250 L 468,242 L 478,250 L 468,258 Z" fill="#0284C7" opacity="0.9" />
+
+    <!-- Inner Cyan Circle Ring -->
+    <circle cx="250" cy="250" r="165" fill="none" stroke="#0284C7" stroke-width="2.5" opacity="0.9" />
+
+    <!-- Top Curved English Text -->
+    <text font-family="'Times New Roman', Georgia, serif" font-weight="900" font-size="38" fill="#4C1D95" letter-spacing="7" opacity="0.95">
+      <textPath href="#stampTextPathTop" startOffset="50%" text-anchor="middle">N G A H   T &amp; C N</textPath>
+    </text>
+
+    <!-- Bottom Curved Arabic Text -->
+    <text font-family="'Cairo', 'Segoe UI', Arial, sans-serif" font-weight="900" font-size="33" fill="#4C1D95" opacity="0.95">
+      <textPath href="#stampTextPathBottom" startOffset="50%" text-anchor="middle">النجاح للتدريب والاستشارات</textPath>
+    </text>
+
+    <!-- CENTER EMBLEM -->
+    <g transform="translate(0, -5)" opacity="0.92">
+      <circle cx="250" cy="155" r="28" fill="#1E293B" />
+      <path d="M 205,225 C 205,192 295,192 295,225 L 290,240 L 210,240 Z" fill="#1E293B" />
+      <polygon points="250,198 255,212 250,234 245,212" fill="#2563EB" />
+      <polygon points="170,230 238,188 238,230 170,230" fill="#2563EB" />
+      <polygon points="176,227 233,193 233,227" fill="#FFFFFF" />
+      <rect x="165" y="235" width="170" height="15" rx="3" fill="#2563EB" />
+    </g>
+
+    <!-- SUPPORTING HANDS -->
+    <g opacity="0.92">
+      <path d="M 92,220 C 92,315 185,385 242,385 C 210,385 130,325 130,258 C 130,238 115,220 102,220 Z" fill="#D97706" />
+      <path d="M 408,220 C 408,315 315,385 258,385 C 290,385 370,325 370,258 C 370,238 385,220 398,220 Z" fill="#D97706" />
+    </g>
+  </g>
+</svg>
