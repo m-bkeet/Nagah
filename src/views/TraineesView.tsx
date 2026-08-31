@@ -129,10 +129,43 @@ export const TraineesView: React.FC = () => {
   const [selectedPaymentStatus, setSelectedPaymentStatus] = useState<string>('all');
   const [sortBy, setSortBy] = useState<string>('created_desc');
 
+  const matchBranch = (traineeBranchId: string | undefined | null, targetBranchId: string, allBranches: Branch[]) => {
+    if (!targetBranchId || targetBranchId === 'all') return true;
+    if (!traineeBranchId) return true;
+    if (traineeBranchId === targetBranchId) return true;
+
+    const normalize = (id: string) => {
+      const s = String(id || '').trim().toLowerCase();
+      if (s === 'branch-1' || s === 'nagah-main' || s === 'main' || s === 'فرع النجاح الرئيسي') return 'branch-main';
+      if (s === 'branch-2' || s === 'badr-branch' || s === 'فرع بدر التكنولوجي') return 'branch-badr';
+      return s;
+    };
+
+    if (normalize(traineeBranchId) === normalize(targetBranchId)) return true;
+
+    const targetBranch = (allBranches || []).find(b => b.id === targetBranchId || b.branchId === targetBranchId || b.name === targetBranchId);
+    const traineeBranch = (allBranches || []).find(b => b.id === traineeBranchId || b.branchId === traineeBranchId || b.name === traineeBranchId);
+
+    if (targetBranch && traineeBranch) {
+      if (targetBranch.id === traineeBranch.id || targetBranch.branchId === traineeBranch.branchId || targetBranch.name === traineeBranch.name) {
+        return true;
+      }
+    }
+
+    if (targetBranch && (targetBranch.id === traineeBranchId || targetBranch.branchId === traineeBranchId || targetBranch.name === traineeBranchId)) {
+      return true;
+    }
+
+    return false;
+  };
+
   const filteredTrainees = React.useMemo(() => {
     let result = (Array.isArray(trainees) ? trainees : []).filter((t) => {
-      if (selectedBranch && selectedBranch !== 'all' && t.branchId !== selectedBranch) {
-        return false;
+      if (selectedBranch && selectedBranch !== 'all') {
+        const traineeBranch = t.branchId || (t as any).branch_id || (t as any).branchCode;
+        if (!matchBranch(traineeBranch, selectedBranch, branches)) {
+          return false;
+        }
       }
       if (selectedCourse && selectedCourse !== 'all' && t.courseId !== selectedCourse) {
         if (!t.courseIds || !t.courseIds.includes(selectedCourse)) {
