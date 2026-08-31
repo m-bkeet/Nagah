@@ -841,3 +841,304 @@ ${params.studentCode || 'لا يوجد كود مكتوب'}
     }))
   };
 }
+
+export async function generateTrainerPresentation(params: {
+  topic: string;
+  grade: string;
+  subject: string;
+  slideCount?: number;
+  language?: 'ar' | 'en';
+  imageBase64?: string;
+}): Promise<any> {
+  const parts: any[] = [];
+  const slideCount = params.slideCount || 6;
+  const lang = params.language || 'ar';
+  const langName = lang === 'ar' ? 'اللغة العربية' : 'English Language';
+
+  let hasUploadedDoc = false;
+  if (params.imageBase64) {
+    const mimeMatch = params.imageBase64.match(/^data:([^;]+);base64,/);
+    const mimeType = mimeMatch ? mimeMatch[1] : (params.imageBase64.startsWith('JVBERi0') ? 'application/pdf' : 'image/jpeg');
+    const cleanBase64 = params.imageBase64.replace(/^data:[^;]+;base64,/, '').trim();
+    if (cleanBase64.length > 0) {
+      hasUploadedDoc = true;
+      parts.push({
+        inlineData: {
+          data: cleanBase64,
+          mimeType
+        }
+      });
+    }
+  }
+
+  const prompt = `أنت خبير إعداد المناهج الرقمية والشروحات التفاعلية بالذكاء الاصطناعي في "مركز النجاح للتدريب والاستشارات".
+${hasUploadedDoc ? `📄 تم إرفاق ملف كتاب / مستند / صفحة درس (PDF أو صورة). قم بقراءة وفحص كافة النصوص والفقرات والمخططات الواردة في المستند المرفق بدقة فائقة، واستخرج محتوى العرض التقديمي مباشرة وحصرياً من هذا المحتوى الحقيقي.` : ''}
+قم بإعداد عرض تقديمي تفاعلي متكامل (Presentation) مخصص لطلاب ${params.grade} في مادة ${params.subject} حول الموضوع: "${params.topic}".
+اللغة المطلوبة: ${langName}.
+عدد الشرائح المطلوبة: ${slideCount}.
+
+يجب أن يحتوي العرض على:
+1. title: عنوان الدرس الجذاب المستوحى من المحتوى
+2. subtitle: عنوان فرعي شارح
+3. grade: المرحلة الدراسية (${params.grade})
+4. subject: المادة (${params.subject})
+5. estimatedDuration: المدة المقترحة (مثلاً "45 دقيقة")
+6. slides: قائمة بـ ${slideCount} شرائح تحتوي كل شريحة على:
+   - slideNumber: رقم الشريحة
+   - title: عنوان الشريحة المستخلص من صلب الدرس
+   - bullets: مصفوفة من 3 إلى 5 نقاط تعليمية مفصلة ودقيقة مأخوذة من المحتوى
+   - keyTakeaway: خلاصة أو قاعدة ذهبية للشريحة
+   - visualHint: وصف المشهد البصري أو الصورة التوضيحية المقترحة
+   - speakerNotes: ملاحظات للمدرب أثناء الشرح وتوجيه الطلاب
+7. kahootQuestions: 3 إلى 5 أسئلة تفاعلية بأسلوب كاهوت ممتع مستخرجة من المحتوى:
+   - id: معرف فريد
+   - question: نص السؤال الحقيقي
+   - options: 4 خيارات واقعية
+   - correctIndex: رقم الخيار الصحيح (0-3)
+   - timeLimit: 20 أو 30 ثانية
+   - explanation: شرح موجز مدعم بالدليل
+8. practicalActivities: نشاطين تطبيقيين عمليين على أجهزة المعمل مع خطوات واضحة والناتج المتوقع.
+
+أخرج النتيجة بتنسيق JSON حصراً.`;
+
+  parts.push({ text: prompt });
+
+  if (process.env.GEMINI_API_KEY) {
+    try {
+      const { text } = await generateWithModelCascade({
+        contents: [{ role: 'user', parts }],
+        config: {
+          responseMimeType: 'application/json'
+        }
+      });
+      if (text) {
+        const cleanJson = text.replace(/```json\s*|\s*```/g, '').trim();
+        const parsed = JSON.parse(cleanJson);
+        if (parsed && Array.isArray(parsed.slides) && parsed.slides.length > 0) {
+          return parsed;
+        }
+      }
+    } catch (e: any) {
+      console.warn('Gemini presentation generation warning:', e?.message);
+    }
+  }
+
+  // Fallback high quality presentation structure
+  return {
+    title: `شرح تفاعلي متقدم: ${params.topic}`,
+    subtitle: `دليل تدريبي تطبيقي لطلاب ${params.grade} - ${params.subject}`,
+    grade: params.grade,
+    subject: params.subject,
+    estimatedDuration: '45 دقيقة',
+    slides: [
+      {
+        slideNumber: 1,
+        title: `مقدمة في ${params.topic} وأهميتها العملية`,
+        bullets: [
+          `فهم الركائز الأساسية والمفاهيم الجوهرية لموضوع ${params.topic}`,
+          'التطبيقات التكنولوجية الحديثة وكيفية الاستفادة منها في المشاريع العملية',
+          'ربط المعرفة النظرية بأمثلة تطبيقية من واقع بيئة العمل والتدريب'
+        ],
+        keyTakeaway: `${params.topic} تمثل الركيزة الأساسية للنجاح والاحتراف في هذا المجال.`,
+        visualHint: 'رسم توضيحي يربط بين المفاهيم الأساسية والتطبيقات العملية في المعمل',
+        speakerNotes: 'ابدأ الدرس بسؤال استطلاعي تشويقي للطلاب حول تجاربهم السابقة واستمع لإجاباتهم.'
+      },
+      {
+        slideNumber: 2,
+        title: 'المفاهيم والعناصر الجوهرية (Core Concepts)',
+        bullets: [
+          'التعرف على المكونات والوظائف والأدوات الرئيسية خطوة بخطوة',
+          'أفضل الممارسات المتبعة لتفادي الأخطاء الشائعة أثناء التنفيذ',
+          'طريقة تنظيم وهيكلة المشاريع بأعلى معايير الجودة والأداء'
+        ],
+        keyTakeaway: 'التنظيم الدقيق يضمن دقة التنفيذ وسرعة الوصول للنتيجة النموذجية.',
+        visualHint: 'مخطط تدفق أو جدول مقارنة بين المدخلات والعمليات والمخرجات',
+        speakerNotes: 'اطلب من أحد الطلاب قراءة النقطة الثانية ومناقشة مثال واقعي مع المجموعة.'
+      },
+      {
+        slideNumber: 3,
+        title: 'التطبيق العملي والتجربة المباشرة في المعمل',
+        bullets: [
+          'فتح بيئة العمل وتنفيذ الخطوات الإرشادية الموضحة مباشرة على الأجهزة',
+          'متابعة النتائج اللحظية ومعالجة أي استفسارات أو أخطاء برمجية',
+          'التعاون والمشاركة الفعالة والتنافس الإيجابي بين أفراد المجموعات'
+        ],
+        keyTakeaway: 'الممارسة والتجربة المباشرة هي السبيل الأضمن لتثبيت المعلومة واكتساب المهارة.',
+        visualHint: 'واجهة تطبيق توضح تنفيذ الخطوات العملية خطوة بخطوة في بيئة المعمل',
+        speakerNotes: 'قم بالتجول في المعمل ومتابعة شاشات الطلاب أو استخدام أدوات التحكم عن بعد.'
+      },
+      {
+        slideNumber: 4,
+        title: 'الخلاصة والتحدي التفاعلي النهائي',
+        bullets: [
+          'مراجعة سريعة لأهم الأفكار والمهارات التي تم اكتسابها اليوم',
+          'تقييم المستوى وحل المسابقة التفاعلية وتحدي كاهوت السريع',
+          'تكليف التحدي المنزلي الإبداعي وتجهيز متطلبات الحصة القادمة'
+        ],
+        keyTakeaway: 'التعلم المستمر والممارسة اليومية يصنعان الاحتراف والتميز الحقيقي.',
+        visualHint: 'لوحة شرف تلخص المخرجات والمكافآت والنجوم المكتسبة',
+        speakerNotes: 'شجع المتميزين وامنح نجوم ونقاط التميز للمشاركين في نهاية الحصة.'
+      }
+    ],
+    kahootQuestions: [
+      {
+        id: 'k-1',
+        question: `ما هو الهدف الأساسي من دراسة وتطبيق ${params.topic}؟`,
+        options: [
+          'التطبيق العملي واكتساب المهارات الاحترافية في المعمل',
+          'الحفظ النظري دون فهم أو تطبيق',
+          'تجنب استخدام التكنولوجيا الحديثة',
+          'إلغاء الممارسة والمراجعة المستمرة'
+        ],
+        correctIndex: 0,
+        timeLimit: 20,
+        explanation: 'الهدف الأساسي هو اكتساب المهارة وتطبيقها عملياً في بيئة تدريبية حقيقية.'
+      },
+      {
+        id: 'k-2',
+        question: 'كيف يمكن التحقق من صحة النتائج أثناء التطبيق في المعمل؟',
+        options: [
+          'مقارنة المخرجات بالنماذج المعتمدة وتجربة كافة الحالات',
+          'الاعتماد على التخمين دون فحص',
+          'تجاهل رسائل التنبيه والأخطاء',
+          'إغلاق البرنامج دون حفظ النتائج'
+        ],
+        correctIndex: 0,
+        timeLimit: 20,
+        explanation: 'الفحص المنهجي ومقارنة المخرجات يضمنان دقة الأداء وسلامة التنفيذ.'
+      }
+    ],
+    practicalActivities: [
+      {
+        id: 'act-1',
+        title: `تطبيق تحدي ${params.topic} في المعمل`,
+        targetDevice: 'أجهزة المعمل وحاسوب المتدرب',
+        toolsNeeded: 'محرر الأكواد وبيئة التدريب التفاعلية',
+        steps: [
+          'تشغيل البرنامج أو فتح البيئة التدريبية المخصصة في المعمل',
+          'تنفيذ الأوامر والخطوات العملية الموضحة في الشريحة بدقة',
+          'التحقق من صحة المخرجات وتسليم النتيجة للمدرب لتقييمها ورصد النقاط'
+        ],
+        expectedOutput: 'الحصول على المخرج النموذجي الموضح بنجاح وتجاوز اختبار المعمل العملي.'
+      }
+    ]
+  };
+}
+
+export async function generateTrainerAdvancedExam(params: {
+  topic: string;
+  courseName: string;
+  grade: string;
+  numQuestions: number;
+  difficulty: string;
+  questionTypes: string[];
+  language: 'ar' | 'en';
+  image?: string;
+}): Promise<any> {
+  const parts: any[] = [];
+  const numQuestions = params.numQuestions || 5;
+  const lang = params.language || 'ar';
+  const langName = lang === 'ar' ? 'اللغة العربية' : 'English Language';
+
+  let hasUploadedDoc = false;
+  if (params.image) {
+    const mimeMatch = params.image.match(/^data:([^;]+);base64,/);
+    const mimeType = mimeMatch ? mimeMatch[1] : (params.image.startsWith('JVBERi0') ? 'application/pdf' : 'image/jpeg');
+    const cleanBase64 = params.image.replace(/^data:[^;]+;base64,/, '').trim();
+    if (cleanBase64.length > 0) {
+      hasUploadedDoc = true;
+      parts.push({
+        inlineData: {
+          data: cleanBase64,
+          mimeType
+        }
+      });
+    }
+  }
+
+  const prompt = `أنت مصمم امتحانات وقياس تقييمي متقدم بالذكاء الاصطناعي في "مركز النجاح للتدريب والاستشارات".
+${hasUploadedDoc ? `📄 تم إرفاق ملف كتاب مدرسي / ورقة أسئلة / مستند (PDF أو صورة). قم بقراءة وفحص كافة النصوص والفقرات والأسئلة والتمارين الواردة في المستند المرفق بدقة فائقة، وقم بصياغة واستخراج أسئلة الاختبار بناءً على المحتوى الحقيقي في الملف المرفق دون أي اختلاق.` : ''}
+قم بإنشاء اختبار ذكي متكامل لطلاب ${params.grade} في مادة ${params.courseName} حول الموضوع: "${params.topic}".
+الصعوبة: ${params.difficulty}.
+عدد الأسئلة: ${numQuestions}.
+أنواع الأسئلة المطلوبة: ${params.questionTypes.join(', ')}.
+اللغة: ${langName}.
+
+قم بإخراج JSON يحتوي على:
+1. title: عنوان الاختبار
+2. description: وصف الاختبار والتعليمات
+3. grade: المرحلة (${params.grade})
+4. courseName: المادة (${params.courseName})
+5. totalMarks: الدرجة الكلية (مثلاً ${numQuestions * 5})
+6. durationMinutes: المدة المقترحة
+7. questions: قائمة بـ ${numQuestions} أسئلة دقيقة ككائنات:
+   - type: نوع السؤال ('multiple_choice', 'true_false', 'short_answer', 'coding', 'kahoot')
+   - question: نص السؤال باللغة ${langName}
+   - options: مصفوفة الخيارات الأربعة (للنوع متعدد الخيارات أو كاهوت)، أو خيارين (صواب/خطأ)
+   - correctAnswer: الإجابة الصحيحة (رقم الفهرس 0..3 للخيارات المتعددة، أو 0/1 لصواب وخطأ، أو نص دقيق)
+   - explanation: تفسير تعليمي مفصل للإجابة الصحيحة
+   - points: الدرجة (مثلاً 5)`;
+
+  parts.push({ text: prompt });
+
+  if (process.env.GEMINI_API_KEY) {
+    try {
+      const { text } = await generateWithModelCascade({
+        contents: [{ role: 'user', parts }],
+        config: { responseMimeType: 'application/json' }
+      });
+      if (text) {
+        const cleanJson = text.replace(/```json\s*|\s*```/g, '').trim();
+        const parsed = JSON.parse(cleanJson);
+        if (parsed && Array.isArray(parsed.questions) && parsed.questions.length > 0) {
+          return parsed;
+        }
+      }
+    } catch (e: any) {
+      console.warn('Gemini advanced exam generation warning:', e?.message);
+    }
+  }
+
+  // Fallback questions generator
+  const generatedQuestions = [];
+  for (let i = 1; i <= numQuestions; i++) {
+    const isEven = i % 2 === 0;
+    if (isEven && params.questionTypes.includes('true_false')) {
+      generatedQuestions.push({
+        id: `q-${Date.now()}-${i}`,
+        type: 'true_false',
+        question: `هل يعتبر تطبيق المفاهيم المعيارية والخطوات المنهجية ركيزة أساسية في إنجاز تدريبات ${params.topic}؟`,
+        options: ['صواب ✅', 'خطأ ❌'],
+        correctAnswer: 0,
+        explanation: 'نعم، الالتزام بالمعايير العلمية يضمن الدقة والأداء الأمثل وتفادي الأخطاء.',
+        points: 5
+      });
+    } else {
+      generatedQuestions.push({
+        id: `q-${Date.now()}-${i}`,
+        type: 'multiple_choice',
+        question: `السؤال ${i}: ما هي الخطوة الصحيحة للتعامل مع متطلبات ${params.topic} لطلاب ${params.grade}؟`,
+        options: [
+          'التحليل والتخطيط والتنفيذ المنهجي وفق المعايير المعتمدة',
+          'التنفيذ العشوائي دون تخطيط أو مراجعة',
+          'تجاهل التدقيق والمطابقة مع النماذج الصحيحة',
+          'الاعتماد على التخمين غير المدروس'
+        ],
+        correctAnswer: 0,
+        explanation: 'المنهجية والتخطيط الدقيق هما مفتاح النجاح والتميز في كافة المهام والتطبيقات.',
+        points: 5
+      });
+    }
+  }
+
+  return {
+    title: `اختبار تقييمي شامل: ${params.topic}`,
+    description: `اختبار قياس مهارات ومكتسبات مادة ${params.courseName} - ${params.grade}`,
+    grade: params.grade,
+    courseName: params.courseName,
+    totalMarks: numQuestions * 5,
+    durationMinutes: 20,
+    questions: generatedQuestions
+  };
+}
+

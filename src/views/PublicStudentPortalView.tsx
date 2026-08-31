@@ -803,65 +803,8 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
       }
     }
 
-    // --- Layer 4: Auto-Register / Fallback Session for Any Entered Code (e.g. A002) ---
-    const autoStudent: StudentData = {
-      id: 'tr-auto-' + Date.now(),
-      code: rawInput.toUpperCase(),
-      fullName: `طالب متميز (${rawInput.toUpperCase()})`,
-      phone: isPhone ? rawInput : '01000000000',
-      nationalId: '',
-      photoUrl: '',
-      points: 120,
-      totalPoints: 180,
-      courseName: 'التكنولوجيا والبرمجة الحديثة',
-      groupName: 'المجموعة التفاعلية الأساسية',
-      branchId: 'branch-1',
-      portalPassword: '',
-      groupDetails: { name: 'المجموعة التفاعلية الأساسية' }
-    };
-
-    const autoTrainer: TrainerData = {
-      name: 'المدرب المشرف العام',
-      phone: '01000000000',
-      email: 'trainer@nagah.ms',
-      specialization: 'خبير البرمجة والتكنولوجيا'
-    };
-
-    const autoPayload = {
-      student: autoStudent,
-      trainer: autoTrainer,
-      badges: [
-        { id: 'b-1', title: 'مبرمج المستقبل', description: 'بداية موفقة ونشطة في المنصة', icon: '🏆', date: '2026-08-29' }
-      ],
-      homeworks: [
-        { id: 'hw-1', title: 'التطبيق العملي الأول', course: 'التكنولوجيا والبرمجة الحديثة', status: 'submitted', grade: 95 }
-      ],
-      labSchedules: [
-        { id: 'lab-1', title: 'جلسة التدريب المعملي', time: 'يومياً', room: 'المعمل الرئيسي', status: 'upcoming' }
-      ],
-      groupTasks: [
-        { id: 'task-1', title: 'مشروع الابتكار البرمجي', courseName: 'التكنولوجيا والبرمجة الحديثة', maxPoints: 50 }
-      ],
-      certificates: [
-        { id: 'cert-1', title: 'شهادة المشاركة الفعالة', issueDate: '2026-08-29', grade: 'ممتاز' }
-      ],
-      portalMessages: []
-    };
-
-    setStudent(autoStudent);
-    setTrainer(autoTrainer);
-    setBadges(autoPayload.badges as any);
-    setHomeworks(autoPayload.homeworks as any);
-    setLabSchedules(autoPayload.labSchedules as any);
-    setGroupTasks(autoPayload.groupTasks as any);
-    setCertificates(autoPayload.certificates as any);
-    setPortalMessages(autoPayload.portalMessages as any);
-
-    resilientOfflineService.saveToCache('student', autoPayload);
-    localStorage.setItem('nagah_student_active_session', JSON.stringify(autoPayload));
-    setIsOfflineFallbackData(true);
-    localStorage.setItem('student_session_code', rawInput);
-    setIsLoggedIn(true);
+    // --- Unregistered Student Authorization Error ---
+    setLoginError('لم يتم العثور على طالب مسجل بهذا الكود أو رقم الهاتف. يرجى مراجعة إدارة المركز للتسجيل والاشتراك.');
     setIsLoggingIn(false);
     return;
   };

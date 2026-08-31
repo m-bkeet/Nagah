@@ -1,15 +1,71 @@
-import { createClient } from '@supabase/supabase-js';
 import * as crypto from 'crypto';
+import { db } from './db';
 
-const SUPABASE_URL = process.env.SUPABASE_URL || 'https://placeholder.supabase.co';
-const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || 'placeholder_key';
+const SUPABASE_URL = process.env.SUPABASE_URL || '';
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || '';
+const hasValidSupabase = Boolean(
+  SUPABASE_URL &&
+  !SUPABASE_URL.includes('placeholder') &&
+  SUPABASE_KEY &&
+  !SUPABASE_KEY.includes('placeholder')
+);
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
-  auth: { persistSession: false }
-});
+let supabaseClient: any = null;
+if (hasValidSupabase) {
+  try {
+    const { createClient } = require('@supabase/supabase-js');
+    supabaseClient = createClient(SUPABASE_URL, SUPABASE_KEY, {
+      auth: { persistSession: false }
+    });
+  } catch (e) {
+    supabaseClient = null;
+  }
+}
 
 function generateId() {
   return crypto.randomUUID().replace(/-/g, '').substring(0, 20);
+}
+
+// In-memory / DB collection helper
+function getCollectionStore(collectionName: string): any[] {
+  const data = db.getData() as any;
+  if (!data) return [];
+
+  // Known entity arrays in DatabaseSchema
+  if (Array.isArray(data[collectionName])) {
+    return data[collectionName];
+  }
+
+  // System settings single doc or custom table
+  if (collectionName === 'settings') {
+    return data.settings ? [{ id: 'main', ...data.settings }] : [];
+  }
+
+  // Custom collection store inside data
+  if (!data._customCollections) {
+    data._customCollections = {};
+  }
+  if (!Array.isArray(data._customCollections[collectionName])) {
+    data._customCollections[collectionName] = [];
+  }
+  return data._customCollections[collectionName];
+}
+
+function saveCollectionStore(collectionName: string, items: any[]) {
+  const data = db.getData() as any;
+  if (!data) return;
+
+  if (collectionName in data && Array.isArray(data[collectionName])) {
+    data[collectionName] = items;
+  } else if (collectionName === 'settings') {
+    if (items.length > 0) {
+      data.settings = { ...(data.settings || {}), ...items[0] };
+    }
+  } else {
+    if (!data._customCollections) data._customCollections = {};
+    data._customCollections[collectionName] = items;
+  }
+  db.save();
 }
 
 class DocumentSnapshot {
@@ -40,9 +96,9 @@ class QuerySnapshot {
 }
 
 class Query {
-  private filters: any[] = [];
-  private orderFields: {field: string, dir: string}[] = [];
-  private limitCount?: number;
+  protected filters: any[] = [];
+  protected orderFields: { field: string; dir: string }[] = [];
+  protected limitCount?: number;
 
   constructor(public collectionName: string) {}
 
@@ -62,20 +118,10 @@ class Query {
   }
 
   async get(): Promise<QuerySnapshot> {
-    const { data, error } = await supabase
-      .from('collections')
-      .select('id, data')
-      .eq('collection_name', this.collectionName);
+    const rawItems = getCollectionStore(this.collectionName);
+    let results = rawItems.map(item => ({ ...item }));
 
-    if (error) {
-      console.error('Supabase query error:', error);
-      throw error;
-    }
-
-    let results = (data || []).map(row => row.data);
-    let idMap = new Map((data || []).map(row => [row.data, row.id]));
-
-    // In-memory filtering
+    // Apply filtering
     for (const filter of this.filters) {
       results = results.filter(item => {
         const itemVal = item[filter.field];
@@ -93,7 +139,7 @@ class Query {
       });
     }
 
-    // In-memory sorting
+    // Apply sorting
     if (this.orderFields.length > 0) {
       results.sort((a, b) => {
         for (const order of this.orderFields) {
@@ -106,14 +152,14 @@ class Query {
       });
     }
 
-    // In-memory limiting
+    // Apply limiting
     if (this.limitCount !== undefined) {
       results = results.slice(0, this.limitCount);
     }
 
     const docs = results.map(item => {
-      const id = idMap.get(item) as string;
-      return new DocumentSnapshot(id, true, item, new DocumentReference(this.collectionName, id));
+      const docId = String(item.id || generateId());
+      return new DocumentSnapshot(docId, true, item, new DocumentReference(this.collectionName, docId));
     });
 
     return new QuerySnapshot(docs);
@@ -124,63 +170,65 @@ class DocumentReference {
   constructor(public collectionName: string, public id: string) {}
 
   async get(): Promise<DocumentSnapshot> {
-    const { data, error } = await supabase
-      .from('collections')
-      .select('data')
-      .eq('collection_name', this.collectionName)
-      .eq('id', this.id)
-      .maybeSingle();
-      
-    if (error) {
-      throw error;
-    }
-    
-    if (data) {
-      return new DocumentSnapshot(this.id, true, data.data, this);
+    const items = getCollectionStore(this.collectionName);
+    const item = items.find(i => String(i.id) === String(this.id));
+    if (item) {
+      return new DocumentSnapshot(this.id, true, { ...item }, this);
     }
     return new DocumentSnapshot(this.id, false, null, this);
   }
 
   async set(data: any, options?: { merge?: boolean }): Promise<void> {
-    if (options?.merge) {
-      await this.update(data).catch(async () => {
-        await this._upsert(data);
-      });
+    const items = getCollectionStore(this.collectionName);
+    const existingIndex = items.findIndex(i => String(i.id) === String(this.id));
+    const finalData = options?.merge && existingIndex >= 0
+      ? { ...items[existingIndex], ...data, id: this.id }
+      : { ...data, id: this.id };
+
+    if (existingIndex >= 0) {
+      items[existingIndex] = finalData;
     } else {
-      await this._upsert(data);
+      items.push(finalData);
     }
-  }
-  
-  async _upsert(data: any) {
-    // Inject ID if not present
-    const finalData = { ...data, id: this.id };
-    const { error } = await supabase
-      .from('collections')
-      .upsert({
-        collection_name: this.collectionName,
-        id: this.id,
-        data: finalData,
-        updated_at: new Date().toISOString()
-      }, { onConflict: 'collection_name,id' });
-    if (error) throw error;
+    saveCollectionStore(this.collectionName, items);
+
+    // Optional background sync if Supabase is active
+    if (supabaseClient) {
+      try {
+        await supabaseClient.from('collections').upsert({
+          collection_name: this.collectionName,
+          id: this.id,
+          data: finalData,
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'collection_name,id' });
+      } catch (e) {
+        // Silently ignore background sync error
+      }
+    }
   }
 
   async update(data: any): Promise<void> {
-    const current = await this.get();
-    if (!current.exists) {
-      throw new Error(`Document not found: ${this.collectionName}/${this.id}`);
+    const items = getCollectionStore(this.collectionName);
+    const existingIndex = items.findIndex(i => String(i.id) === String(this.id));
+    if (existingIndex < 0) {
+      // Create if not exists to be lenient
+      items.push({ ...data, id: this.id });
+    } else {
+      items[existingIndex] = { ...items[existingIndex], ...data, id: this.id };
     }
-    const merged = { ...current.data(), ...data, id: this.id };
-    await this._upsert(merged);
+    saveCollectionStore(this.collectionName, items);
   }
 
   async delete(): Promise<void> {
-    const { error } = await supabase
-      .from('collections')
-      .delete()
-      .eq('collection_name', this.collectionName)
-      .eq('id', this.id);
-    if (error) throw error;
+    const items = getCollectionStore(this.collectionName);
+    const filtered = items.filter(i => String(i.id) !== String(this.id));
+    saveCollectionStore(this.collectionName, filtered);
+
+    if (supabaseClient) {
+      try {
+        await supabaseClient.from('collections').delete().eq('collection_name', this.collectionName).eq('id', this.id);
+      } catch (e) {}
+    }
   }
 }
 
@@ -195,20 +243,20 @@ class CollectionReference extends Query {
 }
 
 class WriteBatch {
-  private mutations: any[] = [];
+  private mutations: (() => Promise<void>)[] = [];
 
   set(ref: DocumentReference, data: any, options?: { merge?: boolean }): WriteBatch {
-    this.mutations.push(async () => await ref.set(data, options));
+    this.mutations.push(async () => { await ref.set(data, options); });
     return this;
   }
 
   update(ref: DocumentReference, data: any): WriteBatch {
-    this.mutations.push(async () => await ref.update(data));
+    this.mutations.push(async () => { await ref.update(data); });
     return this;
   }
 
   delete(ref: DocumentReference): WriteBatch {
-    this.mutations.push(async () => await ref.delete());
+    this.mutations.push(async () => { await ref.delete(); });
     return this;
   }
 
@@ -225,7 +273,6 @@ class Transaction {
   }
 
   set(ref: DocumentReference, data: any, options?: { merge?: boolean }): Transaction {
-    // Fire and forget within transaction execution (mock)
     ref.set(data, options);
     return this;
   }
@@ -263,5 +310,6 @@ export const adminDiagInfo = {
   clientEmailSet: true,
   privateKeyPresent: true,
   privateKeyValid: true,
-  dbId: 'supabase-mock'
+  dbId: 'local-authoritative-db'
 };
+

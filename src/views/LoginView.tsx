@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
-import { Shield, Lock, User, CheckCircle2, ArrowRight, Download, Smartphone, Monitor, UserPlus, BookOpen } from 'lucide-react';
+import { Shield, Lock, User, CheckCircle2, ArrowRight, Download, Smartphone, Monitor, UserPlus, BookOpen, GraduationCap } from 'lucide-react';
 import { UserRole } from '../types';
 import { PwaInstallPrompt } from '../components/PwaInstallPrompt';
 import { ThemeQuickSwitcher } from '../components/ThemeQuickSwitcher';
@@ -254,31 +254,44 @@ export const LoginView: React.FC = () => {
           )}
         </div>
 
-        {/* Student & Parent Portals Direct Access */}
-        <div className="grid grid-cols-2 gap-3">
+        {/* Student, Parent & Trainer Portals Direct Access */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
           <a
             href="/?view=student_portal"
-            className="bg-amber-950/40 border border-amber-500/40 hover:border-amber-400 rounded-3xl p-4 text-center backdrop-blur-md space-y-2 shadow-xl block group transition-all"
+            className="bg-amber-950/40 border border-amber-500/40 hover:border-amber-400 rounded-2xl p-3.5 text-center backdrop-blur-md space-y-1.5 shadow-xl block group transition-all"
           >
             <div className="flex items-center justify-center gap-1.5 text-amber-300 font-bold text-xs group-hover:text-amber-200">
-              <BookOpen className="w-4 h-4 text-amber-400" />
-              <span>بوابة الطالب (الواجبات والذكاء)</span>
+              <BookOpen className="w-4 h-4 text-amber-400 shrink-0" />
+              <span>بوابة الطالب (الذكاء الاصطناعي)</span>
             </div>
             <p className="text-[10px] text-slate-400">
-              رفع الواجبات وتصحيح Gemini الفوري
+              رفع الواجبات وتصحيح Gemini
             </p>
           </a>
 
           <a
             href="/?view=parent_portal"
-            className="bg-emerald-950/40 border border-emerald-500/40 hover:border-emerald-400 rounded-3xl p-4 text-center backdrop-blur-md space-y-2 shadow-xl block group transition-all"
+            className="bg-emerald-950/40 border border-emerald-500/40 hover:border-emerald-400 rounded-2xl p-3.5 text-center backdrop-blur-md space-y-1.5 shadow-xl block group transition-all"
           >
             <div className="flex items-center justify-center gap-1.5 text-emerald-300 font-bold text-xs group-hover:text-emerald-200">
-              <User className="w-4 h-4 text-emerald-400" />
+              <User className="w-4 h-4 text-emerald-400 shrink-0" />
               <span>بوابة ولي الأمر</span>
             </div>
             <p className="text-[10px] text-slate-400">
               متابعة الحضور، النتائج والدفع
+            </p>
+          </a>
+
+          <a
+            href="/?view=trainer_portal"
+            className="bg-indigo-950/40 border border-indigo-500/40 hover:border-indigo-400 rounded-2xl p-3.5 text-center backdrop-blur-md space-y-1.5 shadow-xl block group transition-all"
+          >
+            <div className="flex items-center justify-center gap-1.5 text-indigo-300 font-bold text-xs group-hover:text-indigo-200">
+              <GraduationCap className="w-4 h-4 text-indigo-400 shrink-0" />
+              <span>بوابة المدرب (دخول المحاضر)</span>
+            </div>
+            <p className="text-[10px] text-slate-400">
+              إدارة المجموعات، الحضور والواجبات
             </p>
           </a>
         </div>

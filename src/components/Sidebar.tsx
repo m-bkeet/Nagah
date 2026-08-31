@@ -125,11 +125,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   return (
     <>
-      {/* Dim backdrop overlay when sidebar drawer is expanded */}
+      {/* Mobile-only backdrop overlay when sidebar drawer is expanded on small screens */}
       {!isCollapsed && (
         <div
           onClick={handleToggle}
-          className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-40 transition-all duration-300 animate-fadeIn"
+          className="md:hidden fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-40 transition-all duration-300 animate-fadeIn"
         />
       )}
 

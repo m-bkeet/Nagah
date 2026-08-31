@@ -40,6 +40,7 @@ import { useCenter } from '../context/CenterContext';
 import { api } from '../services/api';
 import { audioService } from '../services/audioService';
 import { SmartWhiteboardModal } from './SmartWhiteboardModal';
+import { SmartSpeakerModal } from './SmartSpeakerModal';
 
 interface FloatingTeachingToolsOverlayProps {
   activeSessionId?: string;
@@ -51,6 +52,9 @@ export const FloatingTeachingToolsOverlay: React.FC<FloatingTeachingToolsOverlay
   onNavigateToView
 }) => {
   const { showToast } = useCenter();
+
+  // Smart Speaker Modal State
+  const [isSmartSpeakerOpen, setIsSmartSpeakerOpen] = useState(false);
 
   // Floating Bar Expansion & Position
   const [isOpen, setIsIsOpen] = useState(false);
@@ -196,12 +200,12 @@ export const FloatingTeachingToolsOverlay: React.FC<FloatingTeachingToolsOverlay
             clearInterval(interval);
             setIsTimerRunning(false);
             audioService.playSessionEndFanfare();
-            showToast('انتهى الوقت المحدد للنشاط! 🎉', 'success');
+            setTimeout(() => showToast('انتهى الوقت المحدد للنشاط! 🎉', 'success'), 0);
             return 0;
           }
           if (prev === 61) {
             audioService.playFiveMinuteWarningAlert();
-            showToast('تبقى دقيقة واحدة فقط على نهاية المؤقت! ⏱️', 'warning');
+            setTimeout(() => showToast('تبقى دقيقة واحدة فقط على نهاية المؤقت! ⏱️', 'warning'), 0);
           }
           return prev - 1;
         });
@@ -288,14 +292,12 @@ export const FloatingTeachingToolsOverlay: React.FC<FloatingTeachingToolsOverlay
         if (targetTool) {
           e.preventDefault();
           const selected = targetTool;
-          setActiveTool(prev => {
-            const next = prev === selected ? 'none' : selected;
-            if (next !== 'none') {
-              audioService.playChime([700, 900]);
-              showToast(`تفعيل أداة ${toolName} (Alt+${key.replace('Key', '')}) ⚡`, 'success');
-            }
-            return next;
-          });
+          const isOpening = activeTool !== selected;
+          setActiveTool(isOpening ? selected : 'none');
+          if (isOpening) {
+            audioService.playChime([700, 900]);
+            showToast(`تفعيل أداة ${toolName} (Alt+${key.replace('Key', '')}) ⚡`, 'success');
+          }
         }
       }
     };
@@ -526,6 +528,13 @@ export const FloatingTeachingToolsOverlay: React.FC<FloatingTeachingToolsOverlay
 
   // Unified Central Tool Activation & History Tracking
   const handleSelectTool = (toolId: string) => {
+    if (toolId === 'smart_speaker') {
+      setIsSmartSpeakerOpen(true);
+      audioService.playChime([520, 680, 850]);
+      showToast('جاري فتح مكبر الصوت الذكي وعازل الضوضاء 📢🎙️', 'info');
+      if (!isPinned) setIsIsOpen(false);
+      return;
+    }
     if (toolId === 'clear') {
       clearCanvasOverlay();
       audioService.playChime([600, 800]);
@@ -600,6 +609,7 @@ export const FloatingTeachingToolsOverlay: React.FC<FloatingTeachingToolsOverlay
   };
 
   const TOOLS_REGISTRY = [
+    { id: 'smart_speaker', label: 'مكبر صوت 📢', category: 'صوت', shortcut: 'Alt+S', icon: Radio, textColor: 'text-emerald-400 group-hover:text-emerald-300' },
     { id: 'pen', label: 'قلم 🖊️', category: 'رسم', shortcut: 'Alt+P', icon: PenTool, textColor: 'text-red-400 group-hover:text-red-300' },
     { id: 'highlighter', label: 'تمييز 🖍️', category: 'رسم', shortcut: 'Alt+H', icon: Highlighter, textColor: 'text-amber-400 group-hover:text-amber-300' },
     { id: 'laser', label: 'ليزر 🔴', category: 'تركيز', shortcut: 'Alt+L', icon: Radio, textColor: 'text-red-500 group-hover:text-red-400' },
@@ -769,12 +779,10 @@ export const FloatingTeachingToolsOverlay: React.FC<FloatingTeachingToolsOverlay
             onMouseDown={handleMouseDownDrag}
             onDoubleClick={(e) => {
               e.stopPropagation();
-              setIsPinned(prev => {
-                const next = !prev;
-                if (next) setIsIsOpen(true);
-                showToast(next ? 'تم تثبيت قائمة أدوات الشرح مفتوحة 📌 (Double-Click)' : 'تم إلغاء التثبيت 🔓', 'info');
-                return next;
-              });
+              const next = !isPinned;
+              setIsPinned(next);
+              if (next) setIsIsOpen(true);
+              showToast(next ? 'تم تثبيت قائمة أدوات الشرح مفتوحة 📌 (Double-Click)' : 'تم إلغاء التثبيت 🔓', 'info');
             }}
             onClick={() => {
               if (activeTool !== 'none') {
@@ -1314,6 +1322,15 @@ export const FloatingTeachingToolsOverlay: React.FC<FloatingTeachingToolsOverlay
           </div>
         </div>
       )}
+
+      {/* ---------------------------------------------------- */}
+      {/* POPUP MODAL: SMART SPEAKER & ADVANCED NOISE FILTER */}
+      {/* ---------------------------------------------------- */}
+      <SmartSpeakerModal
+        isOpen={isSmartSpeakerOpen}
+        onClose={() => setIsSmartSpeakerOpen(false)}
+        activeSessionId={activeSessionId}
+      />
     </>
   );
 };

@@ -32,11 +32,51 @@ import {
   Crown,
   Video
 } from 'lucide-react';
-import { InteractiveSession, Question, ExamQuestion } from '../types';
+import { InteractiveSession, Question, ExamQuestion, Trainer, Group, Course, Trainee } from '../types';
+import { AIPresentationGenerator } from '../components/trainer/AIPresentationGenerator';
+import { LiveLectureStudio } from '../components/trainer/LiveLectureStudio';
+import { SessionCeremonyModal } from '../components/SessionCeremonyModal';
+import {
+  Presentation,
+  BookOpen,
+  Monitor,
+  Code,
+  PartyPopper,
+  Flame,
+  Sliders,
+  Check,
+  Terminal,
+  Volume2
+} from 'lucide-react';
 
 export const InteractiveSessionsView: React.FC = () => {
   const { showToast, refreshKey } = useCenter();
-  const [activeTab, setActiveTab] = useState<'external' | 'nagah_pro' | 'bank' | 'quick' | 'leaderboard' | 'language_lab'>('nagah_pro');
+  const [activeTab, setActiveTab] = useState<'lesson_workspace' | 'nagah_pro' | 'external' | 'bank' | 'quick' | 'leaderboard' | 'language_lab'>('lesson_workspace');
+  const [lessonSubMode, setLessonSubMode] = useState<'slides' | 'live_studio' | 'practical' | 'ceremony'>('slides');
+
+  // Center Domain Entities
+  const [trainers, setTrainers] = useState<Trainer[]>([]);
+  const [groups, setGroups] = useState<Group[]>([]);
+  const [courses, setCourses] = useState<Course[]>([]);
+  const [trainees, setTrainees] = useState<Trainee[]>([]);
+  const [selectedTrainer, setSelectedTrainer] = useState<Trainer | null>(null);
+  const [selectedGroup, setSelectedGroup] = useState<Group | null>(null);
+  const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
+  const [isCeremonyOpen, setIsCeremonyOpen] = useState(false);
+
+  // Practical Teaching Mode States
+  const [practicalCode, setPracticalCode] = useState(`// كود التدريب العملي والتجربة الحية بالمعمل
+function calculateGrade(score, maxScore) {
+  const percentage = (score / maxScore) * 100;
+  if (percentage >= 90) return 'ممتاز 🌟';
+  if (percentage >= 80) return 'جيد جداً 👍';
+  if (percentage >= 70) return 'جيد 👏';
+  return 'يحتاج لمزيد من التدريب 💪';
+}
+
+console.log("نتيجة الطالب:", calculateGrade(48, 50));`);
+  const [practicalOutput, setPracticalOutput] = useState<string>('');
+  const [isExecutingCode, setIsExecutingCode] = useState(false);
 
   // Language Lab States (معمل اللغات الذكي)
   const [langPersona, setLangPersona] = useState<'interview' | 'airport' | 'tech_support' | 'daily'>('interview');
@@ -94,7 +134,74 @@ export const InteractiveSessionsView: React.FC = () => {
     loadQuestionBank();
     loadDevices();
     loadQuizzes();
+    loadCenterData();
   }, [refreshKey]);
+
+  const loadCenterData = async () => {
+    try {
+      const [tRes, gRes, cRes, trRes] = await Promise.all([
+        api.getTrainers().catch(() => []),
+        api.getGroups().catch(() => []),
+        api.getCourses().catch(() => []),
+        api.getTrainees().catch(() => [])
+      ]);
+      setTrainers(tRes);
+      setGroups(gRes);
+      setCourses(cRes);
+      setTrainees(trRes);
+      if (tRes.length > 0) setSelectedTrainer(tRes[0]);
+      if (gRes.length > 0) setSelectedGroup(gRes[0]);
+      if (cRes.length > 0) setSelectedCourse(cRes[0]);
+    } catch (e) {
+      console.error('Failed to load center data for interactive sessions', e);
+    }
+  };
+
+  const handleAwardBonus = async (traineeId: string, points: number, reason: string) => {
+    try {
+      await api.awardPoints(traineeId, points, reason);
+      showToast(`تم منح ${points} نقطة بنجاح! ⭐`, 'success');
+      loadCenterData();
+    } catch (e: any) {
+      showToast(e.message || 'فشل منح النقاط', 'error');
+    }
+  };
+
+  const handleRunPracticalCode = () => {
+    setIsExecutingCode(true);
+    setPracticalOutput('');
+    try {
+      const logs: string[] = [];
+      const customConsole = {
+        log: (...args: any[]) => logs.push(args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ')),
+        error: (...args: any[]) => logs.push('❌ Error: ' + args.join(' ')),
+        warn: (...args: any[]) => logs.push('⚠️ Warn: ' + args.join(' '))
+      };
+      const runFn = new Function('console', practicalCode);
+      runFn(customConsole);
+      setPracticalOutput(logs.join('\n') || 'تم تنفيذ الكود بنجاح دون أخطاء.');
+      showToast('تم تشغيل واختبار الكود بنجاح!', 'success');
+    } catch (err: any) {
+      setPracticalOutput(`❌ خطأ في التنفيذ:\n${err.message}`);
+      showToast('يوجد خطأ في الكود', 'error');
+    } finally {
+      setIsExecutingCode(false);
+    }
+  };
+
+  const handleBroadcastPracticalCode = async () => {
+    try {
+      await api.createInteractiveSession({
+        title: 'تطبيق عملي مباشر: محرر الأكواد والتمارين',
+        platform: 'Other',
+        url: window.location.origin,
+        status: 'active'
+      });
+      showToast('تم بث مسألة الكود التفاعلي لجميع أجهزة الطلاب في المعمل! 💻🚀', 'success');
+    } catch (err: any) {
+      showToast(err.message || 'فشل بث الكود', 'error');
+    }
+  };
 
   const loadQuizzes = async () => {
     try {
@@ -361,79 +468,245 @@ export const InteractiveSessionsView: React.FC = () => {
       </div>
 
       {/* Main Mode Navigation Tabs */}
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 bg-slate-900/80 p-1.5 rounded-2xl border border-slate-800 backdrop-blur-md">
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2 bg-slate-900/80 p-1.5 rounded-2xl border border-slate-800 backdrop-blur-md">
+        <button
+          onClick={() => setActiveTab('lesson_workspace')}
+          className={`py-3 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all ${
+            activeTab === 'lesson_workspace'
+              ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 shadow-lg font-black scale-[1.02]'
+              : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+          }`}
+        >
+          <BookOpen className="w-4 h-4 shrink-0" />
+          <span className="truncate">شرح الحصة الذكي</span>
+        </button>
+
         <button
           onClick={() => setActiveTab('nagah_pro')}
-          className={`py-3 px-4 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all ${
+          className={`py-3 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all ${
             activeTab === 'nagah_pro'
               ? 'bg-amber-500 text-slate-950 shadow-lg font-black scale-[1.02]'
               : 'text-slate-300 hover:bg-slate-800 hover:text-white'
           }`}
         >
-          <Crown className="w-4 h-4" />
-          <span>النجاح Pro (Kahoot Style)</span>
+          <Crown className="w-4 h-4 shrink-0" />
+          <span className="truncate">النجاح Pro (Kahoot)</span>
         </button>
 
         <button
           onClick={() => setActiveTab('external')}
-          className={`py-3 px-4 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all ${
+          className={`py-3 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all ${
             activeTab === 'external'
               ? 'bg-purple-500 text-white shadow-lg font-black scale-[1.02]'
               : 'text-slate-300 hover:bg-slate-800 hover:text-white'
           }`}
         >
-          <Globe className="w-4 h-4" />
-          <span>كاهوت / كويزيز (External)</span>
+          <Globe className="w-4 h-4 shrink-0" />
+          <span className="truncate">كاهوت / كويزيز</span>
         </button>
 
         <button
           onClick={() => setActiveTab('bank')}
-          className={`py-3 px-4 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all ${
+          className={`py-3 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all ${
             activeTab === 'bank'
               ? 'bg-cyan-500 text-slate-950 shadow-lg font-black scale-[1.02]'
               : 'text-slate-300 hover:bg-slate-800 hover:text-white'
           }`}
         >
-          <Database className="w-4 h-4" />
-          <span>بنك الأسئلة بالبرنامج ({questionBank.length})</span>
+          <Database className="w-4 h-4 shrink-0" />
+          <span className="truncate">بنك الأسئلة ({questionBank.length})</span>
         </button>
 
         <button
           onClick={() => setActiveTab('quick')}
-          className={`py-3 px-4 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all ${
+          className={`py-3 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all ${
             activeTab === 'quick'
               ? 'bg-emerald-500 text-slate-950 shadow-lg font-black scale-[1.02]'
               : 'text-slate-300 hover:bg-slate-800 hover:text-white'
           }`}
         >
-          <Zap className="w-4 h-4" />
-          <span>السؤال اللحظي</span>
+          <Zap className="w-4 h-4 shrink-0" />
+          <span className="truncate">السؤال اللحظي</span>
         </button>
 
         <button
           onClick={() => setActiveTab('leaderboard')}
-          className={`py-3 px-4 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all ${
+          className={`py-3 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all ${
             activeTab === 'leaderboard'
               ? 'bg-blue-500 text-white shadow-lg font-black scale-[1.02]'
               : 'text-slate-300 hover:bg-slate-800 hover:text-white'
           }`}
         >
-          <Trophy className="w-4 h-4" />
-          <span>النتائج والمتصدرين</span>
+          <Trophy className="w-4 h-4 shrink-0" />
+          <span className="truncate">المتصدرين</span>
         </button>
 
         <button
           onClick={() => setActiveTab('language_lab')}
-          className={`py-3 px-4 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all ${
+          className={`py-3 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all ${
             activeTab === 'language_lab'
               ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-slate-950 shadow-lg font-black scale-[1.02]'
               : 'text-slate-300 hover:bg-slate-800 hover:text-white'
           }`}
         >
-          <Languages className="w-4 h-4" />
-          <span>معمل اللغات الذكي 🗣️</span>
+          <Languages className="w-4 h-4 shrink-0" />
+          <span className="truncate">معمل اللغات 🗣️</span>
         </button>
       </div>
+
+      {/* ========================================================================= */}
+      {/* TAB: LESSON WORKSPACE (شرح الحصة والمحتوى التفاعلي) */}
+      {/* ========================================================================= */}
+      {activeTab === 'lesson_workspace' && (
+        <div className="space-y-6 animate-fadeIn">
+          {/* Sub-mode Navigation Header */}
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-slate-900 border border-slate-800 p-3 rounded-2xl">
+            <div className="flex items-center gap-2 overflow-x-auto w-full sm:w-auto custom-scrollbar p-1">
+              <button
+                onClick={() => setLessonSubMode('slides')}
+                className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all shrink-0 ${
+                  lessonSubMode === 'slides'
+                    ? 'bg-amber-500 text-slate-950 shadow-md font-black'
+                    : 'bg-slate-950 text-slate-300 hover:text-white border border-slate-800'
+                }`}
+              >
+                <Presentation className="w-4 h-4" />
+                <span>عرض الدرس والشرائح الذكية</span>
+              </button>
+
+              <button
+                onClick={() => setLessonSubMode('live_studio')}
+                className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all shrink-0 ${
+                  lessonSubMode === 'live_studio'
+                    ? 'bg-amber-500 text-slate-950 shadow-md font-black'
+                    : 'bg-slate-950 text-slate-300 hover:text-white border border-slate-800'
+                }`}
+              >
+                <Video className="w-4 h-4" />
+                <span>ستوديو الشرح والبث المباشر</span>
+              </button>
+
+              <button
+                onClick={() => setLessonSubMode('practical')}
+                className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all shrink-0 ${
+                  lessonSubMode === 'practical'
+                    ? 'bg-amber-500 text-slate-950 shadow-md font-black'
+                    : 'bg-slate-950 text-slate-300 hover:text-white border border-slate-800'
+                }`}
+              >
+                <Code className="w-4 h-4" />
+                <span>وضع التدريب العملي والتجربة</span>
+              </button>
+            </div>
+
+            {/* Quick Session Ending & Award Ceremony Trigger */}
+            <button
+              onClick={() => setIsCeremonyOpen(true)}
+              className="bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 px-4 py-2 rounded-xl text-xs font-black flex items-center gap-2 shadow-lg hover:scale-105 transition-all shrink-0 w-full sm:w-auto justify-center"
+            >
+              <PartyPopper className="w-4 h-4" />
+              <span>نهاية الحصة وتكريم الأبطال 🏆</span>
+            </button>
+          </div>
+
+          {/* Submode 1: AI Presentation Deck */}
+          {lessonSubMode === 'slides' && (
+            <div>
+              {trainers.length > 0 ? (
+                <AIPresentationGenerator
+                  trainer={selectedTrainer || trainers[0]}
+                  groups={groups}
+                  courses={courses}
+                  onShowToast={showToast}
+                />
+              ) : (
+                <div className="bg-slate-900 border border-slate-800 rounded-3xl p-8 text-center text-slate-400">
+                  <BookOpen className="w-12 h-12 text-amber-400 mx-auto mb-3 opacity-50" />
+                  <h3 className="text-base font-bold text-slate-200">جاري تجهيز بيانات المحتوى...</h3>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Submode 2: Live Lecture Studio */}
+          {lessonSubMode === 'live_studio' && (
+            <div>
+              {trainers.length > 0 ? (
+                <LiveLectureStudio
+                  trainer={selectedTrainer || trainers[0]}
+                  activeGroup={selectedGroup || groups[0] || null}
+                  groups={groups}
+                  onShowToast={showToast}
+                />
+              ) : (
+                <div className="bg-slate-900 border border-slate-800 rounded-3xl p-8 text-center text-slate-400">
+                  <Video className="w-12 h-12 text-amber-400 mx-auto mb-3 opacity-50" />
+                  <h3 className="text-base font-bold text-slate-200">ستوديو البث جاهز، يرجى اختيار المدرب والمجموعة</h3>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Submode 3: Practical Lab Teaching Mode */}
+          {lessonSubMode === 'practical' && (
+            <div className="space-y-6">
+              <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4 pb-4 border-b border-slate-800">
+                  <div>
+                    <h3 className="text-base font-black text-slate-100 flex items-center gap-2">
+                      <Terminal className="w-5 h-5 text-amber-400" />
+                      <span>محرر الأكواد والتمارين العملية الحية بالمعمل</span>
+                    </h3>
+                    <p className="text-xs text-slate-400 mt-1">
+                      اكتب الكود أو التمرين العملي ثم قم بتشغيله وبثه مباشرة إلى شاشات أجهزة الطلاب
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={handleRunPracticalCode}
+                      disabled={isExecutingCode}
+                      className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 px-4 py-2 rounded-xl text-xs font-black flex items-center gap-2 shadow-lg transition-all"
+                    >
+                      <Play className="w-4 h-4" />
+                      <span>{isExecutingCode ? 'جاري التشغيل...' : 'تشغيل الكود (Run)'}</span>
+                    </button>
+                    <button
+                      onClick={handleBroadcastPracticalCode}
+                      className="bg-amber-500 hover:bg-amber-400 text-slate-950 px-4 py-2 rounded-xl text-xs font-black flex items-center gap-2 shadow-lg transition-all"
+                    >
+                      <Send className="w-4 h-4" />
+                      <span>بث التمرين لأجهزة الطلاب 🚀</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  <div>
+                    <span className="text-xs font-bold text-slate-400 block mb-1">محرر الكود (JavaScript / Scratch Logic):</span>
+                    <textarea
+                      value={practicalCode}
+                      onChange={e => setPracticalCode(e.target.value)}
+                      rows={12}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-2xl p-4 font-mono text-xs text-amber-300 focus:border-amber-500 focus:outline-none custom-scrollbar leading-relaxed"
+                      dir="ltr"
+                    />
+                  </div>
+                  <div>
+                    <span className="text-xs font-bold text-slate-400 block mb-1">مخرجات التنفيذ (Console Output):</span>
+                    <div className="w-full h-64 bg-slate-950 border border-slate-800 rounded-2xl p-4 font-mono text-xs text-slate-300 overflow-y-auto custom-scrollbar" dir="ltr">
+                      {practicalOutput ? (
+                        <pre className="whitespace-pre-wrap">{practicalOutput}</pre>
+                      ) : (
+                        <span className="text-slate-600 italic">اضغط "تشغيل الكود" لمعاينة النتائج هنا...</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Mode Selector (Individual / Teams / League) - Floating style */}
       <div className="flex items-center justify-center gap-4 bg-slate-900/50 p-3 rounded-2xl border border-slate-800/50">
@@ -1527,6 +1800,16 @@ export const InteractiveSessionsView: React.FC = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Session Ending & Podium Ceremony Modal */}
+      {isCeremonyOpen && (
+        <SessionCeremonyModal
+          trainees={trainees}
+          groups={groups}
+          onClose={() => setIsCeremonyOpen(false)}
+          onAwardBonus={handleAwardBonus}
+        />
       )}
     </div>
   );

@@ -86,6 +86,8 @@ export const AIPresentationGenerator: React.FC<AIPresentationGeneratorProps> = (
   const [language, setLanguage] = useState<'ar' | 'en'>('ar');
   const [uploadedImageBase64, setUploadedImageBase64] = useState<string | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [uploadedFileName, setUploadedFileName] = useState<string | null>(null);
+  const [isPdfDoc, setIsPdfDoc] = useState(false);
 
   // Loading & Result State
   const [isGenerating, setIsGenerating] = useState(false);
@@ -123,12 +125,16 @@ export const AIPresentationGenerator: React.FC<AIPresentationGeneratorProps> = (
     const file = e.target.files?.[0];
     if (!file) return;
 
+    const isPdf = file.type === 'application/pdf' || file.name.endsWith('.pdf');
+    setIsPdfDoc(isPdf);
+    setUploadedFileName(file.name);
+
     const reader = new FileReader();
     reader.onload = (evt) => {
       const b64 = evt.target?.result as string;
       setUploadedImageBase64(b64);
-      setImagePreview(b64);
-      onShowToast('تم تحميل صورة صفحة الكتاب بنجاح! سيتم تحويلها لعرض تقديمي ذكي.', 'success');
+      setImagePreview(isPdf ? null : b64);
+      onShowToast(isPdf ? 'تم إرفاق كتاب / مستند PDF بنجاح! سيتم تحويله لعرض تقديمي تفاعلي ذكي.' : 'تم تحميل صورة صفحة الكتاب بنجاح!', 'success');
     };
     reader.readAsDataURL(file);
   };
@@ -345,35 +351,46 @@ export const AIPresentationGenerator: React.FC<AIPresentationGeneratorProps> = (
           </div>
         </div>
 
-        {/* Image Upload Area */}
+        {/* Image / PDF Upload Area */}
         <div className="pt-2 border-t border-slate-800">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
             <div className="flex items-center gap-2">
               <input
                 ref={fileInputRef}
                 type="file"
-                accept="image/*"
+                accept="image/*,application/pdf,.pdf"
                 onChange={handleImageUpload}
                 className="hidden"
               />
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
-                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs border border-slate-700 transition-all"
+                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs border border-slate-700 transition-all active:scale-95"
               >
-                <Camera className="w-4 h-4 text-amber-400" />
-                <span>رفع أو تصوير صفحة الكتاب 📸</span>
+                <BookOpen className="w-4 h-4 text-amber-400" />
+                <span>رفع كتاب PDF أو صفحة درس 📚📸</span>
               </button>
 
-              {imagePreview && (
-                <div className="flex items-center gap-2 bg-slate-950 px-2.5 py-1 rounded-xl border border-slate-700 text-xs text-slate-300">
-                  <ImageIcon className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>تم إرفاق صفحة الكتاب</span>
+              {uploadedImageBase64 && (
+                <div className="flex items-center gap-2 bg-slate-950 px-2.5 py-1.5 rounded-xl border border-slate-700 text-xs text-slate-300">
+                  {isPdfDoc ? (
+                    <BookOpen className="w-3.5 h-3.5 text-rose-400" />
+                  ) : (
+                    <ImageIcon className="w-3.5 h-3.5 text-emerald-400" />
+                  )}
+                  <span className="max-w-[140px] truncate text-slate-200 font-medium">
+                    {uploadedFileName || (isPdfDoc ? 'كتاب PDF مرفق' : 'صورة مرفقة')}
+                  </span>
                   <button
-                    onClick={() => { setUploadedImageBase64(null); setImagePreview(null); }}
-                    className="text-red-400 hover:text-red-300 text-xs font-bold mr-1"
+                    onClick={() => {
+                      setUploadedImageBase64(null);
+                      setImagePreview(null);
+                      setUploadedFileName(null);
+                      setIsPdfDoc(false);
+                    }}
+                    className="text-rose-400 hover:text-rose-300 text-xs font-bold mr-1 hover:underline"
                   >
-                    إلغاء
+                    إلغاء ✕
                   </button>
                 </div>
               )}

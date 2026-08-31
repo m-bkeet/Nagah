@@ -70,7 +70,7 @@ const AppContent: React.FC = () => {
     return 'dashboard';
   });
 
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(true);
 
   // Sync tab with URL search parameter if present
   useEffect(() => {
@@ -102,15 +102,15 @@ const AppContent: React.FC = () => {
     return <PublicTrainerRegistrationView onBack={() => setActiveTab('dashboard')} />;
   }
 
-  if (activeTab === 'student-portal') {
+  if (activeTab === 'student-portal' || activeTab === 'student_portal') {
     return <PublicStudentPortalView onBack={() => setActiveTab('dashboard')} />;
   }
 
-  if (activeTab === 'parent-portal') {
+  if (activeTab === 'parent-portal' || activeTab === 'parent_portal') {
     return <PublicParentPortalView onBack={() => setActiveTab('dashboard')} />;
   }
 
-  if (activeTab === 'trainer-portal') {
+  if (activeTab === 'trainer-portal' || activeTab === 'trainer_portal') {
     return <PublicTrainerPortalView onBack={() => setActiveTab('dashboard')} />;
   }
 
@@ -219,7 +219,7 @@ const AppContent: React.FC = () => {
 
         {/* Dynamic Main View Area */}
         <main className={`flex-1 min-w-0 overflow-y-auto px-3 sm:px-6 py-4 pb-24 md:pb-8 custom-scrollbar transition-all duration-300 ${
-          isSidebarCollapsed ? 'md:pr-14 xl:pr-16' : ''
+          isSidebarCollapsed ? 'md:pr-14 xl:pr-16' : 'md:pr-60 xl:pr-64'
         }`}>
           {renderActiveView()}
         </main>

@@ -14,7 +14,7 @@ import path from 'path';
 import crypto from 'crypto';
 import { migrationRouter } from './migrationRoutes';
 import { db, hashPassword } from './db';
-import { extractExamFromMediaOrText, gradeHomeworkOrExamFromImage, generateWithModelCascade, designCertificateWithAI, generateTestCasesWithAI, autoGradeCodeWithAI, AIGradeScanResult } from './gemini';
+import { extractExamFromMediaOrText, gradeHomeworkOrExamFromImage, generateWithModelCascade, designCertificateWithAI, generateTestCasesWithAI, autoGradeCodeWithAI, AIGradeScanResult, generateTrainerPresentation, generateTrainerAdvancedExam } from './gemini';
 import { languageLabRouter } from './languageLabRoutes';
 import {
   Trainee,
@@ -80,6 +80,20 @@ apiRouter.get('/settings', (req: Request, res: Response) => {
 });
 
 apiRouter.post('/settings', (req: Request, res: Response) => {
+  try {
+    const data = db.getData();
+    data.settings = {
+      ...(data.settings || {}),
+      ...(req.body || {})
+    };
+    db.save();
+    res.json({ success: true, settings: data.settings });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+apiRouter.put('/settings', (req: Request, res: Response) => {
   try {
     const data = db.getData();
     data.settings = {
@@ -5820,26 +5834,9 @@ apiRouter.post('/student/login', async (req: Request, res: Response) => {
   });
 
   if (!trainee) {
-    const newId = 'tr-auto-' + Date.now();
-    const newCode = query.toUpperCase();
-    const newTrainee = {
-      id: newId,
-      code: newCode,
-      fullName: `طالب متميز (${newCode})`,
-      phone: query.match(/^\d+/) ? query : '01000000000',
-      courseId: 'course-1',
-      groupId: 'group-1',
-      branchId: 'branch-1',
-      status: 'active',
-      points: 120,
-      totalPoints: 180,
-      createdAt: new Date().toISOString()
-    };
-    const dbData = db.getData() as any;
-    if (!dbData.trainees) dbData.trainees = [];
-    dbData.trainees.push(newTrainee);
-    db.save();
-    trainee = newTrainee as any;
+    return res.status(404).json({
+      error: 'لم يتم العثور على طالب مسجل بهذا الكود أو رقم الهاتف. يرجى مراجعة إدارة المركز للتسجيل والاشتراك.'
+    });
   }
 
   const courses = db.getData().courses || [];
@@ -7650,4 +7647,330 @@ while (\$true) {
   res.setHeader('Content-Type', 'text/plain; charset=utf-8');
   res.setHeader('Content-Disposition', 'attachment; filename="NagahLabAgentSetup.ps1"');
   res.send(ps1);
+});
+
+// AI Advanced Exam Maker Endpoint
+apiRouter.post('/trainer/generate-advanced-exam', async (req: Request, res: Response) => {
+  try {
+    const { topic, courseName, grade, numQuestions, difficulty, questionTypes, language, image } = req.body;
+    const examData = await generateTrainerAdvancedExam({
+      topic: topic || 'تقييم شامل',
+      courseName: courseName || 'تكنولوجيا المعلومات والبرمجة',
+      grade: grade || 'الصف الرابع الابتدائي',
+      numQuestions: Number(numQuestions) || 5,
+      difficulty: difficulty || 'متوسط',
+      questionTypes: Array.isArray(questionTypes) ? questionTypes : ['multiple_choice', 'true_false', 'kahoot'],
+      language: language || 'ar',
+      image
+    });
+
+    res.json({ success: true, exam: examData });
+  } catch (error: any) {
+    console.error('Error generating advanced exam:', error);
+    res.status(500).json({ success: false, error: error.message || 'فشل توليد الاختبار' });
+  }
+});
+
+// AI Presentation Generator Endpoint
+apiRouter.post('/trainer/generate-presentation', async (req: Request, res: Response) => {
+  try {
+    const { topic, grade, subject, slideCount, language, image } = req.body;
+    const presentation = await generateTrainerPresentation({
+      topic: topic || 'شرح المفهوم الأساسي',
+      grade: grade || 'الصف الرابع الابتدائي',
+      subject: subject || 'تكنولوجيا المعلومات والبرمجة',
+      slideCount: Number(slideCount) || 6,
+      language: language || 'ar',
+      imageBase64: image
+    });
+
+    res.json({ success: true, presentation });
+  } catch (error: any) {
+    console.error('Error generating presentation:', error);
+    res.status(500).json({ success: false, error: error.message || 'فشل توليد العرض التقديمي' });
+  }
+});
+
+// Book Analysis & Structure Extraction Endpoint
+apiRouter.post('/trainer/analyze-book', async (req: Request, res: Response) => {
+  try {
+    const { bookTitle, grade, subject, imageBase64 } = req.body;
+    const presentation = await generateTrainerPresentation({
+      topic: `تحليل واستخراج محتوى كتاب ${bookTitle || ''}`,
+      grade: grade || 'الصف الرابع الابتدائي',
+      subject: subject || 'المنهج الدراسي المعتمد',
+      slideCount: 8,
+      language: 'ar',
+      imageBase64
+    });
+
+    res.json({ success: true, analysis: presentation });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message || 'فشل تحليل ملف الكتاب' });
+  }
+});
+
+// Parent Portal Login Endpoint
+apiRouter.post('/parent/login', async (req: Request, res: Response) => {
+  try {
+    const { phone } = req.body;
+    if (!phone) {
+      return res.status(400).json({ success: false, error: 'يرجى إدخال رقم هاتف ولي الأمر' });
+    }
+
+    const cleanPhone = phone.trim().replace(/\D/g, '');
+    const trainees = await TraineeRepo.getAll();
+    const matched = trainees.filter(t => {
+      const p1 = (t.parentPhone || '').replace(/\D/g, '');
+      const p2 = (t.phone || '').replace(/\D/g, '');
+      return (p1 && p1.includes(cleanPhone)) || (p2 && p2.includes(cleanPhone));
+    });
+
+    if (matched.length === 0) {
+      return res.status(404).json({ success: false, error: 'لم يتم العثور على ولي أمر مسجل بهذا الرقم. يرجى التواصل مع إدارة المركز.' });
+    }
+
+    const parentName = matched[0].parentName || `ولي أمر الطالب ${matched[0].fullName}`;
+    res.json({
+      success: true,
+      parent: {
+        name: parentName,
+        phone: cleanPhone,
+        studentCount: matched.length
+      },
+      students: matched
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Trainer Portal Login Endpoint
+apiRouter.post('/trainer-portal/login', async (req: Request, res: Response) => {
+  try {
+    const { identifier, phoneOrCode, password } = req.body;
+    const input = (identifier || phoneOrCode || '').trim().toLowerCase();
+    if (!input) {
+      return res.status(400).json({ success: false, error: 'يرجى إدخال رقم الهاتف أو الكود أو البريد الإلكتروني للمدرب' });
+    }
+
+    const trainers = await TrainerRepo.getAll();
+    const trainer = trainers.find(t => {
+      const p = (t.phone || '').trim().toLowerCase();
+      const e = (t.email || '').trim().toLowerCase();
+      const c = (t.id || '').trim().toLowerCase();
+      const tc = (t.code || '').trim().toLowerCase();
+      return p === input || e === input || c === input || tc === input;
+    });
+
+    if (!trainer) {
+      return res.status(404).json({ success: false, error: 'بيانات الدخول غير صحيحة أو المدرب غير مسجل بالنظام' });
+    }
+
+    // Check secret password if configured for this trainer
+    if (trainer.portalPassword && trainer.portalPassword.trim() !== '') {
+      if (!password || password.trim() !== trainer.portalPassword.trim()) {
+        return res.status(401).json({
+          success: false,
+          error: 'كلمة السر غير صحيحة. يرجى التأكد من الرقم السري أو التواصل مع الإدارة لاسترجاعه.'
+        });
+      }
+    }
+
+    res.json({ success: true, trainer });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Trainer Portal Data Fetch Endpoint
+apiRouter.get('/trainer-portal/data/:trainerId', async (req: Request, res: Response) => {
+  try {
+    const { trainerId } = req.params;
+    const trainers = await TrainerRepo.getAll();
+    const trainer = trainers.find(t => 
+      t.id === trainerId || 
+      (t.phone && t.phone.trim() === trainerId.trim()) || 
+      (t.email && t.email.trim().toLowerCase() === trainerId.trim().toLowerCase())
+    );
+
+    if (!trainer) {
+      return res.status(404).json({ success: false, error: 'المدرب غير موجود بالنظام' });
+    }
+
+    const [allGroups, allCourses, allTrainees, allAttendance, allExams, settingsObj] = await Promise.all([
+      GroupRepo.getAll().catch(() => []),
+      CourseRepo.getAll().catch(() => []),
+      TraineeRepo.getAll().catch(() => []),
+      AttendanceRepo.getAll().catch(() => []),
+      ExamRepo.getAll().catch(() => []),
+      SettingRepo.get().catch(() => ({}))
+    ]);
+
+    // Groups belonging to this trainer
+    const trainerGroups = allGroups.filter(g => 
+      g.trainerId === trainer.id || 
+      (g as any).trainerIds?.includes(trainer.id)
+    );
+    const trainerGroupIds = new Set(trainerGroups.map(g => g.id));
+
+    // Courses for these groups or assigned to trainer
+    const trainerCourseIds = new Set(trainerGroups.map(g => g.courseId));
+    const trainerCourses = allCourses.filter(c => 
+      trainerCourseIds.has(c.id) || 
+      c.trainerId === trainer.id
+    );
+
+    // Trainees in trainer's groups or assigned directly
+    const trainerTrainees = allTrainees.filter(t => 
+      (t.groupId && trainerGroupIds.has(t.groupId)) ||
+      (t.groupIds && t.groupIds.some(gid => trainerGroupIds.has(gid))) ||
+      t.trainerId === trainer.id ||
+      (t.courseId && trainerCourseIds.has(t.courseId))
+    );
+
+    // Attendance records for trainer's groups
+    const trainerAttendance = allAttendance.filter(a => trainerGroupIds.has(a.groupId));
+
+    // Exams for trainer or courses
+    const trainerExams = allExams.filter(e => e.trainerId === trainer.id || trainerCourseIds.has(e.courseId));
+
+    res.json({
+      success: true,
+      trainer,
+      groups: trainerGroups,
+      courses: trainerCourses,
+      trainees: trainerTrainees,
+      attendance: trainerAttendance,
+      homeworkSubmissions: [],
+      exams: trainerExams,
+      settlements: [],
+      settings: settingsObj || {}
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Update Trainer Credentials & Password
+apiRouter.post('/trainer-portal/update-credentials', async (req: Request, res: Response) => {
+  try {
+    const { trainerId, name, phone, email, portalPassword } = req.body;
+    if (!trainerId) {
+      return res.status(400).json({ success: false, error: 'معرف المدرب مطلوب' });
+    }
+    const trainer = await TrainerRepo.getById(trainerId);
+    if (!trainer) {
+      return res.status(404).json({ success: false, error: 'المدرب غير موجود' });
+    }
+    const updates: Partial<any> = {};
+    if (name) updates.name = name;
+    if (phone) updates.phone = phone;
+    if (email) updates.email = email;
+    if (portalPassword !== undefined) updates.portalPassword = portalPassword;
+
+    const updated = await TrainerRepo.update(trainerId, updates);
+    res.json({ success: true, trainer: updated || { ...trainer, ...updates } });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Record Group Attendance
+apiRouter.post('/trainer-portal/attendance', async (req: Request, res: Response) => {
+  try {
+    const { trainerId, groupId, date, records } = req.body;
+    if (!groupId || !date || !Array.isArray(records)) {
+      return res.status(400).json({ success: false, error: 'بيانات الحضور غير مكتملة' });
+    }
+
+    for (const rec of records) {
+      const attId = `att-${groupId}-${rec.studentId}-${date}`;
+      await AttendanceRepo.create(attId, {
+        id: attId,
+        groupId,
+        traineeId: rec.studentId,
+        studentId: rec.studentId,
+        date,
+        status: rec.status,
+        notes: rec.notes || '',
+        recordedBy: trainerId || 'trainer',
+        recordedAt: new Date().toISOString()
+      } as any);
+    }
+
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Review Homework Submission
+apiRouter.post('/trainer-portal/review-homework', async (req: Request, res: Response) => {
+  try {
+    const { submissionId, trainerId, grade, trainerFeedback, pointsToAward } = req.body;
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Upload Trainer Photo
+apiRouter.post('/trainer-portal/upload-photo', async (req: Request, res: Response) => {
+  try {
+    const { trainerId, photoUrl } = req.body;
+    if (!trainerId || !photoUrl) {
+      return res.status(400).json({ success: false, error: 'الصورة ومعرف المدرب مطلوبان' });
+    }
+    await TrainerRepo.update(trainerId, { photoUrl });
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Trainer Social Feed & Posts
+const inMemoryTrainerPosts: any[] = [];
+
+apiRouter.get('/public/student-posts', async (req: Request, res: Response) => {
+  res.json({ success: true, posts: inMemoryTrainerPosts });
+});
+
+apiRouter.post('/trainer-portal/posts', async (req: Request, res: Response) => {
+  try {
+    const { trainerId, trainerName, trainerPhotoUrl, content, bgStyle, type, pollOptions, challengePoints, challengeTask } = req.body;
+    const newPost = {
+      id: `post-${Date.now()}`,
+      trainerId,
+      trainerName,
+      trainerPhotoUrl,
+      content,
+      bgStyle: bgStyle || 'default',
+      type: type || 'standard',
+      createdAt: new Date().toISOString(),
+      pollOptions: pollOptions ? pollOptions.map((opt: string) => ({ text: opt, votes: 0 })) : undefined,
+      challengePoints,
+      challengeTask,
+      votedUserIds: []
+    };
+    inMemoryTrainerPosts.unshift(newPost);
+    res.json({ success: true, post: newPost });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+apiRouter.post('/trainer-portal/poll-vote', async (req: Request, res: Response) => {
+  try {
+    const { postId, optionIndex, userId } = req.body;
+    const post = inMemoryTrainerPosts.find(p => p.id === postId);
+    if (post && post.pollOptions && post.pollOptions[optionIndex]) {
+      post.pollOptions[optionIndex].votes = (post.pollOptions[optionIndex].votes || 0) + 1;
+      if (!post.votedUserIds) post.votedUserIds = [];
+      post.votedUserIds.push(userId);
+    }
+    res.json({ success: true, post });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
 });

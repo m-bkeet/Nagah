@@ -33,7 +33,10 @@ import {
   Copy,
   Smartphone,
   Download,
-  Send
+  Send,
+  Lock,
+  Key,
+  RefreshCw
 } from 'lucide-react';
 import { Trainer, Course, Branch, LabScheduleSlot } from '../types';
 import { formatTimeAMPM, timeToMinutes } from '../utils/timeFormat';
@@ -60,6 +63,10 @@ export const TrainersView: React.FC = () => {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isSettlementModalOpen, setIsSettlementModalOpen] = useState(false);
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
+  const [isPasswordResetModalOpen, setIsPasswordResetModalOpen] = useState(false);
+  const [passwordResetTrainer, setPasswordResetTrainer] = useState<Trainer | null>(null);
+  const [passwordResetValue, setPasswordResetValue] = useState('');
+  const [isSavingPasswordReset, setIsSavingPasswordReset] = useState(false);
   const [activeTrainer, setActiveTrainer] = useState<Trainer | null>(null);
   const [trainerScheduleSlots, setTrainerScheduleSlots] = useState<LabScheduleSlot[]>([]);
   const [scheduleSortMode, setScheduleSortMode] = useState<'time-asc' | 'time-desc' | 'group' | 'course'>('time-asc');
@@ -131,6 +138,39 @@ export const TrainersView: React.FC = () => {
       showToast(err.message || 'فشل تحميل بيانات المدربين', 'error');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleOpenPasswordResetModal = (t: Trainer) => {
+    setPasswordResetTrainer(t);
+    const defaultPass = t.portalPassword || (t.code ? `${t.code}${t.code}` : '123456');
+    setPasswordResetValue(defaultPass);
+    setIsPasswordResetModalOpen(true);
+  };
+
+  const handleSavePasswordReset = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!passwordResetTrainer) return;
+    if (!passwordResetValue.trim()) {
+      showToast('يرجى إدخال كلمة المرور', 'warning');
+      return;
+    }
+    setIsSavingPasswordReset(true);
+    try {
+      const res = await api.updateTrainer(passwordResetTrainer.id, {
+        portalPassword: passwordResetValue.trim()
+      });
+      if (res.success) {
+        showToast(`تم تغيير وتعيين كلمة السر للمدرب (${passwordResetTrainer.name}) بنجاح 🔐`, 'success');
+        setIsPasswordResetModalOpen(false);
+        loadData();
+      } else {
+        showToast('فشل حفظ كلمة السر الجديدة', 'error');
+      }
+    } catch (err: any) {
+      showToast(err.message || 'حدث خطأ أثناء حفظ كلمة السر', 'error');
+    } finally {
+      setIsSavingPasswordReset(false);
     }
   };
 
@@ -712,12 +752,22 @@ export const TrainersView: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* 4 Dedicated Portal Action Buttons for this Trainer */}
-                  <div className="bg-indigo-950/40 border border-indigo-500/30 p-2 rounded-xl space-y-1.5 mb-2">
-                    <p className="text-[10px] font-bold text-indigo-300 flex items-center justify-between">
-                      <span>بوابة المدرب ({tr.name.split(' ')[0]}):</span>
-                      <span className="text-[9px] text-indigo-400 font-normal">دخول مباشر بدون جوجل</span>
-                    </p>
+                  {/* Dedicated Portal Action Buttons & Password Management for this Trainer */}
+                  <div className="bg-indigo-950/40 border border-indigo-500/30 p-2.5 rounded-xl space-y-2 mb-2">
+                    <div className="flex items-center justify-between gap-1 text-[11px] font-bold text-indigo-300">
+                      <span className="flex items-center gap-1">
+                        <Lock className="w-3.5 h-3.5 text-amber-400" />
+                        <span>بوابة المدرب ({tr.name.split(' ')[0]}):</span>
+                      </span>
+                      <button
+                        onClick={() => handleOpenPasswordResetModal(tr)}
+                        className="text-[10px] bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded-lg flex items-center gap-1 transition-all"
+                        title="تخصيص وتعديل أو استرجاع الرقم السري للمدرب"
+                      >
+                        <Key className="w-3 h-3 text-amber-400" />
+                        <span>الرقم السري ({tr.portalPassword || 'افتراضي'})</span>
+                      </button>
+                    </div>
                     <div className="grid grid-cols-2 gap-1.5">
                       <button
                         onClick={() => handleOpenTrainerPortal(tr)}
@@ -1665,6 +1715,83 @@ export const TrainersView: React.FC = () => {
         branches={branches}
         onShowToast={showToast}
       />
+
+      {/* ----------------- MODAL: Password Reset for Trainer ----------------- */}
+      {isPasswordResetModalOpen && passwordResetTrainer && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl max-w-md w-full p-6 text-slate-100 animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800 mb-4">
+              <div className="flex items-center gap-2">
+                <Lock className="w-5 h-5 text-amber-400" />
+                <h3 className="font-bold text-sm">تخصيص / استرجاع كلمة السر للمدرب</h3>
+              </div>
+              <button
+                onClick={() => setIsPasswordResetModalOpen(false)}
+                className="p-1 text-slate-400 hover:text-white"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSavePasswordReset} className="space-y-4 text-xs">
+              <div className="p-3 rounded-xl bg-slate-800/80 border border-slate-700 space-y-1">
+                <span className="font-bold text-slate-200 block">{passwordResetTrainer.name}</span>
+                <p className="text-[11px] text-slate-400">
+                  الكود: <span className="font-mono text-amber-300 font-bold">{passwordResetTrainer.code || 'غير محدد'}</span> | الهاتف: <span className="font-mono text-slate-200">{passwordResetTrainer.phone}</span>
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-slate-300 font-bold mb-1.5">
+                  كلمة المرور / الرقم السري الجديد للبوابة:
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    required
+                    value={passwordResetValue}
+                    onChange={(e) => setPasswordResetValue(e.target.value)}
+                    placeholder="أدخل كلمة المرور الجديدة..."
+                    className="w-full bg-slate-950 border border-amber-500/50 rounded-xl px-3 py-2 text-white font-mono font-bold text-sm"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const def = passwordResetTrainer.code ? `${passwordResetTrainer.code}${passwordResetTrainer.code}` : '123456';
+                      setPasswordResetValue(def);
+                    }}
+                    className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-amber-300 rounded-xl font-bold shrink-0 border border-amber-500/30 text-[11px]"
+                    title="إعادة تعيين للافتراضي (تكرار الكود)"
+                  >
+                    الافتراضي
+                  </button>
+                </div>
+                <p className="text-[10px] text-slate-400 mt-1">
+                  💡 كلمة المرور الافتراضية هي تكرار كود المدرب مرتين (مثال: {passwordResetTrainer.code ? `${passwordResetTrainer.code}${passwordResetTrainer.code}` : 'DR01DR01'})
+                </p>
+              </div>
+
+              <div className="pt-3 border-t border-slate-800 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsPasswordResetModalOpen(false)}
+                  className="px-4 py-2 bg-slate-800 text-slate-300 rounded-xl"
+                >
+                  إلغاء
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSavingPasswordReset}
+                  className="px-5 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-xl shadow-lg flex items-center gap-1.5"
+                >
+                  {isSavingPasswordReset && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
+                  <span>حفظ كلمة السر</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

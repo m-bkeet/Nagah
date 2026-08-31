@@ -37,7 +37,8 @@ import {
   Presentation,
   Radio,
   Video,
-  Mic
+  Mic,
+  Lock
 } from 'lucide-react';
 import { Trainer, Group, Course, Trainee, AttendanceRecord, HomeworkSubmission, Exam } from '../types';
 import { NextLectureCard } from '../components/trainer/NextLectureCard';
@@ -57,6 +58,8 @@ interface PublicTrainerPortalViewProps {
 export const PublicTrainerPortalView: React.FC<PublicTrainerPortalViewProps> = ({ onBack }) => {
   const [trainer, setTrainer] = useState<Trainer | null>(null);
   const [phoneOrCodeInput, setPhoneOrCodeInput] = useState('');
+  const [passwordInput, setPasswordInput] = useState('');
+  const [isForgotPasswordOpen, setIsForgotPasswordOpen] = useState(false);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
 
@@ -222,13 +225,17 @@ export const PublicTrainerPortalView: React.FC<PublicTrainerPortalViewProps> = (
       const res = await fetch('/api/trainer-portal/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phoneOrCode: phoneOrCodeInput })
+        body: JSON.stringify({
+          identifier: phoneOrCodeInput,
+          phoneOrCode: phoneOrCodeInput,
+          password: passwordInput
+        })
       });
       const data = await res.json();
       if (data.success && data.trainer) {
         loadTrainerData(data.trainer.id);
       } else {
-        setLoginError(data.error || 'لم يتم العثور على المدرب. تأكد من رقم الهاتف أو الكود.');
+        setLoginError(data.error || 'لم يتم العثور على المدرب أو كلمة السر غير صحيحة. تأكد من رقم الهاتف/الكود والرقم السري.');
       }
     } catch (err: any) {
       setLoginError('حدث خطأ أثناء تسجيل الدخول. يرجى المحاولة مرة أخرى.');
@@ -594,7 +601,7 @@ export const PublicTrainerPortalView: React.FC<PublicTrainerPortalViewProps> = (
             <form onSubmit={handleLoginSubmit} className="space-y-4">
               <div>
                 <label className="block text-xs font-bold text-slate-300 mb-1.5">
-                  رقم الهاتف أو كود المدرب
+                  رقم الهاتف أو الكود أو البريد الإلكتروني *
                 </label>
                 <div className="relative">
                   <Phone className="w-4 h-4 text-slate-400 absolute right-3.5 top-3.5" />
@@ -603,7 +610,32 @@ export const PublicTrainerPortalView: React.FC<PublicTrainerPortalViewProps> = (
                     required
                     value={phoneOrCodeInput}
                     onChange={(e) => setPhoneOrCodeInput(e.target.value)}
-                    placeholder="مثال: 01012345678 أو كود المدرب..."
+                    placeholder="مثال: 01012345678 أو DR01 أو email@domain.com"
+                    className="w-full bg-slate-950 border border-slate-700 rounded-2xl pr-10 pl-3 py-3 text-sm text-slate-100 focus:outline-none focus:border-indigo-500 font-mono"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-xs font-bold text-slate-300">
+                    الرقم السري / كلمة المرور
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setIsForgotPasswordOpen(true)}
+                    className="text-[11px] font-bold text-indigo-400 hover:text-indigo-300 transition-colors"
+                  >
+                    نسيت كلمة السر؟
+                  </button>
+                </div>
+                <div className="relative">
+                  <Lock className="w-4 h-4 text-slate-400 absolute right-3.5 top-3.5" />
+                  <input
+                    type="password"
+                    value={passwordInput}
+                    onChange={(e) => setPasswordInput(e.target.value)}
+                    placeholder="الرقم السري الخاص بالمدرب..."
                     className="w-full bg-slate-950 border border-slate-700 rounded-2xl pr-10 pl-3 py-3 text-sm text-slate-100 focus:outline-none focus:border-indigo-500 font-mono"
                   />
                 </div>
@@ -1765,6 +1797,46 @@ export const PublicTrainerPortalView: React.FC<PublicTrainerPortalViewProps> = (
                 <span>اعتماد التقييم والنقاط</span>
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Forgot Password Modal */}
+      {isForgotPasswordOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
+          <div className="bg-slate-900 border border-slate-700 rounded-3xl p-6 max-w-md w-full space-y-4 shadow-2xl text-slate-100 animate-fade-in">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <div className="flex items-center gap-2 text-indigo-400 font-bold text-sm">
+                <Lock className="w-5 h-5" />
+                <h3>استرجاع كلمة السر لبوابة المدرب</h3>
+              </div>
+              <button
+                onClick={() => setIsForgotPasswordOpen(false)}
+                className="p-1 text-slate-400 hover:text-white"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="space-y-3 text-xs leading-relaxed text-slate-300">
+              <p>
+                إذا نسيت كلمة المرور الخاصة ببوابتك، يمكنك استرجاعها مباشرة عبر التواصل مع <strong>إدارة مركز النجاح</strong>.
+              </p>
+              <div className="p-3 bg-indigo-950/50 border border-indigo-500/30 rounded-2xl space-y-1">
+                <span className="font-bold text-indigo-300 block">💡 كلمة المرور الافتراضية:</span>
+                <p className="text-slate-300">
+                  هي تكرار كود المدرب مرتين (مثال: إذا كان كودك <span className="font-mono text-amber-300">DR01</span> فإن كلمة السر الافتراضية تكون <span className="font-mono text-amber-300">DR01DR01</span>).
+                </p>
+              </div>
+              <p>
+                يقوم المسؤول بإعادة تعيين أو تخصيص كلمة المرور فوراً من شاشة إدارة المدربين بالإدارة.
+              </p>
+            </div>
+            <button
+              onClick={() => setIsForgotPasswordOpen(false)}
+              className="w-full py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs transition-colors"
+            >
+              إغلاق النافذة
+            </button>
           </div>
         </div>
       )}

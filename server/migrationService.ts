@@ -481,14 +481,13 @@ export class MigrationService {
     }
 
     // Student Normalization & Immutable Code Protection
-    const STUDENT_CODE_REGEX = /^[A-Z][0-9]{3}$/;
     const studentsValidList: any[] = [];
     const studentsNeedsReview: any[] = [];
 
     for (const s of allStudents) {
       const rawCode = s.code || s.studentCode || s.traineeCode || '';
       const cleanCode = String(rawCode).trim().toUpperCase();
-      const isValidFormat = STUDENT_CODE_REGEX.test(cleanCode);
+      const isValidFormat = Boolean(cleanCode) && (cleanCode.length >= 2 || /^[A-Z\u0600-\u06FF]\d{1,4}$/i.test(cleanCode));
 
       const branch = allBranches.find(b => b.id === s.branchId);
       const group = allGroups.find(g => g.id === s.groupId);
@@ -500,19 +499,12 @@ export class MigrationService {
       const reviewIssues: string[] = [];
 
       if (!cleanCode) {
-        confidence = 'LOW';
-        needsReview = true;
-        reviewIssues.push('كود الطالب مفقود');
+        confidence = 'MEDIUM';
+        needsReview = false; // Code can be auto-generated during import if missing
       } else if (!isValidFormat) {
         confidence = 'LOW';
         needsReview = true;
-        reviewIssues.push(`كود الطالب (${cleanCode}) لا يطابق الصيغة القياسية ^[A-Z][0-9]{3}$ (طالب تجريبي أو يحتاج تنسيق)`);
-      }
-
-      if (!branch && !group) {
-        confidence = 'MEDIUM';
-        needsReview = true;
-        reviewIssues.push('الفرع والمجموعة غير محددين');
+        reviewIssues.push(`كود الطالب (${cleanCode}) يحتاج تنسيق أو تصحيح`);
       }
 
       const studentRecord = {
