@@ -3,7 +3,7 @@
  * Network-First for HTML/Navigation to guarantee latest updates on mobile PWAs.
  */
 
-const CACHE_NAME = 'nagah-cache-v7-live';
+const CACHE_NAME = 'nagah-cache-v8-live';
 
 // Install Event - Skip waiting immediately to activate fresh code
 self.addEventListener('install', (event) => {
@@ -35,9 +35,9 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(
       fetch(event.request)
         .then((response) => {
-          if (response && response.status === 200) {
+          if (response && response.status === 200 && event.request.method === 'GET') {
             const responseClone = response.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, responseClone));
+            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, responseClone)).catch(() => {});
           }
           return response;
         })
@@ -51,24 +51,28 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(
       fetch(event.request)
         .then((response) => {
-          if (response.ok) {
+          if (response && response.ok && event.request.method === 'GET') {
             const responseClone = response.clone();
             caches.open('nagah-api-cache').then((cache) => {
               cache.put(event.request, responseClone);
-            });
+            }).catch(() => {});
           }
           return response;
         })
         .catch(() => {
           return caches.match(event.request).then((cachedResponse) => {
-            if (cachedResponse) return cachedResponse;
+            if (cachedResponse && event.request.method === 'GET') return cachedResponse;
+            const isReallyOffline = typeof self.navigator !== 'undefined' && !self.navigator.onLine;
             return new Response(
               JSON.stringify({ 
                 success: false, 
-                error: 'أنت في وضع عدم الاتصال حالياً. يرجى الاتصال بالإنترنت للتحديث.',
-                isOffline: true 
+                error: isReallyOffline ? 'أنت في وضع عدم الاتصال حالياً. يرجى الاتصال بالإنترنت للتحديث.' : 'تعذر الاتصال بخادم البيانات',
+                isOffline: isReallyOffline 
               }),
-              { headers: { 'Content-Type': 'application/json' } }
+              { 
+                status: isReallyOffline ? 200 : 503,
+                headers: { 'Content-Type': 'application/json' } 
+              }
             );
           });
         })
@@ -80,9 +84,9 @@ self.addEventListener('fetch', (event) => {
   event.respondWith(
     caches.match(event.request).then((cachedResponse) => {
       const fetchPromise = fetch(event.request).then((networkResponse) => {
-        if (networkResponse && networkResponse.status === 200) {
+        if (networkResponse && networkResponse.status === 200 && event.request.method === 'GET') {
           const responseClone = networkResponse.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, responseClone));
+          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, responseClone)).catch(() => {});
         }
         return networkResponse;
       }).catch(() => null);
