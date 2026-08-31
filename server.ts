@@ -29,6 +29,7 @@ import { aiMemoryService } from "./src/server/aiMemoryService";
 import { aiFeedbackService } from "./src/server/aiFeedbackService";
 import { domainRouter } from "./src/server/domainRoutes";
 import { apiRouter } from "./server/routes";
+import { hydrateAllFromSupabase } from "./server/data";
 
 const { Pool } = pg;
 
@@ -4556,7 +4557,13 @@ app.use("/api", (req, res) => {
 });
 
 async function startServer() {
-  // Safe startup: no automated background writes to database
+  // Hydrate authoritative data from Supabase collections
+  try {
+    await hydrateAllFromSupabase();
+  } catch (err) {
+    console.error('[Startup] Supabase hydration warning:', err);
+  }
+
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
       server: { middlewareMode: true },

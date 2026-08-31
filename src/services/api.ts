@@ -38,8 +38,15 @@ import {
 const getApiBaseUrl = () => {
   const envUrl = typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_BASE_URL;
   if (envUrl) {
-    const clean = envUrl.replace(/\/$/, '');
+    const clean = String(envUrl).trim().replace(/\/$/, '');
     return clean.endsWith('/api') ? clean : `${clean}/api`;
+  }
+  // Automatically route to Cloud Run production API when running on Vercel deployment without custom env
+  if (typeof window !== 'undefined' && window.location && window.location.hostname) {
+    const host = window.location.hostname;
+    if (host.includes('vercel.app')) {
+      return 'https://ais-pre-7wkppak7c63am6ebvulppu-481160813332.europe-west2.run.app/api';
+    }
   }
   return '/api';
 };

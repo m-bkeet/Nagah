@@ -1,8 +1,9 @@
 import * as crypto from 'crypto';
 import { db } from './db';
 
-const SUPABASE_URL = process.env.SUPABASE_URL || '';
-const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || '';
+const rawSupabaseUrl = (process.env.SUPABASE_URL || '').trim();
+const SUPABASE_URL = rawSupabaseUrl.replace(/\/rest\/v1\/?$/, '').replace(/\/$/, '');
+const SUPABASE_KEY = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || '').trim();
 const hasValidSupabase = Boolean(
   SUPABASE_URL &&
   !SUPABASE_URL.includes('placeholder') &&

@@ -379,11 +379,12 @@ export const TraineesView: React.FC = () => {
         api.getTrainers().catch((e) => { console.warn('getTrainers failed:', e); return null; })
       ]);
 
-      if (Array.isArray(traineesRes) && traineesRes.length > 0) {
+      if (Array.isArray(traineesRes)) {
         const traineeMap = new Map<string, Trainee>();
         traineesRes.forEach(t => traineeMap.set(t.id, t));
-        setTrainees(Array.from(traineeMap.values()));
-        localStorage.setItem('nagah_trainees', JSON.stringify(traineesRes));
+        const freshList = Array.from(traineeMap.values());
+        setTrainees(freshList);
+        try { localStorage.setItem('nagah_trainees', JSON.stringify(freshList)); } catch {}
       } else {
         const cached = localStorage.getItem('nagah_trainees');
         if (cached) {
@@ -391,9 +392,9 @@ export const TraineesView: React.FC = () => {
         }
       }
 
-      if (Array.isArray(coursesRes) && coursesRes.length > 0) {
+      if (Array.isArray(coursesRes)) {
         setCourses(coursesRes);
-        localStorage.setItem('nagah_courses', JSON.stringify(coursesRes));
+        try { localStorage.setItem('nagah_courses', JSON.stringify(coursesRes)); } catch {}
       } else {
         const cached = localStorage.getItem('nagah_courses');
         if (cached) {
@@ -401,9 +402,9 @@ export const TraineesView: React.FC = () => {
         }
       }
 
-      if (Array.isArray(groupsRes) && groupsRes.length > 0) {
+      if (Array.isArray(groupsRes)) {
         setGroups(groupsRes);
-        localStorage.setItem('nagah_groups', JSON.stringify(groupsRes));
+        try { localStorage.setItem('nagah_groups', JSON.stringify(groupsRes)); } catch {}
       } else {
         const cached = localStorage.getItem('nagah_groups');
         if (cached) {
@@ -411,9 +412,9 @@ export const TraineesView: React.FC = () => {
         }
       }
 
-      if (Array.isArray(trainersRes) && trainersRes.length > 0) {
+      if (Array.isArray(trainersRes)) {
         setTrainers(trainersRes);
-        localStorage.setItem('nagah_trainers', JSON.stringify(trainersRes));
+        try { localStorage.setItem('nagah_trainers', JSON.stringify(trainersRes)); } catch {}
       } else {
         const cached = localStorage.getItem('nagah_trainers');
         if (cached) {

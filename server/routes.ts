@@ -1,6 +1,6 @@
 import { adminDb, adminDiagInfo } from './firebaseAdmin';
 import { 
-  TraineeRepo, BranchRepo, CourseRepo, GroupRepo, TrainerRepo, 
+  TraineeRepo, BranchRepo, CourseRepo, ProgramRepo, GroupRepo, TrainerRepo, 
   AttendanceRepo, PaymentRepo, ExpenseRepo, ExamRepo, ExamQuestionRepo, 
   ExamResultRepo, PointRuleRepo, PointTransactionRepo, SettingRepo, 
   CertificateRepo, CertificateTemplateRepo, UserRepo, AuditLogRepo 
@@ -3002,8 +3002,13 @@ apiRouter.post('/courses/:id/duplicate', (req: Request, res: Response) => {
   res.json({ success: true, course: newCourse });
 });
 
-apiRouter.get('/programs', (req: Request, res: Response) => {
-  res.json(db.getData().programs);
+apiRouter.get('/programs', async (req: Request, res: Response) => {
+  try {
+    const list = await ProgramRepo.getAll();
+    res.json(list);
+  } catch (e: any) {
+    res.status(500).json({ success: false, error: e.message });
+  }
 });
 
 apiRouter.post('/programs', (req: Request, res: Response) => {

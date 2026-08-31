@@ -3,8 +3,11 @@ import { audioService } from '../services/audioService';
 
 export const AudioAutoplayUnlockBanner: React.FC = () => {
   useEffect(() => {
-    // Automatically unlock audio in the background without showing any prompt or banner
-    audioService.unlockAudio();
+    try {
+      audioService.unlockAudio();
+    } catch (e) {
+      console.warn('[AudioAutoplayUnlockBanner] Auto-unlock audio error:', e);
+    }
   }, []);
 
   return null;
