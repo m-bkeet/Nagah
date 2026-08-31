@@ -3,7 +3,7 @@
  * Network-First for HTML/Navigation to guarantee latest updates on mobile PWAs.
  */
 
-const CACHE_NAME = 'nagah-cache-v5-live';
+const CACHE_NAME = 'nagah-cache-v7-live';
 
 // Install Event - Skip waiting immediately to activate fresh code
 self.addEventListener('install', (event) => {

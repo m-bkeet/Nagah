@@ -1,4 +1,5 @@
 import { adminDb, adminDiagInfo } from './firebaseAdmin';
+import { authMiddleware, requireRole, sanitizeTraineeDTO, runDataIntegrityAudit, AuthenticatedRequest } from './securityMiddleware';
 import { 
   TraineeRepo, BranchRepo, CourseRepo, ProgramRepo, GroupRepo, TrainerRepo, 
   AttendanceRepo, PaymentRepo, ExpenseRepo, ExamRepo, ExamQuestionRepo, 
@@ -60,6 +61,21 @@ apiRouter.use((req, res, next) => {
     }
   }
   next();
+});
+
+// Health check endpoint for apiRouter
+apiRouter.get('/health', (req: Request, res: Response) => {
+  res.json({
+    success: true,
+    data: {
+      service: "Nagah Cloud Run Backend",
+      status: "healthy",
+      database: process.env.SUPABASE_URL ? "connected (Supabase PostgreSQL)" : "configured",
+      aiProvider: "Google Gemini Active",
+      timestamp: new Date().toISOString(),
+      environment: process.env.NODE_ENV || "development",
+    }
+  });
 });
 
 // Center Settings API Endpoints
@@ -945,11 +961,25 @@ apiRouter.get('/trainees/next-code', async (req: Request, res: Response) => {
   }
 });
 
-apiRouter.get('/trainees', async (req: Request, res: Response) => {
+apiRouter.get('/trainees', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
   try {
     let list = await TraineeRepo.getAll();
+    const user = req.user;
+
+    // RBAC filtering
+    if (user) {
+      if (user.role === 'student') {
+        list = list.filter(t => t.id === user.traineeId || t.code === user.username || t.studentCode === user.username);
+      } else if (user.role === 'parent') {
+        list = list.filter(t => t.parentPhone === user.phone || (user as any).childrenIds?.includes(t.id));
+      } else if (user.role === 'branch_manager' && user.branchId && user.branchId !== 'all') {
+        list = list.filter(t => t.branchId === user.branchId);
+      } else if (user.role === 'trainer' && user.trainerId) {
+        list = list.filter(t => t.trainerId === user.trainerId);
+      }
+    }
     
-        const branchId = req.query.branchId as string;
+    const branchId = req.query.branchId as string;
     const courseId = req.query.courseId as string;
     const groupId = req.query.groupId as string;
     const trainerId = req.query.trainerId as string;
@@ -969,9 +999,18 @@ apiRouter.get('/trainees', async (req: Request, res: Response) => {
         (t.parentPhone && t.parentPhone.includes(s))
       );
     }
-    // Return flat list to match current UI expectations which usually just expects an array.
-    res.json(list);
+    const sanitizedList = list.map(t => sanitizeTraineeDTO(t, user?.role || 'student'));
+    res.json(sanitizedList);
   } catch(e: any) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+apiRouter.get('/audit/integrity-report', authMiddleware, requireRole(['super_admin', 'admin']), async (req: Request, res: Response) => {
+  try {
+    const report = await runDataIntegrityAudit();
+    res.json({ success: true, report });
+  } catch(e: any) {
+    res.status(500).json({ success: false, error: e.message });
+  }
 });
 
 apiRouter.get('/trainees/:id', async (req: Request, res: Response) => {

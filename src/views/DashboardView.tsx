@@ -40,9 +40,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
         api.getFinanceSummary(activeBranchId !== 'all' ? { branchId: activeBranchId } : {}),
         api.getAttendance({ date: todayStr })
       ]);
-      if (trRes.status === 'fulfilled') setTrainees(trRes.value || []);
-      if (crRes.status === 'fulfilled') setCourses(crRes.value || []);
-      if (grRes.status === 'fulfilled') setGroups(grRes.value || []);
+      if (trRes.status === 'fulfilled') setTrainees(Array.isArray(trRes.value) ? trRes.value : ((trRes.value as any)?.data && Array.isArray((trRes.value as any).data) ? (trRes.value as any).data : []));
+      if (crRes.status === 'fulfilled') setCourses(Array.isArray(crRes.value) ? crRes.value : ((crRes.value as any)?.data && Array.isArray((crRes.value as any).data) ? (crRes.value as any).data : []));
+      if (grRes.status === 'fulfilled') setGroups(Array.isArray(grRes.value) ? grRes.value : ((grRes.value as any)?.data && Array.isArray((grRes.value as any).data) ? (grRes.value as any).data : []));
       if (fnRes.status === 'fulfilled') setFinanceSummary(fnRes.value || null);
       if (attRes.status === 'fulfilled' && Array.isArray(attRes.value)) {
         const presentCount = attRes.value.filter((a: any) => a.status === 'present' || a.status === 'late').length;
@@ -59,7 +59,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
 
   // Real Honor roll / Stars of the week data synced directly with the database
   const honorTrainees = useMemo(() => {
-    if (!trainees || trainees.length === 0) return [];
+    if (!Array.isArray(trainees) || trainees.length === 0) return [];
     
     // Sort trainees by points/stars descending
     const sorted = [...trainees].sort((a, b) => {

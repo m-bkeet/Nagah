@@ -4574,6 +4574,13 @@ async function startServer() {
     const distPath = path.join(process.cwd(), "dist");
     app.use(express.static(distPath));
     app.get("*", (req, res) => {
+      if (req.path.startsWith("/api") || req.originalUrl.startsWith("/api")) {
+        return res.status(404).json({
+          success: false,
+          error: `API endpoint not found: ${req.method} ${req.originalUrl || req.url}`,
+          code: 404,
+        });
+      }
       res.sendFile(path.join(distPath, "index.html"));
     });
   }

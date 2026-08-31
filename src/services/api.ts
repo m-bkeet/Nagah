@@ -35,17 +35,18 @@ import {
   LabScheduleSlot
 } from '../types';
 
+const CLOUD_RUN_API_URL = 'https://ais-pre-7wkppak7c63am6ebvulppu-481160813332.europe-west2.run.app/api';
+
 const getApiBaseUrl = () => {
   const envUrl = typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_BASE_URL;
   if (envUrl) {
     const clean = String(envUrl).trim().replace(/\/$/, '');
     return clean.endsWith('/api') ? clean : `${clean}/api`;
   }
-  // Automatically route to Cloud Run production API when running on Vercel deployment without custom env
   if (typeof window !== 'undefined' && window.location && window.location.hostname) {
     const host = window.location.hostname;
-    if (host.includes('vercel.app')) {
-      return 'https://ais-pre-7wkppak7c63am6ebvulppu-481160813332.europe-west2.run.app/api';
+    if (host.endsWith('vercel.app')) {
+      return CLOUD_RUN_API_URL;
     }
   }
   return '/api';
@@ -105,6 +106,14 @@ export async function request<T>(endpoint: string, options: RequestInit = {}, re
       const trimmed = text.trim();
       const lower = trimmed.toLowerCase();
       if (lower.startsWith('<!doctype') || lower.startsWith('<html') || lower.includes('<head>') || lower.includes('<body')) {
+        if (retryCount < 1 && !BASE_URL.startsWith('http')) {
+          try {
+            const fallbackRes = await fetch(`${CLOUD_RUN_API_URL}${endpoint}`, { ...options, headers });
+            if (fallbackRes.ok && fallbackRes.headers.get('content-type')?.includes('application/json')) {
+              return await fallbackRes.json();
+            }
+          } catch {}
+        }
         throw new Error(`انتهت الجلسة أو تعذر الاتصال بالخادم (${endpoint}). يرجى إعادة تحميل الصفحة.`);
       }
       try {
@@ -215,7 +224,13 @@ export const api = {
     }),
 
   // Branches
-  getBranches: () => request<Branch[]>('/branches'),
+  getBranches: async () => {
+    const res = await request<any>('/branches');
+    if (Array.isArray(res)) return res as Branch[];
+    if (res && Array.isArray(res.data)) return res.data as Branch[];
+    if (res && Array.isArray(res.branches)) return res.branches as Branch[];
+    return [] as Branch[];
+  },
   createBranch: (branchData: Partial<Branch>) =>
     request<{ success: boolean; branch: Branch }>('/branches', {
       method: 'POST',
@@ -280,9 +295,13 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(data)
     }),
-  getTrainees: (params?: Record<string, string>) => {
+  getTrainees: async (params?: Record<string, string>) => {
     const query = new URLSearchParams(params || {}).toString();
-    return request<Trainee[]>(`/trainees${query ? '?' + query : ''}`);
+    const res = await request<any>(`/trainees${query ? '?' + query : ''}`);
+    if (Array.isArray(res)) return res as Trainee[];
+    if (res && Array.isArray(res.data)) return res.data as Trainee[];
+    if (res && Array.isArray(res.trainees)) return res.trainees as Trainee[];
+    return [] as Trainee[];
   },
   getTraineeDetails: (id: string) =>
     request<{
@@ -362,7 +381,13 @@ export const api = {
     }),
 
   // Trainers
-  getTrainers: () => request<Trainer[]>('/trainers'),
+  getTrainers: async () => {
+    const res = await request<any>('/trainers');
+    if (Array.isArray(res)) return res as Trainer[];
+    if (res && Array.isArray(res.data)) return res.data as Trainer[];
+    if (res && Array.isArray(res.trainers)) return res.trainers as Trainer[];
+    return [] as Trainer[];
+  },
   createTrainer: (trainerData: Partial<Trainer>) =>
     request<{ success: boolean; trainer: Trainer }>('/trainers', {
       method: 'POST',
@@ -379,7 +404,13 @@ export const api = {
     }),
 
   // Courses, Programs, Groups
-  getCourses: () => request<Course[]>('/courses'),
+  getCourses: async () => {
+    const res = await request<any>('/courses');
+    if (Array.isArray(res)) return res as Course[];
+    if (res && Array.isArray(res.data)) return res.data as Course[];
+    if (res && Array.isArray(res.courses)) return res.courses as Course[];
+    return [] as Course[];
+  },
   createCourse: (courseData: Partial<Course>) =>
     request<{ success: boolean; course: Course }>('/courses', {
       method: 'POST',
@@ -417,7 +448,13 @@ export const api = {
       method: 'DELETE'
     }),
 
-  getPrograms: () => request<Program[]>('/programs'),
+  getPrograms: async () => {
+    const res = await request<any>('/programs');
+    if (Array.isArray(res)) return res as Program[];
+    if (res && Array.isArray(res.data)) return res.data as Program[];
+    if (res && Array.isArray(res.programs)) return res.programs as Program[];
+    return [] as Program[];
+  },
   createProgram: (progData: Partial<Program> & Record<string, any>) =>
     request<{ success: boolean; program: Program }>('/programs', {
       method: 'POST',
@@ -438,7 +475,13 @@ export const api = {
       body: JSON.stringify(data)
     }),
 
-  getGroups: () => request<Group[]>('/groups'),
+  getGroups: async () => {
+    const res = await request<any>('/groups');
+    if (Array.isArray(res)) return res as Group[];
+    if (res && Array.isArray(res.data)) return res.data as Group[];
+    if (res && Array.isArray(res.groups)) return res.groups as Group[];
+    return [] as Group[];
+  },
   createGroup: (groupData: Partial<Group>) =>
     request<{ success: boolean; group: Group }>('/groups', {
       method: 'POST',
@@ -465,9 +508,13 @@ export const api = {
     }),
 
   // Attendance
-  getAttendance: (params?: Record<string, string>) => {
+  getAttendance: async (params?: Record<string, string>) => {
     const query = new URLSearchParams(params || {}).toString();
-    return request<AttendanceRecord[]>(`/attendance${query ? `?${query}` : ''}`);
+    const res = await request<any>(`/attendance${query ? `?${query}` : ''}`);
+    if (Array.isArray(res)) return res as AttendanceRecord[];
+    if (res && Array.isArray(res.data)) return res.data as AttendanceRecord[];
+    if (res && Array.isArray(res.attendance)) return res.attendance as AttendanceRecord[];
+    return [] as AttendanceRecord[];
   },
   saveAttendanceBatch: (data: {
     records: { traineeId: string; status: string; notes?: string }[];
