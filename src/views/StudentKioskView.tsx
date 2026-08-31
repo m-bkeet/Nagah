@@ -84,6 +84,7 @@ export const StudentKioskView: React.FC = () => {
   const [questionStartTime, setQuestionStartTime] = useState<number>(Date.now());
   const [activeSessionId, setActiveSessionId] = useState<string>('session-live');
   const [activeExternalSession, setActiveExternalSession] = useState<any>(null);
+  const [kahootPinInput, setKahootPinInput] = useState('');
   const [isLockedByMaster, setIsLockedByMaster] = useState(false);
   const [lockMessage, setLockMessage] = useState('');
 
@@ -1048,6 +1049,128 @@ export const StudentKioskView: React.FC = () => {
                   <span className="text-[10px] text-indigo-400 font-bold block">المركز الحالي</span>
                   <span className="text-xs font-black text-indigo-300">{rankBadge} المركز #{groupRank}</span>
                 </div>
+              </div>
+            </div>
+
+            {/* 🎮 KAHOOT! INTERACTIVE LAB STUDIO & STUDENT INCENTIVES BANNER 🎮 */}
+            <div className="bg-gradient-to-r from-purple-900/90 via-indigo-900/90 to-slate-900 border-2 border-purple-500/50 rounded-3xl p-5 shadow-2xl space-y-4">
+              <div className="flex flex-col lg:flex-row items-center justify-between gap-4">
+                {/* Left Info & Gamification Progress */}
+                <div className="space-y-1.5 text-center sm:text-right w-full lg:w-auto">
+                  <div className="flex items-center justify-center sm:justify-start gap-2 flex-wrap">
+                    <span className="px-3 py-1 rounded-full text-xs font-black bg-purple-500/20 text-purple-300 border border-purple-500/40 flex items-center gap-1">
+                      <Flame className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
+                      سلسلة التواجد: 7 أيام متتالية 🔥 (1.5x XP)
+                    </span>
+                    <span className="px-3 py-1 rounded-full text-xs font-black bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                      🏆 المستوى 5: بطل المعمل
+                    </span>
+                  </div>
+                  <h3 className="text-lg md:text-xl font-black text-white flex items-center justify-center sm:justify-start gap-2">
+                    <span>استوديو كاهوت والأنشطة التفاعلية بالمعمل 🎮</span>
+                  </h3>
+                  <p className="text-xs text-slate-300 max-w-xl">
+                    أدخل رمز اللعبة (Game PIN) المعروض على شاشة المعمل أو زوم للانضمام الفوري للمنافسة وحصد نقاط التميز!
+                  </p>
+                </div>
+
+                {/* Right PIN Entry Quick Form */}
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    if (!kahootPinInput.trim()) return;
+                    setActiveExternalSession({
+                      title: `مسابقة كاهوت (PIN: ${kahootPinInput.trim()})`,
+                      platform: 'Kahoot! Live Studio',
+                      gamePin: kahootPinInput.trim(),
+                      url: 'https://kahoot.it'
+                    });
+                  }}
+                  className="flex items-center gap-2 w-full sm:w-auto shrink-0"
+                >
+                  <div className="relative flex-1 sm:w-48">
+                    <input
+                      type="text"
+                      placeholder="رمز اللعبة PIN (مثال: 849201)"
+                      value={kahootPinInput}
+                      onChange={(e) => setKahootPinInput(e.target.value)}
+                      className="w-full bg-slate-950/90 border-2 border-purple-500/60 rounded-2xl px-4 py-3 text-sm text-center font-mono font-black text-amber-300 focus:outline-none focus:border-amber-400 placeholder-slate-500 shadow-inner"
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    className="px-5 py-3 rounded-2xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs shadow-lg shadow-amber-500/20 active:scale-95 transition-all flex items-center gap-1.5 shrink-0"
+                  >
+                    <span>انضمام لكاهوت 🚀</span>
+                  </button>
+                </form>
+              </div>
+
+              {/* Student Incentive Quick Action Grid */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-2 border-t border-purple-500/30">
+                <button
+                  onClick={() => {
+                    setActiveExternalSession({
+                      title: 'تحدي كاهوت التجريبي السريع 🎯',
+                      platform: 'Kahoot!',
+                      gamePin: '849 201',
+                      url: 'https://kahoot.it'
+                    });
+                  }}
+                  className="p-3 rounded-2xl bg-slate-950/70 hover:bg-purple-900/40 border border-purple-500/30 text-right space-y-1 group transition-all"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-base">🎮</span>
+                    <span className="text-[10px] text-amber-400 font-bold bg-amber-500/10 px-2 py-0.5 rounded-full">+100 XP</span>
+                  </div>
+                  <div className="text-xs font-black text-slate-200 group-hover:text-amber-300">فتح كاهوت المباشر</div>
+                  <div className="text-[10px] text-slate-400">إدخال PIN والبدء فوراً</div>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setActiveAppWindow('code');
+                    setIsPracticalMode(true);
+                  }}
+                  className="p-3 rounded-2xl bg-slate-950/70 hover:bg-cyan-900/40 border border-cyan-500/30 text-right space-y-1 group transition-all"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-base">💻</span>
+                    <span className="text-[10px] text-cyan-400 font-bold bg-cyan-500/10 px-2 py-0.5 rounded-full">معمل الكود</span>
+                  </div>
+                  <div className="text-xs font-black text-slate-200 group-hover:text-cyan-300">محرر التكويد البرمجي</div>
+                  <div className="text-[10px] text-slate-400">كتابة بايثون وويب حياً</div>
+                </button>
+
+                <button
+                  onClick={() => {
+                    api.sendDeviceCommand('master', 'message', { text: `الطالب ${currentTrainee.fullName} يطلب المساعدة 👋`, isHelpRequest: true });
+                    setActiveNotification('تم إرسال طلب المساعدة للمدرب على الشاشة الرئيسية! ✋');
+                  }}
+                  className="p-3 rounded-2xl bg-slate-950/70 hover:bg-emerald-900/40 border border-emerald-500/30 text-right space-y-1 group transition-all"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-base">🙋‍♂️</span>
+                    <span className="text-[10px] text-emerald-400 font-bold bg-emerald-500/10 px-2 py-0.5 rounded-full">رفع اليد</span>
+                  </div>
+                  <div className="text-xs font-black text-slate-200 group-hover:text-emerald-300">طلب مساعدة المدرب</div>
+                  <div className="text-[10px] text-slate-400">إشعار شاشة المدرب بالمعمل</div>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setActiveAppWindow('files');
+                    setIsPracticalMode(true);
+                  }}
+                  className="p-3 rounded-2xl bg-slate-950/70 hover:bg-amber-900/40 border border-amber-500/30 text-right space-y-1 group transition-all"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-base">📚</span>
+                    <span className="text-[10px] text-amber-400 font-bold bg-amber-500/10 px-2 py-0.5 rounded-full">الملفات</span>
+                  </div>
+                  <div className="text-xs font-black text-slate-200 group-hover:text-amber-300">ملفات المحاضرة وتنزيلها</div>
+                  <div className="text-[10px] text-slate-400">ملفات الشرح والتطبيقات</div>
+                </button>
               </div>
             </div>
 

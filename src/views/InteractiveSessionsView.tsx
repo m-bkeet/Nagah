@@ -35,6 +35,7 @@ import {
 import { InteractiveSession, Question, ExamQuestion, Trainer, Group, Course, Trainee } from '../types';
 import { AIPresentationGenerator } from '../components/trainer/AIPresentationGenerator';
 import { LiveLectureStudio } from '../components/trainer/LiveLectureStudio';
+import { KahootStudio } from '../components/kahoot/KahootStudio';
 import { SessionCeremonyModal } from '../components/SessionCeremonyModal';
 import {
   Presentation,
@@ -1364,6 +1365,21 @@ console.log("نتيجة الطالب:", calculateGrade(48, 50));`);
               💡 <span className="font-bold text-slate-200">طريقة عمل الميزة:</span> بمجرد الضغط على زر البث، ستظهر نافذة مسابقة كاهوت/كويزيز فورياً بملء الشاشة على كافة أجهزة المعمل النشطة مع إبراز كود PIN اللعبة.
             </div>
           </div>
+
+          {/* Kahoot Studio Interactive Simulator Panel */}
+          {externalPlatform === 'Kahoot' && (
+            <div className="pt-4 animate-fade-in">
+              <KahootStudio
+                trainerName={selectedTrainer?.name}
+                groups={groups}
+                courses={courses}
+                trainees={trainees}
+                onShowToast={showToast}
+                onAwardPoints={handleAwardBonus}
+                embeddedMode={true}
+              />
+            </div>
+          )}
         </div>
       )}
 

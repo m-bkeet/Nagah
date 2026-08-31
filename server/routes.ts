@@ -14,7 +14,7 @@ import path from 'path';
 import crypto from 'crypto';
 import { migrationRouter } from './migrationRoutes';
 import { db, hashPassword } from './db';
-import { extractExamFromMediaOrText, gradeHomeworkOrExamFromImage, generateWithModelCascade, designCertificateWithAI, generateTestCasesWithAI, autoGradeCodeWithAI, AIGradeScanResult, generateTrainerPresentation, generateTrainerAdvancedExam } from './gemini';
+import { extractExamFromMediaOrText, gradeHomeworkOrExamFromImage, generateWithModelCascade, designCertificateWithAI, generateTestCasesWithAI, autoGradeCodeWithAI, AIGradeScanResult, generateTrainerPresentation, generateTrainerAdvancedExam, generateKahootQuiz } from './gemini';
 import { languageLabRouter } from './languageLabRoutes';
 import {
   Trainee,
@@ -7688,6 +7688,26 @@ apiRouter.post('/trainer/generate-presentation', async (req: Request, res: Respo
   } catch (error: any) {
     console.error('Error generating presentation:', error);
     res.status(500).json({ success: false, error: error.message || 'فشل توليد العرض التقديمي' });
+  }
+});
+
+// Dedicated AI Kahoot Quiz Generator Endpoint
+apiRouter.post('/trainer/generate-kahoot', async (req: Request, res: Response) => {
+  try {
+    const { topic, grade, subject, questionCount, difficulty, image } = req.body;
+    const kahootGame = await generateKahootQuiz({
+      topic: topic || 'أساسيات البرمجة والتكنولوجيا',
+      grade: grade || 'الصف الرابع الابتدائي',
+      subject: subject || 'تكنولوجيا المعلومات والبرمجة',
+      questionCount: Number(questionCount) || 8,
+      difficulty: difficulty || 'متوسط',
+      imageBase64: image
+    });
+
+    res.json({ success: true, kahootGame });
+  } catch (error: any) {
+    console.error('Error generating Kahoot quiz:', error);
+    res.status(500).json({ success: false, error: error.message || 'فشل توليد مسابقة كاهوت' });
   }
 });
 

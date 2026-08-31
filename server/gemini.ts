@@ -1142,3 +1142,184 @@ ${hasUploadedDoc ? `📄 تم إرفاق ملف كتاب مدرسي / ورقة �
   };
 }
 
+export interface GenerateKahootParams {
+  topic: string;
+  grade?: string;
+  subject?: string;
+  questionCount?: number;
+  difficulty?: string;
+  imageBase64?: string;
+}
+
+export async function generateKahootQuiz(params: GenerateKahootParams) {
+  const count = Number(params.questionCount) || 8;
+  const grade = params.grade || 'الصف الرابع الابتدائي';
+  const subject = params.subject || 'تكنولوجيا المعلومات والبرمجة';
+  const topic = params.topic || 'أساسيات التقنية والبرمجة';
+  const difficulty = params.difficulty || 'متوسط';
+
+  const parts: any[] = [];
+  if (params.imageBase64) {
+    const cleanB64 = params.imageBase64.replace(/^data:image\/\w+;base64,/, '').replace(/^data:application\/pdf;base64,/, '');
+    parts.push({
+      inlineData: {
+        mimeType: params.imageBase64.includes('pdf') ? 'application/pdf' : 'image/jpeg',
+        data: cleanB64
+      }
+    });
+  }
+
+  const prompt = `أنت خبير في تصميم مسابقات كاهوت (Kahoot!) التفاعلية الممتعة والتعليمية الموجهة للطلاب.
+قم بتوليد حزمة مسابقة كاهوت كاملة حول الموضوع التالي:
+- الموضوع: ${topic}
+- المرحلة الدراسية: ${grade}
+- المادة: ${subject}
+- المستوى: ${difficulty}
+- عدد الأسئلة المطلوب: ${count} أسئلة متنوعة وشيقة!
+
+تنوع الأسئلة المطلوب:
+1. 'mcq': اختيار من متعدد (4 خيارات مميزة بألوان كاهوت: أحمر، أزرق، أصفر، أخضر).
+2. 'true_false': سؤال صح أو خطأ (خياران: صواب / خطأ).
+3. 'short_answer': سؤال إجابة قصيرة.
+4. 'puzzle': سؤال ترتيب تسلسلي (4 خيارات يجب ترتيبها بالترتيب الصحيح).
+
+أخرج الهيكل كالتالي بتنسيق JSON حصراً:
+{
+  "id": "kahoot-${Date.now()}",
+  "title": "تحدي كاهوت الذكي: ${topic}",
+  "description": "مسابقة تفاعلية ممتعة لطلاب ${grade} في مادة ${subject}",
+  "subject": "${subject}",
+  "grade": "${grade}",
+  "coverEmoji": "⚡",
+  "timeLimitDefault": 20,
+  "questions": [
+    {
+      "id": "kq-1",
+      "type": "mcq",
+      "question": "نص السؤال التشويقي المباشر",
+      "options": ["خيار 1 (أحمر 🔺)", "خيار 2 (أزرق 🔷)", "خيار 3 (أصفر 🟡)", "خيار 4 (أخضر 🟩)"],
+      "correctIndex": 0,
+      "timeLimit": 20,
+      "pointsType": "normal",
+      "explanation": "تفسير علمي مشجع ومبسط للإجابة الصحيحة",
+      "emojiOrTheme": "🎯",
+      "category": "${topic}"
+    }
+  ]
+}`;
+
+  parts.push({ text: prompt });
+
+  if (process.env.GEMINI_API_KEY) {
+    try {
+      const { text } = await generateWithModelCascade({
+        contents: [{ role: 'user', parts }],
+        config: {
+          responseMimeType: 'application/json'
+        }
+      });
+
+      if (text) {
+        const cleanJson = text.replace(/```json\s*|\s*```/g, '').trim();
+        const parsed = JSON.parse(cleanJson);
+        if (parsed && Array.isArray(parsed.questions) && parsed.questions.length > 0) {
+          return parsed;
+        }
+      }
+    } catch (err: any) {
+      console.warn('generateKahootQuiz Gemini warning:', err?.message);
+    }
+  }
+
+  // High quality offline fallback Kahoot Package
+  const fallbackQuestions = [
+    {
+      id: `kq-fb-1`,
+      type: 'mcq',
+      question: `ما هي الخطوة الأساسية الأولى لبدء أي مشروع برمي أو تقني جديد في ${topic}؟`,
+      options: [
+        'تحليل المتطلبات والتخطيط المنهجي الجيد 🎯',
+        'كتابة الكود عشوائياً دون تخطيط ❌',
+        'تجاهل واجهة المستخدم والتصميم 🎨',
+        'إغلاق الجهاز والانتظار 😴'
+      ],
+      correctIndex: 0,
+      timeLimit: 20,
+      pointsType: 'normal',
+      explanation: 'التخطيط والتحليل هما أساس النجاح لتفادي الأخطاء البرمجية وإتمام المشروع بكفاءة عالية.',
+      emojiOrTheme: '🚀',
+      category: topic
+    },
+    {
+      id: `kq-fb-2`,
+      type: 'true_false',
+      question: `هل يساعد استخدام التفكير المنطقي والذكاء الاصطناعي في تسريع حل المشكلات التكنولوجية؟`,
+      options: ['صواب ✅ (نعم بالتأكيد)', 'خطأ ❌ (لا يؤثر)'],
+      correctIndex: 0,
+      timeLimit: 15,
+      pointsType: 'normal',
+      explanation: 'بالتأكيد! الذكاء الاصطناعي والتفكير المنطقي يضاعفان القدرة على الابتكار واكتشاف الحلول.',
+      emojiOrTheme: '⚡',
+      category: topic
+    },
+    {
+      id: `kq-fb-3`,
+      type: 'mcq',
+      question: `ما هو المفهوم المسؤول عن تكرار تنفيذ أمر برمجي لعدد محدد من المرات؟`,
+      options: [
+        'حلقة التكرار (Loop / Repeat) 🔄',
+        'المتغيرات (Variables) 📦',
+        'الشروط (If Statement) 🔀',
+        'المصفوفات (Arrays) 📊'
+      ],
+      correctIndex: 0,
+      timeLimit: 20,
+      pointsType: 'double',
+      explanation: 'حلقات التكرار (Loops) تختصر الوقت والجهد وتنفذ التعليمات المكررة بذكاء فائقة.',
+      emojiOrTheme: '🔥',
+      category: topic
+    },
+    {
+      id: `kq-fb-4`,
+      type: 'puzzle',
+      question: `رتب خطوات كتابة واختبار البرنامج البرمجي بالترتيب الصحيح:`,
+      options: [
+        '1. تحديد وتصميم الفكرة 💡',
+        '2. كتابة الأوامر والأكواد 💻',
+        '3. تشغيل واختبار البرنامج 🧪',
+        '4. حفظ ونشر المشروع النهائي 🌟'
+      ],
+      correctIndex: 0,
+      timeLimit: 30,
+      pointsType: 'double',
+      explanation: 'الترتيب الصحيح يبدأ بالفكرة ثم البرمجة ثم الاختبار ثم النشر!',
+      emojiOrTheme: '🧩',
+      category: topic
+    },
+    {
+      id: `kq-fb-5`,
+      type: 'short_answer',
+      question: `ما اسم المنصة التي نستخدمها الآن لإجراء التحديات والمسابقات التفاعلية الحية؟`,
+      options: ['كاهوت (Kahoot) 🎮', 'Nagah MS 🛡️', 'جميع ما سبق ✅', 'لا شيء مما سبق ❌'],
+      correctIndex: 2,
+      timeLimit: 20,
+      pointsType: 'normal',
+      explanation: 'أنت الآن تخوض تحدي كاهوت التفاعلي المباشر المدمج داخل منصة نجاح!',
+      emojiOrTheme: '🏆',
+      category: topic
+    }
+  ];
+
+  return {
+    id: `kahoot-${Date.now()}`,
+    title: `تحدي كاهوت التفاعلي: ${topic}`,
+    description: `مسابقة تفاعلية شيقة وممتعة لمادة ${subject} - ${grade}`,
+    subject,
+    grade,
+    coverEmoji: '🔥',
+    timeLimitDefault: 20,
+    questions: fallbackQuestions
+  };
+}
+
+

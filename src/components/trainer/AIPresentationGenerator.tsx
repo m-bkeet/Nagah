@@ -23,9 +23,11 @@ import {
   RefreshCw,
   FileText,
   Lightbulb,
-  HelpCircle
+  HelpCircle,
+  BookOpen
 } from 'lucide-react';
 import { Trainer, Group, Course } from '../../types';
+import { KahootStudio, KahootQuestionItem } from '../kahoot/KahootStudio';
 
 interface AIPresentationGeneratorProps {
   trainer: Trainer;
@@ -556,105 +558,31 @@ export const AIPresentationGenerator: React.FC<AIPresentationGeneratorProps> = (
             </div>
           )}
 
-          {/* Tab 2: Kahoot Interactive Game Mode */}
+          {/* Tab 2: Kahoot Interactive Game Studio */}
           {activeTab === 'kahoot' && (
-            <div className="space-y-4">
-              <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 md:p-8 space-y-6">
-                {/* Header Info */}
-                <div className="flex items-center justify-between border-b border-slate-800 pb-4">
-                  <div className="flex items-center gap-2">
-                    <span className="px-3 py-1 rounded-full text-xs font-black bg-red-500/20 text-red-400 border border-red-500/30">
-                      سؤال {kahootCurrentIndex + 1} من {presentation.kahootQuestions.length}
-                    </span>
-                    <span className="text-xs text-slate-400 flex items-center gap-1">
-                      <Clock className="w-3.5 h-3.5 text-amber-400" />
-                      {presentation.kahootQuestions[kahootCurrentIndex]?.timeLimit || 20} ثانية
-                    </span>
-                  </div>
-
-                  <div className="text-xs font-bold text-amber-400 bg-amber-500/10 px-3 py-1 rounded-full border border-amber-500/20">
-                    النقاط المحرزة: {kahootScore} ⭐
-                  </div>
-                </div>
-
-                {/* Question Text */}
-                <div className="text-center py-4">
-                  <h3 className="text-xl md:text-2xl font-black text-white">
-                    {presentation.kahootQuestions[kahootCurrentIndex]?.question}
-                  </h3>
-                </div>
-
-                {/* Options 2x2 Grid with Kahoot Colors */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {presentation.kahootQuestions[kahootCurrentIndex]?.options.map((opt, optIdx) => {
-                    const color = kahootColors[optIdx % 4];
-                    const isSelected = kahootSelectedOption === optIdx;
-                    const isCorrect = optIdx === presentation.kahootQuestions[kahootCurrentIndex]?.correctIndex;
-
-                    let btnClass = color.bg + ' ' + color.text;
-                    if (kahootShowAnswer) {
-                      if (isCorrect) {
-                        btnClass = 'bg-emerald-500 text-white ring-4 ring-emerald-300';
-                      } else if (isSelected) {
-                        btnClass = 'bg-red-600 text-white opacity-80';
-                      } else {
-                        btnClass = 'bg-slate-800 text-slate-500 opacity-40';
-                      }
-                    }
-
-                    return (
-                      <button
-                        key={optIdx}
-                        disabled={kahootShowAnswer}
-                        onClick={() => {
-                          setKahootSelectedOption(optIdx);
-                          setKahootShowAnswer(true);
-                          if (isCorrect) {
-                            setKahootScore(prev => prev + 100);
-                            onShowToast('إجابة صحيحة رائعة! +100 نقطة ⭐', 'success');
-                          } else {
-                            onShowToast('إجابة خاطئة! راجع الشرح.', 'error');
-                          }
-                        }}
-                        className={`p-5 rounded-2xl font-bold text-sm md:text-base flex items-center justify-between gap-3 shadow-lg transition-all active:scale-95 ${btnClass}`}
-                      >
-                        <span className="text-xl">{color.icon}</span>
-                        <span className="flex-1 text-center">{opt}</span>
-                        {kahootShowAnswer && isCorrect && <CheckCircle2 className="w-6 h-6 text-white" />}
-                        {kahootShowAnswer && isSelected && !isCorrect && <XCircle className="w-6 h-6 text-white" />}
-                      </button>
-                    );
-                  })}
-                </div>
-
-                {/* Answer Explanation Box */}
-                {kahootShowAnswer && (
-                  <div className="p-4 rounded-2xl bg-slate-950 border border-slate-700 flex flex-col sm:flex-row items-center justify-between gap-4">
-                    <div>
-                      <div className="text-xs font-bold text-amber-400">💡 تفسير الإجابة الصحيحة:</div>
-                      <div className="text-xs text-slate-200 mt-1">
-                        {presentation.kahootQuestions[kahootCurrentIndex]?.explanation}
-                      </div>
-                    </div>
-
-                    <button
-                      onClick={() => {
-                        if (kahootCurrentIndex < presentation.kahootQuestions.length - 1) {
-                          setKahootCurrentIndex(prev => prev + 1);
-                          setKahootSelectedOption(null);
-                          setKahootShowAnswer(false);
-                        } else {
-                          onShowToast(`انتهت المسابقة! مجموع النقاط: ${kahootScore} ⭐`, 'success');
-                        }
-                      }}
-                      className="px-5 py-2.5 rounded-xl bg-amber-500 text-slate-950 font-black text-xs hover:bg-amber-400 transition-all shrink-0"
-                    >
-                      {kahootCurrentIndex < presentation.kahootQuestions.length - 1 ? 'السؤال التالي ➡️' : 'إعادة المسابقة 🔄'}
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
+            <KahootStudio
+              initialTopic={presentation?.title || topic}
+              initialQuestions={
+                presentation?.kahootQuestions
+                  ? presentation.kahootQuestions.map((q, idx) => ({
+                      id: q.id || `kq-${idx}`,
+                      type: 'mcq',
+                      question: q.question,
+                      options: q.options || [],
+                      correctIndex: q.correctIndex ?? 0,
+                      timeLimit: q.timeLimit || 20,
+                      pointsType: 'normal',
+                      explanation: q.explanation || '',
+                      emojiOrTheme: '🎯'
+                    }))
+                  : undefined
+              }
+              trainerName={trainer?.name}
+              groups={groups}
+              courses={courses}
+              onShowToast={onShowToast}
+              embeddedMode={true}
+            />
           )}
 
           {/* Tab 3: Practical Lab Activities */}

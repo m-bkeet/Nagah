@@ -38,7 +38,9 @@ import {
   Radio,
   Video,
   Mic,
-  Lock
+  Lock,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import { Trainer, Group, Course, Trainee, AttendanceRecord, HomeworkSubmission, Exam } from '../types';
 import { NextLectureCard } from '../components/trainer/NextLectureCard';
@@ -74,8 +76,17 @@ export const PublicTrainerPortalView: React.FC<PublicTrainerPortalViewProps> = (
   const [settlements, setSettlements] = useState<any[]>([]);
   const [settings, setSettings] = useState<any>({});
 
-  // Active Tab
+  // Active Tab & Navigation Ref
   const [activeTab, setActiveTab] = useState<'attendance' | 'homework' | 'grades' | 'finances' | 'schedule' | 'ai_presentation' | 'live_lecture' | 'social_feed' | 'ai_exam_maker' | 'ai_assistant' | 'ai_messaging' | 'credentials' | 'language_lab' | 'groups' | 'content_planner'>('attendance');
+  const [tabCategory, setTabCategory] = useState<'all' | 'teaching' | 'interactive' | 'eval' | 'ai' | 'account'>('all');
+  const tabContainerRef = React.useRef<HTMLDivElement>(null);
+
+  const scrollTabs = (direction: 'left' | 'right') => {
+    if (tabContainerRef.current) {
+      const scrollAmount = direction === 'left' ? -250 : 250;
+      tabContainerRef.current.scrollBy({ left: scrollAmount, behavior: 'smooth' });
+    }
+  };
 
   // Credentials Update State
   const [newPhone, setNewPhone] = useState('');
@@ -727,187 +738,269 @@ export const PublicTrainerPortalView: React.FC<PublicTrainerPortalViewProps> = (
               }}
             />
 
-            {/* TAB SELECTOR BAR */}
-            <div className="flex items-center gap-2 overflow-x-auto pb-2 border-b border-slate-800 scrollbar-none">
-              <button
-                onClick={() => setActiveTab('groups')}
-                className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-black transition-all shrink-0 border border-indigo-500/40 ${
-                  activeTab === 'groups'
-                    ? 'bg-gradient-to-r from-indigo-600 to-indigo-700 text-white shadow-lg shadow-indigo-600/30 scale-105'
-                    : 'bg-slate-900/80 text-indigo-300 hover:text-white hover:bg-indigo-900/30'
-                }`}
-              >
-                <Users className="w-4 h-4" />
-                <span>المجموعات والطلاب 👥</span>
-              </button>
+            {/* TAB SELECTOR BAR - WITH SCROLL CONTROLS & CATEGORY FILTERS */}
+            <div className="space-y-3 pb-2 border-b border-slate-800">
+              {/* Category Filter Pills for Quick Navigation */}
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs font-bold scrollbar-none">
+                <span className="text-[10px] text-slate-500 font-bold shrink-0 ml-1">تصفية التبويبات:</span>
+                {[
+                  { id: 'all', label: 'الكل (جميع الخدمات) 🌐' },
+                  { id: 'teaching', label: 'المجموعات والتحضير 👥' },
+                  { id: 'interactive', label: 'البث وكاهوت والتفاعل 📽️' },
+                  { id: 'eval', label: 'الواجبات والدرجات 📝' },
+                  { id: 'ai', label: 'أدوات الذكاء الاصطناعي 🤖' },
+                  { id: 'account', label: 'الحساب والإعدادات 🔐' }
+                ].map((cat) => (
+                  <button
+                    key={cat.id}
+                    onClick={() => setTabCategory(cat.id as any)}
+                    className={`px-3 py-1 rounded-xl text-[11px] font-bold transition-all shrink-0 ${
+                      tabCategory === cat.id
+                        ? 'bg-indigo-600 text-white shadow-md'
+                        : 'bg-slate-900/90 text-slate-400 hover:text-slate-200 hover:bg-slate-800 border border-slate-800'
+                    }`}
+                  >
+                    {cat.label}
+                  </button>
+                ))}
+              </div>
 
-              <button
-                onClick={() => setActiveTab('content_planner')}
-                className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-black transition-all shrink-0 border border-amber-500/40 ${
-                  activeTab === 'content_planner'
-                    ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 font-black shadow-lg shadow-amber-500/30 scale-105'
-                    : 'bg-slate-900/80 text-amber-300 hover:text-white hover:bg-amber-900/30'
-                }`}
-              >
-                <Sparkles className="w-4 h-4" />
-                <span>مساعد المحتوى وخطة السير 📚🤖</span>
-              </button>
+              {/* Scrollable Tabs Bar with Left/Right Arrow Buttons */}
+              <div className="relative flex items-center group">
+                {/* Scroll Right Button */}
+                <button
+                  onClick={() => scrollTabs('right')}
+                  className="absolute right-0 z-10 p-1.5 rounded-full bg-slate-900/90 text-slate-300 hover:text-white border border-slate-700 shadow-xl opacity-80 hover:opacity-100 transition-opacity"
+                  title="تمرير لليمين"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
 
-              <button
-                onClick={() => setActiveTab('attendance')}
-                className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-black transition-all shrink-0 ${
-                  activeTab === 'attendance'
-                    ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20 scale-105'
-                    : 'bg-slate-900/80 text-slate-400 hover:text-slate-200 hover:bg-slate-800'
-                }`}
-              >
-                <UserCheck className="w-4 h-4" />
-                <span>تسجيل الحضور والغياب</span>
-              </button>
+                {/* Tabs Container */}
+                <div
+                  ref={tabContainerRef}
+                  className="flex items-center gap-2 overflow-x-auto px-8 py-1.5 scrollbar-thin scrollbar-thumb-indigo-600/40 w-full scroll-smooth"
+                >
+                  {(tabCategory === 'all' || tabCategory === 'teaching') && (
+                    <button
+                      onClick={() => setActiveTab('groups')}
+                      className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-black transition-all shrink-0 border border-indigo-500/40 ${
+                        activeTab === 'groups'
+                          ? 'bg-gradient-to-r from-indigo-600 to-indigo-700 text-white shadow-lg shadow-indigo-600/30 ring-2 ring-indigo-400'
+                          : 'bg-slate-900/90 text-indigo-300 hover:text-white hover:bg-indigo-900/30'
+                      }`}
+                    >
+                      <Users className="w-4 h-4" />
+                      <span>المجموعات والطلاب 👥</span>
+                    </button>
+                  )}
 
-              <button
-                onClick={() => setActiveTab('ai_presentation')}
-                className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-black transition-all shrink-0 border border-amber-500/40 ${
-                  activeTab === 'ai_presentation'
-                    ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 font-black shadow-lg shadow-amber-500/30 scale-105'
-                    : 'bg-slate-900/80 text-amber-300 hover:text-white hover:bg-amber-900/30'
-                }`}
-              >
-                <Presentation className="w-4 h-4" />
-                <span>العروض التقديمية وكاهوت 📽️</span>
-              </button>
+                  {(tabCategory === 'all' || tabCategory === 'teaching') && (
+                    <button
+                      onClick={() => setActiveTab('attendance')}
+                      className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-black transition-all shrink-0 ${
+                        activeTab === 'attendance'
+                          ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20 ring-2 ring-indigo-400'
+                          : 'bg-slate-900/90 text-slate-300 hover:text-slate-100 hover:bg-slate-800 border border-slate-800'
+                      }`}
+                    >
+                      <UserCheck className="w-4 h-4 text-emerald-400" />
+                      <span>تسجيل الحضور والغياب</span>
+                    </button>
+                  )}
 
-              <button
-                onClick={() => setActiveTab('live_lecture')}
-                className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-black transition-all shrink-0 border border-red-500/40 ${
-                  activeTab === 'live_lecture'
-                    ? 'bg-gradient-to-r from-red-600 to-rose-600 text-white shadow-lg shadow-red-600/30 scale-105'
-                    : 'bg-slate-900/80 text-red-300 hover:text-white hover:bg-red-900/30'
-                }`}
-              >
-                <Radio className="w-4 h-4 animate-pulse" />
-                <span>البث المباشر وزوم 🔴</span>
-              </button>
+                  {(tabCategory === 'all' || tabCategory === 'interactive') && (
+                    <button
+                      onClick={() => setActiveTab('ai_presentation')}
+                      className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-black transition-all shrink-0 border border-amber-500/40 ${
+                        activeTab === 'ai_presentation'
+                          ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 font-black shadow-lg shadow-amber-500/30 ring-2 ring-amber-300'
+                          : 'bg-slate-900/90 text-amber-300 hover:text-white hover:bg-amber-900/30'
+                      }`}
+                    >
+                      <Presentation className="w-4 h-4" />
+                      <span>العروض التقديمية وكاهوت 📽️</span>
+                    </button>
+                  )}
 
-              <button
-                onClick={() => setActiveTab('social_feed')}
-                className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-black transition-all shrink-0 border border-sky-500/40 ${
-                  activeTab === 'social_feed'
-                    ? 'bg-gradient-to-r from-sky-600 to-blue-600 text-white shadow-lg shadow-sky-600/30 scale-105'
-                    : 'bg-slate-900/80 text-sky-300 hover:text-white hover:bg-sky-900/30'
-                }`}
-              >
-                <Share2 className="w-4 h-4" />
-                <span>التواصل والمسابقات 🏆</span>
-              </button>
+                  {(tabCategory === 'all' || tabCategory === 'interactive') && (
+                    <button
+                      onClick={() => setActiveTab('live_lecture')}
+                      className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-black transition-all shrink-0 border border-red-500/40 ${
+                        activeTab === 'live_lecture'
+                          ? 'bg-gradient-to-r from-red-600 to-rose-600 text-white shadow-lg shadow-red-600/30 ring-2 ring-red-400'
+                          : 'bg-slate-900/90 text-red-300 hover:text-white hover:bg-red-900/30'
+                      }`}
+                    >
+                      <Radio className="w-4 h-4 animate-pulse" />
+                      <span>البث المباشر وزوم 🔴</span>
+                    </button>
+                  )}
 
-              <button
-                onClick={() => setActiveTab('homework')}
-                className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-black transition-all shrink-0 ${
-                  activeTab === 'homework'
-                    ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20 scale-105'
-                    : 'bg-slate-900/80 text-slate-400 hover:text-slate-200 hover:bg-slate-800'
-                }`}
-              >
-                <BookOpen className="w-4 h-4" />
-                <span>تصحيح الواجبات ({homeworkSubmissions.filter(h => h.status === 'pending').length})</span>
-              </button>
+                  {(tabCategory === 'all' || tabCategory === 'interactive') && (
+                    <button
+                      onClick={() => setActiveTab('language_lab')}
+                      className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-black transition-all shrink-0 border border-teal-500/40 ${
+                        activeTab === 'language_lab'
+                          ? 'bg-gradient-to-r from-teal-600 to-emerald-600 text-white shadow-lg shadow-teal-600/30 ring-2 ring-teal-400'
+                          : 'bg-slate-900/90 text-teal-300 hover:text-white hover:bg-teal-900/30'
+                      }`}
+                    >
+                      <Mic className="w-4 h-4 text-teal-300" />
+                      <span>معمل اللغات الذكي 🗣️</span>
+                    </button>
+                  )}
 
-              <button
-                onClick={() => setActiveTab('grades')}
-                className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-black transition-all shrink-0 ${
-                  activeTab === 'grades'
-                    ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20 scale-105'
-                    : 'bg-slate-900/80 text-slate-400 hover:text-slate-200 hover:bg-slate-800'
-                }`}
-              >
-                <Award className="w-4 h-4" />
-                <span>رصد درجات الاختبارات</span>
-              </button>
+                  {(tabCategory === 'all' || tabCategory === 'interactive') && (
+                    <button
+                      onClick={() => setActiveTab('social_feed')}
+                      className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-black transition-all shrink-0 border border-sky-500/40 ${
+                        activeTab === 'social_feed'
+                          ? 'bg-gradient-to-r from-sky-600 to-blue-600 text-white shadow-lg shadow-sky-600/30 ring-2 ring-sky-400'
+                          : 'bg-slate-900/90 text-sky-300 hover:text-white hover:bg-sky-900/30'
+                      }`}
+                    >
+                      <Share2 className="w-4 h-4" />
+                      <span>التواصل والمسابقات 🏆</span>
+                    </button>
+                  )}
 
-              <button
-                onClick={() => setActiveTab('finances')}
-                className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-black transition-all shrink-0 ${
-                  activeTab === 'finances'
-                    ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20 scale-105'
-                    : 'bg-slate-900/80 text-slate-400 hover:text-slate-200 hover:bg-slate-800'
-                }`}
-              >
-                <DollarSign className="w-4 h-4" />
-                <span>كشف الحساب والمستحقات</span>
-              </button>
+                  {(tabCategory === 'all' || tabCategory === 'eval') && (
+                    <button
+                      onClick={() => setActiveTab('homework')}
+                      className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-black transition-all shrink-0 border border-indigo-500/30 ${
+                        activeTab === 'homework'
+                          ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20 ring-2 ring-indigo-400'
+                          : 'bg-slate-900/90 text-slate-300 hover:text-slate-100 hover:bg-slate-800'
+                      }`}
+                    >
+                      <BookOpen className="w-4 h-4 text-cyan-400" />
+                      <span>تصحيح الواجبات ({homeworkSubmissions.filter(h => h.status === 'pending').length})</span>
+                    </button>
+                  )}
 
-              <button
-                onClick={() => setActiveTab('schedule')}
-                className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-black transition-all shrink-0 ${
-                  activeTab === 'schedule'
-                    ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20 scale-105'
-                    : 'bg-slate-900/80 text-slate-400 hover:text-slate-200 hover:bg-slate-800'
-                }`}
-              >
-                <Calendar className="w-4 h-4" />
-                <span>جدول المحاضرات والطلاب</span>
-              </button>
+                  {(tabCategory === 'all' || tabCategory === 'eval') && (
+                    <button
+                      onClick={() => setActiveTab('grades')}
+                      className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-black transition-all shrink-0 border border-indigo-500/30 ${
+                        activeTab === 'grades'
+                          ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20 ring-2 ring-indigo-400'
+                          : 'bg-slate-900/90 text-slate-300 hover:text-slate-100 hover:bg-slate-800'
+                      }`}
+                    >
+                      <Award className="w-4 h-4 text-amber-400" />
+                      <span>رصد درجات الاختبارات</span>
+                    </button>
+                  )}
 
-              <button
-                onClick={() => setActiveTab('ai_assistant')}
-                className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-black transition-all shrink-0 border border-purple-500/30 ${
-                  activeTab === 'ai_assistant'
-                    ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-lg shadow-purple-600/30 scale-105'
-                    : 'bg-slate-900/80 text-purple-300 hover:text-white hover:bg-purple-900/30'
-                }`}
-              >
-                <Sparkles className="w-4 h-4 text-amber-300" />
-                <span>مساعد المدرب الذكي (AI)</span>
-              </button>
+                  {(tabCategory === 'all' || tabCategory === 'eval' || tabCategory === 'ai') && (
+                    <button
+                      onClick={() => setActiveTab('ai_exam_maker')}
+                      className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-black transition-all shrink-0 border border-blue-500/30 ${
+                        activeTab === 'ai_exam_maker'
+                          ? 'bg-gradient-to-r from-blue-600 to-cyan-600 text-white shadow-lg shadow-blue-600/30 ring-2 ring-blue-400'
+                          : 'bg-slate-900/90 text-blue-300 hover:text-white hover:bg-blue-900/30'
+                      }`}
+                    >
+                      <FileQuestion className="w-4 h-4 text-cyan-300" />
+                      <span>صانع الاختبارات الذكي</span>
+                    </button>
+                  )}
 
-              <button
-                onClick={() => setActiveTab('ai_exam_maker')}
-                className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-black transition-all shrink-0 border border-blue-500/30 ${
-                  activeTab === 'ai_exam_maker'
-                    ? 'bg-gradient-to-r from-blue-600 to-cyan-600 text-white shadow-lg shadow-blue-600/30 scale-105'
-                    : 'bg-slate-900/80 text-blue-300 hover:text-white hover:bg-blue-900/30'
-                }`}
-              >
-                <FileQuestion className="w-4 h-4 text-cyan-300" />
-                <span>صانع الاختبارات الذكي</span>
-              </button>
+                  {(tabCategory === 'all' || tabCategory === 'ai') && (
+                    <button
+                      onClick={() => setActiveTab('content_planner')}
+                      className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-black transition-all shrink-0 border border-amber-500/40 ${
+                        activeTab === 'content_planner'
+                          ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 font-black shadow-lg shadow-amber-500/30 ring-2 ring-amber-300'
+                          : 'bg-slate-900/90 text-amber-300 hover:text-white hover:bg-amber-900/30'
+                      }`}
+                    >
+                      <Sparkles className="w-4 h-4 text-amber-400" />
+                      <span>مساعد المحتوى وخطة السير 📚🤖</span>
+                    </button>
+                  )}
 
-              <button
-                onClick={() => setActiveTab('ai_messaging')}
-                className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-black transition-all shrink-0 border border-emerald-500/30 ${
-                  activeTab === 'ai_messaging'
-                    ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-lg shadow-emerald-600/30 scale-105'
-                    : 'bg-slate-900/80 text-emerald-300 hover:text-white hover:bg-emerald-900/30'
-                }`}
-              >
-                <MessageSquare className="w-4 h-4 text-emerald-300" />
-                <span>الرد الآلي والتواصل الذكي</span>
-              </button>
+                  {(tabCategory === 'all' || tabCategory === 'ai') && (
+                    <button
+                      onClick={() => setActiveTab('ai_assistant')}
+                      className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-black transition-all shrink-0 border border-purple-500/30 ${
+                        activeTab === 'ai_assistant'
+                          ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-lg shadow-purple-600/30 ring-2 ring-purple-400'
+                          : 'bg-slate-900/90 text-purple-300 hover:text-white hover:bg-purple-900/30'
+                      }`}
+                    >
+                      <Bot className="w-4 h-4 text-purple-300" />
+                      <span>مساعد المدرب الذكي (AI)</span>
+                    </button>
+                  )}
 
-              <button
-                onClick={() => setActiveTab('credentials')}
-                className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-black transition-all shrink-0 border border-emerald-500/40 ${
-                  activeTab === 'credentials'
-                    ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-lg shadow-emerald-600/30 scale-105'
-                    : 'bg-slate-900/80 text-emerald-300 hover:text-white hover:bg-emerald-900/30'
-                }`}
-              >
-                <Smartphone className="w-4 h-4 text-emerald-300" />
-                <span>إعدادات الدخول وكلمة السر 🔐</span>
-              </button>
+                  {(tabCategory === 'all' || tabCategory === 'ai') && (
+                    <button
+                      onClick={() => setActiveTab('ai_messaging')}
+                      className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-black transition-all shrink-0 border border-emerald-500/30 ${
+                        activeTab === 'ai_messaging'
+                          ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-lg shadow-emerald-600/30 ring-2 ring-emerald-400'
+                          : 'bg-slate-900/90 text-emerald-300 hover:text-white hover:bg-emerald-900/30'
+                      }`}
+                    >
+                      <MessageSquare className="w-4 h-4 text-emerald-300" />
+                      <span>الرد الآلي والتواصل الذكي</span>
+                    </button>
+                  )}
 
-              <button
-                onClick={() => setActiveTab('language_lab')}
-                className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-black transition-all shrink-0 border border-teal-500/40 ${
-                  activeTab === 'language_lab'
-                    ? 'bg-gradient-to-r from-teal-600 to-emerald-600 text-white shadow-lg shadow-teal-600/30 scale-105'
-                    : 'bg-slate-900/80 text-teal-300 hover:text-white hover:bg-teal-900/30'
-                }`}
-              >
-                <Mic className="w-4 h-4 text-teal-300" />
-                <span>معمل اللغات الذكي 🗣️</span>
-              </button>
+                  {(tabCategory === 'all' || tabCategory === 'teaching') && (
+                    <button
+                      onClick={() => setActiveTab('schedule')}
+                      className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-black transition-all shrink-0 border border-indigo-500/30 ${
+                        activeTab === 'schedule'
+                          ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20 ring-2 ring-indigo-400'
+                          : 'bg-slate-900/90 text-slate-300 hover:text-slate-100 hover:bg-slate-800'
+                      }`}
+                    >
+                      <Calendar className="w-4 h-4 text-indigo-400" />
+                      <span>جدول المحاضرات والطلاب</span>
+                    </button>
+                  )}
+
+                  {(tabCategory === 'all' || tabCategory === 'account') && (
+                    <button
+                      onClick={() => setActiveTab('finances')}
+                      className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-black transition-all shrink-0 border border-indigo-500/30 ${
+                        activeTab === 'finances'
+                          ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20 ring-2 ring-indigo-400'
+                          : 'bg-slate-900/90 text-slate-300 hover:text-slate-100 hover:bg-slate-800'
+                      }`}
+                    >
+                      <DollarSign className="w-4 h-4 text-emerald-400" />
+                      <span>كشف الحساب والمستحقات</span>
+                    </button>
+                  )}
+
+                  {(tabCategory === 'all' || tabCategory === 'account') && (
+                    <button
+                      onClick={() => setActiveTab('credentials')}
+                      className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-black transition-all shrink-0 border border-emerald-500/40 ${
+                        activeTab === 'credentials'
+                          ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-lg shadow-emerald-600/30 ring-2 ring-emerald-400'
+                          : 'bg-slate-900/90 text-emerald-300 hover:text-white hover:bg-emerald-900/30'
+                      }`}
+                    >
+                      <Smartphone className="w-4 h-4 text-emerald-300" />
+                      <span>إعدادات الدخول وكلمة السر 🔐</span>
+                    </button>
+                  )}
+                </div>
+
+                {/* Scroll Left Button */}
+                <button
+                  onClick={() => scrollTabs('left')}
+                  className="absolute left-0 z-10 p-1.5 rounded-full bg-slate-900/90 text-slate-300 hover:text-white border border-slate-700 shadow-xl opacity-80 hover:opacity-100 transition-opacity"
+                  title="تمرير لليسار"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+              </div>
             </div>
 
             {activeTab === 'groups' && trainer && (
