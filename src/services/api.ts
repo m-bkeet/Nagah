@@ -36,10 +36,12 @@ import {
 } from '../types';
 
 const getApiBaseUrl = () => {
-  if (typeof window !== 'undefined' && window.location.hostname.includes('vercel.app')) {
-    return 'https://ais-dev-7wkppak7c63am6ebvulppu-481160813332.europe-west2.run.app/api';
+  const envUrl = typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_BASE_URL;
+  if (envUrl) {
+    const clean = envUrl.replace(/\/$/, '');
+    return clean.endsWith('/api') ? clean : `${clean}/api`;
   }
-  return (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_BASE_URL) || '/api';
+  return '/api';
 };
 
 const BASE_URL = getApiBaseUrl();
