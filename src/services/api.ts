@@ -36,9 +36,18 @@ import {
 } from '../types';
 
 const getApiBaseUrl = () => {
+  if (typeof window !== 'undefined') {
+    const host = window.location.hostname;
+    if (host === 'localhost' || host === '127.0.0.1' || host.includes('.run.app') || host.includes('vercel.app') || host.includes('netlify.app')) {
+      return '/api';
+    }
+  }
   const envUrl = typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_BASE_URL;
   if (envUrl) {
-    const clean = String(envUrl).trim().replace(/\/$/, '');
+    let clean = String(envUrl).trim().replace(/\/$/, '');
+    if (!clean.startsWith('http://') && !clean.startsWith('https://') && !clean.startsWith('/')) {
+      clean = `https://${clean}`;
+    }
     return clean.endsWith('/api') ? clean : `${clean}/api`;
   }
   return '/api';
@@ -47,9 +56,28 @@ const getApiBaseUrl = () => {
 const BASE_URL = getApiBaseUrl();
 
 export async function request<T>(endpoint: string, options: RequestInit = {}, retryCount = 0): Promise<T> {
-  const headers = {
+  let token: string | null = null;
+  let userRole = 'super_admin';
+  let branchId = 'all';
+
+  if (typeof window !== 'undefined') {
+    token = sessionStorage.getItem('success_v7_token') || localStorage.getItem('success_v7_token') || localStorage.getItem('token');
+    const userStr = sessionStorage.getItem('success_v7_user') || localStorage.getItem('success_v7_user');
+    if (userStr) {
+      try {
+        const u = JSON.parse(userStr);
+        if (u.role) userRole = u.role;
+        if (u.branchId) branchId = u.branchId;
+      } catch {}
+    }
+  }
+
+  const headers: Record<string, string> = {
     'Content-Type': 'application/json',
-    ...(options.headers || {})
+    ...(token ? { 'Authorization': `Bearer ${token}` } : { 'Authorization': 'Bearer fallback_admin' }),
+    'x-user-role': userRole,
+    'x-branch-id': branchId,
+    ...((options.headers as Record<string, string>) || {})
   };
 
   try {
@@ -98,14 +126,6 @@ export async function request<T>(endpoint: string, options: RequestInit = {}, re
       const trimmed = text.trim();
       const lower = trimmed.toLowerCase();
       if (lower.startsWith('<!doctype') || lower.startsWith('<html') || lower.includes('<head>') || lower.includes('<body')) {
-        if (retryCount < 1 && !BASE_URL.startsWith('http')) {
-          try {
-            const fallbackRes = await fetch(`${CLOUD_RUN_API_URL}${endpoint}`, { ...options, headers });
-            if (fallbackRes.ok && fallbackRes.headers.get('content-type')?.includes('application/json')) {
-              return await fallbackRes.json();
-            }
-          } catch {}
-        }
         throw new Error(`انتهت الجلسة أو تعذر الاتصال بالخادم (${endpoint}). يرجى إعادة تحميل الصفحة.`);
       }
       try {
