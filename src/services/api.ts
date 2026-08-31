@@ -35,19 +35,11 @@ import {
   LabScheduleSlot
 } from '../types';
 
-const CLOUD_RUN_API_URL = 'https://ais-pre-7wkppak7c63am6ebvulppu-481160813332.europe-west2.run.app/api';
-
 const getApiBaseUrl = () => {
   const envUrl = typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_BASE_URL;
   if (envUrl) {
     const clean = String(envUrl).trim().replace(/\/$/, '');
     return clean.endsWith('/api') ? clean : `${clean}/api`;
-  }
-  if (typeof window !== 'undefined' && window.location && window.location.hostname) {
-    const host = window.location.hostname;
-    if (host.endsWith('vercel.app')) {
-      return CLOUD_RUN_API_URL;
-    }
   }
   return '/api';
 };
