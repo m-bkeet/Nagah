@@ -35,7 +35,14 @@ import {
   LabScheduleSlot
 } from '../types';
 
-const BASE_URL = '/api';
+const getApiBaseUrl = () => {
+  if (typeof window !== 'undefined' && window.location.hostname.includes('vercel.app')) {
+    return 'https://ais-dev-7wkppak7c63am6ebvulppu-481160813332.europe-west2.run.app/api';
+  }
+  return (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_BASE_URL) || '/api';
+};
+
+const BASE_URL = getApiBaseUrl();
 
 export async function request<T>(endpoint: string, options: RequestInit = {}, retryCount = 0): Promise<T> {
   const headers = {

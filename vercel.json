@@ -1,7 +1,9 @@
 {
   "version": 2,
   "rewrites": [
-    { "source": "/api/(.*)", "destination": "/api" },
+    { "source": "/api", "destination": "https://ais-dev-7wkppak7c63am6ebvulppu-481160813332.europe-west2.run.app/api", "external": true },
+    { "source": "/api/(.*)", "destination": "https://ais-dev-7wkppak7c63am6ebvulppu-481160813332.europe-west2.run.app/api/$1", "external": true },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
+
