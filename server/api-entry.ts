@@ -49,9 +49,10 @@ app.get(['/health', '/api/health'], (req, res) => {
 
 // Add CORS to allow external forms/apps to hit the public APIs
 app.use(cors({
-  origin: '*',
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  origin: true,
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-user-role', 'x-user-id', 'x-branch-id', 'x-trainer-id', 'x-trainee-id', '*']
 }));
 
 app.use(express.json({ limit: '50mb' }));

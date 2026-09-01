@@ -1,0 +1,20 @@
+[
+  {
+    "id": "MIG-001",
+    "name": "Initial Schema and Staging Database Setup",
+    "appliedAt": "2026-08-31T23:56:28.976Z",
+    "status": "SUCCESS"
+  },
+  {
+    "id": "MIG-002",
+    "name": "Versioning API Router Support (v1 and v2)",
+    "appliedAt": "2026-08-31T23:56:28.976Z",
+    "status": "SUCCESS"
+  },
+  {
+    "id": "MIG-003",
+    "name": "Secure Database Connection & Integrity Checks",
+    "appliedAt": "2026-08-31T23:56:28.976Z",
+    "status": "SUCCESS"
+  }
+]
