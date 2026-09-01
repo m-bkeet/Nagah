@@ -103,14 +103,8 @@ export const TrainersView: React.FC = () => {
   useEffect(() => {
     // Realtime live subscription to cloud Firestore trainers
     const unsubscribe = cloudDb.listenToCollection<Trainer>('trainers', (cloudTrainers) => {
-      if (cloudTrainers && cloudTrainers.length > 0) {
-        setTrainers(prev => {
-          const map = new Map<string, Trainer>();
-          (prev || []).forEach(t => map.set(t.id, t));
-          cloudTrainers.forEach(ct => map.set(ct.id, { ...map.get(ct.id), ...ct }));
-          const list = Array.from(map.values());
-          return activeBranchId !== 'all' ? list.filter(t => t.branchId === activeBranchId) : list;
-        });
+      if (cloudTrainers && Array.isArray(cloudTrainers)) {
+        setTrainers(activeBranchId !== 'all' ? cloudTrainers.filter(t => t.branchId === activeBranchId) : cloudTrainers);
       }
     });
     return () => unsubscribe();

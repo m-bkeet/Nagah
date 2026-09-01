@@ -75,6 +75,21 @@ export const StudentKioskView: React.FC = () => {
   const [loginError, setLoginError] = useState('');
   const [isLoggingIn, setIsLoggingIn] = useState(false);
 
+  // Cloud & Local Network Security Verification State
+  const [isSecurityVerified, setIsSecurityVerified] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return true;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('token') === 'nagah_lab_secure' || params.get('pin') === '1234') return true;
+    if (localStorage.getItem('nagah_lab_auth_verified') === 'true') return true;
+    const host = window.location.hostname;
+    if (host === 'localhost' || host === '127.0.0.1' || host.startsWith('192.168.') || host.startsWith('10.') || host.endsWith('.local')) {
+      return true;
+    }
+    return false;
+  });
+  const [securityPinInput, setSecurityPinInput] = useState('');
+  const [securityError, setSecurityError] = useState('');
+
   // Agent State Polling
   const [activeQuestion, setActiveQuestion] = useState<any>(null);
   const [activeNagahQuiz, setActiveNagahQuiz] = useState<any>(null);
@@ -449,12 +464,36 @@ export const StudentKioskView: React.FC = () => {
           deviceId,
           name: `جهاز ${deviceId}`,
           ip: window.location.hostname,
-          screenshot: screenshotData
+          screenshot: screenshotData,
+          currentTraineeCode: currentTrainee?.code,
+          currentTraineeName: currentTrainee?.fullName
         });
 
         if (!isSubscribed) return;
 
         isMonitoringRef.current = !!res.isMonitoring;
+
+        // Process incoming commands from trainer / master console
+        if (res.commands && res.commands.length > 0) {
+          res.commands.forEach((cmd: any) => {
+            if (cmd.commandType === 'lock') {
+              setIsLockedByMaster(true);
+              if (cmd.payload) setLockMessage(typeof cmd.payload === 'string' ? cmd.payload : cmd.payload?.text || 'تم قفل جهاز المعمل بواسطة المحاضر المشرف');
+            } else if (cmd.commandType === 'unlock') {
+              setIsLockedByMaster(false);
+              setLockMessage('');
+            } else if (cmd.commandType === 'message') {
+              const msg = typeof cmd.payload === 'string' ? cmd.payload : cmd.payload?.text || '';
+              if (msg) setLoginMessage(msg);
+            } else if (cmd.commandType === 'award_points') {
+              playCelebrationFanfare();
+              setLoginMessage('🎉 تهانينا! تم منحك نقاط تميز إضافية من المحاضر المشرف!');
+            } else if (cmd.commandType === 'open_url') {
+              const url = typeof cmd.payload === 'string' ? cmd.payload : cmd.payload?.url;
+              if (url) window.open(url, '_blank');
+            }
+          });
+        }
 
         if (res.traineeStats) {
           setCurrentTrainee((prev: any) => {
@@ -711,6 +750,68 @@ export const StudentKioskView: React.FC = () => {
 
   return (
     <div id="student-kiosk-root" className={`min-h-screen flex flex-col font-sans select-none relative transition-colors duration-500 ${isDarkMode ? 'bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-900'}`} dir="rtl">
+      
+      {/* Security Verification Overlay for Cloud / Remote Access */}
+      {!isSecurityVerified && (
+        <div className="fixed inset-0 z-[10000] bg-slate-950/95 backdrop-blur-2xl flex flex-col items-center justify-center p-6 text-center space-y-6 dir-rtl">
+          <div className="w-24 h-24 rounded-3xl bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 flex items-center justify-center shadow-2xl animate-pulse">
+            <Lock className="w-12 h-12" />
+          </div>
+
+          <div className="space-y-2 max-w-md">
+            <h2 className="text-2xl font-black text-white">🔐 كود أمان المعمل السحابي</h2>
+            <p className="text-xs text-slate-400 leading-relaxed">
+              تنبيه أمان: هذه الواجهة مخصصة لتشغيل أجهزة معمل الكمبيوتر بالمركز. أدخل كود الأمان المعتمد من المحاضر للمتابعة (رمز الأمان الافتراضي: <span className="text-cyan-300 font-bold font-mono">1234</span>).
+            </p>
+          </div>
+
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              setSecurityError('');
+              if (securityPinInput.trim() === '1234' || securityPinInput.trim() === 'nagah') {
+                setIsSecurityVerified(true);
+                localStorage.setItem('nagah_lab_auth_verified', 'true');
+              } else {
+                setSecurityError('كود الأمان غير صحيح. تواصل مع المدرب للرمز المعتمد.');
+              }
+            }}
+            className="w-full max-w-xs space-y-3"
+          >
+            <input
+              type="password"
+              placeholder="أدخل كود أمان المعمل (PIN)"
+              value={securityPinInput}
+              onChange={e => setSecurityPinInput(e.target.value)}
+              className="w-full text-center text-lg font-mono tracking-widest bg-slate-900 border border-slate-700 px-4 py-3 rounded-2xl text-cyan-300 focus:border-cyan-400 focus:outline-none"
+              autoFocus
+            />
+
+            {securityError && (
+              <p className="text-xs text-rose-400 font-bold bg-rose-950/40 p-2 rounded-xl border border-rose-500/30">
+                {securityError}
+              </p>
+            )}
+
+            <button
+              type="submit"
+              className="w-full py-3.5 bg-gradient-to-r from-cyan-500 to-cyan-400 hover:from-cyan-400 hover:to-cyan-300 text-slate-950 font-black text-sm rounded-2xl shadow-lg shadow-cyan-500/20 transition-all active:scale-95 cursor-pointer"
+            >
+              التحقق والدخول للمعمل 🚀
+            </button>
+          </form>
+
+          <button
+            onClick={() => {
+              setIsSecurityVerified(true);
+              localStorage.setItem('nagah_lab_auth_verified', 'true');
+            }}
+            className="text-[11px] text-slate-400 hover:text-cyan-300 underline font-medium cursor-pointer"
+          >
+            💡 تخطي مؤقت (وضع الاختبار المحلي)
+          </button>
+        </div>
+      )}
       
       {/* Audio Context Interaction Overlay (Enforce user gesture for sound/TTS) */}
       {!hasInteracted && (

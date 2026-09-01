@@ -28,7 +28,14 @@ self.addEventListener('activate', (event) => {
 
 // Fetch Event - Network-First for Navigation / HTML & APIs
 self.addEventListener('fetch', (event) => {
-  const requestUrl = new URL(event.request.url);
+  if (!event.request.url || !event.request.url.startsWith('http')) return;
+  
+  let requestUrl;
+  try {
+    requestUrl = new URL(event.request.url);
+  } catch (e) {
+    return;
+  }
 
   // If request is navigation or HTML document -> ALWAYS Network-First
   if (event.request.mode === 'navigate' || event.request.destination === 'document' || requestUrl.pathname.endsWith('.html') || requestUrl.pathname === '/') {

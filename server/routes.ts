@@ -1154,31 +1154,77 @@ apiRouter.delete('/trainees/:id', async (req: Request, res: Response) => {
     const trainee = await TraineeRepo.getById(id);
     if (!trainee) return res.status(404).json({ success: false, error: 'المتدرب غير موجود' });
 
-    // Safely archive trainee to preserve historical payments and attendance records
-    await TraineeRepo.update(id, { status: 'archived' as any });
-    res.json({ success: true, message: 'تم أرشفة المتدرب وحفظ بياناته المالية والتاريخية بنجاح' });
+    // 1. Delete from TraineeRepo (Supabase + local memory)
+    await TraineeRepo.delete(id);
+
+    // 2. Explicitly remove from db.getData().trainees
+    const memData = db.getData();
+    if (memData && Array.isArray(memData.trainees)) {
+      const idx = memData.trainees.findIndex((t: any) => t.id === id);
+      if (idx >= 0) {
+        memData.trainees.splice(idx, 1);
+      }
+    }
+    db.saveImmediate();
+    TraineeRepo.invalidateCache();
+
+    // 3. Also delete from adminDb if active
+    try {
+      await adminDb.collection('trainees').doc(id).delete();
+    } catch {}
+
+    db.logAudit({
+      userId: 'admin',
+      userName: 'مدير النظام',
+      action: 'حذف متدرب',
+      entity: 'المتدربين',
+      details: `تم حذف المتدرب ${trainee.fullName || trainee.name} (${id}) نهائياً`
+    });
+
+    res.json({ success: true, message: 'تم حذف المتدرب بنجاح' });
   } catch(e: any) { res.status(500).json({ success: false, error: e.message }); }
 });
 
-// Bulk Import Trainees from Excel (Flexible & Forgiving)
+// Bulk Import / Manage Trainees
 apiRouter.post("/trainees/bulk-assign-group", async (req: Request, res: Response) => {
   try {
     const { traineeIds, groupId } = req.body;
-    if (!Array.isArray(traineeIds) || !groupId) return res.status(400).json({ error: "Invalid data" });
+    if (!Array.isArray(traineeIds) || !groupId) return res.status(400).json({ error: "بيانات غير صالحة" });
     const group = await GroupRepo.getById(groupId);
-    if (!group) return res.status(404).json({ error: "Group not found" });
+    if (!group) return res.status(404).json({ error: "المجموعة غير موجودة" });
     
     let count = 0;
-    const batch = adminDb.batch();
+    const memData = db.getData();
     for (const id of traineeIds) {
-      batch.update(adminDb.collection('trainees').doc(id), { 
+      await TraineeRepo.update(id, { 
         groupId: groupId,
+        groupName: group.name,
         courseId: group.courseId
       });
+      if (memData && Array.isArray(memData.trainees)) {
+        const tr = memData.trainees.find((t: any) => t.id === id);
+        if (tr) {
+          tr.groupId = groupId;
+          tr.groupName = group.name;
+          tr.courseId = group.courseId;
+        }
+      }
       count++;
     }
-    await batch.commit();
+    db.saveImmediate();
     TraineeRepo.invalidateCache();
+
+    try {
+      const batch = adminDb.batch();
+      for (const id of traineeIds) {
+        batch.update(adminDb.collection('trainees').doc(id), { 
+          groupId: groupId,
+          courseId: group.courseId
+        });
+      }
+      await batch.commit();
+    } catch {}
+
     res.json({ success: true, count });
   } catch(e: any) { res.status(500).json({ error: e.message }); }
 });
@@ -1186,12 +1232,39 @@ apiRouter.post("/trainees/bulk-assign-group", async (req: Request, res: Response
 apiRouter.post('/trainees/bulk-delete', async (req, res) => {
   try {
     const { ids } = req.body;
-    if (!ids || !Array.isArray(ids)) return res.status(400).json({error: 'Invalid ids'});
-    const batch = adminDb.batch();
-    ids.forEach(id => batch.delete(adminDb.collection('trainees').doc(id)));
-    await batch.commit();
-    res.json({success: true, count: ids.length});
-  } catch(e) { res.status(500).json({error: e.message}); }
+    if (!ids || !Array.isArray(ids) || ids.length === 0) return res.status(400).json({ error: 'المعرفات غير صالحة' });
+    
+    let count = 0;
+    const memData = db.getData();
+    for (const id of ids) {
+      await TraineeRepo.delete(id);
+      if (memData && Array.isArray(memData.trainees)) {
+        const idx = memData.trainees.findIndex((t: any) => t.id === id);
+        if (idx >= 0) {
+          memData.trainees.splice(idx, 1);
+        }
+      }
+      count++;
+    }
+    db.saveImmediate();
+    TraineeRepo.invalidateCache();
+
+    try {
+      const batch = adminDb.batch();
+      ids.forEach(id => batch.delete(adminDb.collection('trainees').doc(id)));
+      await batch.commit();
+    } catch {}
+
+    db.logAudit({
+      userId: 'admin',
+      userName: 'مدير النظام',
+      action: 'حذف متدربين بالجملة',
+      entity: 'المتدربين',
+      details: `تم حذف ${count} متدرب بنجاح`
+    });
+
+    res.json({ success: true, count });
+  } catch(e: any) { res.status(500).json({ error: e.message }); }
 });
 
 apiRouter.post('/trainees/bulk-upgrade', async (req: Request, res: Response) => {
@@ -1201,12 +1274,25 @@ apiRouter.post('/trainees/bulk-upgrade', async (req: Request, res: Response) => 
       return res.status(400).json({ error: 'لا توجد معرفات للترقية' });
     }
 
-    const batch = adminDb.batch();
+    const newStatus = status || 'active';
+    const memData = db.getData();
     for (const id of ids) {
-      batch.update(adminDb.collection('trainees').doc(id), { status: status || 'active' });
+      await TraineeRepo.update(id, { status: newStatus });
+      if (memData && Array.isArray(memData.trainees)) {
+        const tr = memData.trainees.find((t: any) => t.id === id);
+        if (tr) tr.status = newStatus;
+      }
     }
-    await batch.commit();
+    db.saveImmediate();
     TraineeRepo.invalidateCache();
+
+    try {
+      const batch = adminDb.batch();
+      for (const id of ids) {
+        batch.update(adminDb.collection('trainees').doc(id), { status: newStatus });
+      }
+      await batch.commit();
+    } catch {}
     
     db.logAudit({
       userId: 'admin',
@@ -5499,10 +5585,11 @@ apiRouter.get('/devices', (req: Request, res: Response) => {
   const now = Date.now();
   const defaultDesktopSvg = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMjgwIDcyMCIgd2lkdGg9IjEyODAiIGhlaWdodD0iNzIwIj48ZGVmcz48bGluZWFyR3JhZGllbnQgaWQ9ImJnIiB4MT0iMCUiIHkxPSIwJSIgeDI9IjEwMCUiIHkyPSIxMDAlIj48c3RvcCBvZmZzZXQ9IjAlIiBzdG9wLWNvbG9yPSIjMWUzYThhIi8+PHN0b3Agb2Zmc2V0PSI1MCUiIHN0b3AtY29sb3I9IiMwZjE3MmEiLz48c3RvcCBvZmZzZXQ9IjEwMCUiIHN0b3AtY29sb3I9IiMwMjA2MTciLz48L2xpbmVhckdyYWRpZW50PjwvZGVmcz48cmVjdCB3aWR0aD0iMTI4MCIgaGVpZ2h0PSI3MjAiIGZpbGw9InVybCgjYmcpIi8+PHJlY3QgeD0iMCIgeT0iNjgwIiB3aWR0aD0iMTI4MCIgaGVpZ2h0PSI0MCIgZmlsbD0iIzAyMDYxNyIgb3BhY2l0eT0iMC45Ii8+PHJlY3QgeD0iNTYwIiB5PSI2ODIiIHdpZHRoPSIxNjAiIGhlaWdodD0iMzYiIHJ4PSI4IiBmaWxsPSIjMWUyOTNiIiBzdHJva2U9IiMzOGJkZjgiIHN0cm9rZS13aWR0aD0iMSIvPjxjaXJjbGUgY3g9IjU4NSIgY3k9IjcwMCIgcj0iMTAiIGZpbGw9IiMzOGJkZjgiLz48cmVjdCB4PSI2MTAiIHk9IjY5NCIgd2lkdGg9IjkwIiBoZWlnaHQ9IjEyIiByeD0iMyIgZmlsbD0iI2NiZDVlMSIvPjxnIHRyYW5zZm9ybT0idHJhbnNsYXRlKDYwLCA2MCkiPjxyZWN0IHg9IjAiIHk9IjAiIHdpZHRoPSI2MCIgaGVpZ2h0PSI2MCIgcng9IjEyIiBmaWxsPSIjZmJiZjI0Ii8+PHRleHQgeD0iMzAiIHk9IjM4IiBmb250LXNpemU9IjI4IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj7wn5OBPC90ZXh0Pjx0ZXh0IHg9IjMwIiB5PSI3OCIgZm9udC1zaXplPSIxMiIgZmlsbD0iI2ZmZmZmZiIgZm9udC1mYW1pbHk9IkFyaWFsIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj7Yp9mE2YXYtNin2LHZiti5PC90ZXh0PjwvZz48ZyB0cmFuc2Zvcm09InRyYW5zbGF0ZSg2MCwgMTYwKSI+PHJlY3QgeD0iMCIgeT0iMCIgd2lkdGg9IjYwIiBoZWlnaHQ9IjYwIiByeD0iMTIiIGZpbGw9IiMzOGJkZjgiLz48dGV4dCB4PSIzMCIgeT0iMzgiIGZvbnQtc2l6ZT0iMjgiIHRleHQtYW5jaG9yPSJtaWRkbGUiPvCfkrs8L3RleHQ+PHRleHQgeD0iMzAiIHk9Ijc4IiBmb250LXNpemU9IjEyIiBmaWxsPSIjZmZmZmZmIiBmb250LWZhbWlseT0iQXJpYWwiIHRleHQtYW5jaG9yPSJtaWRkbGUiPtiq2LfYqNmK2YLYp9iqPC90ZXh0PjwvZz48cmVjdCB4PSIzMDAiIHk9IjEyMCIgd2lkdGg9IjY4MCIgaGVpZ2h0PSI0MjAiIHJ4PSIxMiIgZmlsbD0iIzBmMTcyYSIgc3Ryb2tlPSIjMzM0MTU1IiBzdHJva2Utd2lkdGg9IjIiLz48cmVjdCB4PSIzMDAiIHk9IjEyMCIgd2lkdGg9IjY4MCIgaGVpZ2h0PSI0MCIgcng9IjEyIiBmaWxsPSIjMWUyOTNiIi8+PGNpcmNsZSBjeD0iMzI1IiBjeT0iMTQwIiByPSI2IiBmaWxsPSIjZjQzZjVlIi8+PGNpcmNsZSBjeD0iMzQ1IiBjeT0iMTQwIiByPSI2IiBmaWxsPSIjZmJiZjI0Ii8+PGNpcmNsZSBjeD0iMzY1IiBjeT0iMTQwIiByPSI2IiBmaWxsPSIjMTBiOTgxIi8+PHRleHQgeD0iNjQwIiB5PSIxNDUiIGZvbnQtc2l6ZT0iMTQiIGZpbGw9IiNlMmU4ZjAiIGZvbnQtZmFtaWx5PSJBcmlhbCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC13ZWlnaHQ9ImJvbGQiPtio2YrYptipINin2YTYqti32YjZitixINmI2KfZhNiq2K/YsdmK2Kgg2KfZhNi52YXZhNmKIC0g2LPYt9itINmF2YPYqtioINin2YTYt9in2YTYqDwvdGV4dD48dGV4dCB4PSI2NDAiIHk9IjMyMCIgZm9udC1zaXplPSIyNCIgZmlsbD0iIzM4YmRmOCIgZm9udC1mYW1pbHk9IkFyaWFsIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmb250LXdlaWdodD0iYm9sZCI+2LTYp9i02Kkg2LPYt9itINmF2YPYqtioINin2YTYt9in2YTYqCDZhti02LfYqSDZiNis2KfZh9iy2Kkg2YTZhNmF2KrYp9io2LnYqSDwn5al77iPPC90ZXh0Pjwvc3Zn>';
 
-  // Mark offline if last heartbeat > 35 seconds
+  // Mark online if last heartbeat is recent (within 5 minutes) or student logged in
   devices.forEach(d => {
-    const last = new Date(d.lastHeartbeat).getTime();
-    d.isOnline = now - last < 75000;
+    const last = d.lastHeartbeat ? new Date(d.lastHeartbeat).getTime() : 0;
+    const isRecent = (now - last < 300000); // 5 minutes window
+    d.isOnline = isRecent || !!d.currentTraineeName || d.status === 'active' || d.status === 'locked' || d.status === 'ONLINE';
     if (!d.lastScreenshotUrl) {
       d.lastScreenshotUrl = defaultDesktopSvg;
     }
@@ -6382,6 +6469,38 @@ apiRouter.post('/agent/heartbeat', (req: Request, res: Response) => {
     device.isAssisting = false;
   }
 
+  // Fetch trainee stats if a student is assigned or logged in on this device
+  let traineeStats = null;
+  const currentTraineeId = (device as any).currentTraineeId;
+  if (currentTraineeId) {
+    const t = db.getData().trainees.find(tr => tr.id === currentTraineeId || tr.code === currentTraineeCode);
+    if (t) {
+      const stats = getTraineeRankAndStats(t.id);
+      traineeStats = {
+        id: t.id,
+        fullName: t.fullName,
+        code: t.code,
+        points: t.points || 0,
+        totalPoints: t.totalPoints || t.points || 0,
+        ...stats
+      };
+    }
+  } else if (currentTraineeCode) {
+    const t = db.getData().trainees.find(tr => tr.code?.toLowerCase() === currentTraineeCode.toLowerCase());
+    if (t) {
+      (device as any).currentTraineeId = t.id;
+      const stats = getTraineeRankAndStats(t.id);
+      traineeStats = {
+        id: t.id,
+        fullName: t.fullName,
+        code: t.code,
+        points: t.points || 0,
+        totalPoints: t.totalPoints || t.points || 0,
+        ...stats
+      };
+    }
+  }
+
   // Fetch pending commands for device
   const pendingCommands = db.getData().deviceCommands.filter(c => c.deviceId === device.deviceId && c.status === 'pending');
   pendingCommands.forEach(c => {
@@ -6404,6 +6523,8 @@ apiRouter.post('/agent/heartbeat', (req: Request, res: Response) => {
     isAssisting: !!device.isAssisting,
     assistanceSession: activeSession,
     audioSession: activeAudioBroadcastSession,
+    masterBroadcast: masterBroadcast,
+    traineeStats: traineeStats,
     streamingQuality: device.streamingQuality || 'OFF'
   });
 });

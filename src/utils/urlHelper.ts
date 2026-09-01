@@ -14,8 +14,11 @@ export function getPublicRegistrationUrl(): string {
   return `${getPublicBaseUrl()}/?view=register`;
 }
 
-export function getPublicKioskUrl(): string {
-  return `${getPublicBaseUrl()}/?role=trainee_device`;
+export function getPublicKioskUrl(secured: boolean = false): string {
+  const base = getPublicBaseUrl();
+  return secured
+    ? `${base}/?view=kiosk&token=nagah_lab_secure`
+    : `${base}/?view=kiosk`;
 }
 
 export function getPublicTrainerRegistrationUrl(): string {

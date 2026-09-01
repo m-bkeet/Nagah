@@ -85,8 +85,13 @@ const AppContent: React.FC = () => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
       const viewParam = params.get('view');
-      if (viewParam) return viewParam;
-      if (params.get('kiosk') === 'true') return 'kiosk';
+      if (viewParam) {
+        if (['kiosk', 'lab', 'lab_kiosk', 'student_kiosk'].includes(viewParam)) return 'kiosk';
+        return viewParam;
+      }
+      if (params.get('role') === 'trainee_device' || params.get('kiosk') === 'true' || params.get('lab') === 'true') {
+        return 'kiosk';
+      }
       if (params.get('projector') === 'true') return 'projector';
       if (params.get('register') === 'true') return 'register';
     }
@@ -101,7 +106,13 @@ const AppContent: React.FC = () => {
       const params = new URLSearchParams(window.location.search);
       const viewParam = params.get('view');
       if (viewParam) {
-        setActiveTab(viewParam);
+        if (['kiosk', 'lab', 'lab_kiosk', 'student_kiosk'].includes(viewParam)) {
+          setActiveTab('kiosk');
+        } else {
+          setActiveTab(viewParam);
+        }
+      } else if (params.get('role') === 'trainee_device' || params.get('kiosk') === 'true' || params.get('lab') === 'true') {
+        setActiveTab('kiosk');
       }
     };
     window.addEventListener('popstate', handlePopState);
@@ -109,7 +120,7 @@ const AppContent: React.FC = () => {
   }, []);
 
   // Handle Standalone / Direct Public Portals (accessible without login)
-  if (activeTab === 'kiosk') {
+  if (activeTab === 'kiosk' || activeTab === 'lab' || activeTab === 'lab_kiosk' || activeTab === 'student_kiosk') {
     return <StudentKioskView />;
   }
 

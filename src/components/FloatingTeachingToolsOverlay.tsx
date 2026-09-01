@@ -469,29 +469,59 @@ export const FloatingTeachingToolsOverlay: React.FC<FloatingTeachingToolsOverlay
     showToast('تم حذف العنصر من العجلة', 'info');
   };
 
-  // Dragging Handlers for Floating Button
-  const handleMouseDownDrag = (e: React.MouseEvent) => {
+  // Dragging Handlers for Floating Button (Mouse & Touch Mobile Friendly)
+  const hasDraggedRef = useRef<boolean>(false);
+
+  const startDrag = (clientX: number, clientY: number) => {
     setIsDragging(true);
+    hasDraggedRef.current = false;
     dragRef.current = {
-      startX: e.clientX,
-      startY: e.clientY,
+      startX: clientX,
+      startY: clientY,
       posX: position.x,
       posY: position.y
     };
   };
 
+  const handleMouseDownDrag = (e: React.MouseEvent) => {
+    if (e.button !== 0) return;
+    startDrag(e.clientX, e.clientY);
+  };
+
+  const handleTouchStartDrag = (e: React.TouchEvent) => {
+    if (e.touches && e.touches.length > 0) {
+      startDrag(e.touches[0].clientX, e.touches[0].clientY);
+    }
+  };
+
   useEffect(() => {
-    const handleMouseMoveDrag = (e: MouseEvent) => {
-      if (!isDragging) return;
-      const dx = e.clientX - dragRef.current.startX;
-      const dy = e.clientY - dragRef.current.startY;
+    const updatePosition = (clientX: number, clientY: number) => {
+      const dx = clientX - dragRef.current.startX;
+      const dy = clientY - dragRef.current.startY;
+      if (Math.abs(dx) > 5 || Math.abs(dy) > 5) {
+        hasDraggedRef.current = true;
+      }
       setPosition({
         x: Math.max(0, Math.min(window.innerWidth - 60, dragRef.current.posX + dx)),
-        y: Math.max(0, Math.min(window.innerHeight - 60, dragRef.current.posY + dy))
+        y: Math.max(0, Math.min(window.innerHeight - 80, dragRef.current.posY + dy))
       });
     };
 
-    const handleMouseUpDrag = () => {
+    const handleMouseMoveDrag = (e: MouseEvent) => {
+      if (!isDragging) return;
+      updatePosition(e.clientX, e.clientY);
+    };
+
+    const handleTouchMoveDrag = (e: TouchEvent) => {
+      if (!isDragging) return;
+      if (e.touches && e.touches.length > 0) {
+        if (e.cancelable) e.preventDefault();
+        updatePosition(e.touches[0].clientX, e.touches[0].clientY);
+      }
+    };
+
+    const handleEndDrag = () => {
+      if (!isDragging) return;
       setIsDragging(false);
       try {
         localStorage.setItem('nagah_teaching_orb_pos', JSON.stringify(positionRef.current));
@@ -500,11 +530,17 @@ export const FloatingTeachingToolsOverlay: React.FC<FloatingTeachingToolsOverlay
 
     if (isDragging) {
       window.addEventListener('mousemove', handleMouseMoveDrag);
-      window.addEventListener('mouseup', handleMouseUpDrag);
+      window.addEventListener('mouseup', handleEndDrag);
+      window.addEventListener('touchmove', handleTouchMoveDrag, { passive: false });
+      window.addEventListener('touchend', handleEndDrag);
+      window.addEventListener('touchcancel', handleEndDrag);
     }
     return () => {
       window.removeEventListener('mousemove', handleMouseMoveDrag);
-      window.removeEventListener('mouseup', handleMouseUpDrag);
+      window.removeEventListener('mouseup', handleEndDrag);
+      window.removeEventListener('touchmove', handleTouchMoveDrag);
+      window.removeEventListener('touchend', handleEndDrag);
+      window.removeEventListener('touchcancel', handleEndDrag);
     };
   }, [isDragging]);
 
@@ -770,13 +806,14 @@ export const FloatingTeachingToolsOverlay: React.FC<FloatingTeachingToolsOverlay
       {/* FLOATING ACTION TOOLBAR BUTTON & RADIAL CIRCULAR MENU */}
       {/* ---------------------------------------------------- */}
       <div
-        className="fixed z-[9990] dir-rtl select-none transition-all duration-300 touch-none max-w-full"
+        className={`fixed z-[9990] dir-rtl select-none touch-none max-w-full ${isDragging ? 'transition-none' : 'transition-all duration-200'}`}
         style={{ left: `${Math.min(position.x, window.innerWidth - 60)}px`, top: `${Math.min(position.y, window.innerHeight - 80)}px` }}
       >
         <div className="relative flex items-center justify-center">
           {/* Main Floating Nagah Orb Button */}
           <button
             onMouseDown={handleMouseDownDrag}
+            onTouchStart={handleTouchStartDrag}
             onDoubleClick={(e) => {
               e.stopPropagation();
               const next = !isPinned;
@@ -784,7 +821,13 @@ export const FloatingTeachingToolsOverlay: React.FC<FloatingTeachingToolsOverlay
               if (next) setIsIsOpen(true);
               showToast(next ? 'تم تثبيت قائمة أدوات الشرح مفتوحة 📌 (Double-Click)' : 'تم إلغاء التثبيت 🔓', 'info');
             }}
-            onClick={() => {
+            onClick={(e) => {
+              if (hasDraggedRef.current) {
+                e.stopPropagation();
+                e.preventDefault();
+                hasDraggedRef.current = false;
+                return;
+              }
               if (activeTool !== 'none') {
                 setActiveTool('none');
                 showToast('تم إغلاق وإلغاء الأداة النشطة ❌', 'info');

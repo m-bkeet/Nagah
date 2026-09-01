@@ -354,15 +354,9 @@ export const TraineesView: React.FC = () => {
   useEffect(() => {
     // Realtime live subscription to cloud Firestore trainees
     const unsubscribe = cloudDb.listenToTrainees((cloudTrainees) => {
-      if (cloudTrainees && cloudTrainees.length > 0) {
-        setTrainees(prev => {
-          const map = new Map<string, Trainee>();
-          // Existing trainees
-          (prev || []).forEach(t => map.set(t.id, t));
-          // Merge cloud trainees
-          cloudTrainees.forEach(ct => map.set(ct.id, { ...map.get(ct.id), ...ct }));
-          return Array.from(map.values());
-        });
+      if (cloudTrainees && Array.isArray(cloudTrainees)) {
+        setTrainees(cloudTrainees);
+        try { localStorage.setItem('nagah_trainees', JSON.stringify(cloudTrainees)); } catch {}
       }
     });
 
@@ -635,15 +629,19 @@ export const TraineesView: React.FC = () => {
   };
   
   const executeBulkDelete = async () => {
+    if (!selectedTraineeIds || selectedTraineeIds.length === 0) return;
+    const idsToDelete = [...selectedTraineeIds];
     try {
-      await api.bulkDeleteTrainees(selectedTraineeIds);
-      for (const id of selectedTraineeIds) {
-        
-      }
-      showToast(`تم حذف ${selectedTraineeIds.length} متدربين بنجاح`, 'success');
+      await api.bulkDeleteTrainees(idsToDelete);
+      setTrainees(prev => {
+        const next = prev.filter(t => !idsToDelete.includes(t.id));
+        try { localStorage.setItem('nagah_trainees', JSON.stringify(next)); } catch {}
+        return next;
+      });
+      showToast(`تم حذف ${idsToDelete.length} متدربين بنجاح`, 'success');
       setSelectedTraineeIds([]);
       setDeleteConfirm(null);
-      loadData();
+      await loadData();
     } catch (err: any) {
       showToast(err.message || 'حدث خطأ أثناء الحذف', 'error');
     }
@@ -679,11 +677,17 @@ export const TraineesView: React.FC = () => {
   
   const executeDeleteSingle = async () => {
     if (!deleteConfirm?.trainee) return;
+    const targetId = deleteConfirm.trainee.id;
     try {
-      await api.deleteTrainee(deleteConfirm.trainee.id);
+      await api.deleteTrainee(targetId);
+      setTrainees(prev => {
+        const next = prev.filter(t => t.id !== targetId);
+        try { localStorage.setItem('nagah_trainees', JSON.stringify(next)); } catch {}
+        return next;
+      });
       showToast('تم حذف المتدرب بنجاح', 'info');
       setDeleteConfirm(null);
-      loadData();
+      await loadData();
     } catch (err: any) {
       showToast(err.message || 'فشل الحذف', 'error');
     }

@@ -64,6 +64,7 @@ import {
   Building
 } from 'lucide-react';
 import { Device, DeviceAuditEntry, LabAssistanceSession } from '../types';
+import { getPublicKioskUrl } from '../utils/urlHelper';
 
 export const DevicesView: React.FC = () => {
   const { activeBranchId, branches, showToast, refreshKey } = useCenter();
@@ -345,6 +346,54 @@ export const DevicesView: React.FC = () => {
     }
   };
 
+  // Delete Single Device Permanently
+  const handleDeleteDevice = async (id: string, name: string) => {
+    if (!window.confirm(`هل أنت متاكد من رغبتك في حذف الجهاز "${name}" نهائياً من القائمة لتوفير المساحة؟`)) return;
+    try {
+      await api.deleteDevice(id);
+      showToast(`تم حذف الجهاز "${name}" بنجاح 🗑️`, 'success');
+      setSelectedDeviceIds(prev => prev.filter(devId => devId !== id));
+      loadDevices();
+    } catch (err: any) {
+      showToast(err.message || 'فشل حذف الجهاز', 'error');
+    }
+  };
+
+  // Delete Selected Devices
+  const handleDeleteSelectedDevices = async () => {
+    if (selectedDeviceIds.length === 0) return;
+    if (!window.confirm(`هل أنت متاكد من حذف الأجهزة المحددة عدد (${selectedDeviceIds.length}) نهائياً من المعمل؟`)) return;
+    try {
+      for (const id of selectedDeviceIds) {
+        await api.deleteDevice(id);
+      }
+      showToast(`تم حذف ${selectedDeviceIds.length} جهاز محدد بنجاح 🗑️`, 'success');
+      setSelectedDeviceIds([]);
+      loadDevices();
+    } catch (err: any) {
+      showToast(err.message || 'فشل حذف الأجهزة المحددة', 'error');
+    }
+  };
+
+  // Delete All Offline Devices to clean up space
+  const handleDeleteOfflineDevices = async () => {
+    const offlineDevs = devices.filter(d => !d.isOnline);
+    if (offlineDevs.length === 0) {
+      showToast('لا توجد أجهزة غير متصلة (Offline) لحذفها حالياً 👍', 'info');
+      return;
+    }
+    if (!window.confirm(`هل أنت متاكد من تنظيف وحذف جميع الأجهزة غير المتصلة عدد (${offlineDevs.length}) نهائياً من القائمة؟`)) return;
+    try {
+      for (const dev of offlineDevs) {
+        await api.deleteDevice(dev.id);
+      }
+      showToast(`تم حذف وتنظيف ${offlineDevs.length} جهاز غير متصل بنجاح 🧹`, 'success');
+      loadDevices();
+    } catch (err: any) {
+      showToast(err.message || 'فشل تنظيف الأجهزة غير المتصلة', 'error');
+    }
+  };
+
   // Student Agent Login Simulator
   const handleSimulateStudentLogin = async () => {
     if (!simStudentCode) {
@@ -537,11 +586,23 @@ Invoke-RestMethod -Uri "${window.location.origin}/api/download/lab-agent-ps1" -U
             <button
               onClick={handleRunDiagnostics}
               disabled={isRunningDiagnostics}
-              className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-cyan-500/30 font-bold text-xs rounded-xl flex items-center gap-1.5 transition-all"
+              className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-cyan-500/30 font-bold text-xs rounded-xl flex items-center gap-1.5 transition-all cursor-pointer"
+              title="تنشيط وإصلاح اتصال الأجهزة وتحديث الحالة"
             >
               <ShieldCheck className={`w-3.5 h-3.5 ${isRunningDiagnostics ? 'animate-spin text-cyan-400' : ''}`} />
-              <span>تشخيص المعمل 🩺</span>
+              <span>تشخيص وتنشيط الأجهزة 🩺</span>
             </button>
+
+            {offlineCount > 0 && (
+              <button
+                onClick={handleDeleteOfflineDevices}
+                className="px-3.5 py-2 bg-rose-950/80 hover:bg-rose-900 text-rose-300 border border-rose-500/40 font-bold text-xs rounded-xl flex items-center gap-1.5 transition-all cursor-pointer shadow-lg"
+                title="حذف جميع الأجهزة غير المتصلة نهائياً من القائمة"
+              >
+                <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+                <span>حذف غير المتصلة ({offlineCount}) 🧹</span>
+              </button>
+            )}
           </div>
         </div>
 
@@ -842,12 +903,22 @@ Invoke-RestMethod -Uri "${window.location.origin}/api/download/lab-agent-ps1" -U
               </select>
 
               {selectedDeviceIds.length > 0 && (
-                <button
-                  onClick={() => setIsBulkCommandModalOpen(true)}
-                  className="px-3 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs rounded-xl flex items-center gap-1 shadow"
-                >
-                  <span>أوامر جماعية ({selectedDeviceIds.length})</span>
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setIsBulkCommandModalOpen(true)}
+                    className="px-3 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs rounded-xl flex items-center gap-1 shadow cursor-pointer"
+                  >
+                    <span>أوامر جماعية ({selectedDeviceIds.length})</span>
+                  </button>
+
+                  <button
+                    onClick={handleDeleteSelectedDevices}
+                    className="px-3 py-2 bg-rose-600 hover:bg-rose-500 text-white font-black text-xs rounded-xl flex items-center gap-1 shadow cursor-pointer transition-all"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>حذف المحدد ({selectedDeviceIds.length}) 🗑️</span>
+                  </button>
+                </div>
               )}
             </div>
           </div>
@@ -988,10 +1059,18 @@ Invoke-RestMethod -Uri "${window.location.origin}/api/download/lab-agent-ps1" -U
 
                             <button
                               onClick={() => handleSessionCleanup(dev.id)}
-                              className="p-1.5 rounded-lg bg-purple-600/20 hover:bg-purple-600 text-purple-300 hover:text-white border border-purple-500/30"
+                              className="p-1.5 rounded-lg bg-purple-600/20 hover:bg-purple-600 text-purple-300 hover:text-white border border-purple-500/30 transition-all cursor-pointer"
                               title="تنظيف ملفات الجلسة والذاكرة المؤقتة"
                             >
-                              <Trash2 className="w-3.5 h-3.5" />
+                              <RotateCcw className="w-3.5 h-3.5 text-purple-300" />
+                            </button>
+
+                            <button
+                              onClick={() => handleDeleteDevice(dev.id, dev.name)}
+                              className="p-1.5 rounded-lg bg-rose-600/20 hover:bg-rose-600 text-rose-300 hover:text-white border border-rose-500/30 transition-all cursor-pointer shadow"
+                              title="حذف الجهاز نهائياً من القائمة لتوفير المساحة"
+                            >
+                              <Trash2 className="w-3.5 h-3.5 text-rose-400 hover:text-white" />
                             </button>
                           </div>
                         </td>
@@ -1661,6 +1740,99 @@ Invoke-RestMethod -Uri "${window.location.origin}/api/download/lab-agent-ps1" -U
                   onChange={e => setInstallerLabName(e.target.value)}
                   className="w-full bg-slate-950 border border-slate-700 px-3 py-2.5 rounded-xl text-xs text-slate-200"
                 />
+              </div>
+            </div>
+
+            {/* Direct Lab Access Link & Cloud Security Card */}
+            <div className="bg-gradient-to-br from-cyan-950/60 via-slate-900 to-slate-950 border border-cyan-500/40 p-5 rounded-2xl space-y-4 shadow-xl relative overflow-hidden">
+              <div className="absolute top-0 left-0 w-32 h-32 bg-cyan-500/10 rounded-full blur-2xl pointer-events-none" />
+              
+              <div className="flex flex-wrap items-center justify-between gap-3 relative z-10">
+                <div className="flex items-center gap-2">
+                  <div className="w-9 h-9 rounded-xl bg-cyan-500/20 border border-cyan-400/40 text-cyan-300 flex items-center justify-center font-bold">
+                    <Monitor className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="font-black text-cyan-200 text-sm flex items-center gap-2">
+                      <span>🔗 رابط المعمل المباشر للتشغيل والتأمين (Direct Lab Access & Kiosk Link)</span>
+                      <span className="px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 text-[10px] border border-emerald-500/30">نشط وجاهز</span>
+                    </h4>
+                    <p className="text-[11px] text-slate-400">
+                      افتجه مباشرة على جهاز معمل الكمبيوتر الخاص بالطالب لتسجيل الحضور، استقبال النقاط ومراقبة الشاشة
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <a
+                    href={getPublicKioskUrl()}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="px-4 py-2 bg-gradient-to-r from-cyan-600 to-cyan-500 hover:from-cyan-500 hover:to-cyan-400 text-white text-xs font-black rounded-xl flex items-center gap-2 transition-all shadow-lg shadow-cyan-600/30 active:scale-95"
+                  >
+                    <ExternalLink className="w-4 h-4" />
+                    <span>فتح واجهة المعمل الآن 🚀</span>
+                  </a>
+
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(getPublicKioskUrl());
+                      showToast('تم نسخ رابط المعمل المباشر حافظة الجهاز 📋', 'success');
+                    }}
+                    className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-cyan-500/30 text-xs font-bold rounded-xl flex items-center gap-1.5 transition-all shadow"
+                  >
+                    <Copy className="w-4 h-4" />
+                    <span>نسخ رابط المعمل</span>
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2 relative z-10">
+                <div className="bg-slate-950/80 border border-slate-800 p-3.5 rounded-xl space-y-2">
+                  <span className="text-[11px] font-bold text-slate-300 block flex items-center gap-1.5">
+                    <Globe className="w-3.5 h-3.5 text-cyan-400" />
+                    الرابط المباشر العادي (يتطلب كود أمان المعمل 1234 عند الاتصال الخارجي):
+                  </span>
+                  <div className="flex items-center gap-2 dir-ltr">
+                    <input
+                      type="text"
+                      readOnly
+                      value={getPublicKioskUrl()}
+                      className="w-full bg-slate-900 border border-slate-700 text-[11px] font-mono text-cyan-300 px-3 py-1.5 rounded-lg select-all"
+                    />
+                  </div>
+                </div>
+
+                <div className="bg-slate-950/80 border border-slate-800 p-3.5 rounded-xl space-y-2">
+                  <span className="text-[11px] font-bold text-slate-300 block flex items-center gap-1.5">
+                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                    الرابط السحابي المعتمد مسبقاً (Pre-authenticated Secure Link):
+                  </span>
+                  <div className="flex items-center gap-2 dir-ltr">
+                    <input
+                      type="text"
+                      readOnly
+                      value={getPublicKioskUrl(true)}
+                      className="w-full bg-slate-900 border border-slate-700 text-[11px] font-mono text-emerald-300 px-3 py-1.5 rounded-lg select-all"
+                    />
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(getPublicKioskUrl(true));
+                        showToast('تم نسخ رابط المعمل المشفر والموثق بنجاح 🛡️', 'success');
+                      }}
+                      className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-bold rounded-lg shrink-0 transition-all"
+                    >
+                      نسخ
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-cyan-950/40 border border-cyan-500/30 p-3 rounded-xl text-xs text-cyan-200 flex items-start gap-2">
+                <span className="text-base">💡</span>
+                <p className="text-[11px] text-slate-300 leading-relaxed">
+                  <strong className="text-cyan-300 font-bold">تعليمات تشغيل رابط المعمل:</strong> عند فتح هذا الرابط على أجهزة المعمل، يقوم الجهاز بالتعرف التلقائي على محيط المعمل بالشبكة المحلية (LAN) وتوثيق حضور المتدرب فور إدخال كوده. يتم استقبال الأوامر الجماعية (قفل/فتح/منح نقاط/مراقبة الشاشة) مباشرة عبر هذا الرابط.
+                </p>
               </div>
             </div>
 
