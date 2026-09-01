@@ -7276,9 +7276,9 @@ var DatabaseManager = class {
 var db = new DatabaseManager();
 
 // server/firebaseAdmin.ts
-var rawSupabaseUrl = (process.env.SUPABASE_URL || "").trim();
+var rawSupabaseUrl = (process.env.SUPABASE_URL || "https://zdbrwwkyxjujrokzjang.supabase.co").trim();
 var SUPABASE_URL = rawSupabaseUrl.replace(/\/rest\/v1\/?$/, "").replace(/\/$/, "");
-var SUPABASE_KEY = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || "").trim();
+var SUPABASE_KEY = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpkYnJ3d2t5eGp1anJva3pqYW5nIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4ODA0ODY0MiwiZXhwIjoyMTAzNjI0NjQyfQ._JEu3kjLDPWS1uCabeVMyTRIeDS0NpnjTPUjyuL6_Ec").trim();
 var hasValidSupabase = Boolean(
   SUPABASE_URL && !SUPABASE_URL.includes("placeholder") && SUPABASE_KEY && !SUPABASE_KEY.includes("placeholder")
 );
@@ -7542,9 +7542,9 @@ var adminDb = new AdminDbMock();
 
 // server/data/index.ts
 import { createClient } from "@supabase/supabase-js";
-var rawSupabaseUrl2 = (process.env.SUPABASE_URL || "").trim();
+var rawSupabaseUrl2 = (process.env.SUPABASE_URL || "https://zdbrwwkyxjujrokzjang.supabase.co").trim();
 var SUPABASE_URL2 = rawSupabaseUrl2.replace(/\/rest\/v1\/?$/, "").replace(/\/$/, "");
-var SUPABASE_KEY2 = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || "").trim();
+var SUPABASE_KEY2 = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpkYnJ3d2t5eGp1anJva3pqYW5nIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4ODA0ODY0MiwiZXhwIjoyMTAzNjI0NjQyfQ._JEu3kjLDPWS1uCabeVMyTRIeDS0NpnjTPUjyuL6_Ec").trim();
 var hasValidSupabase2 = Boolean(
   SUPABASE_URL2 && !SUPABASE_URL2.includes("placeholder") && SUPABASE_KEY2 && !SUPABASE_KEY2.includes("placeholder")
 );
@@ -18610,9 +18610,10 @@ app.get(["/health", "/api/health"], (req, res) => {
   });
 });
 app.use(cors({
-  origin: "*",
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"]
+  origin: true,
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+  allowedHeaders: ["Content-Type", "Authorization", "x-user-role", "x-user-id", "x-branch-id", "x-trainer-id", "x-trainee-id", "*"]
 }));
 app.use(express3.json({ limit: "50mb" }));
 app.use(express3.text({ limit: "50mb", type: ["application/json", "text/plain", "*/*"] }));
