@@ -42,7 +42,7 @@ interface HeaderProps {
 
 export const Header: React.FC<HeaderProps> = ({ toggleSidebar, onNavigate }) => {
   const { user, logout, switchDemoUser } = useAuth();
-  const { branches, activeBranchId, setActiveBranchId, settings, notifications, unreadNotifsCount, setIsSearchOpen, serverIp, showToast, isAiModalOpen, setIsAiModalOpen, aiModalTab, setAiModalTab, openAiModal } = useCenter();
+  const { branches, activeBranchId, setActiveBranchId, settings, notifications, unreadNotifsCount, setIsSearchOpen, serverIp, showToast, isAiModalOpen, setIsAiModalOpen, aiModalTab, setAiModalTab, openAiModal, isTrainerLabActive, labAttendanceCount, toggleTrainerLabSession, setShowDateStatsModal } = useCenter();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showNotifMenu, setShowNotifMenu] = useState(false);
   const [isUserMenuPinned, setIsUserMenuPinned] = useState(false);
@@ -250,15 +250,15 @@ export const Header: React.FC<HeaderProps> = ({ toggleSidebar, onNavigate }) => 
   };
 
   return (
-    <header className="bg-slate-900/90 backdrop-blur-md border-b border-slate-800 sticky top-0 z-30 px-4 pt-6 sm:pt-2.5 pb-2.5 flex items-center justify-between text-slate-100 no-print">
+    <header className="bg-slate-900/90 backdrop-blur-md border-b border-slate-800 sticky top-0 z-30 px-3 sm:px-4 py-1.5 flex items-center justify-between text-slate-100 no-print">
       {/* Right Side: Center Brand & Active Branch */}
       <div className="flex items-center gap-3 md:gap-5">
         <button
           onClick={toggleSidebar}
-          className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors flex items-center justify-center border border-slate-700"
+          className="p-1.5 text-slate-300 hover:text-amber-400 transition-all flex items-center justify-center hover:scale-110 cursor-pointer"
           title="إظهار / إخفاء القائمة الجانبية"
         >
-          <Menu className="w-5 h-5" />
+          <Menu className="w-5 h-5 filter drop-shadow-[0_0_6px_rgba(255,255,255,0.4)]" />
         </button>
 
         <div className="flex items-center gap-2 sm:gap-3 cursor-pointer" onClick={() => onNavigate?.('dashboard')}>
@@ -304,168 +304,80 @@ export const Header: React.FC<HeaderProps> = ({ toggleSidebar, onNavigate }) => 
           </select>
         </div>
 
-        {/* Global Sync Icon Button with Hover Tooltip */}
-        <div className="relative group hidden sm:block">
-          <button
-            type="button"
-            onClick={handleGlobalSyncAndBackup}
-            disabled={isSyncingGlobal}
-            className="p-2.5 rounded-xl bg-transparent hover:bg-emerald-500/25 text-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.25)] transition-all border border-emerald-500/50 flex items-center justify-center disabled:opacity-50 backdrop-blur-md"
-            title="تحديث ومزامنة النظام بالكامل تلقائياً + رفع نسخة احتياطية على السحابة"
-          >
-            <RefreshCw className={`w-4 h-4 ${isSyncingGlobal ? 'animate-spin' : 'group-hover:rotate-180 transition-transform duration-500'}`} />
-          </button>
+        {/* Master Lab Switch Button in Top Header */}
+        <button
+          type="button"
+          onClick={() => toggleTrainerLabSession(activeBranchId, user?.name || 'المدرب المشرف')}
+          className={`px-2 py-1 rounded-full text-xs font-bold flex items-center gap-1.5 border transition-all ${
+            isTrainerLabActive
+              ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/20'
+              : 'bg-rose-500/10 text-rose-300 border-rose-500/30 hover:bg-rose-500/20'
+          }`}
+          title={`حالة المعمل: ${isTrainerLabActive ? 'مفتوح' : 'مغلق'} - عدد الحضور: ${labAttendanceCount}`}
+        >
+          <div className={`w-1.5 h-1.5 rounded-full ${isTrainerLabActive ? 'bg-emerald-400' : 'bg-rose-400'}`} />
+          <span className="font-mono">{labAttendanceCount}</span>
+        </button>
 
-          {/* Hover Tooltip Info Card */}
-          <div className="absolute top-full mt-1.5 left-0 sm:right-0 sm:left-auto hidden group-hover:flex flex-col w-60 p-2.5 bg-slate-950/95 border border-emerald-500/50 rounded-xl shadow-2xl backdrop-blur-xl z-50 text-xs space-y-2 animate-in fade-in duration-200">
-            <div className="flex items-center justify-between border-b border-slate-800/80 pb-1.5">
-              <span className="font-bold text-slate-100 flex items-center gap-1.5 text-xs">
-                <RefreshCw className="w-3.5 h-3.5 text-emerald-400" />
-                آخر تحديث وسحابة
-              </span>
-              <span className="text-[10px] bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-full font-mono font-bold">
-                نشط
-              </span>
-            </div>
-
-            <div className="space-y-1.5 text-[11px]">
-              <div className="bg-slate-900/90 p-1.5 rounded-lg border border-slate-800 flex items-center justify-between">
-                <span className="text-slate-300 font-bold flex items-center gap-1">
-                  <span className="text-amber-400">⚡</span>
-                  <span>آخر تحديث:</span>
-                </span>
-                <span className="text-amber-300 font-mono font-bold">{lastUpdateTime}</span>
-              </div>
-
-              <div className="bg-slate-900/90 p-1.5 rounded-lg border border-slate-800 flex items-center justify-between">
-                <span className="text-slate-300 font-bold flex items-center gap-1">
-                  <span className="text-cyan-400">☁️</span>
-                  <span>آخر نسخة:</span>
-                </span>
-                <span className="text-cyan-300 font-mono font-bold">{lastCloudBackupTime}</span>
-              </div>
-            </div>
-
-            <p className="text-[10px] text-slate-400 font-mono text-center pt-0.5">
-              انقر للمزامنة والرفع ☁️
-            </p>
-          </div>
-        </div>
-
-        {/* Instant PWA App Installation Button */}
-        <InstallPwaButton variant="compact" className="hidden sm:flex" />
-
-        {/* Lab Device Portal Launcher & Download Shortcut */}
-        <div className="relative group hidden sm:block">
+        {/* Compact Lab Links / Shortcuts Button */}
+        <div className="relative group">
           <button
             onClick={() => {
-              const sharedUrl = "https://ais-pre-7wkppak7c63am6ebvulppu-481160813332.europe-west2.run.app";
-              const labUrl = (sharedUrl || window.location.origin) + '?role=trainee_device';
+              const sharedUrl = window.location.origin;
+              const labUrl = sharedUrl + '?role=trainee_device';
               window.open(labUrl, '_blank');
             }}
-            className="w-10 h-10 rounded-xl bg-indigo-600/20 hover:bg-indigo-600 text-indigo-400 hover:text-white border border-indigo-500/30 transition-all flex items-center justify-center shadow-lg group"
-            title="بوابة أجهزة المعمل - فتح الرابط المباشر للطلاب"
+            className="p-1.5 rounded-lg bg-indigo-600/20 hover:bg-indigo-600 text-indigo-300 hover:text-white border border-indigo-500/30 transition-all flex items-center justify-center shadow-sm"
+            title="روابط أجهزة المعمل السحابية والمحلية"
           >
-            <Monitor className="w-5 h-5" />
+            <Monitor className="w-3.5 h-3.5" />
           </button>
           
-          {/* Hover Menu for Copy/Download Shortcut */}
-          <div className="absolute top-full left-0 mt-1.5 w-60 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-[100] p-3 space-y-2">
-            <div>
-              <p className="text-[11px] font-black text-amber-500 mb-0.5">تجهيز أجهزة المعمل 💻</p>
-              <p className="text-[10px] text-slate-400 leading-tight">استخدم الرابط العام للأجهزة المتصلة بالإنترنت.</p>
-            </div>
-            
-            <div className="space-y-1.5">
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  const sharedUrl = "https://ais-pre-7wkppak7c63am6ebvulppu-481160813332.europe-west2.run.app";
-                  const labUrl = (sharedUrl || window.location.origin) + '?role=trainee_device';
-                  copyToClipboard(labUrl, 'تم نسخ رابط بوابة المعمل (العام العام) بنجاح! 🔗');
-                }}
-                className="w-full flex items-center justify-between px-2.5 py-2 rounded-lg bg-indigo-600/20 hover:bg-indigo-600 text-indigo-100 text-xs font-bold transition-all border border-indigo-500/30"
-              >
-                <div className="flex items-center gap-2">
-                  <Globe className="w-3.5 h-3.5 text-indigo-400 group-hover:text-white" />
-                  <span>نسخ الرابط العام (للمعمل)</span>
-                </div>
-                <ExternalLink className="w-3 h-3 opacity-40" />
-              </button>
-
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  const targetIp = (serverIp === '127.0.0.1' || !serverIp) ? window.location.hostname : serverIp;
-                  const localLabUrl = `http://${targetIp}:3000?role=trainee_device`;
-                  copyToClipboard(localLabUrl, `تم نسخ رابط الشبكة المحلية: ${localLabUrl}\nيمكنك مشاركته عبر Veyon Master.`);
-                }}
-                className="w-full flex items-center justify-between px-2.5 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold transition-all border border-slate-700 hover:border-emerald-500/50"
-              >
-                <div className="flex items-center gap-2">
-                  <Wifi className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>نسخ رابط الشبكة المحلية</span>
-                </div>
-                <span className="text-[9px] font-mono opacity-50">{(serverIp === '127.0.0.1' || !serverIp) ? window.location.hostname : serverIp}</span>
-              </button>
-
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  const targetIp = (serverIp === '127.0.0.1' || !serverIp) ? window.location.hostname : serverIp;
-                  const localLabUrl = `http://${targetIp}:3000?role=trainee_device`;
-                  const urlContent = `[InternetShortcut]\r\nURL=${localLabUrl}\r\nIDList=\r\n[{000214A0-0000-0000-C000-000000000046}]\r\nProp3=19,2`;
-                  const blob = new Blob([urlContent], { type: 'text/plain' });
-                  const link = document.createElement('a');
-                  link.href = URL.createObjectURL(blob);
-                  link.download = "تشغيل_معمل_محلي.url";
-                  link.click();
-                  showToast('تم تحميل شورت‌كات الشبكة المحلية للفلاشة بنجاح! 💾', 'success');
-                }}
-                className="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black transition-all shadow-md border border-emerald-400/30"
-              >
-                <Download className="w-3.5 h-3.5" />
-                <span>تحميل شورت‌كات محلي (للفلاشة / Veyon)</span>
-              </button>
-
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  const sharedUrl = "https://ais-pre-7wkppak7c63am6ebvulppu-481160813332.europe-west2.run.app";
-                  const labUrl = (sharedUrl || window.location.origin) + '?role=trainee_device';
-                  const urlContent = `[InternetShortcut]\r\nURL=${labUrl}\r\nIDList=\r\n[{000214A0-0000-0000-C000-000000000046}]\r\nProp3=19,2`;
-                  const blob = new Blob([urlContent], { type: 'text/plain' });
-                  const link = document.createElement('a');
-                  link.href = URL.createObjectURL(blob);
-                  link.download = "تشغيل_معمل_النجاح.url";
-                  link.click();
-                  showToast('تم تحميل "ملف التشغيل الذاتي" (رابط عام).', 'success');
-                }}
-                className="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg bg-indigo-600/20 hover:bg-indigo-600 text-indigo-100 text-xs font-bold transition-all border border-indigo-500/30"
-              >
-                <Download className="w-3.5 h-3.5" />
-                <span>تحميل شورت‌كات عام (سحابي)</span>
-              </button>
-            </div>
-            
-            <div className="p-2 bg-indigo-950/30 rounded-lg border border-indigo-500/20">
-              <p className="text-[9px] text-indigo-200 leading-relaxed font-medium">
-                💡 نصيحة: عند تشغيل الرابط على أجهزة المعمل، سيفتح وضع "بوابة الطالب" مباشرة.
-              </p>
-            </div>
+          <div className="absolute top-full right-0 mt-1.5 w-52 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-[100] p-2 space-y-1.5 text-xs">
+            <p className="text-[10px] font-black text-amber-400 border-b border-slate-800 pb-1">روابط تشغيل أجهزة المعمل 💻</p>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                const labUrl = window.location.origin + '?role=trainee_device';
+                navigator.clipboard.writeText(labUrl);
+                showToast('تم نسخ الرابط العام بنجاح! 🔗', 'success');
+              }}
+              className="w-full text-right px-2 py-1 rounded bg-indigo-600/20 hover:bg-indigo-600 text-indigo-100 text-[11px] font-bold transition-all flex items-center justify-between"
+            >
+              <span>نسخ الرابط العام</span>
+              <Globe className="w-3 h-3 text-indigo-300" />
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                const targetIp = (serverIp === '127.0.0.1' || !serverIp) ? window.location.hostname : serverIp;
+                const localLabUrl = `http://${targetIp}:3000?role=trainee_device`;
+                const urlContent = `[InternetShortcut]\r\nURL=${localLabUrl}\r\nIDList=\r\n[{000214A0-0000-0000-C000-000000000046}]\r\nProp3=19,2`;
+                const blob = new Blob([urlContent], { type: 'text/plain' });
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(blob);
+                link.download = "تشغيل_معمل_محلي.url";
+                link.click();
+                showToast('تم تحميل شورت‌كات الشبكة المحلية بنجاح! 💾', 'success');
+              }}
+              className="w-full text-right px-2 py-1 rounded bg-emerald-600/20 hover:bg-emerald-600 text-emerald-100 text-[11px] font-bold transition-all flex items-center justify-between"
+            >
+              <span>تحميل شورت‌كات محلي (فلاشة)</span>
+              <Download className="w-3 h-3 text-emerald-300" />
+            </button>
           </div>
         </div>
       </div>
 
       {/* Center: Global Omnisearch Bar & AI Hub */}
-      <div className="flex items-center justify-center gap-2 mx-1 sm:mx-2 shrink-0">
+      <div className="flex items-center justify-center gap-3 mx-1 sm:mx-2 shrink-0">
         <button
           onClick={() => setIsSearchOpen(true)}
-          className="p-2 sm:p-2.5 rounded-xl bg-slate-800/90 hover:bg-slate-800 border border-slate-700 hover:border-amber-500/50 text-amber-400 hover:text-amber-300 transition-all shadow-md group flex items-center justify-center relative shrink-0"
+          className="p-1.5 text-amber-400 hover:text-amber-300 transition-all group flex items-center justify-center relative shrink-0 hover:scale-110 cursor-pointer"
           title="بحث شامل في النظام (Ctrl + K)"
         >
-          <Search className="w-4 h-4 group-hover:scale-110 transition-transform" />
-          <span className="absolute -bottom-1 -left-1 text-[9px] font-mono bg-slate-900 px-1 py-0.2 rounded text-amber-400 border border-slate-700 hidden sm:inline-block">
+          <Search className="w-5 h-5 filter drop-shadow-[0_0_8px_rgba(245,158,11,0.8)] group-hover:scale-110 transition-transform" />
+          <span className="absolute -bottom-1 -left-1 text-[8px] font-mono px-1 rounded text-amber-300 hidden sm:inline-block">
             ⌘K
           </span>
         </button>
@@ -476,17 +388,17 @@ export const Header: React.FC<HeaderProps> = ({ toggleSidebar, onNavigate }) => 
             setAiModalTab('manager');
             setIsAiModalOpen(true);
           }}
-          className="p-2 sm:p-2 rounded-lg sm:rounded-xl bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 hover:border-amber-400 text-amber-400 hover:text-amber-300 transition-all shadow-md group flex items-center justify-center relative shrink-0"
+          className="relative w-11 h-11 text-amber-400 hover:text-amber-300 transition-all group flex items-center justify-center shrink-0 hover:scale-110 cursor-pointer drop-shadow-[0_0_12px_rgba(245,158,11,0.9)]"
           title="مركز الذكاء الاصطناعي والمساعد الذكي"
         >
-          <Sparkles className="w-4 h-4 group-hover:rotate-12 transition-transform" />
-          <span className="absolute -top-1 -right-1 w-1.5 h-1.5 sm:w-2 sm:h-2 bg-amber-400 rounded-full animate-ping" />
-          <span className="absolute -top-1 -right-1 w-1.5 h-1.5 sm:w-2 sm:h-2 bg-amber-400 rounded-full" />
+          <Sparkles className="w-6 h-6 group-hover:rotate-12 transition-transform animate-pulse" />
+          <span className="absolute top-1 right-1 w-2 h-2 bg-amber-400 rounded-full animate-ping" />
+          <span className="absolute top-1 right-1 w-2 h-2 bg-amber-400 rounded-full" />
         </button>
       </div>
 
       {/* Left Side: Server IP, Notifications, Clock, User Profile */}
-      <div className="flex items-center gap-2.5 sm:gap-3.5">
+      <div className="flex items-center gap-3 sm:gap-4">
         {/* Server IP Info Icon Button */}
         <button
           type="button"
@@ -495,26 +407,28 @@ export const Header: React.FC<HeaderProps> = ({ toggleSidebar, onNavigate }) => 
             const fullAddress = `http://${ip}:3000`;
             copyToClipboard(fullAddress, `تم نسخ عنوان الشبكة المحلية: ${fullAddress}`);
           }}
-          className="p-2 rounded-xl bg-slate-800/90 border border-slate-700 hover:border-emerald-500/50 text-emerald-400 hover:text-emerald-300 transition-all flex items-center justify-center relative group shrink-0"
+          className="p-1.5 text-emerald-400 hover:text-emerald-300 transition-all flex items-center justify-center relative group shrink-0 hover:scale-110 cursor-pointer"
           title={`عنوان السيرفر المحلي: ${(serverIp === '127.0.0.1' || !serverIp) ? window.location.hostname : serverIp}:3000 (انقر لنسخ الرابط)`}
         >
-          <Wifi className="w-4 h-4 animate-pulse" />
+          <Wifi className="w-5 h-5 filter drop-shadow-[0_0_8px_rgba(16,185,129,0.8)] animate-pulse" />
         </button>
 
         {/* Live Hijri & Gregorian Date / Clock */}
-        <div className="hidden lg:flex items-center gap-2.5 text-xs text-slate-300 bg-slate-900/80 border border-slate-700/80 px-3 py-1.5 rounded-xl shadow-inner">
-          <div className="w-6 h-6 rounded-lg bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 shrink-0">
-            <Clock className="w-3.5 h-3.5" />
-          </div>
-          <div className="flex flex-col">
-            <span className="font-bold text-slate-200 leading-none">{currentTime}</span>
+        <button
+          type="button"
+          onClick={() => setShowDateStatsModal(true)}
+          className="hidden lg:flex items-center gap-2 text-xs text-slate-300 bg-slate-900/80 border border-slate-700/80 hover:border-purple-500 px-3 py-1.5 rounded-xl shadow-inner transition-all cursor-pointer group"
+          title="انقر لاختيار التاريخ وعرض إحصائيات هذا اليوم"
+        >
+          <div className="flex flex-col text-right">
+            <span className="font-bold text-slate-200 leading-none group-hover:text-purple-300 transition-colors">{currentTime}</span>
             {hijriDate && (
               <span className="text-[10px] text-amber-400 font-semibold tracking-tight mt-0.5">
                 {hijriDate}
               </span>
             )}
           </div>
-        </div>
+        </button>
 
         {/* PWA Desktop/Mobile Install Button */}
         <PwaInstallPrompt />
@@ -531,12 +445,12 @@ export const Header: React.FC<HeaderProps> = ({ toggleSidebar, onNavigate }) => 
         >
           <button
             onClick={() => setShowNotifMenu(!showNotifMenu)}
-            className="p-2 rounded-xl bg-slate-800/90 border border-slate-700 hover:border-amber-500/50 text-slate-300 hover:text-white relative transition-all"
+            className="p-1.5 text-slate-300 hover:text-amber-300 relative transition-all hover:scale-110 cursor-pointer"
             title="التنبيهات"
           >
-            <Bell className="w-4 h-4" />
+            <Bell className="w-5 h-5 filter drop-shadow-[0_0_6px_rgba(255,255,255,0.4)]" />
             {unreadNotifsCount > 0 && (
-              <span className="absolute -top-1 -right-1 w-4 h-4 bg-rose-500 text-white font-bold text-[10px] rounded-full flex items-center justify-center animate-bounce">
+              <span className="absolute -top-1 -right-1 w-4 h-4 bg-rose-500 text-white font-bold text-[9px] rounded-full flex items-center justify-center animate-bounce">
                 {unreadNotifsCount}
               </span>
             )}
@@ -590,9 +504,6 @@ export const Header: React.FC<HeaderProps> = ({ toggleSidebar, onNavigate }) => 
             </div>
             <div className="text-right hidden sm:block">
               <div className="text-xs font-bold leading-tight">{user?.fullName || 'مدير النظام'}</div>
-              <div className="text-[10px] text-amber-400 font-medium">
-                {roleLabels[user?.role || 'super_admin']}
-              </div>
             </div>
             <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
           </button>

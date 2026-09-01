@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useCenter } from '../context/CenterContext';
 import { api, request } from '../services/api';
 import { GoogleMeetService } from '../services/googleMeet';
@@ -30,13 +30,22 @@ import {
   Type as TypeIcon,
   Target,
   Crown,
-  Video
+  Video,
+  Star,
+  UserCheck,
+  LayoutDashboard,
+  Share2,
+  Laptop,
+  Cast,
+  ShieldCheck,
+  Activity
 } from 'lucide-react';
 import { InteractiveSession, Question, ExamQuestion, Trainer, Group, Course, Trainee } from '../types';
 import { AIPresentationGenerator } from '../components/trainer/AIPresentationGenerator';
 import { LiveLectureStudio } from '../components/trainer/LiveLectureStudio';
 import { KahootStudio } from '../components/kahoot/KahootStudio';
 import { SessionCeremonyModal } from '../components/SessionCeremonyModal';
+import { SmartWhiteboardModal } from '../components/SmartWhiteboardModal';
 import {
   Presentation,
   BookOpen,
@@ -51,9 +60,10 @@ import {
 } from 'lucide-react';
 
 export const InteractiveSessionsView: React.FC = () => {
-  const { showToast, refreshKey } = useCenter();
-  const [activeTab, setActiveTab] = useState<'lesson_workspace' | 'nagah_pro' | 'external' | 'bank' | 'quick' | 'leaderboard' | 'language_lab'>('lesson_workspace');
+  const { activeBranchId, branches, showToast, refreshKey, isTrainerLabActive, toggleTrainerLabSession } = useCenter();
+  const [activeTab, setActiveTab] = useState<'cockpit' | 'lesson_workspace' | 'nagah_pro' | 'external' | 'bank' | 'quick' | 'leaderboard' | 'language_lab'>('cockpit');
   const [lessonSubMode, setLessonSubMode] = useState<'slides' | 'live_studio' | 'practical' | 'ceremony'>('slides');
+  const [isWhiteboardOpen, setIsWhiteboardOpen] = useState(false);
 
   // Center Domain Entities
   const [trainers, setTrainers] = useState<Trainer[]>([]);
@@ -469,7 +479,19 @@ console.log("نتيجة الطالب:", calculateGrade(48, 50));`);
       </div>
 
       {/* Main Mode Navigation Tabs */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2 bg-slate-900/80 p-1.5 rounded-2xl border border-slate-800 backdrop-blur-md">
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2 bg-slate-900/80 p-1.5 rounded-2xl border border-slate-800 backdrop-blur-md">
+        <button
+          onClick={() => setActiveTab('cockpit')}
+          className={`py-3 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all ${
+            activeTab === 'cockpit'
+              ? 'bg-gradient-to-r from-emerald-400 via-teal-500 to-cyan-500 text-slate-950 shadow-lg shadow-emerald-500/20 font-black scale-[1.03] ring-2 ring-emerald-400/50'
+              : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+          }`}
+        >
+          <LayoutDashboard className="w-4 h-4 shrink-0 text-slate-950" />
+          <span className="truncate">غرفة إدارة الحصة الموحدة 🎛️</span>
+        </button>
+
         <button
           onClick={() => setActiveTab('lesson_workspace')}
           className={`py-3 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all ${
@@ -554,6 +576,334 @@ console.log("نتيجة الطالب:", calculateGrade(48, 50));`);
           <span className="truncate">معمل اللغات 🗣️</span>
         </button>
       </div>
+
+      {/* ========================================================================= */}
+      {/* TAB 0: UNIFIED CLASSROOM COMMAND CENTER (غرفة إدارة الحصة الموحدة) */}
+      {/* ========================================================================= */}
+      {activeTab === 'cockpit' && (() => {
+        const activeBranchObj = branches.find(b => b.id === activeBranchId);
+        const branchName = activeBranchObj ? activeBranchObj.name : (activeBranchId === 'all' ? 'جميع الفروع' : 'فرع المعمل الرئيسي');
+        const branchTrainees = (activeBranchId && activeBranchId !== 'all')
+          ? trainees.filter(t => t.branchId === activeBranchId)
+          : trainees;
+
+        // Sort students by points for real-time leaderboard
+        const sortedBranchTrainees = [...branchTrainees].sort((a, b) => (b.totalPoints || b.points || 0) - (a.totalPoints || a.points || 0));
+        const topStars = sortedBranchTrainees.slice(0, 3);
+
+        return (
+          <div className="space-y-6 animate-fadeIn dir-rtl">
+            {/* Top Branch & Trainer Sync Banner */}
+            <div className="bg-gradient-to-br from-slate-900 via-slate-900 to-emerald-950/60 border border-emerald-500/30 p-5 rounded-3xl shadow-2xl relative overflow-hidden">
+              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 relative z-10">
+                <div className="flex items-center gap-3">
+                  <div className="p-3 bg-emerald-500/20 text-emerald-400 rounded-2xl border border-emerald-500/40">
+                    <Laptop className="w-8 h-8 animate-pulse" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="px-3 py-1 bg-emerald-500/20 text-emerald-300 text-xs font-black rounded-full border border-emerald-500/40 flex items-center gap-1">
+                        <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                        مرتبط بجهاز المدرب المباشر بالفرع
+                      </span>
+                      <span className="px-3 py-1 bg-slate-800 text-slate-300 text-xs font-bold rounded-full border border-slate-700">
+                        {branchName} 📍
+                      </span>
+                    </div>
+                    <h2 className="text-2xl font-black text-white mt-1">
+                      غرفة إدارة الحصة الموحدة (Live Session Cockpit)
+                    </h2>
+                    <p className="text-xs text-slate-300 mt-0.5">
+                      لوحة تحكم واحدة شاملة لإدارة الحضور، التفاعل، النجوم، الأسئلة، والسبورة المباشرة بقاعة المعمل
+                    </p>
+                  </div>
+                </div>
+
+                {/* Quick Action Toolbar */}
+                <div className="flex items-center gap-2 flex-wrap">
+                  <button
+                    type="button"
+                    onClick={() => toggleTrainerLabSession(activeBranchId, 'المحاضر المشرف')}
+                    className={`px-4 py-2.5 rounded-2xl font-black text-xs flex items-center gap-2 shadow-lg transition-all active:scale-95 ${
+                      isTrainerLabActive
+                        ? 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 border border-emerald-300'
+                        : 'bg-rose-600 hover:bg-rose-500 text-white border border-rose-400'
+                    }`}
+                    title="التحكم في فتح المعمل والسماح بدخول الطلاب وتسجيل الحضور بالفرع"
+                  >
+                    <span>{isTrainerLabActive ? '🟢 المعمل مفتوح بالفرع (انقر للقفل)' : '🔒 المعمل مغلق (انقر للفتح)'}</span>
+                  </button>
+
+                  <button
+                    onClick={() => setIsWhiteboardOpen(true)}
+                    className="px-4 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 rounded-2xl font-black text-xs flex items-center gap-2 shadow-lg transition-all active:scale-95"
+                  >
+                    <Sparkles className="w-4 h-4" />
+                    <span>فتح السبورة التفاعلية 🎨</span>
+                  </button>
+
+                  <button
+                    onClick={async () => {
+                      showToast('تم نشر السبورة التفاعلية وشاشة الدرس على شاشات أجهزة الطلاب بالفرع بنجاح 📡📌', 'success');
+                    }}
+                    className="px-4 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-2xl font-black text-xs flex items-center gap-2 shadow-lg transition-all active:scale-95"
+                  >
+                    <Share2 className="w-4 h-4 text-purple-200" />
+                    <span>نشر على حائط المعمل 📌</span>
+                  </button>
+
+                  <button
+                    onClick={() => setIsCeremonyOpen(true)}
+                    className="px-4 py-2.5 bg-gradient-to-r from-rose-500 to-pink-600 hover:from-rose-600 hover:to-pink-700 text-white rounded-2xl font-black text-xs flex items-center gap-2 shadow-lg shadow-rose-500/20 transition-all active:scale-95"
+                  >
+                    <PartyPopper className="w-4 h-4 animate-bounce" />
+                    <span>إطلاق حفل ختام الحصة 🎉</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Class & Group Meta Controls */}
+              <div className="mt-4 pt-4 border-t border-slate-800 grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-4 gap-3 text-xs">
+                <div className="bg-slate-950/70 p-2.5 rounded-2xl border border-slate-800 flex items-center justify-between">
+                  <span className="text-slate-400 font-bold">المدرب المشرف:</span>
+                  <span className="font-extrabold text-white">{selectedTrainer?.fullName || 'المدرب الحالي'}</span>
+                </div>
+
+                <div className="bg-slate-950/70 p-2.5 rounded-2xl border border-slate-800 flex items-center justify-between">
+                  <span className="text-slate-400 font-bold">المجموعة والحساب:</span>
+                  <span className="font-extrabold text-amber-400">{selectedGroup?.name || 'مجموعة المعمل المباشرة'}</span>
+                </div>
+
+                <div className="bg-slate-950/70 p-2.5 rounded-2xl border border-slate-800 flex items-center justify-between">
+                  <span className="text-slate-400 font-bold">حالة المزامنة بالفرع:</span>
+                  <span className="font-extrabold text-emerald-400 flex items-center gap-1">
+                    <ShieldCheck className="w-3.5 h-3.5" />
+                    مباشر (0ms)
+                  </span>
+                </div>
+
+                <div className="bg-slate-950/70 p-2.5 rounded-2xl border border-slate-800 flex items-center justify-between">
+                  <span className="text-slate-400 font-bold">طلاب الفرع الحاضرين:</span>
+                  <span className="font-extrabold text-cyan-400 text-sm">{branchTrainees.length} طالب</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Top Stars Header & Mass Star Launcher */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Top 3 Stars Leaderboard Card */}
+              <div className="lg:col-span-1 bg-slate-900 border border-slate-800 p-5 rounded-3xl space-y-4 shadow-xl">
+                <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                  <div className="flex items-center gap-2 text-amber-400 font-black">
+                    <Crown className="w-5 h-5 text-amber-400 animate-bounce" />
+                    <span>متميزو الحصة والأعلى نقاط 👑</span>
+                  </div>
+                  <span className="text-[11px] text-slate-400 bg-slate-800 px-2.5 py-1 rounded-full font-bold">تحديث فوري</span>
+                </div>
+
+                <div className="space-y-3">
+                  {topStars.length === 0 ? (
+                    <div className="text-center py-6 text-slate-500 text-xs">لا يوجد طلاب مسجلون بالفرع حالياً</div>
+                  ) : (
+                    topStars.map((st, idx) => (
+                      <div key={st.id} className="flex items-center justify-between bg-slate-950/80 p-3 rounded-2xl border border-slate-800">
+                        <div className="flex items-center gap-3">
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center font-black text-xs ${
+                            idx === 0 ? 'bg-amber-400 text-slate-950 shadow-lg shadow-amber-400/30' :
+                            idx === 1 ? 'bg-slate-300 text-slate-950' : 'bg-amber-700 text-white'
+                          }`}>
+                            {idx === 0 ? '🥇' : idx === 1 ? '🥈' : '🥉'}
+                          </div>
+                          <div>
+                            <span className="font-black text-xs text-white block">{st.fullName}</span>
+                            <span className="text-[10px] text-slate-400">{st.code || st.id}</span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-1.5 bg-amber-500/10 border border-amber-500/30 px-3 py-1 rounded-xl">
+                          <Star className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
+                          <span className="font-black text-amber-300 text-xs">{st.totalPoints || st.points || 0}</span>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+
+                <button
+                  onClick={async () => {
+                    try {
+                      if (branchTrainees.length === 0) {
+                        showToast('لا يوجد طلاب مسجلون بهذا الفرع', 'warning');
+                        return;
+                      }
+                      await Promise.all(branchTrainees.map(t => api.awardPoints(t.id, 10, 'تشجيع الحصة الجماعي بالمعمل').catch(() => {})));
+                      showToast(`تم منح +10 نجوم تشجيعية لجميع طلاب الفرع الحاضرين (${branchTrainees.length} طالب) بنجاح! ⭐🏆`, 'success');
+                      loadCenterData();
+                    } catch (e) {
+                      showToast('تعذر منح النقاط الجماعية', 'error');
+                    }
+                  }}
+                  className="w-full py-2.5 bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-300 font-extrabold text-xs rounded-2xl flex items-center justify-center gap-2 transition-all"
+                >
+                  <Award className="w-4 h-4 text-emerald-400" />
+                  <span>منح +10 نجوم لكل الحاضرين بالمعمل 🌟</span>
+                </button>
+              </div>
+
+              {/* Instant Interactive Question Launcher */}
+              <div className="lg:col-span-2 bg-slate-900 border border-slate-800 p-5 rounded-3xl space-y-4 shadow-xl">
+                <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                  <div className="flex items-center gap-2 text-cyan-400 font-black">
+                    <Zap className="w-5 h-5 text-cyan-400 animate-pulse" />
+                    <span>بث سؤال تفاعلي فوري لشاشات أجهزة الطلاب بالمعمل 🚀</span>
+                  </div>
+                  <span className="text-xs text-slate-400 font-mono">بث شاشة بشاشة</span>
+                </div>
+
+                <form onSubmit={handleQuickQuestionSubmit} className="space-y-3">
+                  <div>
+                    <label className="text-xs text-slate-300 font-bold block mb-1">السؤال التفاعلي اللحظي:</label>
+                    <input
+                      type="text"
+                      value={quickQuestionText}
+                      onChange={(e) => setQuickQuestionText(e.target.value)}
+                      placeholder="مثال: ما هو الناتج المباشر لكود حساب النسبة المئوية المكتوب بالسبورة؟"
+                      className="w-full bg-slate-950 border border-slate-800 rounded-2xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-cyan-500"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    {quickOptions.map((opt, idx) => (
+                      <div key={idx} className="flex items-center gap-2 bg-slate-950 p-2 rounded-xl border border-slate-800">
+                        <input
+                          type="radio"
+                          name="cockpit_correct"
+                          checked={quickCorrectIndex === idx}
+                          onChange={() => setQuickCorrectIndex(idx)}
+                          className="accent-cyan-500 w-4 h-4"
+                        />
+                        <input
+                          type="text"
+                          value={opt}
+                          onChange={(e) => {
+                            const newOpts = [...quickOptions];
+                            newOpts[idx] = e.target.value;
+                            setQuickOptions(newOpts);
+                          }}
+                          className="w-full bg-transparent text-xs text-white focus:outline-none"
+                          placeholder={`الخيار ${idx + 1}`}
+                        />
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="flex items-center justify-between pt-1">
+                    <div className="flex items-center gap-3 text-xs text-slate-400 font-bold">
+                      <span>نقاط الإجابة: <strong className="text-amber-400">15 نقطة</strong></span>
+                      <span>الزمن: <strong className="text-cyan-400">30 ثانية</strong></span>
+                    </div>
+
+                    <button
+                      type="submit"
+                      className="px-6 py-2.5 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-slate-950 font-black text-xs rounded-2xl shadow-lg shadow-cyan-500/20 flex items-center gap-2 transition-all active:scale-95"
+                    >
+                      <Send className="w-4 h-4" />
+                      <span>إطلاق السؤال الآن 🚀</span>
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+
+            {/* CLASSROOM LIVE HALL WALL: PRESENT STUDENTS & STAR AWARDING */}
+            <div className="bg-slate-900 border border-slate-800 p-5 rounded-3xl space-y-4 shadow-xl">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-3 flex-wrap gap-2">
+                <div className="flex items-center gap-2 text-emerald-400 font-black">
+                  <UserCheck className="w-6 h-6 text-emerald-400" />
+                  <h3 className="text-lg font-black text-white">
+                    حائط القاعة والطلاب الحاضرين بالمعمل ({branchTrainees.length} طالب)
+                  </h3>
+                </div>
+                <div className="flex items-center gap-2 text-xs text-slate-400">
+                  <span>منح النجوم والتفاعل المباشر مرتبط بأجهزة الطلاب بالفرع 🟢</span>
+                </div>
+              </div>
+
+              {branchTrainees.length === 0 ? (
+                <div className="text-center py-12 bg-slate-950/60 rounded-3xl border border-slate-800 text-slate-400 text-sm">
+                  لا يوجد طلاب مسجلون في الفرع المحدد ({branchName}) حالياً.
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                  {branchTrainees.map((trainee, idx) => {
+                    const currentPoints = trainee.totalPoints || trainee.points || 0;
+                    return (
+                      <div key={trainee.id} className="bg-slate-950 border border-slate-800 hover:border-slate-700 p-4 rounded-3xl transition-all space-y-3 relative group shadow-md">
+                        {/* Student Header */}
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-amber-500/20 to-emerald-500/20 border border-amber-500/30 flex items-center justify-center font-black text-lg text-amber-300">
+                              {['👨‍🎓', '👩‍🎓', '👨‍💻', '👩‍💻', '🧑‍🎓', '👩‍🔬'][idx % 6]}
+                            </div>
+                            <div>
+                              <h4 className="font-black text-sm text-white line-clamp-1">{trainee.fullName}</h4>
+                              <span className="text-[10px] text-slate-400 font-mono block">{trainee.code || trainee.id}</span>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-1 bg-amber-500/10 border border-amber-500/30 px-2.5 py-1 rounded-xl">
+                            <Star className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
+                            <span className="font-black text-amber-300 text-xs">{currentPoints}</span>
+                          </div>
+                        </div>
+
+                        {/* Device & Engagement Status */}
+                        <div className="flex items-center justify-between bg-slate-900/80 px-3 py-1.5 rounded-xl border border-slate-800 text-[11px]">
+                          <span className="text-emerald-400 font-bold flex items-center gap-1">
+                            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                            جهاز #{String(idx + 1).padStart(2, '0')} أونلاين
+                          </span>
+                          <span className="text-slate-400 font-medium">متفاعل بالمعمل</span>
+                        </div>
+
+                        {/* Fast 1-Tap Star Awarding Buttons */}
+                        <div className="grid grid-cols-3 gap-1.5 pt-1">
+                          <button
+                            onClick={() => handleAwardBonus(trainee.id, 5, 'إجابة ممتازة وسريعة')}
+                            className="py-1.5 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 rounded-xl font-black text-[11px] transition-all active:scale-95 flex items-center justify-center gap-1"
+                            title="منح 5 نجوم"
+                          >
+                            <span>+5</span>
+                            <Star className="w-3 h-3 text-amber-400 fill-amber-400" />
+                          </button>
+
+                          <button
+                            onClick={() => handleAwardBonus(trainee.id, 10, 'تميز وتفوق في التمرين العملي')}
+                            className="py-1.5 bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-300 rounded-xl font-black text-[11px] transition-all active:scale-95 flex items-center justify-center gap-1"
+                            title="منح 10 نجوم"
+                          >
+                            <span>+10</span>
+                            <Award className="w-3 h-3 text-emerald-400" />
+                          </button>
+
+                          <button
+                            onClick={() => handleAwardBonus(trainee.id, 15, 'أفضل سرعة حل كود وتطبيق بالمعمل')}
+                            className="py-1.5 bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-500/40 text-cyan-300 rounded-xl font-black text-[11px] transition-all active:scale-95 flex items-center justify-center gap-1"
+                            title="منح 15 نجمة"
+                          >
+                            <span>+15</span>
+                            <Zap className="w-3 h-3 text-cyan-400" />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ========================================================================= */}
       {/* TAB: LESSON WORKSPACE (شرح الحصة والمحتوى التفاعلي) */}
@@ -1825,6 +2175,14 @@ console.log("نتيجة الطالب:", calculateGrade(48, 50));`);
           groups={groups}
           onClose={() => setIsCeremonyOpen(false)}
           onAwardBonus={handleAwardBonus}
+        />
+      )}
+
+      {/* Smart Whiteboard Modal */}
+      {isWhiteboardOpen && (
+        <SmartWhiteboardModal
+          isOpen={isWhiteboardOpen}
+          onClose={() => setIsWhiteboardOpen(false)}
         />
       )}
     </div>

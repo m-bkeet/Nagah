@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { Branch, CenterSettings, SystemNotification } from '../types';
 import { api } from '../services/api';
+import { isTrainerSessionActive, setTrainerLabSessionState } from '../utils/labSecurity';
 
 export interface ToastMessage {
   id: string;
@@ -36,6 +37,13 @@ interface CenterContextType {
   refreshAll: () => Promise<void>;
   refreshKey: number;
   serverIp: string;
+  isTrainerLabActive: boolean;
+  labAttendanceCount: number;
+  selectedDate: string;
+  setSelectedDate: (date: string) => void;
+  showDateStatsModal: boolean;
+  setShowDateStatsModal: (show: boolean) => void;
+  toggleTrainerLabSession: (branchId?: string, trainerName?: string, active?: boolean, roomName?: string) => void;
 }
 
 const CenterContext = createContext<CenterContextType | undefined>(undefined);
@@ -50,6 +58,40 @@ export const CenterProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [isAiModalOpen, setIsAiModalOpen] = useState(false);
   const [aiModalTab, setAiModalTab] = useState<'manager' | 'developer' | 'social_bots' | 'trainer'>('manager');
   const [printData, setPrintData] = useState<PrintData | null>(null);
+  const [isTrainerLabActive, setIsTrainerLabActive] = useState<boolean>(() => isTrainerSessionActive(activeBranchId));
+  const [labAttendanceCount, setLabAttendanceCount] = useState<number>(0);
+  const [selectedDate, setSelectedDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
+  const [showDateStatsModal, setShowDateStatsModal] = useState<boolean>(false);
+
+  // Sync lab active state on branch change or custom event
+  useEffect(() => {
+    const updateLabState = () => {
+      setIsTrainerLabActive(isTrainerSessionActive(activeBranchId));
+    };
+    updateLabState();
+
+    window.addEventListener('nagah_lab_session_changed', updateLabState);
+    window.addEventListener('storage', updateLabState);
+
+    return () => {
+      window.removeEventListener('nagah_lab_session_changed', updateLabState);
+      window.removeEventListener('storage', updateLabState);
+    };
+  }, [activeBranchId]);
+
+  const toggleTrainerLabSession = useCallback((
+    targetBranchId: string = activeBranchId === 'all' ? 'b1' : activeBranchId,
+    trainerName: string = 'المحاضر المشرف',
+    active?: boolean,
+    roomName: string = 'المعمل الرئيسي'
+  ) => {
+    const nextState = active !== undefined ? active : !isTrainerSessionActive(targetBranchId);
+    setTrainerLabSessionState(targetBranchId, trainerName, nextState, roomName);
+    setIsTrainerLabActive(nextState);
+    if (!nextState) {
+      api.sessionCleanup().catch(() => {});
+    }
+  }, [activeBranchId]);
 
   const openAiModal = useCallback((tab: 'manager' | 'developer' | 'social_bots' | 'trainer' = 'manager') => {
     setAiModalTab(tab);
@@ -76,11 +118,12 @@ export const CenterProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         try { return await p; } catch (e) { console.warn('[CenterContext] API fetch warning:', e); return null; }
       };
 
-      const [branchesRes, settingsRes, notifsRes, sysRes] = await Promise.all([
+       const [branchesRes, settingsRes, notifsRes, sysRes, attRes] = await Promise.all([
         safeCall(api.getBranches()),
         safeCall(api.getSettings()),
         safeCall(api.getNotifications()),
-        safeCall(api.getSystemInfo())
+        safeCall(api.getSystemInfo()),
+        safeCall(api.getAttendance({ date: new Date().toISOString().split('T')[0] }))
       ]);
 
       if (Array.isArray(branchesRes)) {
@@ -108,6 +151,9 @@ export const CenterProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       }
       if (sysRes?.serverIp) {
         setServerIp(sysRes.serverIp);
+      }
+      if (Array.isArray(attRes)) {
+        setLabAttendanceCount(attRes.filter((a: any) => a.status === 'present' || a.status === 'late').length);
       }
       setRefreshKey(k => k + 1);
     } catch (err) {
@@ -156,7 +202,14 @@ export const CenterProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         setPrintData,
         refreshAll,
         refreshKey,
-        serverIp
+        serverIp,
+        isTrainerLabActive,
+        labAttendanceCount,
+        selectedDate,
+        setSelectedDate,
+        showDateStatsModal,
+        setShowDateStatsModal,
+        toggleTrainerLabSession
       }}
     >
       {children}

@@ -17,6 +17,7 @@ import {
   UserCheck
 } from 'lucide-react';
 import { Trainer, Group, Course, Trainee } from '../../types';
+import { formatTimeAMPM } from '../../utils/timeFormat';
 
 interface TrainerGroupsManagerProps {
   trainer: Trainer;
@@ -225,7 +226,7 @@ export const TrainerGroupsManager: React.FC<TrainerGroupsManagerProps> = ({
 
                     <div className="flex items-center gap-1.5 text-slate-400 text-[11px]">
                       <Clock className="w-3.5 h-3.5 shrink-0" />
-                      <span>{g.days?.join('، ') || 'أيام المحاضرات'} {g.timeSlot ? `(${g.timeSlot})` : ''}</span>
+                      <span>{g.days?.join('، ') || 'أيام المحاضرات'} ({formatTimeAMPM(g.startTime || '16:00')} - {formatTimeAMPM(g.endTime || '18:00')})</span>
                     </div>
 
                     <div className="flex items-center gap-1.5 text-slate-400 text-[11px]">

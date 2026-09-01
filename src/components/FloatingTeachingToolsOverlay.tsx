@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   PenTool,
   Highlighter,
@@ -51,7 +51,7 @@ export const FloatingTeachingToolsOverlay: React.FC<FloatingTeachingToolsOverlay
   activeSessionId,
   onNavigateToView
 }) => {
-  const { showToast } = useCenter();
+  const { activeBranchId, branches, showToast, refreshKey } = useCenter();
 
   // Smart Speaker Modal State
   const [isSmartSpeakerOpen, setIsSmartSpeakerOpen] = useState(false);
@@ -148,9 +148,10 @@ export const FloatingTeachingToolsOverlay: React.FC<FloatingTeachingToolsOverlay
   const [qqIsActive, setQqIsActive] = useState(false);
 
   // Points Award State
-  const [selectedTraineeForPoints, setSelectedTraineeForPoints] = useState<string>('A001 - أحمد محمود');
+  const [selectedTraineeForPoints, setSelectedTraineeForPoints] = useState<string>('');
   const [pointsAmount, setPointsAmount] = useState<number>(10);
   const [pointsReason, setPointsReason] = useState<string>('إجابة ممتازة وتسريع الكود');
+  const [selectedPointStudentIds, setSelectedPointStudentIds] = useState<string[]>([]);
 
   // AI Session Copilot Alerts State
   const [copilotAlerts, setCopilotAlerts] = useState<Array<{ id: string; type: 'warning' | 'info' | 'success'; text: string; actionText?: string }>>([
@@ -159,21 +160,119 @@ export const FloatingTeachingToolsOverlay: React.FC<FloatingTeachingToolsOverlay
     { id: '3', type: 'success', text: 'الطالب A009 أنهى المهمة في دقيقة واحدة!', actionText: 'منح 15 نقطة تفوق' }
   ]);
 
-  // Mock Students List (A001 - A012)
-  const liveStudents = [
-    'A001 - أحمد محمود العبدلي',
-    'A002 - سارة خالد السيد',
-    'A003 - يوسف مصطفى إبراهيم',
-    'A004 - مريم علي حسان',
-    'A005 - عمر فاروق الحسين',
-    'A006 - فاطمة الزهراء شريف',
-    'A007 - حمزة عبد الله ناصر',
-    'A008 - نور الدين شريف',
-    'A009 - كريم حسام الدين',
-    'A010 - هناء عبد الرحمن',
-    'A011 - بلال طارق زياد',
-    'A012 - خديجة أيمن مسعود'
-  ];
+  // Dynamic Per-Branch Students Sync Engine with Smart Persistence
+  const [liveStudents, setLiveStudents] = useState<string[]>([]);
+  const [rawTrainees, setRawTrainees] = useState<any[]>([]);
+  const [isSyncingStudents, setIsSyncingStudents] = useState<boolean>(false);
+
+  const syncBranchStudents = useCallback(async (targetBranchId?: string, forceRefresh = false, silent = false) => {
+    const bId = targetBranchId !== undefined ? targetBranchId : activeBranchId;
+    setIsSyncingStudents(true);
+    try {
+      const storageKey = `nagah_locked_attendees_${bId}`;
+      
+      // If not forcing refresh, check if we already have persistent locked attendees for this branch
+      if (!forceRefresh) {
+        try {
+          const cached = localStorage.getItem(storageKey);
+          if (cached) {
+            const parsed = JSON.parse(cached);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              setRawTrainees(parsed);
+              setLiveStudents(parsed.map(t => `${t.code || t.id} - ${t.fullName}`));
+              setSelectedPointStudentIds(parsed.map(t => t.id));
+              if (parsed.length > 0) {
+                setSelectedTraineeForPoints(`${parsed[0].code || parsed[0].id} - ${parsed[0].fullName}`);
+              }
+              setIsSyncingStudents(false);
+              if (!silent) {
+                showToast(`تم تحميل الحاضرين المرتبطين بالمعمل الحالي (${parsed.length} طالب) 🟢`, 'success');
+              }
+              return;
+            }
+          }
+        } catch (e) {}
+      }
+
+      const todayStr = new Date().toISOString().split('T')[0];
+      const [allTrainees, attendanceRecords, devices] = await Promise.all([
+        api.getTrainees().catch(() => []),
+        api.getAttendance({ date: todayStr }).catch(() => []),
+        api.getDevices().catch(() => [])
+      ]);
+
+      const safeTrainees = Array.isArray(allTrainees) ? allTrainees : [];
+      const safeAttendance = Array.isArray(attendanceRecords) ? attendanceRecords : [];
+      const safeDevices = Array.isArray(devices) ? devices : [];
+
+      // Filter trainees strictly by target branch only (preventing cross-branch mixing like Badr vs Nagah)
+      let branchTrainees = safeTrainees;
+      if (bId && bId !== 'all') {
+        branchTrainees = safeTrainees.filter(t => t.branchId === bId);
+      }
+
+      // Collect IDs of present trainees (marked attendance or active in device lab for this branch)
+      const presentTraineeIds = new Set<string>();
+
+      safeAttendance.forEach(a => {
+        if ((a.status === 'present' || a.status === 'late') && (bId === 'all' || a.branchId === bId)) {
+          presentTraineeIds.add(a.traineeId);
+        }
+      });
+
+      safeDevices.forEach(d => {
+        const devBranch = d.branchId || bId;
+        if (d.isOnline && (bId === 'all' || devBranch === bId)) {
+          const tId = (d as any).currentTraineeId;
+          if (tId) presentTraineeIds.add(tId);
+          else if (d.currentTraineeName) {
+            const match = branchTrainees.find(t => t.fullName === d.currentTraineeName);
+            if (match) presentTraineeIds.add(match.id);
+          }
+        }
+      });
+
+      let presentTraineesList = branchTrainees.filter(t => presentTraineeIds.has(t.id));
+
+      // Fallback: If no explicit attendance yet, pull active branch trainees so trainer can immediately award stars
+      if (presentTraineesList.length === 0 && branchTrainees.length > 0) {
+        presentTraineesList = branchTrainees.slice(0, 15);
+      }
+
+      const formattedList = presentTraineesList.map(t => `${t.code || t.id} - ${t.fullName}`);
+      setLiveStudents(formattedList);
+      setRawTrainees(presentTraineesList);
+      setSelectedPointStudentIds(presentTraineesList.map(t => t.id));
+
+      // Persist in localStorage so names remain sticky until explicit reset ("تصفير")
+      try {
+        localStorage.setItem(storageKey, JSON.stringify(presentTraineesList));
+      } catch (e) {}
+
+      if (formattedList.length > 0) {
+        setSelectedTraineeForPoints(formattedList[0]);
+      }
+
+      const activeBranchObj = branches.find(b => b.id === bId);
+      const branchName = activeBranchObj ? activeBranchObj.name : (bId === 'all' ? 'جميع الفروع' : 'فرع المعمل الحاضر');
+
+      if (!silent) {
+        audioService.playChime([523, 659, 783]);
+        showToast(`تمت مزامنة طلاب المعمل (${branchName}) بنجاح! 🟢 الحاضرون الآن: ${formattedList.length} طالب`, 'success');
+      }
+    } catch (err) {
+      if (!silent) {
+        showToast('تعذر مزامنة قائمة الطلاب حالياً', 'error');
+      }
+    } finally {
+      setIsSyncingStudents(false);
+    }
+  }, [activeBranchId, branches, showToast]);
+
+  // Initial Sync and Branch Switching Listener
+  useEffect(() => {
+    syncBranchStudents(activeBranchId, false, true);
+  }, [activeBranchId, refreshKey, syncBranchStudents]);
 
   // Initialize Canvas for Drawing Overlay
   useEffect(() => {
@@ -329,7 +428,14 @@ export const FloatingTeachingToolsOverlay: React.FC<FloatingTeachingToolsOverlay
   // Populate Random Wheel Items
   useEffect(() => {
     if (wheelType === 'attendees') {
-      const defaultAttendees = liveStudents.map(s => s.split(' - ')[0] + ' ' + s.split(' - ')[1].split(' ')[0]);
+      const defaultAttendees = liveStudents.length > 0
+        ? liveStudents.map(s => {
+            const parts = s.split(' - ');
+            const code = parts[0] || '';
+            const name = parts[1] || s;
+            return `${code} ${name.split(' ')[0]}`;
+          })
+        : ['لا يوجد طلاب حاضرين حالياً'];
       setWheelItems([...defaultAttendees, ...customWheelItems]);
     } else if (wheelType === 'questions') {
       const defaultQuestions = ['سؤال البرمجة 1', 'تحدي الإكسيل 2', 'سؤال القواعد 3', 'تحدي المنطق 4', 'سؤال خوارزميات 5'];
@@ -347,7 +453,7 @@ export const FloatingTeachingToolsOverlay: React.FC<FloatingTeachingToolsOverlay
       const defaultTeams = ['الفريق الأحادي', 'الفريق الماسي', 'فريق الأبطال', 'فريق المبتكرين'];
       setWheelItems([...defaultTeams, ...customWheelItems]);
     }
-  }, [wheelType, customWheelItems]);
+  }, [wheelType, customWheelItems, liveStudents]);
 
   // Canvas Drawing Handlers
   const startDrawing = (e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -439,20 +545,31 @@ export const FloatingTeachingToolsOverlay: React.FC<FloatingTeachingToolsOverlay
     }, 100);
   };
 
-  // Quick Points Award
-  const handleAwardPoints = async () => {
+  // Quick Points Award (ClassPoint style)
+  const handleAwardPoints = async (toAllPresent: boolean = false) => {
     try {
-      await api.addPoints({
-        traineeId: selectedTraineeForPoints.split(' - ')[0],
-        points: pointsAmount,
-        reason: pointsReason
-      }).catch(() => {});
+      const targetTrainees = toAllPresent
+        ? rawTrainees
+        : rawTrainees.filter(t => selectedPointStudentIds.includes(t.id));
 
-      audioService.playChime([600, 800, 1000]);
-      showToast(`تم إسناد +${pointsAmount} نقطة تميز للطالب ${selectedTraineeForPoints} ⭐`, 'success');
+      if (targetTrainees.length === 0) {
+        showToast('الرجاء اختيار طالب واحد على الأقل لمنح النقاط', 'warning');
+        return;
+      }
+
+      await Promise.all(targetTrainees.map(t =>
+        api.addPoints({
+          traineeId: t.id || t.code,
+          points: pointsAmount,
+          reason: pointsReason
+        }).catch(() => {})
+      ));
+
+      audioService.playChime([600, 800, 1000, 1200]);
+      showToast(`تم إسناد +${pointsAmount} نقطة تميز بنجاح لـ ${targetTrainees.length} طالب حاضر بالمعمل ⭐🎉`, 'success');
       setActiveTool('none');
     } catch (e) {
-      showToast('خطأ أثناء إضافة النقاط', 'error');
+      showToast('خطأ أثناء إسناد النقاط', 'error');
     }
   };
 
@@ -1119,143 +1236,120 @@ export const FloatingTeachingToolsOverlay: React.FC<FloatingTeachingToolsOverlay
       {/* ---------------------------------------------------- */}
       {activeTool === 'wheel' && (
         <div className="fixed inset-0 z-[9996] bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 dir-rtl">
-          <div className="bg-slate-900 border border-slate-700 p-6 rounded-3xl shadow-2xl text-white max-w-md w-full space-y-4 relative">
+          <div className="bg-slate-900 border border-slate-700 p-4 rounded-3xl shadow-2xl text-white max-w-sm w-full space-y-3 relative">
             <button
               onClick={() => setActiveTool('none')}
-              className="absolute top-4 left-4 text-slate-400 hover:text-white p-1 rounded-lg"
+              className="absolute top-3 left-3 text-slate-400 hover:text-white p-1 rounded-lg"
             >
-              <X className="w-5 h-5" />
+              <X className="w-4 h-4" />
             </button>
 
             <div className="text-center">
-              <div className="inline-flex p-3 bg-amber-500/10 text-amber-400 rounded-2xl mb-2">
-                <RotateCw className="w-7 h-7 animate-spin-slow" />
+              <div className="inline-flex p-2 bg-amber-500/10 text-amber-400 rounded-2xl mb-1">
+                <RotateCw className="w-5 h-5 animate-spin-slow" />
               </div>
-              <h2 className="text-xl font-extrabold">عجلة الحظ التفاعلية (Random Wheel)</h2>
-              <p className="text-xs text-slate-400 mt-1">توليد عشوائي تلقائي ممرور مباشرة من بيانات الحصة الحالية</p>
+              <h2 className="text-base font-extrabold">عجلة الحظ التفاعلية 🎡</h2>
+              <p className="text-[10px] text-slate-400">سحب عشوائي لطلاب المعمل الحاضرين في اللحظة الحالية فقط</p>
+            </div>
+
+            {/* Per-Branch Student Sync Status Bar */}
+            <div className="flex items-center justify-between bg-slate-800/80 px-2.5 py-1.5 rounded-xl border border-slate-700/70 text-[11px]">
+              <div className="flex items-center gap-1.5 text-slate-300 font-bold">
+                <Users className="w-3.5 h-3.5 text-amber-400" />
+                <span>الحاضرون بالمعمل: <strong className="text-emerald-400">{liveStudents.length}</strong></span>
+              </div>
+              <button
+                onClick={() => syncBranchStudents(activeBranchId)}
+                disabled={isSyncingStudents}
+                className="px-2 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 rounded-lg font-bold flex items-center gap-1 transition-all text-[10px]"
+              >
+                <RotateCcw className={`w-3 h-3 ${isSyncingStudents ? 'animate-spin' : ''}`} />
+                <span>مزامنة 🔄</span>
+              </button>
             </div>
 
             {/* Selector */}
-            <div className="grid grid-cols-4 gap-1 bg-slate-800 p-1 rounded-xl text-xs font-semibold">
+            <div className="grid grid-cols-4 gap-1 bg-slate-800 p-1 rounded-xl text-[11px] font-semibold">
               <button
                 onClick={() => setWheelType('attendees')}
-                className={`py-1.5 rounded-lg ${wheelType === 'attendees' ? 'bg-amber-500 text-slate-950' : 'text-slate-400'}`}
+                className={`py-1 rounded-lg ${wheelType === 'attendees' ? 'bg-amber-500 text-slate-950 font-bold' : 'text-slate-400'}`}
               >
                 الطلاب
               </button>
               <button
                 onClick={() => setWheelType('questions')}
-                className={`py-1.5 rounded-lg ${wheelType === 'questions' ? 'bg-amber-500 text-slate-950' : 'text-slate-400'}`}
+                className={`py-1 rounded-lg ${wheelType === 'questions' ? 'bg-amber-500 text-slate-950 font-bold' : 'text-slate-400'}`}
               >
                 الأسئلة
               </button>
               <button
                 onClick={() => setWheelType('codes')}
-                className={`py-1.5 rounded-lg ${wheelType === 'codes' ? 'bg-amber-500 text-slate-950' : 'text-slate-400'}`}
+                className={`py-1 rounded-lg ${wheelType === 'codes' ? 'bg-amber-500 text-slate-950 font-bold' : 'text-slate-400'}`}
               >
                 الأكواد ⚡
               </button>
               <button
                 onClick={() => setWheelType('teams')}
-                className={`py-1.5 rounded-lg ${wheelType === 'teams' ? 'bg-amber-500 text-slate-950' : 'text-slate-400'}`}
+                className={`py-1 rounded-lg ${wheelType === 'teams' ? 'bg-amber-500 text-slate-950 font-bold' : 'text-slate-400'}`}
               >
                 الفرق
               </button>
             </div>
 
-            {/* Custom Input or Auto-load Notice */}
-            {wheelType === 'codes' ? (
-              <div className="bg-amber-500/10 border border-amber-500/30 p-2.5 rounded-xl text-[11px] text-amber-300 flex items-center gap-2">
-                <Zap className="w-4 h-4 text-amber-400 flex-shrink-0" />
-                <span>يتم تحميل أكواد وتحديات المعمل أوتوماتيكياً من الحصة الحالية بدون الحاجة لكتابة يدوية!</span>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <input
-                    type="text"
-                    value={newWheelItemInput}
-                    onChange={e => setNewWheelItemInput(e.target.value)}
-                    onKeyDown={e => e.key === 'Enter' && handleAddCustomWheelItem()}
-                    placeholder={
-                      wheelType === 'attendees'
-                        ? 'إضافة اسم طالب جديد للعجلة...'
-                        : wheelType === 'questions'
-                        ? 'إضافة سؤال جديد للسحب...'
-                        : 'إضافة اسم فريق جديد...'
-                    }
-                    className="flex-1 bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-400 focus:outline-none focus:border-amber-400"
-                  />
-                  <button
-                    onClick={handleAddCustomWheelItem}
-                    className="px-3 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs rounded-xl shadow-md transition-all whitespace-nowrap"
-                  >
-                    إضافة ➕
-                  </button>
-                </div>
+            {/* Custom Input */}
+            {wheelType !== 'codes' && (
+              <div className="flex items-center gap-1.5">
+                <input
+                  type="text"
+                  value={newWheelItemInput}
+                  onChange={e => setNewWheelItemInput(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && handleAddCustomWheelItem()}
+                  placeholder="إضافة عنصر إضافي للعجلة..."
+                  className="flex-1 bg-slate-800 border border-slate-700 rounded-xl px-2.5 py-1.5 text-[11px] text-white placeholder-slate-400 focus:outline-none focus:border-amber-400"
+                />
+                <button
+                  onClick={handleAddCustomWheelItem}
+                  className="px-2.5 py-1.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-[11px] rounded-xl transition-all"
+                >
+                  إضافة ➕
+                </button>
               </div>
             )}
 
-            {/* Current Items List Pills */}
-            <div className="max-h-24 overflow-y-auto p-2 bg-slate-950/60 rounded-xl border border-slate-800 flex flex-wrap gap-1.5 text-[10px]">
-              {wheelItems.map((item, idx) => {
-                const isCustom = customWheelItems.includes(item);
-                return (
-                  <span
-                    key={idx}
-                    className={`px-2 py-1 rounded-lg flex items-center gap-1 ${
-                      isCustom ? 'bg-amber-500/20 border border-amber-500/40 text-amber-300 font-bold' : 'bg-slate-800 text-slate-300'
-                    }`}
-                  >
-                    <span>{item}</span>
-                    {isCustom && (
-                      <button
-                        onClick={() => handleDeleteCustomWheelItem(item)}
-                        className="text-red-400 hover:text-red-300 ml-1"
-                        title="حذف من العجلة"
-                      >
-                        <X className="w-3 h-3" />
-                      </button>
-                    )}
-                  </span>
-                );
-              })}
-            </div>
-
             {/* Wheel Canvas Representation */}
-            <div className="relative w-64 h-64 mx-auto flex items-center justify-center">
+            <div className="relative w-40 h-40 mx-auto flex items-center justify-center">
               <div
-                className="w-full h-full rounded-full border-8 border-amber-500 shadow-2xl flex items-center justify-center transition-all duration-[3500ms] ease-out bg-gradient-to-br from-indigo-900 via-purple-900 to-slate-900"
+                className="w-full h-full rounded-full border-6 border-amber-500 shadow-xl flex items-center justify-center transition-all duration-[3000ms] ease-out bg-gradient-to-br from-indigo-900 via-purple-900 to-slate-900"
                 style={{ transform: `rotate(${wheelRotation}deg)` }}
               >
-                <div className="text-center p-4">
-                  <Sparkles className="w-8 h-8 text-amber-400 mx-auto animate-bounce" />
-                  <p className="text-xs font-bold text-amber-200 mt-2">
-                    {wheelWinner ? `🎉 ${wheelWinner}` : 'اضغط إدارة السحب'}
+                <div className="text-center p-2">
+                  <Sparkles className="w-6 h-6 text-amber-400 mx-auto animate-bounce" />
+                  <p className="text-[11px] font-extrabold text-amber-200 mt-1 line-clamp-2">
+                    {wheelWinner ? `🎉 ${wheelWinner}` : 'اضغط تدوير'}
                   </p>
                 </div>
               </div>
-              <div className="absolute -top-3 w-6 h-6 bg-red-600 clip-triangle shadow-lg z-10 transform rotate-180" />
+              <div className="absolute -top-2.5 w-4 h-4 bg-red-600 clip-triangle shadow z-10 transform rotate-180" />
             </div>
 
             {/* Spin Button */}
             <button
               onClick={handleSpinWheel}
               disabled={wheelIsSpinning}
-              className="w-full py-3 bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-600 hover:to-yellow-600 text-slate-950 font-extrabold rounded-2xl shadow-xl transition-all disabled:opacity-50"
+              className="w-full py-2.5 bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-600 hover:to-yellow-600 text-slate-950 font-black rounded-xl shadow-lg transition-all text-xs disabled:opacity-50"
             >
-              {wheelIsSpinning ? 'جاري دوران العجلة... 🎡' : 'إدارة عجلة الحظ الآن! 🚀'}
+              {wheelIsSpinning ? 'جاري الدوران... 🎡' : 'تدوير العجلة الآن 🚀'}
             </button>
           </div>
         </div>
       )}
 
       {/* ---------------------------------------------------- */}
-      {/* POPUP MODAL: QUICK POINTS ASSIGNER */}
+      {/* POPUP MODAL: RANDOM STUDENT PICKER */}
       {/* ---------------------------------------------------- */}
-      {activeTool === 'points' && (
+      {activeTool === 'picker' && (
         <div className="fixed inset-0 z-[9996] bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 dir-rtl">
-          <div className="bg-slate-900 border border-slate-700 p-6 rounded-3xl shadow-2xl text-white max-w-md w-full space-y-4 relative">
+          <div className="bg-slate-900 border border-slate-700 p-6 rounded-3xl shadow-2xl text-white max-w-md w-full space-y-4 relative text-center">
             <button
               onClick={() => setActiveTool('none')}
               className="absolute top-4 left-4 text-slate-400 hover:text-white p-1 rounded-lg"
@@ -1263,42 +1357,166 @@ export const FloatingTeachingToolsOverlay: React.FC<FloatingTeachingToolsOverlay
               <X className="w-5 h-5" />
             </button>
 
-            <div className="flex items-center gap-3">
-              <div className="p-3 bg-amber-500/20 text-amber-400 rounded-2xl">
-                <Star className="w-6 h-6" />
+            <div className="inline-flex p-3 bg-sky-500/20 text-sky-400 rounded-2xl">
+              <UserCheck className="w-8 h-8" />
+            </div>
+            <h2 className="text-xl font-extrabold">مُنتخِب الطلاب العشوائي (Per-Branch)</h2>
+            <p className="text-xs text-slate-400">اختيار طالب عشوائي من طلاب الفرع الحاضرين بالمعمل حالياً</p>
+
+            <div className="flex items-center justify-between bg-slate-800/80 px-3 py-2 rounded-2xl border border-slate-700/70 text-xs">
+              <div className="flex items-center gap-2 text-slate-300 font-bold">
+                <Users className="w-4 h-4 text-sky-400" />
+                <span>طلاب الفرع الحاضرين: <strong className="text-emerald-400">{liveStudents.length}</strong></span>
               </div>
-              <div>
-                <h2 className="text-lg font-bold">إسناد نقاط تميز فورية للطلاب</h2>
-                <p className="text-xs text-slate-400">إضافة نقاط تحفيزية تدخل في سلم الترتيب العام (Gamification)</p>
+              <button
+                onClick={() => syncBranchStudents(activeBranchId)}
+                disabled={isSyncingStudents}
+                className="px-2.5 py-1 bg-sky-500/20 hover:bg-sky-500/30 text-sky-300 border border-sky-500/40 rounded-xl font-bold flex items-center gap-1.5 transition-all text-[11px]"
+              >
+                <RotateCcw className={`w-3.5 h-3.5 ${isSyncingStudents ? 'animate-spin' : ''}`} />
+                <span>مزامنة الطلاب 🔄</span>
+              </button>
+            </div>
+
+            <div className="p-6 bg-slate-950/70 rounded-2xl border border-slate-800 min-h-[100px] flex items-center justify-center">
+              {pickingStudent ? (
+                <div className="text-2xl font-black text-amber-400 animate-pulse">
+                  {selectedStudentResult || 'جاري الاختيار العشوائي...'}
+                </div>
+              ) : selectedStudentResult ? (
+                <div>
+                  <span className="text-xs text-emerald-400 font-bold block mb-1">وقع الاختيار الفائز على:</span>
+                  <span className="text-xl font-extrabold text-white">{selectedStudentResult}</span>
+                </div>
+              ) : (
+                <span className="text-xs text-slate-400">اضغط على زر الاختيار لبدء السحب العشوائي بين طلاب المعمل</span>
+              )}
+            </div>
+
+            <button
+              onClick={handlePickRandomStudent}
+              disabled={pickingStudent || liveStudents.length === 0}
+              className="w-full py-3 bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-600 hover:to-blue-700 text-slate-950 font-extrabold rounded-2xl shadow-xl transition-all disabled:opacity-50"
+            >
+              {pickingStudent ? 'جاري السحب... 🎲' : 'اختيار طالب عشوائي الآن 🎯'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ---------------------------------------------------- */}
+      {/* POPUP MODAL: QUICK POINTS ASSIGNER (ClassPoint Style) */}
+      {/* ---------------------------------------------------- */}
+      {activeTool === 'points' && (
+        <div className="fixed inset-0 z-[9996] bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-3 dir-rtl">
+          <div className="bg-slate-900 border border-amber-500/50 p-4 rounded-2xl shadow-2xl text-white max-w-md w-full max-h-[82vh] overflow-y-auto space-y-3 relative flex flex-col">
+            <button
+              onClick={() => setActiveTool('none')}
+              className="absolute top-3 left-3 text-slate-400 hover:text-white p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 transition-colors cursor-pointer"
+              title="إغلاق"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            <div className="flex items-center gap-2.5 pr-1">
+              <div className="p-2.5 bg-amber-500/20 text-amber-400 rounded-xl border border-amber-500/40 shadow-inner shrink-0">
+                <Star className="w-5 h-5 animate-pulse" />
+              </div>
+              <div className="min-w-0">
+                <h2 className="text-sm font-black text-amber-300 truncate">منح نقاط التميز - نظام كلاس بوينت</h2>
+                <p className="text-[10px] text-slate-400 truncate">الطلاب الحاضرون والمتصلون بالمعمل والشبكة حالياً</p>
               </div>
             </div>
 
-            <div className="space-y-3">
-              <div>
-                <label className="text-xs text-slate-400 block mb-1">اختر الطالب المستحق:</label>
-                <select
-                  value={selectedTraineeForPoints}
-                  onChange={e => setSelectedTraineeForPoints(e.target.value)}
-                  className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-xs text-white"
-                >
-                  {liveStudents.map(s => (
-                    <option key={s} value={s}>
-                      {s}
-                    </option>
-                  ))}
-                </select>
+            {/* Select All / Deselect All / Reset (تصفير) Bar */}
+            <div className="flex items-center justify-between bg-slate-800/80 px-2.5 py-2 rounded-xl border border-slate-700/70 text-[11px]">
+              <div className="flex items-center gap-1.5 text-slate-300 font-bold">
+                <Users className="w-3.5 h-3.5 text-amber-400" />
+                <span>الحاضرون: <strong className="text-emerald-400">{rawTrainees.length}</strong> | المحدد: <strong className="text-amber-400">{selectedPointStudentIds.length}</strong></span>
               </div>
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const bId = activeBranchId;
+                    localStorage.removeItem(`nagah_locked_attendees_${bId}`);
+                    setRawTrainees([]);
+                    setLiveStudents([]);
+                    setSelectedPointStudentIds([]);
+                    showToast('تم تصفير قائمة الحاضرين بنجاح 🔄', 'info');
+                  }}
+                  className="px-2 py-1 bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 rounded-lg font-bold text-[10px]"
+                  title="تصفير ومسح القائمة الحالية"
+                >
+                  تصفير 🔄
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedPointStudentIds(rawTrainees.map(t => t.id))}
+                  className="px-2 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 rounded-lg font-bold text-[10px]"
+                >
+                  الكل ✅
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedPointStudentIds([])}
+                  className="px-2 py-1 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg text-[10px]"
+                >
+                  إلغاء ❌
+                </button>
+              </div>
+            </div>
 
+            {/* Interactive Trainees Grid */}
+            <div className="max-h-36 overflow-y-auto p-1.5 bg-slate-950/70 rounded-xl border border-slate-800 grid grid-cols-2 gap-1.5">
+              {rawTrainees.length > 0 ? (
+                rawTrainees.map(t => {
+                  const isSelected = selectedPointStudentIds.includes(t.id);
+                  return (
+                    <div
+                      key={t.id}
+                      onClick={() => {
+                        setSelectedPointStudentIds(prev =>
+                          isSelected ? prev.filter(id => id !== t.id) : [...prev, t.id]
+                        );
+                      }}
+                      className={`p-2 rounded-lg border cursor-pointer transition-all flex items-center gap-2 ${
+                        isSelected
+                          ? 'bg-amber-500/20 border-amber-400 shadow ring-1 ring-amber-500/50'
+                          : 'bg-slate-900 border-slate-800 hover:border-slate-700 opacity-75'
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => {}}
+                        className="rounded text-amber-500 focus:ring-0 cursor-pointer w-3.5 h-3.5"
+                      />
+                      <div className="truncate min-w-0">
+                        <div className="text-[11px] font-bold text-white truncate">{t.fullName}</div>
+                        <div className="text-[9px] text-amber-300 font-mono">{t.code || t.id}</div>
+                      </div>
+                    </div>
+                  );
+                })
+              ) : (
+                <div className="col-span-full py-6 text-center text-[11px] text-slate-400">
+                  لا توجد قائمة طلاب نشطة مرتبطة بالمعمل. انقر مزامنة بالأعلى أو اضغط تصفير.
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-2.5">
               <div>
-                <label className="text-xs text-slate-400 block mb-1">مقدار النقاط:</label>
-                <div className="grid grid-cols-4 gap-2">
-                  {[5, 10, 25, 50].map(pt => (
+                <label className="text-[11px] text-slate-400 block mb-1">مقدار النجوم / النقاط الفخرية:</label>
+                <div className="grid grid-cols-5 gap-1.5">
+                  {[2, 5, 10, 25, 50].map(pt => (
                     <button
                       key={pt}
                       type="button"
                       onClick={() => setPointsAmount(pt)}
-                      className={`py-2 rounded-xl text-xs font-bold ${
-                        pointsAmount === pt ? 'bg-amber-500 text-slate-950' : 'bg-slate-800 text-slate-300'
+                      className={`py-1.5 rounded-lg text-[11px] font-bold transition-all ${
+                        pointsAmount === pt ? 'bg-amber-500 text-slate-950 shadow scale-105' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
                       }`}
                     >
                       +{pt} ⭐
@@ -1308,21 +1526,35 @@ export const FloatingTeachingToolsOverlay: React.FC<FloatingTeachingToolsOverlay
               </div>
 
               <div>
-                <label className="text-xs text-slate-400 block mb-1">سبب التميز:</label>
+                <label className="text-[11px] text-slate-400 block mb-1">سبب التميز والتحفيز:</label>
                 <input
                   type="text"
                   value={pointsReason}
                   onChange={e => setPointsReason(e.target.value)}
-                  className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-xs text-white"
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-400"
+                  placeholder="مثال: إجابة نموذجية، سرعة إنجاز التحدي"
                 />
               </div>
 
-              <button
-                onClick={handleAwardPoints}
-                className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-lg transition-all"
-              >
-                منح النقاط والاحتفال 🎉
-              </button>
+              {/* ClassPoint Dual Action Buttons */}
+              <div className="grid grid-cols-2 gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => handleAwardPoints(false)}
+                  disabled={selectedPointStudentIds.length === 0}
+                  className="py-2.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-black text-[11px] rounded-xl shadow transition-all disabled:opacity-50 cursor-pointer"
+                >
+                  منح المحددين ({selectedPointStudentIds.length}) ⭐
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleAwardPoints(true)}
+                  disabled={rawTrainees.length === 0}
+                  className="py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-black text-[11px] rounded-xl shadow transition-all disabled:opacity-50 cursor-pointer"
+                >
+                  منح للجميع دفعة واحدة 🚀
+                </button>
+              </div>
             </div>
           </div>
         </div>

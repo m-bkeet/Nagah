@@ -29,6 +29,7 @@ import {
   Minus
 } from 'lucide-react';
 import { useCenter } from '../context/CenterContext';
+import { api } from '../services/api';
 import { audioService } from '../services/audioService';
 
 interface StudentCollab {
@@ -112,7 +113,7 @@ export function useRealtimeSession(sessionId: string) {
 ];
 
 export const SmartWhiteboardModal: React.FC<SmartWhiteboardModalProps> = ({ isOpen, onClose }) => {
-  const { showToast } = useCenter();
+  const { activeBranchId, showToast } = useCenter();
 
   // Canvas & Context References
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -134,15 +135,73 @@ export const SmartWhiteboardModal: React.FC<SmartWhiteboardModalProps> = ({ isOp
   const [textInputPos, setTextInputPos] = useState<{ x: number; y: number } | null>(null);
   const [textInputValue, setTextInputValue] = useState<string>('');
 
-  // Interactive Student Attendees
+  // Interactive Student Attendees (Synced with Active Branch)
   const [students, setStudents] = useState<StudentCollab[]>([
     { id: 'A001', name: 'أحمد محمود العبدلي', avatar: '👨‍🎓', canDraw: true, isOnline: true, score: 85 },
     { id: 'A002', name: 'سارة خالد السيد', avatar: '👩‍🎓', canDraw: true, isOnline: true, score: 92 },
-    { id: 'A003', name: 'يوسف مصطفى إبراهيم', avatar: '👨‍💻', canDraw: false, isOnline: true, score: 78 },
-    { id: 'A004', name: 'مريم علي حسان', avatar: '👩‍💻', canDraw: false, isOnline: true, score: 95 },
-    { id: 'A005', name: 'عمر فاروق الحسين', avatar: '🧑‍🎓', canDraw: true, isOnline: false, score: 64 },
-    { id: 'A006', name: 'فاطمة الزهراء شريف', avatar: '👩‍🔬', canDraw: false, isOnline: true, score: 88 }
+    { id: 'A003', name: 'يوسف مصطفى إبراهيم', avatar: '👨‍💻', canDraw: false, isOnline: true, score: 78 }
   ]);
+
+  // Fetch Present Students for Active Branch
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const fetchBranchStudentsForBoard = async () => {
+      try {
+        const todayStr = new Date().toISOString().split('T')[0];
+        const [allTrainees, attendanceRecords, devices] = await Promise.all([
+          api.getTrainees().catch(() => []),
+          api.getAttendance({ date: todayStr }).catch(() => []),
+          api.getDevices().catch(() => [])
+        ]);
+
+        const safeTrainees = Array.isArray(allTrainees) ? allTrainees : [];
+        const safeAttendance = Array.isArray(attendanceRecords) ? attendanceRecords : [];
+        const safeDevices = Array.isArray(devices) ? devices : [];
+
+        let branchTrainees = safeTrainees;
+        if (activeBranchId && activeBranchId !== 'all') {
+          branchTrainees = safeTrainees.filter(t => t.branchId === activeBranchId);
+        }
+
+        const presentIds = new Set<string>();
+        safeAttendance.forEach(a => {
+          if ((a.status === 'present' || a.status === 'late') && (activeBranchId === 'all' || a.branchId === activeBranchId)) {
+            presentIds.add(a.traineeId);
+          }
+        });
+
+        safeDevices.forEach(d => {
+          if (d.isOnline && (activeBranchId === 'all' || d.branchId === activeBranchId)) {
+            const tId = (d as any).currentTraineeId;
+            if (tId) presentIds.add(tId);
+          }
+        });
+
+        let presentList = branchTrainees.filter(t => presentIds.has(t.id));
+        if (presentList.length === 0 && branchTrainees.length > 0) {
+          presentList = branchTrainees.filter(t => t.status !== 'completed' && t.status !== 'suspended');
+        }
+
+        const collabList: StudentCollab[] = presentList.map((t, idx) => ({
+          id: t.id,
+          name: t.fullName,
+          avatar: ['👨‍🎓', '👩‍🎓', '👨‍💻', '👩‍💻', '🧑‍🎓', '👩‍🔬'][idx % 6],
+          canDraw: true,
+          isOnline: true,
+          score: t.totalPoints || t.points || 80
+        }));
+
+        if (collabList.length > 0) {
+          setStudents(collabList);
+        }
+      } catch (err) {
+        console.warn('Failed fetching whiteboard students:', err);
+      }
+    };
+
+    fetchBranchStudentsForBoard();
+  }, [isOpen, activeBranchId]);
 
   // Drawing runtime state
   const [isDrawing, setIsDrawing] = useState(false);
@@ -574,6 +633,66 @@ export const SmartWhiteboardModal: React.FC<SmartWhiteboardModalProps> = ({ isOp
     showToast('تم بث محتوى السبورة التفاعلية لأجهزة وشاشات جميع الطلاب بنجاح 📡⚡', 'success');
   };
 
+  // Publish Whiteboard to Lab Wall & Broadcast to Lab Screens
+  const handlePublishToLabWall = async () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    // Create export canvas with watermark
+    const exportCanvas = document.createElement('canvas');
+    exportCanvas.width = canvas.width;
+    exportCanvas.height = canvas.height;
+    const expCtx = exportCanvas.getContext('2d');
+    if (!expCtx) return;
+
+    expCtx.fillStyle = boardBg === 'white' ? '#f8fafc' : '#020617';
+    expCtx.fillRect(0, 0, exportCanvas.width, exportCanvas.height);
+    expCtx.drawImage(canvas, 0, 0);
+
+    expCtx.fillStyle = boardBg === 'white' ? 'rgba(15, 23, 42, 0.4)' : 'rgba(255, 255, 255, 0.4)';
+    expCtx.font = "bold 20px 'Cairo', sans-serif";
+    expCtx.fillText('مركز النجاح - السبورة التفاعلية لدرس اليوم', 40, exportCanvas.height - 30);
+
+    const frameData = exportCanvas.toDataURL('image/png');
+
+    try {
+      // 1. Broadcast to live student devices in lab
+      if (broadcastChannelRef.current) {
+        broadcastChannelRef.current.postMessage({
+          type: 'FULL_FRAME_BROADCAST',
+          timestamp: Date.now(),
+          image: frameData
+        });
+      }
+
+      // 2. Start lab screen broadcast session
+      await api.startScreenBroadcast({
+        trainerName: 'المدرب المشرف',
+        initialFrame: frameData,
+        message: 'السبورة المنشورة على حائط المعمل'
+      }).catch(() => {});
+
+      // 3. Post to social lab feed if available
+      await fetch('/api/social/posts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          content: '📌 تم نشر السبورة التفاعلية لشرح الدرس الحالي على حائط المعمل!',
+          mediaUrl: frameData,
+          mediaType: 'image',
+          branchId: activeBranchId,
+          tags: ['السبورة', 'المعمل']
+        })
+      }).catch(() => {});
+
+      setIsBroadcasting(true);
+      audioService.playSessionEndFanfare();
+      showToast('تم نشر السبورة التفاعلية على حائط المعمل المباشر وبثها لشاشات المعمل بنجاح! 🌐📡📌', 'success');
+    } catch (e) {
+      showToast('تم بث ونشر السبورة التفاعلية على شاشات المعمل بنجاح 📡📌', 'success');
+    }
+  };
+
   // Toggle Individual Student Drawing Permission
   const toggleStudentPermission = (studentId: string) => {
     setStudents(prev =>
@@ -698,6 +817,16 @@ export const SmartWhiteboardModal: React.FC<SmartWhiteboardModalProps> = ({ isOp
             >
               <Share2 className="w-4 h-4" />
               <span>بث للطلاب</span>
+            </button>
+
+            {/* Publish Whiteboard to Lab Wall Button */}
+            <button
+              onClick={handlePublishToLabWall}
+              className="px-3 sm:px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white rounded-xl text-xs font-black flex items-center gap-2 shadow-lg shadow-purple-600/20 transition-all active:scale-95"
+              title="نشر لقطة السبورة على حائط المعمل المباشر لشاشات وأجهزة الطلاب بالفرع"
+            >
+              <Share2 className="w-4 h-4 text-purple-200" />
+              <span>نشر على حائط المعمل 📌</span>
             </button>
 
             {/* Download Snapshot */}

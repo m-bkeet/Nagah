@@ -347,20 +347,19 @@ export const FloatingChatButton: React.FC = () => {
         </div>
       )}
 
-      {/* Floating 3D Transparent Pulsing Gold Button */}
+      {/* Floating Lightweight 3D Glowing Chat Icon Button */}
       <div className="relative flex flex-col items-center">
-        <div className="absolute inset-0 rounded-2xl bg-amber-400/20 blur-xl animate-ping pointer-events-none"></div>
+        <div className="absolute inset-0 rounded-full bg-amber-400/30 blur-xl animate-ping pointer-events-none"></div>
         <button
           type="button"
           onClick={() => setIsOpen(!isOpen)}
-          className="relative z-10 w-14 h-14 rounded-2xl bg-transparent hover:bg-amber-500/25 text-amber-300 shadow-[0_0_25px_rgba(245,158,11,0.5),inset_0_2px_4px_rgba(255,255,255,0.4)] border-2 border-amber-400/80 flex items-center justify-center hover:scale-110 active:scale-95 transition-all cursor-pointer group backdrop-blur-md animate-pulse"
+          className="relative z-10 w-11 h-11 text-amber-400 hover:text-amber-300 drop-shadow-[0_0_12px_rgba(245,158,11,0.9)] flex items-center justify-center hover:scale-125 active:scale-95 transition-all cursor-pointer group animate-pulse"
           title="دردشة سريعة وخدمات الدعم الذكي"
         >
-          <div className="w-full h-full rounded-xl bg-gradient-to-br from-amber-500/20 to-amber-700/20 backdrop-blur-md flex items-center justify-center text-amber-300 group-hover:text-white transition-colors">
-            <MessageCircle className="w-7 h-7 filter drop-shadow-[0_0_8px_rgba(245,158,11,0.9)]" />
-          </div>
+          <MessageCircle className="w-6 h-6 group-hover:scale-110 transition-transform" />
+          
           {/* Notification Badge */}
-          <span className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-amber-500 text-slate-950 rounded-full text-[10px] font-black flex items-center justify-center shadow-lg border border-amber-200 animate-bounce">
+          <span className="absolute top-0 right-0 w-4 h-4 bg-amber-500 text-slate-950 rounded-full text-[9px] font-black flex items-center justify-center shadow-md border border-amber-200 animate-bounce">
             AI
           </span>
         </button>

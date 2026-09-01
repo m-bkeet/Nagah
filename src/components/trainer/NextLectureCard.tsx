@@ -15,6 +15,7 @@ import { sessionEventsService } from '../../services/sessionEventsService';
 import { SessionCelebrationOverlay } from '../SessionCelebrationOverlay';
 import { cloudDb } from '../../services/cloudDatabase';
 import { audioService } from '../../services/audioService';
+import { formatTimeAMPM } from '../../utils/timeFormat';
 
 interface NextLectureCardProps {
   trainer: Trainer;
@@ -189,7 +190,9 @@ export const NextLectureCard: React.FC<NextLectureCardProps> = ({
   const course = courses.find(c => c.id === nextGroup.courseId);
   const locationName = nextGroup.hallName || nextGroup.roomName || 'معمل الحاسب الآلي 1 (Lab A)';
   const daysStr = (nextGroup.days || nextGroup.scheduleDays || ['السبت', 'الثلاثاء']).join(' - ');
-  const timeStr = nextGroup.timeSlot || `${nextGroup.startTime || '04:00 م'} - ${nextGroup.endTime || '06:00 م'}`;
+  const timeStr = nextGroup.timeSlot 
+    ? nextGroup.timeSlot 
+    : `${formatTimeAMPM(nextGroup.startTime || '16:00')} - ${formatTimeAMPM(nextGroup.endTime || '18:00')}`;
 
   return (
     <>

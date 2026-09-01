@@ -52,6 +52,7 @@ import { AdvancedExamMaker } from '../components/trainer/AdvancedExamMaker';
 import { TrainerLanguageLabView } from '../components/languageLab/TrainerLanguageLabView';
 import { TrainerGroupsManager } from '../components/trainer/TrainerGroupsManager';
 import { TrainerContentPlanner } from '../components/trainer/TrainerContentPlanner';
+import { isTrainerSessionActive, setTrainerLabSessionState } from '../utils/labSecurity';
 
 interface PublicTrainerPortalViewProps {
   onBack?: () => void;
@@ -95,14 +96,31 @@ export const PublicTrainerPortalView: React.FC<PublicTrainerPortalViewProps> = (
   const [newName, setNewName] = useState('');
   const [isUpdatingCredentials, setIsUpdatingCredentials] = useState(false);
 
+  const [isLabActive, setIsLabActive] = useState<boolean>(() => isTrainerSessionActive(trainer?.branchId || 'b1'));
+
   useEffect(() => {
     if (trainer) {
       setNewPhone(trainer.phone || '');
       setNewEmail(trainer.email || '');
       setNewPassword(trainer.portalPassword || '');
       setNewName(trainer.name || '');
+      // Check initial lab status and auto-activate if trainer is logged in
+      const currentActive = isTrainerSessionActive(trainer.branchId || 'b1');
+      setIsLabActive(currentActive);
     }
   }, [trainer]);
+
+  const handleToggleLabSession = () => {
+    if (!trainer) return;
+    const nextState = !isLabActive;
+    setTrainerLabSessionState(trainer.branchId || 'b1', trainer.name, nextState, 'المعمل الرئيسي');
+    setIsLabActive(nextState);
+    if (nextState) {
+      showToast('🟢 تم فتح المعمل وتفعيل القاعة وتواجد المدرب بالفرع بنجاح! يمكن للطلاب الدخول وتسجيل الحضور الآن.', 'success');
+    } else {
+      showToast('🔴 تم إغلاق المعمل وقفل الحضور وحظر الدخول الخارجي.', 'info');
+    }
+  };
 
   const handleUpdateCredentials = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -680,6 +698,64 @@ export const PublicTrainerPortalView: React.FC<PublicTrainerPortalViewProps> = (
         ) : (
           /* LOGGED IN TRAINER VIEW */
           <div className="space-y-6 animate-fade-in">
+
+            {/* TRAINER LAB PRESENCE & SECURITY CONTROL BAR */}
+            <div className={`p-4 md:p-5 rounded-3xl border-2 transition-all shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4 ${
+              isLabActive
+                ? 'bg-gradient-to-r from-emerald-950/80 via-slate-900 to-slate-950 border-emerald-500/50 shadow-emerald-950/30'
+                : 'bg-gradient-to-r from-rose-950/80 via-slate-900 to-slate-950 border-rose-500/50 shadow-rose-950/30'
+            }`}>
+              <div className="flex items-center gap-3.5">
+                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-black text-xl shrink-0 shadow-lg ${
+                  isLabActive
+                    ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 animate-pulse'
+                    : 'bg-rose-500/20 text-rose-400 border border-rose-500/40'
+                }`}>
+                  {isLabActive ? '🟢' : '🔒'}
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-sm md:text-base font-black text-slate-100">
+                      محيط أمان المعمل وحالة تواجد المدرب بالفرع
+                    </h3>
+                    <span className={`text-[10px] font-black px-2.5 py-0.5 rounded-full border ${
+                      isLabActive
+                        ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                        : 'bg-rose-500/20 text-rose-300 border-rose-500/40'
+                    }`}>
+                      {isLabActive ? 'المعمل مفتوح والحضور مفعل 🟢' : 'المعمل مغلق وقفل الحضور موجه 🔴'}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-300 mt-1 leading-relaxed">
+                    {isLabActive
+                      ? 'جهاز المدرب مفتوح متصل بالقاعة بالفرع. يستطيع الطلاب الآن تسجيل الحضور ودخول أجهزة المعمل والكشك بنجاح.'
+                      : 'حماية وأمان: يمنع دخول أي متدرب أو فتح المعمل أو تسجيل الحضور تلقائياً حتى يقوم المدرب بفتح المعمل من جهازه بالفرع.'}
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleToggleLabSession}
+                className={`px-5 py-3 rounded-2xl font-black text-xs md:text-sm flex items-center gap-2 transition-all shrink-0 shadow-lg ${
+                  isLabActive
+                    ? 'bg-rose-600 hover:bg-rose-500 text-white shadow-rose-600/30 active:scale-95'
+                    : 'bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 shadow-emerald-500/30 active:scale-95'
+                }`}
+              >
+                {isLabActive ? (
+                  <>
+                    <Lock className="w-4 h-4" />
+                    <span>إغلاق المعمل وحظر الدخول 🔒</span>
+                  </>
+                ) : (
+                  <>
+                    <Unlock className="w-4 h-4" />
+                    <span>فتح المعمل وتفعيل الحضور القاعي 🔓</span>
+                  </>
+                )}
+              </button>
+            </div>
             
             {/* Trainer Profile Ribbon */}
             <div className="bg-slate-900/80 border border-slate-800 rounded-3xl p-5 shadow-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">

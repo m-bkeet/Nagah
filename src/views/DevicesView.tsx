@@ -65,9 +65,10 @@ import {
 } from 'lucide-react';
 import { Device, DeviceAuditEntry, LabAssistanceSession } from '../types';
 import { getPublicKioskUrl } from '../utils/urlHelper';
+import { verifyStudentLabEntryAllowed } from '../utils/labSecurity';
 
 export const DevicesView: React.FC = () => {
-  const { activeBranchId, branches, showToast, refreshKey } = useCenter();
+  const { activeBranchId, branches, showToast, refreshKey, isTrainerLabActive, toggleTrainerLabSession } = useCenter();
   const { user } = useAuth();
   const [devices, setDevices] = useState<Device[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -398,6 +399,14 @@ export const DevicesView: React.FC = () => {
   const handleSimulateStudentLogin = async () => {
     if (!simStudentCode) {
       showToast('يرجى إدخال كود الطالب (مثال: A001)', 'error');
+      return;
+    }
+
+    // Verify trainer lab presence condition
+    const secCheck = verifyStudentLabEntryAllowed(activeBranchId);
+    if (!secCheck.allowed) {
+      setSimLoginResult({ error: secCheck.reasonArabic });
+      showToast(secCheck.reasonArabic, 'error');
       return;
     }
 

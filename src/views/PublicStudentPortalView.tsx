@@ -10,6 +10,7 @@ import { sessionEventsService, SessionEvent } from '../services/sessionEventsSer
 import { SessionCelebrationOverlay } from '../components/SessionCelebrationOverlay';
 import { AudioAutoplayUnlockBanner } from '../components/AudioAutoplayUnlockBanner';
 import { audioService } from '../services/audioService';
+import { isTrainerSessionActive } from '../utils/labSecurity';
 
 import React, { useState, useRef, useEffect } from 'react';
 import { AIExplainModal } from '../components/AIExplainModal';
@@ -511,6 +512,19 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
 
   // Tabs inside Student Portal (Default to 'timeline' for Facebook profile feel)
   const [activeTab, setActiveTab] = useState<'timeline' | 'submit' | 'history' | 'badges' | 'schedule' | 'certificates' | 'profile' | 'language_lab' | 'finance'>('timeline');
+  const [isTrainerLabSessionActive, setIsTrainerLabSessionActive] = useState<boolean>(() => isTrainerSessionActive(student?.branchId));
+
+  useEffect(() => {
+    const update = () => setIsTrainerLabSessionActive(isTrainerSessionActive(student?.branchId));
+    update();
+    window.addEventListener('nagah_lab_session_changed', update);
+    window.addEventListener('storage', update);
+    return () => {
+      window.removeEventListener('nagah_lab_session_changed', update);
+      window.removeEventListener('storage', update);
+    };
+  }, [student?.branchId]);
+
   const [myPayments, setMyPayments] = useState<any[]>([]);
 
   // Security and Password configuration states
@@ -1798,6 +1812,31 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
                 </div>
               </div>
             )}
+
+            {/* TRAINER PRESENCE & LAB STATUS BANNER FOR STUDENTS */}
+            <div className={`p-3.5 sm:p-4 rounded-2xl border text-xs flex flex-col sm:flex-row items-center justify-between gap-3 shadow-lg ${
+              isTrainerLabSessionActive
+                ? 'bg-emerald-950/40 border-emerald-500/40 text-emerald-200'
+                : 'bg-rose-950/40 border-rose-500/40 text-rose-200'
+            }`}>
+              <div className="flex items-center gap-3 text-center sm:text-right">
+                <div className={`w-3 h-3 rounded-full shrink-0 ${
+                  isTrainerLabSessionActive ? 'bg-emerald-400 animate-ping' : 'bg-rose-500'
+                }`} />
+                <div>
+                  <span className="font-black text-sm block">
+                    {isTrainerLabSessionActive
+                      ? '🟢 معمل القاعة مفتوح بالفرع (المدرب متواجد بجهازه المباشر بالقاعة)'
+                      : '🔴 المعمل مغلق حالياً بفرع المركز (في انتظار فتح المحاضر المشرف لجهازه بالقاعة)'}
+                  </span>
+                  <span className="text-[11px] opacity-80 block mt-0.5">
+                    {isTrainerLabSessionActive
+                      ? 'تم التحقق من شبكة المعمل وتواجد المحاضر. يمكنك استخدام معمل اللغات وتسجيل الحضور المباشر.'
+                      : 'حماية وأمان: يمنع فتح المعمل أو تسجيل الحضور تلقائياً من خارج القاعة حتى يبدأ المحاضر الجلسة.'}
+                  </span>
+                </div>
+              </div>
+            </div>
 
             {/* Facebook-style Mobile Navigation Bar */}
             <div className="bg-slate-900 border border-slate-800 p-2 rounded-2xl shadow-lg grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2">
@@ -3129,6 +3168,17 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
             {/* TAB: AI LANGUAGE LAB (STUDENT EXPERIENCE) */}
             {activeTab === 'language_lab' && student && (
               <div className="animate-in fade-in duration-300">
+                {!isTrainerLabSessionActive && (
+                  <div className="p-6 bg-rose-950/80 border-2 border-rose-500/60 rounded-3xl text-center space-y-3 mb-6 shadow-2xl animate-pulse">
+                    <div className="w-14 h-14 bg-rose-500/20 text-rose-400 rounded-2xl border border-rose-500/40 flex items-center justify-center text-2xl mx-auto">
+                      ⛔
+                    </div>
+                    <h3 className="text-base font-black text-rose-100">دخول المعمل محظور حالياً - جاري انتظار فتح المدرب للجلسة</h3>
+                    <p className="text-xs text-rose-200 max-w-xl mx-auto leading-relaxed">
+                      وفقاً لمعايير الأمان المتبعة في مركز النجاح، لا يمكنك إجراء ممارسة المعمل أو تسجيل الحضور تلقائياً من المنزل حتى يقوم المحاضر المشرف بفتح برنامجه وجهازه المباشر بقاعة الفرع.
+                    </p>
+                  </div>
+                )}
                 <StudentLanguageLab trainee={student as any} />
               </div>
             )}

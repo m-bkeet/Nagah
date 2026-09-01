@@ -10,6 +10,7 @@ import {
   isPaymentReminderWindow,
   isTraineeUnpaid
 } from '../utils/paymentUtils';
+import { verifyStudentLabEntryAllowed } from '../utils/labSecurity';
 import {
   Monitor,
   Globe,
@@ -569,6 +570,14 @@ export const StudentKioskView: React.FC = () => {
     setIsLoggingIn(true);
     setLoginError('');
     setLoginMessage('');
+
+    // Strict Lab Security Verification
+    const securityCheck = verifyStudentLabEntryAllowed();
+    if (!securityCheck.allowed) {
+      setLoginError(securityCheck.reasonArabic);
+      setIsLoggingIn(false);
+      return;
+    }
 
     try {
       const res = await api.studentCodeLogin({

@@ -3,6 +3,7 @@ import { useCenter } from '../context/CenterContext';
 import { api } from '../services/api';
 import { cloudDb } from '../services/cloudDatabase';
 import { GoogleMeetService } from '../services/googleMeet';
+import { formatTimeAMPM } from '../utils/timeFormat';
 import {
   Users2,
   Plus,
@@ -466,7 +467,7 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ onNavigate }) => {
     const course = courses.find(c => c.id === g.courseId);
     const trainer = trainers.find(tr => tr.id === g.trainerId);
     const daysStr = (g.scheduleDays || g.days)?.join(' - ') || 'السبت - الثلاثاء';
-    const timeStr = `${g.startTime || '16:00'} إلى ${g.endTime || '18:00'}`;
+    const timeStr = `${formatTimeAMPM(g.startTime || '16:00')} إلى ${formatTimeAMPM(g.endTime || '18:00')}`;
 
     const text = `🎓 *تفاصيل المجموعة التدريبية - مركز النجاح*\n` +
       `📌 *المجموعة:* ${g.name}\n` +
@@ -916,7 +917,7 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ onNavigate }) => {
                         التوقيت:
                       </span>
                       <span className="font-mono font-bold text-slate-200">
-                        {g.startTime || '16:00'} إلى {g.endTime || '18:00'}
+                        {formatTimeAMPM(g.startTime || '16:00')} إلى {formatTimeAMPM(g.endTime || '18:00')}
                       </span>
                     </div>
 
@@ -2492,7 +2493,7 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ onNavigate }) => {
                 </div>
                 <div>
                   <span className="text-slate-500 block">المواعيد والأيام:</span>
-                  <strong className="text-slate-900">{(activeGroup.scheduleDays || activeGroup.days)?.join(' - ')} ({activeGroup.startTime}-{activeGroup.endTime})</strong>
+                  <strong className="text-slate-900">{(activeGroup.scheduleDays || activeGroup.days)?.join(' - ')} ({formatTimeAMPM(activeGroup.startTime || '16:00')} - {formatTimeAMPM(activeGroup.endTime || '18:00')})</strong>
                 </div>
               </div>
 
