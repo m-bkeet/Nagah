@@ -80,6 +80,36 @@ export async function hydrateAllFromSupabase(): Promise<number> {
       }
 
       console.log(`[Hydration] Successfully loaded ${data.length} documents from Supabase public.collections across ${Object.keys(grouped).length} collections.`);
+      
+      // Auto-Seed: If Supabase is completely empty, upload local data to it
+      if (data.length === 0) {
+        console.log('[Hydration] Supabase is empty. Seeding from local memory data...');
+        const inserts = [];
+        for (const [cName, cItems] of Object.entries(memData)) {
+          if (Array.isArray(cItems) && cItems.length > 0) {
+            for (const item of cItems) {
+              if (item && item.id) {
+                inserts.push({
+                  collection_name: cName,
+                  id: item.id,
+                  data: item,
+                  updated_at: new Date().toISOString()
+                });
+              }
+            }
+          }
+        }
+        
+        if (inserts.length > 0) {
+          const chunkSize = 500;
+          for (let i = 0; i < inserts.length; i += chunkSize) {
+            const chunk = inserts.slice(i, i + chunkSize);
+            const { error: seedError } = await supabaseClient.from('collections').insert(chunk);
+            if (seedError) console.error('[Hydration] Error seeding Supabase:', seedError);
+            else console.log(`[Hydration] Seeded chunk of ${chunk.length} items.`);
+          }
+        }
+      }
       return data.length;
     }
   } catch (err: any) {
@@ -112,9 +142,14 @@ function createRepo<T extends { id: string }>(key: string) {
               ...(row.data || {})
             })) as T[];
 
-            // Keep in-memory store in sync
             const memData = db.getData() as any;
             if (memData) {
+              // If Supabase is empty but local memory has data, DO NOT WIPE LOCAL DATA!
+              // Instead, we should probably return local data so it doesn't appear empty.
+              if (items.length === 0 && memData[key] && memData[key].length > 0) {
+                console.log(`[DataLayer] Supabase collection ${key} is empty, but local data has ${memData[key].length}. Using local data as fallback.`);
+                return memData[key] as T[];
+              }
               memData[key] = items;
             }
 

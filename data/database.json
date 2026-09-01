@@ -101,7 +101,7 @@
       "status": "active",
       "address": "",
       "groupId": "grp-1787544071821",
-      "ranking": 11,
+      "ranking": 28,
       "branchId": "branch-1",
       "courseId": "course-1787347508908",
       "fullName": "Ù…Ø­Ù…Ø¯ Ø¹Ø§Ø¯Ù„ Ø§Ø­Ù…Ø¯ Ù…Ø­Ù…Ø¯",
@@ -144,7 +144,7 @@
       "status": "active",
       "address": "",
       "groupId": "grp-1787431825818",
-      "ranking": 12,
+      "ranking": 24,
       "branchId": "branch-1",
       "courseId": "course-1787347508908",
       "fullName": "Ø±Ù…Ø¶Ø§Ù† ÙˆØ§Ø¦Ù„ Ù…Ù‡Ø¯ÙŠ Ø§Ù„Ø®Ø¶Ø±Ø§ÙˆÙŠ",
@@ -187,7 +187,7 @@
       "status": "active",
       "address": "",
       "groupId": "grp-1787431825818",
-      "ranking": 13,
+      "ranking": 22,
       "branchId": "branch-1",
       "courseId": "course-1787347508908",
       "fullName": "Ø§Ù†Ø³ Ù…Ø­Ù…Ø¯ ÙØªØ­ÙŠ Ù…Ø¨Ø±ÙˆÙƒ",
@@ -252,8 +252,7 @@
       "discountAmount": 0,
       "remainingAmount": 200,
       "registrationDate": "2026-08-28",
-      "dataValidationStatus": "verified",
-      "ranking": 14
+      "dataValidationStatus": "verified"
     },
     {
       "id": "trainee-1787959178130",
@@ -289,8 +288,7 @@
       "discountAmount": 0,
       "remainingAmount": 200,
       "registrationDate": "2026-08-28",
-      "dataValidationStatus": "verified",
-      "ranking": 15
+      "dataValidationStatus": "verified"
     },
     {
       "id": "trainee-1787541849209-pmfbt",
@@ -304,7 +302,7 @@
       "status": "active",
       "address": "",
       "groupId": "grp-1787350487970",
-      "ranking": 16,
+      "ranking": 4,
       "branchId": "branch-2",
       "courseId": "course-1787347401956",
       "fullName": "Ø£ØºØ§Ø¨ÙŠ Ø¨ÙŠÙ…Ù† Ø¹Ø²Øª",
@@ -347,7 +345,7 @@
       "status": "active",
       "address": "",
       "groupId": "grp-1787544591647",
-      "ranking": 17,
+      "ranking": 33,
       "branchId": "branch-1",
       "courseId": "crs-1787427970903",
       "fullName": "Ø¢ÙŠÙ‡ Ù…Ø­Ø³Ù† Ù…Ø­Ù…Ø¯ ÙØ±Ø­Ø§Øª",
@@ -420,8 +418,7 @@
       "updatedByUserId": "user-admin",
       "registrationDate": "2026-08-25",
       "updatedByUserName": "Ù…Ø¯ÙŠØ± Ø¹Ø§Ù… Ø§Ù„Ù†Ø¸Ø§Ù…",
-      "dataValidationStatus": "needs_review",
-      "ranking": 18
+      "dataValidationStatus": "needs_review"
     },
     {
       "id": "trainee-1787543652693-cz0n",
@@ -435,7 +432,7 @@
       "status": "active",
       "address": "",
       "groupId": "grp-1787350487970",
-      "ranking": 19,
+      "ranking": 36,
       "branchId": "branch-1",
       "courseId": "course-1787347401956",
       "fullName": "Ù…Ø±ÙŠÙ… Ø±Ù…Ø³ÙŠØ³ ØµØ¨Ø±ÙŠ Ù…Ø±Ø³Ø§Ù„",
@@ -501,8 +498,7 @@
       "discountAmount": 0,
       "remainingAmount": 200,
       "registrationDate": "2026-08-28",
-      "dataValidationStatus": "verified",
-      "ranking": 20
+      "dataValidationStatus": "verified"
     },
     {
       "id": "trainee-1787541849209-vuvxz",
@@ -516,7 +512,7 @@
       "status": "active",
       "address": "",
       "groupId": "grp-1787350487970",
-      "ranking": 7,
+      "ranking": 11,
       "branchId": "branch-1",
       "courseId": "course-1787347401956",
       "fullName": "Ø´ÙŠÙ… Ø­Ø§Ù…Ø¯ Ø§Ø­Ù…Ø¯ Ø§Ù„Ø³ÙŠØ¯",
@@ -660,7 +656,7 @@
       "status": "active",
       "address": "",
       "groupId": "grp-1787431608023",
-      "ranking": 21,
+      "ranking": 17,
       "branchId": "branch-1",
       "courseId": "course-1787347462419",
       "fullName": "Ù…ØµØ·ÙÙ‰ Ù…Ø­Ù…ÙˆØ¯ Ø§Ø­Ù…Ø¯ Ø®Ù„Ù",
@@ -703,7 +699,7 @@
       "status": "active",
       "address": "",
       "groupId": "grp-1787358828709",
-      "ranking": 22,
+      "ranking": 31,
       "branchId": "branch-1",
       "courseId": "course-1787347569318",
       "fullName": "Ù…ÙƒØ§Ø±ÙŠÙˆØ³ Ø¨ÙŠØ´ÙˆÙŠ Ù†Ø¨ÙŠÙ„ ÙƒØ±Ù…",
@@ -752,7 +748,7 @@
       "status": "active",
       "address": "",
       "groupId": "grp-1787351870532",
-      "ranking": 23,
+      "ranking": 15,
       "branchId": "branch-1",
       "courseId": "course-1787347401956",
       "fullName": "Ù‡Ù„Ø§ Ù…Ø­Ù…Ø¯ ÙØªØ­ÙŠ ÙŠØ­ÙŠÙŠ",
@@ -825,8 +821,7 @@
       "updatedByUserId": "u-admin",
       "registrationDate": "2026-08-26",
       "updatedByUserName": "Ø§Ù„Ù…Ø¯ÙŠØ± Ø§Ù„Ø¹Ø§Ù… (Super Admin)",
-      "dataValidationStatus": "needs_review",
-      "ranking": 4
+      "dataValidationStatus": "needs_review"
     },
     {
       "id": "trainee-1787863726447",
@@ -862,8 +857,7 @@
       "discountAmount": 0,
       "remainingAmount": 200,
       "registrationDate": "2026-08-27",
-      "dataValidationStatus": "verified",
-      "ranking": 24
+      "dataValidationStatus": "verified"
     },
     {
       "id": "trainee-1787541849209-0f0b4",
@@ -877,7 +871,7 @@
       "status": "active",
       "address": "",
       "groupId": "grp-1787432103884",
-      "ranking": 25,
+      "ranking": 14,
       "branchId": "branch-2",
       "courseId": "course-1787347401956",
       "fullName": "Ù…Ø§Ø±ÙŠÙ†Ø§ Ø¹Ù…Ø§Ø¯ Ø«Ø±ÙˆØª Ø³Ù„ÙŠÙ…",
@@ -969,7 +963,7 @@
       "status": "active",
       "address": "",
       "groupId": "grp-1787544071821",
-      "ranking": 26,
+      "ranking": 29,
       "branchId": "branch-1",
       "courseId": "course-1787347508908",
       "fullName": "Ù…Ø­Ù…Ø¯ Ù…Ø­Ù…ÙˆØ¯ Ø¹Ø¨Ø¯Ø§Ù„Ø¹Ø²ÙŠØ² Ù…Ø­Ù…Ø¯",
@@ -1034,8 +1028,7 @@
       "discountAmount": 0,
       "remainingAmount": 200,
       "registrationDate": "2026-08-26",
-      "dataValidationStatus": "verified",
-      "ranking": 27
+      "dataValidationStatus": "verified"
     },
     {
       "id": "trainee-1787910708566",
@@ -1071,8 +1064,7 @@
       "discountAmount": 0,
       "remainingAmount": 200,
       "registrationDate": "2026-08-28",
-      "dataValidationStatus": "verified",
-      "ranking": 28
+      "dataValidationStatus": "verified"
     },
     {
       "id": "trainee-1787541849209-v7dn1",
@@ -1086,7 +1078,7 @@
       "status": "active",
       "address": "",
       "groupId": "grp-1787350487970",
-      "ranking": 29,
+      "ranking": 12,
       "branchId": "branch-1",
       "courseId": "course-1787347401956",
       "fullName": "ÙƒØ§Ø±Ø§Ø³ Ø¨ÙŠØ´ÙˆÙŠ Ù†Ø¨ÙŠÙ„ ÙƒØ±Ù…",
@@ -1157,8 +1149,7 @@
       "discountAmount": 0,
       "remainingAmount": 200,
       "registrationDate": "2026-08-28",
-      "dataValidationStatus": "verified",
-      "ranking": 30
+      "dataValidationStatus": "verified"
     },
     {
       "id": "trainee-1787875324594",
@@ -1194,8 +1185,7 @@
       "discountAmount": 0,
       "remainingAmount": 200,
       "registrationDate": "2026-08-28",
-      "dataValidationStatus": "verified",
-      "ranking": 31
+      "dataValidationStatus": "verified"
     },
     {
       "id": "trainee-1787541849209-dziuw",
@@ -1209,7 +1199,7 @@
       "status": "active",
       "address": "",
       "groupId": "grp-1787350488774",
-      "ranking": 32,
+      "ranking": 10,
       "branchId": "branch-1",
       "courseId": "course-1787347401956",
       "fullName": "Ø³Ù…Ø§ Ø³Ø±Ø§Ø¬ Ø§Ù„Ø¯ÙŠÙ† Ù…Ø­Ù…Ø¯ Ù„Ø·ÙÙŠ Ø¹Ù„ÙŠ",
@@ -1253,7 +1243,7 @@
       "status": "active",
       "address": "",
       "groupId": "grp-1787351870532",
-      "ranking": 8,
+      "ranking": 35,
       "branchId": "branch-1",
       "courseId": "course-1787347401956",
       "fullName": "Ø¹Ø¨Ø¯Ø§Ù„Ù„Ù‡ Ø¹Ø¨Ø¯Ø§Ù„Ù…Ù„Ùƒ Ø±Ù…Ø¶Ø§Ù† Ø¨Ø®ÙŠØª",
@@ -1296,7 +1286,7 @@
       "status": "active",
       "address": "",
       "groupId": "grp-1787547775589",
-      "ranking": 33,
+      "ranking": 32,
       "branchId": "branch-1",
       "courseId": "course-1787347569318",
       "fullName": "Ù…Ø­Ù…ÙˆØ¯ Ø§Ù„Ø³ÙŠØ¯ Ù…ØµØ·ÙÙ‰ ÙØ§ÙŠØ¯",
@@ -1369,8 +1359,7 @@
       "updatedByUserId": "u-admin",
       "registrationDate": "2026-08-27",
       "updatedByUserName": "Ø§Ù„Ù…Ø¯ÙŠØ± Ø§Ù„Ø¹Ø§Ù… (Super Admin)",
-      "dataValidationStatus": "needs_review",
-      "ranking": 34
+      "dataValidationStatus": "needs_review"
     },
     {
       "id": "trainee-1787541849209-bgqwo",
@@ -1384,7 +1373,7 @@
       "status": "active",
       "address": "",
       "groupId": "grp-1787350487970",
-      "ranking": 35,
+      "ranking": 13,
       "branchId": "branch-1",
       "courseId": "course-1787347401956",
       "fullName": "Ù…Ø§Ø±Ø³Ù„ÙŠÙ†Ùˆ Ù…Ø§ÙŠÙƒÙ„ Ø±Ø´Ø¯ÙŠ ÙÙˆØ§Ø¯",
@@ -1449,8 +1438,7 @@
       "discountAmount": 0,
       "remainingAmount": 200,
       "registrationDate": "2026-08-25",
-      "dataValidationStatus": "verified",
-      "ranking": 36
+      "dataValidationStatus": "verified"
     },
     {
       "id": "trainee-1787541849210-brq6q",
@@ -1464,7 +1452,7 @@
       "status": "active",
       "address": "",
       "groupId": "grp-1787431802246",
-      "ranking": 37,
+      "ranking": 21,
       "branchId": "branch-1",
       "courseId": "course-1787347508908",
       "fullName": "Ø§Ù…ÙŠØ±Ø© Ù…Ø­Ù…Ø¯ Ø¹Ø¨Ø¯Ø§Ù„Ø¨ØµÙŠØ± Ø±Ø¨ÙŠØ¹",
@@ -1533,8 +1521,7 @@
       "discountAmount": 0,
       "remainingAmount": 200,
       "registrationDate": "2026-08-28",
-      "dataValidationStatus": "verified",
-      "ranking": 38
+      "dataValidationStatus": "verified"
     },
     {
       "id": "trainee-1787936711415",
@@ -1577,8 +1564,7 @@
       "updatedByUserId": "user-admin",
       "registrationDate": "2026-08-28",
       "updatedByUserName": "Ù…Ø¯ÙŠØ± Ø¹Ø§Ù… Ø§Ù„Ù†Ø¸Ø§Ù…",
-      "dataValidationStatus": "verified",
-      "ranking": 9
+      "dataValidationStatus": "verified"
     },
     {
       "id": "trainee-1787541849210-8y0f7",
@@ -1592,7 +1578,7 @@
       "status": "active",
       "address": "",
       "groupId": "grp-1787544071821",
-      "ranking": 39,
+      "ranking": 19,
       "branchId": "branch-1",
       "courseId": "course-1787347508908",
       "fullName": "Ø£Ø­Ù…Ø¯ Ø­Ù…Ø¯Ù‰ Ù…Ø­Ù…Ø¯ Ø§Ø¨Ø±Ø§Ù‡ÙŠÙ…",
@@ -1635,7 +1621,7 @@
       "status": "active",
       "address": "",
       "groupId": "grp-1787351870532",
-      "ranking": 40,
+      "ranking": 6,
       "branchId": "branch-1",
       "courseId": "course-1787347401956",
       "fullName": "Ø§Ø¯Ù… Ø±Ø¨ÙŠØ¹ Ø§Ø­Ù…Ø¯ Ø§Ø­Ù…Ø¯",
@@ -1700,8 +1686,7 @@
       "discountAmount": 0,
       "remainingAmount": 200,
       "registrationDate": "2026-08-26",
-      "dataValidationStatus": "verified",
-      "ranking": 41
+      "dataValidationStatus": "verified"
     },
     {
       "id": "trainee-1787541849210-d5zdo",
@@ -1715,7 +1700,7 @@
       "status": "active",
       "address": "",
       "groupId": "grp-1787544071821",
-      "ranking": 6,
+      "ranking": 23,
       "branchId": "branch-2",
       "courseId": "course-1787347508908",
       "fullName": "Ø±Ø§ÙØ§Ø¦ÙŠÙ„ Ø¹Ø¨Ø¯ Ø§Ù„Ù…Ø³ÙŠØ­ Ø¯Ø±ÙˆÙŠØ´ Ø³Ù„ÙŠÙ…Ø§Ù†",
@@ -1757,7 +1742,7 @@
       "status": "active",
       "address": "",
       "groupId": "grp-1787350487970",
-      "ranking": 42,
+      "ranking": 7,
       "branchId": "branch-1",
       "courseId": "course-1787347401956",
       "fullName": "Ø§Ø±Ø³Ø§Ù†ÙŠÙˆØ³ Ø¨ÙŠØ´ÙˆÙ‰ ÙŠÙˆØ³Ù Ø¨Ø´Ø±Ù‰",
@@ -1822,8 +1807,7 @@
       "discountAmount": 0,
       "remainingAmount": 200,
       "registrationDate": "2026-08-26",
-      "dataValidationStatus": "verified",
-      "ranking": 43
+      "dataValidationStatus": "verified"
     },
     {
       "id": "trainee-1787770178351-p956",
@@ -1867,8 +1851,7 @@
       "createdByUserName": "Ù…Ø¯ÙŠØ± Ø¹Ø§Ù… Ø§Ù„Ù†Ø¸Ø§Ù…",
       "updatedByUserName": "Ø§Ù„Ù…Ø¯ÙŠØ± Ø§Ù„Ø¹Ø§Ù… (Super Admin)",
       "dataValidationStatus": "verified",
-      "initialPaymentMethod": "cash",
-      "ranking": 44
+      "initialPaymentMethod": "cash"
     },
     {
       "id": "trainee-1787541849210-hstjh",
@@ -1882,7 +1865,7 @@
       "status": "active",
       "address": "",
       "groupId": "grp-1787358828709",
-      "ranking": 45,
+      "ranking": 30,
       "branchId": "branch-1",
       "courseId": "course-1787347569318",
       "fullName": "Ø´Ù†ÙˆØ¯Ù‡ Ø¨ÙŠØ´ÙˆÙŠ Ù†Ø¨ÙŠÙ„ ÙƒØ±Ù…",
@@ -1931,7 +1914,7 @@
       "status": "active",
       "address": "",
       "groupId": "grp-1787431802246",
-      "ranking": 46,
+      "ranking": 26,
       "branchId": "branch-1",
       "courseId": "course-1787347508908",
       "fullName": "Ø±ÙŠÙ†Ø§Ø¯Ù‡ Ù‡ÙŠØ«Ù… Ø¹Ø¨Ø¯ Ø§Ù„Ø±Ø­Ù…Ù† Ø¹Ù„Ù‰",
@@ -1974,7 +1957,7 @@
       "status": "active",
       "address": "",
       "groupId": "grp-1787431802246",
-      "ranking": 47,
+      "ranking": 27,
       "branchId": "branch-1",
       "courseId": "course-1787347508908",
       "fullName": "Ø´ÙŠØ±ÙŠÙ† Ù…Ø¨Ø±ÙˆÙƒ Ù…Ø­Ù…Ø¯ Ø§Ù„Ø­Ø¯Ø§Ø¯",
@@ -2017,7 +2000,7 @@
       "status": "active",
       "address": "",
       "groupId": "grp-1787543971890",
-      "ranking": 48,
+      "ranking": 5,
       "branchId": "branch-1",
       "courseId": "course-1787347401956",
       "fullName": "Ø§Ø­Ù…Ø¯ Ø§Ù„Ø´Ø­Ø§Øª ØµÙ„Ø§Ø­ Ø§Ù„Ø´Ø­Ø§Øª",
@@ -2083,8 +2066,7 @@
       "discountAmount": 0,
       "remainingAmount": 200,
       "registrationDate": "2026-08-26",
-      "dataValidationStatus": "verified",
-      "ranking": 49
+      "dataValidationStatus": "verified"
     },
     {
       "id": "trainee-1787541849209-nk3i7",
@@ -2098,7 +2080,7 @@
       "status": "active",
       "address": "",
       "groupId": "grp-1787432635686",
-      "ranking": 50,
+      "ranking": 16,
       "branchId": "branch-2",
       "courseId": "course-1787347462419",
       "fullName": "ÙŠØ§Ø³Ø± Ø¹Ù…Ø§Ø± ÙŠØ§Ø³Ø± Ø±Ø§Ø´Ø¯",
@@ -2172,8 +2154,7 @@
       "updatedByUserId": "u-admin",
       "registrationDate": "2026-08-25",
       "updatedByUserName": "Ø§Ù„Ù…Ø¯ÙŠØ± Ø§Ù„Ø¹Ø§Ù… (Super Admin)",
-      "dataValidationStatus": "needs_review",
-      "ranking": 51
+      "dataValidationStatus": "needs_review"
     },
     {
       "id": "trainee-1787541849210-lfic3",
@@ -2187,7 +2168,7 @@
       "status": "active",
       "address": "",
       "groupId": "grp-1787433082510",
-      "ranking": 52,
+      "ranking": 20,
       "branchId": "branch-2",
       "courseId": "course-1787347508908",
       "fullName": "Ø§Ø³ÙŠÙ„ Ù…Ø­Ù…Ø¯ Ø´ÙˆÙ‚ÙŠ Ø¹Ø¨Ø¯Ø§Ù„Ø­Ø§ÙØ¸",
@@ -2252,8 +2233,7 @@
       "discountAmount": 0,
       "remainingAmount": 200,
       "registrationDate": "2026-08-26",
-      "dataValidationStatus": "verified",
-      "ranking": 53
+      "dataValidationStatus": "verified"
     },
     {
       "id": "trainee-1787758397521",
@@ -2289,8 +2269,7 @@
       "discountAmount": 0,
       "remainingAmount": 500,
       "registrationDate": "2026-08-26",
-      "dataValidationStatus": "verified",
-      "ranking": 54
+      "dataValidationStatus": "verified"
     },
     {
       "id": "trainee-1787541849210-aqkav",
@@ -2304,7 +2283,7 @@
       "status": "active",
       "address": "",
       "groupId": "grp-1787431802246",
-      "ranking": 55,
+      "ranking": 25,
       "branchId": "branch-1",
       "courseId": "course-1787347508908",
       "fullName": "Ø±ÙˆØ¯ÙŠÙ†Ø§ Ù…Ø­Ù…Ø¯ Ø¬Ù…Ø§Ù„ Ø¹Ø¨Ø¯ Ø§Ù„Ø³Ù„Ø§Ù…",
@@ -2347,7 +2326,7 @@
       "status": "active",
       "address": "",
       "groupId": "grp-1787431802246",
-      "ranking": 56,
+      "ranking": 18,
       "branchId": "branch-1",
       "courseId": "course-1787347508908",
       "fullName": "Ø£Ø­Ù…Ø¯ Ø­Ø§Ù…Ø¯ Ø§Ø­Ù…Ø¯ Ø§Ù„Ø³ÙŠØ¯",
@@ -2394,7 +2373,7 @@
       "status": "active",
       "address": "",
       "groupId": "grp-1787351870532",
-      "ranking": 10,
+      "ranking": 8,
       "branchId": "branch-1",
       "courseId": "course-1787347401956",
       "fullName": "Ø§Ø³Ø± Ù…Ø­Ù…Ø¯ Ø¹ØµØ§Ù… Ø§Ø¨Ùˆ Ø§Ù„Ø®ÙŠØ±",
@@ -2437,7 +2416,7 @@
       "status": "active",
       "address": "",
       "groupId": "grp-1787545407365",
-      "ranking": 57,
+      "ranking": 34,
       "branchId": "branch-2",
       "courseId": "course-1787347569318",
       "fullName": "Ù…ØµØ·ÙÙŠ Ø¹Ø¨Ø¯ Ø§Ù„Ù„Ù‡ Ù‡Ø§Ø´Ù…",
@@ -2480,7 +2459,7 @@
       "status": "active",
       "address": "",
       "groupId": "grp-1787350487970",
-      "ranking": 58,
+      "ranking": 9,
       "branchId": "branch-1",
       "courseId": "course-1787347401956",
       "fullName": "Ø§Ù†Ø³ Ù…Ø­Ù…Ø¯ Ø¹Ø¨Ø¯Ø§Ù„Ø¨ØµÙŠØ± Ø±Ø¨ÙŠØ¹",
@@ -2530,8 +2509,7 @@
       "paidAmount": 0,
       "totalPoints": 40,
       "discountAmount": 0,
-      "remainingAmount": 0,
-      "ranking": 5
+      "remainingAmount": 0
     },
     {
       "id": "trainee-1788224497604-f2sb",
@@ -2546,8 +2524,19 @@
       "netAmount": 0,
       "paidAmount": 0,
       "discountAmount": 0,
-      "remainingAmount": 0,
-      "ranking": 59
+      "remainingAmount": 0
+    },
+    {
+      "id": "trainee-vercel-test-1788226411800",
+      "code": "V001",
+      "fullName": "[ØªØ¬Ø±ÙŠØ¨ÙŠ] Ø·Ø§Ù„Ø¨ Ù…Ù† Ø§Ù„Ø°ÙƒØ§Ø¡ Ø§Ù„Ø§ØµØ·Ù†Ø§Ø¹ÙŠ Ù„Ø§Ø®ØªØ¨Ø§Ø± ÙÙŠØ±Ø³Ø§Ù„",
+      "phone": "01000000000",
+      "branchId": "branch-1",
+      "courseId": "course-1787347462419",
+      "grade": "Ø§Ø®ØªØ¨Ø§Ø±",
+      "status": "active",
+      "points": 100,
+      "createdAt": "2026-09-01T01:33:31.801Z"
     }
   ],
   "trainers": [
@@ -3426,28 +3415,6 @@
     }
   ],
   "pointTransactions": [
-    {
-      "id": "pt-1788224531144-xj2t",
-      "traineeId": "trainee-1788224410646-j569",
-      "branchId": "branch-1",
-      "points": 20,
-      "reason": "Ù…Ø´Ø§Ø±ÙƒØ© Ù…Ù…ØªØ§Ø²Ø© Ù…Ù† Ø®Ù„Ø§Ù„ Ø£Ø¬Ù‡Ø²Ø© Ø§Ù„Ù…Ø¹Ù…Ù„ [ØªØ¬Ø±ÙŠØ¨ÙŠ]",
-      "ruleId": "rule-2",
-      "addedByUserId": "admin",
-      "addedByUserName": "Ù…Ø³Ø¤ÙˆÙ„ Ø§Ù„Ù†Ù‚Ø§Ø·",
-      "createdAt": "2026-09-01T01:02:11.144Z"
-    },
-    {
-      "id": "pt-1788224519953-9pjw",
-      "traineeId": "trainee-1788224410646-j569",
-      "branchId": "branch-1",
-      "points": 20,
-      "reason": "Ù…Ø´Ø§Ø±ÙƒØ© Ù…Ù…ØªØ§Ø²Ø© Ù…Ù† Ø®Ù„Ø§Ù„ Ø£Ø¬Ù‡Ø²Ø© Ø§Ù„Ù…Ø¹Ù…Ù„ [ØªØ¬Ø±ÙŠØ¨ÙŠ]",
-      "ruleId": "rule-2",
-      "addedByUserId": "admin",
-      "addedByUserName": "Ø§Ù„Ù†Ø¸Ø§Ù… Ø§Ù„Ø¢Ù„ÙŠ",
-      "createdAt": "2026-09-01T01:01:59.954Z"
-    },
     {
       "id": "pt-1787466295224",
       "points": 10,
@@ -4762,25 +4729,25 @@
     },
     {
       "id": "pt-1788224519953-9pjw",
-      "traineeId": "trainee-1788224410646-j569",
-      "branchId": "branch-1",
       "points": 20,
       "reason": "Ù…Ø´Ø§Ø±ÙƒØ© Ù…Ù…ØªØ§Ø²Ø© Ù…Ù† Ø®Ù„Ø§Ù„ Ø£Ø¬Ù‡Ø²Ø© Ø§Ù„Ù…Ø¹Ù…Ù„ [ØªØ¬Ø±ÙŠØ¨ÙŠ]",
       "ruleId": "rule-2",
+      "branchId": "branch-1",
+      "createdAt": "2026-09-01T01:01:59.954Z",
+      "traineeId": "trainee-1788224410646-j569",
       "addedByUserId": "admin",
-      "addedByUserName": "Ø§Ù„Ù†Ø¸Ø§Ù… Ø§Ù„Ø¢Ù„ÙŠ",
-      "createdAt": "2026-09-01T01:01:59.954Z"
+      "addedByUserName": "Ø§Ù„Ù†Ø¸Ø§Ù… Ø§Ù„Ø¢Ù„ÙŠ"
     },
     {
       "id": "pt-1788224531144-xj2t",
-      "traineeId": "trainee-1788224410646-j569",
-      "branchId": "branch-1",
       "points": 20,
       "reason": "Ù…Ø´Ø§Ø±ÙƒØ© Ù…Ù…ØªØ§Ø²Ø© Ù…Ù† Ø®Ù„Ø§Ù„ Ø£Ø¬Ù‡Ø²Ø© Ø§Ù„Ù…Ø¹Ù…Ù„ [ØªØ¬Ø±ÙŠØ¨ÙŠ]",
       "ruleId": "rule-2",
+      "branchId": "branch-1",
+      "createdAt": "2026-09-01T01:02:11.144Z",
+      "traineeId": "trainee-1788224410646-j569",
       "addedByUserId": "admin",
-      "addedByUserName": "Ù…Ø³Ø¤ÙˆÙ„ Ø§Ù„Ù†Ù‚Ø§Ø·",
-      "createdAt": "2026-09-01T01:02:11.144Z"
+      "addedByUserName": "Ù…Ø³Ø¤ÙˆÙ„ Ø§Ù„Ù†Ù‚Ø§Ø·"
     }
   ],
   "exams": [
@@ -5201,13 +5168,13 @@
       "status": "active",
       "branchId": "branch-1",
       "deviceId": "LAB-MAIN-72",
-      "isOnline": true,
+      "isOnline": false,
       "roomName": "ØµØ§Ù„Ø© Ø§Ù„Ù…Ø¹Ù…Ù„",
       "userType": "trainee",
       "ipAddress": "127.0.0.1",
       "macAddress": "00:11:22:33:44:55",
       "agentVersion": "v2.4.1",
-      "assignedUser": "Ø¬Ù‡Ø§Ø² Ù…Ø¹Ù…Ù„ Ù…Ø¹ØªÙ…Ø¯",
+      "assignedUser": "Ù…ØªØ¯Ø±Ø¨ Ù…Ø¹Ù…Ù„ (Ù…ØªØ§Ø­)",
       "enrollmentKey": "NAGAH-CERT-2026-SECURE",
       "lastHeartbeat": "2026-08-29T21:22:09.895Z",
       "lastScreenshotUrl": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMjgwIDcyMCIgd2lkdGg9IjEyODAiIGhlaWdodD0iNzIwIj48ZGVmcz48bGluZWFyR3JhZGllbnQgaWQ9ImJnIiB4MT0iMCUiIHkxPSIwJSIgeDI9IjEwMCUiIHkyPSIxMDAlIj48c3RvcCBvZmZzZXQ9IjAlIiBzdG9wLWNvbG9yPSIjMWUzYThhIi8+PHN0b3Agb2Zmc2V0PSI1MCUiIHN0b3AtY29sb3I9IiMwZjE3MmEiLz48c3RvcCBvZmZzZXQ9IjEwMCUiIHN0b3AtY29sb3I9IiMwMjA2MTciLz48L2xpbmVhckdyYWRpZW50PjwvZGVmcz48cmVjdCB3aWR0aD0iMTI4MCIgaGVpZ2h0PSI3MjAiIGZpbGw9InVybCgjYmcpIi8+PHJlY3QgeD0iMCIgeT0iNjgwIiB3aWR0aD0iMTI4MCIgaGVpZ2h0PSI0MCIgZmlsbD0iIzAyMDYxNyIgb3BhY2l0eT0iMC45Ii8+PHJlY3QgeD0iNTYwIiB5PSI2ODIiIHdpZHRoPSIxNjAiIGhlaWdodD0iMzYiIHJ4PSI4IiBmaWxsPSIjMWUyOTNiIiBzdHJva2U9IiMzOGJkZjgiIHN0cm9rZS13aWR0aD0iMSIvPjxjaXJjbGUgY3g9IjU4NSIgY3k9IjcwMCIgcj0iMTAiIGZpbGw9IiMzOGJkZjgiLz48cmVjdCB4PSI2MTAiIHk9IjY5NCIgd2lkdGg9IjkwIiBoZWlnaHQ9IjEyIiByeD0iMyIgZmlsbD0iI2NiZDVlMSIvPjxnIHRyYW5zZm9ybT0idHJhbnNsYXRlKDYwLCA2MCkiPjxyZWN0IHg9IjAiIHk9IjAiIHdpZHRoPSI2MCIgaGVpZ2h0PSI2MCIgcng9IjEyIiBmaWxsPSIjZmJiZjI0Ii8+PHRleHQgeD0iMzAiIHk9IjM4IiBmb250LXNpemU9IjI4IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj7wn5OBPC90ZXh0Pjx0ZXh0IHg9IjMwIiB5PSI3OCIgZm9udC1zaXplPSIxMiIgZmlsbD0iI2ZmZmZmZiIgZm9udC1mYW1pbHk9IkFyaWFsIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj7Yp9mE2YXYtNin2LHZiti5PC90ZXh0PjwvZz48ZyB0cmFuc2Zvcm09InRyYW5zbGF0ZSg2MCwgMTYwKSI+PHJlY3QgeD0iMCIgeT0iMCIgd2lkdGg9IjYwIiBoZWlnaHQ9IjYwIiByeD0iMTIiIGZpbGw9IiMzOGJkZjgiLz48dGV4dCB4PSIzMCIgeT0iMzgiIGZvbnQtc2l6ZT0iMjgiIHRleHQtYW5jaG9yPSJtaWRkbGUiPvCfkrs8L3RleHQ+PHRleHQgeD0iMzAiIHk9Ijc4IiBmb250LXNpemU9IjEyIiBmaWxsPSIjZmZmZmZmIiBmb250LWZhbWlseT0iQXJpYWwiIHRleHQtYW5jaG9yPSJtaWRkbGUiPtiq2LfYqNmK2YLYp9iqPC90ZXh0PjwvZz48cmVjdCB4PSIzMDAiIHk9IjEyMCIgd2lkdGg9IjY4MCIgaGVpZ2h0PSI0MjAiIHJ4PSIxMiIgZmlsbD0iIzBmMTcyYSIgc3Ryb2tlPSIjMzM0MTU1IiBzdHJva2Utd2lkdGg9IjIiLz48cmVjdCB4PSIzMDAiIHk9IjEyMCIgd2lkdGg9IjY4MCIgaGVpZ2h0PSI0MCIgcng9IjEyIiBmaWxsPSIjMWUyOTNiIi8+PGNpcmNsZSBjeD0iMzI1IiBjeT0iMTQwIiByPSI2IiBmaWxsPSIjZjQzZjVlIi8+PGNpcmNsZSBjeD0iMzQ1IiBjeT0iMTQwIiByPSI2IiBmaWxsPSIjZmJiZjI0Ii8+PGNpcmNsZSBjeD0iMzY1IiBjeT0iMTQwIiByPSI2IiBmaWxsPSIjMTBiOTgxIi8+PHRleHQgeD0iNjQwIiB5PSIxNDUiIGZvbnQtc2l6ZT0iMTQiIGZpbGw9IiNlMmU4ZjAiIGZvbnQtZmFtaWx5PSJBcmlhbCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC13ZWlnaHQ9ImJvbGQiPtio2YrYptipINin2YTYqti32YjZitixINmI2KfZhNiq2K/YsdmK2Kgg2KfZhNi52YXZhNmKIC0g2LPYt9itINmF2YPYqtioINin2YTYt9in2YTYqDwvdGV4dD48dGV4dCB4PSI2NDAiIHk9IjMyMCIgZm9udC1zaXplPSIyNCIgZmlsbD0iIzM4YmRmOCIgZm9udC1mYW1pbHk9IkFyaWFsIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmb250LXdlaWdodD0iYm9sZCI+2LTYp9i02Kkg2LPYt9itINmF2YPYqtioINin2YTYt9in2YTYqCDZhti02LfYqSDZiNis2KfZh9iy2Kkg2YTZhNmF2KrYp9io2LnYqSDwn5al77iPPC90ZXh0Pjwvc3Zn>"
@@ -5915,21 +5882,13 @@
   "auditLogs": [
     {
       "userId": "admin",
-      "userName": "Ù…Ø³Ø¤ÙˆÙ„ Ø§Ù„Ù†Ù‚Ø§Ø·",
-      "action": "Ø¥Ø¶Ø§ÙØ©/Ø®ØµÙ… Ù†Ù‚Ø§Ø·",
-      "entity": "Ù†Ø¸Ø§Ù… Ø§Ù„Ù†Ù‚Ø§Ø·",
-      "details": "ØªÙ… Ù…Ù†Ø­/ØªØ¹Ø¯ÙŠÙ„ 20 Ù†Ù‚Ø·Ø© Ù„Ø¹Ø¯Ø¯ 1 Ù…ØªØ¯Ø±Ø¨ - Ø§Ù„Ø³Ø¨Ø¨: Ù…Ø´Ø§Ø±ÙƒØ© Ù…Ù…ØªØ§Ø²Ø© Ù…Ù† Ø®Ù„Ø§Ù„ Ø£Ø¬Ù‡Ø²Ø© Ø§Ù„Ù…Ø¹Ù…Ù„ [ØªØ¬Ø±ÙŠØ¨ÙŠ]",
-      "id": "log-1788224531222-vjwb",
-      "timestamp": "2026-09-01T01:02:11.222Z"
-    },
-    {
-      "userId": "admin",
-      "userName": "Ø§Ù„Ù†Ø¸Ø§Ù… Ø§Ù„Ø¢Ù„ÙŠ",
-      "action": "Ø¥Ø¶Ø§ÙØ©/Ø®ØµÙ… Ù†Ù‚Ø§Ø·",
-      "entity": "Ù†Ø¸Ø§Ù… Ø§Ù„Ù†Ù‚Ø§Ø·",
-      "details": "ØªÙ… Ù…Ù†Ø­/ØªØ¹Ø¯ÙŠÙ„ 20 Ù†Ù‚Ø·Ø© Ù„Ø¹Ø¯Ø¯ 1 Ù…ØªØ¯Ø±Ø¨ - Ø§Ù„Ø³Ø¨Ø¨: Ù…Ø´Ø§Ø±ÙƒØ© Ù…Ù…ØªØ§Ø²Ø© Ù…Ù† Ø®Ù„Ø§Ù„ Ø£Ø¬Ù‡Ø²Ø© Ø§Ù„Ù…Ø¹Ù…Ù„ [ØªØ¬Ø±ÙŠØ¨ÙŠ]",
-      "id": "log-1788224520018-p442",
-      "timestamp": "2026-09-01T01:02:00.018Z"
+      "userName": "Ù…Ø´Ø±Ù Ø§Ù„Ù…Ø¹Ù…Ù„",
+      "action": "ØªÙ†Ø¸ÙŠÙ Ø§Ù„Ø¬Ù„Ø³Ø© ÙˆØ­Ø°Ù Ø§Ù„Ù…Ù„ÙØ§Øª Ø§Ù„Ù…Ø¤Ù‚ØªØ©",
+      "entity": "Ø§Ù„Ø£Ø¬Ù‡Ø²Ø©",
+      "entityId": "dev-1788034811666",
+      "details": "ØªÙ… Ø¥Ù†Ù‡Ø§Ø¡ Ø¬Ù„Ø³Ø© Ø§Ù„Ø·Ø§Ù„Ø¨ ÙˆØªÙ†Ø¸ÙŠÙ Ø§Ù„Ù…Ø¬Ù„Ø¯Ø§Øª Ø§Ù„Ù…Ø¤Ù‚ØªØ© Ù„Ù„Ø¬Ù‡Ø§Ø² LAB-PC-01 Ø¨Ù†Ø¬Ø§Ø­ Ø¯ÙˆÙ† Ø§Ù„Ù…Ø³Ø§Ø³ Ø¨Ù†Ø¸Ø§Ù… ÙˆÙŠÙ†Ø¯ÙˆØ²",
+      "id": "log-1788226395219-m25q",
+      "timestamp": "2026-09-01T01:33:15.219Z"
     },
     {
       "id": "log-1788073029266-y363",
@@ -6739,56 +6698,56 @@
       "timestamp": "2026-08-29T17:45:14.920Z",
       "deviceName": "Ø¬Ù‡Ø§Ø² PC-15",
       "traineeName": "Ù…Ø±Ø§Ù… Ù…Ø­Ù…Ø¯ Ø±Ù…Ø¶Ø§Ù† Ø¨Ø®ÙŠØª",
-      "screenshotUrl": "data:image/jpeg;base64,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œì]ÛrÛFš¾Ÿ§`t1å”gÚJí€u E‰&)RÒÖT
-A<)R[©Ÿ5ÊÔNÍîÕîM6ñ$’ÛZŸâqöE¨Ûy‚<Âö À£HZÊxgºmK$Ðh ÿó÷÷ßp"“¶ƒÉEN:¤Ó‹+û¢-KÛ±ÍðŽ¹ÚÈfèE5ÑäV +ßiç¶
-›Ì»}¤W#kÞ*šÉØÚA;MeŠézà ÊÊM:px¸Åïku«r”¢•­eŠÖ<ÔŠ‘ö¢I/VSMº­—ÒFÎŠ&WŽ6«VÅÒÙôm¶•Ù=Ò·T¹fl³­ÆA˜?Ò²bøàˆf¶VÝ	21c'7«•+};Í7·Á¡¸žØ7"–¼_I-šD÷·Ë–•¨HGikßØJIªNÊ‚L‹‚ÊtÚ9:ª1ÌšdÔêb6Ð9XÙIªÁ’fpVzßL”Õ6ÍÔ[ñôêF¸Tb–¹=¥6ÍI#íêKŸ/üÊÚ—Ÿ¡_ÿŠ~ú|FvaÉ·Ð(Ô,Š	JÍ
-lP–d‘ªWMqá3§[Voš¾:ƒÏ°oPòA‰“eÆíf½a©•:ìÇÒ¬HÑÅÊI&¸Ä3KŒì#ïŽº¥VtØ¿ûìòq÷´ûÊ[¦Á3¨©U½×íòa÷e÷ôò¡|xþ]øº/Á¯Á±G¾îY÷ÅåI÷Ü½º¡™º^…Ü1ËèñUK]2*j^ëzþŸ2jCùÏr1À+ÊDi?Ï+!å Ûð[Y	ðùõ½ÄÎÖÊ.J$éýH2¼Î…A‡uÛÝ9T”•©Æ;;¥ìòÆja?m(ë`<p}ØfB¨°ÇmNÅ/poÙÚC¿Áý“›w®CÊ¥ýÝ­"ü$ÁËñNzµ¬Â[E¯:ßoãï†ó=†¿sÙõ?íàïÔjd~ÚGãªßïEm=‚®G±Ò¶2ë©¢û|ˆNÑý´ÚATÊÃš²Uvò¡u%ÙK§jy§wF¤_)2p¤¦·ÝBFÐËâwàT8‡ž·XNÀëcðÃjÈ}ãõÑ{7TÐ*ßÐÁåý
-8»]Ÿ·ÒàPX†‡ë÷ùC“ç³¬àù„5%sj)kà·*Ãã‰;¡¦²U6ó`Ò+JTQÚÊJ&À†V€m®(|t¹ l¯Üáá¸’\[Î«k¡½ôÚJ¸‰ÓµíbTŽ­”Ž¶W²Jbµ½}'ß'5~g‰§ÙØgÕX‰ië»¡’¾Ú.ï³1<v<œò©µeI]3äâbayÝ*~Ø¿X L7¾¬¬”}eEI êÂ!¥¤;ÊÔ-%Âúãm+!e'jÂàª;àÏ²’¯(ù;«J^ëYÉGã¡ÐF!ß
-…@Uãñ‚¶¿Vˆ¶Â©(7jæú!¼ÏêaÞ#¤µð² ÷XVâèòà>Qo‡xÞDôN´ÐÈ…Úy}=ÀæKÃp+á;J@‰åóëñá‘¯j¡\[Ånw’ECVÓb¶Íè‘À¦T,
-ÑÔ^+¹eXº%çhNŒ9¦)˜fgq«½gÛR&ÂÄ£bE§éc²&W6u=½›Ž.®5ö·ƒ –YSùÌ~ÄÚ2r˜	¹ ]-ñ4}˜:Š«›©ÊF%§î€e+'í«Òn{¥À×:*Ÿ
-&u.%-¦­Zñˆ7Ôäz³.ìnµm‡—¶—µTD®·5xËXë™æQ´É0Ò¦¹¾›Ù*rGiQM3 
-¦¸í¦´ØY­U¬º«DhVË¬®­•¤b¤t˜LÖªu“ioÕ­`ns]ß´6w×rù#i»³[\Õ#VÙ`9“á¢½Uæv[’’*››b¥³×9b…­ÛéV´h°`&ûÆÇîJ»F²Õw#b3¶š\'UF^”D¹VÎ5ZkGGéÛ{·¥\$½u¤GKi3g57˜D#Þ’cM‰_¿m¶›‘Ïí2Q~%6w:y  ‘V›éT›‹õH$—9
-(
-aBs“n%3³Žh9V3’l©;€{i>¥v#	)S×+r:k2{zF\Œ•öôÝ²QÚWS†Å›VÄÜæ‹©½`\îÔ[±U~ñ€i!U7%ÆÌî¤ŒœÜ¬9.¹¾¹½›Þåä@î0½'Ê¿[?µŠ¼g&äf¥‘ª–ÀÈ+e))Et-ÛX¼½˜hˆV„º­`;á¥ÅíÖ¡ÝÝîoá]f5+[z®ÖZÜÐšQnUŽE:­¶žÖœ™«W¶fk]ß`ZbœF:GB"•ÝµÃ§Må²’f"³ce´øjVÏei©zØªh_\-r­õ42Jm&·¹&'Í])¸×‘*Û±ÌNÛµRF,ë¹L ±ØŒÊ’°x©&qya{um“‰pb9»/J¹j@«–-æ¶­o‰û!“Ï)GÚÑn=U¡õ,š©ì›­vT”Ë­ö:Ÿ]\©'ôêfšÎš‹f8eÐt•É·JíÊîz®Áï¦¹ØêâJ(YL†Š­Ìfºqsb3`­Ë`
-Š°½^ä:‚´½»º
-DN”´v+'tZ±µÝÔ–a;Ål;V`wKÙ­Z[ÈðÁTEo­&ü!ð‡´¨ÍH­@™%©tð‡“—ÁF&ðçêFàBà?þøCà?þøCió¶YàÍñ2ÃQ…l¾z­ð'¸Äð~02?W7ü!ð‡Àü!ð‡ÀÒH›·Í ø (É4OÑåbóZá»ÄK~02?W7ü!ð‡Àü!ð‡ÀÒH›·ÍXŽ•šÊ×­úuÂ–[X?™ÀŸ«?
-?þøCà?þøCài¤ÍÛf?´Ì’HÕÚºVøÃ,qŒŒ|ðç¼{ Ð@ï/^>ðÝBO»Ï?%¸g¸ÜCpÁ=÷ÜCpÁ=÷ÜCÚ?F›÷p² Ê ,jæ:q#/1¢ŒLpÏ„FpBpÁ=÷ÜCpÁ=÷ÜCió¶YpÄ	2#QåÌw­¸'ˆÞõÆH÷Lh÷(÷ÜCpÁ=÷ÜCpÁ=¤‘6o›÷/s%vŠêµâ½äcî™ÐîQî!¸‡à‚{î!¸‡à‚{H#mÞ6îá€Ð²Åš×ZçFËð¿6#Ü3¡Ü£ÜCpÁ=÷ÜCpÁ=÷FÚ¼mÜÃÂ:7š²ø"{­¸Ç®s»Ž×ºÜ3S#¸‡à‚{î!¸‡à‚{î!¸‡´Œ6îaViŠa×»Þ#,1¬ŒLpÏ„FpBpÁ=÷ÜCpÁ=÷ÜCió¶p+³²(1”\7®õ½4»DË~02Á=Á=
-Á=÷ÜCpÁ=÷ÜCpi¤ÍÛfÁ=A—Y†ªfƒ­ëÃ=â’ £÷°÷Lj÷(÷ÜCpÁ=÷ÜCpÁ=¤‘6o›÷ˆŒHó%µk¬s¸þõƒ‘	î™ÐîQî!¸‡à‚{î!¸‡à‚{H#mÞ6S›L´LKàµÖ¹qKí#Ü3¡Ü£ÜCpÁ=÷ÜCpÁ=÷FÚ¼mÜ#±<-±T)SÓ¯÷ÐK,ï#Ü3¡Ü£ÜCpÁ=÷ÜCpÁ=÷FÚ¼m¦:· $³<UÈIÖµÖ¹—ÉF&¸gB#¸G!¸‡à‚{î!¸‡à‚{î!´yÛ´¸bIæ‘§´LY½6ÜCsK<³Äñ~02Á=Á=
-Á=÷ÜCpÁ=÷ÜCpi¤ÍÛfÁ=ËPr½Ü¾NÜÃÉK<ç½	î™ÐîQî!¸‡à‚{î!¸‡à‚{H#mÞæÁ=àço!6XÐj•zÓÒÍM5Ó °à_Fá¡²š¡<°¦êBŒ7º§—.uŸAÈáéV³ôÆP¿îsÐë5D+ÇèëY÷%8ÿ¬ûŸ}Ùýþò¤ûúòÄGù.ï‚¯ïÇŒp•ÕDÃ«še´<›2¦ZÕ
-œáÏÞ‡×ÔºªVœe…kz˜jÒ1Jk,×šUBO ’pì$ÂAè6+ÉÎ/ï_>º<w@âI÷t<éÆŸ‰hì|D¸årõäOm4Œ|µ¢W-$~øàAàf£V+‘ró¼ä9Q–)šªð´{ÓŠj–àµî³êmµ‚g?õ_í^W«÷ßTzçÁ—÷Ë²÷ËÊ‚ýù·½áœi$õ¶…Htx÷Ð‡¸yÞ}u
-¿>*p×ç·›î¾€¼‡¾T}
-8ùøòØæ3ŽWøã’‚”pôÜ èÑóË{àø=G~ßt_ú†Ÿ©SGl«h>×LS×,¥Ú8ÔMxvyRšd	EÅbÂaÍÌz©mKü)Ps¸Á3g@9îãÉ-‚´µøú|=ñöFJô¼×ô=<:
-%71· _N€ÐCÕ¢Æ9w˜X‹”õ¸ûöò²ÓIè [ÝOsŽ£ç‡Z'ô`ø
-ÎÍ²ÊÌÀ?–2óÜñöYÒ3$¥çÀBAºÁgýü|%·‹Ïp@_0™óî«~ãAúyLÚ97ÿ¡\@-»­i÷5äÛ{pä¢§e à¡móü<òÝîÿ@Žº×÷dv{æxyy¿û
-éæˆYÏÏè!ÍÀk‰j×³7Äk eÏûØõ¢û®ûdó¤º¶GÐ¥ÃIžõÈ
-Ù­dÄÀçg€3€_—_Ùd=Cšs
-Ã	_¸­ée¤Vý¶ö8ð±"Q3­	´·Ì¦þEN-7ôI,xëŠé¨.SU©ü±Qý!
-+îÙªcäv^Ùáä	ø}·û-¤û9è-2¬ÇÝ1ù¢ŽHÀïC«fû,ÏXÝŸàQì›NžMü!>CSÁüÑµR<UíØÖ¶uÐw°2lž"ïã÷4(µã]Åª5
-@¤¿P1®pP%€Iº|4YJÖ‚¿a,Ûs¤þæt—ÐdC!>‡Á2”Ï'àè_ ážŽr·à×kpÝ=ÍvËõPŒõ=ŒÅf£2O[¿•û,èÉ¡St1É3dQ]ˆEùì
-½ž’~ÈxÏD2‘bË7º Èû5"2mgÝwWsÞ³(¾úò±ïVpöi_ ƒIÄ{åÛz ŒBtô
-0œøÄ‰râ©sÄ ÷vLƒí]À¾»ÐøøÿŸ¹‡bo.ÿ°û<où†D}	ˆsŒ¢ÝAR\í}lº‚©ž€OõVØ*èfU·>]š76ºIžÍ"—•)·nÊáÿmXêÂ&ð‡ÀðÒ'ˆ¯næµ,pÐ	öc
-¡y›ï3Äˆ¯n…LÕ(—õù¥fŠÎ ÕR«7%OðcŸkð†›#ÝÞxØü ™»ý.`tCï
-cîœÜÂ_`Ï~©BŒ9…Cõ?ør
-þMÁ^”Íx Ã£7`0—ßu¿±5¦:à¨}Þin–ÏE·˜ÎS-‘¿)¦8‰¡‰}BÍá³@°ºêsAÇHþ¿w8vŽÂ÷·Î×S ´ç(Fzy2U¶kL çC^
-Êt\£b0ˆ/Î Y~Ø »€Ã?!½{ÚýC/öœúöz‚Û¯>,oÒO°Ø,Põzé#CvétÚg§Q,úÒþwP³ËYß¡‘Õ}‡zæ—Fb"Uïä>2bÂàsäï9²	±Ò]œÞƒ¾ñ‡-§((~µÊ!ò£À>ôRŠ(dà!”é3ª!‘ÆÝ3±éÈ¤X¶ý±‘ý!`„‹B'‹É/åöeÞ{ij'kà@ráb(µ>Ö–÷AGœÂåb~éCIåÊÇý€¥=w2Ü˜÷ù>¹ŽŒDÆ³‰£J…ü/•ÉA	}[ºÀÌ¿Å¡„,0D8áñP
-Kí‹î[ØáŽRÁ(?œX(êš)aªD³7¤øÍò¾Áì¾×04MûFŸ€W¦í=$xÙ‰|Æç¤Â{7ÉÃgn00zb³=H1æ‘ý:²Ü=t J^3Bü0Œ:œ3…y»ž#p×Z¦ñïÀ‡ÃçK´[‰Ø¥n†#³ˆœLéÜåþæâàR÷2ˆÄÅ¡GŠ›îÆÉ‡3´nÃ¶)Ì‹-i0²xŽo÷#ø{ÀÊ[	M­Vuó2’Ws‹(ºeÕ<d–M¯ZºéÙ$€Ö ûJZ0)Ðæ´ÌfßGPœ!ú|æ0ÑÌX†UFƒn©yµà‹R	§K¹–¯Ù›ð³¿ÑrœôBVÏ©Í²µÜ¨j{ýòÊ°¬Ë;;–kY=fê9£{;UjÓªÁS›z5oÀ)Î9¡©Y½bh{ºŠh7\ÀgÁb!oªÎˆºK*+¿…)æsÿÞ{Ó¡>/P¤ôö	ë%ý÷Y×ç‰›û-9ŸÂü
-¼deÜ%öÂñÈ‹Â“.z`§m/Zu/ÚXNòó‡„i‚CâÀ¬À!*Æ<7:È<:Èáûz-›#!IÄ|s¹V©P$Ð•§¤Éb_ÑéÒÐÍ–nn -7ôÓàSþµP7`;±B­ŠD˜Á	#Ð´(‰½.ÎµjY5N/«Â˜.Fµa©u	xå‹LI×­ßôŽÙ}ôŠj -1ª¹ÚoMMÓ
-+˜_ï©ŒšÍšà„­*!’Çy}[alô	s¯žlÿB½fT­x³¬{Í·#ê=Ïa‚ž²8¨uŽ^##ýÌÍÛ=Gö®ÏŽ£{¤Ôr^ÀÐž3p\Çô©–¥W³jUÓ½×fõ†fÈÁàp!‰w}÷rë$,wý²çÞáŒ†‚KÙ–|’Ù'¾ülâÄÙÑ?ÈKõêíî¢œ×ƒ±$`Ç‘ ®š–¡uMw<úïã85;ô„¤xÒýù«o\Bœv„ëìLn41¾³ýÄ+‡‘ëà¯{÷gû(Â£ˆ¥6J“qŽNlð¾¾Cnïž›@‹XŽ½ÏâñVóƒ+0õ	îúÊ#0A4–Â8
-èpu³¬OV[Þbÿà	Œ¼žÜqO`Ž¯Í‚è)?˜ÂHB Umø(†î{dóÌŒ¥5ÖB´ŒZy:ÕpnâL'-P¼‚N¿Âùž3¸Üî0ï¡/Ó(	úmGf­¬ÇtÓö/-i£Y×Í/ÔlÅ¨Ž#Ù~ò÷nNÊáâ-T[óÐÿ`üõaóO'¥¯§Ïë.µß!hBá¯-?ÏlØ…ÍwQÏ{G‰F¬åD§aé›P^öŽ$~Pà35µoáÈé£ŽšGµZÓlv­›5¿UŽæÍZ³>pl¤ÛÇsFuø Þ®ëÕá›Añmöº»=ö@%µÍ-TôÜ°œ¹š<jêõš9x/Mn#ghª5Ø×\U›YÃê?Ôƒ½ƒ¿½Rññà_TÔ*xNó
-i¶eÊÄô;hÂj0àVÿ+a<:–ô’å qË-{–¶—kt´ç´Ï¸«wƒeD„?
-žAUMƒ[Ôª5Rþ<ÑÏk·4‰Ã”rˆáJô‡/QGêlPzŒ+Â{õ<GÂ
-Œîˆ¯ìÒçY.p@ÞŸJ»N9œAÎÌ@S×tD7£1š(?õg·¢|ÐPTÁîï¬ˆï˜Gz^”1`z@ ý	9:Ïga|x‡B¿÷¸øôä˜ÃŠg6z
-oÚ(ÜúV¿y5Í¶\“ÔÌ~¯Ä±Gë~ìôÆ+Z?ýhÞ“lz	ìÂ7™Ûýèp@Fà2Ý}¼vu:®ðh.^ÏÀÔYØw]&y˜Ç¿r¾!nÃmdX &m¡B¨C½¬Õ*ž5LSW³ÄZ°ìpSà09·¿×.¼Œ„¼ø
-â÷1ˆzLy«ˆ±Tc£ ÙyŽVuOÜkPdŠÓ•Î¾¹¾¸CÇNÃ\/,ñë	5Pê÷Öˆ}}>dáÝkŸzè4@KÏ*–“MD¯o’´´ÄòðuýBÛNÅ‚Ë¬Ud£µ¬˜Z0r,TnO„¯ZâDÎS+”wï»µ”d¹%Yb9?è¸?‚	@	^xl ã¡ƒ:‡Ñÿ¹D½ð]~{ùô¯¿ûcàòýüöò¿Á¿ïÝáÍ
-L“yR¤P¨t+	Òh¢pUÏk8j–ZŽë-½j§„†Ï†µä:‡z‰‚jŽ»ÚN®4G`ŸŽ©ZÓÙÞ^Üô<¤(1Òèô8ÌÑUAüû	 ß 5]@€Ï“_ÆxƒˆjÁT=Dð,9ƒàÉ{{ {äR¿'/uµƒÄ%(òÍJ4=`"EFì?ßÛ`:`±*ööLÁKy_ß†Ñ:ð_-}ÀýMÜk‹z`›{àÏèù9>(ˆ2ÇH½Gªœˆþg@ u¬Ìx¤Þðø4û"Ãq´ÄÐT–1r¦“;ª[…~4˜Òˆ48¶­f%ƒ×jâáej$ÑQO@šPg§¡›øAšÔ`F`¨cïEO¶¯íá[ˆn%`fÁ§Àq>uþ—ŸM%²,q‚(ÈWÈGð—vZùàE–gäiä#ß¨þ
-‚ÌxZù 7`8‘¥ë‘ôþ…EÃþäZ8Û¯{Üs¦énÌv‰ý8gÉ5z½È¦wÙ€ûËêe0hÅ~AšgOwYÍ$´‚ží[™|ñìàÝxî–40-Ðêž™¼Ëß¬Õ*=ãlç Ý2Ó^¾­·eœ½µ®–Ë>åS¯ÿílçÒº^ê¥!@è0ïvC! Ç8QïS§ÂÃ×v¦Žò)žÇêcZ½	Š}ÄÊÐ“„óàòØ§NÌìBàî·ØÓãj;¸0ÀQïj0Ü-bo¸•ná{£Ÿ}õ70M
-WZ±Âys¥cÞ™‡XÇ|´¬{j‰þq™ÖÓP[½Cj6ï‰CœÃá–Znªýeq€kf)ÑÌx!>™¯Õòe}ÅÖ+Ñ©j½ -ÔÃ#áªš)ëý Xƒ†O:ttl9Ç$ÙrÎÏ3’cË o¢çlì5Ó…âiXÍ,°f±ZÃk\êà$ÕP+õ¾•O¸©xn5Ëöì{ÊFI(…qÜˆ=;\D’É'¬ŽÉaÙŽ2ªY#_ó
-ˆz«îvQÌ_TíñøZýyàlê:A• v"×é; ÞŠ(TÆyï²·ÕÜYsOzÞµb/¤ùþú_ßüüõ¿ÿ¯VÝ¢Úw€ßž¡ÙôÅ›Ör0Õ)@ìð~ß$Áô®\Þ»Ë¯ÑN‚—Þ„ÞnÕuJ0¾ï¾ÿÄK«ÊTñ±6öˆ+hðÚ.Ü†j†¢dÅàúêZ]……Úö:~ý‚Q_}â¼×á¹SÞcÁÞÊ„r?ý§?ýüõ¾ž&hÁ`N€¯å¹©‚–ž´êÚ³'¸rÇ±cˆ7“B„	OÇ?ÝÄ'c†ºõ,¡Mj¼¯ãÂ‰e^õ-U:Å
-5Ë)$*XV½± •6üÍj£LGÁä!P‡ý(Fàx•‚<
-”ÀÉ2¯ŠrVÕ3ÿ-Ðç¹šYQ­_çësÍ¬Õ}ø9#Ð¿>ø\¢'UÖy;l,‹8ÂJŒ´Z¾çF©ûXß Ù<ƒ²x†ÇN£O…{5è­/H«^Â²HO‘Ï,h íÇ…Ï©‘‡¥ÇÞU¸¾â-–ŸÜ=ÒÇÎ²é#´zØ¯ámŽñh¸ÈŽtYŠ§x¹ù>,«{„j¤áŠ7ðþð?ýŸœGƒ‡‚KªGØ†|goû{à† çÍ÷‡v \ ¢ôªÖ‘s‚é3äáßÁyØ[ÎÃWz8$¸OA†¼î>AÛ¸Ñ3z¡Žå¸ñ•¸‚Öž¡ugÐõÊkã]$¨P V*Âý¬ŸLièQú7ƒÎ¬‡s	FžÙH°ãD[}¨ØñµSÁöòÊ³¨2ÊXL«ÐÜµzÿþ*ª¹"ƒ°kº5:2xý­ù.¸umÆ€úý
-EŒHKm}Æ+§Ó†š=çüLÄ»ZñéþE/kª¬ÏQðÔŒ|ôûß~þý|ÛØçÖx_ïWø•Hðý8	ü¥êqP´ÌvP(c¿ïsü>´! „^heo÷õ¡­Bx{š/~Ì…´‘™Bz…™¥—/½¯Fj½D;‰9æf ZŸÓß1A‰gdZ`yšâƒ¬,I5“ÍÉSú»°ƒæ¨³ª4.n®4òø¿eXAfxÑÍ):«hÔÈ„þè‹<KÈ×½Dßw'‡ŽV¦*\öÁ@ÌïC»œ`¹Ð#,r@àú©À},–ð¸ûZ¦>êÝŠ!t3é¾vÝ^Q>…þÍññåñ’/DÓ¬ßYš:·kÜï¹Õ6x&v`ŒâLo´;R`å$Ã/Ñò’Àø®X;
-3–2G©zÉƒ<êª	?´l @ïÉLõ-ô]É£Áaâ5lû3aŽäôjçmAœ(,ÿ†ç!Çëã4Ræ•dÍ¨Ccì<š­}ŠW3D^…ÕŒ×h1Øä·à	Ÿ;Bùïtxæ–<ÀAØÿgQh–¾!ay?àÅ4
-"K´,r´«Ç®ç„»Ì_~Ô
-1V\nL-ñ=7	B¼ñÄK/A¼ñ#½DÍ´ÔòU^ÂQ4Q–Xš*
-Å)x ðŒÄË,CSõz0“Ÿ4[ß£-njÄ™uûÔXÂ,Ó43ŽÅÓ‡i¨5M­Tc¸8æô\3é±É}?EuŸÛÃK[Ó^l—¥ Í{²VŸºÞz@ûÜ¶|wt®	½‹!±7¡9¼ËÞÅäîÖ@;|§—íQõj#ô^¦h&IÓ°p‹•ý@ðö'™ì1åJä‚žZ•¿/1Å#Œ“ÒÑgg¹ßl˜¯É+„£eÍ]´Â»¤vKá·–¼w÷
-œ¢l8ò]7-eœ0‹”	%Të™æß©”0}¢C±«ÏˆÙÖñAŒHÆš%ÒØòâ¬·º5	Îfqœö{‹ÑÓr%Þ²Ó_}ù   ÿÿ ø½ É
+      "screenshotUrl": "data:image/jpeg;base64,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c11qaT1an+d/yqDUTa7kci3ItWZrSlax01pSNRWFIEkk1C3YAoAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/9k="
+    },
+    {
+      "id": "shot-1788025279896-pnr6",
+      "deviceId": "dev-1787974783991",
+      "timestamp": "2026-08-29T17:41:19.896Z",
+      "deviceName": "Ø¬Ù‡Ø§Ø² PC-15",
+      "traineeName": "Ù…Ø±Ø§Ù… Ù…Ø­Ù…Ø¯ Ø±Ù…Ø¶Ø§Ù† Ø¨Ø®ÙŠØª",
+      "screenshotUrl": "data:image/jpeg;base64,/9j/4AAQxœì][sâVžŸOAü0Õ)ÐÉ[©aãml°±ÙšJ	!@Ü-oMÕöÝãLíÔì>í¾d“ÞÄŽÓÝ^÷%=Î~üºŸ`>Âž‹„„¸h;“Ý9§c¤£#ÿý÷?ÿ£$Ë™h¢ ‡å²~Â²¼ä
+ëûÉ­•=:œLQ™h*²ÎE@‡õµ‡²6³µDw§œ[ÞX-fÒº¼ÎÉðúî"‡‹ûìÖ¡<M÷–Ì}ôÜ?µù`ª«nh•rfo«?‰ð×r¢›^­(ðÁVÑã%jö÷ûø»nãïln=LÁO;ø{ww5º?eÐxÅšç»îù^R×£èzô+3»¾[ržÑ)–Ió»;ˆJøK•×còN!¼.G¢ûéÝzÁî éWJ4©Œémµ°^ô2¹x'ÎaÃ>µœ„×Ç‹à—Ù”Æ ÷^¸¨Vm¾¡ƒË™*8¿_Ÿ·ÒàPD‚‡YçùÃ“ç³,ãùDT9{nËkà¯®ÀãÉá–¼“7`Ò+rL–;òJ6È†W€m®È\l¹(o¯<à’‘„œZ[.(káýôÚJ¤MPõíRLŠ¯”¶Wrrrµ³ý ’ØK¤TngNìÒ’žaŠµx™îh{á²¶Ú©d˜8;IFŠ…ÝµeQYÓ¥ÒƒRqyŸÙ*}ÜO<¦›X–WŠrF^‘“€úÅHXîDÂAñ¼uKŽ…±þ¸ÛÆJXÞ	‡ÛÁ¸êø·,"+ráÁª\PûD–±D8¼QŒ%¶Âá$PÕD¢¨fÖŠ±vd7F%ôº±~ï³z÷ËC-²,Á=–åz†Â¸OÌÝ!ž7{+6óáNA[2À’ÃœÇJä”ã…Âzbxä›Z8ßÑâñûÝTI—”´ëÐZ4¸)–J|lw¿ÚÒMÍ”ò+Dõ<]£»¸ÕÙ7K1¥1¡ª%ÒT–6ƒ-…Zš–ÞKÇ×š™íPú>³¦pÙLÔÜã³R„…Ø U+su¸{”P6w«Õ¼²_ÍT·òbF÷:+E®ÞU¸ÝPJcwÅÅ´Y/qº’Zo5ø½­¯îpâö²º•mZ	Å³æz¶ukG³´¸i¬ïe·Š‡ìQZPvCY=j†vÙí–¸Ø]­WÍ†¯F)FÍ®®­•ÅR´|˜JÕkƒîl5ÌP~s]Û¶7÷Öò…#q»»WZÕ¢fE§›yƒfcA­]
+å÷Ú¢¼[á77…jw¿{Äð[÷ÓíX'ÙdÀL2úËì‰{zªÓö¢B+¾šZ¤ZZ©^É5ÛkGGéûû÷Å|4½u¤ÅÊi#o¶6èd3Ñ–â-‘[¿otZÑ.ÇîÑ±ŠÒInîèTê@"­¶Ò»6
+6¢Ñ|ö((Ël”ò­Mª’R´yDIñ’%SÙÜKsÁD|w/š³­*¥ƒù½¯e…Åxy_Û«èåŒ²«›œq`Fm®´»JðâƒF;¾Ê-pÅï6‘6r;»z^j5ô<›ZßÜÞKï±R0˜Þ¤–ÛÎ¯
+jUÚ7’R«ÚLñ5“§¥•Š˜£ššk.Þ_L63]ÛmµCH”·Û‡Blo/–Ùà#{ôjN2µ|½½¸¡¶bìªvÛ-­6Y#ß¨në­öº¶A·…Švøänn_PÃ¬:•ËJÉìŽ™U«9-Ÿ£ÄÚa»ªvÛ\iµÄ¶×ÓÔ®^îÐùÍ5)eì‰¡ý®XÝŽgw:¦ –³JpYËgƒÉÌAp3&‰jÐäÄºÈøíÕµM:Ê
+•Üb<²(ækAµV>4éûj¬±%dÂ——Ô£½Æn•Ô3)ºš1Ú˜ UÚu.·¸ÒHjµÍ4•3È®NÓ5ºÐ.wª{ëù&·—fã«‹+áxt1.µ³›éæQ,Á
+­ ¹.)Èüöz‰íòâöÞê*9AT;í<ßmÇ×övÔ,Ó-å:ñ"³WÎmÕ;|–íVµöj2›‹uB©EV<¤Ò‹+UÄíøfdÇXmæ²Ô¢ÌªR;˜“tò[ÅÍú@‹ß?ÒjÑµ g–ŒT|í “¦Ž²¥t#xPc¤<<Üâ2jÃ¬íRòÖÆÍ‘åÖ¡ZŠvjÈÕÑÊi=oÆR+G›5³jj0íìÞ‘¶¥Hu}›i7"Ü‘v”"G£3õÚNˆŽë;‰„Q«î˜éûi®µþñ¥õd(¼”Ö$L©±B4–Ù®˜f²*¥ÍŒ¾µ+*F$%ñ%ð
+Ýíä©˜JÓJŠVj‹¹`÷`e'¥„ÊªÎn˜éŒ‘úGÑäV"½º)—éev_®Ïn_I#mTJåÏ~åíwŸ¡?ÿˆ~û|znaÉ·Ð,ÖM?EŠáiH-ï7Êbyá3»[Nkëª¶:ƒÏ°oH
+q!‘•$ÚéfêU­i*ÕìÇPŒà§D?<Fh‰•–h> FÎxGÝRªìß{yý¼wÚ{ã‹/ûiÞ5¨¡è5­ßíúiï²wzýÔ>¼?¾Þ%øó#8öÌ×;ë½¾>é;W7UCÓjp‚;F=¾b*KzU)hÁRC+ü]Vij÷YP*\y$ð‡Àü!ð‡Àü!ð‡ÀÒþO·YàÅrÍú‹¹BíVáOh‰æ`dnnþÈþøCà?þøCà?¤‘6o›þp!A”(ÎOUJ­[…?Ì'ÀÈþÜÜü‘	ü!ð‡Àü!ð‡ÀH#mÞ6üaXF¢)¡a6nþ0ìÏÀÈþÜÜü‘	ü!ð‡Àü!ð‡ÀH#mÞ6ü¡$šƒ¦Ì[…?ôKÀÈ· Î{ A tuýôú‰ï:xÚ{õ)Á=Ãà‚{î!¸‡à‚{î!¸‡àÒþ6Ú¸‡•xA¢`éÖ²·‰{hi‰`d‚{&4‚{d‚{î!¸‡à‚{î!¸‡àÒH›·Í‚{D–—hÑ_É°·Š{Bè]o´HpÏ„FpLpÁ=÷ÜCpÁ=÷ÜCió¶YpÏrKû…nI¹UÜÃ —¼±4Á=Á=2Á=÷ÜCpÁ=÷ÜCpi¤ÍÛfÁ=,Z†÷3‡Æ­Ö¹QÒ-ÀÈ÷Lh÷È÷ÜCpÁ=÷ÜCpÁ=¤‘6o›÷0°Îò›\‰¹UÜcÕ¹ÝÆkÝî™©ÜCpÁ=÷ÜCpÁ=÷ÜCÚßF›÷Ð4#”Ÿfš·»ÞÃ/ÑL ŒLpÏ„FpLpÁ=÷ÜCpÁ=÷ÜCió¶p#1’ Ò~©¡ßê{(f‰’`d‚{&4‚{d‚{î!¸‡à‚{î!¸‡àÒH›·Í‚{B<'1´¿–µo÷K¼„ÞkÀÜ3©Ü#ÜCpÁ=÷ÜCpÁ=÷FÚ¼mÜ#ÐÅ‰~A¯ßbÀ=ð¿ ™àž	à™à‚{î!¸‡à‚{î!¸‡4Òæm3Õ¹IOIþP¹ºÕ:7v‰¦`d‚{&4‚{d‚{î!¸‡à‚{î!¸‡àÒH›·Í‚{D†£DÆ_ÎÖµ[Å=ÔÃÀÈ÷Lh÷È÷ÜCpÁ=÷ÜCpÁ=¤‘6o›©Î-$Jç/æEóVëÜBK¼ #Ü3¡Ü#ÜCpÁ=÷ÜCpÁ=÷FÚ¼mZÜ±Œ(q´ÀùÕlE¹5ÜC±K½Är02Á=Á=2Á=÷ÜCpÁ=÷ÜCpi¤ÍÛfÁ=Ëø¥F¥s›¸‡•–86 zÜ3¡Ü#ÜCpÁ=÷ÜCpÁ=÷FÚ¼Í…{ÀïßBl° Ö«–©›J¶	`Á?ŒÂC%ëwÁšš=0Þè^?¹~Ö{	!‡«[ÝÔšCýz¯@¯·­£¯g½Kpþeï{|ö²÷ÝõIïíõ‰Ïï»~¾^à*³…†WTSo»6!e¥¦18ÃŸÝ¯*EÕÍ.8Ëðžkú˜jÒ1Jk.×[5BM ’pÌ$ÂAè6+ÉÎ¯_?»>w@âIït<é<ãÏD4f>¢yn9†\}ùSšM½P«j5‰>xÐ¸Y¯×ÆJä‚Ü'„8V$?å¯r”sÓªb”áµÎ³j¥Šg?^í\WoÞ”ûçÁ—°ûË²ûËÊ‚õù·ýáìi¤´Ž‰Htx÷Ô‡¸yÞ{u
+¿¾*ðÐ°šî½†¼‡¾Týpþúùõ±Åg oðÇ$'>(#àè)¸Ð£W×ÀñG¶ü¾ë]†Ÿ©Û@l«ª.>×CSM¹Ö<ÔxvyRšÄËÚOé¥;bÂaÝÈ¹©mIü)Ps—¸Á3g@9ãÉ-‚´µŒøú|=q÷FJôªßô=<:
+#71· _N€ÐCÕ¢Æ9·™X‹”õ¸÷þú²ÓNè [=OsŽ£ç‡Z'ô-`ø
+ÏÍ2efàã7
+ìñöYÒ3$¥çÀBAºÁgýü~%w€‹/q@_0™óÞ›AãAùLÚ>7ÿ¡\@-{­iï-äÛ8rÑ×2HPðÐ–ù~ùaï¿ Gëû2»½t\^?î½Aº9bÖó3zˆD3ðZôw¹;â5Ð²WìzÝûÐ{1yR]Û3èÒÎá¤ÀÏúd…ì…V2âàóKÀÀ¯ë/-²ž!Í9…á„/ÒQµ
+R«A[ûxX‘¬æÚ›FKû"¯TšÚ$¼·ÅtT—ü5±òK£úSV<² UÇÈí¼±ÂÈð÷aïH÷sÐZ6dX{?bò?E‘€?†VÍòY®±z?Á£Ø7 =›$øwB|šò‡
+G·JýñTµb[ËÖAß=ÂÊ<²yŠ¼OÀÕ ÔŽw¨Ö,‘þBÁºÁA@• &éúÙLdü’ú™(cÙ¾#xšÏë.¡É†B|ƒe(Ÿ/ÀÑ?Â}?ÊÝ‚?oÁu\6Û1.·Ca0Ökôp0›Êœ¿Ônþ5¨<`A‡H¢ƒI^"‹zì@(Êg7èõ”ôCÆ{&’	~¦rpW¡Š¼ßB!ò!ÓvÖûpS0ç>‹B@à«¯ŸûîgŸ0(DŒ°Á°[¾Ý¡2Á(ô@Gß¡ ÃŽOì(×O#]Y1r´ûBàCâÿ{|æŠu¾ö\þ-`÷kxßò=‰l<z	ˆsŒ¢]/)nö>]ÁTO@H„§z/b5£¦™Ÿ.ÍÝ%Ïf‘KÑŸ­´ïÊáÿuXêÂ"ð›ÀðÒˆo<7s[8èû1…Ð|€ŽÍ÷bÄW÷Â†¢W*ÚüR3EgÖßVjw%/ðcŸkð†›#ÝÞxØü
+ ™‡ƒ.`tCï
+cîìÜÂŸaÏA©BŒ9…C>ør
+~¦`/Êf<áÑ;0'˜Ëz_[š	SpÔï47Ëç¢ÛLçüm»+¦{œÄP‚Ä:¡æðY Ø ]¸ c$ÿßÙ;Gáû{ûë)PÚs#]]ŸL•íÀù—‚ò ×¨â‹3h–ß6À.àðOHï¾ïý¡Ÿ{Ný {½@Ší——7$ØlæýFù†ìÒé´ÏJ¢Xô=$8¤ý?AÍ®ä|‡zNójÙŸ‰	þF7ÿ#–Ÿ#øÈ–Mˆ•âôôO|8l9EAñ3¨%P‘öé¤ŸRD!À O¡LŸÁP)ˆ4>šè®‰MGöŸa:¿4²#ŒpñSèd1¹±áï§ÜÞ¡,Â•›¦–q±„!.†Rëcmù tÄ)ÜQ.æçNQÐ~±Rý%B?`iÏí7fÁ#d¾On##‘†qÆ,dbýåbáçÊä „¾%]`æßàÐB"œð|(…ƒ¥öuï=ìðG©`”çO,uÍ‚Ð¼¿L1w¤ø4Åp>ovßm	hŠ¢|£OÀ+½i{W^6E"ŸöÙ©ð~ÆGò0Â™ŒžØ,dùéãŽÈ~Ùîž:F ¥o!~FÎ™Â¼]ß8k-ÓøwàÃásŒ%Ú½dü£RwÃ‘YDNòkìåþêâàP÷2ˆÄÅ¡GŠ“îÆÉ‡3´nÃ¶)Ì‹%i0²x…o÷#ø;ÀÊ{IU©Õ4ã#2“WsŠ(ššiêµd–U«™šáÚ$€Ö JZ0)Ðæ´ÌfÝGPœ!ú|æ0ÙÊšºYAƒn)¥è‹ù“v—J½P·6áç@³m;é…œ–WZs¹PS»Öúå3”aó¬ËÛ;–ë9-nhy½{ÛUJË¬ÃS›Z­`Á)Ö>¡*9­ª«ûš‚h7\Á/{Áb¡`(öˆšC*+¿‡)æså¾éPŸ×(Rzû„Çõ’~û,ëóÂÉ€}‹–œOa~^²2îkáxäE‘I=±Ò6Þ‹V‹6–SœgÞàï™&8$xfùã´ç¹ÑAÆó\è ‹ïë¶l¶„¤óåzµª7›@‘@WŽòH’Å.‚Ý¥©mÍØ@[nh& À?»ük¡aèÀ$vãÅz‰0‚š§(Aú]&œk×sJœ^VšÅ1]ôZÓT
+ðêÙ²¦™¿é³úhUEGZ¢×òõß4[ªª5›~¬`­¯2J.g€–ª<…Hçõ-…±Ð'Ì½º²ýº^3­Šæ6ß¶¨÷=‡:¸Êâ ÖÙzŒôK'o÷
+Ù»;Žî±«TZðšrãÚ¦O1M­–Sjªæ¾6§5UCG‡³I|¸—S'`¹ã/=¿p§7e\Ê¶äƒÌ:ñ»Ï&Nœ=ñSO^ª_o÷å¼žŒ%3ŽÅ0uUo(hºã©0xÛ©Y¡'$Å‹ÞÈ_}íâ´÷#\gÿhb°£‰ñ­å'ÞØ|xŽ\oEØ{0{8@vEL¥YžDˆs´¨pbwðõr{œd Z„Äzpì~—·šŸÜXÉ€©Op×7.©€	¢±àÇQ@ƒ«›m²ZXÚðûW`äöä¶ûxs|xmüBOùÑ„àG­jÃÇ@¹0tßs ›¯a`,%üc-D[¯W¦Sû&ödqÒÅ+èôœï9ƒËíîóú2’ ¿V¸`Ô+Z\3,ÿ2Ñ’6[ÍøBÉUõÚ8’]à'¿rrR6ï¡Úš§Nøã¯Wëœ:‰(=}ö(X'p©øA
+-ùy‰dÃ*l~ˆ
+x®l%±–£7“Ý¦©U-B¹Ù;’4øAoÌÖ•…#'¦kŽ:jxŽªõ–Ñôvmu¿U=GF½ÕðévÀñ¼^>¨uZmøfP|›ÞžCw×¡ÇöTR[ÜBEÏƒ«À™+ïQCkÔï½T¸¼®*¦·;®¹öUZ9Ý<Ô‡ýƒ¿½Qññà_T•xNãi¶dÊÄô[hÂj0àVÿVÂ¸.´-é$Ë} â”[ö-m?×hkÏé€pVï¼eD„"<ƒ*ª
+·
+(5s¤ü¹¢Ÿ·Ni(‡)åÃ7”!.Q[ê,PzŒ+Âûõ<GÂ
+Œî;ˆ¯¬ÒûY.p@>˜J»M9œAlÎÌ@CS5D7½9š(?õŸnEù ¡¨‚Ý&Þ#X?0ôÜ(Ãcú@ ý	9:×{a|ø€B¿+\|úrÌfÅK=†wmîHýG«ß¼šfY®Ijf½WâØ¥u?zãmþv4ïJ6]»ðMæö :ôÈ\¦{Œ×®NÇÍÅë˜:ûnË$óøWö7Äm¸Ä¤-T¨“ÿP«¨õªkÓÐ”œ‡X¦®c
+|&çôwÛ…KÀHÈ‹/a þƒøÑ©Ç]w1–jl ;ÏÑªî‰sŠLqºÒÞ777cÈcÛi˜ë…%þï]¡JýÞ±¯Ï‡,¼³qíS×
+haj9Ù´³‰èõ-|Š—¾®Ÿ±™áT,¸Ì\E6ZW*²¡#ÇrA1àöDøú¦DV`]µB9p÷[‹)†]âé%†€Ž™L Jp	là	°¶[„êFÿçVõÚwýÍõ÷ÿóO^Ÿ¡ßß\ÿøùÎ®ÙªÂ4™+E
+…J3S€ Í:WõÜ†£n*•„ÖÖjVJhølÄöPK¾¡s8¡—,*Æ¸«­´àJkô Öé¸Ò­·Ì‘=àíUÀM×C
+"-ŽHKÀ]ÄÏ°úy­é|®üú0Æó"ªC9tÁµäN€'ïïì?’Cý¾¼4”.—ÀÑ#R”ÇDxEF<ßß`ê±XUk{&ï¦¼o`Ãhø¯¶æq÷Ú¢Øfàø3z~–ñ‚ÄÒ¢§÷H•Ðÿh 3ÎŒôÀ.ŸfÝB Y–iÊŸ£õ¼ÇcrÇ4³XÇSºžØIÕ€cÛjU³x­&Yö$:ê	Hîî45?HËïÍuì¿èÉòµ}|c	Ñ½$Ì,ød8Î§ŽÑÿÝgSÉ‡$‰,/ðÒòúÙåƒ™V>8áhiùÁ7jÿx> f<­|€Ð,OKâíˆÆHzÿÌ¢a}r,‹ìí×}îÙÓt6f;ÎÄŠ~ì3¼è½~dÓ¿ÌãþrZEZ±^æÚÓ]Q²Iµ¨åV&¼/^ƒÜÏÁÝR:¦úŸƒ:g&ïò7êõjß8[9@§Ì´Ÿoëo™gï­+•ŠOþÔí»Ûù´¦•ûiÈP úÌÃ;ÝPèòvÔû½]áá[+Sç÷É®Çêc˜ý	
+ÄÊÐ—„óàòØïí˜ÙÀ½o°§ÇÕV*pÁÃQ÷j0Ü-bo¸•ná{£Ÿ×õ70M
+WZ±Â¹s¥cÞ™‡XGÿbY÷Õýí2­¯¡–z‡•\Á‡Ø‡#m¥ÒRËâŠ !Ör²•uC&|²P¯*ÚŠ¬W²[SûA#Z¨‡G"5%[ÑA°Mž´éhÛr–NÑ4²ål€£EÛ–/4AßdßÙXk¦}ÄÓ4[9`Íâõ¦9Ö¸4ÀIS©6 ûàÆž¤s¦¢—½‘Z¶4»8ÔV+ðÕª›÷ ˆ­Ù¥•§¨v•ü1
+Õv¼X=³‹‚¬e?ô"˜ …•ëöK°Fõ	Œä/|vÙ+¬&tï‘ÀK¦ï‘Èþäl{<¶WBž¡íMPi¾‚·9Æ£áºY8ÒC ©0nÇ»°}°š•„>ê½ƒ÷‡»²ÿòÕ¿ýÑ=ãêTA«:ìôR=ƒZíë}kíäy×þ`¿½üñPQï"J¿õ1Ê[þñ)í8kÉs¸Kß&Á#x
+2ämïÚ™‰ÖŒÐ;2|(m…¯ÄEY°Üç-%®OPª
+†£µ?X|K–!Y?™&JèZbxøÞOŽ*J±„•Ùµod®PqÒ%Þ2qa‡	oÐ*à„Ð`ÜCÒÒ¨‡œø€ÌP·þÃ°Õ‡ê—ÞÚE)¯ ¯\yRûâx±nÚ…D“ªßÜ
+M+4²‚,FÅ2gÃzíÂ~Þ	‘Ë¥ù°ŽHâë×k9½Pið‘ÁFå[Ï?ñ¡åÜ'ö.Í,|WvñÛ>p(qDuÙ®ûïŽ4ž—'Y+ã¾ÿù÷¯ÿòÕ¿ü·ÚDý/} Ly?A_Üyj;IrÚû½r&à›äiÜKÑ`„+g=ó-ÚtéÎÐâý“=»¦ê»ÞÕ'óØŽ!@éØŽ§ÈÂ^âMžh R¨à/P"òk8{á¿OåE¾üÄ~QË+{GŸgxo"2†ùêOúËWøjJý†dvýf&ê72è—v­èÌ›y<Ý¬ŠMWìIVg’BM³Ñ\
+Ñ›‡›V­Ù Ž´ òlÀ~~šg9žC
+ñ~ž•$N¤œ¢eÿ†ŸçëFU1×ÍÏU£Þøõáç4Oýúàs‘šÖX°·j,«¨æ2$M@ÍmH^@õô!Q‡ËQÑf¨ªoPÄˆ\ºåüñÊé´¡f_—¿…‰xÇ…¾CÂE?kª¬Ï‘ÅøÞe»>ÊñÏ¿?ÿ
+ß6öÚ¾5Þ×û%~%|ÿÇN_¡T=¶aÀ%[òŒ¬ûjÀNøÐ† 8z¡•µÝ×‡¶
+áíyh¾ø0ÑVe
+WÇÏ¬ìxxk¯0º4âí$zf[kO´>§zÐ!‘£%Šg8ÊÏ…I³J6——¦T>°‚æ˜½ª4.n®6øÿ~K3¼Ds‚“S´WÐ>¨‘	ý0pu-	 3}‰
+¾Nö4V¦*\öA»ð¡]N°\è¹gÀÏ=E*ð‹%<î¼–i@…ú·€bcRW8í¼vÝZQ>…Á=šãóëã%_˜¢˜€½4unÕ¸?rªmðL,?ŠÜ’Û9ŽX)EsK”´ÄÓÀ„›ÖJÂŒ¥Äú­ì
+TŠ?´l@ïÊL,ôÝÈ#ï0‰:¶€ƒ™0[rúµó– y'
+Ë¿áyHãñú8”¹%YÕÐÛfiÇDŸâÖ“þc5ã-ZÌ6ù=xÂW¶P¾Å;^:eO0bû¿¬ 2ÅPw¤  ¼˜FA$‘’–’BcuãØñœp—ùå/Z!Æ*ƒÃ©%¾ï&0Aˆ— ^‚x	â%ˆ— ^b¤—¨¦R¹ÉKØªÀ€&H"Cù‹‡üAi
+ð-rCSþF#”-Lšƒ¥ÇWh‹Û„q"Î:5–0ËEcñ4Ãa$ë-C Õ.Ž9=×LúlrÞO1XÝçôpÓÖ°Û%1Dqî…,ÏêSÏ]h}Û–Ž.ãÂ5¡1$v¯~oç²v19»5Ðßée{T½Ú½—ü¢(X¸ÅH x™I&Û#¦,ïØ«Våÿ—˜âÆIéè³³ÜoH6=æË#™c…p´¬99n¼KÚ³[
+¿µäÊÙ+pŠ–Îïºk)cùY¤Œçý|­‘mý?•2Ó':4ŒÝl|†DlÈ¶Žª`D2Ö,áÆ’{yÆ©I°7‹ã´ß{,ˆ»–+žw—þêwÿ  ÿÿ NÒB
