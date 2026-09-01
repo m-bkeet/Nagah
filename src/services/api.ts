@@ -43,9 +43,9 @@ const getApiBaseUrl = () => {
     }
   }
   const envUrl = typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_BASE_URL;
-  if (envUrl) {
+  if (envUrl && typeof envUrl === 'string' && envUrl.trim() && !envUrl.startsWith('/')) {
     let clean = String(envUrl).trim().replace(/\/$/, '');
-    if (!clean.startsWith('http://') && !clean.startsWith('https://') && !clean.startsWith('/')) {
+    if (!clean.startsWith('http://') && !clean.startsWith('https://')) {
       clean = `https://${clean}`;
     }
     return clean.endsWith('/api') ? clean : `${clean}/api`;

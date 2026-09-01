@@ -37,12 +37,29 @@ if (!isServerless) {
 }
 
 // Health check endpoints
-app.get(['/health', '/api/health'], (req, res) => {
+app.get(['/health', '/api/health'], async (req, res) => {
+  let supabaseStatus = 'disconnected';
+  let supabaseCount = 0;
+  try {
+    const { supabaseClient } = await import('./data/index.js');
+    if (supabaseClient) {
+      const { data, error } = await supabaseClient
+        .from('collections')
+        .select('id', { count: 'exact', head: true });
+      if (!error) {
+        supabaseStatus = 'connected';
+      }
+    }
+  } catch (e: any) {
+    supabaseStatus = `error: ${e?.message || e}`;
+  }
+
   res.json({
     status: 'ok',
     service: 'Nagah Management System',
-    environment: process.env.NODE_ENV || 'development',
+    environment: process.env.NODE_ENV || 'production',
     serverless: isServerless,
+    supabase: supabaseStatus,
     timestamp: new Date().toISOString()
   });
 });
