@@ -3,6 +3,7 @@ import { useCenter } from '../context/CenterContext';
 import { ElectronicPaymentWidget } from '../components/ElectronicPaymentWidget';
 import { getPublicParentPortalUrl } from '../utils/urlHelper';
 import { useAuth } from '../context/AuthContext';
+import { ALL_PERMISSIONS } from '../utils/permissions';
 import { api } from '../services/api';
 import { GoogleDriveService } from '../services/googleDrive';
 import { GoogleSheetsService } from '../services/googleSheets';
@@ -82,27 +83,7 @@ export const SettingsView: React.FC = () => {
     rolePermissions: []
   });
 
-  const availablePermissions = [
-    { id: 'dashboard', label: '🏠 لوحة التحكم' },
-    { id: 'trainees', label: '👥 المتدربون' },
-    { id: 'trainers', label: '👨‍🏫 المدربون' },
-    { id: 'courses', label: '📚 الدورات التدريبية' },
-    { id: 'programs', label: '🎓 البرامج التدريبية' },
-    { id: 'groups', label: '👥 المجموعات التدريبية' },
-    { id: 'attendance', label: '🗓️ الحضور والغياب' },
-    { id: 'finance', label: '💰 الحسابات والخزينة' },
-    { id: 'expenses', label: '💸 المصروفات' },
-    { id: 'points', label: '⭐ نظام النقاط والمكافآت' },
-    { id: 'exams', label: '📝 الاختبارات والدرجات' },
-    { id: 'interactive', label: '🔗 الجلسات التفاعلية' },
-    { id: 'devices', label: '🖥️ إدارة الأجهزة والتحكم' },
-    { id: 'messages', label: '💬 رسائل WhatsApp' },
-    { id: 'reports', label: '📊 مركز التقارير' },
-    { id: 'certificates', label: '🎓 الشهادات المعتمدة' },
-    { id: 'branches', label: '🏢 إدارة الفروع' },
-    { id: 'audit', label: '📜 سجل العمليات (Audit)' },
-    { id: 'settings', label: '⚙️ إعدادات النظام والنسخ' }
-  ];
+  const availablePermissions = ALL_PERMISSIONS;
 
   const handleAddCustomRole = () => {
     const roleId = 'custom_' + Date.now().toString(36).substring(4);

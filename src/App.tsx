@@ -52,10 +52,33 @@ import { PublicTrainerRegistrationView } from './views/PublicTrainerRegistration
 import { PublicStudentPortalView } from './views/PublicStudentPortalView';
 import { PublicParentPortalView } from './views/PublicParentPortalView';
 import { PublicTrainerPortalView } from './views/PublicTrainerPortalView';
+import { hasPermission } from './utils/permissions';
+import { ShieldAlert, LayoutDashboard } from 'lucide-react';
+
+const AccessDeniedView: React.FC<{ tabId: string; onGoHome: () => void }> = ({ tabId, onGoHome }) => {
+  return (
+    <div className="min-h-[70vh] flex flex-col items-center justify-center p-6 text-center animate-fadeIn">
+      <div className="w-20 h-20 rounded-3xl bg-rose-500/10 border border-rose-500/30 text-rose-500 flex items-center justify-center mb-5 shadow-xl shadow-rose-950/20 animate-bounce">
+        <ShieldAlert className="w-10 h-10" />
+      </div>
+      <h2 className="text-2xl font-black text-slate-100 mb-2">غير مصرح بالوصول لهذا القسم</h2>
+      <p className="text-sm text-slate-400 max-w-md mb-6 leading-relaxed">
+        عذراً، حسابك لا يمتلك الصلاحية الكافية للوصول إلى هذا القسم (<span className="text-amber-400 font-bold">{tabId}</span>). يرجى التواصل مع المدير العام لتعديل صلاحيات دورك.
+      </p>
+      <button
+        onClick={onGoHome}
+        className="px-6 py-3 rounded-2xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-sm transition-all shadow-lg shadow-amber-500/20 flex items-center gap-2 cursor-pointer"
+      >
+        <LayoutDashboard className="w-4 h-4" />
+        العودة إلى لوحة التحكم
+      </button>
+    </div>
+  );
+};
 
 const AppContent: React.FC = () => {
-  const { isAuthenticated, isLoading } = useAuth();
-  const { isAiModalOpen, setIsAiModalOpen, aiModalTab } = useCenter();
+  const { user, isAuthenticated, isLoading } = useAuth();
+  const { isAiModalOpen, setIsAiModalOpen, aiModalTab, settings } = useCenter();
   const { themeConfig } = useTheme();
 
   const [activeTab, setActiveTab] = useState<string>(() => {
@@ -128,56 +151,64 @@ const AppContent: React.FC = () => {
     return <LoginView />;
   }
 
-  // Render Active Tab View
+  // Render Active Tab View with Strict Permission Guarding
   const renderActiveView = () => {
+    // Helper to guard view rendering
+    const guard = (permId: string, component: React.ReactNode) => {
+      if (!hasPermission(user, settings, permId)) {
+        return <AccessDeniedView tabId={permId} onGoHome={() => setActiveTab('dashboard')} />;
+      }
+      return component;
+    };
+
     switch (activeTab) {
       case 'dashboard':
-        return <DashboardView onNavigate={setActiveTab} />;
+        return guard('dashboard', <DashboardView onNavigate={setActiveTab} />);
       case 'trainers':
-        return <TrainersView />;
+        return guard('trainers', <TrainersView />);
       case 'trainees':
-        return <TraineesView />;
+        return guard('trainees', <TraineesView />);
       case 'programs':
-        return <ProgramsView />;
+        return guard('programs', <ProgramsView />);
       case 'courses':
-        return <CoursesView />;
+        return guard('courses', <CoursesView />);
       case 'groups':
-        return <GroupsView onNavigate={setActiveTab} />;
+        return guard('groups', <GroupsView onNavigate={setActiveTab} />);
       case 'lab_schedule':
-        return <LabScheduleView />;
+        return guard('lab_schedule', <LabScheduleView />);
       case 'attendance':
-        return <AttendanceView />;
+        return guard('attendance', <AttendanceView />);
       case 'finance':
-        return <FinanceView />;
+        return guard('finance', <FinanceView />);
       case 'expenses':
-        return <ExpensesView />;
+        return guard('expenses', <ExpensesView />);
       case 'points':
-        return <PointsView />;
+        return guard('points', <PointsView />);
       case 'exams':
-        return <ExamsView />;
+        return guard('exams', <ExamsView />);
       case 'homeworks':
-        return <HomeworksView />;
+        return guard('homeworks', <HomeworksView />);
       case 'interactive':
-        return <InteractiveSessionsView />;
+        return guard('interactive', <InteractiveSessionsView />);
       case 'social_feed':
-        return <SocialFeedView />;
+        return guard('social_feed', <SocialFeedView />);
       case 'devices':
-        return <DevicesView />;
+        return guard('devices', <DevicesView />);
       case 'messages':
-        return <MessagesView />;
+        return guard('messages', <MessagesView />);
       case 'reports':
-        return <ReportsView />;
+        return guard('reports', <ReportsView />);
       case 'certificates':
-        return <CertificatesView />;
+        return guard('certificates', <CertificatesView />);
       case 'branches':
-        return <BranchesView />;
+        return guard('branches', <BranchesView />);
       case 'ai_developer':
-        return <NagahAiDeveloperView />;
+        return guard('ai_developer', <NagahAiDeveloperView />);
       case 'audit':
       case 'audit_logs':
-        return <AuditLogsView />;
+        return guard('audit', <AuditLogsView />);
       case 'settings':
-        return <SettingsView />;
+        return guard('settings', <SettingsView />);
       case 'student_portal':
         return <PublicStudentPortalView onBack={() => setActiveTab('dashboard')} />;
       case 'parent_portal':

@@ -1,8 +1,16 @@
 import * as crypto from 'crypto';
 import { db } from './db';
 
-const rawSupabaseUrl = (process.env.SUPABASE_URL || 'https://zdbrwwkyxjujrokzjang.supabase.co').trim();
-const SUPABASE_URL = rawSupabaseUrl.replace(/\/rest\/v1\/?$/, '').replace(/\/$/, '');
+function cleanSupabaseUrl(raw?: string): string {
+  if (!raw) return 'https://zdbrwwkyxjujrokzjang.supabase.co';
+  let url = raw.trim().replace(/\/+$/, '');
+  while (/\/rest\/v1$/i.test(url)) {
+    url = url.replace(/\/rest\/v1$/i, '').replace(/\/+$/, '');
+  }
+  return url.trim() || 'https://zdbrwwkyxjujrokzjang.supabase.co';
+}
+
+const SUPABASE_URL = cleanSupabaseUrl(process.env.SUPABASE_URL);
 const SUPABASE_KEY = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpkYnJ3d2t5eGp1anJva3pqYW5nIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4ODA0ODY0MiwiZXhwIjoyMTAzNjI0NjQyfQ._JEu3kjLDPWS1uCabeVMyTRIeDS0NpnjTPUjyuL6_Ec').trim();
 const hasValidSupabase = Boolean(
   SUPABASE_URL &&

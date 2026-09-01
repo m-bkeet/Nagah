@@ -1,7 +1,17 @@
 import { createClient } from '@supabase/supabase-js';
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || '';
-const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_KEY || '';
+function cleanSupabaseUrl(raw?: string): string {
+  if (!raw) return 'https://zdbrwwkyxjujrokzjang.supabase.co';
+  let url = raw.trim().replace(/\/+$/, '');
+  while (/\/rest\/v1$/i.test(url)) {
+    url = url.replace(/\/rest\/v1$/i, '').replace(/\/+$/, '');
+  }
+  return url.trim() || 'https://zdbrwwkyxjujrokzjang.supabase.co';
+}
+
+const rawUrl = (import.meta.env.VITE_SUPABASE_URL || '').trim();
+const SUPABASE_URL = rawUrl ? cleanSupabaseUrl(rawUrl) : 'https://zdbrwwkyxjujrokzjang.supabase.co';
+const SUPABASE_KEY = (import.meta.env.VITE_SUPABASE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpkYnJ3d2t5eGp1anJva3pqYW5nIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4ODA0ODY0MiwiZXhwIjoyMTAzNjI0NjQyfQ._JEu3kjLDPWS1uCabeVMyTRIeDS0NpnjTPUjyuL6_Ec').trim();
 const hasValidSupabase = Boolean(
   SUPABASE_URL &&
   !SUPABASE_URL.includes('placeholder') &&

@@ -1,6 +1,7 @@
 import React from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useCenter } from '../context/CenterContext';
+import { hasPermission } from '../utils/permissions';
 import {
   CheckSquare,
   LayoutDashboard,
@@ -112,16 +113,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'settings', label: 'إعدادات النظام والنسخ', icon: Settings, roles: ['super_admin'] }
   ];
 
-  const visibleItems = allNavItems.filter(item => {
-    if (role === 'super_admin') return true;
-    
-    const roleConfig = settings?.rolePermissions?.find(r => r.id === role);
-    if (roleConfig) {
-      return roleConfig.permissions.includes(item.id);
-    }
-    
-    return item.roles.includes(role);
-  });
+  const visibleItems = allNavItems.filter(item => hasPermission(user, settings, item.id));
 
   return (
     <>

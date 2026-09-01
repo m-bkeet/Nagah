@@ -4009,7 +4009,7 @@ async function hydrateAllFromSupabase() {
         memData[colName] = items;
       }
       console.log(`[Hydration] Successfully loaded ${data.length} documents from Supabase public.collections across ${Object.keys(grouped).length} collections.`);
-      if (data.length === 0) {
+      if (false) {
         console.log("[Hydration] Supabase is empty. Seeding from local memory data...");
         const inserts = [];
         for (const [cName, cItems] of Object.entries(memData)) {
@@ -4056,10 +4056,6 @@ function createRepo(key) {
             }));
             const memData2 = db.getData();
             if (memData2) {
-              if (items.length === 0 && memData2[key] && memData2[key].length > 0) {
-                console.log(`[DataLayer] Supabase collection ${key} is empty, but local data has ${memData2[key].length}. Using local data as fallback.`);
-                return memData2[key];
-              }
               memData2[key] = items;
             }
             return items;

@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { useCenter } from '../context/CenterContext';
 import { useAuth } from '../context/AuthContext';
+import { hasPermission } from '../utils/permissions';
 
 interface MobileAppNavigationProps {
   activeTab: string;
@@ -21,7 +22,7 @@ export const MobileAppNavigation: React.FC<MobileAppNavigationProps> = ({
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [menuSearch, setMenuSearch] = useState('');
   const { user } = useAuth();
-  const { showToast, unreadNotifsCount, setIsSearchOpen, openAiModal } = useCenter();
+  const { settings, showToast, unreadNotifsCount, setIsSearchOpen, openAiModal } = useCenter();
 
   // Top Clean Icon Tabs (Facebook App Top Bar Style)
   const topIconTabs = [
@@ -65,11 +66,15 @@ export const MobileAppNavigation: React.FC<MobileAppNavigationProps> = ({
   ];
 
   const filteredSections = useMemo(() => {
-    if (!menuSearch.trim()) return allSections;
-    return allSections.filter(s => 
+    let list = allSections.filter(s => {
+      if (s.id === 'student_portal' || s.id === 'parent_portal') return true;
+      return hasPermission(user, settings, s.id);
+    });
+    if (!menuSearch.trim()) return list;
+    return list.filter(s => 
       s.label.includes(menuSearch) || s.cat.includes(menuSearch)
     );
-  }, [menuSearch]);
+  }, [menuSearch, user, settings]);
 
   const handleTabClick = (tabId: string) => {
     if (tabId === 'more_menu') {
