@@ -631,7 +631,7 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
       } catch (e) {
         // Silent sync catch
       }
-    }, 3500);
+    }, 20000); // Increased interval to 20 seconds to save server bandwidth and quota
 
     return () => clearInterval(syncInterval);
   }, [isLoggedIn, student?.code, student?.points, student?.totalPoints]);

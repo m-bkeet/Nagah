@@ -835,50 +835,6 @@
       "dataValidationStatus": "verified"
     },
     {
-      "id": "trainee-1787746135198",
-      "code": "B003",
-      "grade": "الصف الخامس الابتدائي",
-      "notes": "[طالب حقيقي - تسجيل ذاتي عبر الرابط الخارجي]",
-      "phone": "01022773941",
-      "gender": "male",
-      "points": 120,
-      "prefix": "B",
-      "status": "active",
-      "address": "",
-      "groupId": "grp-1787432635686",
-      "branchId": "branch-2",
-      "courseId": "course-1787347462419",
-      "fullName": "حنين علي عبد الظاهر حسين",
-      "isExempt": false,
-      "photoUrl": "",
-      "birthDate": "",
-      "courseIds": [
-        "course-1787347462419"
-      ],
-      "feeAmount": 250,
-      "netAmount": 250,
-      "trainerId": "trainer-1787349806643",
-      "updatedAt": "2026-09-01T13:32:01.758Z",
-      "nationalId": "",
-      "paidAmount": 500,
-      "parentName": "علي عبد الظاهر حسين",
-      "siblingIds": [],
-      "parentPhone": "01022773941",
-      "studentCode": "B003",
-      "totalPoints": 120,
-      "traineeCode": "B003",
-      "isTestRecord": false,
-      "reviewReason": "financial_discrepancy; ",
-      "siblingNames": [],
-      "creditBalance": 250,
-      "discountAmount": 0,
-      "remainingAmount": 0,
-      "updatedByUserId": "u-admin",
-      "registrationDate": "2026-08-26",
-      "updatedByUserName": "المدير العام (Super Admin)",
-      "dataValidationStatus": "needs_review"
-    },
-    {
       "id": "trainee-1787863726447",
       "code": "C013",
       "grade": "الصف السادس الابتدائي",
@@ -2126,42 +2082,6 @@
       "creditBalance": 0,
       "discountAmount": 0,
       "remainingAmount": 200,
-      "registrationDate": "2026-08-26",
-      "dataValidationStatus": "verified"
-    },
-    {
-      "id": "trainee-1787758397521",
-      "code": "B006",
-      "grade": "الصف الخامس الابتدائي",
-      "notes": "[طالب حقيقي - تسجيل ذاتي عبر الرابط الخارجي]",
-      "phone": "01009193365",
-      "gender": "male",
-      "points": 0,
-      "prefix": "B",
-      "status": "active",
-      "groupId": "grp-1787432635686",
-      "branchId": "branch-2",
-      "courseId": "course-1787347462419",
-      "fullName": "محمد علي عبد الظاهر حسين",
-      "photoUrl": "",
-      "courseIds": [
-        "course-1787347462419"
-      ],
-      "feeAmount": 500,
-      "netAmount": 500,
-      "trainerId": "trainer-1787349806643",
-      "updatedAt": "2026-08-31T12:11:52.530Z",
-      "nationalId": "",
-      "paidAmount": 0,
-      "parentName": "علي عبد الظاهر حسين",
-      "parentPhone": "01022773941",
-      "studentCode": "B006",
-      "totalPoints": 0,
-      "traineeCode": "B006",
-      "isTestRecord": false,
-      "creditBalance": 0,
-      "discountAmount": 0,
-      "remainingAmount": 500,
       "registrationDate": "2026-08-26",
       "dataValidationStatus": "verified"
     },
@@ -3487,6 +3407,54 @@
       "updatedByUserName": "مدير عام النظام",
       "initialPaymentMethod": "cash",
       "parentPortalPassword": ""
+    },
+    {
+      "id": "trainee-1787746135198",
+      "code": "B003",
+      "grade": "الصف الخامس الابتدائي",
+      "notes": "[طالب حقيقي - تسجيل ذاتي عبر الرابط الخارجي]",
+      "phone": "01022773941",
+      "gender": "male",
+      "points": 120,
+      "prefix": "B",
+      "status": "active",
+      "address": "",
+      "groupId": "grp-1787432635686",
+      "branchId": "branch-2",
+      "courseId": "course-1787347462419",
+      "fullName": "حنين علي عبد الظاهر حسين",
+      "isExempt": false,
+      "photoUrl": "",
+      "birthDate": "",
+      "courseIds": [
+        "course-1787347462419"
+      ],
+      "feeAmount": 200,
+      "netAmount": 200,
+      "trainerId": "trainer-1787349806643",
+      "updatedAt": "2026-09-02T18:44:34.303Z",
+      "nationalId": "",
+      "paidAmount": 500,
+      "parentName": "علي عبد الظاهر حسين",
+      "siblingIds": [],
+      "parentPhone": "01022773941",
+      "studentCode": "B003",
+      "totalPoints": 120,
+      "traineeCode": "B003",
+      "isTestRecord": false,
+      "reviewReason": "financial_discrepancy; ",
+      "siblingNames": [],
+      "creditBalance": 250,
+      "discountAmount": 0,
+      "initialPayment": 0,
+      "portalPassword": "",
+      "remainingAmount": -300,
+      "updatedByUserId": "user-admin",
+      "registrationDate": "2026-08-26",
+      "updatedByUserName": "مدير عام النظام",
+      "dataValidationStatus": "needs_review",
+      "initialPaymentMethod": "cash",
+      "parentPortalPassword": ""
     }
   ],
   "courses": [
@@ -3834,19 +3802,6 @@
         "الثلاثاء"
       ],
       "whatsappGroupLink": "https://chat.whatsapp.com/LbqSa2quIAt3cvKjOTI5rI"
-    },
-    {
-      "id": "grp-1787502480417-ltuf",
-      "days": [
-        "الجمعة"
-      ],
-      "name": "ICT-p1-L - 1",
-      "status": "active",
-      "branchId": "branch-1",
-      "courseId": "crs-1787502480417-0ggk",
-      "timeSlot": "04:00 م - 06:00 م",
-      "maxCapacity": 10,
-      "maxStudents": 10
     },
     {
       "id": "grp-1787431608023",
@@ -9854,26 +9809,6 @@
   },
   "studentPosts": [
     {
-      "id": "post-sample-2",
-      "type": "homework",
-      "likes": [],
-      "bgStyle": "classic",
-      "content": "يا شباب، بخصوص الواجب التفاعلي للدرس الثالث: هل حد واجهته مشكلة في صياغة الكود النهائي؟ لو حد عنده فكرة ممكن نتناقش هنا 🙏",
-      "comments": [
-        {
-          "id": "c-2",
-          "content": "نعم إبراهيم، يمكنك استخدام دالة التكرار البسيطة لحل هذه النقطة، سأقوم بنشر لقطة للشرح بعد قليل لتستفيد منها!",
-          "createdAt": "2026-08-28T20:25:43.439Z",
-          "traineeId": "trainee-sample-1",
-          "traineeName": "عمار عبد العزيز"
-        }
-      ],
-      "createdAt": "2026-08-28T19:25:43.439Z",
-      "traineeId": "trainee-sample-2",
-      "traineeName": "إبراهيم يوسف الحسين",
-      "traineePhotoUrl": ""
-    },
-    {
       "id": "post-sample-1",
       "type": "congratulations",
       "likes": [
@@ -9894,6 +9829,26 @@
       "traineeId": "trainee-sample-1",
       "traineeName": "عمار عبد العزيز",
       "traineePhotoUrl": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80"
+    },
+    {
+      "id": "post-sample-2",
+      "type": "homework",
+      "likes": [],
+      "bgStyle": "classic",
+      "content": "يا شباب، بخصوص الواجب التفاعلي للدرس الثالث: هل حد واجهته مشكلة في صياغة الكود النهائي؟ لو حد عنده فكرة ممكن نتناقش هنا 🙏",
+      "comments": [
+        {
+          "id": "c-2",
+          "content": "نعم إبراهيم، يمكنك استخدام دالة التكرار البسيطة لحل هذه النقطة، سأقوم بنشر لقطة للشرح بعد قليل لتستفيد منها!",
+          "createdAt": "2026-08-28T20:25:43.439Z",
+          "traineeId": "trainee-sample-1",
+          "traineeName": "عمار عبد العزيز"
+        }
+      ],
+      "createdAt": "2026-08-28T19:25:43.439Z",
+      "traineeId": "trainee-sample-2",
+      "traineeName": "إبراهيم يوسف الحسين",
+      "traineePhotoUrl": ""
     },
     {
       "id": "post-sample-3",
@@ -9993,5 +9948,9 @@
         }
       ]
     }
-  ]
+  ],
+  "portalMessages": [],
+  "badges": [],
+  "schedules": [],
+  "session_attendance_records": []
 }

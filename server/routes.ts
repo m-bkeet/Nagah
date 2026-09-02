@@ -6300,7 +6300,7 @@ apiRouter.post('/student/login', async (req: Request, res: Response) => {
     certificates: [
       { id: 'cert-1', title: 'شهادة اجتياز أساسيات البرمجة', issueDate: '2026-08-15', grade: 'ممتاز مع مرتبة الشرف' }
     ],
-    portalMessages: []
+    portalMessages: (db.getData().portalMessages || []).filter((m: any) => m.traineeId === trainee.id || m.traineeCode === trainee.code)
   });
 });
 
@@ -7411,8 +7411,8 @@ apiRouter.get(['/messages/all-portal', '/messages/all-portal/'], async (req: Req
       data.portalMessages = [];
     }
     const trainees = data.trainees || [];
-    const enriched = data.portalMessages.map((msg: any) => {
-      if (msg.traineeId) {
+    const enriched = data.portalMessages.filter(Boolean).map((msg: any) => {
+      if (msg && msg.traineeId) {
         const t = trainees.find((tr: any) => tr.id === msg.traineeId || tr.code === msg.traineeCode);
         if (t) {
           return {
@@ -7476,7 +7476,7 @@ apiRouter.post(['/messages/mark-as-read', '/messages/mark-as-read/'], async (req
     if (Array.isArray(data.portalMessages)) {
       let updated = false;
       data.portalMessages.forEach((m: any) => {
-        if (m.traineeId === traineeId && m.senderRole !== 'admin') {
+        if (m && m.traineeId === traineeId && m.senderRole !== 'admin') {
           m.read = true;
           updated = true;
         }

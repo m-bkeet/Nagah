@@ -3612,6 +3612,12 @@ var init_db = __esm({
               pointTransactions: parsed.pointTransactions && parsed.pointTransactions.length > 0 ? parsed.pointTransactions : initialData.pointTransactions,
               certificates: parsed.certificates && parsed.certificates.length > 0 ? parsed.certificates : initialData.certificates,
               trainerAttestations: parsed.trainerAttestations || [],
+              portalMessages: Array.isArray(parsed.portalMessages) ? parsed.portalMessages : [],
+              notifications: Array.isArray(parsed.notifications) ? parsed.notifications : [],
+              homeworkSubmissions: Array.isArray(parsed.homeworkSubmissions) ? parsed.homeworkSubmissions : [],
+              badges: Array.isArray(parsed.badges) ? parsed.badges : [],
+              schedules: Array.isArray(parsed.schedules) ? parsed.schedules : [],
+              session_attendance_records: Array.isArray(parsed.session_attendance_records) ? parsed.session_attendance_records : [],
               users: existingUsers,
               settings: {
                 ...initialData.settings,
@@ -13742,7 +13748,7 @@ apiRouter.post("/student/login", async (req, res) => {
     certificates: [
       { id: "cert-1", title: "\u0634\u0647\u0627\u062F\u0629 \u0627\u062C\u062A\u064A\u0627\u0632 \u0623\u0633\u0627\u0633\u064A\u0627\u062A \u0627\u0644\u0628\u0631\u0645\u062C\u0629", issueDate: "2026-08-15", grade: "\u0645\u0645\u062A\u0627\u0632 \u0645\u0639 \u0645\u0631\u062A\u0628\u0629 \u0627\u0644\u0634\u0631\u0641" }
     ],
-    portalMessages: []
+    portalMessages: (db.getData().portalMessages || []).filter((m) => m.traineeId === trainee.id || m.traineeCode === trainee.code)
   });
 });
 apiRouter.post("/agent/student-login", async (req, res) => {
@@ -14653,8 +14659,8 @@ apiRouter.get(["/messages/all-portal", "/messages/all-portal/"], async (req, res
       data.portalMessages = [];
     }
     const trainees = data.trainees || [];
-    const enriched = data.portalMessages.map((msg) => {
-      if (msg.traineeId) {
+    const enriched = data.portalMessages.filter(Boolean).map((msg) => {
+      if (msg && msg.traineeId) {
         const t = trainees.find((tr) => tr.id === msg.traineeId || tr.code === msg.traineeCode);
         if (t) {
           return {
@@ -14713,7 +14719,7 @@ apiRouter.post(["/messages/mark-as-read", "/messages/mark-as-read/"], async (req
     if (Array.isArray(data.portalMessages)) {
       let updated = false;
       data.portalMessages.forEach((m) => {
-        if (m.traineeId === traineeId && m.senderRole !== "admin") {
+        if (m && m.traineeId === traineeId && m.senderRole !== "admin") {
           m.read = true;
           updated = true;
         }
@@ -15334,29 +15340,91 @@ apiRouter.post("/trainer/analyze-book", async (req, res) => {
 });
 apiRouter.post("/parent/login", async (req, res) => {
   try {
-    const { phone } = req.body;
-    if (!phone) {
-      return res.status(400).json({ success: false, error: "\u064A\u0631\u062C\u0649 \u0625\u062F\u062E\u0627\u0644 \u0631\u0642\u0645 \u0647\u0627\u062A\u0641 \u0648\u0644\u064A \u0627\u0644\u0623\u0645\u0631" });
+    const { phone, codeOrPhone, code } = req.body;
+    const inputVal = String(codeOrPhone || phone || code || "").trim();
+    if (!inputVal) {
+      return res.status(400).json({ success: false, error: "\u064A\u0631\u062C\u0649 \u0625\u062F\u062E\u0627\u0644 \u0643\u0648\u062F \u0627\u0644\u0637\u0627\u0644\u0628 \u0623\u0648 \u0631\u0642\u0645 \u0647\u0627\u062A\u0641 \u0648\u0644\u064A \u0627\u0644\u0623\u0645\u0631" });
     }
-    const cleanPhone = phone.trim().replace(/\D/g, "");
+    const cleanInputDigits = inputVal.replace(/\D/g, "");
+    const cleanInputCode = inputVal.toUpperCase();
     const trainees = await TraineeRepo.getAll();
     const matched = trainees.filter((t) => {
       const p1 = (t.parentPhone || "").replace(/\D/g, "");
       const p2 = (t.phone || "").replace(/\D/g, "");
-      return p1 && p1.includes(cleanPhone) || p2 && p2.includes(cleanPhone);
+      const codeMatch = t.code && t.code.toUpperCase() === cleanInputCode;
+      const phoneMatch = cleanInputDigits.length >= 6 && (p1 && p1.includes(cleanInputDigits) || p2 && p2.includes(cleanInputDigits));
+      return codeMatch || phoneMatch;
     });
     if (matched.length === 0) {
-      return res.status(404).json({ success: false, error: "\u0644\u0645 \u064A\u062A\u0645 \u0627\u0644\u0639\u062B\u0648\u0631 \u0639\u0644\u0649 \u0648\u0644\u064A \u0623\u0645\u0631 \u0645\u0633\u062C\u0644 \u0628\u0647\u0630\u0627 \u0627\u0644\u0631\u0642\u0645. \u064A\u0631\u062C\u0649 \u0627\u0644\u062A\u0648\u0627\u0635\u0644 \u0645\u0639 \u0625\u062F\u0627\u0631\u0629 \u0627\u0644\u0645\u0631\u0643\u0632." });
+      return res.status(404).json({ success: false, error: "\u0644\u0645 \u064A\u062A\u0645 \u0627\u0644\u0639\u062B\u0648\u0631 \u0639\u0644\u0649 \u0648\u0644\u064A \u0623\u0645\u0631 \u0623\u0648 \u0637\u0627\u0644\u0628 \u0628\u0647\u0630\u0627 \u0627\u0644\u0643\u0648\u062F \u0623\u0648 \u0627\u0644\u0631\u0642\u0645. \u064A\u0631\u062C\u0649 \u0627\u0644\u062A\u0648\u0627\u0635\u0644 \u0645\u0639 \u0625\u062F\u0627\u0631\u0629 \u0627\u0644\u0645\u0631\u0643\u0632." });
     }
+    const allCourses = await CourseRepo.getAll();
+    const allGroups = await GroupRepo.getAll();
+    const allTrainers = await TrainerRepo.getAll();
+    const allAttendance = await AttendanceRepo.getAll();
+    const allPayments = await PaymentRepo.getAll();
+    const allSchedules = await ScheduleRepo.getAll();
+    const data = db.getData();
+    const enrichedChildren = matched.map((t) => {
+      const course = allCourses.find((c) => c.id === t.courseId);
+      const group = allGroups.find((g) => g.id === t.groupId);
+      const trainer = group ? allTrainers.find((tr) => tr.id === group.trainerId) : null;
+      const childAtt = allAttendance.filter(
+        (a) => a.student_id === t.id || a.studentId === t.id || a.traineeId === t.id || a.student_code === t.code
+      );
+      const childSched = allSchedules.filter(
+        (s) => s.groupId === t.groupId || s.courseId === t.courseId || s.branchId === t.branchId
+      );
+      const childBadges = (data.badges || []).filter(
+        (b) => b.traineeId === t.id || b.studentId === t.id
+      );
+      const childEvals = (data.traineeEvaluations || []).filter(
+        (e) => e.traineeId === t.id
+      );
+      const childPay = allPayments.filter(
+        (p) => p.student_id === t.id || p.studentId === t.id || p.traineeId === t.id
+      );
+      const childMsgs = (data.portalMessages || []).filter(
+        (m) => m.traineeId === t.id || m.traineeCode === t.code
+      );
+      return {
+        ...t,
+        courseName: course?.name || "\u0627\u0644\u0628\u0631\u0646\u0627\u0645\u062C \u0627\u0644\u062A\u062F\u0631\u064A\u0628\u064A \u0627\u0644\u0639\u0627\u0645",
+        groupName: group?.name || "\u0627\u0644\u0645\u062C\u0645\u0648\u0639\u0629 \u0627\u0644\u0645\u0639\u062A\u0645\u062F\u0629",
+        badges: childBadges.length > 0 ? childBadges : [
+          { id: "b-1", title: "\u0645\u0628\u0631\u0645\u062C \u0627\u0644\u0645\u0633\u062A\u0642\u0628\u0644", description: "\u0627\u0644\u062A\u0641\u0648\u0642 \u0648\u0627\u0644\u062A\u0637\u0648\u064A\u0631 \u0627\u0644\u0645\u0633\u062A\u0645\u0631", icon: "\u{1F3C6}", date: (/* @__PURE__ */ new Date()).toISOString() }
+        ],
+        evaluations: childEvals,
+        attendance: childAtt,
+        attendanceCount: childAtt.filter((a) => a.status === "present" || a.status === "\u062D\u0627\u0636\u0631").length,
+        totalAttendance: Math.max(childAtt.length, 8),
+        schedules: childSched.length > 0 ? childSched : [
+          { id: "sch-1", title: "\u0627\u0644\u0648\u0631\u0634\u0629 \u0627\u0644\u062A\u0641\u0627\u0639\u0644\u064A\u0629 \u0627\u0644\u0623\u0633\u0628\u0648\u0639\u064A\u0629", dayName: "\u0627\u0644\u0633\u0628\u062A", startTime: "10:00 \u0635", roomName: "\u0627\u0644\u0645\u0639\u0645\u0644 \u0627\u0644\u0631\u0626\u064A\u0633\u064A (1)" }
+        ],
+        payments: childPay,
+        messages: childMsgs,
+        groupDetails: group,
+        trainer: trainer ? {
+          id: trainer.id,
+          name: trainer.name,
+          phone: trainer.phone,
+          email: trainer.email,
+          specialty: trainer.specialty || "\u0645\u062D\u0627\u0636\u0631 \u0648\u062A\u062F\u0631\u064A\u0628 \u0639\u0645\u0644\u064A"
+        } : null
+      };
+    });
     const parentName = matched[0].parentName || `\u0648\u0644\u064A \u0623\u0645\u0631 \u0627\u0644\u0637\u0627\u0644\u0628 ${matched[0].fullName}`;
     res.json({
       success: true,
+      parentName,
+      parentPhone: cleanInputDigits || matched[0].parentPhone || matched[0].phone,
       parent: {
         name: parentName,
-        phone: cleanPhone,
+        phone: cleanInputDigits || matched[0].parentPhone || matched[0].phone,
         studentCount: matched.length
       },
-      students: matched
+      children: enrichedChildren,
+      students: enrichedChildren
     });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
