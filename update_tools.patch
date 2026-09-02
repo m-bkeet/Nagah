@@ -1,0 +1,52 @@
+--- src/components/FloatingTeachingToolsOverlay.tsx
++++ src/components/FloatingTeachingToolsOverlay.tsx
+@@ -710,6 +710,48 @@
+       if (!isPinned) setIsIsOpen(false);
+       return;
+     }
++    
++    if (toolId.startsWith('zoomit_')) {
++      if (toolId === 'zoomit_bridge') {
++        // Download the .bat file for custom protocol handler
++        const batContent = `@echo off
++echo ===================================================
++echo Nagah Platform - ZoomIt Bridge Installer
++echo ===================================================
++echo Requesting Administrative Privileges...
++net session >nul 2>&1
++if %errorLevel% == 0 (
++    echo Success: Administrative rights confirmed.
++) else (
++    echo ERROR: Please right-click this file and select "Run as administrator"
++    pause
++    exit
++)
++
++echo Registering Custom Protocol (nagah-zoomit://)...
++reg add "HKCR\\nagah-zoomit" /ve /t REG_SZ /d "URL:Nagah ZoomIt Protocol" /f >nul
++reg add "HKCR\\nagah-zoomit" /v "URL Protocol" /t REG_SZ /d "" /f >nul
++
++set CMD=powershell.exe -WindowStyle Hidden -Command "$u='%%1'; $s=New-Object -ComObject WScript.Shell; if($u -match 'draw'){$s.SendKeys('^{2}')} elseif($u -match 'zoom'){$s.SendKeys('^{1}')} elseif($u -match 'live'){$s.SendKeys('^{4}')} elseif($u -match 'break'){$s.SendKeys('^{3}')}"
++reg add "HKCR\\nagah-zoomit\\shell\\open\\command" /ve /t REG_SZ /d "%CMD%" /f >nul
++
++echo Integration Successful! You can now use ZoomIt tools directly from the Nagah Platform.
++pause`;
++        const blob = new Blob([batContent], { type: 'application/bat' });
++        const url = URL.createObjectURL(blob);
++        const a = document.createElement('a');
++        a.href = url;
++        a.download = 'nagah_zoomit_bridge.bat';
++        a.click();
++        showToast('تم تحميل ملف الربط. يرجى تشغيله كمسؤول (Run as administrator) لمرة واحدة فقط.', 'success');
++      } else {
++        const action = toolId.replace('zoomit_', '');
++        window.location.href = \`nagah-zoomit://\${action}\`;
++        showToast('جاري تفعيل أداة ZoomIt...', 'info');
++      }
++      if (!isPinned) setIsIsOpen(false);
++      return;
++    }
++
+     if (toolId === 'clear') {
+       clearCanvasOverlay();
+       audioService.playChime([600, 800]);

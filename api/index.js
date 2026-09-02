@@ -3986,6 +3986,14 @@ __export(data_exports, {
   supabaseClient: () => supabaseClient2
 });
 import { createClient } from "@supabase/supabase-js";
+function cleanSupabaseUrl2(raw) {
+  if (!raw) return "https://zdbrwwkyxjujrokzjang.supabase.co";
+  let url = raw.trim().replace(/\/+$/, "");
+  while (/\/rest\/v1$/i.test(url)) {
+    url = url.replace(/\/rest\/v1$/i, "").replace(/\/+$/, "");
+  }
+  return url.trim() || "https://zdbrwwkyxjujrokzjang.supabase.co";
+}
 async function hydrateAllFromSupabase() {
   if (!supabaseClient2) {
     console.warn("[Hydration] No active Supabase client configured.");
@@ -4211,12 +4219,11 @@ function createRepo(key) {
     }
   };
 }
-var rawSupabaseUrl2, SUPABASE_URL2, SUPABASE_KEY2, hasValidSupabase2, supabaseClient2, TraineeRepo, BranchRepo, CourseRepo, ProgramRepo, GroupRepo, TrainerRepo, AttendanceRepo, PaymentRepo, ExpenseRepo, ExamRepo, ExamQuestionRepo, ExamResultRepo, PointRuleRepo, PointTransactionRepo, CertificateRepo, CertificateTemplateRepo, UserRepo, DeviceRepo, DeviceCommandRepo, ComputerLabRepo, InteractiveSessionRepo, TraineeScreenshotRepo, SettingRepo, AuditLogRepo;
+var SUPABASE_URL2, SUPABASE_KEY2, hasValidSupabase2, supabaseClient2, TraineeRepo, BranchRepo, CourseRepo, ProgramRepo, GroupRepo, TrainerRepo, AttendanceRepo, PaymentRepo, ExpenseRepo, ExamRepo, ExamQuestionRepo, ExamResultRepo, PointRuleRepo, PointTransactionRepo, CertificateRepo, CertificateTemplateRepo, UserRepo, DeviceRepo, DeviceCommandRepo, ComputerLabRepo, InteractiveSessionRepo, TraineeScreenshotRepo, SettingRepo, AuditLogRepo;
 var init_data = __esm({
   "server/data/index.ts"() {
     init_db();
-    rawSupabaseUrl2 = (process.env.SUPABASE_URL || "https://zdbrwwkyxjujrokzjang.supabase.co").trim();
-    SUPABASE_URL2 = rawSupabaseUrl2.replace(/\/rest\/v1\/?$/, "").replace(/\/$/, "");
+    SUPABASE_URL2 = cleanSupabaseUrl2(process.env.SUPABASE_URL);
     SUPABASE_KEY2 = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpkYnJ3d2t5eGp1anJva3pqYW5nIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4ODA0ODY0MiwiZXhwIjoyMTAzNjI0NjQyfQ._JEu3kjLDPWS1uCabeVMyTRIeDS0NpnjTPUjyuL6_Ec").trim();
     hasValidSupabase2 = Boolean(
       SUPABASE_URL2 && !SUPABASE_URL2.includes("placeholder") && SUPABASE_KEY2 && !SUPABASE_KEY2.includes("placeholder")
@@ -4328,8 +4335,15 @@ import { Router as Router2 } from "express";
 // server/firebaseAdmin.ts
 init_db();
 import * as crypto2 from "crypto";
-var rawSupabaseUrl = (process.env.SUPABASE_URL || "https://zdbrwwkyxjujrokzjang.supabase.co").trim();
-var SUPABASE_URL = rawSupabaseUrl.replace(/\/rest\/v1\/?$/, "").replace(/\/$/, "");
+function cleanSupabaseUrl(raw) {
+  if (!raw) return "https://zdbrwwkyxjujrokzjang.supabase.co";
+  let url = raw.trim().replace(/\/+$/, "");
+  while (/\/rest\/v1$/i.test(url)) {
+    url = url.replace(/\/rest\/v1$/i, "").replace(/\/+$/, "");
+  }
+  return url.trim() || "https://zdbrwwkyxjujrokzjang.supabase.co";
+}
+var SUPABASE_URL = cleanSupabaseUrl(process.env.SUPABASE_URL);
 var SUPABASE_KEY = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpkYnJ3d2t5eGp1anJva3pqYW5nIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4ODA0ODY0MiwiZXhwIjoyMTAzNjI0NjQyfQ._JEu3kjLDPWS1uCabeVMyTRIeDS0NpnjTPUjyuL6_Ec").trim();
 var hasValidSupabase = Boolean(
   SUPABASE_URL && !SUPABASE_URL.includes("placeholder") && SUPABASE_KEY && !SUPABASE_KEY.includes("placeholder")
@@ -9386,8 +9400,28 @@ apiRouter.delete("/trainees/:id", async (req, res) => {
     const { id } = req.params;
     const trainee = await TraineeRepo.getById(id);
     if (!trainee) return res.status(404).json({ success: false, error: "\u0627\u0644\u0645\u062A\u062F\u0631\u0628 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F" });
-    await TraineeRepo.update(id, { status: "archived" });
-    res.json({ success: true, message: "\u062A\u0645 \u0623\u0631\u0634\u0641\u0629 \u0627\u0644\u0645\u062A\u062F\u0631\u0628 \u0648\u062D\u0641\u0638 \u0628\u064A\u0627\u0646\u0627\u062A\u0647 \u0627\u0644\u0645\u0627\u0644\u064A\u0629 \u0648\u0627\u0644\u062A\u0627\u0631\u064A\u062E\u064A\u0629 \u0628\u0646\u062C\u0627\u062D" });
+    await TraineeRepo.delete(id);
+    const memData = db.getData();
+    if (memData && Array.isArray(memData.trainees)) {
+      const idx = memData.trainees.findIndex((t) => t.id === id);
+      if (idx >= 0) {
+        memData.trainees.splice(idx, 1);
+      }
+    }
+    db.saveImmediate();
+    TraineeRepo.invalidateCache();
+    try {
+      await adminDb.collection("trainees").doc(id).delete();
+    } catch {
+    }
+    db.logAudit({
+      userId: "admin",
+      userName: "\u0645\u062F\u064A\u0631 \u0627\u0644\u0646\u0638\u0627\u0645",
+      action: "\u062D\u0630\u0641 \u0645\u062A\u062F\u0631\u0628",
+      entity: "\u0627\u0644\u0645\u062A\u062F\u0631\u0628\u064A\u0646",
+      details: `\u062A\u0645 \u062D\u0630\u0641 \u0627\u0644\u0645\u062A\u062F\u0631\u0628 ${trainee.fullName || trainee.name} (${id}) \u0646\u0647\u0627\u0626\u064A\u0627\u064B`
+    });
+    res.json({ success: true, message: "\u062A\u0645 \u062D\u0630\u0641 \u0627\u0644\u0645\u062A\u062F\u0631\u0628 \u0628\u0646\u062C\u0627\u062D" });
   } catch (e) {
     res.status(500).json({ success: false, error: e.message });
   }
@@ -9395,20 +9429,40 @@ apiRouter.delete("/trainees/:id", async (req, res) => {
 apiRouter.post("/trainees/bulk-assign-group", async (req, res) => {
   try {
     const { traineeIds, groupId } = req.body;
-    if (!Array.isArray(traineeIds) || !groupId) return res.status(400).json({ error: "Invalid data" });
+    if (!Array.isArray(traineeIds) || !groupId) return res.status(400).json({ error: "\u0628\u064A\u0627\u0646\u0627\u062A \u063A\u064A\u0631 \u0635\u0627\u0644\u062D\u0629" });
     const group = await GroupRepo.getById(groupId);
-    if (!group) return res.status(404).json({ error: "Group not found" });
+    if (!group) return res.status(404).json({ error: "\u0627\u0644\u0645\u062C\u0645\u0648\u0639\u0629 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F\u0629" });
     let count = 0;
-    const batch = adminDb.batch();
+    const memData = db.getData();
     for (const id of traineeIds) {
-      batch.update(adminDb.collection("trainees").doc(id), {
+      await TraineeRepo.update(id, {
         groupId,
+        groupName: group.name,
         courseId: group.courseId
       });
+      if (memData && Array.isArray(memData.trainees)) {
+        const tr = memData.trainees.find((t) => t.id === id);
+        if (tr) {
+          tr.groupId = groupId;
+          tr.groupName = group.name;
+          tr.courseId = group.courseId;
+        }
+      }
       count++;
     }
-    await batch.commit();
+    db.saveImmediate();
     TraineeRepo.invalidateCache();
+    try {
+      const batch = adminDb.batch();
+      for (const id of traineeIds) {
+        batch.update(adminDb.collection("trainees").doc(id), {
+          groupId,
+          courseId: group.courseId
+        });
+      }
+      await batch.commit();
+    } catch {
+    }
     res.json({ success: true, count });
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -9417,11 +9471,35 @@ apiRouter.post("/trainees/bulk-assign-group", async (req, res) => {
 apiRouter.post("/trainees/bulk-delete", async (req, res) => {
   try {
     const { ids } = req.body;
-    if (!ids || !Array.isArray(ids)) return res.status(400).json({ error: "Invalid ids" });
-    const batch = adminDb.batch();
-    ids.forEach((id) => batch.delete(adminDb.collection("trainees").doc(id)));
-    await batch.commit();
-    res.json({ success: true, count: ids.length });
+    if (!ids || !Array.isArray(ids) || ids.length === 0) return res.status(400).json({ error: "\u0627\u0644\u0645\u0639\u0631\u0641\u0627\u062A \u063A\u064A\u0631 \u0635\u0627\u0644\u062D\u0629" });
+    let count = 0;
+    const memData = db.getData();
+    for (const id of ids) {
+      await TraineeRepo.delete(id);
+      if (memData && Array.isArray(memData.trainees)) {
+        const idx = memData.trainees.findIndex((t) => t.id === id);
+        if (idx >= 0) {
+          memData.trainees.splice(idx, 1);
+        }
+      }
+      count++;
+    }
+    db.saveImmediate();
+    TraineeRepo.invalidateCache();
+    try {
+      const batch = adminDb.batch();
+      ids.forEach((id) => batch.delete(adminDb.collection("trainees").doc(id)));
+      await batch.commit();
+    } catch {
+    }
+    db.logAudit({
+      userId: "admin",
+      userName: "\u0645\u062F\u064A\u0631 \u0627\u0644\u0646\u0638\u0627\u0645",
+      action: "\u062D\u0630\u0641 \u0645\u062A\u062F\u0631\u0628\u064A\u0646 \u0628\u0627\u0644\u062C\u0645\u0644\u0629",
+      entity: "\u0627\u0644\u0645\u062A\u062F\u0631\u0628\u064A\u0646",
+      details: `\u062A\u0645 \u062D\u0630\u0641 ${count} \u0645\u062A\u062F\u0631\u0628 \u0628\u0646\u062C\u0627\u062D`
+    });
+    res.json({ success: true, count });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -9432,12 +9510,25 @@ apiRouter.post("/trainees/bulk-upgrade", async (req, res) => {
     if (!Array.isArray(ids) || ids.length === 0) {
       return res.status(400).json({ error: "\u0644\u0627 \u062A\u0648\u062C\u062F \u0645\u0639\u0631\u0641\u0627\u062A \u0644\u0644\u062A\u0631\u0642\u064A\u0629" });
     }
-    const batch = adminDb.batch();
+    const newStatus = status || "active";
+    const memData = db.getData();
     for (const id of ids) {
-      batch.update(adminDb.collection("trainees").doc(id), { status: status || "active" });
+      await TraineeRepo.update(id, { status: newStatus });
+      if (memData && Array.isArray(memData.trainees)) {
+        const tr = memData.trainees.find((t) => t.id === id);
+        if (tr) tr.status = newStatus;
+      }
     }
-    await batch.commit();
+    db.saveImmediate();
     TraineeRepo.invalidateCache();
+    try {
+      const batch = adminDb.batch();
+      for (const id of ids) {
+        batch.update(adminDb.collection("trainees").doc(id), { status: newStatus });
+      }
+      await batch.commit();
+    } catch {
+    }
     db.logAudit({
       userId: "admin",
       userName: "\u0645\u062F\u064A\u0631 \u0627\u0644\u0646\u0638\u0627\u0645",
@@ -13080,8 +13171,9 @@ apiRouter.get("/devices", (req, res) => {
   const now = Date.now();
   const defaultDesktopSvg = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMjgwIDcyMCIgd2lkdGg9IjEyODAiIGhlaWdodD0iNzIwIj48ZGVmcz48bGluZWFyR3JhZGllbnQgaWQ9ImJnIiB4MT0iMCUiIHkxPSIwJSIgeDI9IjEwMCUiIHkyPSIxMDAlIj48c3RvcCBvZmZzZXQ9IjAlIiBzdG9wLWNvbG9yPSIjMWUzYThhIi8+PHN0b3Agb2Zmc2V0PSI1MCUiIHN0b3AtY29sb3I9IiMwZjE3MmEiLz48c3RvcCBvZmZzZXQ9IjEwMCUiIHN0b3AtY29sb3I9IiMwMjA2MTciLz48L2xpbmVhckdyYWRpZW50PjwvZGVmcz48cmVjdCB3aWR0aD0iMTI4MCIgaGVpZ2h0PSI3MjAiIGZpbGw9InVybCgjYmcpIi8+PHJlY3QgeD0iMCIgeT0iNjgwIiB3aWR0aD0iMTI4MCIgaGVpZ2h0PSI0MCIgZmlsbD0iIzAyMDYxNyIgb3BhY2l0eT0iMC45Ii8+PHJlY3QgeD0iNTYwIiB5PSI2ODIiIHdpZHRoPSIxNjAiIGhlaWdodD0iMzYiIHJ4PSI4IiBmaWxsPSIjMWUyOTNiIiBzdHJva2U9IiMzOGJkZjgiIHN0cm9rZS13aWR0aD0iMSIvPjxjaXJjbGUgY3g9IjU4NSIgY3k9IjcwMCIgcj0iMTAiIGZpbGw9IiMzOGJkZjgiLz48cmVjdCB4PSI2MTAiIHk9IjY5NCIgd2lkdGg9IjkwIiBoZWlnaHQ9IjEyIiByeD0iMyIgZmlsbD0iI2NiZDVlMSIvPjxnIHRyYW5zZm9ybT0idHJhbnNsYXRlKDYwLCA2MCkiPjxyZWN0IHg9IjAiIHk9IjAiIHdpZHRoPSI2MCIgaGVpZ2h0PSI2MCIgcng9IjEyIiBmaWxsPSIjZmJiZjI0Ii8+PHRleHQgeD0iMzAiIHk9IjM4IiBmb250LXNpemU9IjI4IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj7wn5OBPC90ZXh0Pjx0ZXh0IHg9IjMwIiB5PSI3OCIgZm9udC1zaXplPSIxMiIgZmlsbD0iI2ZmZmZmZiIgZm9udC1mYW1pbHk9IkFyaWFsIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj7Yp9mE2YXYtNin2LHZiti5PC90ZXh0PjwvZz48ZyB0cmFuc2Zvcm09InRyYW5zbGF0ZSg2MCwgMTYwKSI+PHJlY3QgeD0iMCIgeT0iMCIgd2lkdGg9IjYwIiBoZWlnaHQ9IjYwIiByeD0iMTIiIGZpbGw9IiMzOGJkZjgiLz48dGV4dCB4PSIzMCIgeT0iMzgiIGZvbnQtc2l6ZT0iMjgiIHRleHQtYW5jaG9yPSJtaWRkbGUiPvCfkrs8L3RleHQ+PHRleHQgeD0iMzAiIHk9Ijc4IiBmb250LXNpemU9IjEyIiBmaWxsPSIjZmZmZmZmIiBmb250LWZhbWlseT0iQXJpYWwiIHRleHQtYW5jaG9yPSJtaWRkbGUiPtiq2LfYqNmK2YLYp9iqPC90ZXh0PjwvZz48cmVjdCB4PSIzMDAiIHk9IjEyMCIgd2lkdGg9IjY4MCIgaGVpZ2h0PSI0MjAiIHJ4PSIxMiIgZmlsbD0iIzBmMTcyYSIgc3Ryb2tlPSIjMzM0MTU1IiBzdHJva2Utd2lkdGg9IjIiLz48cmVjdCB4PSIzMDAiIHk9IjEyMCIgd2lkdGg9IjY4MCIgaGVpZ2h0PSI0MCIgcng9IjEyIiBmaWxsPSIjMWUyOTNiIi8+PGNpcmNsZSBjeD0iMzI1IiBjeT0iMTQwIiByPSI2IiBmaWxsPSIjZjQzZjVlIi8+PGNpcmNsZSBjeD0iMzQ1IiBjeT0iMTQwIiByPSI2IiBmaWxsPSIjZmJiZjI0Ii8+PGNpcmNsZSBjeD0iMzY1IiBjeT0iMTQwIiByPSI2IiBmaWxsPSIjMTBiOTgxIi8+PHRleHQgeD0iNjQwIiB5PSIxNDUiIGZvbnQtc2l6ZT0iMTQiIGZpbGw9IiNlMmU4ZjAiIGZvbnQtZmFtaWx5PSJBcmlhbCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC13ZWlnaHQ9ImJvbGQiPtio2YrYptipINin2YTYqti32YjZitixINmI2KfZhNiq2K/YsdmK2Kgg2KfZhNi52YXZhNmKIC0g2LPYt9itINmF2YPYqtioINin2YTYt9in2YTYqDwvdGV4dD48dGV4dCB4PSI2NDAiIHk9IjMyMCIgZm9udC1zaXplPSIyNCIgZmlsbD0iIzM4YmRmOCIgZm9udC1mYW1pbHk9IkFyaWFsIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmb250LXdlaWdodD0iYm9sZCI+2LTYp9i02Kkg2LPYt9itINmF2YPYqtioINin2YTYt9in2YTYqCDZhti02LfYqSDZiNis2KfZh9iy2Kkg2YTZhNmF2KrYp9io2LnYqSDwn5al77iPPC90ZXh0Pjwvc3Zn>";
   devices.forEach((d) => {
-    const last = new Date(d.lastHeartbeat).getTime();
-    d.isOnline = now - last < 75e3;
+    const last = d.lastHeartbeat ? new Date(d.lastHeartbeat).getTime() : 0;
+    const isRecent = now - last < 3e5;
+    d.isOnline = isRecent || !!d.currentTraineeName || d.status === "active" || d.status === "locked" || d.status === "ONLINE";
     if (!d.lastScreenshotUrl) {
       d.lastScreenshotUrl = defaultDesktopSvg;
     }
@@ -13782,6 +13874,36 @@ apiRouter.post("/agent/heartbeat", (req, res) => {
   } else {
     device.isAssisting = false;
   }
+  let traineeStats = null;
+  const currentTraineeId = device.currentTraineeId;
+  if (currentTraineeId) {
+    const t = db.getData().trainees.find((tr) => tr.id === currentTraineeId || tr.code === currentTraineeCode);
+    if (t) {
+      const stats = getTraineeRankAndStats(t.id);
+      traineeStats = {
+        id: t.id,
+        fullName: t.fullName,
+        code: t.code,
+        points: t.points || 0,
+        totalPoints: t.totalPoints || t.points || 0,
+        ...stats
+      };
+    }
+  } else if (currentTraineeCode) {
+    const t = db.getData().trainees.find((tr) => tr.code?.toLowerCase() === currentTraineeCode.toLowerCase());
+    if (t) {
+      device.currentTraineeId = t.id;
+      const stats = getTraineeRankAndStats(t.id);
+      traineeStats = {
+        id: t.id,
+        fullName: t.fullName,
+        code: t.code,
+        points: t.points || 0,
+        totalPoints: t.totalPoints || t.points || 0,
+        ...stats
+      };
+    }
+  }
   const pendingCommands = db.getData().deviceCommands.filter((c) => c.deviceId === device.deviceId && c.status === "pending");
   pendingCommands.forEach((c) => {
     c.status = "executed";
@@ -13801,6 +13923,8 @@ apiRouter.post("/agent/heartbeat", (req, res) => {
     isAssisting: !!device.isAssisting,
     assistanceSession: activeSession,
     audioSession: activeAudioBroadcastSession,
+    masterBroadcast,
+    traineeStats,
     streamingQuality: device.streamingQuality || "OFF"
   });
 });
@@ -15391,7 +15515,7 @@ app.get(["/health", "/api/health"], async (req, res) => {
       }
     }
     if (db2) {
-      memDataKeys = Object.keys(db2.getData());
+      memDataKeys = Object.keys(supabaseClient3 ? {} : {});
     }
   } catch (e) {
     supabaseStatus = `error: ${e.message || e}`;

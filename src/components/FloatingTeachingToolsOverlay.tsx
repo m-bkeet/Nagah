@@ -31,7 +31,7 @@ import {
   Layers,
   Palette,
   Circle,
-  Move,
+  Move, Video, Link2, Monitor,
   Lock,
   MessageSquare,
   Crown
@@ -41,11 +41,23 @@ import { api } from '../services/api';
 import { audioService } from '../services/audioService';
 import { SmartWhiteboardModal } from './SmartWhiteboardModal';
 import { SmartSpeakerModal } from './SmartSpeakerModal';
+import { PopoutPortal } from './PopoutPortal';
+import { ExternalLink } from 'lucide-react';
 
 interface FloatingTeachingToolsOverlayProps {
   activeSessionId?: string;
   onNavigateToView?: (view: string) => void;
 }
+
+const ConditionalPopoutWrapper: React.FC<{ isPoppedOut: boolean; onClose: () => void; children: React.ReactNode }> = ({ isPoppedOut, onClose, children }) => {
+  return isPoppedOut ? (
+    <PopoutPortal isOpen={isPoppedOut} onClose={onClose}>
+      {children}
+    </PopoutPortal>
+  ) : (
+    <>{children}</>
+  );
+};
 
 export const FloatingTeachingToolsOverlay: React.FC<FloatingTeachingToolsOverlayProps> = ({
   activeSessionId,
@@ -57,6 +69,7 @@ export const FloatingTeachingToolsOverlay: React.FC<FloatingTeachingToolsOverlay
   const [isSmartSpeakerOpen, setIsSmartSpeakerOpen] = useState(false);
 
   // Floating Bar Expansion & Position
+  const [isPoppedOut, setIsPoppedOut] = useState(false);
   const [isOpen, setIsIsOpen] = useState(false);
   const [isPinned, setIsPinned] = useState(false);
   const [position, setPosition] = useState<{ x: number; y: number }>(() => {
@@ -681,6 +694,13 @@ export const FloatingTeachingToolsOverlay: React.FC<FloatingTeachingToolsOverlay
 
   // Unified Central Tool Activation & History Tracking
   const handleSelectTool = (toolId: string) => {
+    if (toolId === 'popout') {
+      setIsPoppedOut(!isPoppedOut);
+      showToast(!isPoppedOut ? 'تم فتح الأدوات في نافذة منفصلة ↗️' : 'تم استعادة الأدوات ↙️', 'info');
+      audioService.playChime([700, 900]);
+      if (!isPinned) setIsIsOpen(false);
+      return;
+    }
     if (toolId === 'smart_speaker') {
       setIsSmartSpeakerOpen(true);
       audioService.playChime([520, 680, 850]);
@@ -688,6 +708,7 @@ export const FloatingTeachingToolsOverlay: React.FC<FloatingTeachingToolsOverlay
       if (!isPinned) setIsIsOpen(false);
       return;
     }
+    
     if (toolId === 'clear') {
       clearCanvasOverlay();
       audioService.playChime([600, 800]);
@@ -702,6 +723,28 @@ export const FloatingTeachingToolsOverlay: React.FC<FloatingTeachingToolsOverlay
 
     const nextTool = activeTool === toolId ? 'none' : toolId;
     setActiveTool(nextTool);
+
+    // Intelligent Desktop & ZoomIt Integration (Unified Experience)
+    if (nextTool !== 'none') {
+      if (toolId === 'pen' || toolId === 'highlighter') {
+        try {
+          window.location.href = 'nagah-zoomit://draw';
+        } catch (e) {}
+        showToast('تم تفعيل القلم المتكامل (المنصة + سطح المكتب 🖊️)', 'success');
+      } else if (toolId === 'screen_zoom' || toolId === 'lens') {
+        try {
+          window.location.href = 'nagah-zoomit://zoom';
+        } catch (e) {}
+        showToast('تم تفعيل تكبير وزوم سطح المكتب الشامل لبرامج وورد والنوافذ الخارجية (ZoomIt 🔍🔎)', 'success');
+      } else if (toolId === 'focus') {
+        showToast('تم تفعيل بقعة التركيز والشاشة المعتمة 🎯', 'success');
+      } else if (toolId === 'laser') {
+        try {
+          window.location.href = 'nagah-zoomit://live';
+        } catch (e) {}
+        showToast('تم تفعيل مؤشر الليزر التفاعلي 🔴', 'success');
+      }
+    }
 
     if (nextTool !== 'none') {
       audioService.playChime([700, 900]);
@@ -766,7 +809,8 @@ export const FloatingTeachingToolsOverlay: React.FC<FloatingTeachingToolsOverlay
     { id: 'pen', label: 'قلم 🖊️', category: 'رسم', shortcut: 'Alt+P', icon: PenTool, textColor: 'text-red-400 group-hover:text-red-300' },
     { id: 'highlighter', label: 'تمييز 🖍️', category: 'رسم', shortcut: 'Alt+H', icon: Highlighter, textColor: 'text-amber-400 group-hover:text-amber-300' },
     { id: 'laser', label: 'ليزر 🔴', category: 'تركيز', shortcut: 'Alt+L', icon: Radio, textColor: 'text-red-500 group-hover:text-red-400' },
-    { id: 'lens', label: 'عدسة 🔍', category: 'تركيز', shortcut: 'Alt+Z', icon: Search, textColor: 'text-blue-400 group-hover:text-blue-300' },
+    { id: 'screen_zoom', label: 'زوم شاشة 🔍', category: 'سطح المكتب', shortcut: 'Alt+Z', icon: Maximize2, textColor: 'text-emerald-500 group-hover:text-emerald-400' },
+    { id: 'lens', label: 'عدسة 🔎', category: 'تركيز', shortcut: 'Alt+M', icon: Search, textColor: 'text-blue-400 group-hover:text-blue-300' },
     { id: 'focus', label: 'تركيز 🎯', category: 'تركيز', shortcut: 'Alt+F', icon: Target, textColor: 'text-purple-400 group-hover:text-purple-300' },
     { id: 'whiteboard', label: 'سبورة ⬛', category: 'سبورة', shortcut: 'Alt+W', icon: Square, textColor: 'text-indigo-400 group-hover:text-indigo-300' },
     { id: 'timer', label: 'مؤقت ⏱️', category: 'تفاعل', shortcut: 'Alt+T', icon: Clock, textColor: 'text-emerald-400 group-hover:text-emerald-300' },
@@ -774,6 +818,7 @@ export const FloatingTeachingToolsOverlay: React.FC<FloatingTeachingToolsOverlay
     { id: 'picker', label: 'طالب 👥', category: 'تفاعل', shortcut: '', icon: UserCheck, textColor: 'text-sky-400 group-hover:text-sky-300' },
     { id: 'points', label: 'نقاط ⭐', category: 'تفاعل', shortcut: '', icon: Star, textColor: 'text-amber-500 group-hover:text-amber-400' },
     { id: 'copilot', label: 'مساعد 🤖', category: 'مساعد', shortcut: '', icon: Bot, textColor: 'text-purple-400 group-hover:text-purple-300' },
+    { id: 'popout', label: isPoppedOut ? 'استعادة' : 'فصل', category: 'أدوات', shortcut: '', icon: isPoppedOut ? Minimize2 : ExternalLink, textColor: 'text-indigo-400 group-hover:text-indigo-300' },
     { id: 'clear', label: 'مسح 🧹', category: 'أدوات', shortcut: '', icon: Trash2, textColor: 'text-rose-400 group-hover:text-rose-300' }
   ];
 
@@ -914,6 +959,7 @@ export const FloatingTeachingToolsOverlay: React.FC<FloatingTeachingToolsOverlay
       {/* ---------------------------------------------------- */}
       {/* OVERLAY 5: Advanced Smart Interactive Whiteboard & Blackboard */}
       {/* ---------------------------------------------------- */}
+      <ConditionalPopoutWrapper isPoppedOut={isPoppedOut} onClose={() => setIsPoppedOut(false)}>
       <SmartWhiteboardModal
         isOpen={activeTool === 'whiteboard'}
         onClose={() => setActiveTool('none')}
@@ -924,7 +970,11 @@ export const FloatingTeachingToolsOverlay: React.FC<FloatingTeachingToolsOverlay
       {/* ---------------------------------------------------- */}
       <div
         className={`fixed z-[9990] dir-rtl select-none touch-none max-w-full ${isDragging ? 'transition-none' : 'transition-all duration-200'}`}
-        style={{ left: `${Math.min(position.x, window.innerWidth - 60)}px`, top: `${Math.min(position.y, window.innerHeight - 80)}px` }}
+        style={
+          isPoppedOut 
+            ? { right: '40px', bottom: '40px', left: 'auto', top: 'auto' } 
+            : { left: `${Math.min(position.x, window.innerWidth - 60)}px`, top: `${Math.min(position.y, window.innerHeight - 80)}px` }
+        }
       >
         <div className="relative flex items-center justify-center">
           {/* Main Floating Nagah Orb Button */}
@@ -1030,7 +1080,7 @@ export const FloatingTeachingToolsOverlay: React.FC<FloatingTeachingToolsOverlay
                     )}
 
                     {/* Tooltip Label on Hover */}
-                    <div className="absolute top-10 left-1/2 -translate-x-1/2 bg-slate-900/95 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded-md text-[9px] font-bold opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap shadow-lg pointer-events-none z-10 hidden sm:flex items-center gap-1">
+                    <div className={`absolute ${pos.x < 0 ? 'right-full mr-2' : 'left-full ml-2'} top-1/2 -translate-y-1/2 bg-slate-900/95 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded-md text-[9px] font-bold opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap shadow-lg pointer-events-none z-10 hidden sm:flex items-center gap-1`}>
                       <span className="text-slate-400 text-[8px]">[{tool.category}]</span>
                       <span>{tool.label}</span>
                       {tool.shortcut && <span className="text-[8px] text-slate-400 bg-slate-800 px-1 rounded border border-slate-700">{tool.shortcut}</span>}
@@ -1598,14 +1648,12 @@ export const FloatingTeachingToolsOverlay: React.FC<FloatingTeachingToolsOverlay
         </div>
       )}
 
-      {/* ---------------------------------------------------- */}
-      {/* POPUP MODAL: SMART SPEAKER & ADVANCED NOISE FILTER */}
-      {/* ---------------------------------------------------- */}
       <SmartSpeakerModal
         isOpen={isSmartSpeakerOpen}
         onClose={() => setIsSmartSpeakerOpen(false)}
         activeSessionId={activeSessionId}
       />
+      </ConditionalPopoutWrapper>
     </>
   );
 };

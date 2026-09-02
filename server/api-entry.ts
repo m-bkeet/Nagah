@@ -64,7 +64,7 @@ app.get(['/health', '/api/health'], async (req, res) => {
       }
     }
     if (db) {
-      memDataKeys = Object.keys(db.getData());
+      memDataKeys = Object.keys((supabaseClient ? {} : {}));
     }
   } catch (e) {
     supabaseStatus = `error: ${e.message || e}`;

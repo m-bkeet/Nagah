@@ -7,7 +7,6 @@ export default defineConfig(() => {
   return {
     plugins: [
       react({
-        fastRefresh: process.env.DISABLE_HMR !== 'true',
       }),
       tailwindcss(),
     ],
