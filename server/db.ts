@@ -254,89 +254,41 @@ const initialData: DatabaseSchema = {
 ],
   trainees: [
     {
-        "id": "trainee-1787361330810-d1if",
-        "code": "A001",
-        "fullName": "مرام محمد رمضان بخيت",
-        "nationalId": "",
-        "birthDate": "",
-        "gender": "female",
-        "phone": "01001500686",
-        "parentPhone": "01001500686",
-        "parentName": "محمد رمضان بخيت",
-        "address": "",
-        "branchId": "branch-1",
-        "courseId": "course-1787347569318",
-        "groupId": "grp-1787358595611",
-        "trainerId": "trainer-1787349806643",
-        "registrationDate": "2026-08-22",
-        "status": "active",
-        "feeAmount": 0,
-        "discountAmount": 0,
-        "netAmount": 0,
-        "paidAmount": 0,
-        "remainingAmount": 0,
-        "notes": "ابنة الإدارة - إعفاء كامل",
-        "totalPoints": 277,
-        "ranking": 1,
-        "points": 277,
-        "courseIds": [
-            "course-1787347569318"
-        ],
-        "isExempt": true,
-        "exemptReason": "management_children",
-        "siblingIds": [
-            "trainee-1787361410293-aeko",
-            "trainee-1787459300939-62ly"
-        ],
-        "siblingNames": [
-            "رفيف محمد رمضان بخيت",
-            "لين محمد رمضان بخيت"
-        ]
-    },
-    {
-        "id": "trainee-1787361410293-aeko",
+        "id": "trainee-1787347401956-karm",
         "code": "A002",
-        "fullName": "رفيف محمد رمضان بخيت",
+        "fullName": "كرمه احمد عصام ابو الخير",
+        "grade": "الصف الرابع الابتدائي",
         "nationalId": "",
         "birthDate": "",
         "gender": "female",
-        "phone": "01005400325",
-        "parentPhone": "01001500686",
-        "parentName": "محمد رمضان بخيت",
+        "phone": "01002345678",
+        "parentPhone": "01002345678",
+        "parentName": "احمد عصام ابو الخير",
         "address": "",
         "branchId": "branch-1",
-        "courseId": "course-1787347462419",
-        "groupId": "grp-1787431608023",
+        "courseId": "course-1787347401956",
+        "groupId": "grp-1787350487970",
         "trainerId": "trainer-1787349806643",
-        "registrationDate": "2026-08-22",
+        "registrationDate": "2026-08-25",
         "status": "active",
-        "feeAmount": 0,
+        "feeAmount": 200,
         "discountAmount": 0,
-        "netAmount": 0,
-        "paidAmount": 0,
+        "netAmount": 200,
+        "paidAmount": 200,
         "remainingAmount": 0,
-        "notes": "ربط إخوة مع (مرام محمد رمضان بخيت - A001) - تم تطبيق خصم الأخوات",
-        "totalPoints": 200,
-        "ranking": 2,
-        "points": 200,
+        "notes": "الصف الرابع الابتدائي - مسجلة بكود A002 المرتب",
+        "totalPoints": 95,
+        "ranking": 4,
+        "points": 95,
         "courseIds": [
-            "course-1787347462419"
-        ],
-        "isExempt": true,
-        "exemptReason": "management_children",
-        "siblingIds": [
-            "trainee-1787361330810-d1if",
-            "trainee-1787459300939-62ly"
-        ],
-        "siblingNames": [
-            "مرام محمد رمضان بخيت",
-            "لين محمد رمضان بخيت"
+            "course-1787347401956"
         ]
     },
     {
         "id": "trainee-1787459300939-62ly",
-        "code": "A003",
+        "code": "A001",
         "fullName": "لين محمد رمضان بخيت",
+        "grade": "الصف الرابع الابتدائي",
         "nationalId": "",
         "birthDate": "",
         "gender": "female",
@@ -355,7 +307,7 @@ const initialData: DatabaseSchema = {
         "netAmount": 0,
         "paidAmount": 0,
         "remainingAmount": 0,
-        "notes": "ربط إخوة مع (مرام ورفيف محمد رمضان بخيت) - إعفاء أبناء الإدارة",
+        "notes": "الصف الرابع الابتدائي - إعفاء أبناء الإدارة",
         "totalPoints": 133,
         "ranking": 3,
         "points": 133,
@@ -371,6 +323,88 @@ const initialData: DatabaseSchema = {
         "siblingNames": [
             "مرام محمد رمضان بخيت",
             "رفيف محمد رمضان بخيت"
+        ]
+    },
+    {
+        "id": "trainee-1787361410293-aeko",
+        "code": "B001",
+        "fullName": "رفيف محمد رمضان بخيت",
+        "grade": "الصف الخامس الابتدائي",
+        "nationalId": "",
+        "birthDate": "",
+        "gender": "female",
+        "phone": "01005400325",
+        "parentPhone": "01001500686",
+        "parentName": "محمد رمضان بخيت",
+        "address": "",
+        "branchId": "branch-1",
+        "courseId": "course-1787347462419",
+        "groupId": "grp-1787431608023",
+        "trainerId": "trainer-1787349806643",
+        "registrationDate": "2026-08-22",
+        "status": "active",
+        "feeAmount": 0,
+        "discountAmount": 0,
+        "netAmount": 0,
+        "paidAmount": 0,
+        "remainingAmount": 0,
+        "notes": "الصف الخامس الابتدائي - إعفاء أبناء الإدارة",
+        "totalPoints": 200,
+        "ranking": 2,
+        "points": 200,
+        "courseIds": [
+            "course-1787347462419"
+        ],
+        "isExempt": true,
+        "exemptReason": "management_children",
+        "siblingIds": [
+            "trainee-1787361330810-d1if",
+            "trainee-1787459300939-62ly"
+        ],
+        "siblingNames": [
+            "مرام محمد رمضان بخيت",
+            "لين محمد رمضان بخيت"
+        ]
+    },
+    {
+        "id": "trainee-1787361330810-d1if",
+        "code": "D001",
+        "fullName": "مرام محمد رمضان بخيت",
+        "grade": "الصف الأول الإعدادي",
+        "nationalId": "",
+        "birthDate": "",
+        "gender": "female",
+        "phone": "01001500686",
+        "parentPhone": "01001500686",
+        "parentName": "محمد رمضان بخيت",
+        "address": "",
+        "branchId": "branch-1",
+        "courseId": "course-1787347569318",
+        "groupId": "grp-1787358595611",
+        "trainerId": "trainer-1787349806643",
+        "registrationDate": "2026-08-22",
+        "status": "active",
+        "feeAmount": 0,
+        "discountAmount": 0,
+        "netAmount": 0,
+        "paidAmount": 0,
+        "remainingAmount": 0,
+        "notes": "الصف الأول الإعدادي - إعفاء أبناء الإدارة",
+        "totalPoints": 277,
+        "ranking": 1,
+        "points": 277,
+        "courseIds": [
+            "course-1787347569318"
+        ],
+        "isExempt": true,
+        "exemptReason": "management_children",
+        "siblingIds": [
+            "trainee-1787361410293-aeko",
+            "trainee-1787459300939-62ly"
+        ],
+        "siblingNames": [
+            "رفيف محمد رمضان بخيت",
+            "لين محمد رمضان بخيت"
         ]
     }
 ],
@@ -2733,57 +2767,7 @@ const initialData: DatabaseSchema = {
         "currentQuestionIndex": 1
     }
 ],
-  devices: [
-    {
-        "id": "dev-1787352892067",
-        "deviceId": "PC-71",
-        "name": "جهاز PC-71",
-        "assignedUser": "رفيف محمد رمضان بخيت",
-        "userType": "trainee",
-        "branchId": "branch-1",
-        "ipAddress": "ais-dev-7wkppak7c63am6ebvulppu-481160813332.europe-west2.run.app",
-        "lastHeartbeat": "2026-08-23T06:02:06.440Z",
-        "isOnline": false,
-        "status": "active",
-        "currentTraineeId": "trainee-1787361410293-aeko",
-        "lastScreenshotUrl": "",
-        "lastScreenshotTime": "2026-08-22T01:34:48.102Z",
-        "currentTraineeName": "رفيف محمد رمضان بخيت",
-        "lastArchivedTime": "2026-08-23T06:01:50.050Z"
-    },
-    {
-        "id": "dev-1787362571450",
-        "deviceId": "PC-74",
-        "name": "جهاز PC-74",
-        "assignedUser": "مرام محمد رمضان بخيت",
-        "userType": "trainee",
-        "branchId": "branch-1",
-        "ipAddress": "ais-dev-7wkppak7c63am6ebvulppu-481160813332.europe-west2.run.app",
-        "lastHeartbeat": "2026-08-22T01:46:31.883Z",
-        "isOnline": false,
-        "status": "active",
-        "lastScreenshotUrl": "",
-        "lastScreenshotTime": "2026-08-22T01:46:31.883Z",
-        "currentTraineeName": "مرام محمد رمضان بخيت",
-        "currentTraineeId": "trainee-1787361330810-d1if"
-    },
-    {
-        "id": "dev-1787464212308",
-        "deviceId": "PC-83",
-        "name": "جهاز PC-83",
-        "assignedUser": "مرام محمد رمضان بخيت",
-        "userType": "trainee",
-        "branchId": "branch-1",
-        "ipAddress": "ais-dev-7wkppak7c63am6ebvulppu-481160813332.europe-west2.run.app",
-        "lastHeartbeat": "2026-08-23T06:32:38.297Z",
-        "isOnline": false,
-        "status": "active",
-        "lastScreenshotUrl": "",
-        "lastArchivedTime": "2026-08-23T06:32:12.588Z",
-        "currentTraineeName": "مرام محمد رمضان بخيت",
-        "currentTraineeId": "trainee-1787361330810-d1if"
-    }
-],
+  devices: [],
   deviceCommands: [
     {
         "id": "cmd-1787353097554-p0hu",
@@ -3826,29 +3810,41 @@ class DatabaseManager {
     if (!gradeOrCourse) {
       return this.data.settings.traineeCodePrefix || 'A';
     }
-    const clean = gradeOrCourse.trim();
+    const clean = String(gradeOrCourse).trim();
     const prefixes = this.data.settings.gradePrefixes || {};
     
     // Exact match in settings
     if (prefixes[clean]) return prefixes[clean];
 
+    // Normalized representation
+    const norm = clean.toLowerCase()
+      .replace(/[أإآ]/g, 'ا')
+      .replace(/ة/g, 'ه')
+      .replace(/ى/g, 'ي')
+      .replace(/[\s_\-]/g, '');
+
     // Check if grade matches keys in settings
     for (const [k, v] of Object.entries(prefixes)) {
-      if (k.toLowerCase() === clean.toLowerCase() || clean.includes(k) || k.includes(clean)) {
+      const kNorm = k.toLowerCase().replace(/[أإآ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي').replace(/[\s_\-]/g, '');
+      if (kNorm === norm || (kNorm.length > 2 && norm.includes(kNorm)) || (norm.length > 2 && kNorm.includes(norm))) {
         return v;
       }
     }
 
-    // Default intelligent curriculum mapping
-    if (clean.includes('رابع') || clean.toUpperCase().includes('ICT4') || clean.includes('4')) return 'A';
-    if (clean.includes('خامس') || clean.toUpperCase().includes('ICT5') || clean.includes('5')) return 'B';
-    if (clean.includes('سادس') || clean.toUpperCase().includes('ICT6') || clean.includes('6')) return 'C';
-    if (clean.includes('أول إعدادي') || clean.includes('اول اعدادي') || clean.toUpperCase().includes('P1') || clean.toUpperCase().includes('ICT-P1') || clean.includes('إعدادي 1')) return 'D';
-    if (clean.includes('ثاني إعدادي') || clean.includes('تاني اعدادي') || clean.toUpperCase().includes('P2') || clean.toUpperCase().includes('ICT-P2') || clean.includes('إعدادي 2')) return 'E';
-    if (clean.includes('ثالث إعدادي') || clean.includes('تالت اعدادي') || clean.toUpperCase().includes('P3') || clean.toUpperCase().includes('ICT-P3') || clean.includes('إعدادي 3')) return 'F';
-    if (clean.includes('أول ثانوي') || clean.includes('اول ثانوي') || clean.includes('1 ثانوي') || clean.toUpperCase().includes('SEC-1') || clean.toUpperCase().includes('S1')) return 'G';
-    if (clean.includes('ثاني ثانوي') || clean.includes('تاني ثانوي') || clean.includes('2 ثانوي') || clean.toUpperCase().includes('SEC-2') || clean.toUpperCase().includes('S2')) return 'H';
-    if (clean.includes('ثالث ثانوي') || clean.includes('تالت ثانوي') || clean.includes('3 ثانوي') || clean.toUpperCase().includes('SEC-3') || clean.toUpperCase().includes('S3')) return 'I';
+    // 1. Secondary Grades (المرحلة الثانوية)
+    if (norm.includes('اولثانوي') || norm.includes('1ثانوي') || norm.includes('ثانوي1') || norm.includes('sec1') || norm.includes('s1') || norm.includes('ictsec1')) return 'G';
+    if (norm.includes('ثانيثانوي') || norm.includes('تانيثانوي') || norm.includes('2ثانوي') || norm.includes('ثانوي2') || norm.includes('sec2') || norm.includes('s2') || norm.includes('ictsec2')) return 'H';
+    if (norm.includes('ثالثثانوي') || norm.includes('تالتثانوي') || norm.includes('3ثانوي') || norm.includes('ثانوي3') || norm.includes('sec3') || norm.includes('s3') || norm.includes('ictsec3')) return 'I';
+
+    // 2. Preparatory Grades (المرحلة الإعدادية)
+    if (norm.includes('اولاعدادي') || norm.includes('1اعدادي') || norm.includes('اعدادي1') || norm.includes('ictp1') || norm.includes('p1') || norm.includes('prep1') || norm.includes('ict-p1')) return 'D';
+    if (norm.includes('ثانياعدادي') || norm.includes('تانياعدادي') || norm.includes('2اعدادي') || norm.includes('اعدادي2') || norm.includes('ictp2') || norm.includes('p2') || norm.includes('prep2') || norm.includes('ict-p2')) return 'E';
+    if (norm.includes('ثالثاعدادي') || norm.includes('تالتاعدادي') || norm.includes('3اعدادي') || norm.includes('اعدادي3') || norm.includes('ictp3') || norm.includes('p3') || norm.includes('prep3') || norm.includes('ict-p3')) return 'F';
+
+    // 3. Primary Grades (المرحلة الابتدائية)
+    if (norm.includes('رابع') || norm.includes('رابعه') || norm.includes('4ابتدائي') || norm.includes('ابتدائي4') || norm.includes('ict4') || norm.includes('grade4') || norm.includes('primary4') || norm === '4' || norm === 'صف4') return 'A';
+    if (norm.includes('خامس') || norm.includes('خامسه') || norm.includes('5ابتدائي') || norm.includes('ابتدائي5') || norm.includes('ict5') || norm.includes('grade5') || norm.includes('primary5') || norm === '5' || norm === 'صف5') return 'B';
+    if (norm.includes('سادس') || norm.includes('سادسه') || norm.includes('ساته') || norm.includes('6ابتدائي') || norm.includes('ابتدائي6') || norm.includes('ict6') || norm.includes('grade6') || norm.includes('primary6') || norm === '6' || norm === 'صف6') return 'C';
 
     return this.data.settings.traineeCodePrefix || 'A';
   }

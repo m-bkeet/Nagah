@@ -530,9 +530,22 @@ export const StudentKioskView: React.FC = () => {
 
     performHeartbeat();
 
+    const handleBeforeUnload = () => {
+      try {
+        const payload = JSON.stringify({ deviceId });
+        if (navigator.sendBeacon) {
+          navigator.sendBeacon('/api/agent/leave', new Blob([payload], { type: 'application/json' }));
+        }
+      } catch (e) {}
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
     return () => {
       isSubscribed = false;
       clearTimeout(timerId);
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      handleBeforeUnload();
     };
   }, [deviceId, lockMessage]);
 

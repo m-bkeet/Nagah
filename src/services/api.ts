@@ -263,7 +263,7 @@ export const api = {
     }),
 
   // Trainees
-  getNextTraineeCode: (params?: { prefix?: string; courseId?: string; grade?: string } | string) => {
+  getNextTraineeCode: (params?: { prefix?: string; courseId?: string; grade?: string; excludeId?: string } | string) => {
     let query = '';
     if (typeof params === 'string') {
       query = `?prefix=${encodeURIComponent(params)}`;
@@ -272,10 +272,35 @@ export const api = {
       if (params.prefix) q.set('prefix', params.prefix);
       if (params.courseId) q.set('courseId', params.courseId);
       if (params.grade) q.set('grade', params.grade);
+      if (params.excludeId) q.set('excludeId', params.excludeId);
       query = `?${q.toString()}`;
     }
-    return request<{ code: string; prefix?: string }>(`/trainees/next-code${query}`);
+    return request<{ code: string; prefix?: string; nextNumber?: number }>(`/trainees/next-code${query}`);
   },
+  previewCodeFix: () =>
+    request<{
+      success: boolean;
+      totalTrainees: number;
+      validCount: number;
+      changesCount: number;
+      itemsToFix: Array<{
+        id: string;
+        fullName: string;
+        grade: string;
+        groupName: string;
+        currentCode: string;
+        proposedCode: string;
+        expectedPrefix: string;
+        reason: string;
+      }>;
+    }>('/trainees/preview-code-fix', {
+      method: 'POST'
+    }),
+  executeCodeFix: (updates: Array<{ id: string; proposedCode: string; expectedPrefix?: string; grade?: string }>) =>
+    request<{ success: boolean; updatedCount: number }>('/trainees/execute-code-fix', {
+      method: 'POST',
+      body: JSON.stringify({ updates })
+    }),
   getPromotionPreview: (params?: { branchId?: string; academicYear?: string }) => {
     const query = new URLSearchParams(params || {}).toString();
     return request<{
@@ -1076,6 +1101,22 @@ export const api = {
 
   cleanupDeviceSession: (deviceId: string) =>
     request<{ success: boolean; message: string }>('/devices/session-cleanup', {
+      method: 'POST',
+      body: JSON.stringify({ deviceId })
+    }),
+
+  resetLab: () =>
+    request<{ success: boolean; message: string }>('/devices/reset-lab', {
+      method: 'POST'
+    }),
+
+  clearAllDevices: () =>
+    request<{ success: boolean; message: string }>('/devices/clear-all', {
+      method: 'POST'
+    }),
+
+  agentLeave: (deviceId: string) =>
+    request<{ success: boolean }>('/agent/leave', {
       method: 'POST',
       body: JSON.stringify({ deviceId })
     }),

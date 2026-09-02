@@ -395,6 +395,19 @@ export const DevicesView: React.FC = () => {
     }
   };
 
+  const handleResetLab = async () => {
+    if (!window.confirm('هل أنت متأكد من تفريغ المعمل بالكامل وإزالة جميع أسماء الطلاب القدامى (مثل أسر ومرام) وتهيئته للجروب الجديد؟')) return;
+    try {
+      const res = await api.resetLab();
+      if (res.success) {
+        showToast(res.message || 'تم تفريغ المعمل بنجاح 🔄', 'success');
+        loadDevices();
+      }
+    } catch (err: any) {
+      showToast(err.message || 'فشل تفريغ المعمل', 'error');
+    }
+  };
+
   // Student Agent Login Simulator
   const handleSimulateStudentLogin = async () => {
     if (!simStudentCode) {
@@ -486,6 +499,19 @@ export const DevicesView: React.FC = () => {
       showToast(err.message || 'فشل تشخيص الأجهزة', 'error');
     } finally {
       setIsRunningDiagnostics(false);
+    }
+  };
+
+  // Delete All Devices Permanently
+  const handleClearAllDevices = async () => {
+    if (!window.confirm('هل أنت متأكد من رغبتك في حذف ومسح جميع الأجهزة المسجلة في المعمل نهائياً؟')) return;
+    try {
+      await api.clearAllDevices();
+      showToast('تم مسح وحذف كافة أجهزة المعمل بنجاح 🗑️', 'success');
+      setSelectedDeviceIds([]);
+      loadDevices();
+    } catch (err: any) {
+      showToast(err.message || 'فشل مسح الأجهزة', 'error');
     }
   };
 
@@ -610,6 +636,26 @@ Invoke-RestMethod -Uri "${window.location.origin}/api/download/lab-agent-ps1" -U
               >
                 <Trash2 className="w-3.5 h-3.5 text-rose-400" />
                 <span>حذف غير المتصلة ({offlineCount}) 🧹</span>
+              </button>
+            )}
+
+            <button
+              onClick={handleResetLab}
+              className="px-3.5 py-2 bg-indigo-950/80 hover:bg-indigo-900 text-indigo-300 border border-indigo-500/40 font-bold text-xs rounded-xl flex items-center gap-1.5 transition-all cursor-pointer shadow-lg"
+              title="تفريغ المعمل بالكامل وإزالة ارتباطات الطلاب القدامى"
+            >
+              <RefreshCw className="w-3.5 h-3.5 text-indigo-400" />
+              <span>تفريغ المعمل للجروب الجديد 🔄</span>
+            </button>
+
+            {totalCount > 0 && (
+              <button
+                onClick={handleClearAllDevices}
+                className="px-3.5 py-2 bg-rose-900/60 hover:bg-rose-800 text-rose-200 border border-rose-700/50 font-bold text-xs rounded-xl flex items-center gap-1.5 transition-all cursor-pointer"
+                title="مسح وحذف كافة الأجهزة من القائمة نهائياً"
+              >
+                <Trash2 className="w-3.5 h-3.5 text-rose-300" />
+                <span>مسح كافة الأجهزة 🗑️</span>
               </button>
             )}
           </div>

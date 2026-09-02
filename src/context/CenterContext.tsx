@@ -118,12 +118,13 @@ export const CenterProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         try { return await p; } catch (e) { console.warn('[CenterContext] API fetch warning:', e); return null; }
       };
 
-       const [branchesRes, settingsRes, notifsRes, sysRes, attRes] = await Promise.all([
+       const [branchesRes, settingsRes, notifsRes, sysRes, attRes, devRes] = await Promise.all([
         safeCall(api.getBranches()),
         safeCall(api.getSettings()),
         safeCall(api.getNotifications()),
         safeCall(api.getSystemInfo()),
-        safeCall(api.getAttendance({ date: new Date().toISOString().split('T')[0] }))
+        safeCall(api.getAttendance({ date: new Date().toISOString().split('T')[0] })),
+        safeCall(api.getDevices())
       ]);
 
       if (Array.isArray(branchesRes)) {
@@ -152,9 +153,14 @@ export const CenterProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       if (sysRes?.serverIp) {
         setServerIp(sysRes.serverIp);
       }
-      if (Array.isArray(attRes)) {
-        setLabAttendanceCount(attRes.filter((a: any) => a.status === 'present' || a.status === 'late').length);
+
+      let onlineDevCount = 0;
+      if (Array.isArray(devRes)) {
+        onlineDevCount = devRes.filter((d: any) => d.isOnline).length;
       }
+
+      // Reflect only currently connected online devices
+      setLabAttendanceCount(onlineDevCount);
       setRefreshKey(k => k + 1);
     } catch (err) {
       console.error('Error refreshing center data:', err);
@@ -163,6 +169,17 @@ export const CenterProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   useEffect(() => {
     refreshAll();
+    const livePoll = setInterval(async () => {
+      try {
+        const devRes = await api.getDevices().catch(() => []);
+        let onlineDevCount = 0;
+        if (Array.isArray(devRes)) {
+          onlineDevCount = devRes.filter((d: any) => d.isOnline).length;
+        }
+        setLabAttendanceCount(onlineDevCount);
+      } catch (e) {}
+    }, 2500);
+    return () => clearInterval(livePoll);
   }, [refreshAll]);
 
   // Keyboard shortcut Ctrl+K for search

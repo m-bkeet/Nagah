@@ -308,15 +308,15 @@ export const Header: React.FC<HeaderProps> = ({ toggleSidebar, onNavigate }) => 
         <button
           type="button"
           onClick={() => toggleTrainerLabSession(activeBranchId, user?.name || 'المدرب المشرف')}
-          className={`px-2 py-1 rounded-full text-xs font-bold flex items-center gap-1.5 border transition-all ${
+          className={`px-2 py-0.5 rounded-full text-xs font-bold flex items-center gap-1 border transition-all ${
             isTrainerLabActive
-              ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/20'
+              ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/25 shadow-sm'
               : 'bg-rose-500/10 text-rose-300 border-rose-500/30 hover:bg-rose-500/20'
           }`}
-          title={`حالة المعمل: ${isTrainerLabActive ? 'مفتوح' : 'مغلق'} - عدد الحضور: ${labAttendanceCount}`}
+          title={`حالة المعمل: ${isTrainerLabActive ? 'مفتوح 🟢' : 'مغلق 🔒'} • عدد الأجهزة المتصلة حالياً: ${labAttendanceCount}`}
         >
           <div className={`w-1.5 h-1.5 rounded-full ${isTrainerLabActive ? 'bg-emerald-400' : 'bg-rose-400'}`} />
-          <span className="font-mono">{labAttendanceCount}</span>
+          <span className="font-mono font-black">{labAttendanceCount}</span>
         </button>
 
         {/* Compact Lab Links / Shortcuts Button */}

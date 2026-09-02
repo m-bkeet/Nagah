@@ -919,7 +919,7 @@ apiRouter.post('/branches/:id/duplicate', async (req: Request, res: Response) =>
 // ----------------------------------------------------
 apiRouter.get('/trainees/next-code', async (req: Request, res: Response) => {
   try {
-    const { prefix, courseId, grade } = req.query;
+    const { prefix, courseId, grade, excludeId } = req.query;
     let targetPrefix = typeof prefix === 'string' ? prefix : '';
     if (!targetPrefix && typeof courseId === 'string' && courseId) {
       const courses = await CourseRepo.getAll();
@@ -933,16 +933,16 @@ apiRouter.get('/trainees/next-code', async (req: Request, res: Response) => {
     }
     const resolvedPrefix = targetPrefix
       ? (targetPrefix.length === 1 ? targetPrefix.toUpperCase() : db.getPrefixForGradeOrCourse(targetPrefix))
-      : 'NGH';
+      : (db.getData().settings?.traineeCodePrefix || 'A');
     
     const allTrainees = await TraineeRepo.getAll();
     
     // Calculate atomic next code against Firestore state
-    const pfx = (resolvedPrefix || 'NGH').toUpperCase();
+    const pfx = (resolvedPrefix || 'A').toUpperCase();
     const regex = new RegExp(`^${pfx}-?(\\d+)$`, 'i');
     let maxNum = 0;
     allTrainees.forEach(t => {
-      if (t.code) {
+      if (t.code && (!excludeId || t.id !== excludeId)) {
         const match = String(t.code).trim().match(regex);
         if (match) {
           const num = parseInt(match[1], 10);
@@ -953,9 +953,9 @@ apiRouter.get('/trainees/next-code', async (req: Request, res: Response) => {
       }
     });
     const nextNum = maxNum + 1;
-    const code = pfx.length === 1 ? `${pfx}${String(nextNum).padStart(3, '0')}` : `${pfx}-${nextNum}`;
+    const code = `${pfx}${String(nextNum).padStart(3, '0')}`;
     
-    res.json({ code, prefix: resolvedPrefix });
+    res.json({ code, prefix: pfx, nextNumber: nextNum });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -1097,53 +1097,74 @@ apiRouter.post('/trainees', async (req: Request, res: Response) => {
 apiRouter.put('/trainees/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    let updates = req.body;
+    let updates = { ...req.body };
     
     const currentTrainee = await TraineeRepo.getById(id);
     if (currentTrainee) {
       let oldCourseId = currentTrainee.courseId;
       let oldGrade = currentTrainee.grade;
-      let newCourseId = updates.courseId;
-      let newGrade = updates.grade;
+      let newCourseId = updates.courseId !== undefined ? updates.courseId : oldCourseId;
+      let newGrade = updates.grade !== undefined ? updates.grade : oldGrade;
       
-      if ((newCourseId && newCourseId !== oldCourseId) || (newGrade && newGrade !== oldGrade)) {
-        let newPrefix = '';
-        if (newCourseId) {
-          const course = await CourseRepo.getById(newCourseId);
-          if (course) newPrefix = db.getPrefixForGradeOrCourse(course.name);
-        }
-        if (!newPrefix && newGrade) {
-          newPrefix = db.getPrefixForGradeOrCourse(newGrade);
-        }
-        newPrefix = (newPrefix || 'NGH').toUpperCase();
-        
-        let currentPrefix = '';
-        if (currentTrainee.code) {
-          const m = currentTrainee.code.match(/^([a-zA-Z]+)/);
-          if (m) currentPrefix = m[1].toUpperCase();
-        }
-        
-        if (newPrefix && currentPrefix && newPrefix !== currentPrefix) {
-          const allTrainees = await TraineeRepo.getAll();
-          const regex = new RegExp(`^${newPrefix}-?(\\d+)$`, 'i');
-          let maxNum = 0;
-          allTrainees.forEach(t => {
-            if (t.code && t.id !== id) {
-              const match = t.code.trim().match(regex);
-              if (match) {
-                const num = parseInt(match[1], 10);
-                if (num > maxNum) maxNum = num;
-              }
+      let targetPrefix = '';
+      if (newCourseId) {
+        const courses = await CourseRepo.getAll();
+        const course = courses.find(c => c.id === newCourseId);
+        if (course) targetPrefix = db.getPrefixForGradeOrCourse(course.name);
+      }
+      if (!targetPrefix && newGrade) {
+        targetPrefix = db.getPrefixForGradeOrCourse(newGrade);
+      }
+      targetPrefix = (targetPrefix || 'A').toUpperCase();
+
+      let currentCode = (currentTrainee.code || '').trim().toUpperCase();
+      let currentPrefix = '';
+      const m = currentCode.match(/^([a-zA-Z]+)/);
+      if (m) currentPrefix = m[1].toUpperCase();
+
+      const gradeOrCourseChanged = (newCourseId && newCourseId !== oldCourseId) || (newGrade && newGrade !== oldGrade);
+      const isCodeMismatched = currentPrefix && targetPrefix && currentPrefix !== targetPrefix;
+      const isForceRegen = updates.forceRegenerateCode === true;
+      const userProvidedValidNewCode = updates.code && updates.code !== currentTrainee.code && updates.code.toUpperCase().startsWith(targetPrefix);
+
+      if ((gradeOrCourseChanged || isCodeMismatched || isForceRegen || !currentCode) && !userProvidedValidNewCode) {
+        const allTrainees = await TraineeRepo.getAll();
+        const regex = new RegExp(`^${targetPrefix}-?(\\d+)$`, 'i');
+        let maxNum = 0;
+        allTrainees.forEach(t => {
+          if (t.code && t.id !== id) {
+            const match = String(t.code).trim().match(regex);
+            if (match) {
+              const num = parseInt(match[1], 10);
+              if (!isNaN(num) && num > maxNum) maxNum = num;
             }
-          });
-          updates.code = `${newPrefix}${(maxNum + 1).toString().padStart(3, '0')}`;
-          updates.prefix = newPrefix;
-          console.log(`[TRAINEE_UPDATE] Regenerated code for ${id}: ${currentTrainee.code} -> ${updates.code}`);
-        }
+          }
+        });
+        const nextNum = maxNum + 1;
+        const autoNewCode = `${targetPrefix}${String(nextNum).padStart(3, '0')}`;
+        updates.code = autoNewCode;
+        updates.prefix = targetPrefix;
+        console.log(`[TRAINEE_UPDATE] Auto-assigned clean sequential code for trainee ${id}: ${currentTrainee.code} -> ${updates.code}`);
+      } else if (updates.code) {
+        updates.code = updates.code.trim().toUpperCase();
+        const mNew = updates.code.match(/^([a-zA-Z]+)/);
+        if (mNew) updates.prefix = mNew[1].toUpperCase();
       }
     }
     
+    delete updates.forceRegenerateCode;
     const updated = await TraineeRepo.update(id, updates);
+
+    // Sync in-memory DB if available
+    const memData = db.getData();
+    if (memData && Array.isArray(memData.trainees)) {
+      const idx = memData.trainees.findIndex((t: any) => t.id === id);
+      if (idx >= 0) {
+        memData.trainees[idx] = { ...memData.trainees[idx], ...updates, updatedAt: new Date().toISOString() };
+        db.saveImmediate();
+      }
+    }
+
     res.json({ success: true, trainee: updated });
   } catch(e: any) { res.status(500).json({ success: false, error: e.message }); }
 });
@@ -2124,18 +2145,9 @@ function normalizeGradeName(gradeStr: string): string {
 }
 
 // Helper to get grade code prefix
-function getGradeCodePrefix(gradeName?: string): string {
-  const norm = normalizeGradeName(gradeName || '');
-  if (norm.includes('الرابع')) return 'A';
-  if (norm.includes('الخامس')) return 'B';
-  if (norm.includes('السادس')) return 'C';
-  if (norm.includes('الأول الإعدادي') || norm.includes('الاول الاعدادي')) return 'D';
-  if (norm.includes('الثاني الإعدادي') || norm.includes('الثاني الاعدادي')) return 'E';
-  if (norm.includes('الثالث الإعدادي') || norm.includes('الثالث الاعدادي')) return 'F';
-  if (norm.includes('الأول الثانوي') || norm.includes('الاول الثانوي')) return 'G';
-  if (norm.includes('الثاني الثانوي') || norm.includes('الثاني الثانوي')) return 'H';
-  if (norm.includes('الثالث الثانوي') || norm.includes('الثالث الثانوي')) return 'I';
-  return 'ST';
+function getGradeCodePrefix(gradeOrCourseName?: string): string {
+  if (!gradeOrCourseName) return 'A';
+  return db.getPrefixForGradeOrCourse(gradeOrCourseName);
 }
 
 // ----------------------------------------------------
@@ -2143,9 +2155,30 @@ function getGradeCodePrefix(gradeName?: string): string {
 // ----------------------------------------------------
 apiRouter.post('/trainees/preview-code-fix', async (req: Request, res: Response) => {
   try {
-    const allTrainees = await TraineeRepo.getAll();
-    const allGroups = await GroupRepo.getAll();
+    const [allTrainees, allGroups, allCourses] = await Promise.all([
+      TraineeRepo.getAll(),
+      GroupRepo.getAll(),
+      CourseRepo.getAll()
+    ]);
     const groupMap = new Map(allGroups.map((g: any) => [g.id, g]));
+    const courseMap = new Map(allCourses.map((c: any) => [c.id, c]));
+
+    const resolveTraineeTarget = (t: any): { expectedPrefix: string; effectiveGrade: string } => {
+      let gradeStr = t.grade || '';
+      if (!gradeStr && t.courseId && courseMap.has(t.courseId)) {
+        const c = courseMap.get(t.courseId);
+        gradeStr = c.name || c.category || '';
+      }
+      if (!gradeStr && t.groupId && groupMap.has(t.groupId)) {
+        const g = groupMap.get(t.groupId);
+        gradeStr = g.grade || g.name || '';
+      }
+      const pfx = db.getPrefixForGradeOrCourse(gradeStr || 'الصف الرابع الابتدائي');
+      return {
+        expectedPrefix: (pfx || 'A').toUpperCase(),
+        effectiveGrade: gradeStr || 'الصف الرابع الابتدائي'
+      };
+    };
 
     let validCount = 0;
     let changesCount = 0;
@@ -2155,7 +2188,7 @@ apiRouter.post('/trainees/preview-code-fix', async (req: Request, res: Response)
 
     // 1st pass: Valid codes already matching system format
     allTrainees.forEach((t: any) => {
-      const expectedPrefix = getGradeCodePrefix(t.grade);
+      const { expectedPrefix } = resolveTraineeTarget(t);
       if (!allocatedCodesByPrefix.has(expectedPrefix)) {
         allocatedCodesByPrefix.set(expectedPrefix, new Set());
       }
@@ -2174,7 +2207,7 @@ apiRouter.post('/trainees/preview-code-fix', async (req: Request, res: Response)
     const nextSeqMap = new Map<string, number>();
 
     allTrainees.forEach((t: any) => {
-      const expectedPrefix = getGradeCodePrefix(t.grade);
+      const { expectedPrefix, effectiveGrade } = resolveTraineeTarget(t);
       const currentCode = (t.code || '').trim().toUpperCase();
       const allocatedSet = allocatedCodesByPrefix.get(expectedPrefix) || new Set();
 
@@ -2204,7 +2237,7 @@ apiRouter.post('/trainees/preview-code-fix', async (req: Request, res: Response)
       itemsToFix.push({
         id: t.id,
         fullName: t.fullName,
-        grade: t.grade || 'غير محدد',
+        grade: effectiveGrade,
         groupName: group ? group.name : 'بدون مجموعة',
         currentCode: t.code || 'بدون كود',
         proposedCode,
@@ -2238,18 +2271,20 @@ apiRouter.post('/trainees/execute-code-fix', async (req: Request, res: Response)
     for (const update of updates) {
       if (!update.id || !update.proposedCode) continue;
 
-      const prefix = getGradeCodePrefix(update.grade);
+      const prefix = (update.expectedPrefix || db.getPrefixForGradeOrCourse(update.grade) || 'A').toUpperCase();
 
       const localT = dbTrainees.find((t: any) => t.id === update.id);
       if (localT) {
         localT.code = update.proposedCode;
         localT.prefix = prefix;
+        if (update.grade) localT.grade = update.grade;
       }
 
       try {
         await TraineeRepo.update(update.id, {
           code: update.proposedCode,
-          prefix
+          prefix,
+          ...(update.grade ? { grade: update.grade } : {})
         });
       } catch (err) {
         console.warn(`Firestore update failed for trainee ${update.id}`, err);
@@ -2258,7 +2293,7 @@ apiRouter.post('/trainees/execute-code-fix', async (req: Request, res: Response)
       updatedCount++;
     }
 
-    db.save();
+    db.saveImmediate();
 
     db.logAudit({
       userId: 'admin',
@@ -5581,31 +5616,76 @@ apiRouter.get('/question-bank', (req: Request, res: Response) => {
 // Device Management & Remote Agent
 // ----------------------------------------------------
 apiRouter.get('/devices', (req: Request, res: Response) => {
-  const devices = db.getData().devices;
+  let devices = db.getData().devices || [];
   const now = Date.now();
-  const defaultDesktopSvg = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMjgwIDcyMCIgd2lkdGg9IjEyODAiIGhlaWdodD0iNzIwIj48ZGVmcz48bGluZWFyR3JhZGllbnQgaWQ9ImJnIiB4MT0iMCUiIHkxPSIwJSIgeDI9IjEwMCUiIHkyPSIxMDAlIj48c3RvcCBvZmZzZXQ9IjAlIiBzdG9wLWNvbG9yPSIjMWUzYThhIi8+PHN0b3Agb2Zmc2V0PSI1MCUiIHN0b3AtY29sb3I9IiMwZjE3MmEiLz48c3RvcCBvZmZzZXQ9IjEwMCUiIHN0b3AtY29sb3I9IiMwMjA2MTciLz48L2xpbmVhckdyYWRpZW50PjwvZGVmcz48cmVjdCB3aWR0aD0iMTI4MCIgaGVpZ2h0PSI3MjAiIGZpbGw9InVybCgjYmcpIi8+PHJlY3QgeD0iMCIgeT0iNjgwIiB3aWR0aD0iMTI4MCIgaGVpZ2h0PSI0MCIgZmlsbD0iIzAyMDYxNyIgb3BhY2l0eT0iMC45Ii8+PHJlY3QgeD0iNTYwIiB5PSI2ODIiIHdpZHRoPSIxNjAiIGhlaWdodD0iMzYiIHJ4PSI4IiBmaWxsPSIjMWUyOTNiIiBzdHJva2U9IiMzOGJkZjgiIHN0cm9rZS13aWR0aD0iMSIvPjxjaXJjbGUgY3g9IjU4NSIgY3k9IjcwMCIgcj0iMTAiIGZpbGw9IiMzOGJkZjgiLz48cmVjdCB4PSI2MTAiIHk9IjY5NCIgd2lkdGg9IjkwIiBoZWlnaHQ9IjEyIiByeD0iMyIgZmlsbD0iI2NiZDVlMSIvPjxnIHRyYW5zZm9ybT0idHJhbnNsYXRlKDYwLCA2MCkiPjxyZWN0IHg9IjAiIHk9IjAiIHdpZHRoPSI2MCIgaGVpZ2h0PSI2MCIgcng9IjEyIiBmaWxsPSIjZmJiZjI0Ii8+PHRleHQgeD0iMzAiIHk9IjM4IiBmb250LXNpemU9IjI4IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj7wn5OBPC90ZXh0Pjx0ZXh0IHg9IjMwIiB5PSI3OCIgZm9udC1zaXplPSIxMiIgZmlsbD0iI2ZmZmZmZiIgZm9udC1mYW1pbHk9IkFyaWFsIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj7Yp9mE2YXYtNin2LHZiti5PC90ZXh0PjwvZz48ZyB0cmFuc2Zvcm09InRyYW5zbGF0ZSg2MCwgMTYwKSI+PHJlY3QgeD0iMCIgeT0iMCIgd2lkdGg9IjYwIiBoZWlnaHQ9IjYwIiByeD0iMTIiIGZpbGw9IiMzOGJkZjgiLz48dGV4dCB4PSIzMCIgeT0iMzgiIGZvbnQtc2l6ZT0iMjgiIHRleHQtYW5jaG9yPSJtaWRkbGUiPvCfkrs8L3RleHQ+PHRleHQgeD0iMzAiIHk9Ijc4IiBmb250LXNpemU9IjEyIiBmaWxsPSIjZmZmZmZmIiBmb250LWZhbWlseT0iQXJpYWwiIHRleHQtYW5jaG9yPSJtaWRkbGUiPtiq2LfYqNmK2YLYp9iqPC90ZXh0PjwvZz48cmVjdCB4PSIzMDAiIHk9IjEyMCIgd2lkdGg9IjY4MCIgaGVpZ2h0PSI0MjAiIHJ4PSIxMiIgZmlsbD0iIzBmMTcyYSIgc3Ryb2tlPSIjMzM0MTU1IiBzdHJva2Utd2lkdGg9IjIiLz48cmVjdCB4PSIzMDAiIHk9IjEyMCIgd2lkdGg9IjY4MCIgaGVpZ2h0PSI0MCIgcng9IjEyIiBmaWxsPSIjMWUyOTNiIi8+PGNpcmNsZSBjeD0iMzI1IiBjeT0iMTQwIiByPSI2IiBmaWxsPSIjZjQzZjVlIi8+PGNpcmNsZSBjeD0iMzQ1IiBjeT0iMTQwIiByPSI2IiBmaWxsPSIjZmJiZjI0Ii8+PGNpcmNsZSBjeD0iMzY1IiBjeT0iMTQwIiByPSI2IiBmaWxsPSIjMTBiOTgxIi8+PHRleHQgeD0iNjQwIiB5PSIxNDUiIGZvbnQtc2l6ZT0iMTQiIGZpbGw9IiNlMmU4ZjAiIGZvbnQtZmFtaWx5PSJBcmlhbCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC13ZWlnaHQ9ImJvbGQiPtio2YrYptipINin2YTYqti32YjZitixINmI2KfZhNiq2K/YsdmK2Kgg2KfZhNi52YXZhNmKIC0g2LPYt9itINmF2YPYqtioINin2YTYt9in2YTYqDwvdGV4dD48dGV4dCB4PSI2NDAiIHk9IjMyMCIgZm9udC1zaXplPSIyNCIgZmlsbD0iIzM4YmRmOCIgZm9udC1-ZmFtaWx5PSJBcmlhbCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC13ZWlnaHQ9ImJvbGQiP2LTYp9i02Kkg2LPYt9itINmF2YPYqtioINin2YTYt9in2YTYqCDZhti02LfYqSDZiNis2KfZh9iy2Kkg2YTZhNmF2KrYp9io2LnYqSDwn5al77iPPC90ZXh0Pjwvc3Zn>';
+  const defaultDesktopSvg = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMjgwIDcyMCIgd2lkdGg9IjEyODAiIGhlaWdodD0iNzIwIj48ZGVmcz48bGluZWFyR3JhZGllbnQgaWQ9ImJnIiB4MT0iMCUiIHkxPSIwJSIgeDI9IjEwMCUiIHkyPSIxMDAlIj48c3RvcCBvZmZzZXQ9IjAlIiBzdG9wLWNvbG9yPSIjMWUzYThhIi8+PHN0b3Agb2Zmc2V0PSI1MCUiIHN0b3AtY29sb3I9IiMwZjE3MmEiLz48c3RvcCBvZmZzZXQ9IjEwMCUiIHN0b3AtY29sb3I9IiMwMjA2MTciLz48L2xpbmVhckdyYWRpZW50PjwvZGVmcz48cmVjdCB3aWR0aD0iMTI4MCIgaGVpZ2h0PSI3MjAiIGZpbGw9InVybCgjYmcpIi8+PHJlY3QgeD0iMCIgeT0iNjgwIiB3aWR0aD0iMTI4MCIgaGVpZ2h0PSI0MCIgZmlsbD0iIzAyMDYxNyIgb3BhY2l0eT0iMC45Ii8+PHJlY3QgeD0iNTYwIiB5PSI2ODIiIHdpZHRoPSIxNjAiIGhlaWdodD0iMzYiIHJ4PSI4IiBmaWxsPSIjMWUyOTNiIiBzdHJva2U9IiMzOGJkZjgiIHN0cm9rZS13aWR0aD0iMSIvPjxjaXJjbGUgY3g9IjU4NSIgY3k9IjcwMCIgcj0iMTAiIGZpbGw9IiMzOGJkZjgiLz48cmVjdCB4PSI2MTAiIHk9IjY5NCIgd2lkdGg9IjkwIiBoZWlnaHQ9IjEyIiByeD0iMyIgZmlsbD0iI2NiZDVlMSIvPjxnIHRyYW5zZm9ybT0idHJhbnNsYXRlKDYwLCA2MCkiPjxyZWN0IHg9IjAiIHk9IjAiIHdpZHRoPSI2MCIgaGVpZ2h0PSI2MCIgcng9IjEyIiBmaWxsPSIjZmJiZjI0Ii8+PHRleHQgeD0iMzAiIHk9IjM4IiBmb250LXNpemU9IjI4IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj7wn5OBPC90ZXh0Pjx0ZXh0IHg9IjMwIiB5PSI3OCIgZm9udC1zaXplPSIxMiIgZmlsbD0iI2ZmZmZmZiIgZm9udC1mYW1pbHk9IkFyaWFsIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj7Yp9mE2YXYtNin2LHZiti5PC90ZXh0PjwvZz48ZyB0cmFuc2Zvcm09InRyYW5zbGF0ZSg2MCwgMTYwKSI+PHJlY3QgeD0iMCIgeT0iMCIgd2lkdGg9IjYwIiBoZWlnaHQ9IjYwIiByeD0iMTIiIGZpbGw9IiMzOGJkZjgiLz48dGV4dCB4PSIzMCIgeT0iMzgiIGZvbnQtc2l6ZT0iMjgiIHRleHQtYW5jaG9yPSJtaWRkbGUiPvCfkrs8L3RleHQ+PHRleHQgeD0iMzAiIHk9Ijc4IiBmb250LXNpemU9IjEyIiZmLWZpbGw9IiNmZmZmZmYiIGZvbnQtZmFtaWx5PSJBcmlhbCIgdGV4dC1hbmNob3I9Im1pZGRsZSI+tiq2LfYqNmK2YLYp9iqPC90ZXh0PjwvZz48cmVjdCB4PSIzMDAiIHk9IjEyMCIgd2lkdGg9IjY4MCIgaGVpZ2h0PSI0MjAiIHJ4PSIxMiIgZmlsbD0iIzBmMTcyYSIgc3Ryb2tlPSIjMzM0MTU1IiBzdHJva2Utd2lkdGg9IjIiLz48cmVjdCB4PSIzMDAiIHk9IjEyMCIgd2lkdGg9IjY4MCIgaGVpZ2h0PSI0MCIgcng9IjEyIiBmaWxsPSIjMWUyOTNiIi8+PGNpcmNsZSBjeD0iMzI1IiBjeT0iMTQwIiByPSI2IiBmaWxsPSIjZjQzZjVlIi8+PGNpcmNsZSBjeD0iMzQ1IiBjeT0iMTQwIiByPSI2IiBmaWxsPSIjZmJiZjI0Ii8+PGNpcmNsZSBjeD0iMzY1IiBjeT0iMTQwIiByPSI2IiBmaWxsPSIjMTBiOTgxIi8+PHRleHQgeD0iNjQwIiB5PSIxNDUiIGZvbnQtc2l6ZT0iMTQiIGZpbGw9IiNlMmU4ZjAiIGZvbnQtZmFtaWx5PSJBcmlhbCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC13ZWlnaHQ9ImJvbGQiPtio2YrYptipINin2YTYqti32YjZitixINmI2KfZhNiq2K/YsdmK2Kgg2KfZhNi52YXZhNmKIC0g2LPYt9itINmF2YPYqtioINin2YTYt9in2YTYqDwvdGV4dD48dGV4dCB4PSI2NDAiIHk9IjMyMCIgZm9udC1zaXplPSIyNCIgZmlsbD0iIzM4YmRmOCIgZm9udC1mYW1pbHk9IkFyaWFsIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj7Yp9mE2YXYudmF2YQg2KfZhNmF2KjYp9i02LEgLSDYp9mE2KzZh9in2LIg2KzYp9mH2LIg2YTZhNin2KrYtdin2YQg8J+Vpe+4jzwvdGV4dD48L3N2Zz4=';
 
-  // Automatically prune stale devices (no heartbeat in >60 seconds and no active trainee)
-  const activeDevices = devices.filter(d => {
+  // Purge any auto generated mock devices
+  devices = devices.filter(d => !d.id?.startsWith('dev-auto-'));
+
+  devices.forEach(d => {
     const last = d.lastHeartbeat ? new Date(d.lastHeartbeat).getTime() : 0;
-    const isRecent = (now - last < 60000); // 60 seconds threshold
-    return isRecent || !!d.currentTraineeName || d.status === 'active' || d.status === 'locked' || d.status === 'ONLINE';
-  });
-
-  if (activeDevices.length !== devices.length) {
-    db.getData().devices = activeDevices;
-    db.save();
-  }
-
-  activeDevices.forEach(d => {
-    const last = d.lastHeartbeat ? new Date(d.lastHeartbeat).getTime() : 0;
-    const isRecent = (now - last < 60000);
-    d.isOnline = isRecent || !!d.currentTraineeName;
+    // Strict live heartbeat threshold (25 seconds)
+    const isRecent = (now - last < 25000);
+    d.isOnline = isRecent;
+    if (!isRecent) {
+      d.currentTraineeName = undefined;
+      (d as any).currentTraineeId = undefined;
+      (d as any).currentTraineeCode = undefined;
+      d.assignedUser = 'جهاز معمل (متاح)';
+    }
     if (!d.lastScreenshotUrl) {
       d.lastScreenshotUrl = defaultDesktopSvg;
     }
   });
-  res.json(activeDevices);
+
+  db.getData().devices = devices;
+  db.save();
+  res.json(devices);
+});
+
+apiRouter.post('/devices/clear-all', (req: Request, res: Response) => {
+  db.getData().devices = [];
+  db.save();
+  res.json({ success: true, message: 'تم مسح وحذف جميع أجهزة المعمل بنجاح' });
+});
+
+apiRouter.post('/agent/leave', (req: Request, res: Response) => {
+  const { deviceId } = req.body || {};
+  if (deviceId) {
+    const dev = db.getData().devices.find(d => d.deviceId === deviceId || d.id === deviceId);
+    if (dev) {
+      dev.isOnline = false;
+      dev.currentTraineeName = undefined;
+      (dev as any).currentTraineeId = undefined;
+      (dev as any).currentTraineeCode = undefined;
+      dev.assignedUser = 'جهاز معمل (متاح)';
+      dev.lastHeartbeat = new Date(0).toISOString();
+      db.save();
+    }
+  }
+  res.json({ success: true, message: 'Device disconnected successfully' });
+});
+
+apiRouter.post('/devices/reset-lab', (req: Request, res: Response) => {
+  const devices = db.getData().devices || [];
+  devices.forEach(d => {
+    d.currentTraineeName = undefined;
+    (d as any).currentTraineeId = undefined;
+    (d as any).currentTraineeCode = undefined;
+    d.assignedUser = 'جهاز معمل (متاح)';
+    d.isOnline = false;
+    d.status = 'active';
+  });
+  db.save();
+  db.logAudit({
+    userId: 'admin',
+    userName: 'مشرف المعامل',
+    action: 'إعادة تعيين المعمل وتفريغ جميع الأجهزة',
+    entity: 'الأجهزة',
+    details: 'تم تفريغ جميع أجهزة المعمل وإزالة أسماء الطلاب القدامى استعداداً للجروب الجديد'
+  });
+  res.json({ success: true, message: 'تم تفريغ جميع أجهزة المعمل وإزالة ارتباطات الطلاب القدامى بنجاح' });
 });
 
 apiRouter.post('/devices', (req: Request, res: Response) => {

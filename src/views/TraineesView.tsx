@@ -250,6 +250,27 @@ export const TraineesView: React.FC = () => {
   const [isPromotionModalOpen, setIsPromotionModalOpen] = useState(false);
   const [selectedDigitalCardTrainee, setSelectedDigitalCardTrainee] = useState<Trainee | null>(null);
   const [isGeneratingCode, setIsGeneratingCode] = useState(false);
+  const [codeRegenNotice, setCodeRegenNotice] = useState<string | null>(null);
+
+  // Student Code Audit & Alignment State
+  const [isCodeAuditModalOpen, setIsCodeAuditModalOpen] = useState(false);
+  const [codeAuditLoading, setCodeAuditLoading] = useState(false);
+  const [codeAuditApplying, setCodeAuditApplying] = useState(false);
+  const [codeAuditData, setCodeAuditData] = useState<{
+    totalTrainees: number;
+    validCount: number;
+    changesCount: number;
+    itemsToFix: Array<{
+      id: string;
+      fullName: string;
+      grade: string;
+      groupName: string;
+      currentCode: string;
+      proposedCode: string;
+      expectedPrefix: string;
+      reason: string;
+    }>;
+  } | null>(null);
 
   // UI states for organized top bar dropdowns
   const [excelDropdownOpen, setExcelDropdownOpen] = useState(false);
@@ -592,7 +613,94 @@ export const TraineesView: React.FC = () => {
       status: t.status,
       notes: t.notes || ''
     });
+    setCodeRegenNotice(null);
     setIsEditModalOpen(true);
+  };
+
+  const handleGradeChangeInEdit = async (selGrade: string) => {
+    let matchedCourse = courses.find(c => c.name.includes(selGrade) || selGrade.includes(c.name) || c.grade === selGrade);
+    if (selGrade.includes('رابع')) matchedCourse = courses.find(c => c.name.includes('ICT4') || c.code?.includes('ICT4') || c.grade === selGrade);
+    if (selGrade.includes('خامس')) matchedCourse = courses.find(c => c.name.includes('ICT5') || c.code?.includes('ICT5') || c.grade === selGrade);
+    if (selGrade.includes('سادس')) matchedCourse = courses.find(c => c.name.includes('ICT6') || c.code?.includes('ICT6') || c.grade === selGrade);
+    if (selGrade.includes('أول إعدادي') || selGrade.includes('الأول الإعدادي')) matchedCourse = courses.find(c => c.name.includes('ICT-P1') || c.code?.includes('ICT-P1'));
+    if (selGrade.includes('ثاني إعدادي') || selGrade.includes('الثاني الإعدادي')) matchedCourse = courses.find(c => c.name.includes('ICT-P2') || c.code?.includes('ICT-P2'));
+    if (selGrade.includes('ثالث إعدادي') || selGrade.includes('الثالث الإعدادي')) matchedCourse = courses.find(c => c.name.includes('ICT-P3') || c.code?.includes('ICT-P3'));
+    if (selGrade.includes('أول ثانوي') || selGrade.includes('الأول الثانوي')) matchedCourse = courses.find(c => c.name.includes('ICT-S1') || c.code?.includes('ICT-S1'));
+    if (selGrade.includes('ثاني ثانوي') || selGrade.includes('الثاني الثانوي')) matchedCourse = courses.find(c => c.name.includes('ICT-S2') || c.code?.includes('ICT-S2'));
+    if (selGrade.includes('ثالث ثانوي') || selGrade.includes('الثالث الثانوي')) matchedCourse = courses.find(c => c.name.includes('ICT-S3') || c.code?.includes('ICT-S3'));
+
+    setIsGeneratingCode(true);
+    try {
+      const res = await api.getNextTraineeCode({
+        grade: selGrade,
+        courseId: matchedCourse?.id,
+        excludeId: activeTrainee?.id
+      });
+      if (res && res.code) {
+        setFormData(prev => ({
+          ...prev,
+          grade: selGrade,
+          code: res.code,
+          courseId: matchedCourse ? matchedCourse.id : prev.courseId,
+          feeAmount: matchedCourse ? matchedCourse.feeAmount : prev.feeAmount
+        }));
+        setCodeRegenNotice(`تم تحديث كود الطالب تلقائياً ليتوافق مع ${selGrade}: (${res.code})`);
+      } else {
+        setFormData(prev => ({
+          ...prev,
+          grade: selGrade,
+          courseId: matchedCourse ? matchedCourse.id : prev.courseId,
+          feeAmount: matchedCourse ? matchedCourse.feeAmount : prev.feeAmount
+        }));
+      }
+    } catch (err) {
+      setFormData(prev => ({
+        ...prev,
+        grade: selGrade,
+        courseId: matchedCourse ? matchedCourse.id : prev.courseId,
+        feeAmount: matchedCourse ? matchedCourse.feeAmount : prev.feeAmount
+      }));
+    } finally {
+      setIsGeneratingCode(false);
+    }
+  };
+
+  const handleOpenCodeAuditModal = async () => {
+    setIsCodeAuditModalOpen(true);
+    setCodeAuditLoading(true);
+    try {
+      const res = await api.previewCodeFix();
+      if (res && res.success) {
+        setCodeAuditData(res);
+      }
+    } catch (err: any) {
+      showToast(err.message || 'فشل فحص الأكواد', 'error');
+    } finally {
+      setCodeAuditLoading(false);
+    }
+  };
+
+  const handleApplyCodeFix = async () => {
+    if (!codeAuditData || !codeAuditData.itemsToFix || codeAuditData.itemsToFix.length === 0) return;
+    setCodeAuditApplying(true);
+    try {
+      const updates = codeAuditData.itemsToFix.map(item => ({
+        id: item.id,
+        proposedCode: item.proposedCode,
+        expectedPrefix: item.expectedPrefix,
+        grade: item.grade
+      }));
+      const res = await api.executeCodeFix(updates);
+      if (res && res.success) {
+        showToast(`تم تحديث وتوحيد وتصحيح أكواد ${res.updatedCount} طالب بنجاح! 🎉`, 'success');
+        setIsCodeAuditModalOpen(false);
+        loadData();
+      }
+    } catch (err: any) {
+      showToast(err.message || 'فشل تطبيق تصحيح الأكواد', 'error');
+    } finally {
+      setCodeAuditApplying(false);
+    }
   };
 
   const handleSaveEditTrainee = async (e: React.FormEvent) => {
@@ -1490,6 +1598,19 @@ export const TraineesView: React.FC = () => {
                         <div className="text-[9px] text-slate-400">فحص الخصومات والإخوة وتواريخ الميلاد</div>
                       </div>
                     </button>
+                    <button
+                      onClick={() => {
+                        handleOpenCodeAuditModal();
+                        setToolsDropdownOpen(false);
+                      }}
+                      className="w-full flex items-center gap-2 px-3 py-2.5 hover:bg-slate-800 rounded-lg text-amber-300 text-xs transition-colors border-t border-slate-800 font-bold"
+                    >
+                      <Sparkles className="w-4 h-4 text-amber-400 shrink-0" />
+                      <div>
+                        <div className="font-bold">فحص وتصحيح أكواد الطلاب 🏷️</div>
+                        <div className="text-[9px] text-slate-400">توحيد البادئات (A/B/C/D...) وترتيب الأكواد بالتسلسل</div>
+                      </div>
+                    </button>
                   </div>
                 )}
               </div>
@@ -1786,6 +1907,17 @@ export const TraineesView: React.FC = () => {
                 >
                   <Zap className="w-5 h-5 text-cyan-400" />
                   <span className="text-xs font-bold text-slate-200">مزامنة الكشوفات</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    handleOpenCodeAuditModal();
+                    setIsMobileToolsDrawerOpen(false);
+                  }}
+                  className="col-span-2 p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl flex items-center justify-center gap-2 text-center active:scale-95"
+                >
+                  <Sparkles className="w-5 h-5 text-amber-400" />
+                  <span className="text-xs font-bold text-amber-300">فحص وتصحيح أكواد الطلاب حسب الصفوف 🏷️</span>
                 </button>
               </div>
             </div>
@@ -3054,13 +3186,30 @@ export const TraineesView: React.FC = () => {
               </div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <div>
-                  <label className="block text-slate-400 font-semibold mb-1">كود المتدرب</label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-slate-400 font-semibold">كود المتدرب (مرتبط بالصف)</label>
+                    <button
+                      type="button"
+                      onClick={() => handleGradeChangeInEdit(formData.grade || '')}
+                      disabled={isGeneratingCode || !formData.grade}
+                      className="text-[10px] text-amber-400 hover:text-amber-300 flex items-center gap-1 font-bold transition-all disabled:opacity-50"
+                      title="إعادة توليد الكود التسلسلي الصحيح بناء على الصف المختار"
+                    >
+                      <Sparkles className={`w-3 h-3 ${isGeneratingCode ? 'animate-spin text-amber-300' : ''}`} />
+                      تحديث الكود حسب الصف
+                    </button>
+                  </div>
                   <input
                     type="text"
                     value={formData.code ?? ''}
                     readOnly
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-amber-400 font-mono font-bold cursor-not-allowed"
+                    className="w-full bg-slate-800/90 border border-amber-500/40 rounded-xl px-3 py-2 text-amber-400 font-mono font-black text-sm"
                   />
+                  {codeRegenNotice && (
+                    <p className="text-[10px] text-emerald-400 mt-1 font-bold bg-emerald-950/40 border border-emerald-500/30 p-1.5 rounded-lg">
+                      ✨ {codeRegenNotice}
+                    </p>
+                  )}
                 </div>
                 <div className="md:col-span-2">
                   <label className="block text-slate-300 font-bold mb-1">الاسم رباعي *</label>
@@ -3207,39 +3356,13 @@ export const TraineesView: React.FC = () => {
                   <label className="block text-slate-300 font-bold mb-1">الصف الدراسي</label>
                   <select
                     value={formData.grade ?? ''}
-                    onChange={(e) => {
-                      const selGrade = e.target.value;
-                      // Auto suggest matching course
-                      let matchedCourse = courses.find(c => c.name.includes(selGrade) || selGrade.includes(c.name));
-                      if (selGrade.includes('رابع')) matchedCourse = courses.find(c => c.name.includes('ICT4') || c.code?.includes('ICT4'));
-                      if (selGrade.includes('خامس')) matchedCourse = courses.find(c => c.name.includes('ICT5') || c.code?.includes('ICT5'));
-                      if (selGrade.includes('سادس')) matchedCourse = courses.find(c => c.name.includes('ICT6') || c.code?.includes('ICT6'));
-                      if (selGrade.includes('أول إعدادي') || selGrade.includes('الأول الإعدادي')) matchedCourse = courses.find(c => c.name.includes('ICT-P1') || c.code?.includes('ICT-P1'));
-                      if (selGrade.includes('ثاني إعدادي') || selGrade.includes('الثاني الإعدادي')) matchedCourse = courses.find(c => c.name.includes('ICT-P2') || c.code?.includes('ICT-P2'));
-                      if (selGrade.includes('ثالث إعدادي') || selGrade.includes('الثالث الإعدادي')) matchedCourse = courses.find(c => c.name.includes('ICT-P3') || c.code?.includes('ICT-P3'));
-                      if (selGrade.includes('أول ثانوي') || selGrade.includes('الأول الثانوي')) matchedCourse = courses.find(c => c.name.includes('ICT-S1') || c.code?.includes('ICT-S1'));
-                      if (selGrade.includes('ثاني ثانوي') || selGrade.includes('الثاني الثانوي')) matchedCourse = courses.find(c => c.name.includes('ICT-S2') || c.code?.includes('ICT-S2'));
-                      if (selGrade.includes('ثالث ثانوي') || selGrade.includes('الثالث الثانوي')) matchedCourse = courses.find(c => c.name.includes('ICT-S3') || c.code?.includes('ICT-S3'));
-
-                      setFormData({
-                        ...formData,
-                        grade: selGrade,
-                        courseId: matchedCourse ? matchedCourse.id : formData.courseId,
-                        feeAmount: matchedCourse ? matchedCourse.feeAmount : formData.feeAmount
-                      });
-                    }}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 text-xs"
+                    onChange={(e) => handleGradeChangeInEdit(e.target.value)}
+                    className="w-full bg-slate-800 border border-amber-500/40 rounded-xl px-3 py-2 text-slate-100 text-xs font-bold"
                   >
                     <option value="">-- اختر الصف --</option>
-                    <option value="الصف الرابع الابتدائي">الصف الرابع الابتدائي</option>
-                    <option value="الصف الخامس الابتدائي">الصف الخامس الابتدائي</option>
-                    <option value="الصف السادس الابتدائي">الصف السادس الابتدائي</option>
-                    <option value="الصف الأول الإعدادي">الصف الأول الإعدادي</option>
-                    <option value="الصف الثاني الإعدادي">الصف الثاني الإعدادي</option>
-                    <option value="الصف الثالث الإعدادي">الصف الثالث الإعدادي</option>
-                    <option value="الصف الأول الثانوي">الصف الأول الثانوي</option>
-                    <option value="الصف الثاني الثانوي">الصف الثاني الثانوي</option>
-                    <option value="الصف الثالث الثانوي">الصف الثالث الثانوي</option>
+                    {GRADE_OPTIONS.map(g => (
+                      <option key={g} value={g}>{g}</option>
+                    ))}
                   </select>
                 </div>
                 <div>
@@ -4742,6 +4865,153 @@ export const TraineesView: React.FC = () => {
         onClose={() => setIsGoogleSheetsModalOpen(false)}
         defaultTab="export"
       />
+
+      {/* Student Code Audit & Bulk Grade Alignment Modal */}
+      {isCodeAuditModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md overflow-y-auto">
+          <div className="bg-slate-900 border border-slate-700 rounded-3xl shadow-2xl max-w-3xl w-full max-h-[90vh] flex flex-col overflow-hidden text-slate-100">
+            {/* Header */}
+            <div className="p-4 border-b border-slate-800 flex items-center justify-between bg-slate-900/90">
+              <div className="flex items-center gap-2">
+                <div className="w-9 h-9 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 font-bold">
+                  🏷️
+                </div>
+                <div>
+                  <h3 className="font-black text-sm text-slate-100">
+                    فحص وتدقيق أكواد الطلاب حسب المراحل الدراسية
+                  </h3>
+                  <p className="text-[10px] text-slate-400">
+                    التحقق من مطابقة بادئة الكود (A=الرابع، B=الخامس، C=السادس، D=الأول الإعدادي...) وترتيب التسلسل تلقائياً
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsCodeAuditModalOpen(false)}
+                className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="p-5 overflow-y-auto space-y-4 text-xs">
+              {codeAuditLoading ? (
+                <div className="py-16 text-center space-y-3">
+                  <Sparkles className="w-8 h-8 text-amber-400 animate-spin mx-auto" />
+                  <p className="font-bold text-slate-300 text-sm">جاري فحص وتدقيق أكواد جميع الطلاب في قاعدة البيانات...</p>
+                  <p className="text-[10px] text-slate-500">يتم فحص مطابقة الصفوف والمراحل وتكرارات وتداخلات البادئات</p>
+                </div>
+              ) : codeAuditData ? (
+                <div className="space-y-4">
+                  {/* Summary Bar */}
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="p-3 bg-slate-950/60 rounded-2xl border border-slate-800 text-center">
+                      <p className="text-[10px] text-slate-400 font-bold">إجمالي الطلاب المفحوصين</p>
+                      <p className="text-xl font-black text-slate-100 mt-1 font-mono">{codeAuditData.totalTrainees}</p>
+                    </div>
+                    <div className="p-3 bg-emerald-950/40 rounded-2xl border border-emerald-500/30 text-center">
+                      <p className="text-[10px] text-emerald-400 font-bold">أكواد مطابقة ومضبوطة</p>
+                      <p className="text-xl font-black text-emerald-300 mt-1 font-mono">{codeAuditData.validCount}</p>
+                    </div>
+                    <div className="p-3 bg-amber-950/40 rounded-2xl border border-amber-500/30 text-center">
+                      <p className="text-[10px] text-amber-400 font-bold">بحاجة لتحديث وتصحيح</p>
+                      <p className="text-xl font-black text-amber-300 mt-1 font-mono">{codeAuditData.changesCount}</p>
+                    </div>
+                  </div>
+
+                  {codeAuditData.itemsToFix.length === 0 ? (
+                    <div className="p-6 bg-emerald-950/30 border border-emerald-500/30 rounded-2xl text-center space-y-2">
+                      <div className="text-3xl">🎉</div>
+                      <p className="font-black text-emerald-300 text-sm">جميع أكواد الطلاب متطابقة تماماً وموزعة بالتسلسل الصحيح حسب مراحلهم الدراسية!</p>
+                      <p className="text-[11px] text-slate-400">لا يوجد أي تعارض أو كود يحمل بادئة مرحلة غير مطابقة لصف الطالب.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-2xl flex items-start gap-2">
+                        <Sparkles className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                        <p className="text-[11px] text-amber-200">
+                          تم العثور على <strong>{codeAuditData.itemsToFix.length}</strong> طالب أكوادهم السابقة كانت غير مطابقة لصفهم الدراسي الحالي أو متداخلة. يمكنك مراجعة الكود المقترح واعتماده بضغطة زر.
+                        </p>
+                      </div>
+
+                      <div className="border border-slate-800 rounded-2xl overflow-hidden shadow-inner bg-slate-950/40">
+                        <table className="w-full text-right text-xs">
+                          <thead className="bg-slate-800/80 text-slate-300 border-b border-slate-700">
+                            <tr>
+                              <th className="p-2.5 font-bold">اسم الطالب</th>
+                              <th className="p-2.5 font-bold">الصف الدراسي</th>
+                              <th className="p-2.5 font-bold">الكود الحالي</th>
+                              <th className="p-2.5 font-bold">الكود المصحح الجديد</th>
+                              <th className="p-2.5 font-bold">ملاحظات التدقيق</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-800/60">
+                            {codeAuditData.itemsToFix.map((item, idx) => (
+                              <tr key={item.id || idx} className="hover:bg-slate-800/30 transition-colors">
+                                <td className="p-2.5 font-bold text-slate-200">
+                                  {item.fullName}
+                                </td>
+                                <td className="p-2.5 text-slate-300">
+                                  <span className="px-2 py-0.5 rounded-md bg-slate-800 border border-slate-700 text-[10px]">
+                                    {item.grade || 'غير محدد'}
+                                  </span>
+                                </td>
+                                <td className="p-2.5 font-mono font-bold text-rose-400 line-through">
+                                  {item.currentCode}
+                                </td>
+                                <td className="p-2.5 font-mono font-black text-emerald-400">
+                                  <span className="px-2 py-0.5 rounded-md bg-emerald-950/60 border border-emerald-500/40">
+                                    {item.proposedCode}
+                                  </span>
+                                </td>
+                                <td className="p-2.5 text-[10px] text-slate-400">
+                                  {item.reason}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : null}
+            </div>
+
+            {/* Footer */}
+            <div className="p-4 border-t border-slate-800 bg-slate-900/90 flex items-center justify-between gap-3">
+              <button
+                type="button"
+                onClick={() => setIsCodeAuditModalOpen(false)}
+                className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs transition-all"
+              >
+                إغلاق
+              </button>
+
+              {codeAuditData && codeAuditData.itemsToFix.length > 0 && (
+                <button
+                  type="button"
+                  onClick={handleApplyCodeFix}
+                  disabled={codeAuditApplying}
+                  className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-xs shadow-lg shadow-emerald-600/30 transition-all flex items-center gap-2 disabled:opacity-50"
+                >
+                  {codeAuditApplying ? (
+                    <>
+                      <Sparkles className="w-4 h-4 animate-spin" />
+                      <span>جاري تحديث وتصحيح الأكواد في السحابة...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Zap className="w-4 h-4 text-amber-300" />
+                      <span>اعتماد وتصحيح جميع الأكواد ({codeAuditData.itemsToFix.length}) فوراً ⚡</span>
+                    </>
+                  )}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );
