@@ -28,16 +28,20 @@ export function getActiveTrainerSessions(): Record<string, ActiveLabSession> {
 }
 
 /**
- * Checks whether a trainer has an active, open device session for a specific branch
+ * Checks whether a trainer has an active, open device session for a specific branch or globally
  */
 export function isTrainerSessionActive(branchId?: string): boolean {
   const sessions = getActiveTrainerSessions();
+  const anyActive = Object.values(sessions).some(s => s && s.isActive);
   if (!branchId || branchId === 'all') {
-    // Check if ANY trainer session is currently active
-    return Object.values(sessions).some(s => s && s.isActive);
+    return anyActive;
   }
   const session = sessions[branchId];
-  return !!(session && session.isActive);
+  if (session && session.isActive) {
+    return true;
+  }
+  // Fallback: if any trainer lab session is active in the system, allow entry to avoid branch mismatch (e.g. Najah vs Center)
+  return anyActive;
 }
 
 /**
@@ -84,7 +88,7 @@ export function verifyStudentLabEntryAllowed(branchId?: string): { allowed: bool
   if (!trainerActive) {
     return {
       allowed: false,
-      reasonArabic: '⛔ المعمل مغلق حالياً بفرع المركز! لا يمكن دخول المعمل أو تسجيل الحضور إلا بعد فتح المحاضر المشرف لجلسة المعمل من جهازه بالفرع.'
+      reasonArabic: '⛔ المعمل مغلق حالياً بالفرع! لا يمكن دخول المعمل أو تسجيل الحضور إلا بعد فتح المحاضر المشرف لجلسة المعمل من جهازه.'
     };
   }
 
