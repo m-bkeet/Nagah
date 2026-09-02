@@ -635,6 +635,26 @@ console.log("نتيجة الطالب:", calculateGrade(48, 50));`);
                   </button>
 
                   <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        await api.sessionCleanup();
+                        localStorage.removeItem(`nagah_locked_attendees_${activeBranchId}`);
+                        localStorage.removeItem('nagah_active_trainer_lab_sessions');
+                        showToast('تم تفريغ المعمل بنجاح وتخريج جميع أجهزة الطلاب للجروب الجديد 🔄✨', 'success');
+                        window.dispatchEvent(new Event('storage'));
+                        setRefreshKey(k => k + 1);
+                      } catch (e) {
+                        showToast('فشل تفريغ المعمل', 'error');
+                      }
+                    }}
+                    className="px-4 py-2.5 bg-amber-600/90 hover:bg-amber-500 text-white rounded-2xl font-black text-xs flex items-center gap-2 shadow-lg transition-all active:scale-95 border border-amber-500/50"
+                    title="تفريغ أجهزة المعمل وخروج الطلاب الحاليين لدخول جروب جديد"
+                  >
+                    <span>تفريغ المعمل للجروب الجديد 🔄</span>
+                  </button>
+
+                  <button
                     onClick={() => setIsWhiteboardOpen(true)}
                     className="px-4 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 rounded-2xl font-black text-xs flex items-center gap-2 shadow-lg transition-all active:scale-95"
                   >

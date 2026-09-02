@@ -50,12 +50,28 @@ interface FloatingTeachingToolsOverlayProps {
 }
 
 const ConditionalPopoutWrapper: React.FC<{ isPoppedOut: boolean; onClose: () => void; children: React.ReactNode }> = ({ isPoppedOut, onClose, children }) => {
-  return isPoppedOut ? (
-    <PopoutPortal isOpen={isPoppedOut} onClose={onClose}>
-      {children}
-    </PopoutPortal>
-  ) : (
-    <>{children}</>
+  return (
+    <>
+      {isPoppedOut && (
+        <PopoutPortal isOpen={isPoppedOut} onClose={onClose}>
+          {children}
+        </PopoutPortal>
+      )}
+      {isPoppedOut ? (
+        <div className="fixed bottom-6 right-6 z-[9999] bg-slate-900/95 border border-indigo-500/60 p-3 rounded-2xl shadow-2xl flex items-center gap-3 text-white text-xs dir-rtl animate-bounce">
+          <div className="w-2.5 h-2.5 rounded-full bg-indigo-500 animate-ping" />
+          <span>الأدوات الذكية مفصولة في نافذة خارجية ↗️</span>
+          <button
+            onClick={onClose}
+            className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-xs transition-colors cursor-pointer shadow"
+          >
+            استعادة للمنصة ↙️
+          </button>
+        </div>
+      ) : (
+        children
+      )}
+    </>
   );
 };
 
@@ -178,7 +194,7 @@ export const FloatingTeachingToolsOverlay: React.FC<FloatingTeachingToolsOverlay
   const [rawTrainees, setRawTrainees] = useState<any[]>([]);
   const [isSyncingStudents, setIsSyncingStudents] = useState<boolean>(false);
 
-  const syncBranchStudents = useCallback(async (targetBranchId?: string, forceRefresh = false, silent = false) => {
+  const syncBranchStudents = useCallback(async (targetBranchId?: string, forceRefresh = true, silent = false) => {
     const bId = targetBranchId !== undefined ? targetBranchId : activeBranchId;
     setIsSyncingStudents(true);
     try {
@@ -218,28 +234,27 @@ export const FloatingTeachingToolsOverlay: React.FC<FloatingTeachingToolsOverlay
       const safeAttendance = Array.isArray(attendanceRecords) ? attendanceRecords : [];
       const safeDevices = Array.isArray(devices) ? devices : [];
 
-      // Filter trainees strictly by target branch only (preventing cross-branch mixing like Badr vs Nagah)
+      // Include all trainees or filter by branch if specific branch requested
       let branchTrainees = safeTrainees;
       if (bId && bId !== 'all') {
-        branchTrainees = safeTrainees.filter(t => t.branchId === bId);
+        branchTrainees = safeTrainees.filter(t => !t.branchId || t.branchId === bId || t.branchId === 'branch-1' || t.branchId === 'branch-2');
       }
 
-      // Collect IDs of present trainees (marked attendance or active in device lab for this branch)
+      // Collect IDs of present trainees (marked attendance or active in device lab or logged in via kiosk)
       const presentTraineeIds = new Set<string>();
 
       safeAttendance.forEach(a => {
-        if ((a.status === 'present' || a.status === 'late') && (bId === 'all' || a.branchId === bId)) {
+        if ((a.status === 'present' || a.status === 'late' || a.status === 'active')) {
           presentTraineeIds.add(a.traineeId);
         }
       });
 
       safeDevices.forEach(d => {
-        const devBranch = d.branchId || bId;
-        if (d.isOnline && (bId === 'all' || devBranch === bId)) {
+        if (d.isOnline) {
           const tId = (d as any).currentTraineeId;
           if (tId) presentTraineeIds.add(tId);
           else if (d.currentTraineeName) {
-            const match = branchTrainees.find(t => t.fullName === d.currentTraineeName);
+            const match = safeTrainees.find(t => t.fullName === d.currentTraineeName);
             if (match) presentTraineeIds.add(match.id);
           }
         }
@@ -247,17 +262,15 @@ export const FloatingTeachingToolsOverlay: React.FC<FloatingTeachingToolsOverlay
 
       let presentTraineesList = branchTrainees.filter(t => presentTraineeIds.has(t.id));
 
-      // Fallback: If no explicit attendance yet, pull active branch trainees so trainer can immediately award stars
-      if (presentTraineesList.length === 0 && branchTrainees.length > 0) {
-        presentTraineesList = branchTrainees.slice(0, 15);
-      }
+      // Only include truly active/checked-in/online students. If none, keep list empty (0 students).
+      // This ensures when students close their devices or a new group enters, stale students are removed immediately.
 
       const formattedList = presentTraineesList.map(t => `${t.code || t.id} - ${t.fullName}`);
       setLiveStudents(formattedList);
       setRawTrainees(presentTraineesList);
       setSelectedPointStudentIds(presentTraineesList.map(t => t.id));
 
-      // Persist in localStorage so names remain sticky until explicit reset ("تصفير")
+      // Persist in localStorage so names remain sticky
       try {
         localStorage.setItem(storageKey, JSON.stringify(presentTraineesList));
       } catch (e) {}
@@ -282,9 +295,13 @@ export const FloatingTeachingToolsOverlay: React.FC<FloatingTeachingToolsOverlay
     }
   }, [activeBranchId, branches, showToast]);
 
-  // Initial Sync and Branch Switching Listener
+  // Initial Sync and Branch Switching Listener & Auto-Sync Interval every 3 seconds
   useEffect(() => {
-    syncBranchStudents(activeBranchId, false, true);
+    syncBranchStudents(activeBranchId, true, true);
+    const interval = setInterval(() => {
+      syncBranchStudents(activeBranchId, true, true);
+    }, 3000);
+    return () => clearInterval(interval);
   }, [activeBranchId, refreshKey, syncBranchStudents]);
 
   // Initialize Canvas for Drawing Overlay

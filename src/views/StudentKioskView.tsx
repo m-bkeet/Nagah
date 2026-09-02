@@ -66,7 +66,12 @@ import {
 export const StudentKioskView: React.FC = () => {
   const [deviceId, setDeviceId] = useState<string>(() => {
     const params = new URLSearchParams(window.location.search);
-    return params.get('device') || localStorage.getItem('nagah_device_id') || `PC-${Math.floor(10 + Math.random() * 90)}`;
+    let dev = params.get('device') || sessionStorage.getItem('nagah_device_id');
+    if (!dev) {
+      dev = `PC-${Math.floor(10 + Math.random() * 90)}`;
+      sessionStorage.setItem('nagah_device_id', dev);
+    }
+    return dev;
   });
 
   const [studentCodeInput, setStudentCodeInput] = useState('');
