@@ -1,5 +1,6 @@
 import { WhatsAppShareModal } from "../components/WhatsAppShareModal";
 import { ElectronicPaymentWidget } from "../components/ElectronicPaymentWidget";
+import { DuplicatesAuditModal } from "../components/DuplicatesAuditModal";
 import { getVodafoneCashUssdCode, executeVodafoneCashPayment, executeInstaPayPayment } from "../utils/paymentUtils";
 import React, { useState, useEffect, useRef } from 'react';
 import * as XLSX from 'xlsx';
@@ -53,6 +54,7 @@ import {
   BookOpen,
   Sparkles,
   Shield,
+  ShieldAlert,
   Camera,
   Hash,
   Image as ImageIcon,
@@ -253,6 +255,7 @@ export const TraineesView: React.FC = () => {
   const [codeRegenNotice, setCodeRegenNotice] = useState<string | null>(null);
 
   // Student Code Audit & Alignment State
+  const [isDuplicatesModalOpen, setIsDuplicatesModalOpen] = useState(false);
   const [isCodeAuditModalOpen, setIsCodeAuditModalOpen] = useState(false);
   const [codeAuditLoading, setCodeAuditLoading] = useState(false);
   const [codeAuditApplying, setCodeAuditApplying] = useState(false);
@@ -1583,6 +1586,19 @@ export const TraineesView: React.FC = () => {
                       <div>
                         <div className="font-bold">مزامنة وتحديث الكشوفات ⚡</div>
                         <div className="text-[9px] text-slate-400">فحص الخصومات والإخوة وتواريخ الميلاد</div>
+                      </div>
+                    </button>
+                    <button
+                      onClick={() => {
+                        setIsDuplicatesModalOpen(true);
+                        setToolsDropdownOpen(false);
+                      }}
+                      className="w-full flex items-center gap-2 px-3 py-2.5 hover:bg-slate-800 rounded-lg text-rose-300 hover:text-rose-200 text-xs transition-colors border-t border-slate-800 font-bold"
+                    >
+                      <ShieldAlert className="w-4 h-4 text-rose-400 shrink-0" />
+                      <div>
+                        <div className="font-bold">فحص الطلاب المكررين 🔍</div>
+                        <div className="text-[9px] text-slate-400">كشف وتدقيق المكررين مع التسامح في (أ/ا، ة/هـ، ى/ي)</div>
                       </div>
                     </button>
                     <button
@@ -5000,6 +5016,14 @@ export const TraineesView: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Duplicates & Arabic Normalization Audit Modal */}
+      <DuplicatesAuditModal
+        isOpen={isDuplicatesModalOpen}
+        onClose={() => setIsDuplicatesModalOpen(false)}
+        trainees={trainees}
+        onRefresh={loadData}
+      />
 
     </div>
   );

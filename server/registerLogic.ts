@@ -148,32 +148,54 @@ export function matchCourseForRegistration(allCourses: Course[], grade: string, 
   return allCourses.find(c => c.name === cleanGrade || cleanGrade.includes(c.name)) || null;
 }
 
+export function normalizeArabicFull(str: string): string {
+  if (!str) return '';
+  let s = str.trim().toLowerCase();
+  s = s.replace(/[\u064B-\u065F\u0670\u0640]/g, '');
+  s = s.replace(/[أإآٱ]/g, 'ا');
+  s = s.replace(/ة/g, 'ه');
+  s = s.replace(/ى/g, 'ي');
+  s = s.replace(/[ؤئ]/g, 'ء');
+  s = s.replace(/عبد\s+/g, 'عبد');
+  s = s.replace(/ابو\s+/g, 'ابو');
+  s = s.replace(/[\s\-_.]+/g, ' ');
+  return s.trim();
+}
+
 export async function handlePublicRegister(req: Request, res: Response) {
   try {
     const data = req.body;
-    if (!data.fullName || !data.phone) {
-      return res.status(400).json({ success: false, error: 'الاسم ورقم الهاتف حقول إجبارية' });
+    if (!data.fullName || (!data.phone && !data.parentPhone)) {
+      return res.status(400).json({ success: false, error: 'اسم الطالب ورقم الهاتف حقول إجبارية' });
     }
 
     const cleanFullName = String(data.fullName).trim();
-    const cleanPhone = String(data.phone).trim();
+    const cleanPhone = String(data.phone || '').trim();
+    const cleanParentPhone = String(data.parentPhone || '').trim();
     const phoneDigits = cleanPhone.replace(/\D/g, '').slice(-10);
+    const parentPhoneDigits = cleanParentPhone.replace(/\D/g, '').slice(-10);
     const branchId = data.branchId || 'branch-1';
     const grade = String(data.grade || data.customGrade || 'الصف الرابع الابتدائي').trim();
     const track = String(data.track || 'عربي').trim();
 
-    // Check existing by normalized phone or exact full name
+    const normInputName = normalizeArabicFull(cleanFullName);
+
+    // Fetch all records for duplicate check
     const allTrainees = await TraineeRepo.getAll();
     const allCourses = await CourseRepo.getAll();
     const allGroups = await GroupRepo.getAll();
     const allBranches = await BranchRepo.getAll();
 
+    // Sibling-aware duplicate check:
+    // Match duplicate ONLY if same student (matching student's own phone or normalized student full name)
     const existingTrainee = allTrainees.find(t => {
       const tPhoneDigits = String(t.phone || '').replace(/\D/g, '').slice(-10);
-      const tParentDigits = String(t.parentPhone || '').replace(/\D/g, '').slice(-10);
-      const phoneMatches = phoneDigits && phoneDigits.length >= 8 && (tPhoneDigits === phoneDigits || tParentDigits === phoneDigits);
-      const nameMatches = t.fullName && t.fullName.trim().toLowerCase() === cleanFullName.toLowerCase();
-      return phoneMatches || nameMatches;
+      const normExistingName = normalizeArabicFull(t.fullName || '');
+
+      const sameStudentPhone = phoneDigits && phoneDigits.length >= 8 && tPhoneDigits && tPhoneDigits === phoneDigits;
+      const sameNormalizedName = normInputName && normExistingName && normInputName === normExistingName;
+
+      return sameStudentPhone || sameNormalizedName;
     });
 
     if (existingTrainee) {
@@ -183,12 +205,18 @@ export async function handlePublicRegister(req: Request, res: Response) {
 
       return res.json({
         success: true,
-        message: 'أهلاً بك مجدداً! بياناتك مسجلة بالفعل لدينا مسبقاً بنجاح.',
+        alreadyRegistered: true,
+        message: 'تم التسجيل من قبل! أهلاً بك مجدداً في مركز النجاح للتدريب والاستشارات.',
         traineeCode: existingTrainee.code,
         traineeName: existingTrainee.fullName,
-        groupName: existingGroup?.name || '',
-        courseName: existingCourse?.name || '',
-        branchName: existingBranch?.name || ''
+        grade: existingTrainee.grade || grade,
+        groupName: existingGroup?.name || 'المجموعة الأساسية',
+        courseName: existingCourse?.name || 'الدورة التدريبية',
+        branchName: existingBranch?.name || 'الفرع الرئيسي',
+        phone: existingTrainee.phone,
+        parentPhone: existingTrainee.parentPhone,
+        parentName: existingTrainee.parentName,
+        photoUrl: existingTrainee.photoUrl
       });
     }
 

@@ -228,11 +228,23 @@ export const PublicRegistrationView: React.FC<PublicRegistrationViewProps> = ({ 
 
         <div className="bg-slate-900/95 border border-slate-800 rounded-3xl p-6 md:p-8 max-w-lg w-full shadow-2xl space-y-5 relative z-10 backdrop-blur-xl">
           <div className="text-center space-y-1.5">
-            <div className="w-14 h-14 bg-emerald-500/20 text-emerald-400 rounded-full flex items-center justify-center mx-auto border border-emerald-500/30 shadow-lg shadow-emerald-500/10 animate-bounce">
-              <CheckCircle2 className="w-8 h-8" />
-            </div>
-            <h2 className="text-xl md:text-2xl font-black text-white">تم التسجيل وتأكيد العضوية بنجاح!</h2>
-            <p className="text-slate-300 text-xs">تم إنشاء بطاقتك وتسكينك تلقائياً في المجموعة المناسبة.</p>
+            {result.alreadyRegistered ? (
+              <div className="w-14 h-14 bg-amber-500/20 text-amber-400 rounded-full flex items-center justify-center mx-auto border border-amber-500/40 shadow-lg shadow-amber-500/10">
+                <ShieldCheck className="w-8 h-8" />
+              </div>
+            ) : (
+              <div className="w-14 h-14 bg-emerald-500/20 text-emerald-400 rounded-full flex items-center justify-center mx-auto border border-emerald-500/30 shadow-lg shadow-emerald-500/10 animate-bounce">
+                <CheckCircle2 className="w-8 h-8" />
+              </div>
+            )}
+            <h2 className="text-xl md:text-2xl font-black text-white">
+              {result.alreadyRegistered ? 'تم التسجيل من قبل مسبقاً!' : 'تم التسجيل وتأكيد العضوية بنجاح!'}
+            </h2>
+            <p className="text-slate-300 text-xs">
+              {result.alreadyRegistered 
+                ? 'أهلاً بك مجدداً! بياناتك وكودك مسجلان بالفعل لدينا بالنظام. يمكنك استخدام بطاقتك أدناه:' 
+                : 'تم إنشاء بطاقتك وتسكينك تلقائياً في المجموعة المناسبة.'}
+            </p>
           </div>
           
           {/* THE DIGITAL TRAINEE CARD (Captured as image) */}

@@ -3692,6 +3692,12 @@ class DatabaseManager {
           pointTransactions: (parsed.pointTransactions && parsed.pointTransactions.length > 0) ? parsed.pointTransactions : initialData.pointTransactions,
           certificates: (parsed.certificates && parsed.certificates.length > 0) ? parsed.certificates : initialData.certificates,
           trainerAttestations: parsed.trainerAttestations || [],
+          portalMessages: Array.isArray(parsed.portalMessages) ? parsed.portalMessages : [],
+          notifications: Array.isArray(parsed.notifications) ? parsed.notifications : [],
+          homeworkSubmissions: Array.isArray(parsed.homeworkSubmissions) ? parsed.homeworkSubmissions : [],
+          badges: Array.isArray(parsed.badges) ? parsed.badges : [],
+          schedules: Array.isArray(parsed.schedules) ? parsed.schedules : [],
+          session_attendance_records: Array.isArray(parsed.session_attendance_records) ? parsed.session_attendance_records : [],
           users: existingUsers,
           settings: {
             ...initialData.settings,
