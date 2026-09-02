@@ -620,6 +620,66 @@ export class AudioController {
   }
 
   /**
+   * Play cheerful coin sound for star points
+   */
+  public playCoinSound(): void {
+    this.unlockAudio();
+    const ctx = this.getAudioContext();
+    if (!ctx) return;
+    try {
+      const now = ctx.currentTime;
+      // High B5 then E6
+      [987.77, 1318.51].forEach((freq, i) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, now + i * 0.08);
+        gain.gain.setValueAtTime(0.3, now + i * 0.08);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.08 + 0.35);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now + i * 0.08);
+        osc.stop(now + i * 0.08 + 0.35);
+        this.activeOscillators.add(osc);
+      });
+    } catch (e) {}
+  }
+
+  /**
+   * Play warning/deduction buzz
+   */
+  public playBuzzerSound(): void {
+    this.unlockAudio();
+    const ctx = this.getAudioContext();
+    if (!ctx) return;
+    try {
+      const now = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(150, now);
+      osc.frequency.setValueAtTime(120, now + 0.15);
+      gain.gain.setValueAtTime(0.2, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.35);
+      this.activeOscillators.add(osc);
+    } catch (e) {}
+  }
+
+  /**
+   * Play comprehensive grand celebration (Fanfare + Clapping + Star Chimes)
+   */
+  public playCelebrationCheer(): void {
+    this.playFanfare();
+    setTimeout(() => {
+      this.playClapping(3);
+    }, 400);
+  }
+
+  /**
    * Custom chime frequencies
    */
   public playChime(freqs: number[]): void {

@@ -46,6 +46,8 @@ import { LiveLectureStudio } from '../components/trainer/LiveLectureStudio';
 import { KahootStudio } from '../components/kahoot/KahootStudio';
 import { SessionCeremonyModal } from '../components/SessionCeremonyModal';
 import { SmartWhiteboardModal } from '../components/SmartWhiteboardModal';
+import { CelebrationBalloonsOverlay } from '../components/CelebrationBalloonsOverlay';
+import { audioService } from '../services/audioService';
 import {
   Presentation,
   BookOpen,
@@ -56,7 +58,13 @@ import {
   Sliders,
   Check,
   Terminal,
-  Volume2
+  Volume2,
+  Filter,
+  CheckCircle,
+  XCircle,
+  AlertTriangle,
+  HelpCircle,
+  Sparkle
 } from 'lucide-react';
 
 export const InteractiveSessionsView: React.FC = () => {
@@ -74,6 +82,14 @@ export const InteractiveSessionsView: React.FC = () => {
   const [selectedGroup, setSelectedGroup] = useState<Group | null>(null);
   const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
   const [isCeremonyOpen, setIsCeremonyOpen] = useState(false);
+
+  // Cockpit Group & Attendance Filtering States
+  const [selectedCockpitGroupId, setSelectedCockpitGroupId] = useState<string>('auto');
+  const [cockpitFilterMode, setCockpitFilterMode] = useState<'present' | 'all_group' | 'all_branch'>('present');
+  const [cockpitBonusAmount, setCockpitBonusAmount] = useState<number>(10);
+  const [cockpitBonusReason, setCockpitBonusReason] = useState<string>('تفاعل وتميز بالحصة');
+  const [attendanceMap, setAttendanceMap] = useState<Record<string, 'present' | 'absent' | 'late' | 'excused'>>({});
+  const [celebrationOverlay, setCelebrationOverlay] = useState<{ active: boolean; title?: string; pointsBadge?: string; subtitle?: string }>({ active: false });
 
   // Practical Teaching Mode States
   const [practicalCode, setPracticalCode] = useState(`// كود التدريب العملي والتجربة الحية بالمعمل
@@ -171,10 +187,48 @@ console.log("نتيجة الطالب:", calculateGrade(48, 50));`);
   const handleAwardBonus = async (traineeId: string, points: number, reason: string) => {
     try {
       await api.awardPoints(traineeId, points, reason);
-      showToast(`تم منح ${points} نقطة بنجاح! ⭐`, 'success');
+      if (points > 0) {
+        audioService.playCoinSound();
+        if (points >= 10) {
+          audioService.playCelebrationCheer();
+          setCelebrationOverlay({
+            active: true,
+            title: `🎉 إسناد +${points} ⭐ بنجاح!`,
+            pointsBadge: `+${points} نقطة تميز`,
+            subtitle: reason || 'تفاعل وتميز بالحصة'
+          });
+        }
+        showToast(`تم إسناد +${points} نقطة بنجاح! ⭐`, 'success');
+      } else {
+        audioService.playBuzzerSound();
+        showToast(`تم تطبيق خصم ${points} نقطة: ${reason} ⚠️`, 'info');
+      }
       loadCenterData();
     } catch (e: any) {
       showToast(e.message || 'فشل منح النقاط', 'error');
+    }
+  };
+
+  const handleStudentAttendanceChange = async (traineeId: string, status: 'present' | 'absent' | 'late' | 'excused', groupId?: string) => {
+    setAttendanceMap(prev => ({ ...prev, [traineeId]: status }));
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      await api.saveAttendanceBatch({
+        records: [{ traineeId, status }],
+        date: today,
+        groupId: groupId || selectedGroup?.id || '',
+        branchId: activeBranchId !== 'all' ? activeBranchId : undefined
+      });
+      audioService.playChime([523, 659]);
+      const labels: Record<string, string> = {
+        present: 'حاضر 🟢',
+        absent: 'غائب 🔴',
+        late: 'متأخر 🟡',
+        excused: 'معذور 🔵'
+      };
+      showToast(`تم تسجيل المتدرب: ${labels[status]}`, 'success');
+    } catch (e) {
+      showToast('تعذر حفظ الحضور بالخادم', 'error');
     }
   };
 
@@ -587,9 +641,58 @@ console.log("نتيجة الطالب:", calculateGrade(48, 50));`);
           ? trainees.filter(t => t.branchId === activeBranchId)
           : trainees;
 
-        // Sort students by points for real-time leaderboard
-        const sortedBranchTrainees = [...branchTrainees].sort((a, b) => (b.totalPoints || b.points || 0) - (a.totalPoints || a.points || 0));
-        const topStars = sortedBranchTrainees.slice(0, 3);
+        const branchGroups = (activeBranchId && activeBranchId !== 'all')
+          ? groups.filter(g => !g.branchId || g.branchId === activeBranchId)
+          : groups;
+
+        // Auto-detect active group based on current day and time schedule
+        const now = new Date();
+        const daysMap = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
+        const todayName = daysMap[now.getDay()];
+        const currentMinutes = now.getHours() * 60 + now.getMinutes();
+
+        const autoDetectedGroup = branchGroups.find(g => {
+          const gDays = Array.isArray(g.days) ? g.days : (g.days ? String(g.days).split(/[,،]/) : []);
+          const isDay = gDays.some((d: string) => d.includes(todayName) || todayName.includes(d.trim()));
+          if (isDay && g.startTime && g.endTime) {
+            const [sh, sm] = g.startTime.split(':').map(Number);
+            const [eh, em] = g.endTime.split(':').map(Number);
+            const sNum = (sh || 0) * 60 + (sm || 0);
+            const eNum = (eh || 0) * 60 + (em || 0);
+            return currentMinutes >= sNum - 30 && currentMinutes <= eNum + 30;
+          }
+          return false;
+        }) || branchGroups[0] || groups[0] || null;
+
+        const effectiveGroup = (selectedCockpitGroupId === 'auto' || !selectedCockpitGroupId)
+          ? autoDetectedGroup
+          : (groups.find(g => g.id === selectedCockpitGroupId) || autoDetectedGroup);
+
+        // Group students
+        const currentGroupTrainees = effectiveGroup
+          ? branchTrainees.filter(t => t.groupId === effectiveGroup.id)
+          : branchTrainees;
+
+        // Determine displayed students based on filter mode
+        let displayedTrainees: Trainee[] = [];
+        if (cockpitFilterMode === 'all_branch') {
+          displayedTrainees = branchTrainees;
+        } else if (cockpitFilterMode === 'all_group') {
+          displayedTrainees = currentGroupTrainees;
+        } else {
+          // 'present': filter for students marked present/late, or all group students if no attendance marked yet
+          const presentOnly = currentGroupTrainees.filter(t => {
+            const st = attendanceMap[t.id];
+            return st === 'present' || st === 'late';
+          });
+          displayedTrainees = presentOnly.length > 0 ? presentOnly : currentGroupTrainees;
+        }
+
+        // Leaderboard for current active group
+        const sortedGroupTrainees = [...currentGroupTrainees].sort((a, b) => (b.totalPoints || b.points || 0) - (a.totalPoints || a.points || 0));
+        const topStars = sortedGroupTrainees.slice(0, 3);
+
+        const presentCount = currentGroupTrainees.filter(t => attendanceMap[t.id] === 'present' || attendanceMap[t.id] === 'late').length;
 
         return (
           <div className="space-y-6 animate-fadeIn dir-rtl">
@@ -604,7 +707,7 @@ console.log("نتيجة الطالب:", calculateGrade(48, 50));`);
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="px-3 py-1 bg-emerald-500/20 text-emerald-300 text-xs font-black rounded-full border border-emerald-500/40 flex items-center gap-1">
                         <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-                        مرتبط بجهاز المدرب المباشر بالفرع
+                        حصة نشطة ومباشرة بالمعمل
                       </span>
                       <span className="px-3 py-1 bg-slate-800 text-slate-300 text-xs font-bold rounded-full border border-slate-700">
                         {branchName} 📍
@@ -614,7 +717,7 @@ console.log("نتيجة الطالب:", calculateGrade(48, 50));`);
                       غرفة إدارة الحصة الموحدة (Live Session Cockpit)
                     </h2>
                     <p className="text-xs text-slate-300 mt-0.5">
-                      لوحة تحكم واحدة شاملة لإدارة الحضور، التفاعل، النجوم، الأسئلة، والسبورة المباشرة بقاعة المعمل
+                      لوحة تحكم حية مرتبطة بالمجموعة الحالية فقط لتسجيل الحضور، منح النجوم، وبث التفاعل اللحظي
                     </p>
                   </div>
                 </div>
@@ -631,7 +734,36 @@ console.log("نتيجة الطالب:", calculateGrade(48, 50));`);
                     }`}
                     title="التحكم في فتح المعمل والسماح بدخول الطلاب وتسجيل الحضور بالفرع"
                   >
-                    <span>{isTrainerLabActive ? '🟢 المعمل مفتوح بالفرع (انقر للقفل)' : '🔒 المعمل مغلق (انقر للفتح)'}</span>
+                    <span>{isTrainerLabActive ? '🟢 المعمل مفتوح (انقر للقفل)' : '🔒 المعمل مغلق (انقر للفتح)'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      audioService.playClapping(3.5);
+                      showToast('👏 تم بث تصفيق حار لجميع شاشات وأجهزة الطلاب الحاضرين!', 'success');
+                    }}
+                    className="px-3.5 py-2.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 rounded-2xl font-black text-xs flex items-center gap-1.5 shadow transition-all active:scale-95"
+                    title="تشغيل تصفيق حار وتشجيع جماعي للطلاب"
+                  >
+                    <span>👏 تصفيق وتشجيع</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      audioService.playFanfare();
+                      setCelebrationOverlay({
+                        active: true,
+                        title: `🎉 تحية وتتويج مجموعة ${effectiveGroup?.name || ''}!`,
+                        pointsBadge: '🌟 تميز وإبداع',
+                        subtitle: 'أداء استثنائي بالحصة التدريبية'
+                      });
+                    }}
+                    className="px-3.5 py-2.5 bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 border border-purple-500/40 rounded-2xl font-black text-xs flex items-center gap-1.5 shadow transition-all active:scale-95"
+                    title="إطلاق احتفال بالونات وبوق الفرحة"
+                  >
+                    <span>🎈 بالونات وفرحة</span>
                   </button>
 
                   <button
@@ -648,82 +780,89 @@ console.log("نتيجة الطالب:", calculateGrade(48, 50));`);
                         showToast('فشل تفريغ المعمل', 'error');
                       }
                     }}
-                    className="px-4 py-2.5 bg-amber-600/90 hover:bg-amber-500 text-white rounded-2xl font-black text-xs flex items-center gap-2 shadow-lg transition-all active:scale-95 border border-amber-500/50"
+                    className="px-3.5 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-2xl font-bold text-xs flex items-center gap-1.5 shadow transition-all active:scale-95 border border-slate-700"
                     title="تفريغ أجهزة المعمل وخروج الطلاب الحاليين لدخول جروب جديد"
                   >
-                    <span>تفريغ المعمل للجروب الجديد 🔄</span>
+                    <span>تفريغ المعمل 🔄</span>
                   </button>
 
                   <button
                     onClick={() => setIsWhiteboardOpen(true)}
-                    className="px-4 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 rounded-2xl font-black text-xs flex items-center gap-2 shadow-lg transition-all active:scale-95"
+                    className="px-3.5 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 rounded-2xl font-black text-xs flex items-center gap-1.5 shadow-lg transition-all active:scale-95"
                   >
                     <Sparkles className="w-4 h-4" />
-                    <span>فتح السبورة التفاعلية 🎨</span>
-                  </button>
-
-                  <button
-                    onClick={async () => {
-                      showToast('تم نشر السبورة التفاعلية وشاشة الدرس على شاشات أجهزة الطلاب بالفرع بنجاح 📡📌', 'success');
-                    }}
-                    className="px-4 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-2xl font-black text-xs flex items-center gap-2 shadow-lg transition-all active:scale-95"
-                  >
-                    <Share2 className="w-4 h-4 text-purple-200" />
-                    <span>نشر على حائط المعمل 📌</span>
+                    <span>السبورة الذكية 🎨</span>
                   </button>
 
                   <button
                     onClick={() => setIsCeremonyOpen(true)}
-                    className="px-4 py-2.5 bg-gradient-to-r from-rose-500 to-pink-600 hover:from-rose-600 hover:to-pink-700 text-white rounded-2xl font-black text-xs flex items-center gap-2 shadow-lg shadow-rose-500/20 transition-all active:scale-95"
+                    className="px-4 py-2.5 bg-gradient-to-r from-rose-500 to-pink-600 hover:from-rose-600 hover:to-pink-700 text-white rounded-2xl font-black text-xs flex items-center gap-1.5 shadow-lg shadow-rose-500/20 transition-all active:scale-95"
                   >
                     <PartyPopper className="w-4 h-4 animate-bounce" />
-                    <span>إطلاق حفل ختام الحصة 🎉</span>
+                    <span>حفل ختام الحصة 🎉</span>
                   </button>
                 </div>
               </div>
 
-              {/* Class & Group Meta Controls */}
-              <div className="mt-4 pt-4 border-t border-slate-800 grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-4 gap-3 text-xs">
+              {/* Group & Active Session Meta Controls Bar */}
+              <div className="mt-4 pt-4 border-t border-slate-800 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
+                {/* Active Group Selector */}
+                <div className="bg-slate-950/80 p-2.5 rounded-2xl border border-amber-500/30 flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5 text-amber-400 font-bold shrink-0">
+                    <Users className="w-4 h-4" />
+                    <span>المجموعة النشطة:</span>
+                  </div>
+                  <select
+                    value={selectedCockpitGroupId}
+                    onChange={(e) => setSelectedCockpitGroupId(e.target.value)}
+                    className="bg-slate-900 border border-slate-700 rounded-xl px-2 py-1 text-white font-extrabold text-xs focus:outline-none focus:border-amber-400 max-w-[150px] truncate"
+                  >
+                    <option value="auto">⚡ {autoDetectedGroup ? `تلقائي (${autoDetectedGroup.name})` : 'تلقائي حسب الجدول'}</option>
+                    {branchGroups.map(g => (
+                      <option key={g.id} value={g.id}>{g.name}</option>
+                    ))}
+                  </select>
+                </div>
+
                 <div className="bg-slate-950/70 p-2.5 rounded-2xl border border-slate-800 flex items-center justify-between">
                   <span className="text-slate-400 font-bold">المدرب المشرف:</span>
-                  <span className="font-extrabold text-white">{selectedTrainer?.fullName || 'المدرب الحالي'}</span>
+                  <span className="font-extrabold text-white truncate">{selectedTrainer?.fullName || 'المدرب الحالي'}</span>
                 </div>
 
                 <div className="bg-slate-950/70 p-2.5 rounded-2xl border border-slate-800 flex items-center justify-between">
-                  <span className="text-slate-400 font-bold">المجموعة والحساب:</span>
-                  <span className="font-extrabold text-amber-400">{selectedGroup?.name || 'مجموعة المعمل المباشرة'}</span>
-                </div>
-
-                <div className="bg-slate-950/70 p-2.5 rounded-2xl border border-slate-800 flex items-center justify-between">
-                  <span className="text-slate-400 font-bold">حالة المزامنة بالفرع:</span>
+                  <span className="text-slate-400 font-bold">حالة المزامنة والربط:</span>
                   <span className="font-extrabold text-emerald-400 flex items-center gap-1">
                     <ShieldCheck className="w-3.5 h-3.5" />
-                    مباشر (0ms)
+                    لحظي مباشر (0ms)
                   </span>
                 </div>
 
                 <div className="bg-slate-950/70 p-2.5 rounded-2xl border border-slate-800 flex items-center justify-between">
-                  <span className="text-slate-400 font-bold">طلاب الفرع الحاضرين:</span>
-                  <span className="font-extrabold text-cyan-400 text-sm">{branchTrainees.length} طالب</span>
+                  <span className="text-slate-400 font-bold">طلاب الحصة الحالية:</span>
+                  <span className="font-extrabold text-cyan-400 text-sm">
+                    {presentCount > 0 ? `${presentCount} حاضر من ${currentGroupTrainees.length}` : `${currentGroupTrainees.length} طالب`}
+                  </span>
                 </div>
               </div>
             </div>
 
             {/* Top Stars Header & Mass Star Launcher */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* Top 3 Stars Leaderboard Card */}
+              {/* Top 3 Stars Leaderboard Card for Current Group */}
               <div className="lg:col-span-1 bg-slate-900 border border-slate-800 p-5 rounded-3xl space-y-4 shadow-xl">
                 <div className="flex items-center justify-between border-b border-slate-800 pb-3">
                   <div className="flex items-center gap-2 text-amber-400 font-black">
                     <Crown className="w-5 h-5 text-amber-400 animate-bounce" />
-                    <span>متميزو الحصة والأعلى نقاط 👑</span>
+                    <span>متميزو المجموعة الحالية 👑</span>
                   </div>
-                  <span className="text-[11px] text-slate-400 bg-slate-800 px-2.5 py-1 rounded-full font-bold">تحديث فوري</span>
+                  <span className="text-[11px] text-amber-300 bg-amber-500/10 border border-amber-500/30 px-2.5 py-0.5 rounded-full font-bold">
+                    {effectiveGroup?.name || 'المجموعة الحالية'}
+                  </span>
                 </div>
 
-                <div className="space-y-3">
+                <div className="space-y-2.5">
                   {topStars.length === 0 ? (
-                    <div className="text-center py-6 text-slate-500 text-xs">لا يوجد طلاب مسجلون بالفرع حالياً</div>
+                    <div className="text-center py-6 text-slate-500 text-xs">لا يوجد طلاب مسجلون في هذه المجموعة حالياً</div>
                   ) : (
                     topStars.map((st, idx) => (
                       <div key={st.id} className="flex items-center justify-between bg-slate-950/80 p-3 rounded-2xl border border-slate-800">
@@ -752,21 +891,28 @@ console.log("نتيجة الطالب:", calculateGrade(48, 50));`);
                 <button
                   onClick={async () => {
                     try {
-                      if (branchTrainees.length === 0) {
-                        showToast('لا يوجد طلاب مسجلون بهذا الفرع', 'warning');
+                      if (displayedTrainees.length === 0) {
+                        showToast('لا يوجد طلاب محددون بالمجموعة حالياً', 'warning');
                         return;
                       }
-                      await Promise.all(branchTrainees.map(t => api.awardPoints(t.id, 10, 'تشجيع الحصة الجماعي بالمعمل').catch(() => {})));
-                      showToast(`تم منح +10 نجوم تشجيعية لجميع طلاب الفرع الحاضرين (${branchTrainees.length} طالب) بنجاح! ⭐🏆`, 'success');
+                      await Promise.all(displayedTrainees.map(t => api.awardPoints(t.id, cockpitBonusAmount, cockpitBonusReason || 'تشجيع الحصة الجماعي بالمعمل').catch(() => {})));
+                      audioService.playCelebrationCheer();
+                      setCelebrationOverlay({
+                        active: true,
+                        title: `🌟 منح +${cockpitBonusAmount} ⭐ لجميع طلاب المجموعة الحاضرين!`,
+                        pointsBadge: `+${cockpitBonusAmount} نقطة لكل طالب`,
+                        subtitle: `${displayedTrainees.length} طالب حاضر بالحصة`
+                      });
+                      showToast(`تم منح +${cockpitBonusAmount} نجوم تشجيعية لجميع الحاضرين بالمجموعة (${displayedTrainees.length} طالب) بنجاح! ⭐🏆`, 'success');
                       loadCenterData();
                     } catch (e) {
                       showToast('تعذر منح النقاط الجماعية', 'error');
                     }
                   }}
-                  className="w-full py-2.5 bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-300 font-extrabold text-xs rounded-2xl flex items-center justify-center gap-2 transition-all"
+                  className="w-full py-2.5 bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-300 font-extrabold text-xs rounded-2xl flex items-center justify-center gap-2 transition-all cursor-pointer"
                 >
                   <Award className="w-4 h-4 text-emerald-400" />
-                  <span>منح +10 نجوم لكل الحاضرين بالمعمل 🌟</span>
+                  <span>منح +{cockpitBonusAmount} نجوم لجميع الحاضرين بالمجموعة 🌟</span>
                 </button>
               </div>
 
@@ -837,26 +983,120 @@ console.log("نتيجة الطالب:", calculateGrade(48, 50));`);
 
             {/* CLASSROOM LIVE HALL WALL: PRESENT STUDENTS & STAR AWARDING */}
             <div className="bg-slate-900 border border-slate-800 p-5 rounded-3xl space-y-4 shadow-xl">
-              <div className="flex items-center justify-between border-b border-slate-800 pb-3 flex-wrap gap-2">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-3 flex-wrap gap-3">
                 <div className="flex items-center gap-2 text-emerald-400 font-black">
                   <UserCheck className="w-6 h-6 text-emerald-400" />
-                  <h3 className="text-lg font-black text-white">
-                    حائط القاعة والطلاب الحاضرين بالمعمل ({branchTrainees.length} طالب)
-                  </h3>
+                  <div>
+                    <h3 className="text-lg font-black text-white">
+                      حائط القاعة والطلاب الحاضرين بالمعمل ({displayedTrainees.length} طالب)
+                    </h3>
+                    <p className="text-[11px] text-slate-400">
+                      مرتبط بمجموعة: <strong className="text-amber-300">{effectiveGroup?.name || 'مجموعة الحصة الحالية'}</strong>
+                    </p>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2 text-xs text-slate-400">
-                  <span>منح النجوم والتفاعل المباشر مرتبط بأجهزة الطلاب بالفرع 🟢</span>
+
+                {/* Filter Switcher Buttons */}
+                <div className="flex items-center gap-1.5 bg-slate-950 p-1 rounded-2xl border border-slate-800">
+                  <button
+                    type="button"
+                    onClick={() => setCockpitFilterMode('present')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                      cockpitFilterMode === 'present'
+                        ? 'bg-emerald-500 text-slate-950 font-black shadow'
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    <span>🟢 الحاضرون بالحصة</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCockpitFilterMode('all_group')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                      cockpitFilterMode === 'all_group'
+                        ? 'bg-amber-500 text-slate-950 font-black shadow'
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    <span>👥 كل طلاب المجموعة</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCockpitFilterMode('all_branch')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                      cockpitFilterMode === 'all_branch'
+                        ? 'bg-purple-600 text-white font-black shadow'
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    <span>🌐 كل الفرع ({branchTrainees.length})</span>
+                  </button>
                 </div>
               </div>
 
-              {branchTrainees.length === 0 ? (
-                <div className="text-center py-12 bg-slate-950/60 rounded-3xl border border-slate-800 text-slate-400 text-sm">
-                  لا يوجد طلاب مسجلون في الفرع المحدد ({branchName}) حالياً.
+              {/* Points Configuration Bar */}
+              <div className="bg-slate-950/70 p-3.5 rounded-2xl border border-slate-800 flex flex-wrap items-center justify-between gap-3 text-xs">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-slate-400 font-bold">قيمة النجوم المحددة:</span>
+                  <div className="flex items-center gap-1 flex-wrap">
+                    {[2, 5, 10, 25, 50].map(pt => (
+                      <button
+                        key={pt}
+                        type="button"
+                        onClick={() => setCockpitBonusAmount(pt)}
+                        className={`px-2.5 py-1 rounded-xl font-black transition-all ${
+                          cockpitBonusAmount === pt
+                            ? 'bg-amber-500 text-slate-950 shadow scale-105'
+                            : 'bg-slate-900 text-slate-300 hover:bg-slate-800 border border-slate-800'
+                        }`}
+                      >
+                        +{pt} ⭐
+                      </button>
+                    ))}
+                    {[-5, -10].map(pt => (
+                      <button
+                        key={pt}
+                        type="button"
+                        onClick={() => setCockpitBonusAmount(pt)}
+                        className={`px-2 py-1 rounded-xl font-bold transition-all ${
+                          cockpitBonusAmount === pt
+                            ? 'bg-rose-500 text-white shadow scale-105'
+                            : 'bg-rose-950/60 text-rose-300 hover:bg-rose-900 border border-rose-900/50'
+                        }`}
+                      >
+                        {pt} ⚠️
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 flex-1 min-w-[240px]">
+                  <span className="text-slate-400 font-bold shrink-0">السبب:</span>
+                  <input
+                    type="text"
+                    value={cockpitBonusReason}
+                    onChange={(e) => setCockpitBonusReason(e.target.value)}
+                    placeholder="مثال: إجابة نموذجية، حل عملي متقن، مشاركة فعالة"
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-400"
+                  />
+                </div>
+              </div>
+
+              {displayedTrainees.length === 0 ? (
+                <div className="text-center py-12 bg-slate-950/60 rounded-3xl border border-slate-800 text-slate-400 text-sm space-y-2">
+                  <p>لا يوجد طلاب مسجلون في هذه المجموعة ({effectiveGroup?.name || ''}) حالياً.</p>
+                  <p className="text-xs text-slate-500">اختر مجموعة أخرى من القائمة بالأعلى أو غيّر وضع الفلتر.</p>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                  {branchTrainees.map((trainee, idx) => {
+                  {displayedTrainees.map((trainee, idx) => {
                     const currentPoints = trainee.totalPoints || trainee.points || 0;
+                    const att = attendanceMap[trainee.id];
+                    const isPresent = att === 'present';
+                    const isAbsent = att === 'absent';
+                    const isLate = att === 'late';
+                    const isExcused = att === 'excused';
+
                     return (
                       <div key={trainee.id} className="bg-slate-950 border border-slate-800 hover:border-slate-700 p-4 rounded-3xl transition-all space-y-3 relative group shadow-md">
                         {/* Student Header */}
@@ -877,42 +1117,76 @@ console.log("نتيجة الطالب:", calculateGrade(48, 50));`);
                           </div>
                         </div>
 
-                        {/* Device & Engagement Status */}
-                        <div className="flex items-center justify-between bg-slate-900/80 px-3 py-1.5 rounded-xl border border-slate-800 text-[11px]">
-                          <span className="text-emerald-400 font-bold flex items-center gap-1">
-                            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-                            جهاز #{String(idx + 1).padStart(2, '0')} أونلاين
-                          </span>
-                          <span className="text-slate-400 font-medium">متفاعل بالمعمل</span>
+                        {/* 1-Tap Attendance Buttons */}
+                        <div className="grid grid-cols-4 gap-1 bg-slate-900/80 p-1.5 rounded-2xl border border-slate-800">
+                          <button
+                            type="button"
+                            onClick={() => handleStudentAttendanceChange(trainee.id, 'present', effectiveGroup?.id)}
+                            className={`py-1 rounded-xl text-[10px] font-bold transition-all ${
+                              isPresent ? 'bg-emerald-500 text-slate-950 font-black shadow scale-105' : 'bg-slate-800 text-emerald-400 hover:bg-emerald-500/20'
+                            }`}
+                            title="تسجيل حاضر"
+                          >
+                            حاضر 🟢
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleStudentAttendanceChange(trainee.id, 'late', effectiveGroup?.id)}
+                            className={`py-1 rounded-xl text-[10px] font-bold transition-all ${
+                              isLate ? 'bg-amber-500 text-slate-950 font-black shadow scale-105' : 'bg-slate-800 text-amber-400 hover:bg-amber-500/20'
+                            }`}
+                            title="تسجيل متأخر"
+                          >
+                            متأخر 🟡
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleStudentAttendanceChange(trainee.id, 'absent', effectiveGroup?.id)}
+                            className={`py-1 rounded-xl text-[10px] font-bold transition-all ${
+                              isAbsent ? 'bg-rose-500 text-white font-black shadow scale-105' : 'bg-slate-800 text-rose-400 hover:bg-rose-500/20'
+                            }`}
+                            title="تسجيل غائب"
+                          >
+                            غائب 🔴
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleStudentAttendanceChange(trainee.id, 'excused', effectiveGroup?.id)}
+                            className={`py-1 rounded-xl text-[10px] font-bold transition-all ${
+                              isExcused ? 'bg-sky-500 text-white font-black shadow scale-105' : 'bg-slate-800 text-sky-400 hover:bg-sky-500/20'
+                            }`}
+                            title="تسجيل معذور"
+                          >
+                            معذور 🔵
+                          </button>
                         </div>
 
                         {/* Fast 1-Tap Star Awarding Buttons */}
-                        <div className="grid grid-cols-3 gap-1.5 pt-1">
-                          <button
-                            onClick={() => handleAwardBonus(trainee.id, 5, 'إجابة ممتازة وسريعة')}
-                            className="py-1.5 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 rounded-xl font-black text-[11px] transition-all active:scale-95 flex items-center justify-center gap-1"
-                            title="منح 5 نجوم"
-                          >
-                            <span>+5</span>
-                            <Star className="w-3 h-3 text-amber-400 fill-amber-400" />
-                          </button>
+                        <div className="space-y-1.5 pt-1">
+                          <div className="grid grid-cols-4 gap-1">
+                            {[2, 5, 10, 25].map(pt => (
+                              <button
+                                key={pt}
+                                onClick={() => handleAwardBonus(trainee.id, pt, cockpitBonusReason || 'إجابة وتطبيق متميز')}
+                                className="py-1.5 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 rounded-xl font-black text-[10px] transition-all active:scale-95 flex items-center justify-center gap-0.5"
+                                title={`منح +${pt} نجوم`}
+                              >
+                                <span>+{pt}</span>
+                                <Star className="w-2.5 h-2.5 text-amber-400 fill-amber-400" />
+                              </button>
+                            ))}
+                          </div>
 
                           <button
-                            onClick={() => handleAwardBonus(trainee.id, 10, 'تميز وتفوق في التمرين العملي')}
-                            className="py-1.5 bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-300 rounded-xl font-black text-[11px] transition-all active:scale-95 flex items-center justify-center gap-1"
-                            title="منح 10 نجوم"
+                            onClick={() => handleAwardBonus(trainee.id, cockpitBonusAmount, cockpitBonusReason || 'تميز وتفوق بالحصة')}
+                            className={`w-full py-1.5 rounded-xl font-black text-[11px] transition-all active:scale-95 flex items-center justify-center gap-1.5 ${
+                              cockpitBonusAmount >= 0
+                                ? 'bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-300'
+                                : 'bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/40 text-rose-300'
+                            }`}
                           >
-                            <span>+10</span>
-                            <Award className="w-3 h-3 text-emerald-400" />
-                          </button>
-
-                          <button
-                            onClick={() => handleAwardBonus(trainee.id, 15, 'أفضل سرعة حل كود وتطبيق بالمعمل')}
-                            className="py-1.5 bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-500/40 text-cyan-300 rounded-xl font-black text-[11px] transition-all active:scale-95 flex items-center justify-center gap-1"
-                            title="منح 15 نجمة"
-                          >
-                            <span>+15</span>
-                            <Zap className="w-3 h-3 text-cyan-400" />
+                            <span>{cockpitBonusAmount >= 0 ? `منح +${cockpitBonusAmount} ⭐` : `تطبيق ${cockpitBonusAmount} ⚠️`}</span>
+                            <span className="text-[9px] text-slate-400">({cockpitBonusReason})</span>
                           </button>
                         </div>
                       </div>
@@ -2193,6 +2467,8 @@ console.log("نتيجة الطالب:", calculateGrade(48, 50));`);
         <SessionCeremonyModal
           trainees={trainees}
           groups={groups}
+          initialGroupId={effectiveCockpitGroupId || effectiveGroup?.id || selectedGroup?.id || groups[0]?.id}
+          initialAttendeesOnly={false}
           onClose={() => setIsCeremonyOpen(false)}
           onAwardBonus={handleAwardBonus}
         />
@@ -2205,6 +2481,15 @@ console.log("نتيجة الطالب:", calculateGrade(48, 50));`);
           onClose={() => setIsWhiteboardOpen(false)}
         />
       )}
+
+      {/* Celebration Balloons & Fanfare Overlay */}
+      <CelebrationBalloonsOverlay
+        isActive={celebrationOverlay.active}
+        title={celebrationOverlay.title}
+        pointsBadge={celebrationOverlay.pointsBadge}
+        subtitle={celebrationOverlay.subtitle}
+        onComplete={() => setCelebrationOverlay(prev => ({ ...prev, active: false }))}
+      />
     </div>
   );
 };

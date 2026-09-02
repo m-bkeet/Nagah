@@ -73,13 +73,13 @@ import {
   Wand2,
   Share2,
   RefreshCw,
+  Database,
   Check
-} from 'lucide-react';
+ } from 'lucide-react';
 import { Trainee, Course, Group, Trainer, Branch, PaymentMethod } from '../types';
 import { StudentPhotoCropperModal } from '../components/StudentPhotoCropperModal';
-import { ShareRegistrationModal } from '../components/ShareRegistrationModal';
+import { ShareRegistrationModal } from '../components/WhatsAppShareModal';
 import { AIHomeworkScannerModal } from '../components/AIHomeworkScannerModal';
-import { BatchPromotionModal } from '../components/BatchPromotionModal';
 import { StudentPromotionModal } from '../components/StudentPromotionModal';
 import { TraineeDigitalCardModal } from '../components/TraineeDigitalCardModal';
 import { StudentCardsBroadcastModal } from '../components/StudentCardsBroadcastModal';
@@ -467,23 +467,79 @@ export const TraineesView: React.FC = () => {
     });
   }, [formData.fullName, formData.parentName, formData.parentPhone, trainees, activeTrainee]);
 
-  const fetchCodeForCourse = async (courseId?: string, grade?: string) => {
-    if (!courseId && !grade) return;
+  const fetchCodeForCourse = async (courseId?: string, targetGrade?: string) => {
+    if (!courseId && !targetGrade) return;
     setIsGeneratingCode(true);
     try {
-      const res = await api.getNextTraineeCode({ courseId, grade });
+      const g = targetGrade || formData.grade;
+      const cId = courseId || formData.courseId;
+      let matchedCourse = courses.find(c => c.id === cId);
+      if (g && !matchedCourse) {
+        matchedCourse = courses.find(c => c.name.includes(g) || g.includes(c.name) || c.grade === g);
+      }
+      const res = await api.getNextTraineeCode({ courseId: matchedCourse?.id || cId, grade: g });
       if (res && res.code) {
-        setFormData((prev: any) => ({ ...prev, code: res.code }));
-        setNextCode(res.code);
+        const resPrefix = res.prefix || '';
+        setFormData((prev: any) => {
+          const currentCode = prev.code || '';
+          const currentPrefix = currentCode.replace(/[0-9]/g, '').toUpperCase().trim();
+          
+          if (resPrefix && currentPrefix === resPrefix && currentCode.length > resPrefix.length) {
+            setCodeRegenNotice(`بادئة الكود الحالية (${currentPrefix}) متوافقة بالفعل مع الصف، لم يتم تغيير التسلسل.`);
+            return {
+              ...prev,
+              grade: g || prev.grade,
+              courseId: matchedCourse ? matchedCourse.id : prev.courseId,
+              feeAmount: matchedCourse ? matchedCourse.feeAmount : prev.feeAmount
+            };
+          } else {
+            if (g) setCodeRegenNotice(`تم تحديث كود الطالب تلقائياً ليتوافق مع ${g}: (${res.code})`);
+            return {
+              ...prev,
+              grade: g || prev.grade,
+              code: res.code,
+              courseId: matchedCourse ? matchedCourse.id : prev.courseId,
+              feeAmount: matchedCourse ? matchedCourse.feeAmount : prev.feeAmount
+            };
+          }
+        });
       }
     } catch (err) {
-      console.error('Failed to get next code for course:', err);
+      console.warn('fetchCodeForCourse error:', err);
     } finally {
       setIsGeneratingCode(false);
     }
   };
 
+  const handleGradeChangeInEdit = async (selGrade: string) => {
+    const matchedCourse = courses.find(c => c.name.includes(selGrade) || selGrade.includes(c.name) || c.grade === selGrade);
+    setFormData((prev: any) => ({
+      ...prev,
+      grade: selGrade,
+      courseId: matchedCourse ? matchedCourse.id : prev.courseId,
+      feeAmount: matchedCourse ? matchedCourse.feeAmount : prev.feeAmount
+    }));
+    await fetchCodeForCourse(matchedCourse?.id || formData.courseId, selGrade);
+  };
+
+  const handlePhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) {
+        showToast('حجم الصورة كبير جداً، يرجى اختيار صورة أقل من 5 ميجابايت', 'warning');
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = () => {
+        setFormData((prev: any) => ({ ...prev, photoUrl: reader.result as string }));
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   const handleOpenAddModal = () => {
+    setActiveTrainee(null);
+    const initialBranch = activeBranchId && activeBranchId !== 'all' ? activeBranchId : (branches[0]?.id || '');
     setFormData({
       fullName: '',
       code: '',
@@ -494,174 +550,83 @@ export const TraineesView: React.FC = () => {
       birthDate: '',
       gender: 'male',
       address: '',
-      branchId: selectedBranch !== 'all' ? selectedBranch : branches?.[0]?.id || 'branch-1',
+      branchId: initialBranch,
       courseId: '',
       groupId: '',
-      trainerId: trainers?.[0]?.id || '',
+      trainerId: '',
       feeAmount: 0,
       discountAmount: 0,
       initialPayment: 0,
       initialPaymentMethod: 'cash',
       photoUrl: '',
-      isExempt: false,
-      exemptReason: undefined,
-      siblingIds: [],
-      siblingNames: [],
       status: 'active',
       notes: ''
     });
-    setNextCode('');
+    setCodeRegenNotice(null);
     setIsAddModalOpen(true);
-  };
-
-  const handlePhotoSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (file.size > 3 * 1024 * 1024) {
-      showToast('حجم الصورة يجب أن لا يتعدى 3 ميجابايت', 'warning');
-      return;
-    }
-    
-    // Instead of saving base64 directly, upload it
-    const reader = new FileReader();
-    reader.onload = async () => {
-      try {
-        const base64Data = reader.result as string;
-        const res = await fetch('/api/upload', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ fileData: base64Data, fileName: file.name })
-        });
-        const data = await res.json();
-        if (res.ok && data.success) {
-          setFormData((prev: any) => ({ ...prev, photoUrl: data.url }));
-        } else {
-          setFormData((prev: any) => ({ ...prev, photoUrl: base64Data }));
-        }
-      } catch(e) {
-        setFormData((prev: any) => ({ ...prev, photoUrl: reader.result as string }));
-      }
-    };
-    reader.readAsDataURL(file);
-  };
-
-  const handleSaveAddTrainee = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!formData.fullName.trim() || !formData.phone.trim() || !formData.branchId) {
-      showToast('يرجى ملء جميع الحقول الإجبارية (الاسم، الهاتف، والفرع)', 'warning');
-      return;
-    }
-
-    try {
-      const res = await api.createTrainee({
-        ...formData,
-        createdByUserId: user?.id,
-        createdByUserName: user?.fullName
-      });
-      if (res.success) {
-        if (res.trainee) {
-          
-        }
-        showToast(`تمت إضافة المتدرب ${res.trainee.fullName} بنجاح بكود (${res.trainee.code})`, 'success');
-        setIsAddModalOpen(false);
-        loadData();
-      }
-    } catch (err: any) {
-      showToast(err.message || 'فشل حفظ المتدرب', 'error');
-    }
   };
 
   const handleOpenEditModal = (t: Trainee) => {
     setActiveTrainee(t);
-    // Smartly resolve courseId from t.courseId, t.courseIds[0], or from group's courseId, or grade
-    let resolvedCourseId = t.courseId || (t.courseIds && t.courseIds[0]) || '';
-    if (!resolvedCourseId && t.groupId) {
-      const g = groups.find(grp => grp.id === t.groupId);
-      if (g && g.courseId) resolvedCourseId = g.courseId;
-    }
-    if (resolvedCourseId && !courses.some(c => c.id === resolvedCourseId)) {
-      const foundByName = courses.find(c => c.name === resolvedCourseId || (t.grade && c.name.includes(t.grade)));
-      if (foundByName) resolvedCourseId = foundByName.id;
-    }
-    if (!resolvedCourseId && t.grade) {
-      const foundByGrade = courses.find(c => c.name.includes(t.grade) || t.grade.includes(c.name));
-      if (foundByGrade) resolvedCourseId = foundByGrade.id;
-    }
-
     setFormData({
-      fullName: t.fullName,
-      code: t.code,
-      phone: t.phone,
+      fullName: t.fullName || '',
+      code: t.code || '',
+      phone: t.phone || '',
       parentPhone: t.parentPhone || '',
       parentName: t.parentName || '',
       nationalId: t.nationalId || '',
       birthDate: t.birthDate || '',
       gender: t.gender || 'male',
       address: t.address || '',
-      grade: t.grade || '',
-      branchId: t.branchId || (branches[0]?.id || 'branch-1'),
-      courseId: resolvedCourseId,
+      branchId: t.branchId || '',
+      courseId: t.courseId || '',
       groupId: t.groupId || '',
       trainerId: t.trainerId || '',
-      feeAmount: t.feeAmount,
-      discountAmount: t.discountAmount,
+      feeAmount: t.feeAmount || 0,
+      discountAmount: t.discountAmount || 0,
+      initialPayment: 0,
+      initialPaymentMethod: 'cash',
       photoUrl: t.photoUrl || '',
-      isExempt: Boolean(t.isExempt),
-      exemptReason: t.exemptReason || undefined,
-      siblingIds: t.siblingIds || [],
-      siblingNames: t.siblingNames || [],
-      status: t.status,
-      notes: t.notes || ''
+      status: t.status || 'active',
+      notes: t.notes || '',
+      portalPassword: t.portalPassword || '',
+      parentPortalPassword: t.parentPortalPassword || ''
     });
     setCodeRegenNotice(null);
     setIsEditModalOpen(true);
   };
 
-  const handleGradeChangeInEdit = async (selGrade: string) => {
-    let matchedCourse = courses.find(c => c.name.includes(selGrade) || selGrade.includes(c.name) || c.grade === selGrade);
-    if (selGrade.includes('رابع')) matchedCourse = courses.find(c => c.name.includes('ICT4') || c.code?.includes('ICT4') || c.grade === selGrade);
-    if (selGrade.includes('خامس')) matchedCourse = courses.find(c => c.name.includes('ICT5') || c.code?.includes('ICT5') || c.grade === selGrade);
-    if (selGrade.includes('سادس')) matchedCourse = courses.find(c => c.name.includes('ICT6') || c.code?.includes('ICT6') || c.grade === selGrade);
-    if (selGrade.includes('أول إعدادي') || selGrade.includes('الأول الإعدادي')) matchedCourse = courses.find(c => c.name.includes('ICT-P1') || c.code?.includes('ICT-P1'));
-    if (selGrade.includes('ثاني إعدادي') || selGrade.includes('الثاني الإعدادي')) matchedCourse = courses.find(c => c.name.includes('ICT-P2') || c.code?.includes('ICT-P2'));
-    if (selGrade.includes('ثالث إعدادي') || selGrade.includes('الثالث الإعدادي')) matchedCourse = courses.find(c => c.name.includes('ICT-P3') || c.code?.includes('ICT-P3'));
-    if (selGrade.includes('أول ثانوي') || selGrade.includes('الأول الثانوي')) matchedCourse = courses.find(c => c.name.includes('ICT-S1') || c.code?.includes('ICT-S1'));
-    if (selGrade.includes('ثاني ثانوي') || selGrade.includes('الثاني الثانوي')) matchedCourse = courses.find(c => c.name.includes('ICT-S2') || c.code?.includes('ICT-S2'));
-    if (selGrade.includes('ثالث ثانوي') || selGrade.includes('الثالث الثانوي')) matchedCourse = courses.find(c => c.name.includes('ICT-S3') || c.code?.includes('ICT-S3'));
-
-    setIsGeneratingCode(true);
+  const handleSaveAddTrainee = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formData.fullName || !formData.fullName.trim()) {
+      showToast('يرجى إدخال اسم الطالب كاملاً', 'warning');
+      return;
+    }
     try {
-      const res = await api.getNextTraineeCode({
-        grade: selGrade,
-        courseId: matchedCourse?.id,
-        excludeId: activeTrainee?.id
-      });
-      if (res && res.code) {
-        setFormData(prev => ({
-          ...prev,
-          grade: selGrade,
-          code: res.code,
-          courseId: matchedCourse ? matchedCourse.id : prev.courseId,
-          feeAmount: matchedCourse ? matchedCourse.feeAmount : prev.feeAmount
-        }));
-        setCodeRegenNotice(`تم تحديث كود الطالب تلقائياً ليتوافق مع ${selGrade}: (${res.code})`);
+      const netAmt = (Number(formData.feeAmount) || 0) - (Number(formData.discountAmount) || 0);
+      const paidAmt = Number(formData.initialPayment) || 0;
+      const remainingAmt = netAmt - paidAmt;
+
+      const payload = {
+        ...formData,
+        netAmount: netAmt,
+        paidAmount: paidAmt,
+        remainingAmount: remainingAmt,
+        createdByUserId: user?.id,
+        createdByUserName: user?.fullName,
+        branchId: formData.branchId || (activeBranchId && activeBranchId !== 'all' ? activeBranchId : branches[0]?.id)
+      };
+
+      const res = await api.createTrainee(payload);
+      if (res && res.success) {
+        showToast('تم تسجيل المتدرب الجديد بنجاح 🎉', 'success');
+        setIsAddModalOpen(false);
+        await loadData();
       } else {
-        setFormData(prev => ({
-          ...prev,
-          grade: selGrade,
-          courseId: matchedCourse ? matchedCourse.id : prev.courseId,
-          feeAmount: matchedCourse ? matchedCourse.feeAmount : prev.feeAmount
-        }));
+        showToast('حدث خطأ أثناء إضافة المتدرب', 'error');
       }
-    } catch (err) {
-      setFormData(prev => ({
-        ...prev,
-        grade: selGrade,
-        courseId: matchedCourse ? matchedCourse.id : prev.courseId,
-        feeAmount: matchedCourse ? matchedCourse.feeAmount : prev.feeAmount
-      }));
-    } finally {
-      setIsGeneratingCode(false);
+    } catch (err: any) {
+      showToast(err.message || 'فشل إضافة المتدرب', 'error');
     }
   };
 
@@ -1416,7 +1381,7 @@ export const TraineesView: React.FC = () => {
 
             {/* Desktop Dropdowns */}
             <div className="hidden md:flex items-center gap-1.5">
-              {/* Dropdown 1: Excel Operations */}
+              {/* Dropdown 1: Unified Import Center */}
               <div className="relative">
                 <button
                   onClick={() => {
@@ -1426,52 +1391,74 @@ export const TraineesView: React.FC = () => {
                   }}
                   className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-bold text-xs transition-all"
                 >
-                  <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
-                  <span>ملفات Excel 📊</span>
+                  <Download className="w-4 h-4 text-emerald-400" />
+                  <span>مركز الاستيراد 📥</span>
                 </button>
                 {excelDropdownOpen && (
-                  <div className="absolute left-0 sm:right-0 mt-2 w-52 rounded-xl bg-slate-900 border border-slate-700 p-1.5 shadow-2xl z-[999] space-y-1 text-right max-h-[80vh] overflow-y-auto backdrop-blur-xl">
-                    <button
-                      onClick={() => {
-                        handleDownloadTemplate('full');
-                        setExcelDropdownOpen(false);
-                      }}
-                      className="w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-800 rounded-lg text-slate-200 text-xs transition-colors"
-                    >
-                      <Download className="w-3.5 h-3.5 text-amber-400" />
-                      <span>تحميل نموذج Excel</span>
-                    </button>
+                  <div className="absolute left-0 sm:right-0 mt-2 w-56 rounded-xl bg-slate-900 border border-slate-700 p-1.5 shadow-2xl z-[999] space-y-1 text-right max-h-[80vh] overflow-y-auto backdrop-blur-xl">
                     <button
                       onClick={() => {
                         setImportResults(null);
                         setIsImportModalOpen(true);
                         setExcelDropdownOpen(false);
                       }}
-                      className="w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-800 rounded-lg text-slate-200 text-xs transition-colors"
+                      className="w-full flex items-center gap-2 px-3 py-2.5 hover:bg-slate-800 rounded-lg text-slate-200 text-xs transition-colors"
                     >
-                      <Upload className="w-3.5 h-3.5 text-emerald-400" />
-                      <span>استيراد Excel</span>
-                    </button>
-                    <button
-                      onClick={() => {
-                        handleExportExcel();
-                        setExcelDropdownOpen(false);
-                      }}
-                      className="w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-800 rounded-lg text-slate-200 text-xs transition-colors"
-                    >
-                      <FileSpreadsheet className="w-3.5 h-3.5 text-cyan-400" />
-                      <span>تصدير ملف Excel محلي</span>
+                      <FileSpreadsheet className="w-4 h-4 text-emerald-400 shrink-0" />
+                      <div className="text-right">
+                        <div className="font-bold">استيراد من Excel</div>
+                        <div className="text-[9px] text-slate-400">ملفات xlsx, csv</div>
+                      </div>
                     </button>
                     <button
                       onClick={() => {
                         setIsGoogleSheetsModalOpen(true);
                         setExcelDropdownOpen(false);
                       }}
-                      className="w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-800 rounded-lg text-emerald-300 text-xs transition-colors border-t border-slate-800 font-bold"
+                      className="w-full flex items-center gap-2 px-3 py-2.5 hover:bg-slate-800 rounded-lg text-slate-200 text-xs transition-colors"
                     >
-                      <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
-                      <span>جداول Google Sheets السحابية 📊</span>
+                      <Database className="w-4 h-4 text-emerald-400 shrink-0" />
+                      <div className="text-right">
+                        <div className="font-bold">استيراد من Google Sheets</div>
+                        <div className="text-[9px] text-slate-400">جداول جوجل السحابية</div>
+                      </div>
                     </button>
+                    <button
+                      onClick={() => {
+                        setIsFormsImportModalOpen(true);
+                        setExcelDropdownOpen(false);
+                      }}
+                      className="w-full flex items-center gap-2 px-3 py-2.5 hover:bg-slate-800 rounded-lg text-slate-200 text-xs transition-colors"
+                    >
+                      <MessageSquare className="w-4 h-4 text-purple-400 shrink-0" />
+                      <div className="text-right">
+                        <div className="font-bold">استيراد من Google Forms</div>
+                        <div className="text-[9px] text-slate-400">استمارات تسجيل الطلاب</div>
+                      </div>
+                    </button>
+
+                    <div className="my-1 border-t border-slate-800 pt-1">
+                      <button
+                        onClick={() => {
+                          handleDownloadTemplate('full');
+                          setExcelDropdownOpen(false);
+                        }}
+                        className="w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-800 rounded-lg text-amber-300 text-xs transition-colors"
+                      >
+                        <Download className="w-3.5 h-3.5 shrink-0" />
+                        <span>تحميل نموذج Excel فارغ</span>
+                      </button>
+                      <button
+                        onClick={() => {
+                          handleExportExcel();
+                          setExcelDropdownOpen(false);
+                        }}
+                        className="w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-800 rounded-lg text-cyan-400 text-xs transition-colors"
+                      >
+                        <FileSpreadsheet className="w-3.5 h-3.5 shrink-0" />
+                        <span>تصدير ملف Excel محلي</span>
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
@@ -2749,7 +2736,8 @@ export const TraineesView: React.FC = () => {
                     type="button"
                     onClick={() => {
                       const sibs = detectedSiblings;
-                      const discVal = Math.round((formData.feeAmount || 0) * 0.2); // 20% خصم الأخوات
+                      const isBadr = formData.branchId === 'branch-2' || String(formData.branchId || '').toLowerCase().includes('badr');
+                      const discVal = isBadr ? Math.round((formData.feeAmount || 0) * 0.1) : 0;
                       setFormData((prev: any) => ({
                         ...prev,
                         discountAmount: discVal,
@@ -2757,9 +2745,9 @@ export const TraineesView: React.FC = () => {
                         siblingNames: sibs.map((s) => s.fullName),
                         notes:
                           (prev.notes ? prev.notes + ' | ' : '') +
-                          `ربط إخوة مع (${sibs.map((s) => `${s.fullName} - ${s.code}`).join('، ')}) - تم تطبيق خصم الأخوات`
+                          `ربط إخوة مع (${sibs.map((s) => `${s.fullName} - ${s.code}`).join('، ')})` + (isBadr ? ' - تم تطبيق خصم 10% لفرع بدر' : ' - بدون خصم إضافي لفرع النجاح')
                       }));
-                      showToast('تم ربط الأخوات وتطبيق الخصم 20% بنجاح!', 'success');
+                      showToast(isBadr ? 'تم ربط الإخوة وتطبيق خصم 10% (فرع بدر) بنجاح!' : 'تم ربط الإخوة بنجاح (بدون خصم تلقائي لفرع النجاح، يرجى التحديد يدوياً إن لزم)', 'success');
                     }}
                     className="px-3 py-1.5 bg-purple-600 hover:bg-purple-500 text-white rounded-lg font-bold text-xs shadow-lg transition-all shrink-0 flex items-center gap-1"
                   >
@@ -3202,8 +3190,8 @@ export const TraineesView: React.FC = () => {
                   <input
                     type="text"
                     value={formData.code ?? ''}
-                    readOnly
-                    className="w-full bg-slate-800/90 border border-amber-500/40 rounded-xl px-3 py-2 text-amber-400 font-mono font-black text-sm"
+                    onChange={(e) => setFormData({ ...formData, code: e.target.value.toUpperCase() })}
+                    className="w-full bg-slate-800/90 border border-amber-500/40 rounded-xl px-3 py-2 text-amber-400 font-mono font-black text-sm focus:outline-none focus:ring-1 focus:ring-amber-500"
                   />
                   {codeRegenNotice && (
                     <p className="text-[10px] text-emerald-400 mt-1 font-bold bg-emerald-950/40 border border-emerald-500/30 p-1.5 rounded-lg">

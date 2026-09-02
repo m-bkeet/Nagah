@@ -320,7 +320,18 @@ export const PointsView: React.FC = () => {
                       {idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `#${idx + 1}`}
                     </td>
                     <td className="p-3.5 font-mono font-bold text-amber-400">{t.code}</td>
-                    <td className="p-3.5 font-bold text-slate-100">{t.fullName}</td>
+                    <td className="p-3.5 font-bold text-slate-100">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-8 h-8 rounded-full overflow-hidden shrink-0 border border-slate-700 bg-slate-800 flex items-center justify-center">
+                          {t.photoUrl || (t as any).photo ? (
+                            <img src={t.photoUrl || (t as any).photo} alt={t.fullName} className="w-full h-full object-cover" />
+                          ) : (
+                            <span className="text-xs font-bold text-amber-400">{t.fullName.slice(0, 1)}</span>
+                          )}
+                        </div>
+                        <span className="truncate">{t.fullName}</span>
+                      </div>
+                    </td>
                     <td className="p-3.5 text-slate-300">{t.groupName || 'المجموعة الأساسية'}</td>
                     <td className="p-3.5 text-center font-mono font-black text-amber-300 text-sm">
                       {points}
@@ -436,8 +447,12 @@ export const PointsView: React.FC = () => {
         <SessionCeremonyModal
           trainees={trainees}
           groups={groups}
+          initialGroupId={selectedGroupId !== 'all' ? selectedGroupId : undefined}
+          initialAttendeesOnly={true}
           onClose={() => setIsCeremonyOpen(false)}
-          onAwardBonus={(traineeId, points, reason) => {}}
+          onAwardBonus={(traineeId, points, reason) => {
+            handleAddPoints(traineeId, points, reason);
+          }}
         />
       )}
     </div>

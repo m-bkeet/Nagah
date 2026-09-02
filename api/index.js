@@ -198,89 +198,41 @@ var init_db = __esm({
       ],
       trainees: [
         {
-          "id": "trainee-1787361330810-d1if",
-          "code": "A001",
-          "fullName": "\u0645\u0631\u0627\u0645 \u0645\u062D\u0645\u062F \u0631\u0645\u0636\u0627\u0646 \u0628\u062E\u064A\u062A",
-          "nationalId": "",
-          "birthDate": "",
-          "gender": "female",
-          "phone": "01001500686",
-          "parentPhone": "01001500686",
-          "parentName": "\u0645\u062D\u0645\u062F \u0631\u0645\u0636\u0627\u0646 \u0628\u062E\u064A\u062A",
-          "address": "",
-          "branchId": "branch-1",
-          "courseId": "course-1787347569318",
-          "groupId": "grp-1787358595611",
-          "trainerId": "trainer-1787349806643",
-          "registrationDate": "2026-08-22",
-          "status": "active",
-          "feeAmount": 0,
-          "discountAmount": 0,
-          "netAmount": 0,
-          "paidAmount": 0,
-          "remainingAmount": 0,
-          "notes": "\u0627\u0628\u0646\u0629 \u0627\u0644\u0625\u062F\u0627\u0631\u0629 - \u0625\u0639\u0641\u0627\u0621 \u0643\u0627\u0645\u0644",
-          "totalPoints": 277,
-          "ranking": 1,
-          "points": 277,
-          "courseIds": [
-            "course-1787347569318"
-          ],
-          "isExempt": true,
-          "exemptReason": "management_children",
-          "siblingIds": [
-            "trainee-1787361410293-aeko",
-            "trainee-1787459300939-62ly"
-          ],
-          "siblingNames": [
-            "\u0631\u0641\u064A\u0641 \u0645\u062D\u0645\u062F \u0631\u0645\u0636\u0627\u0646 \u0628\u062E\u064A\u062A",
-            "\u0644\u064A\u0646 \u0645\u062D\u0645\u062F \u0631\u0645\u0636\u0627\u0646 \u0628\u062E\u064A\u062A"
-          ]
-        },
-        {
-          "id": "trainee-1787361410293-aeko",
+          "id": "trainee-1787347401956-karm",
           "code": "A002",
-          "fullName": "\u0631\u0641\u064A\u0641 \u0645\u062D\u0645\u062F \u0631\u0645\u0636\u0627\u0646 \u0628\u062E\u064A\u062A",
+          "fullName": "\u0643\u0631\u0645\u0647 \u0627\u062D\u0645\u062F \u0639\u0635\u0627\u0645 \u0627\u0628\u0648 \u0627\u0644\u062E\u064A\u0631",
+          "grade": "\u0627\u0644\u0635\u0641 \u0627\u0644\u0631\u0627\u0628\u0639 \u0627\u0644\u0627\u0628\u062A\u062F\u0627\u0626\u064A",
           "nationalId": "",
           "birthDate": "",
           "gender": "female",
-          "phone": "01005400325",
-          "parentPhone": "01001500686",
-          "parentName": "\u0645\u062D\u0645\u062F \u0631\u0645\u0636\u0627\u0646 \u0628\u062E\u064A\u062A",
+          "phone": "01002345678",
+          "parentPhone": "01002345678",
+          "parentName": "\u0627\u062D\u0645\u062F \u0639\u0635\u0627\u0645 \u0627\u0628\u0648 \u0627\u0644\u062E\u064A\u0631",
           "address": "",
           "branchId": "branch-1",
-          "courseId": "course-1787347462419",
-          "groupId": "grp-1787431608023",
+          "courseId": "course-1787347401956",
+          "groupId": "grp-1787350487970",
           "trainerId": "trainer-1787349806643",
-          "registrationDate": "2026-08-22",
+          "registrationDate": "2026-08-25",
           "status": "active",
-          "feeAmount": 0,
+          "feeAmount": 200,
           "discountAmount": 0,
-          "netAmount": 0,
-          "paidAmount": 0,
+          "netAmount": 200,
+          "paidAmount": 200,
           "remainingAmount": 0,
-          "notes": "\u0631\u0628\u0637 \u0625\u062E\u0648\u0629 \u0645\u0639 (\u0645\u0631\u0627\u0645 \u0645\u062D\u0645\u062F \u0631\u0645\u0636\u0627\u0646 \u0628\u062E\u064A\u062A - A001) - \u062A\u0645 \u062A\u0637\u0628\u064A\u0642 \u062E\u0635\u0645 \u0627\u0644\u0623\u062E\u0648\u0627\u062A",
-          "totalPoints": 200,
-          "ranking": 2,
-          "points": 200,
+          "notes": "\u0627\u0644\u0635\u0641 \u0627\u0644\u0631\u0627\u0628\u0639 \u0627\u0644\u0627\u0628\u062A\u062F\u0627\u0626\u064A - \u0645\u0633\u062C\u0644\u0629 \u0628\u0643\u0648\u062F A002 \u0627\u0644\u0645\u0631\u062A\u0628",
+          "totalPoints": 95,
+          "ranking": 4,
+          "points": 95,
           "courseIds": [
-            "course-1787347462419"
-          ],
-          "isExempt": true,
-          "exemptReason": "management_children",
-          "siblingIds": [
-            "trainee-1787361330810-d1if",
-            "trainee-1787459300939-62ly"
-          ],
-          "siblingNames": [
-            "\u0645\u0631\u0627\u0645 \u0645\u062D\u0645\u062F \u0631\u0645\u0636\u0627\u0646 \u0628\u062E\u064A\u062A",
-            "\u0644\u064A\u0646 \u0645\u062D\u0645\u062F \u0631\u0645\u0636\u0627\u0646 \u0628\u062E\u064A\u062A"
+            "course-1787347401956"
           ]
         },
         {
           "id": "trainee-1787459300939-62ly",
-          "code": "A003",
+          "code": "A001",
           "fullName": "\u0644\u064A\u0646 \u0645\u062D\u0645\u062F \u0631\u0645\u0636\u0627\u0646 \u0628\u062E\u064A\u062A",
+          "grade": "\u0627\u0644\u0635\u0641 \u0627\u0644\u0631\u0627\u0628\u0639 \u0627\u0644\u0627\u0628\u062A\u062F\u0627\u0626\u064A",
           "nationalId": "",
           "birthDate": "",
           "gender": "female",
@@ -299,7 +251,7 @@ var init_db = __esm({
           "netAmount": 0,
           "paidAmount": 0,
           "remainingAmount": 0,
-          "notes": "\u0631\u0628\u0637 \u0625\u062E\u0648\u0629 \u0645\u0639 (\u0645\u0631\u0627\u0645 \u0648\u0631\u0641\u064A\u0641 \u0645\u062D\u0645\u062F \u0631\u0645\u0636\u0627\u0646 \u0628\u062E\u064A\u062A) - \u0625\u0639\u0641\u0627\u0621 \u0623\u0628\u0646\u0627\u0621 \u0627\u0644\u0625\u062F\u0627\u0631\u0629",
+          "notes": "\u0627\u0644\u0635\u0641 \u0627\u0644\u0631\u0627\u0628\u0639 \u0627\u0644\u0627\u0628\u062A\u062F\u0627\u0626\u064A - \u0625\u0639\u0641\u0627\u0621 \u0623\u0628\u0646\u0627\u0621 \u0627\u0644\u0625\u062F\u0627\u0631\u0629",
           "totalPoints": 133,
           "ranking": 3,
           "points": 133,
@@ -315,6 +267,88 @@ var init_db = __esm({
           "siblingNames": [
             "\u0645\u0631\u0627\u0645 \u0645\u062D\u0645\u062F \u0631\u0645\u0636\u0627\u0646 \u0628\u062E\u064A\u062A",
             "\u0631\u0641\u064A\u0641 \u0645\u062D\u0645\u062F \u0631\u0645\u0636\u0627\u0646 \u0628\u062E\u064A\u062A"
+          ]
+        },
+        {
+          "id": "trainee-1787361410293-aeko",
+          "code": "B001",
+          "fullName": "\u0631\u0641\u064A\u0641 \u0645\u062D\u0645\u062F \u0631\u0645\u0636\u0627\u0646 \u0628\u062E\u064A\u062A",
+          "grade": "\u0627\u0644\u0635\u0641 \u0627\u0644\u062E\u0627\u0645\u0633 \u0627\u0644\u0627\u0628\u062A\u062F\u0627\u0626\u064A",
+          "nationalId": "",
+          "birthDate": "",
+          "gender": "female",
+          "phone": "01005400325",
+          "parentPhone": "01001500686",
+          "parentName": "\u0645\u062D\u0645\u062F \u0631\u0645\u0636\u0627\u0646 \u0628\u062E\u064A\u062A",
+          "address": "",
+          "branchId": "branch-1",
+          "courseId": "course-1787347462419",
+          "groupId": "grp-1787431608023",
+          "trainerId": "trainer-1787349806643",
+          "registrationDate": "2026-08-22",
+          "status": "active",
+          "feeAmount": 0,
+          "discountAmount": 0,
+          "netAmount": 0,
+          "paidAmount": 0,
+          "remainingAmount": 0,
+          "notes": "\u0627\u0644\u0635\u0641 \u0627\u0644\u062E\u0627\u0645\u0633 \u0627\u0644\u0627\u0628\u062A\u062F\u0627\u0626\u064A - \u0625\u0639\u0641\u0627\u0621 \u0623\u0628\u0646\u0627\u0621 \u0627\u0644\u0625\u062F\u0627\u0631\u0629",
+          "totalPoints": 200,
+          "ranking": 2,
+          "points": 200,
+          "courseIds": [
+            "course-1787347462419"
+          ],
+          "isExempt": true,
+          "exemptReason": "management_children",
+          "siblingIds": [
+            "trainee-1787361330810-d1if",
+            "trainee-1787459300939-62ly"
+          ],
+          "siblingNames": [
+            "\u0645\u0631\u0627\u0645 \u0645\u062D\u0645\u062F \u0631\u0645\u0636\u0627\u0646 \u0628\u062E\u064A\u062A",
+            "\u0644\u064A\u0646 \u0645\u062D\u0645\u062F \u0631\u0645\u0636\u0627\u0646 \u0628\u062E\u064A\u062A"
+          ]
+        },
+        {
+          "id": "trainee-1787361330810-d1if",
+          "code": "D001",
+          "fullName": "\u0645\u0631\u0627\u0645 \u0645\u062D\u0645\u062F \u0631\u0645\u0636\u0627\u0646 \u0628\u062E\u064A\u062A",
+          "grade": "\u0627\u0644\u0635\u0641 \u0627\u0644\u0623\u0648\u0644 \u0627\u0644\u0625\u0639\u062F\u0627\u062F\u064A",
+          "nationalId": "",
+          "birthDate": "",
+          "gender": "female",
+          "phone": "01001500686",
+          "parentPhone": "01001500686",
+          "parentName": "\u0645\u062D\u0645\u062F \u0631\u0645\u0636\u0627\u0646 \u0628\u062E\u064A\u062A",
+          "address": "",
+          "branchId": "branch-1",
+          "courseId": "course-1787347569318",
+          "groupId": "grp-1787358595611",
+          "trainerId": "trainer-1787349806643",
+          "registrationDate": "2026-08-22",
+          "status": "active",
+          "feeAmount": 0,
+          "discountAmount": 0,
+          "netAmount": 0,
+          "paidAmount": 0,
+          "remainingAmount": 0,
+          "notes": "\u0627\u0644\u0635\u0641 \u0627\u0644\u0623\u0648\u0644 \u0627\u0644\u0625\u0639\u062F\u0627\u062F\u064A - \u0625\u0639\u0641\u0627\u0621 \u0623\u0628\u0646\u0627\u0621 \u0627\u0644\u0625\u062F\u0627\u0631\u0629",
+          "totalPoints": 277,
+          "ranking": 1,
+          "points": 277,
+          "courseIds": [
+            "course-1787347569318"
+          ],
+          "isExempt": true,
+          "exemptReason": "management_children",
+          "siblingIds": [
+            "trainee-1787361410293-aeko",
+            "trainee-1787459300939-62ly"
+          ],
+          "siblingNames": [
+            "\u0631\u0641\u064A\u0641 \u0645\u062D\u0645\u062F \u0631\u0645\u0636\u0627\u0646 \u0628\u062E\u064A\u062A",
+            "\u0644\u064A\u0646 \u0645\u062D\u0645\u062F \u0631\u0645\u0636\u0627\u0646 \u0628\u062E\u064A\u062A"
           ]
         }
       ],
@@ -2677,57 +2711,7 @@ var init_db = __esm({
           "currentQuestionIndex": 1
         }
       ],
-      devices: [
-        {
-          "id": "dev-1787352892067",
-          "deviceId": "PC-71",
-          "name": "\u062C\u0647\u0627\u0632 PC-71",
-          "assignedUser": "\u0631\u0641\u064A\u0641 \u0645\u062D\u0645\u062F \u0631\u0645\u0636\u0627\u0646 \u0628\u062E\u064A\u062A",
-          "userType": "trainee",
-          "branchId": "branch-1",
-          "ipAddress": "ais-dev-7wkppak7c63am6ebvulppu-481160813332.europe-west2.run.app",
-          "lastHeartbeat": "2026-08-23T06:02:06.440Z",
-          "isOnline": false,
-          "status": "active",
-          "currentTraineeId": "trainee-1787361410293-aeko",
-          "lastScreenshotUrl": "",
-          "lastScreenshotTime": "2026-08-22T01:34:48.102Z",
-          "currentTraineeName": "\u0631\u0641\u064A\u0641 \u0645\u062D\u0645\u062F \u0631\u0645\u0636\u0627\u0646 \u0628\u062E\u064A\u062A",
-          "lastArchivedTime": "2026-08-23T06:01:50.050Z"
-        },
-        {
-          "id": "dev-1787362571450",
-          "deviceId": "PC-74",
-          "name": "\u062C\u0647\u0627\u0632 PC-74",
-          "assignedUser": "\u0645\u0631\u0627\u0645 \u0645\u062D\u0645\u062F \u0631\u0645\u0636\u0627\u0646 \u0628\u062E\u064A\u062A",
-          "userType": "trainee",
-          "branchId": "branch-1",
-          "ipAddress": "ais-dev-7wkppak7c63am6ebvulppu-481160813332.europe-west2.run.app",
-          "lastHeartbeat": "2026-08-22T01:46:31.883Z",
-          "isOnline": false,
-          "status": "active",
-          "lastScreenshotUrl": "",
-          "lastScreenshotTime": "2026-08-22T01:46:31.883Z",
-          "currentTraineeName": "\u0645\u0631\u0627\u0645 \u0645\u062D\u0645\u062F \u0631\u0645\u0636\u0627\u0646 \u0628\u062E\u064A\u062A",
-          "currentTraineeId": "trainee-1787361330810-d1if"
-        },
-        {
-          "id": "dev-1787464212308",
-          "deviceId": "PC-83",
-          "name": "\u062C\u0647\u0627\u0632 PC-83",
-          "assignedUser": "\u0645\u0631\u0627\u0645 \u0645\u062D\u0645\u062F \u0631\u0645\u0636\u0627\u0646 \u0628\u062E\u064A\u062A",
-          "userType": "trainee",
-          "branchId": "branch-1",
-          "ipAddress": "ais-dev-7wkppak7c63am6ebvulppu-481160813332.europe-west2.run.app",
-          "lastHeartbeat": "2026-08-23T06:32:38.297Z",
-          "isOnline": false,
-          "status": "active",
-          "lastScreenshotUrl": "",
-          "lastArchivedTime": "2026-08-23T06:32:12.588Z",
-          "currentTraineeName": "\u0645\u0631\u0627\u0645 \u0645\u062D\u0645\u062F \u0631\u0645\u0636\u0627\u0646 \u0628\u062E\u064A\u062A",
-          "currentTraineeId": "trainee-1787361330810-d1if"
-        }
-      ],
+      devices: [],
       deviceCommands: [
         {
           "id": "cmd-1787353097554-p0hu",
@@ -3727,23 +3711,25 @@ var init_db = __esm({
         if (!gradeOrCourse) {
           return this.data.settings.traineeCodePrefix || "A";
         }
-        const clean = gradeOrCourse.trim();
+        const clean = String(gradeOrCourse).trim();
         const prefixes = this.data.settings.gradePrefixes || {};
         if (prefixes[clean]) return prefixes[clean];
+        const norm = clean.toLowerCase().replace(/[أإآ]/g, "\u0627").replace(/ة/g, "\u0647").replace(/ى/g, "\u064A").replace(/[\s_\-]/g, "");
         for (const [k, v] of Object.entries(prefixes)) {
-          if (k.toLowerCase() === clean.toLowerCase() || clean.includes(k) || k.includes(clean)) {
+          const kNorm = k.toLowerCase().replace(/[أإآ]/g, "\u0627").replace(/ة/g, "\u0647").replace(/ى/g, "\u064A").replace(/[\s_\-]/g, "");
+          if (kNorm === norm || kNorm.length > 2 && norm.includes(kNorm) || norm.length > 2 && kNorm.includes(norm)) {
             return v;
           }
         }
-        if (clean.includes("\u0631\u0627\u0628\u0639") || clean.toUpperCase().includes("ICT4") || clean.includes("4")) return "A";
-        if (clean.includes("\u062E\u0627\u0645\u0633") || clean.toUpperCase().includes("ICT5") || clean.includes("5")) return "B";
-        if (clean.includes("\u0633\u0627\u062F\u0633") || clean.toUpperCase().includes("ICT6") || clean.includes("6")) return "C";
-        if (clean.includes("\u0623\u0648\u0644 \u0625\u0639\u062F\u0627\u062F\u064A") || clean.includes("\u0627\u0648\u0644 \u0627\u0639\u062F\u0627\u062F\u064A") || clean.toUpperCase().includes("P1") || clean.toUpperCase().includes("ICT-P1") || clean.includes("\u0625\u0639\u062F\u0627\u062F\u064A 1")) return "D";
-        if (clean.includes("\u062B\u0627\u0646\u064A \u0625\u0639\u062F\u0627\u062F\u064A") || clean.includes("\u062A\u0627\u0646\u064A \u0627\u0639\u062F\u0627\u062F\u064A") || clean.toUpperCase().includes("P2") || clean.toUpperCase().includes("ICT-P2") || clean.includes("\u0625\u0639\u062F\u0627\u062F\u064A 2")) return "E";
-        if (clean.includes("\u062B\u0627\u0644\u062B \u0625\u0639\u062F\u0627\u062F\u064A") || clean.includes("\u062A\u0627\u0644\u062A \u0627\u0639\u062F\u0627\u062F\u064A") || clean.toUpperCase().includes("P3") || clean.toUpperCase().includes("ICT-P3") || clean.includes("\u0625\u0639\u062F\u0627\u062F\u064A 3")) return "F";
-        if (clean.includes("\u0623\u0648\u0644 \u062B\u0627\u0646\u0648\u064A") || clean.includes("\u0627\u0648\u0644 \u062B\u0627\u0646\u0648\u064A") || clean.includes("1 \u062B\u0627\u0646\u0648\u064A") || clean.toUpperCase().includes("SEC-1") || clean.toUpperCase().includes("S1")) return "G";
-        if (clean.includes("\u062B\u0627\u0646\u064A \u062B\u0627\u0646\u0648\u064A") || clean.includes("\u062A\u0627\u0646\u064A \u062B\u0627\u0646\u0648\u064A") || clean.includes("2 \u062B\u0627\u0646\u0648\u064A") || clean.toUpperCase().includes("SEC-2") || clean.toUpperCase().includes("S2")) return "H";
-        if (clean.includes("\u062B\u0627\u0644\u062B \u062B\u0627\u0646\u0648\u064A") || clean.includes("\u062A\u0627\u0644\u062A \u062B\u0627\u0646\u0648\u064A") || clean.includes("3 \u062B\u0627\u0646\u0648\u064A") || clean.toUpperCase().includes("SEC-3") || clean.toUpperCase().includes("S3")) return "I";
+        if (norm.includes("\u0627\u0648\u0644\u062B\u0627\u0646\u0648\u064A") || norm.includes("1\u062B\u0627\u0646\u0648\u064A") || norm.includes("\u062B\u0627\u0646\u0648\u064A1") || norm.includes("sec1") || norm.includes("s1") || norm.includes("ictsec1")) return "G";
+        if (norm.includes("\u062B\u0627\u0646\u064A\u062B\u0627\u0646\u0648\u064A") || norm.includes("\u062A\u0627\u0646\u064A\u062B\u0627\u0646\u0648\u064A") || norm.includes("2\u062B\u0627\u0646\u0648\u064A") || norm.includes("\u062B\u0627\u0646\u0648\u064A2") || norm.includes("sec2") || norm.includes("s2") || norm.includes("ictsec2")) return "H";
+        if (norm.includes("\u062B\u0627\u0644\u062B\u062B\u0627\u0646\u0648\u064A") || norm.includes("\u062A\u0627\u0644\u062A\u062B\u0627\u0646\u0648\u064A") || norm.includes("3\u062B\u0627\u0646\u0648\u064A") || norm.includes("\u062B\u0627\u0646\u0648\u064A3") || norm.includes("sec3") || norm.includes("s3") || norm.includes("ictsec3")) return "I";
+        if (norm.includes("\u0627\u0648\u0644\u0627\u0639\u062F\u0627\u062F\u064A") || norm.includes("1\u0627\u0639\u062F\u0627\u062F\u064A") || norm.includes("\u0627\u0639\u062F\u0627\u062F\u064A1") || norm.includes("ictp1") || norm.includes("p1") || norm.includes("prep1") || norm.includes("ict-p1")) return "D";
+        if (norm.includes("\u062B\u0627\u0646\u064A\u0627\u0639\u062F\u0627\u062F\u064A") || norm.includes("\u062A\u0627\u0646\u064A\u0627\u0639\u062F\u0627\u062F\u064A") || norm.includes("2\u0627\u0639\u062F\u0627\u062F\u064A") || norm.includes("\u0627\u0639\u062F\u0627\u062F\u064A2") || norm.includes("ictp2") || norm.includes("p2") || norm.includes("prep2") || norm.includes("ict-p2")) return "E";
+        if (norm.includes("\u062B\u0627\u0644\u062B\u0627\u0639\u062F\u0627\u062F\u064A") || norm.includes("\u062A\u0627\u0644\u062A\u0627\u0639\u062F\u0627\u062F\u064A") || norm.includes("3\u0627\u0639\u062F\u0627\u062F\u064A") || norm.includes("\u0627\u0639\u062F\u0627\u062F\u064A3") || norm.includes("ictp3") || norm.includes("p3") || norm.includes("prep3") || norm.includes("ict-p3")) return "F";
+        if (norm.includes("\u0631\u0627\u0628\u0639") || norm.includes("\u0631\u0627\u0628\u0639\u0647") || norm.includes("4\u0627\u0628\u062A\u062F\u0627\u0626\u064A") || norm.includes("\u0627\u0628\u062A\u062F\u0627\u0626\u064A4") || norm.includes("ict4") || norm.includes("grade4") || norm.includes("primary4") || norm === "4" || norm === "\u0635\u06414") return "A";
+        if (norm.includes("\u062E\u0627\u0645\u0633") || norm.includes("\u062E\u0627\u0645\u0633\u0647") || norm.includes("5\u0627\u0628\u062A\u062F\u0627\u0626\u064A") || norm.includes("\u0627\u0628\u062A\u062F\u0627\u0626\u064A5") || norm.includes("ict5") || norm.includes("grade5") || norm.includes("primary5") || norm === "5" || norm === "\u0635\u06415") return "B";
+        if (norm.includes("\u0633\u0627\u062F\u0633") || norm.includes("\u0633\u0627\u062F\u0633\u0647") || norm.includes("\u0633\u0627\u062A\u0647") || norm.includes("6\u0627\u0628\u062A\u062F\u0627\u0626\u064A") || norm.includes("\u0627\u0628\u062A\u062F\u0627\u0626\u064A6") || norm.includes("ict6") || norm.includes("grade6") || norm.includes("primary6") || norm === "6" || norm === "\u0635\u06416") return "C";
         return this.data.settings.traineeCodePrefix || "A";
       }
       getNextTraineeCode(prefixOrGrade) {
@@ -9184,7 +9170,7 @@ apiRouter.post("/branches/:id/duplicate", async (req, res) => {
 });
 apiRouter.get("/trainees/next-code", async (req, res) => {
   try {
-    const { prefix, courseId, grade } = req.query;
+    const { prefix, courseId, grade, excludeId } = req.query;
     let targetPrefix = typeof prefix === "string" ? prefix : "";
     if (!targetPrefix && typeof courseId === "string" && courseId) {
       const courses = await CourseRepo.getAll();
@@ -9196,13 +9182,13 @@ apiRouter.get("/trainees/next-code", async (req, res) => {
     if (!targetPrefix && typeof grade === "string" && grade) {
       targetPrefix = db.getPrefixForGradeOrCourse(grade);
     }
-    const resolvedPrefix = targetPrefix ? targetPrefix.length === 1 ? targetPrefix.toUpperCase() : db.getPrefixForGradeOrCourse(targetPrefix) : "NGH";
+    const resolvedPrefix = targetPrefix ? targetPrefix.length === 1 ? targetPrefix.toUpperCase() : db.getPrefixForGradeOrCourse(targetPrefix) : db.getData().settings?.traineeCodePrefix || "A";
     const allTrainees = await TraineeRepo.getAll();
-    const pfx = (resolvedPrefix || "NGH").toUpperCase();
+    const pfx = (resolvedPrefix || "A").toUpperCase();
     const regex = new RegExp(`^${pfx}-?(\\d+)$`, "i");
     let maxNum = 0;
     allTrainees.forEach((t) => {
-      if (t.code) {
+      if (t.code && (!excludeId || t.id !== excludeId)) {
         const match = String(t.code).trim().match(regex);
         if (match) {
           const num = parseInt(match[1], 10);
@@ -9213,8 +9199,8 @@ apiRouter.get("/trainees/next-code", async (req, res) => {
       }
     });
     const nextNum = maxNum + 1;
-    const code = pfx.length === 1 ? `${pfx}${String(nextNum).padStart(3, "0")}` : `${pfx}-${nextNum}`;
-    res.json({ code, prefix: resolvedPrefix });
+    const code = `${pfx}${String(nextNum).padStart(3, "0")}`;
+    res.json({ code, prefix: pfx, nextNumber: nextNum });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -9348,51 +9334,129 @@ apiRouter.post("/trainees", async (req, res) => {
 apiRouter.put("/trainees/:id", async (req, res) => {
   try {
     const { id } = req.params;
-    let updates = req.body;
+    let updates = { ...req.body };
     const currentTrainee = await TraineeRepo.getById(id);
     if (currentTrainee) {
       let oldCourseId = currentTrainee.courseId;
       let oldGrade = currentTrainee.grade;
-      let newCourseId = updates.courseId;
-      let newGrade = updates.grade;
-      if (newCourseId && newCourseId !== oldCourseId || newGrade && newGrade !== oldGrade) {
-        let newPrefix = "";
-        if (newCourseId) {
-          const course = await CourseRepo.getById(newCourseId);
-          if (course) newPrefix = db.getPrefixForGradeOrCourse(course.name);
-        }
-        if (!newPrefix && newGrade) {
-          newPrefix = db.getPrefixForGradeOrCourse(newGrade);
-        }
-        newPrefix = (newPrefix || "NGH").toUpperCase();
-        let currentPrefix = "";
-        if (currentTrainee.code) {
-          const m = currentTrainee.code.match(/^([a-zA-Z]+)/);
-          if (m) currentPrefix = m[1].toUpperCase();
-        }
-        if (newPrefix && currentPrefix && newPrefix !== currentPrefix) {
-          const allTrainees = await TraineeRepo.getAll();
-          const regex = new RegExp(`^${newPrefix}-?(\\d+)$`, "i");
-          let maxNum = 0;
-          allTrainees.forEach((t) => {
-            if (t.code && t.id !== id) {
-              const match = t.code.trim().match(regex);
-              if (match) {
-                const num = parseInt(match[1], 10);
-                if (num > maxNum) maxNum = num;
-              }
+      let newCourseId = updates.courseId !== void 0 ? updates.courseId : oldCourseId;
+      let newGrade = updates.grade !== void 0 ? updates.grade : oldGrade;
+      let targetPrefix = "";
+      if (newCourseId) {
+        const courses = await CourseRepo.getAll();
+        const course = courses.find((c) => c.id === newCourseId);
+        if (course) targetPrefix = db.getPrefixForGradeOrCourse(course.name);
+      }
+      if (!targetPrefix && newGrade) {
+        targetPrefix = db.getPrefixForGradeOrCourse(newGrade);
+      }
+      targetPrefix = (targetPrefix || "A").toUpperCase();
+      let currentCode = (currentTrainee.code || "").trim().toUpperCase();
+      let currentPrefix = "";
+      const m = currentCode.match(/^([a-zA-Z]+)/);
+      if (m) currentPrefix = m[1].toUpperCase();
+      const gradeOrCourseChanged = newCourseId && newCourseId !== oldCourseId || newGrade && newGrade !== oldGrade;
+      const isCodeMismatched = currentPrefix && targetPrefix && currentPrefix !== targetPrefix;
+      const isForceRegen = updates.forceRegenerateCode === true;
+      const userProvidedValidNewCode = updates.code && updates.code !== currentTrainee.code && updates.code.toUpperCase().startsWith(targetPrefix);
+      if ((gradeOrCourseChanged || isCodeMismatched || isForceRegen || !currentCode) && !userProvidedValidNewCode) {
+        const allTrainees = await TraineeRepo.getAll();
+        const regex = new RegExp(`^${targetPrefix}-?(\\d+)$`, "i");
+        let maxNum = 0;
+        allTrainees.forEach((t) => {
+          if (t.code && t.id !== id) {
+            const match = String(t.code).trim().match(regex);
+            if (match) {
+              const num = parseInt(match[1], 10);
+              if (!isNaN(num) && num > maxNum) maxNum = num;
             }
-          });
-          updates.code = `${newPrefix}${(maxNum + 1).toString().padStart(3, "0")}`;
-          updates.prefix = newPrefix;
-          console.log(`[TRAINEE_UPDATE] Regenerated code for ${id}: ${currentTrainee.code} -> ${updates.code}`);
-        }
+          }
+        });
+        const nextNum = maxNum + 1;
+        const autoNewCode = `${targetPrefix}${String(nextNum).padStart(3, "0")}`;
+        updates.code = autoNewCode;
+        updates.prefix = targetPrefix;
+        console.log(`[TRAINEE_UPDATE] Auto-assigned clean sequential code for trainee ${id}: ${currentTrainee.code} -> ${updates.code}`);
+      } else if (updates.code) {
+        updates.code = updates.code.trim().toUpperCase();
+        const mNew = updates.code.match(/^([a-zA-Z]+)/);
+        if (mNew) updates.prefix = mNew[1].toUpperCase();
       }
     }
+    delete updates.forceRegenerateCode;
     const updated = await TraineeRepo.update(id, updates);
+    const memData = db.getData();
+    if (memData && Array.isArray(memData.trainees)) {
+      const idx = memData.trainees.findIndex((t) => t.id === id);
+      if (idx >= 0) {
+        memData.trainees[idx] = { ...memData.trainees[idx], ...updates, updatedAt: (/* @__PURE__ */ new Date()).toISOString() };
+        db.saveImmediate();
+      }
+    }
     res.json({ success: true, trainee: updated });
   } catch (e) {
     res.status(500).json({ success: false, error: e.message });
+  }
+});
+apiRouter.post(["/student/update-photo", "/trainees/update-photo"], async (req, res) => {
+  try {
+    const { traineeId, photoUrl, photo } = req.body || {};
+    const finalPhoto = photoUrl || photo;
+    if (!traineeId || !finalPhoto) {
+      return res.status(400).json({ success: false, error: "\u0645\u0639\u0631\u0641 \u0627\u0644\u0637\u0627\u0644\u0628 \u0648\u0627\u0644\u0635\u0648\u0631\u0629 \u0645\u0637\u0644\u0648\u0628\u0627\u0646" });
+    }
+    let trainee = await TraineeRepo.getById(traineeId);
+    let targetId = traineeId;
+    if (!trainee) {
+      const all = await TraineeRepo.getAll();
+      const found = all.find((t) => t.id === traineeId || t.code === traineeId || t.nationalId === traineeId);
+      if (found) {
+        trainee = found;
+        targetId = found.id;
+      }
+    }
+    if (trainee) {
+      await TraineeRepo.update(targetId, { photoUrl: finalPhoto, photo: finalPhoto });
+    }
+    const memData = db.getData();
+    if (memData && Array.isArray(memData.trainees)) {
+      const idx = memData.trainees.findIndex((t) => t.id === targetId || t.code === traineeId || t.id === traineeId);
+      if (idx >= 0) {
+        memData.trainees[idx] = {
+          ...memData.trainees[idx],
+          photoUrl: finalPhoto,
+          photo: finalPhoto,
+          updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+        };
+      }
+    }
+    if (memData && Array.isArray(memData.devices)) {
+      memData.devices.forEach((d) => {
+        if (d.currentTraineeId === targetId || d.currentTraineeCode === traineeId || trainee && d.currentTraineeCode === trainee.code) {
+          d.currentTraineePhoto = finalPhoto;
+          d.photoUrl = finalPhoto;
+        }
+      });
+    }
+    try {
+      await adminDb.collection("trainees").doc(targetId).set({
+        photoUrl: finalPhoto,
+        photo: finalPhoto,
+        updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+      }, { merge: true });
+    } catch {
+    }
+    db.saveImmediate();
+    TraineeRepo.invalidateCache();
+    console.log(`[STUDENT_PHOTO] Successfully updated photo for trainee ${targetId} (${trainee?.fullName || traineeId})`);
+    res.json({
+      success: true,
+      message: "\u062A\u0645 \u062D\u0641\u0638 \u0648\u062A\u062D\u062F\u064A\u062B \u0635\u0648\u0631\u0629 \u0627\u0644\u0645\u062A\u062F\u0631\u0628 \u0628\u0646\u062C\u0627\u062D \u0648\u0631\u0628\u0637\u0647\u0627 \u0628\u0627\u0644\u0645\u0644\u0641 \u0627\u0644\u0623\u0643\u0627\u062F\u064A\u0645\u064A",
+      photoUrl: finalPhoto
+    });
+  } catch (err) {
+    console.error("[STUDENT_PHOTO_ERROR]", err);
+    res.status(500).json({ success: false, error: err.message });
   }
 });
 apiRouter.delete("/trainees/:id", async (req, res) => {
@@ -10219,30 +10283,37 @@ function normalizeGradeName(gradeStr) {
   if (clean.includes("\u062B\u0627\u0644\u062B\u062B\u0627\u0646\u0648\u064A") || clean.includes("\u062A\u0627\u0644\u062A\u062B\u0627\u0646\u0648\u064A") || clean.includes("3\u062B\u0627\u0646\u0648\u064A") || clean.includes("\u0627\u0644\u062B\u0627\u0644\u062B\u0627\u0644\u062B\u0627\u0646\u0648\u064A") || clean.includes("\u0627\u0644\u062B\u0627\u0644\u062B\u062B\u0627\u0646\u0648\u064A") || clean.includes("\u062B\u0627\u0646\u0648\u064A3") || clean.includes("sec3") || clean.includes("s3")) return "\u0627\u0644\u0635\u0641 \u0627\u0644\u062B\u0627\u0644\u062B \u0627\u0644\u062B\u0627\u0646\u0648\u064A";
   return gradeStr.trim();
 }
-function getGradeCodePrefix(gradeName) {
-  const norm = normalizeGradeName(gradeName || "");
-  if (norm.includes("\u0627\u0644\u0631\u0627\u0628\u0639")) return "A";
-  if (norm.includes("\u0627\u0644\u062E\u0627\u0645\u0633")) return "B";
-  if (norm.includes("\u0627\u0644\u0633\u0627\u062F\u0633")) return "C";
-  if (norm.includes("\u0627\u0644\u0623\u0648\u0644 \u0627\u0644\u0625\u0639\u062F\u0627\u062F\u064A") || norm.includes("\u0627\u0644\u0627\u0648\u0644 \u0627\u0644\u0627\u0639\u062F\u0627\u062F\u064A")) return "D";
-  if (norm.includes("\u0627\u0644\u062B\u0627\u0646\u064A \u0627\u0644\u0625\u0639\u062F\u0627\u062F\u064A") || norm.includes("\u0627\u0644\u062B\u0627\u0646\u064A \u0627\u0644\u0627\u0639\u062F\u0627\u062F\u064A")) return "E";
-  if (norm.includes("\u0627\u0644\u062B\u0627\u0644\u062B \u0627\u0644\u0625\u0639\u062F\u0627\u062F\u064A") || norm.includes("\u0627\u0644\u062B\u0627\u0644\u062B \u0627\u0644\u0627\u0639\u062F\u0627\u062F\u064A")) return "F";
-  if (norm.includes("\u0627\u0644\u0623\u0648\u0644 \u0627\u0644\u062B\u0627\u0646\u0648\u064A") || norm.includes("\u0627\u0644\u0627\u0648\u0644 \u0627\u0644\u062B\u0627\u0646\u0648\u064A")) return "G";
-  if (norm.includes("\u0627\u0644\u062B\u0627\u0646\u064A \u0627\u0644\u062B\u0627\u0646\u0648\u064A") || norm.includes("\u0627\u0644\u062B\u0627\u0646\u064A \u0627\u0644\u062B\u0627\u0646\u0648\u064A")) return "H";
-  if (norm.includes("\u0627\u0644\u062B\u0627\u0644\u062B \u0627\u0644\u062B\u0627\u0646\u0648\u064A") || norm.includes("\u0627\u0644\u062B\u0627\u0644\u062B \u0627\u0644\u062B\u0627\u0646\u0648\u064A")) return "I";
-  return "ST";
-}
 apiRouter.post("/trainees/preview-code-fix", async (req, res) => {
   try {
-    const allTrainees = await TraineeRepo.getAll();
-    const allGroups = await GroupRepo.getAll();
+    const [allTrainees, allGroups, allCourses] = await Promise.all([
+      TraineeRepo.getAll(),
+      GroupRepo.getAll(),
+      CourseRepo.getAll()
+    ]);
     const groupMap = new Map(allGroups.map((g) => [g.id, g]));
+    const courseMap = new Map(allCourses.map((c) => [c.id, c]));
+    const resolveTraineeTarget = (t) => {
+      let gradeStr = t.grade || "";
+      if (!gradeStr && t.courseId && courseMap.has(t.courseId)) {
+        const c = courseMap.get(t.courseId);
+        gradeStr = c.name || c.category || "";
+      }
+      if (!gradeStr && t.groupId && groupMap.has(t.groupId)) {
+        const g = groupMap.get(t.groupId);
+        gradeStr = g.grade || g.name || "";
+      }
+      const pfx = db.getPrefixForGradeOrCourse(gradeStr || "\u0627\u0644\u0635\u0641 \u0627\u0644\u0631\u0627\u0628\u0639 \u0627\u0644\u0627\u0628\u062A\u062F\u0627\u0626\u064A");
+      return {
+        expectedPrefix: (pfx || "A").toUpperCase(),
+        effectiveGrade: gradeStr || "\u0627\u0644\u0635\u0641 \u0627\u0644\u0631\u0627\u0628\u0639 \u0627\u0644\u0627\u0628\u062A\u062F\u0627\u0626\u064A"
+      };
+    };
     let validCount = 0;
     let changesCount = 0;
     const itemsToFix = [];
     const allocatedCodesByPrefix = /* @__PURE__ */ new Map();
     allTrainees.forEach((t) => {
-      const expectedPrefix = getGradeCodePrefix(t.grade);
+      const { expectedPrefix } = resolveTraineeTarget(t);
       if (!allocatedCodesByPrefix.has(expectedPrefix)) {
         allocatedCodesByPrefix.set(expectedPrefix, /* @__PURE__ */ new Set());
       }
@@ -10256,7 +10327,7 @@ apiRouter.post("/trainees/preview-code-fix", async (req, res) => {
     });
     const nextSeqMap = /* @__PURE__ */ new Map();
     allTrainees.forEach((t) => {
-      const expectedPrefix = getGradeCodePrefix(t.grade);
+      const { expectedPrefix, effectiveGrade } = resolveTraineeTarget(t);
       const currentCode = (t.code || "").trim().toUpperCase();
       const allocatedSet = allocatedCodesByPrefix.get(expectedPrefix) || /* @__PURE__ */ new Set();
       const isFormatMatching = currentCode.startsWith(expectedPrefix) && /^[A-Z]+\d+$/.test(currentCode);
@@ -10280,7 +10351,7 @@ apiRouter.post("/trainees/preview-code-fix", async (req, res) => {
       itemsToFix.push({
         id: t.id,
         fullName: t.fullName,
-        grade: t.grade || "\u063A\u064A\u0631 \u0645\u062D\u062F\u062F",
+        grade: effectiveGrade,
         groupName: group ? group.name : "\u0628\u062F\u0648\u0646 \u0645\u062C\u0645\u0648\u0639\u0629",
         currentCode: t.code || "\u0628\u062F\u0648\u0646 \u0643\u0648\u062F",
         proposedCode,
@@ -10309,23 +10380,25 @@ apiRouter.post("/trainees/execute-code-fix", async (req, res) => {
     const dbTrainees = db.getData().trainees || [];
     for (const update of updates) {
       if (!update.id || !update.proposedCode) continue;
-      const prefix = getGradeCodePrefix(update.grade);
+      const prefix = (update.expectedPrefix || db.getPrefixForGradeOrCourse(update.grade) || "A").toUpperCase();
       const localT = dbTrainees.find((t) => t.id === update.id);
       if (localT) {
         localT.code = update.proposedCode;
         localT.prefix = prefix;
+        if (update.grade) localT.grade = update.grade;
       }
       try {
         await TraineeRepo.update(update.id, {
           code: update.proposedCode,
-          prefix
+          prefix,
+          ...update.grade ? { grade: update.grade } : {}
         });
       } catch (err) {
         console.warn(`Firestore update failed for trainee ${update.id}`, err);
       }
       updatedCount++;
     }
-    db.save();
+    db.saveImmediate();
     db.logAudit({
       userId: "admin",
       userName: "\u0645\u062F\u064A\u0631 \u0627\u0644\u0646\u0638\u0627\u0645",
@@ -12275,32 +12348,77 @@ apiRouter.post("/points/add", async (req, res) => {
   }
   const pVal = Number(points);
   const createdList = [];
+  const dbData = db.getData();
+  if (!Array.isArray(dbData.deviceCommands)) dbData.deviceCommands = [];
   for (const tid of traineeIds) {
-    const student = await TraineeRepo.getById(tid);
+    let student = await TraineeRepo.getById(tid);
+    if (!student) {
+      const all = await TraineeRepo.getAll();
+      student = all.find((t) => t.id === tid || t.code === tid);
+    }
     if (student) {
       const newTotal = Math.max(0, (student.totalPoints || student.points || 0) + pVal);
       student.totalPoints = newTotal;
       student.points = newTotal;
       await TraineeRepo.update(student.id, { totalPoints: newTotal, points: newTotal });
+      if (Array.isArray(dbData.trainees)) {
+        const memIdx = dbData.trainees.findIndex((t) => t.id === student.id || t.code === student.code || t.id === tid);
+        if (memIdx >= 0) {
+          dbData.trainees[memIdx].totalPoints = newTotal;
+          dbData.trainees[memIdx].points = newTotal;
+        }
+      }
       const pt = {
         id: "pt-" + Date.now() + "-" + Math.random().toString(36).substr(2, 4),
         traineeId: student.id,
         groupId: student.groupId,
         branchId: student.branchId,
         points: pVal,
-        reason: reason || "\u0646\u0634\u0627\u0637 \u062A\u062F\u0631\u064A\u0628\u064A",
+        reason: reason || "\u0646\u0634\u0627\u0637 \u062A\u062F\u0631\u064A\u0628\u064A \u0648\u062A\u0641\u0627\u0639\u0644 \u0628\u0627\u0644\u0645\u0639\u0645\u0644",
         ruleId,
         addedByUserId: addedByUserId || "admin",
-        addedByUserName: addedByUserName || "\u0645\u0633\u0624\u0648\u0644 \u0627\u0644\u0646\u0642\u0627\u0637",
+        addedByUserName: addedByUserName || "\u0627\u0644\u0645\u062D\u0627\u0636\u0631 \u0627\u0644\u0645\u0634\u0631\u0641",
         createdAt: (/* @__PURE__ */ new Date()).toISOString()
       };
       await PointTransactionRepo.create(pt.id, pt);
-      db.getData().pointTransactions.unshift(pt);
+      if (!Array.isArray(dbData.pointTransactions)) dbData.pointTransactions = [];
+      dbData.pointTransactions.unshift(pt);
       createdList.push(pt);
+      const targetDevices = (dbData.devices || []).filter(
+        (d) => d.currentTraineeId === student.id || d.currentTraineeCode === student.code || d.currentTraineeId === tid || d.currentTraineeCode === tid
+      );
+      const cmdPayload = {
+        action: "award_points",
+        points: pVal,
+        newTotal,
+        reason: reason || "\u0646\u0634\u0627\u0637 \u062A\u062F\u0631\u064A\u0628\u064A \u0648\u062A\u0641\u0627\u0639\u0644 \u0645\u062A\u0645\u064A\u0632",
+        traineeName: student.fullName,
+        timestamp: Date.now()
+      };
+      if (targetDevices.length > 0) {
+        targetDevices.forEach((d) => {
+          dbData.deviceCommands.push({
+            id: "cmd-pts-" + Date.now() + "-" + Math.random().toString(36).substr(2, 4),
+            deviceId: d.deviceId || d.id,
+            commandType: "award_points",
+            payload: cmdPayload,
+            status: "pending",
+            createdAt: (/* @__PURE__ */ new Date()).toISOString()
+          });
+        });
+      }
     }
   }
+  masterBroadcast.lastPointsAwarded = {
+    traineeIds,
+    points: pVal,
+    reason: reason || "\u0646\u0634\u0627\u0637 \u062A\u062F\u0631\u064A\u0628\u064A \u0648\u062A\u0641\u0627\u0639\u0644 \u0645\u062A\u0645\u064A\u0632",
+    timestamp: Date.now()
+  };
+  masterBroadcast.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
   db.recalculateTraineeRankings();
-  db.save();
+  db.saveImmediate();
+  TraineeRepo.invalidateCache();
   db.logAudit({
     userId: addedByUserId || "admin",
     userName: addedByUserName || "\u0645\u0633\u0624\u0648\u0644 \u0627\u0644\u0646\u0642\u0627\u0637",
@@ -12955,6 +13073,12 @@ apiRouter.post("/interactive-sessions/broadcast-question", (req, res) => {
   if (!question || !question.text) {
     return res.status(400).json({ error: "\u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0644\u0633\u0624\u0627\u0644 \u063A\u064A\u0631 \u0645\u0643\u062A\u0645\u0644\u0629" });
   }
+  masterBroadcast.activeQuestion = {
+    question,
+    sessionId,
+    timestamp: Date.now()
+  };
+  masterBroadcast.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
   const devices = db.getData().devices || [];
   const now = Date.now();
   let count = 0;
@@ -13026,6 +13150,38 @@ apiRouter.post("/interactive-sessions/broadcast-ceremony", (req, res) => {
   });
   db.save();
   res.json({ success: true, count });
+});
+apiRouter.post("/devices/force-ceremony", (req, res) => {
+  const { active } = req.body;
+  const isAct = active !== false;
+  if (!isAct) {
+    masterBroadcast.activeCeremony = null;
+  }
+  masterBroadcast.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
+  const devices = db.getData().devices || [];
+  let count = 0;
+  devices.forEach((d) => {
+    const targetDeviceId = d.deviceId || d.id;
+    const cmd = {
+      id: "force-ceremony-" + Date.now() + "-" + Math.random().toString(36).substr(2, 4),
+      deviceId: targetDeviceId,
+      commandType: "message",
+      payload: JSON.stringify({
+        action: "force_ceremony",
+        active: isAct,
+        timestamp: Date.now()
+      }),
+      issuedByUserId: "trainer-live",
+      createdAt: (/* @__PURE__ */ new Date()).toISOString(),
+      issuedAt: (/* @__PURE__ */ new Date()).toISOString(),
+      status: "pending"
+    };
+    if (!db.getData().deviceCommands) db.getData().deviceCommands = [];
+    db.getData().deviceCommands.push(cmd);
+    count++;
+  });
+  db.save();
+  res.json({ success: true, count, active: isAct });
 });
 apiRouter.post("/interactive-sessions/broadcast-external", (req, res) => {
   const { title, platform, url, gamePin } = req.body;
@@ -13167,18 +13323,68 @@ apiRouter.get("/question-bank", (req, res) => {
   res.json(allBank);
 });
 apiRouter.get("/devices", (req, res) => {
-  const devices = db.getData().devices;
+  let devices = db.getData().devices || [];
   const now = Date.now();
-  const defaultDesktopSvg = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMjgwIDcyMCIgd2lkdGg9IjEyODAiIGhlaWdodD0iNzIwIj48ZGVmcz48bGluZWFyR3JhZGllbnQgaWQ9ImJnIiB4MT0iMCUiIHkxPSIwJSIgeDI9IjEwMCUiIHkyPSIxMDAlIj48c3RvcCBvZmZzZXQ9IjAlIiBzdG9wLWNvbG9yPSIjMWUzYThhIi8+PHN0b3Agb2Zmc2V0PSI1MCUiIHN0b3AtY29sb3I9IiMwZjE3MmEiLz48c3RvcCBvZmZzZXQ9IjEwMCUiIHN0b3AtY29sb3I9IiMwMjA2MTciLz48L2xpbmVhckdyYWRpZW50PjwvZGVmcz48cmVjdCB3aWR0aD0iMTI4MCIgaGVpZ2h0PSI3MjAiIGZpbGw9InVybCgjYmcpIi8+PHJlY3QgeD0iMCIgeT0iNjgwIiB3aWR0aD0iMTI4MCIgaGVpZ2h0PSI0MCIgZmlsbD0iIzAyMDYxNyIgb3BhY2l0eT0iMC45Ii8+PHJlY3QgeD0iNTYwIiB5PSI2ODIiIHdpZHRoPSIxNjAiIGhlaWdodD0iMzYiIHJ4PSI4IiBmaWxsPSIjMWUyOTNiIiBzdHJva2U9IiMzOGJkZjgiIHN0cm9rZS13aWR0aD0iMSIvPjxjaXJjbGUgY3g9IjU4NSIgY3k9IjcwMCIgcj0iMTAiIGZpbGw9IiMzOGJkZjgiLz48cmVjdCB4PSI2MTAiIHk9IjY5NCIgd2lkdGg9IjkwIiBoZWlnaHQ9IjEyIiByeD0iMyIgZmlsbD0iI2NiZDVlMSIvPjxnIHRyYW5zZm9ybT0idHJhbnNsYXRlKDYwLCA2MCkiPjxyZWN0IHg9IjAiIHk9IjAiIHdpZHRoPSI2MCIgaGVpZ2h0PSI2MCIgcng9IjEyIiBmaWxsPSIjZmJiZjI0Ii8+PHRleHQgeD0iMzAiIHk9IjM4IiBmb250LXNpemU9IjI4IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj7wn5OBPC90ZXh0Pjx0ZXh0IHg9IjMwIiB5PSI3OCIgZm9udC1zaXplPSIxMiIgZmlsbD0iI2ZmZmZmZiIgZm9udC1mYW1pbHk9IkFyaWFsIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj7Yp9mE2YXYtNin2LHZiti5PC90ZXh0PjwvZz48ZyB0cmFuc2Zvcm09InRyYW5zbGF0ZSg2MCwgMTYwKSI+PHJlY3QgeD0iMCIgeT0iMCIgd2lkdGg9IjYwIiBoZWlnaHQ9IjYwIiByeD0iMTIiIGZpbGw9IiMzOGJkZjgiLz48dGV4dCB4PSIzMCIgeT0iMzgiIGZvbnQtc2l6ZT0iMjgiIHRleHQtYW5jaG9yPSJtaWRkbGUiPvCfkrs8L3RleHQ+PHRleHQgeD0iMzAiIHk9Ijc4IiBmb250LXNpemU9IjEyIiBmaWxsPSIjZmZmZmZmIiBmb250LWZhbWlseT0iQXJpYWwiIHRleHQtYW5jaG9yPSJtaWRkbGUiPtiq2LfYqNmK2YLYp9iqPC90ZXh0PjwvZz48cmVjdCB4PSIzMDAiIHk9IjEyMCIgd2lkdGg9IjY4MCIgaGVpZ2h0PSI0MjAiIHJ4PSIxMiIgZmlsbD0iIzBmMTcyYSIgc3Ryb2tlPSIjMzM0MTU1IiBzdHJva2Utd2lkdGg9IjIiLz48cmVjdCB4PSIzMDAiIHk9IjEyMCIgd2lkdGg9IjY4MCIgaGVpZ2h0PSI0MCIgcng9IjEyIiBmaWxsPSIjMWUyOTNiIi8+PGNpcmNsZSBjeD0iMzI1IiBjeT0iMTQwIiByPSI2IiBmaWxsPSIjZjQzZjVlIi8+PGNpcmNsZSBjeD0iMzQ1IiBjeT0iMTQwIiByPSI2IiBmaWxsPSIjZmJiZjI0Ii8+PGNpcmNsZSBjeD0iMzY1IiBjeT0iMTQwIiByPSI2IiBmaWxsPSIjMTBiOTgxIi8+PHRleHQgeD0iNjQwIiB5PSIxNDUiIGZvbnQtc2l6ZT0iMTQiIGZpbGw9IiNlMmU4ZjAiIGZvbnQtZmFtaWx5PSJBcmlhbCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC13ZWlnaHQ9ImJvbGQiPtio2YrYptipINin2YTYqti32YjZitixINmI2KfZhNiq2K/YsdmK2Kgg2KfZhNi52YXZhNmKIC0g2LPYt9itINmF2YPYqtioINin2YTYt9in2YTYqDwvdGV4dD48dGV4dCB4PSI2NDAiIHk9IjMyMCIgZm9udC1zaXplPSIyNCIgZmlsbD0iIzM4YmRmOCIgZm9udC1mYW1pbHk9IkFyaWFsIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmb250LXdlaWdodD0iYm9sZCI+2LTYp9i02Kkg2LPYt9itINmF2YPYqtioINin2YTYt9in2YTYqCDZhti02LfYqSDZiNis2KfZh9iy2Kkg2YTZhNmF2KrYp9io2LnYqSDwn5al77iPPC90ZXh0Pjwvc3Zn>";
+  const defaultDesktopSvg = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMjgwIDcyMCIgd2lkdGg9IjEyODAiIGhlaWdodD0iNzIwIj48ZGVmcz48bGluZWFyR3JhZGllbnQgaWQ9ImJnIiB4MT0iMCUiIHkxPSIwJSIgeDI9IjEwMCUiIHkyPSIxMDAlIj48c3RvcCBvZmZzZXQ9IjAlIiBzdG9wLWNvbG9yPSIjMWUzYThhIi8+PHN0b3Agb2Zmc2V0PSI1MCUiIHN0b3AtY29sb3I9IiMwZjE3MmEiLz48c3RvcCBvZmZzZXQ9IjEwMCUiIHN0b3AtY29sb3I9IiMwMjA2MTciLz48L2xpbmVhckdyYWRpZW50PjwvZGVmcz48cmVjdCB3aWR0aD0iMTI4MCIgaGVpZ2h0PSI3MjAiIGZpbGw9InVybCgjYmcpIi8+PHJlY3QgeD0iMCIgeT0iNjgwIiB3aWR0aD0iMTI4MCIgaGVpZ2h0PSI0MCIgZmlsbD0iIzAyMDYxNyIgb3BhY2l0eT0iMC45Ii8+PHJlY3QgeD0iNTYwIiB5PSI2ODIiIHdpZHRoPSIxNjAiIGhlaWdodD0iMzYiIHJ4PSI4IiBmaWxsPSIjMWUyOTNiIiBzdHJva2U9IiMzOGJkZjgiIHN0cm9rZS13aWR0aD0iMSIvPjxjaXJjbGUgY3g9IjU4NSIgY3k9IjcwMCIgcj0iMTAiIGZpbGw9IiMzOGJkZjgiLz48cmVjdCB4PSI2MTAiIHk9IjY5NCIgd2lkdGg9IjkwIiBoZWlnaHQ9IjEyIiByeD0iMyIgZmlsbD0iI2NiZDVlMSIvPjxnIHRyYW5zZm9ybT0idHJhbnNsYXRlKDYwLCA2MCkiPjxyZWN0IHg9IjAiIHk9IjAiIHdpZHRoPSI2MCIgaGVpZ2h0PSI2MCIgcng9IjEyIiBmaWxsPSIjZmJiZjI0Ii8+PHRleHQgeD0iMzAiIHk9IjM4IiBmb250LXNpemU9IjI4IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj7wn5OBPC90ZXh0Pjx0ZXh0IHg9IjMwIiB5PSI3OCIgZm9udC1zaXplPSIxMiIgZmlsbD0iI2ZmZmZmZiIgZm9udC1mYW1pbHk9IkFyaWFsIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj7Yp9mE2YXYtNin2LHZiti5PC90ZXh0PjwvZz48ZyB0cmFuc2Zvcm09InRyYW5zbGF0ZSg2MCwgMTYwKSI+PHJlY3QgeD0iMCIgeT0iMCIgd2lkdGg9IjYwIiBoZWlnaHQ9IjYwIiByeD0iMTIiIGZpbGw9IiMzOGJkZjgiLz48dGV4dCB4PSIzMCIgeT0iMzgiIGZvbnQtc2l6ZT0iMjgiIHRleHQtYW5jaG9yPSJtaWRkbGUiPvCfkrs8L3RleHQ+PHRleHQgeD0iMzAiIHk9Ijc4IiBmb250LXNpemU9IjEyIiZmLWZpbGw9IiNmZmZmZmYiIGZvbnQtZmFtaWx5PSJBcmlhbCIgdGV4dC1hbmNob3I9Im1pZGRsZSI+tiq2LfYqNmK2YLYp9iqPC90ZXh0PjwvZz48cmVjdCB4PSIzMDAiIHk9IjEyMCIgd2lkdGg9IjY4MCIgaGVpZ2h0PSI0MjAiIHJ4PSIxMiIgZmlsbD0iIzBmMTcyYSIgc3Ryb2tlPSIjMzM0MTU1IiBzdHJva2Utd2lkdGg9IjIiLz48cmVjdCB4PSIzMDAiIHk9IjEyMCIgd2lkdGg9IjY4MCIgaGVpZ2h0PSI0MCIgcng9IjEyIiBmaWxsPSIjMWUyOTNiIi8+PGNpcmNsZSBjeD0iMzI1IiBjeT0iMTQwIiByPSI2IiBmaWxsPSIjZjQzZjVlIi8+PGNpcmNsZSBjeD0iMzQ1IiBjeT0iMTQwIiByPSI2IiBmaWxsPSIjZmJiZjI0Ii8+PGNpcmNsZSBjeD0iMzY1IiBjeT0iMTQwIiByPSI2IiBmaWxsPSIjMTBiOTgxIi8+PHRleHQgeD0iNjQwIiB5PSIxNDUiIGZvbnQtc2l6ZT0iMTQiIGZpbGw9IiNlMmU4ZjAiIGZvbnQtZmFtaWx5PSJBcmlhbCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC13ZWlnaHQ9ImJvbGQiPtio2YrYptipINin2YTYqti32YjZitixINmI2KfZhNiq2K/YsdmK2Kgg2KfZhNi52YXZhNmKIC0g2LPYt9itINmF2YPYqtioINin2YTYt9in2YTYqDwvdGV4dD48dGV4dCB4PSI2NDAiIHk9IjMyMCIgZm9udC1zaXplPSIyNCIgZmlsbD0iIzM4YmRmOCIgZm9udC1mYW1pbHk9IkFyaWFsIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj7Yp9mE2YXYudmF2YQg2KfZhNmF2KjYp9i02LEgLSDYp9mE2KzZh9in2LIg2KzYp9mH2LIg2YTZhNin2KrYtdin2YQg8J+Vpe+4jzwvdGV4dD48L3N2Zz4=";
+  devices = devices.filter((d) => !d.id?.startsWith("dev-auto-"));
   devices.forEach((d) => {
     const last = d.lastHeartbeat ? new Date(d.lastHeartbeat).getTime() : 0;
-    const isRecent = now - last < 3e5;
-    d.isOnline = isRecent || !!d.currentTraineeName || d.status === "active" || d.status === "locked" || d.status === "ONLINE";
+    const isRecent = now - last < 25e3;
+    d.isOnline = isRecent;
+    if (!isRecent) {
+      d.currentTraineeName = void 0;
+      d.currentTraineeId = void 0;
+      d.currentTraineeCode = void 0;
+      d.assignedUser = "\u062C\u0647\u0627\u0632 \u0645\u0639\u0645\u0644 (\u0645\u062A\u0627\u062D)";
+    }
     if (!d.lastScreenshotUrl) {
       d.lastScreenshotUrl = defaultDesktopSvg;
     }
   });
+  db.getData().devices = devices;
+  db.save();
   res.json(devices);
+});
+apiRouter.post("/devices/clear-all", (req, res) => {
+  db.getData().devices = [];
+  db.save();
+  res.json({ success: true, message: "\u062A\u0645 \u0645\u0633\u062D \u0648\u062D\u0630\u0641 \u062C\u0645\u064A\u0639 \u0623\u062C\u0647\u0632\u0629 \u0627\u0644\u0645\u0639\u0645\u0644 \u0628\u0646\u062C\u0627\u062D" });
+});
+apiRouter.post("/agent/leave", (req, res) => {
+  const { deviceId } = req.body || {};
+  if (deviceId) {
+    const dev = db.getData().devices.find((d) => d.deviceId === deviceId || d.id === deviceId);
+    if (dev) {
+      dev.isOnline = false;
+      dev.currentTraineeName = void 0;
+      dev.currentTraineeId = void 0;
+      dev.currentTraineeCode = void 0;
+      dev.assignedUser = "\u062C\u0647\u0627\u0632 \u0645\u0639\u0645\u0644 (\u0645\u062A\u0627\u062D)";
+      dev.lastHeartbeat = (/* @__PURE__ */ new Date(0)).toISOString();
+      db.save();
+    }
+  }
+  res.json({ success: true, message: "Device disconnected successfully" });
+});
+apiRouter.post("/devices/reset-lab", (req, res) => {
+  const devices = db.getData().devices || [];
+  devices.forEach((d) => {
+    d.currentTraineeName = void 0;
+    d.currentTraineeId = void 0;
+    d.currentTraineeCode = void 0;
+    d.assignedUser = "\u062C\u0647\u0627\u0632 \u0645\u0639\u0645\u0644 (\u0645\u062A\u0627\u062D)";
+    d.isOnline = false;
+    d.status = "active";
+  });
+  db.save();
+  db.logAudit({
+    userId: "admin",
+    userName: "\u0645\u0634\u0631\u0641 \u0627\u0644\u0645\u0639\u0627\u0645\u0644",
+    action: "\u0625\u0639\u0627\u062F\u0629 \u062A\u0639\u064A\u064A\u0646 \u0627\u0644\u0645\u0639\u0645\u0644 \u0648\u062A\u0641\u0631\u064A\u063A \u062C\u0645\u064A\u0639 \u0627\u0644\u0623\u062C\u0647\u0632\u0629",
+    entity: "\u0627\u0644\u0623\u062C\u0647\u0632\u0629",
+    details: "\u062A\u0645 \u062A\u0641\u0631\u064A\u063A \u062C\u0645\u064A\u0639 \u0623\u062C\u0647\u0632\u0629 \u0627\u0644\u0645\u0639\u0645\u0644 \u0648\u0625\u0632\u0627\u0644\u0629 \u0623\u0633\u0645\u0627\u0621 \u0627\u0644\u0637\u0644\u0627\u0628 \u0627\u0644\u0642\u062F\u0627\u0645\u0649 \u0627\u0633\u062A\u0639\u062F\u0627\u062F\u0627\u064B \u0644\u0644\u062C\u0631\u0648\u0628 \u0627\u0644\u062C\u062F\u064A\u062F"
+  });
+  res.json({ success: true, message: "\u062A\u0645 \u062A\u0641\u0631\u064A\u063A \u062C\u0645\u064A\u0639 \u0623\u062C\u0647\u0632\u0629 \u0627\u0644\u0645\u0639\u0645\u0644 \u0648\u0625\u0632\u0627\u0644\u0629 \u0627\u0631\u062A\u0628\u0627\u0637\u0627\u062A \u0627\u0644\u0637\u0644\u0627\u0628 \u0627\u0644\u0642\u062F\u0627\u0645\u0649 \u0628\u0646\u062C\u0627\u062D" });
 });
 apiRouter.post("/devices", (req, res) => {
   const { deviceId, name, assignedUser, userType, branchId, ipAddress } = req.body;
@@ -13258,6 +13464,7 @@ var masterBroadcast = {
   activeMessage: "",
   isLocked: false,
   pushedFile: null,
+  activeQuestion: null,
   activeExternalSession: null,
   activeNagahQuiz: null,
   activeCeremony: null,
@@ -13558,11 +13765,11 @@ apiRouter.post("/agent/student-login", async (req, res) => {
   if (!trainee) {
     return res.status(404).json({ error: "\u0644\u0645 \u064A\u062A\u0645 \u0627\u0644\u0639\u062B\u0648\u0631 \u0639\u0644\u0649 \u0645\u062A\u062F\u0631\u0628 \u0645\u0633\u062C\u0644 \u0628\u0647\u0630\u0627 \u0627\u0644\u0643\u0648\u062F \u0623\u0648 \u0627\u0644\u0647\u0627\u062A\u0641" });
   }
-  const devId = deviceId || `PC-${req.ip || "01"}`;
+  const devId = deviceId && String(deviceId).trim() ? String(deviceId).trim() : `PC-${Math.floor(100 + Math.random() * 900)}`;
   let device = db.getData().devices.find((d) => d.deviceId === devId || d.id === devId);
   if (!device) {
     device = {
-      id: "dev-" + Date.now(),
+      id: "dev-" + Date.now() + "-" + Math.random().toString(36).substring(2, 6),
       deviceId: devId,
       name: deviceName || `\u062C\u0647\u0627\u0632 ${devId}`,
       assignedUser: trainee.fullName,
@@ -13575,11 +13782,13 @@ apiRouter.post("/agent/student-login", async (req, res) => {
       status: "active"
     };
     device.currentTraineeId = trainee.id;
+    device.currentTraineeCode = trainee.code;
     db.getData().devices.push(device);
   } else {
     device.assignedUser = trainee.fullName;
     device.currentTraineeName = trainee.fullName;
     device.currentTraineeId = trainee.id;
+    device.currentTraineeCode = trainee.code;
     device.isOnline = true;
     device.status = "active";
     device.lastHeartbeat = (/* @__PURE__ */ new Date()).toISOString();
@@ -14290,9 +14499,21 @@ apiRouter.post("/devices/exam-policy", (req, res) => {
   db.save();
   res.json({ success: true, message: `\u062A\u0645 \u062A\u062D\u062F\u064A\u062B \u0633\u064A\u0627\u0633\u0629 \u0627\u0644\u0627\u062E\u062A\u0628\u0627\u0631 \u0627\u0644\u0645\u062D\u0645\u064A \u0639\u0644\u0649 ${affected} \u062C\u0647\u0627\u0632` });
 });
-apiRouter.post("/devices/session-cleanup", (req, res) => {
-  const { deviceId } = req.body;
+apiRouter.post(["/devices/session-cleanup", "/interactive-sessions/cleanup"], (req, res) => {
+  const { deviceId } = req.body || {};
   const devices = db.getData().devices || [];
+  if (!deviceId) {
+    devices.forEach((d) => {
+      d.currentTraineeName = void 0;
+      d.currentTraineeId = void 0;
+      d.currentTraineeCode = void 0;
+      d.assignedUser = "\u062C\u0647\u0627\u0632 \u0645\u0639\u0645\u0644 (\u0645\u062A\u0627\u062D)";
+      d.isOnline = false;
+      d.status = "active";
+    });
+    db.save();
+    return res.json({ success: true, message: "\u062A\u0645 \u062A\u0641\u0631\u064A\u063A \u0648\u062A\u0646\u0638\u064A\u0641 \u062C\u0645\u064A\u0639 \u0623\u062C\u0647\u0632\u0629 \u0627\u0644\u0645\u0639\u0645\u0644 \u0628\u0646\u062C\u0627\u062D" });
+  }
   const device = devices.find((d) => d.id === deviceId || d.deviceId === deviceId);
   if (device) {
     device.currentTraineeName = void 0;

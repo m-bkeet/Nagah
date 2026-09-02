@@ -1169,6 +1169,80 @@ apiRouter.put('/trainees/:id', async (req: Request, res: Response) => {
   } catch(e: any) { res.status(500).json({ success: false, error: e.message }); }
 });
 
+// Update Student Photo from Student Portal or Trainer Portal
+apiRouter.post(['/student/update-photo', '/trainees/update-photo'], async (req: Request, res: Response) => {
+  try {
+    const { traineeId, photoUrl, photo } = req.body || {};
+    const finalPhoto = photoUrl || photo;
+    if (!traineeId || !finalPhoto) {
+      return res.status(400).json({ success: false, error: 'معرف الطالب والصورة مطلوبان' });
+    }
+
+    let trainee = await TraineeRepo.getById(traineeId);
+    let targetId = traineeId;
+
+    if (!trainee) {
+      const all = await TraineeRepo.getAll();
+      const found = all.find(t => t.id === traineeId || t.code === traineeId || (t as any).nationalId === traineeId);
+      if (found) {
+        trainee = found;
+        targetId = found.id;
+      }
+    }
+
+    // Update in Supabase / Local SQLite / Memory Repo
+    if (trainee) {
+      await TraineeRepo.update(targetId, { photoUrl: finalPhoto, photo: finalPhoto });
+    }
+
+    // Sync in-memory DB & persistent store
+    const memData = db.getData();
+    if (memData && Array.isArray(memData.trainees)) {
+      const idx = memData.trainees.findIndex((t: any) => t.id === targetId || t.code === traineeId || t.id === traineeId);
+      if (idx >= 0) {
+        memData.trainees[idx] = {
+          ...memData.trainees[idx],
+          photoUrl: finalPhoto,
+          photo: finalPhoto,
+          updatedAt: new Date().toISOString()
+        };
+      }
+    }
+
+    // Also update any active device currently assigned to this student
+    if (memData && Array.isArray(memData.devices)) {
+      memData.devices.forEach((d: any) => {
+        if (d.currentTraineeId === targetId || d.currentTraineeCode === traineeId || (trainee && d.currentTraineeCode === trainee.code)) {
+          d.currentTraineePhoto = finalPhoto;
+          d.photoUrl = finalPhoto;
+        }
+      });
+    }
+
+    // Sync with Firestore if active
+    try {
+      await adminDb.collection('trainees').doc(targetId).set({
+        photoUrl: finalPhoto,
+        photo: finalPhoto,
+        updatedAt: new Date().toISOString()
+      }, { merge: true });
+    } catch {}
+
+    db.saveImmediate();
+    TraineeRepo.invalidateCache();
+
+    console.log(`[STUDENT_PHOTO] Successfully updated photo for trainee ${targetId} (${trainee?.fullName || traineeId})`);
+    res.json({
+      success: true,
+      message: 'تم حفظ وتحديث صورة المتدرب بنجاح وربطها بالملف الأكاديمي',
+      photoUrl: finalPhoto
+    });
+  } catch (err: any) {
+    console.error('[STUDENT_PHOTO_ERROR]', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 apiRouter.delete('/trainees/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
@@ -4544,14 +4618,30 @@ apiRouter.post('/points/add', async (req: Request, res: Response) => {
 
   const pVal = Number(points);
   const createdList: PointTransaction[] = [];
+  const dbData = db.getData();
+  if (!Array.isArray(dbData.deviceCommands)) dbData.deviceCommands = [];
 
   for (const tid of traineeIds) {
-    const student = await TraineeRepo.getById(tid);
+    let student = await TraineeRepo.getById(tid);
+    if (!student) {
+      const all = await TraineeRepo.getAll();
+      student = all.find(t => t.id === tid || t.code === tid);
+    }
+
     if (student) {
       const newTotal = Math.max(0, (student.totalPoints || student.points || 0) + pVal);
       student.totalPoints = newTotal;
       student.points = newTotal;
       await TraineeRepo.update(student.id, { totalPoints: newTotal, points: newTotal });
+
+      // Update in-memory db trainees array for instant heartbeat resolution
+      if (Array.isArray(dbData.trainees)) {
+        const memIdx = dbData.trainees.findIndex(t => t.id === student.id || t.code === student.code || t.id === tid);
+        if (memIdx >= 0) {
+          dbData.trainees[memIdx].totalPoints = newTotal;
+          dbData.trainees[memIdx].points = newTotal;
+        }
+      }
 
       const pt: PointTransaction = {
         id: 'pt-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
@@ -4559,20 +4649,61 @@ apiRouter.post('/points/add', async (req: Request, res: Response) => {
         groupId: student.groupId,
         branchId: student.branchId,
         points: pVal,
-        reason: reason || 'نشاط تدريبي',
+        reason: reason || 'نشاط تدريبي وتفاعل بالمعمل',
         ruleId,
         addedByUserId: addedByUserId || 'admin',
-        addedByUserName: addedByUserName || 'مسؤول النقاط',
+        addedByUserName: addedByUserName || 'المحاضر المشرف',
         createdAt: new Date().toISOString()
       };
       await PointTransactionRepo.create(pt.id, pt);
-      db.getData().pointTransactions.unshift(pt);
+      if (!Array.isArray(dbData.pointTransactions)) dbData.pointTransactions = [];
+      dbData.pointTransactions.unshift(pt);
       createdList.push(pt);
+
+      // Push real-time device command for instant celebration on student screens without page refresh
+      const targetDevices = (dbData.devices || []).filter((d: any) =>
+        d.currentTraineeId === student.id ||
+        d.currentTraineeCode === student.code ||
+        d.currentTraineeId === tid ||
+        d.currentTraineeCode === tid
+      );
+
+      const cmdPayload = {
+        action: 'award_points',
+        points: pVal,
+        newTotal: newTotal,
+        reason: reason || 'نشاط تدريبي وتفاعل متميز',
+        traineeName: student.fullName,
+        timestamp: Date.now()
+      };
+
+      if (targetDevices.length > 0) {
+        targetDevices.forEach((d: any) => {
+          dbData.deviceCommands.push({
+            id: 'cmd-pts-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
+            deviceId: d.deviceId || d.id,
+            commandType: 'award_points',
+            payload: cmdPayload,
+            status: 'pending',
+            createdAt: new Date().toISOString()
+          });
+        });
+      }
     }
   }
 
+  // Update master broadcast state for instant sync
+  masterBroadcast.lastPointsAwarded = {
+    traineeIds,
+    points: pVal,
+    reason: reason || 'نشاط تدريبي وتفاعل متميز',
+    timestamp: Date.now()
+  };
+  masterBroadcast.updatedAt = new Date().toISOString();
+
   db.recalculateTraineeRankings();
-  db.save();
+  db.saveImmediate();
+  TraineeRepo.invalidateCache();
 
   db.logAudit({
     userId: addedByUserId || 'admin',
@@ -5361,6 +5492,14 @@ apiRouter.post('/interactive-sessions/broadcast-question', (req: Request, res: R
     return res.status(400).json({ error: 'بيانات السؤال غير مكتملة' });
   }
 
+  // Update masterBroadcast for instant sync on all devices
+  masterBroadcast.activeQuestion = {
+    question,
+    sessionId,
+    timestamp: Date.now()
+  };
+  masterBroadcast.updatedAt = new Date().toISOString();
+
   const devices = db.getData().devices || [];
   const now = Date.now();
   let count = 0;
@@ -5447,6 +5586,44 @@ apiRouter.post('/interactive-sessions/broadcast-ceremony', (req: Request, res: R
 
   db.save();
   res.json({ success: true, count });
+});
+
+// Force ceremony mode on/off across all student devices
+apiRouter.post('/devices/force-ceremony', (req: Request, res: Response) => {
+  const { active } = req.body;
+  const isAct = active !== false;
+
+  if (!isAct) {
+    masterBroadcast.activeCeremony = null;
+  }
+  masterBroadcast.updatedAt = new Date().toISOString();
+
+  const devices = db.getData().devices || [];
+  let count = 0;
+
+  devices.forEach(d => {
+    const targetDeviceId = d.deviceId || d.id;
+    const cmd: DeviceCommand = {
+      id: 'force-ceremony-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
+      deviceId: targetDeviceId,
+      commandType: 'message',
+      payload: JSON.stringify({
+        action: 'force_ceremony',
+        active: isAct,
+        timestamp: Date.now()
+      }),
+      issuedByUserId: 'trainer-live',
+      createdAt: new Date().toISOString(),
+      issuedAt: new Date().toISOString(),
+      status: 'pending'
+    };
+    if (!db.getData().deviceCommands) db.getData().deviceCommands = [];
+    db.getData().deviceCommands.push(cmd);
+    count++;
+  });
+
+  db.save();
+  res.json({ success: true, count, active: isAct });
 });
 
 // Broadcast external session (Kahoot, Quizizz, Google Forms, Live Link) to all active devices
@@ -5781,6 +5958,7 @@ let masterBroadcast = {
   activeMessage: '',
   isLocked: false,
   pushedFile: null as { fileName: string; fileUrl?: string; fileBase64?: string; fileType?: string; openImmediately?: boolean } | null,
+  activeQuestion: null as any,
   activeExternalSession: null as { title: string; platform: string; url: string; gamePin?: string; updatedAt: number } | null,
   activeNagahQuiz: null as any,
   activeCeremony: null as any,
@@ -6161,11 +6339,11 @@ apiRouter.post('/agent/student-login', async (req: Request, res: Response) => {
   }
 
   // Update or register Device
-  const devId = deviceId || `PC-${req.ip || '01'}`;
+  const devId = (deviceId && String(deviceId).trim()) ? String(deviceId).trim() : `PC-${Math.floor(100 + Math.random() * 900)}`;
   let device = db.getData().devices.find(d => d.deviceId === devId || d.id === devId);
   if (!device) {
     device = {
-      id: 'dev-' + Date.now(),
+      id: 'dev-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6),
       deviceId: devId,
       name: deviceName || `جهاز ${devId}`,
       assignedUser: trainee.fullName,
@@ -6178,11 +6356,13 @@ apiRouter.post('/agent/student-login', async (req: Request, res: Response) => {
       status: 'active'
     };
     (device as any).currentTraineeId = trainee.id;
+    (device as any).currentTraineeCode = trainee.code;
     db.getData().devices.push(device);
   } else {
     device.assignedUser = trainee.fullName;
     device.currentTraineeName = trainee.fullName;
     (device as any).currentTraineeId = trainee.id;
+    (device as any).currentTraineeCode = trainee.code;
     device.isOnline = true;
     device.status = 'active';
     device.lastHeartbeat = new Date().toISOString();
@@ -7051,11 +7231,24 @@ apiRouter.post('/devices/exam-policy', (req: Request, res: Response) => {
 });
 
 // Remote Session Cleanup
-apiRouter.post('/devices/session-cleanup', (req: Request, res: Response) => {
-  const { deviceId } = req.body;
+apiRouter.post(['/devices/session-cleanup', '/interactive-sessions/cleanup'], (req: Request, res: Response) => {
+  const { deviceId } = req.body || {};
   const devices = db.getData().devices || [];
-  const device = devices.find(d => d.id === deviceId || d.deviceId === deviceId);
 
+  if (!deviceId) {
+    devices.forEach(d => {
+      d.currentTraineeName = undefined;
+      (d as any).currentTraineeId = undefined;
+      (d as any).currentTraineeCode = undefined;
+      d.assignedUser = 'جهاز معمل (متاح)';
+      d.isOnline = false;
+      d.status = 'active';
+    });
+    db.save();
+    return res.json({ success: true, message: 'تم تفريغ وتنظيف جميع أجهزة المعمل بنجاح' });
+  }
+
+  const device = devices.find(d => d.id === deviceId || d.deviceId === deviceId);
   if (device) {
     device.currentTraineeName = undefined;
     (device as any).currentTraineeId = undefined;

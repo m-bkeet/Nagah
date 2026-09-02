@@ -1042,6 +1042,24 @@ export const SettingsView: React.FC = () => {
                     </div>
 
                     <div>
+                      <label className="block text-amber-600 dark:text-amber-400 font-bold mb-1 flex items-center gap-1">
+                        <Lock className="w-3.5 h-3.5" />
+                        <span>الرقم السري لدخول الإدارة والمدربين 🔐</span>
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="2026"
+                        value={settings.adminPasscode || ''}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setSettings({ ...settings, adminPasscode: val });
+                          localStorage.setItem('nagah_admin_passcode', val);
+                        }}
+                        className="w-full bg-slate-50 dark:bg-slate-800 border border-amber-300 dark:border-amber-500/40 rounded-xl px-3 py-2 text-amber-800 dark:text-amber-300 font-mono font-bold focus:border-amber-500 focus:outline-none"
+                      />
+                    </div>
+
+                    <div>
                       <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">العنوان الرئيسي للمقر</label>
                       <input
                         type="text"

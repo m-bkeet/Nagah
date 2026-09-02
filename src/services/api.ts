@@ -839,6 +839,11 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ active })
     }),
+  updateStudentPhoto: (data: { traineeId: string; photoUrl: string }) =>
+    request<{ success: boolean; message: string; photoUrl?: string }>('/student/update-photo', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    }),
   submitInteractiveAnswer: (data: any) =>
     request<{ success: boolean; response: any }>('/interactive-sessions/answer', {
       method: 'POST',
@@ -1103,6 +1108,12 @@ export const api = {
     request<{ success: boolean; message: string }>('/devices/session-cleanup', {
       method: 'POST',
       body: JSON.stringify({ deviceId })
+    }),
+
+  sessionCleanup: (deviceId?: string) =>
+    request<{ success: boolean; message?: string }>(deviceId ? '/devices/session-cleanup' : '/devices/reset-lab', {
+      method: 'POST',
+      body: JSON.stringify(deviceId ? { deviceId } : {})
     }),
 
   resetLab: () =>

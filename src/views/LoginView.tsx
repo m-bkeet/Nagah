@@ -1,14 +1,20 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { Shield, Lock, User, CheckCircle2, ArrowRight, Download, Smartphone, Monitor, UserPlus, BookOpen, GraduationCap } from 'lucide-react';
 import { UserRole } from '../types';
 import { PwaInstallPrompt } from '../components/PwaInstallPrompt';
 import { ThemeQuickSwitcher } from '../components/ThemeQuickSwitcher';
+import { AdminPasscodeModal } from '../components/AdminPasscodeModal';
 
 export const LoginView: React.FC = () => {
   const { login, alwaysRequireLogin, setAlwaysRequireLogin } = useAuth();
   const { themeConfig } = useTheme();
+  
+  const [isPasscodeUnlocked, setIsPasscodeUnlocked] = useState(() => {
+    return sessionStorage.getItem('nagah_admin_passcode_unlocked') === 'true';
+  });
+  const [showPasscodeModal, setShowPasscodeModal] = useState(!isPasscodeUnlocked);
   const [username, setUsername] = useState(() => {
     return localStorage.getItem('nagah_saved_username') || '';
   });
@@ -254,6 +260,18 @@ export const LoginView: React.FC = () => {
           )}
         </div>
 
+        {/* Public Home Page Button */}
+        <a
+          href="/?view=public_home"
+          className="w-full py-3 px-4 rounded-2xl bg-slate-900 hover:bg-slate-800 border border-amber-500/40 text-amber-300 font-bold text-xs flex items-center justify-between shadow-lg transition-all group"
+        >
+          <div className="flex items-center gap-2">
+            <BookOpen className="w-4 h-4 text-amber-400 group-hover:scale-110 transition-transform" />
+            <span>الواجهة الرئيسية العامة للطلاب وأولياء الأمور</span>
+          </div>
+          <ArrowRight className="w-4 h-4 rotate-180 text-amber-400" />
+        </a>
+
         {/* Student, Parent, Trainer & Lab Portals Direct Access */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
           <a
@@ -346,6 +364,19 @@ export const LoginView: React.FC = () => {
           مركز النجاح للتدريب والاستشارات © {new Date().getFullYear()} - جميع الحقوق محفوظة
         </p>
       </div>
+
+      {/* Admin Passcode Gate Modal */}
+      <AdminPasscodeModal
+        isOpen={showPasscodeModal && !isPasscodeUnlocked}
+        onClose={() => {
+          setShowPasscodeModal(false);
+          window.location.href = '/?view=public_home';
+        }}
+        onSuccess={() => {
+          setIsPasscodeUnlocked(true);
+          setShowPasscodeModal(false);
+        }}
+      />
     </div>
   );
 };

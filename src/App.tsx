@@ -47,6 +47,7 @@ import { SettingsView } from './views/SettingsView';
 // Public Views & Portals
 import { StudentKioskView } from './views/StudentKioskView';
 import { ProjectorView } from './views/ProjectorView';
+import { PublicHomeView } from './views/PublicHomeView';
 import { PublicRegistrationView } from './views/PublicRegistrationView';
 import { PublicTrainerRegistrationView } from './views/PublicTrainerRegistrationView';
 import { PublicStudentPortalView } from './views/PublicStudentPortalView';
@@ -128,24 +129,32 @@ const AppContent: React.FC = () => {
     return <ProjectorView onExit={() => setActiveTab('dashboard')} />;
   }
 
+  if (activeTab === 'public_home' || activeTab === 'public-home' || activeTab === 'public_landing') {
+    return <PublicHomeView onNavigate={(view) => setActiveTab(view)} />;
+  }
+
+  if (activeTab === 'login') {
+    return <LoginView />;
+  }
+
   if (activeTab === 'register') {
-    return <PublicRegistrationView onBack={() => setActiveTab('dashboard')} />;
+    return <PublicRegistrationView onBack={() => setActiveTab('public_home')} />;
   }
 
   if (activeTab === 'register-trainer') {
-    return <PublicTrainerRegistrationView onBack={() => setActiveTab('dashboard')} />;
+    return <PublicTrainerRegistrationView onBack={() => setActiveTab('public_home')} />;
   }
 
   if (activeTab === 'student-portal' || activeTab === 'student_portal') {
-    return <PublicStudentPortalView onBack={() => setActiveTab('dashboard')} />;
+    return <PublicStudentPortalView onBack={() => setActiveTab('public_home')} />;
   }
 
   if (activeTab === 'parent-portal' || activeTab === 'parent_portal') {
-    return <PublicParentPortalView onBack={() => setActiveTab('dashboard')} />;
+    return <PublicParentPortalView onBack={() => setActiveTab('public_home')} />;
   }
 
   if (activeTab === 'trainer-portal' || activeTab === 'trainer_portal') {
-    return <PublicTrainerPortalView onBack={() => setActiveTab('dashboard')} />;
+    return <PublicTrainerPortalView onBack={() => setActiveTab('public_home')} />;
   }
 
   // Authentication check

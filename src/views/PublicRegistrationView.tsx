@@ -2,7 +2,7 @@ import { api } from '../services/api';
 import { Camera, Upload, Send, CheckCircle2, User, Phone, MapPin, BookOpen, Layers, Copy, ArrowRight, ShieldCheck, QrCode, Share2, Sparkles, RefreshCw, Download, Printer, Award } from "lucide-react";
 import React, { useState, useRef, useEffect } from "react";
 import QRCode from 'qrcode';
-import { toPng } from 'html-to-image';
+import html2canvas from 'html2canvas';
 import { uploadFile } from '../lib/storage';
 import { cloudDb } from '../services/cloudDatabase';
 import { ThemeQuickSwitcher } from '../components/ThemeQuickSwitcher';
@@ -185,13 +185,13 @@ export const PublicRegistrationView: React.FC<PublicRegistrationViewProps> = ({ 
         // Wait a bit to ensure everything is rendered
         await new Promise(resolve => setTimeout(resolve, 500));
         
-        const dataUrl = await toPng(cardElementRef.current, {
-          pixelRatio: 2,
+        const canvas = await html2canvas(cardElementRef.current, {
+          scale: 2,
           backgroundColor: "#090d16",
-          style: {
-            borderRadius: "24px"
-          }
+          useCORS: true
         });
+        
+        const dataUrl = canvas.toDataURL("image/png");
         
         setGeneratedImageUrl(dataUrl);
         

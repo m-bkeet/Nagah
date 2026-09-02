@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Calendar, Clock, Plus, Trash2, RefreshCw, Printer, Share2, 
-  CheckCircle2, AlertTriangle, Users, BookOpen, UserCheck, Building, Bell, BarChart2, Award
+  CheckCircle2, AlertTriangle, Users, BookOpen, UserCheck, Building, Bell, BarChart2, Award, Edit2
 } from 'lucide-react';
 import { LabScheduleSlot, Branch, Group, Trainer } from '../types';
 import { formatTimeAMPM, timeToMinutes } from '../utils/timeFormat';
@@ -19,6 +19,8 @@ export const LabScheduleView: React.FC = () => {
   const [isPosterModalOpen, setIsPosterModalOpen] = useState<boolean>(false);
   const [syncStatus, setSyncStatus] = useState<{ lastSyncTime?: string; syncStatus?: string }>({});
   const [viewMode, setViewMode] = useState<'cards' | 'timetable'>('cards');
+  const [editingGroup, setEditingGroup] = useState<Group | null>(null);
+  const [viewingTraineesGroup, setViewingTraineesGroup] = useState<Group | null>(null);
 
   // New slot form state
   const [newGroupname, setNewGroupname] = useState('');
@@ -34,32 +36,61 @@ export const LabScheduleView: React.FC = () => {
   const fetchSchedules = async () => {
     setIsLoading(true);
     try {
-      const url = selectedBranchId && selectedBranchId !== 'all' 
-        ? `/api/lab-schedules?branchId=${selectedBranchId}` 
-        : '/api/lab-schedules';
-      const res = await fetch(url);
-      const data = await res.json();
-      if (Array.isArray(data)) setSchedules(data);
+      const [brRes, grpRes, trRes, crsRes, syncRes, trnRes] = await Promise.all([
+        fetch('/api/branches').catch(() => ({ json: () => [] })),
+        fetch('/api/groups').catch(() => ({ json: () => [] })),
+        fetch('/api/trainers').catch(() => ({ json: () => [] })),
+        fetch('/api/courses').catch(() => ({ json: () => [] })),
+        fetch('/api/system/google-drive-sync').catch(() => ({ json: () => ({}) })),
+        fetch('/api/trainees').catch(() => ({ json: () => [] }))
+      ]);
 
-      const brRes = await fetch('/api/branches');
       const brData = await brRes.json();
-      if (Array.isArray(brData)) setBranches(brData);
-
-      const grpRes = await fetch('/api/groups');
       const grpData = await grpRes.json();
-      if (Array.isArray(grpData)) setGroups(grpData);
-
-      const trRes = await fetch('/api/trainers');
       const trData = await trRes.json();
-      if (Array.isArray(trData)) setTrainers(trData);
-
-      const crsRes = await fetch('/api/courses');
       const crsData = await crsRes.json();
-      if (Array.isArray(crsData)) setCourses(crsData);
-
-      const syncRes = await fetch('/api/system/google-drive-sync');
       const syncData = await syncRes.json();
+      const trnData = await trnRes.json();
+
+      if (Array.isArray(brData)) setBranches(brData);
+      if (Array.isArray(grpData)) setGroups(grpData);
+      if (Array.isArray(trData)) setTrainers(trData);
+      if (Array.isArray(crsData)) setCourses(crsData);
       setSyncStatus(syncData);
+
+      // Store trainees on window to show them in modal easily without big refactor
+      (window as any).allTrainees = Array.isArray(trnData) ? trnData : [];
+
+      // Auto-generate schedules from groups!
+      if (Array.isArray(grpData)) {
+        let generatedSchedules: LabScheduleSlot[] = [];
+        grpData.forEach(g => {
+          if (!selectedBranchId || selectedBranchId === 'all' || g.branchId === selectedBranchId) {
+            const gDays = g.scheduleDays || g.days || [];
+            if (gDays.length > 0) {
+              const c = crsData.find((cr: any) => cr.id === g.courseId || cr.code === g.courseId) || {};
+              const t = trData.find((tr: any) => tr.id === g.trainerId) || {};
+              
+              gDays.forEach((day: string) => {
+                generatedSchedules.push({
+                  id: `sch-${g.id}-${day}`,
+                  branchId: g.branchId,
+                  groupId: g.id,
+                  groupName: g.name,
+                  courseName: c.title_arabic || c.title || c.name || c.courseCode || 'دورة تدريبية',
+                  trainerId: g.trainerId,
+                  trainerName: t.fullName || t.name || t.full_name_arabic || 'مدرب غير محدد',
+                  roomName: g.roomName || g.hallName || 'معمل 1',
+                  dayOfWeek: day,
+                  startTime: g.startTime || g.scheduleTime || '16:00',
+                  endTime: g.endTime || '18:00',
+                });
+              });
+            }
+          }
+        });
+        setSchedules(generatedSchedules);
+      }
     } catch (e) {
       console.error(e);
     } finally {
@@ -407,13 +438,28 @@ export const LabScheduleView: React.FC = () => {
                               <h4 className="font-bold text-xs text-slate-100 mt-1.5">{slot.groupName}</h4>
                               <p className="text-[11px] text-indigo-300 mt-0.5">{slot.courseName}</p>
                             </div>
-                            <button
-                              onClick={() => handleDeleteSlot(slot.id)}
-                              className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-rose-400 transition-all"
-                              title="حذف الموعد"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
+                            <div className="opacity-0 group-hover:opacity-100 flex flex-col gap-1 transition-all">
+                              <button
+                                onClick={() => {
+                                  const group = groups.find(g => g.id === slot.groupId);
+                                  if (group) setViewingTraineesGroup(group);
+                                }}
+                                className="p-1 text-slate-400 hover:text-emerald-400 bg-slate-800 rounded transition-all"
+                                title="عرض المتدربين"
+                              >
+                                <Users className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => {
+                                  const group = groups.find(g => g.id === slot.groupId);
+                                  if (group) setEditingGroup(group);
+                                }}
+                                className="p-1 text-slate-400 hover:text-indigo-400 bg-slate-800 rounded transition-all"
+                                title="تعديل بيانات الجدول"
+                              >
+                                <Edit2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
                           </div>
 
                           <div className="mt-3 pt-2 border-t border-slate-700/50 flex items-center justify-between text-[10px] text-slate-400">
@@ -518,13 +564,28 @@ export const LabScheduleView: React.FC = () => {
                                     <span className="text-[10px] font-mono font-bold text-amber-300 bg-amber-500/10 px-1.5 py-0.5 rounded">
                                       {formatTimeAMPM(slot.startTime)} - {formatTimeAMPM(slot.endTime)}
                                     </span>
-                                    <button
-                                      onClick={() => handleDeleteSlot(slot.id)}
-                                      className="p-1 text-slate-400 hover:text-rose-400 transition-all rounded hover:bg-rose-950/50"
-                                      title="حذف هذا الموعد نهائياً"
-                                    >
-                                      <Trash2 className="w-3.5 h-3.5" />
-                                    </button>
+                                    <div className="flex items-center gap-1">
+                                      <button
+                                        onClick={() => {
+                                          const group = groups.find(g => g.id === slot.groupId);
+                                          if (group) setViewingTraineesGroup(group);
+                                        }}
+                                        className="p-1 text-slate-400 hover:text-emerald-400 transition-all rounded hover:bg-slate-800"
+                                        title="عرض المتدربين"
+                                      >
+                                        <Users className="w-3.5 h-3.5" />
+                                      </button>
+                                      <button
+                                        onClick={() => {
+                                          const group = groups.find(g => g.id === slot.groupId);
+                                          if (group) setEditingGroup(group);
+                                        }}
+                                        className="p-1 text-slate-400 hover:text-indigo-400 transition-all rounded hover:bg-slate-800"
+                                        title="تعديل بيانات الجدول"
+                                      >
+                                        <Edit2 className="w-3.5 h-3.5" />
+                                      </button>
+                                    </div>
                                   </div>
                                   <div className="font-bold text-slate-100 mt-1 text-xs">{slot.groupName}</div>
                                   <div className="text-[10px] text-indigo-200 mt-0.5">{slot.courseName}</div>
@@ -873,6 +934,140 @@ export const LabScheduleView: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Show Trainees Modal */}
+      {viewingTraineesGroup && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 w-full max-w-2xl rounded-2xl p-6 shadow-2xl text-right flex flex-col max-h-[90vh]">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-base font-black text-slate-100 flex items-center gap-2">
+                <Users className="w-5 h-5 text-emerald-400" />
+                <span>متدربين مجموعة: {viewingTraineesGroup.name}</span>
+              </h3>
+              <button onClick={() => setViewingTraineesGroup(null)} className="text-slate-500 hover:text-slate-300">
+                إغلاق
+              </button>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-2">
+              {((window as any).allTrainees || []).filter((t: any) => t.groupId === viewingTraineesGroup.id).length === 0 ? (
+                <div className="text-slate-500 text-center py-8 text-xs">لا يوجد متدربين في هذه المجموعة</div>
+              ) : (
+                ((window as any).allTrainees || []).filter((t: any) => t.groupId === viewingTraineesGroup.id).map((t: any, idx: number) => (
+                  <div key={t.id} className="bg-slate-800 p-3 rounded-xl border border-slate-700 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-slate-300 font-bold text-xs">{idx + 1}</div>
+                      <div>
+                        <div className="text-sm font-bold text-slate-200">{t.fullName}</div>
+                        <div className="text-[10px] text-slate-400 font-mono mt-0.5">{t.code}</div>
+                      </div>
+                    </div>
+                    <div className="text-xs text-indigo-300 bg-indigo-500/10 px-2 py-1 rounded">
+                      {t.phone}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Group Modal */}
+      {editingGroup && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 w-full max-w-lg rounded-2xl p-6 shadow-2xl text-right">
+            <h3 className="text-base font-black text-slate-100 mb-4 flex items-center gap-2">
+              <Edit2 className="w-5 h-5 text-indigo-400" />
+              <span>تعديل بيانات المجموعة: {editingGroup.name}</span>
+            </h3>
+            
+            <form onSubmit={async (e) => {
+              e.preventDefault();
+              try {
+                const fd = new FormData(e.currentTarget);
+                const days = fd.getAll('scheduleDays');
+                const updated = {
+                  ...editingGroup,
+                  branchId: fd.get('branchId') as string,
+                  trainerId: fd.get('trainerId') as string,
+                  roomName: fd.get('roomName') as string,
+                  startTime: fd.get('startTime') as string,
+                  endTime: fd.get('endTime') as string,
+                  scheduleDays: days.length ? days : editingGroup.scheduleDays
+                };
+                
+                const res = await fetch(`/api/groups/${editingGroup.id}`, {
+                  method: 'PUT',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify(updated)
+                });
+                
+                if (res.ok) {
+                  setEditingGroup(null);
+                  fetchSchedules(); // refresh
+                } else {
+                  alert('حدث خطأ أثناء الحفظ');
+                }
+              } catch(err) {
+                console.error(err);
+              }
+            }} className="space-y-4 text-xs">
+              
+              <div>
+                <label className="block text-slate-300 font-bold mb-1">الفرع</label>
+                <select name="branchId" defaultValue={editingGroup.branchId} className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-200">
+                  {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-slate-300 font-bold mb-1">المدرب</label>
+                <select name="trainerId" defaultValue={editingGroup.trainerId} className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-200">
+                  <option value="">-- غير محدد --</option>
+                  {trainers.map(t => <option key={t.id} value={t.id}>{t.name || t.fullName}</option>)}
+                </select>
+              </div>
+              
+              <div>
+                <label className="block text-slate-300 font-bold mb-1">المعمل / القاعة</label>
+                <input name="roomName" type="text" defaultValue={editingGroup.roomName || (editingGroup as any).hallName} className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-200" />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-slate-300 font-bold mb-1">وقت البدء</label>
+                  <input name="startTime" type="time" defaultValue={editingGroup.startTime || (editingGroup as any).scheduleTime || '16:00'} className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-200" />
+                </div>
+                <div>
+                  <label className="block text-slate-300 font-bold mb-1">وقت الانتهاء</label>
+                  <input name="endTime" type="time" defaultValue={editingGroup.endTime || '18:00'} className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-200" />
+                </div>
+              </div>
+              
+              <div>
+                <label className="block text-slate-300 font-bold mb-2">أيام المحاضرات</label>
+                <div className="flex flex-wrap gap-2">
+                  {['السبت', 'الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة'].map(d => (
+                    <label key={d} className="flex items-center gap-1.5 bg-slate-800 px-3 py-1.5 rounded-lg border border-slate-700 cursor-pointer hover:border-indigo-500/50">
+                      <input type="checkbox" name="scheduleDays" value={d} defaultChecked={(editingGroup.scheduleDays || editingGroup.days || []).includes(d)} className="accent-indigo-500" />
+                      <span className="text-slate-300">{d}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-4">
+                <button type="button" onClick={() => setEditingGroup(null)} className="px-4 py-2 text-slate-400 hover:text-slate-200">إلغاء</button>
+                <button type="submit" className="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl shadow-lg shadow-indigo-900/20">
+                  حفظ التعديلات
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };

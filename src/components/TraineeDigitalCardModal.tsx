@@ -16,7 +16,7 @@ import {
   Layers
 } from 'lucide-react';
 import QRCode from 'qrcode';
-import { toPng } from 'html-to-image';
+import html2canvas from 'html2canvas';
 import { Trainee, Course, Group, Branch } from '../types';
 import { useCenter } from '../context/CenterContext';
 
@@ -90,10 +90,12 @@ export const TraineeDigitalCardModal: React.FC<TraineeDigitalCardModalProps> = (
     try {
       // Wait a bit to ensure everything is rendered
       await new Promise(resolve => setTimeout(resolve, 300));
-      const dataUrl = await toPng(cardRef.current, {
-        pixelRatio: 2,
+      const canvas = await html2canvas(cardRef.current, {
+        scale: 2,
         backgroundColor: "#090d16",
+        useCORS: true
       });
+      const dataUrl = canvas.toDataURL("image/png");
       const link = document.createElement("a");
       link.href = dataUrl;
       link.download = `كارت_المتدرب_${code}_${name.replace(/\s+/g, "_")}.png`;

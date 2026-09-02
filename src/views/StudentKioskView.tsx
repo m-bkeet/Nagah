@@ -66,10 +66,16 @@ import {
 export const StudentKioskView: React.FC = () => {
   const [deviceId, setDeviceId] = useState<string>(() => {
     const params = new URLSearchParams(window.location.search);
-    let dev = params.get('device') || sessionStorage.getItem('nagah_device_id');
-    if (!dev) {
-      dev = `PC-${Math.floor(10 + Math.random() * 90)}`;
-      sessionStorage.setItem('nagah_device_id', dev);
+    let dev = params.get('device');
+    if (dev) return dev;
+    try {
+      dev = localStorage.getItem('nagah_unique_device_id');
+      if (!dev) {
+        dev = `PC-${Math.floor(100 + Math.random() * 900)}-${Math.random().toString(36).substring(2, 5).toUpperCase()}`;
+        localStorage.setItem('nagah_unique_device_id', dev);
+      }
+    } catch (e) {
+      dev = `PC-${Math.floor(100 + Math.random() * 900)}`;
     }
     return dev;
   });
@@ -479,6 +485,40 @@ export const StudentKioskView: React.FC = () => {
 
         isMonitoringRef.current = !!res.isMonitoring;
 
+        // Update masterBroadcast state
+        if (res.masterBroadcast) {
+          setMasterBroadcast(res.masterBroadcast);
+
+          // Sync active live ceremony (podium celebration)
+          if (res.masterBroadcast.activeCeremony) {
+            setActiveCeremony(res.masterBroadcast.activeCeremony);
+          } else if (activeCeremony && !res.masterBroadcast.activeCeremony) {
+            setActiveCeremony(null);
+          }
+
+          // Sync active question (live competition)
+          if (res.masterBroadcast.activeQuestion) {
+            const qData = res.masterBroadcast.activeQuestion.question || res.masterBroadcast.activeQuestion;
+            if (qData && (!activeQuestion || activeQuestion.id !== qData.id)) {
+              setActiveQuestion(qData);
+              setSelectedOptionIndex(null);
+              setQuestionAnswered(false);
+              setQuestionStartTime(Date.now());
+              playCelebrationFanfare();
+            }
+          }
+
+          // Sync active quiz
+          if (res.masterBroadcast.activeNagahQuiz) {
+            setActiveNagahQuiz(res.masterBroadcast.activeNagahQuiz);
+          }
+
+          // Sync external interactive session (Kahoot, Quizizz)
+          if (res.masterBroadcast.activeExternalSession) {
+            setActiveExternalSession(res.masterBroadcast.activeExternalSession);
+          }
+        }
+
         // Process incoming commands from trainer / master console
         if (res.commands && res.commands.length > 0) {
           res.commands.forEach((cmd: any) => {
@@ -488,9 +528,31 @@ export const StudentKioskView: React.FC = () => {
             } else if (cmd.commandType === 'unlock') {
               setIsLockedByMaster(false);
               setLockMessage('');
-            } else if (cmd.commandType === 'message') {
-              const msg = typeof cmd.payload === 'string' ? cmd.payload : cmd.payload?.text || '';
-              if (msg) setLoginMessage(msg);
+            } else if (cmd.commandType === 'message' || cmd.commandType === 'interactive') {
+              let payloadData: any = cmd.payload;
+              if (typeof cmd.payload === 'string') {
+                try { payloadData = JSON.parse(cmd.payload); } catch (e) { payloadData = { text: cmd.payload }; }
+              }
+              if (payloadData?.action === 'interactive_question' && payloadData.question) {
+                setActiveQuestion(payloadData.question);
+                setSelectedOptionIndex(null);
+                setQuestionAnswered(false);
+                setQuestionStartTime(Date.now());
+                playCelebrationFanfare();
+              } else if (payloadData?.action === 'ceremony') {
+                setActiveCeremony(payloadData);
+              } else if (payloadData?.action === 'start_quiz' && payloadData.quiz) {
+                setActiveNagahQuiz(payloadData.quiz);
+              } else if (payloadData?.action === 'interactive_external') {
+                setActiveExternalSession(payloadData);
+              } else if (payloadData?.action === 'award_points') {
+                playCelebrationFanfare();
+                setLoginMessage(`🎉 تهانينا! منحك المحاضر +${payloadData.points || 10} نقطة: ${payloadData.reason || 'تميز وتفاعل'}`);
+              } else if (payloadData?.text) {
+                setLoginMessage(payloadData.text);
+              } else if (typeof cmd.payload === 'string') {
+                setLoginMessage(cmd.payload);
+              }
             } else if (cmd.commandType === 'award_points') {
               playCelebrationFanfare();
               setLoginMessage('🎉 تهانينا! تم منحك نقاط تميز إضافية من المحاضر المشرف!');

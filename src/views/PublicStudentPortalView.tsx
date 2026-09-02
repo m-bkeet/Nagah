@@ -2,7 +2,6 @@ import { api } from '../services/api';
 import { NextLectureWidget } from "../components/NextLectureWidget";
 import { AITutor } from "../components/AITutor";
 import { StudentLanguageLabView } from "../components/languageLab/StudentLanguageLabView";
-import { StudentLanguageLab } from "../components/language/StudentLanguageLab";
 import { resilientOfflineService } from '../services/resilientOfflineService';
 import { cloudDb } from '../services/cloudDatabase';
 import { compressImage } from '../utils/imageCompressor';
@@ -583,6 +582,59 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
       setPortalPasswordForm(student.portalPassword || '');
     }
   }, [student]);
+
+  // Real-time student live synchronization (Points, Badges, Homeworks, Messages)
+  useEffect(() => {
+    if (!isLoggedIn || !student?.code) return;
+
+    const syncInterval = setInterval(async () => {
+      // Optimiziation: Pause background polling to save quota if page is hidden
+      if (document.hidden) return;
+
+      try {
+        const savedPassword = localStorage.getItem('student_session_password') || '';
+        const res = await fetch('/api/student/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            codeOrPhone: student.code,
+            password: savedPassword
+          })
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data.success && data.student) {
+          const newPoints = data.student.points ?? data.student.totalPoints ?? 0;
+          const oldPoints = student.points ?? student.totalPoints ?? 0;
+
+          if (newPoints > oldPoints) {
+            audioService.playCoinSound();
+            if (newPoints - oldPoints >= 10) {
+              audioService.playCelebrationCheer();
+            }
+          }
+
+          setStudent(prev => {
+            if (!prev) return data.student;
+            const cachedPhoto = localStorage.getItem('student_session_photo_' + prev.id) || localStorage.getItem('student_session_photo_' + prev.code);
+            return {
+              ...prev,
+              ...data.student,
+              photoUrl: data.student.photoUrl || cachedPhoto || prev.photoUrl
+            };
+          });
+
+          if (data.badges) setBadges(data.badges);
+          if (data.homeworks) setHomeworks(data.homeworks);
+          if (data.portalMessages) setPortalMessages(data.portalMessages);
+        }
+      } catch (e) {
+        // Silent sync catch
+      }
+    }, 3500);
+
+    return () => clearInterval(syncInterval);
+  }, [isLoggedIn, student?.code, student?.points, student?.totalPoints]);
 
   // Helper for normalizing Arabic numerals and phone numbers
   const normalizeDigits = (str: string): string => {
@@ -3179,7 +3231,7 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
                     </p>
                   </div>
                 )}
-                <StudentLanguageLab trainee={student as any} />
+                <StudentLanguageLabView student={student as any} />
               </div>
             )}
           </div>
@@ -3282,18 +3334,25 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
             
           } catch (e) {}
 
-          // 5. Update Backend Express API
+          // 5. Update Backend Express API & Firestore
           try {
-            const res = await fetch('/api/student/update-photo', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ traineeId: student.id, photoUrl: optimizedPhoto })
+            const resp = await api.updateStudentPhoto({
+              traineeId: student.id || student.code,
+              photoUrl: optimizedPhoto
             });
-            if (res.ok) {
-              alert('تم تحديث وتجميل صورتك بنجاح في ملفك الشخصي! ✨');
+            if (resp && resp.success) {
+              alert('تم تحديث وتجميل صورتك بنجاح وحفظها في المنصة وبياناتك الشخصية! ✨');
             }
           } catch (err) {
             console.warn('Backend photo save warning:', err);
+            // Fallback direct request
+            try {
+              await fetch('/api/student/update-photo', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ traineeId: student.id || student.code, photoUrl: optimizedPhoto })
+              });
+            } catch (e) {}
           }
         }}
       />

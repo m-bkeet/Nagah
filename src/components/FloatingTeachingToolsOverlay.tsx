@@ -41,7 +41,10 @@ import { api } from '../services/api';
 import { audioService } from '../services/audioService';
 import { SmartWhiteboardModal } from './SmartWhiteboardModal';
 import { SmartSpeakerModal } from './SmartSpeakerModal';
+import { FloatingPointsModal } from './FloatingPointsModal';
+import { FloatingCopilotModal } from './FloatingCopilotModal';
 import { PopoutPortal } from './PopoutPortal';
+import { CelebrationBalloonsOverlay } from './CelebrationBalloonsOverlay';
 import { ExternalLink } from 'lucide-react';
 
 interface FloatingTeachingToolsOverlayProps {
@@ -83,6 +86,8 @@ export const FloatingTeachingToolsOverlay: React.FC<FloatingTeachingToolsOverlay
 
   // Smart Speaker Modal State
   const [isSmartSpeakerOpen, setIsSmartSpeakerOpen] = useState(false);
+  const [isFloatingPointsOpen, setIsFloatingPointsOpen] = useState(false);
+  const [isFloatingCopilotOpen, setIsFloatingCopilotOpen] = useState(false);
 
   // Floating Bar Expansion & Position
   const [isPoppedOut, setIsPoppedOut] = useState(false);
@@ -181,6 +186,7 @@ export const FloatingTeachingToolsOverlay: React.FC<FloatingTeachingToolsOverlay
   const [pointsAmount, setPointsAmount] = useState<number>(10);
   const [pointsReason, setPointsReason] = useState<string>('إجابة ممتازة وتسريع الكود');
   const [selectedPointStudentIds, setSelectedPointStudentIds] = useState<string[]>([]);
+  const [celebrationOverlay, setCelebrationOverlay] = useState<{ active: boolean; title?: string; pointsBadge?: string; subtitle?: string }>({ active: false });
 
   // AI Session Copilot Alerts State
   const [copilotAlerts, setCopilotAlerts] = useState<Array<{ id: string; type: 'warning' | 'info' | 'success'; text: string; actionText?: string }>>([
@@ -189,102 +195,124 @@ export const FloatingTeachingToolsOverlay: React.FC<FloatingTeachingToolsOverlay
     { id: '3', type: 'success', text: 'الطالب A009 أنهى المهمة في دقيقة واحدة!', actionText: 'منح 15 نقطة تفوق' }
   ]);
 
-  // Dynamic Per-Branch Students Sync Engine with Smart Persistence
+  // Dynamic Per-Branch Students & Groups Sync Engine with Smart Group Filtering
   const [liveStudents, setLiveStudents] = useState<string[]>([]);
   const [rawTrainees, setRawTrainees] = useState<any[]>([]);
+  const [availableGroups, setAvailableGroups] = useState<any[]>([]);
+  const [selectedGroupId, setSelectedGroupId] = useState<string>('auto'); // 'auto' | 'all' | groupId
+  const [activeDetectedGroupName, setActiveDetectedGroupName] = useState<string>('');
   const [isSyncingStudents, setIsSyncingStudents] = useState<boolean>(false);
 
-  const syncBranchStudents = useCallback(async (targetBranchId?: string, forceRefresh = true, silent = false) => {
+  const syncBranchStudents = useCallback(async (targetBranchId?: string, forceRefresh = true, silent = false, overrideGroupId?: string) => {
     const bId = targetBranchId !== undefined ? targetBranchId : activeBranchId;
+    const currentGId = overrideGroupId !== undefined ? overrideGroupId : selectedGroupId;
     setIsSyncingStudents(true);
     try {
-      const storageKey = `nagah_locked_attendees_${bId}`;
-      
-      // If not forcing refresh, check if we already have persistent locked attendees for this branch
-      if (!forceRefresh) {
-        try {
-          const cached = localStorage.getItem(storageKey);
-          if (cached) {
-            const parsed = JSON.parse(cached);
-            if (Array.isArray(parsed) && parsed.length > 0) {
-              setRawTrainees(parsed);
-              setLiveStudents(parsed.map(t => `${t.code || t.id} - ${t.fullName}`));
-              setSelectedPointStudentIds(parsed.map(t => t.id));
-              if (parsed.length > 0) {
-                setSelectedTraineeForPoints(`${parsed[0].code || parsed[0].id} - ${parsed[0].fullName}`);
-              }
-              setIsSyncingStudents(false);
-              if (!silent) {
-                showToast(`تم تحميل الحاضرين المرتبطين بالمعمل الحالي (${parsed.length} طالب) 🟢`, 'success');
-              }
-              return;
-            }
-          }
-        } catch (e) {}
-      }
-
       const todayStr = new Date().toISOString().split('T')[0];
-      const [allTrainees, attendanceRecords, devices] = await Promise.all([
+      const now = new Date();
+      const currentHour = now.getHours();
+      const currentMinute = now.getMinutes();
+      const currentTimeNum = currentHour * 60 + currentMinute;
+      const dayNames = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
+      const todayDayName = dayNames[now.getDay()];
+
+      const [allTrainees, attendanceRecords, devices, groupsData] = await Promise.all([
         api.getTrainees().catch(() => []),
         api.getAttendance({ date: todayStr }).catch(() => []),
-        api.getDevices().catch(() => [])
+        api.getDevices().catch(() => []),
+        api.getGroups().catch(() => [])
       ]);
 
       const safeTrainees = Array.isArray(allTrainees) ? allTrainees : [];
       const safeAttendance = Array.isArray(attendanceRecords) ? attendanceRecords : [];
       const safeDevices = Array.isArray(devices) ? devices : [];
+      const safeGroups = Array.isArray(groupsData) ? groupsData : [];
 
-      // Include all trainees or filter by branch if specific branch requested
+      setAvailableGroups(safeGroups);
+
+      // Branch filter
       let branchTrainees = safeTrainees;
       if (bId && bId !== 'all') {
         branchTrainees = safeTrainees.filter(t => !t.branchId || t.branchId === bId || t.branchId === 'branch-1' || t.branchId === 'branch-2');
       }
 
-      // Collect IDs of present trainees (marked attendance or active in device lab or logged in via kiosk)
-      const presentTraineeIds = new Set<string>();
-
-      safeAttendance.forEach(a => {
-        if ((a.status === 'present' || a.status === 'late' || a.status === 'active')) {
-          presentTraineeIds.add(a.traineeId);
-        }
-      });
-
-      safeDevices.forEach(d => {
-        if (d.isOnline) {
-          const tId = (d as any).currentTraineeId;
-          if (tId) presentTraineeIds.add(tId);
-          else if (d.currentTraineeName) {
-            const match = safeTrainees.find(t => t.fullName === d.currentTraineeName);
-            if (match) presentTraineeIds.add(match.id);
+      // Determine active group if auto
+      let effectiveGroupId = currentGId;
+      if (currentGId === 'auto') {
+        // Find group that matches current time
+        const matchingGroup = safeGroups.find(g => {
+          if (!g.days || !g.startTime) return false;
+          const daysArray = Array.isArray(g.days) ? g.days : (typeof g.days === 'string' ? g.days.split(',') : []);
+          const isDayMatch = daysArray.some((d: string) => d.includes(todayDayName) || todayDayName.includes(d.trim()));
+          
+          if (isDayMatch && g.startTime && g.endTime) {
+            const [sh, sm] = g.startTime.split(':').map(Number);
+            const [eh, em] = g.endTime.split(':').map(Number);
+            const sNum = (sh || 0) * 60 + (sm || 0);
+            const eNum = (eh || 0) * 60 + (em || 0);
+            return currentTimeNum >= sNum - 15 && currentTimeNum <= eNum + 15;
           }
+          return false;
+        });
+
+        if (matchingGroup) {
+          effectiveGroupId = matchingGroup.id;
+          setActiveDetectedGroupName(`المجموعة الحالية: ${matchingGroup.name} (${matchingGroup.startTime || ''} - ${matchingGroup.endTime || ''})`);
+        } else {
+          effectiveGroupId = 'all';
+          setActiveDetectedGroupName('جميع الحاضرين بالمعمل');
         }
+      } else if (currentGId !== 'all') {
+        const selectedG = safeGroups.find(g => g.id === currentGId);
+        setActiveDetectedGroupName(selectedG ? `المجموعة: ${selectedG.name}` : '');
+      } else {
+        setActiveDetectedGroupName('جميع المجموعات');
+      }
+
+      // Filter trainees by group if a group is active
+      let groupFilteredTrainees = branchTrainees;
+      if (effectiveGroupId && effectiveGroupId !== 'all') {
+        groupFilteredTrainees = branchTrainees.filter(t => t.groupId === effectiveGroupId);
+      }
+
+      // Map attendance and device state for each trainee
+      const enrichedTrainees = groupFilteredTrainees.map(t => {
+        const att = safeAttendance.find(a => a.traineeId === t.id);
+        const dev = safeDevices.find(d => d.isOnline && ((d as any).currentTraineeId === t.id || d.currentTraineeName === t.fullName || (d as any).currentTraineeCode === t.code));
+        
+        let status: 'present' | 'absent' | 'late' | 'excused' = 'absent';
+        if (att) {
+          status = (att.status as any) || 'present';
+        } else if (dev) {
+          status = 'present';
+        }
+
+        return {
+          ...t,
+          attendanceStatus: status,
+          isDeviceOnline: !!dev,
+          onlineDeviceId: dev?.name || dev?.deviceId || ''
+        };
       });
 
-      let presentTraineesList = branchTrainees.filter(t => presentTraineeIds.has(t.id));
+      // Filter present/active trainees for quick selector
+      const presentTraineesList = enrichedTrainees.filter(t => t.attendanceStatus === 'present' || t.attendanceStatus === 'late' || t.isDeviceOnline);
 
-      // Only include truly active/checked-in/online students. If none, keep list empty (0 students).
-      // This ensures when students close their devices or a new group enters, stale students are removed immediately.
+      // If group is selected, show all students of the group so teacher can mark attendance and award points
+      const displayTrainees = effectiveGroupId !== 'all' ? enrichedTrainees : presentTraineesList;
 
-      const formattedList = presentTraineesList.map(t => `${t.code || t.id} - ${t.fullName}`);
+      const formattedList = displayTrainees.map(t => `${t.code || t.id} - ${t.fullName}`);
       setLiveStudents(formattedList);
-      setRawTrainees(presentTraineesList);
-      setSelectedPointStudentIds(presentTraineesList.map(t => t.id));
-
-      // Persist in localStorage so names remain sticky
-      try {
-        localStorage.setItem(storageKey, JSON.stringify(presentTraineesList));
-      } catch (e) {}
+      setRawTrainees(displayTrainees);
+      setSelectedPointStudentIds(displayTrainees.filter(t => t.attendanceStatus === 'present' || t.isDeviceOnline).map(t => t.id));
 
       if (formattedList.length > 0) {
         setSelectedTraineeForPoints(formattedList[0]);
       }
 
-      const activeBranchObj = branches.find(b => b.id === bId);
-      const branchName = activeBranchObj ? activeBranchObj.name : (bId === 'all' ? 'جميع الفروع' : 'فرع المعمل الحاضر');
-
       if (!silent) {
         audioService.playChime([523, 659, 783]);
-        showToast(`تمت مزامنة طلاب المعمل (${branchName}) بنجاح! 🟢 الحاضرون الآن: ${formattedList.length} طالب`, 'success');
+        showToast(`تمت مزامنة طلاب المجموعة (${activeDetectedGroupName || 'المعمل'}) بنجاح! 🟢 الحاضرون: ${presentTraineesList.length} من ${enrichedTrainees.length}`, 'success');
       }
     } catch (err) {
       if (!silent) {
@@ -293,7 +321,7 @@ export const FloatingTeachingToolsOverlay: React.FC<FloatingTeachingToolsOverlay
     } finally {
       setIsSyncingStudents(false);
     }
-  }, [activeBranchId, branches, showToast]);
+  }, [activeBranchId, selectedGroupId, showToast]);
 
   // Initial Sync and Branch Switching Listener & Auto-Sync Interval every 3 seconds
   useEffect(() => {
@@ -575,11 +603,53 @@ export const FloatingTeachingToolsOverlay: React.FC<FloatingTeachingToolsOverlay
     }, 100);
   };
 
+  // Quick Attendance Change inside Points & ClassPoint Modal
+  const handleQuickAttendanceChange = async (traineeId: string, newStatus: 'present' | 'absent' | 'late' | 'excused') => {
+    try {
+      const todayStr = new Date().toISOString().split('T')[0];
+      const currentTime = new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
+      
+      // Update UI optimistically
+      setRawTrainees(prev => prev.map(t => {
+        if (t.id === traineeId) {
+          return { ...t, attendanceStatus: newStatus };
+        }
+        return t;
+      }));
+
+      // If marked present or late, ensure selected for points
+      if (newStatus === 'present' || newStatus === 'late') {
+        setSelectedPointStudentIds(prev => Array.from(new Set([...prev, traineeId])));
+      } else {
+        setSelectedPointStudentIds(prev => prev.filter(id => id !== traineeId));
+      }
+
+      await api.markAttendance({
+        traineeId,
+        date: todayStr,
+        status: newStatus,
+        checkInTime: currentTime,
+        method: 'manual',
+        notes: `تحديث فوري من لوحة المعلم الذكية`
+      });
+
+      const statusLabels: Record<string, string> = {
+        present: 'حاضر 🟢',
+        absent: 'غائب 🔴',
+        late: 'متأخر 🟡',
+        excused: 'معذور 🔵'
+      };
+      showToast(`تم تسجيل الطالب ${statusLabels[newStatus] || newStatus}`, 'success');
+    } catch (e) {
+      showToast('تعذر حفظ حالة الحضور في السيرفر', 'error');
+    }
+  };
+
   // Quick Points Award (ClassPoint style)
   const handleAwardPoints = async (toAllPresent: boolean = false) => {
     try {
       const targetTrainees = toAllPresent
-        ? rawTrainees
+        ? rawTrainees.filter(t => t.attendanceStatus === 'present' || t.attendanceStatus === 'late' || t.isDeviceOnline)
         : rawTrainees.filter(t => selectedPointStudentIds.includes(t.id));
 
       if (targetTrainees.length === 0) {
@@ -595,8 +665,23 @@ export const FloatingTeachingToolsOverlay: React.FC<FloatingTeachingToolsOverlay
         }).catch(() => {})
       ));
 
-      audioService.playChime([600, 800, 1000, 1200]);
-      showToast(`تم إسناد +${pointsAmount} نقطة تميز بنجاح لـ ${targetTrainees.length} طالب حاضر بالمعمل ⭐🎉`, 'success');
+      if (pointsAmount > 0) {
+        audioService.playCoinSound();
+        if (pointsAmount >= 10 || toAllPresent) {
+          audioService.playCelebrationCheer();
+          setCelebrationOverlay({
+            active: true,
+            title: `🎉 إسناد +${pointsAmount} ⭐ بنجاح!`,
+            pointsBadge: `+${pointsAmount} نقطة تميز`,
+            subtitle: `${targetTrainees.length} طالب حاضر بالمجموعة (${pointsReason})`
+          });
+        }
+      } else {
+        audioService.playBuzzerSound();
+      }
+
+      const signText = pointsAmount >= 0 ? `+${pointsAmount}` : `${pointsAmount}`;
+      showToast(`تم إسناد ${signText} نقطة تميز بنجاح لـ ${targetTrainees.length} طالب حاضر بالمجموعة ⭐🎉`, 'success');
       setActiveTool('none');
     } catch (e) {
       showToast('خطأ أثناء إسناد النقاط', 'error');
@@ -822,7 +907,9 @@ export const FloatingTeachingToolsOverlay: React.FC<FloatingTeachingToolsOverlay
   };
 
   const TOOLS_REGISTRY = [
-    { id: 'smart_speaker', label: 'مكبر صوت 📢', category: 'صوت', shortcut: 'Alt+S', icon: Radio, textColor: 'text-emerald-400 group-hover:text-emerald-300' },
+    { id: 'copilot', label: 'مساعد 🤖', category: 'ذكاء اصطناعي', shortcut: 'Alt+C', icon: Bot, textColor: 'text-fuchsia-400 group-hover:text-fuchsia-300' },
+    { id: 'points', label: 'نقاط ⭐️', category: 'تفاعل', shortcut: 'Alt+A', icon: Star, textColor: 'text-amber-400 group-hover:text-amber-300' },
+    { id: 'smart_speaker', label: 'صوت 📢', category: 'أدوات', shortcut: 'Alt+S', icon: Volume2, textColor: 'text-emerald-400 group-hover:text-emerald-300' },
     { id: 'pen', label: 'قلم 🖊️', category: 'رسم', shortcut: 'Alt+P', icon: PenTool, textColor: 'text-red-400 group-hover:text-red-300' },
     { id: 'highlighter', label: 'تمييز 🖍️', category: 'رسم', shortcut: 'Alt+H', icon: Highlighter, textColor: 'text-amber-400 group-hover:text-amber-300' },
     { id: 'laser', label: 'ليزر 🔴', category: 'تركيز', shortcut: 'Alt+L', icon: Radio, textColor: 'text-red-500 group-hover:text-red-400' },
@@ -833,9 +920,7 @@ export const FloatingTeachingToolsOverlay: React.FC<FloatingTeachingToolsOverlay
     { id: 'timer', label: 'مؤقت ⏱️', category: 'تفاعل', shortcut: 'Alt+T', icon: Clock, textColor: 'text-emerald-400 group-hover:text-emerald-300' },
     { id: 'wheel', label: 'عجلة 🎡', category: 'تفاعل', shortcut: 'Alt+R', icon: RotateCw, textColor: 'text-yellow-400 group-hover:text-yellow-300' },
     { id: 'picker', label: 'طالب 👥', category: 'تفاعل', shortcut: '', icon: UserCheck, textColor: 'text-sky-400 group-hover:text-sky-300' },
-    { id: 'points', label: 'نقاط ⭐', category: 'تفاعل', shortcut: '', icon: Star, textColor: 'text-amber-500 group-hover:text-amber-400' },
-    { id: 'copilot', label: 'مساعد 🤖', category: 'مساعد', shortcut: '', icon: Bot, textColor: 'text-purple-400 group-hover:text-purple-300' },
-    { id: 'popout', label: isPoppedOut ? 'استعادة' : 'فصل', category: 'أدوات', shortcut: '', icon: isPoppedOut ? Minimize2 : ExternalLink, textColor: 'text-indigo-400 group-hover:text-indigo-300' },
+            { id: 'popout', label: isPoppedOut ? 'استعادة' : 'فصل', category: 'أدوات', shortcut: '', icon: isPoppedOut ? Minimize2 : ExternalLink, textColor: 'text-indigo-400 group-hover:text-indigo-300' },
     { id: 'clear', label: 'مسح 🧹', category: 'أدوات', shortcut: '', icon: Trash2, textColor: 'text-rose-400 group-hover:text-rose-300' }
   ];
 
@@ -1472,162 +1557,6 @@ export const FloatingTeachingToolsOverlay: React.FC<FloatingTeachingToolsOverlay
       )}
 
       {/* ---------------------------------------------------- */}
-      {/* POPUP MODAL: QUICK POINTS ASSIGNER (ClassPoint Style) */}
-      {/* ---------------------------------------------------- */}
-      {activeTool === 'points' && (
-        <div className="fixed inset-0 z-[9996] bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-3 dir-rtl">
-          <div className="bg-slate-900 border border-amber-500/50 p-4 rounded-2xl shadow-2xl text-white max-w-md w-full max-h-[82vh] overflow-y-auto space-y-3 relative flex flex-col">
-            <button
-              onClick={() => setActiveTool('none')}
-              className="absolute top-3 left-3 text-slate-400 hover:text-white p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 transition-colors cursor-pointer"
-              title="إغلاق"
-            >
-              <X className="w-4 h-4" />
-            </button>
-
-            <div className="flex items-center gap-2.5 pr-1">
-              <div className="p-2.5 bg-amber-500/20 text-amber-400 rounded-xl border border-amber-500/40 shadow-inner shrink-0">
-                <Star className="w-5 h-5 animate-pulse" />
-              </div>
-              <div className="min-w-0">
-                <h2 className="text-sm font-black text-amber-300 truncate">منح نقاط التميز - نظام كلاس بوينت</h2>
-                <p className="text-[10px] text-slate-400 truncate">الطلاب الحاضرون والمتصلون بالمعمل والشبكة حالياً</p>
-              </div>
-            </div>
-
-            {/* Select All / Deselect All / Reset (تصفير) Bar */}
-            <div className="flex items-center justify-between bg-slate-800/80 px-2.5 py-2 rounded-xl border border-slate-700/70 text-[11px]">
-              <div className="flex items-center gap-1.5 text-slate-300 font-bold">
-                <Users className="w-3.5 h-3.5 text-amber-400" />
-                <span>الحاضرون: <strong className="text-emerald-400">{rawTrainees.length}</strong> | المحدد: <strong className="text-amber-400">{selectedPointStudentIds.length}</strong></span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => {
-                    const bId = activeBranchId;
-                    localStorage.removeItem(`nagah_locked_attendees_${bId}`);
-                    setRawTrainees([]);
-                    setLiveStudents([]);
-                    setSelectedPointStudentIds([]);
-                    showToast('تم تصفير قائمة الحاضرين بنجاح 🔄', 'info');
-                  }}
-                  className="px-2 py-1 bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 rounded-lg font-bold text-[10px]"
-                  title="تصفير ومسح القائمة الحالية"
-                >
-                  تصفير 🔄
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSelectedPointStudentIds(rawTrainees.map(t => t.id))}
-                  className="px-2 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 rounded-lg font-bold text-[10px]"
-                >
-                  الكل ✅
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSelectedPointStudentIds([])}
-                  className="px-2 py-1 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg text-[10px]"
-                >
-                  إلغاء ❌
-                </button>
-              </div>
-            </div>
-
-            {/* Interactive Trainees Grid */}
-            <div className="max-h-36 overflow-y-auto p-1.5 bg-slate-950/70 rounded-xl border border-slate-800 grid grid-cols-2 gap-1.5">
-              {rawTrainees.length > 0 ? (
-                rawTrainees.map(t => {
-                  const isSelected = selectedPointStudentIds.includes(t.id);
-                  return (
-                    <div
-                      key={t.id}
-                      onClick={() => {
-                        setSelectedPointStudentIds(prev =>
-                          isSelected ? prev.filter(id => id !== t.id) : [...prev, t.id]
-                        );
-                      }}
-                      className={`p-2 rounded-lg border cursor-pointer transition-all flex items-center gap-2 ${
-                        isSelected
-                          ? 'bg-amber-500/20 border-amber-400 shadow ring-1 ring-amber-500/50'
-                          : 'bg-slate-900 border-slate-800 hover:border-slate-700 opacity-75'
-                      }`}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={isSelected}
-                        onChange={() => {}}
-                        className="rounded text-amber-500 focus:ring-0 cursor-pointer w-3.5 h-3.5"
-                      />
-                      <div className="truncate min-w-0">
-                        <div className="text-[11px] font-bold text-white truncate">{t.fullName}</div>
-                        <div className="text-[9px] text-amber-300 font-mono">{t.code || t.id}</div>
-                      </div>
-                    </div>
-                  );
-                })
-              ) : (
-                <div className="col-span-full py-6 text-center text-[11px] text-slate-400">
-                  لا توجد قائمة طلاب نشطة مرتبطة بالمعمل. انقر مزامنة بالأعلى أو اضغط تصفير.
-                </div>
-              )}
-            </div>
-
-            <div className="space-y-2.5">
-              <div>
-                <label className="text-[11px] text-slate-400 block mb-1">مقدار النجوم / النقاط الفخرية:</label>
-                <div className="grid grid-cols-5 gap-1.5">
-                  {[2, 5, 10, 25, 50].map(pt => (
-                    <button
-                      key={pt}
-                      type="button"
-                      onClick={() => setPointsAmount(pt)}
-                      className={`py-1.5 rounded-lg text-[11px] font-bold transition-all ${
-                        pointsAmount === pt ? 'bg-amber-500 text-slate-950 shadow scale-105' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
-                      }`}
-                    >
-                      +{pt} ⭐
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <label className="text-[11px] text-slate-400 block mb-1">سبب التميز والتحفيز:</label>
-                <input
-                  type="text"
-                  value={pointsReason}
-                  onChange={e => setPointsReason(e.target.value)}
-                  className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-400"
-                  placeholder="مثال: إجابة نموذجية، سرعة إنجاز التحدي"
-                />
-              </div>
-
-              {/* ClassPoint Dual Action Buttons */}
-              <div className="grid grid-cols-2 gap-2 pt-1">
-                <button
-                  type="button"
-                  onClick={() => handleAwardPoints(false)}
-                  disabled={selectedPointStudentIds.length === 0}
-                  className="py-2.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-black text-[11px] rounded-xl shadow transition-all disabled:opacity-50 cursor-pointer"
-                >
-                  منح المحددين ({selectedPointStudentIds.length}) ⭐
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleAwardPoints(true)}
-                  disabled={rawTrainees.length === 0}
-                  className="py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-black text-[11px] rounded-xl shadow transition-all disabled:opacity-50 cursor-pointer"
-                >
-                  منح للجميع دفعة واحدة 🚀
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ---------------------------------------------------- */}
       {/* POPUP MODAL: SESSION COPILOT AI */}
       {/* ---------------------------------------------------- */}
       {activeTool === 'copilot' && (
@@ -1665,12 +1594,22 @@ export const FloatingTeachingToolsOverlay: React.FC<FloatingTeachingToolsOverlay
         </div>
       )}
 
+      <FloatingPointsModal isOpen={isFloatingPointsOpen} onClose={() => setIsFloatingPointsOpen(false)} />
+      <FloatingCopilotModal isOpen={isFloatingCopilotOpen} onClose={() => setIsFloatingCopilotOpen(false)} />
       <SmartSpeakerModal
         isOpen={isSmartSpeakerOpen}
         onClose={() => setIsSmartSpeakerOpen(false)}
         activeSessionId={activeSessionId}
       />
       </ConditionalPopoutWrapper>
+
+      <CelebrationBalloonsOverlay
+        isActive={celebrationOverlay.active}
+        title={celebrationOverlay.title}
+        pointsBadge={celebrationOverlay.pointsBadge}
+        subtitle={celebrationOverlay.subtitle}
+        onComplete={() => setCelebrationOverlay(prev => ({ ...prev, active: false }))}
+      />
     </>
   );
 };

@@ -1214,52 +1214,117 @@ export const PublicTrainerPortalView: React.FC<PublicTrainerPortalViewProps> = (
                               </div>
                             </div>
 
-                            {/* Status Buttons */}
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <button
-                                type="button"
-                                onClick={() => setAttendanceMap({ ...attendanceMap, [st.id]: { ...state, status: 'present' } })}
-                                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
-                                  state.status === 'present'
-                                    ? 'bg-emerald-600 text-white shadow'
-                                    : 'bg-slate-800 text-slate-400 hover:text-white'
-                                }`}
-                              >
-                                حاضر
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setAttendanceMap({ ...attendanceMap, [st.id]: { ...state, status: 'absent' } })}
-                                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
-                                  state.status === 'absent'
-                                    ? 'bg-rose-600 text-white shadow'
-                                    : 'bg-slate-800 text-slate-400 hover:text-white'
-                                }`}
-                              >
-                                غائب
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setAttendanceMap({ ...attendanceMap, [st.id]: { ...state, status: 'late' } })}
-                                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
-                                  state.status === 'late'
-                                    ? 'bg-amber-600 text-white shadow'
-                                    : 'bg-slate-800 text-slate-400 hover:text-white'
-                                }`}
-                              >
-                                متأخر
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setAttendanceMap({ ...attendanceMap, [st.id]: { ...state, status: 'excused' } })}
-                                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
-                                  state.status === 'excused'
-                                    ? 'bg-blue-600 text-white shadow'
-                                    : 'bg-slate-800 text-slate-400 hover:text-white'
-                                }`}
-                              >
-                                معذور
-                              </button>
+                            {/* Status and Quick Point Buttons */}
+                            <div className="flex items-center gap-2 flex-wrap">
+                              {/* Quick Points Award */}
+                              <div className="flex items-center gap-1 bg-slate-900 border border-amber-500/30 rounded-xl px-2 py-1">
+                                <span className="text-[10px] text-amber-400 font-bold">نقاط:</span>
+                                <button
+                                  type="button"
+                                  onClick={async () => {
+                                    try {
+                                      await api.addPoints({
+                                        traineeId: st.id || st.code,
+                                        points: 10,
+                                        reason: 'مشاركة ممتازة وتفاعل بالحصة'
+                                      });
+                                      showToast(`تم منح +10 نقاط للطالب ${st.fullName} ⭐`, 'success');
+                                    } catch (e) {
+                                      showToast('تعذر منح النقاط', 'error');
+                                    }
+                                  }}
+                                  className="px-1.5 py-0.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/40 text-amber-300 text-[10px] font-bold"
+                                  title="منح +10 نقاط"
+                                >
+                                  +10 ⭐
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={async () => {
+                                    try {
+                                      await api.addPoints({
+                                        traineeId: st.id || st.code,
+                                        points: 5,
+                                        reason: 'نشاط وتفاعل إيجابي'
+                                      });
+                                      showToast(`تم منح +5 نقاط للطالب ${st.fullName} ⭐`, 'success');
+                                    } catch (e) {
+                                      showToast('تعذر منح النقاط', 'error');
+                                    }
+                                  }}
+                                  className="px-1.5 py-0.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/30 text-amber-300 text-[10px] font-bold"
+                                  title="منح +5 نقاط"
+                                >
+                                  +5 ⭐
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={async () => {
+                                    try {
+                                      await api.addPoints({
+                                        traineeId: st.id || st.code,
+                                        points: -5,
+                                        reason: 'ملاحظة سلوكية أو عدم انتباه'
+                                      });
+                                      showToast(`تم خصم 5 نقاط من الطالب ${st.fullName} ⚠️`, 'info');
+                                    } catch (e) {
+                                      showToast('تعذر خصم النقاط', 'error');
+                                    }
+                                  }}
+                                  className="px-1.5 py-0.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/30 text-rose-300 text-[10px] font-bold"
+                                  title="خصم 5 نقاط"
+                                >
+                                  -5 ⚠️
+                                </button>
+                              </div>
+
+                              {/* Attendance Status Buttons */}
+                              <div className="flex items-center gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() => setAttendanceMap({ ...attendanceMap, [st.id]: { ...state, status: 'present' } })}
+                                  className={`px-2.5 py-1 rounded-xl text-xs font-bold transition-all ${
+                                    state.status === 'present'
+                                      ? 'bg-emerald-600 text-white shadow ring-1 ring-emerald-400'
+                                      : 'bg-slate-800 text-slate-400 hover:text-white'
+                                  }`}
+                                >
+                                  حاضر
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setAttendanceMap({ ...attendanceMap, [st.id]: { ...state, status: 'absent' } })}
+                                  className={`px-2.5 py-1 rounded-xl text-xs font-bold transition-all ${
+                                    state.status === 'absent'
+                                      ? 'bg-rose-600 text-white shadow ring-1 ring-rose-400'
+                                      : 'bg-slate-800 text-slate-400 hover:text-white'
+                                  }`}
+                                >
+                                  غائب
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setAttendanceMap({ ...attendanceMap, [st.id]: { ...state, status: 'late' } })}
+                                  className={`px-2.5 py-1 rounded-xl text-xs font-bold transition-all ${
+                                    state.status === 'late'
+                                      ? 'bg-amber-600 text-white shadow ring-1 ring-amber-400'
+                                      : 'bg-slate-800 text-slate-400 hover:text-white'
+                                  }`}
+                                >
+                                  متأخر
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setAttendanceMap({ ...attendanceMap, [st.id]: { ...state, status: 'excused' } })}
+                                  className={`px-2.5 py-1 rounded-xl text-xs font-bold transition-all ${
+                                    state.status === 'excused'
+                                      ? 'bg-blue-600 text-white shadow ring-1 ring-blue-400'
+                                      : 'bg-slate-800 text-slate-400 hover:text-white'
+                                  }`}
+                                >
+                                  معذور
+                                </button>
+                              </div>
                             </div>
                           </div>
                         );
