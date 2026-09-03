@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
-import { CourseRepo, GroupRepo, TraineeRepo, BranchRepo } from './data';
+import { CourseRepo, GroupRepo, TraineeRepo, BranchRepo, SettingRepo, TrainerRepo } from './data';
 import { adminDb } from './firebaseAdmin';
-import { Trainee, Course, Group } from '../src/types';
+import { Trainee, Course, Group, Trainer } from '../src/types';
 
 export function resolveGradePrefix(gradeOrCourse?: string): string {
   if (!gradeOrCourse) return 'A';
@@ -164,6 +164,15 @@ export function normalizeArabicFull(str: string): string {
 
 export async function handlePublicRegister(req: Request, res: Response) {
   try {
+    const settings = await SettingRepo.get();
+    if (settings.allowOnlineRegistration === false) {
+      return res.status(403).json({
+        success: false,
+        registrationClosed: true,
+        error: 'عذراً، باب التسجيل الخارجي مغلق حالياً لاكتمال العدد المطلوب أو بقرار إداري. يمكنك التواصل المباشر مع إدارة المركز عبر الواتساب.'
+      });
+    }
+
     const data = req.body;
     if (!data.fullName || (!data.phone && !data.parentPhone)) {
       return res.status(400).json({ success: false, error: 'اسم الطالب ورقم الهاتف حقول إجبارية' });
@@ -346,3 +355,61 @@ export async function handlePublicRegister(req: Request, res: Response) {
     res.status(500).json({ success: false, error: err.message || 'Internal Server Error' });
   }
 }
+
+export async function handlePublicTrainerRegister(req: Request, res: Response) {
+  try {
+    const settings = await SettingRepo.get();
+    if (settings.allowOnlineRegistration === false) {
+      return res.status(403).json({
+        success: false,
+        registrationClosed: true,
+        error: 'عذراً، باب تسجيل المدربين مغلق حالياً بقرار إداري. يرجى التواصل مع إدارة المركز.'
+      });
+    }
+
+    const { name, phone, email, branchId, specialty, percentage, notes } = req.body;
+    if (!name || !phone || !branchId || !specialty) {
+      return res.status(400).json({ success: false, error: 'جميع الحقول الأساسية مطلوبة' });
+    }
+
+    const allTrainers = await TrainerRepo.getAll();
+    const cleanPhone = String(phone).trim();
+    const existing = allTrainers.find(t => t.phone && t.phone.replace(/\D/g, '').slice(-10) === cleanPhone.replace(/\D/g, '').slice(-10));
+    
+    if (existing) {
+      return res.json({
+        success: true,
+        alreadyRegistered: true,
+        message: 'أهلاً بك! رقم هاتفك مسجل بالفعل كمدرب لدينا في النظام.',
+        trainer: existing
+      });
+    }
+
+    const code = `TR-${Date.now().toString().slice(-4)}`;
+    const newTrainer: Trainer = {
+      id: 'trainer-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6),
+      code,
+      name: String(name).trim(),
+      phone: cleanPhone,
+      email: email ? String(email).trim() : '',
+      branchId: branchId || 'branch-1',
+      specialty: String(specialty).trim(),
+      percentage: Number(percentage) || 50,
+      centerPercentage: 100 - (Number(percentage) || 50),
+      notes: notes ? String(notes).trim() : '[تسجيل مدرب خارجي عبر الرابط الإلكتروني]',
+      status: 'active'
+    };
+
+    await TrainerRepo.create(newTrainer.id, newTrainer);
+
+    return res.json({
+      success: true,
+      message: 'تم تسجيل بيانات المدرب بنجاح!',
+      trainer: newTrainer
+    });
+  } catch (err: any) {
+    console.error('Trainer Registration error:', err);
+    return res.status(500).json({ success: false, error: err.message || 'خطأ في السيرفر أثناء تسجيل المدرب' });
+  }
+}
+

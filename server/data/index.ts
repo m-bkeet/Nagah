@@ -136,6 +136,7 @@ if (supabaseClient) {
 function createRepo<T extends { id: string }>(key: string) {
   return {
     async getAll(): Promise<T[]> {
+      let supabaseItems: T[] = [];
       if (supabaseClient) {
         try {
           const { data, error } = await supabaseClient
@@ -145,18 +146,10 @@ function createRepo<T extends { id: string }>(key: string) {
             .range(0, 4999);
 
           if (!error && Array.isArray(data)) {
-            const items = data.map((row: any) => ({
+            supabaseItems = data.map((row: any) => ({
               id: row.id,
               ...(row.data || {})
             })) as T[];
-
-            const memData = db.getData() as any;
-            if (memData) {
-
-              memData[key] = items;
-            }
-
-            return items;
           } else if (error) {
             console.error(`[SupabaseRepo] Error fetching collection "${key}":`, error.message);
           }
@@ -166,8 +159,26 @@ function createRepo<T extends { id: string }>(key: string) {
       }
 
       const memData = db.getData() as any;
-      const list = memData ? memData[key] : [];
-      return Array.isArray(list) ? list : [];
+      const memItems = (memData && Array.isArray(memData[key])) ? (memData[key] as T[]) : [];
+
+      if (supabaseItems.length > 0) {
+        const itemMap = new Map<string, T>();
+        supabaseItems.forEach(item => {
+          if (item && item.id) itemMap.set(String(item.id), item);
+        });
+        memItems.forEach(item => {
+          if (item && item.id && !itemMap.has(String(item.id))) {
+            itemMap.set(String(item.id), item);
+          }
+        });
+        const merged = Array.from(itemMap.values());
+        if (memData) {
+          memData[key] = merged;
+        }
+        return merged;
+      }
+
+      return memItems;
     },
 
     async getById(id: string): Promise<T | null> {

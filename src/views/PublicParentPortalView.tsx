@@ -213,44 +213,65 @@ export const PublicParentPortalView: React.FC<PublicParentPortalViewProps> = ({ 
   }, []);
 
   const autoLoginParent = async (phoneOrCode: string) => {
+    if (!phoneOrCode) return;
     setIsLoading(true);
-    // 1. Instantly load from local offline-first cache
-    try {
-      const cached = resilientOfflineService.getFromCache('parent');
-      if (cached) {
-        populateParentData(cached);
-        setIsOfflineFallback(true);
+    setError('');
+
+    const isActuallyOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
+    const savedPassword = localStorage.getItem('parent_session_password') || '';
+
+    // 1. If online, fetch fresh server data
+    if (isActuallyOnline) {
+      try {
+        const res = await fetch('/api/parent/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ codeOrPhone: phoneOrCode, password: savedPassword })
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          populateParentData(data);
+          resilientOfflineService.saveToCache('parent', data);
+          setIsOfflineFallback(false);
+          setIsLoading(false);
+          return;
+        } else {
+          // If the account was not found on the server, clear invalid session
+          if (res.status === 404 || (data.error && data.error.includes('لم يتم العثور'))) {
+            localStorage.removeItem('parent_session_code');
+            localStorage.removeItem('parent_session_password');
+            setChildren([]);
+          }
+        }
+      } catch (err) {
+        console.warn('[Parent Auto-Login] Server request failed, falling back to local cache if matching:', err);
       }
-    } catch (e) {
-      console.warn('[Parent Auto-Login] No parent cache loaded:', e);
     }
 
-    // 2. Revalidate in background if online
-    const savedPassword = localStorage.getItem('parent_session_password') || '';
+    // 2. Only if offline or network unreachable, load matching cached data
     try {
-      const res = await fetch('/api/parent/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ codeOrPhone: phoneOrCode, password: savedPassword })
-      });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        populateParentData(data);
-        // Cache the session data
-        resilientOfflineService.saveToCache('parent', data);
-        setIsOfflineFallback(false);
-      } else {
-        // Only remove session if the server says it's strictly invalid (e.g., bad credentials)
-        if (data.error && data.error.includes('غير صحيحة')) {
-          localStorage.removeItem('parent_session_code');
-          localStorage.removeItem('parent_session_password');
+      const cached = resilientOfflineService.getFromCache('parent');
+      if (cached && Array.isArray(cached.children) && cached.children.length > 0) {
+        const norm = normalizeDigits(phoneOrCode).trim().toLowerCase();
+        const digits = cleanPhoneDigits(phoneOrCode);
+        const matches = cached.children.some((c: any) => {
+          const cCode = normalizeDigits(c.code || '').trim().toLowerCase();
+          const cPhone = cleanPhoneDigits(c.phone || '');
+          const pPhone = cleanPhoneDigits(c.parentPhone || '');
+          return cCode === norm || (digits.length >= 8 && (cPhone === digits || pPhone === digits));
+        });
+        if (matches) {
+          populateParentData(cached);
+          setIsOfflineFallback(!isActuallyOnline);
+          setIsLoading(false);
+          return;
         }
       }
-    } catch (err) {
-      console.warn('[Parent Offline] Failed autoLogin background refresh, staying on cache.', err);
-    } finally {
-      setIsLoading(false);
+    } catch (e) {
+      console.warn('[Parent Auto-Login] No matching parent cache:', e);
     }
+
+    setIsLoading(false);
   };
 
   const populateParentData = (data: any) => {
@@ -457,12 +478,20 @@ export const PublicParentPortalView: React.FC<PublicParentPortalViewProps> = ({ 
 
     // --- Layer 3: Local Offline Cache ---
     const cached = resilientOfflineService.getFromCache('parent');
-    if (cached) {
-      localStorage.setItem('parent_session_code', rawInput);
-      populateParentData(cached);
-      setIsOfflineFallback(true);
-      setIsLoading(false);
-      return;
+    if (cached && Array.isArray(cached.children) && cached.children.length > 0) {
+      const matches = cached.children.some((c: any) => {
+        const cCode = normalizeDigits(c.code || '').trim().toLowerCase();
+        const cPhone = cleanPhoneDigits(c.phone || '');
+        const pPhone = cleanPhoneDigits(c.parentPhone || '');
+        return cCode === normalizedInput || (isPhone && (cPhone === inputDigits || pPhone === inputDigits));
+      });
+      if (matches) {
+        localStorage.setItem('parent_session_code', rawInput);
+        populateParentData(cached);
+        setIsOfflineFallback(true);
+        setIsLoading(false);
+        return;
+      }
     }
 
     setError(`لم يتم العثور على حساب مسجل برقم الهاتف أو الكود (${rawInput}). يرجى التأكد وإعادة المحاولة.`);
@@ -473,14 +502,49 @@ export const PublicParentPortalView: React.FC<PublicParentPortalViewProps> = ({ 
     localStorage.removeItem('parent_session_code');
     localStorage.removeItem('parent_session_password');
     localStorage.removeItem('nagah_parent_cache');
+    try {
+      resilientOfflineService.saveToCache('parent', null);
+    } catch (e) {}
     setChildren([]);
+    setSelectedChildId('');
     setParentName('');
     setCodeOrPhone('');
     setError('');
+    setIsOfflineFallback(false);
   };
 
   const selectedChild = children.find(c => c.id === selectedChildId) || children[0];
   const parentMessages = selectedChild?.messages || [];
+
+  // Live polling for parent messages every 4 seconds when child is selected
+  useEffect(() => {
+    if (!selectedChild?.id && !selectedChild?.code) return;
+
+    const pollParentMessages = async () => {
+      try {
+        const queryId = selectedChild.id || selectedChild.code;
+        const res = await fetch(`/api/parent/messages/${queryId}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success && Array.isArray(data.messages)) {
+            setChildren(prevChildren => 
+              prevChildren.map(c => 
+                (c.id === selectedChild.id || c.code === selectedChild.code)
+                  ? { ...c, messages: data.messages }
+                  : c
+              )
+            );
+          }
+        }
+      } catch (e) {
+        // silent fail
+      }
+    };
+
+    pollParentMessages();
+    const interval = setInterval(pollParentMessages, 4000);
+    return () => clearInterval(interval);
+  }, [selectedChild?.id, selectedChild?.code]);
 
   // Session Celebration & Real-Time Event State for Parent
   const [showCelebrationOverlay, setShowCelebrationOverlay] = useState(false);
@@ -813,7 +877,7 @@ export const PublicParentPortalView: React.FC<PublicParentPortalViewProps> = ({ 
       </header>
 
       {/* Connectivity & Emergency Offline Warning Banner */}
-      {(!isOnline || isOfflineFallback) && (
+      {children.length > 0 && (!isOnline || isOfflineFallback) && (
         <div className="bg-gradient-to-r from-indigo-700 via-indigo-600 to-indigo-700 border-b border-indigo-500/40 text-white font-bold text-xs py-2 px-4 shadow-md flex items-center justify-between transition-all">
           <div className="flex items-center gap-2">
             <AlertCircle className="w-4 h-4 animate-pulse shrink-0 text-amber-400" />

@@ -133,28 +133,55 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
   return (
     <div className="dir-rtl text-slate-900 dark:text-slate-100 font-sans max-w-7xl mx-auto min-h-[calc(100vh-4rem)] flex flex-col justify-between p-2 sm:p-3 overflow-x-hidden relative select-none">
       
-      {/* 1. TOP SECTION: FULL-WIDTH SLIM HONOR BOARD AT THE VERY TOP */}
-      <div className="mb-2 shrink-0">
-        <div 
+      {/* 1. TOP SECTION: STARS OF THE WEEK HONOR BAR (لوحة نجوم الأسبوع) */}
+      <div className="w-full flex items-center justify-between gap-2 sm:gap-3 mb-2.5 shrink-0 select-none">
+        
+        {/* Right side title: نجوم الأسبوع */}
+        <button
+          type="button"
           onClick={() => setShowHonorModal(true)}
-          className="w-full bg-gradient-to-r from-slate-900/50 via-purple-950/60 to-slate-900/50 border border-amber-400/60 rounded-xl px-4 py-1.5 shadow-xl backdrop-blur-xl cursor-pointer hover:scale-[1.005] transition-all relative flex items-center justify-between gap-3"
+          className="px-3.5 sm:px-4 py-2 rounded-2xl text-xs font-bold shrink-0 flex items-center gap-1.5 cursor-pointer hover:scale-105 active:scale-95 transition-all border
+            bg-white/70 border-amber-400/80 text-amber-900 shadow-[0_4px_20px_rgba(245,158,11,0.2),inset_0_1px_1px_rgba(255,255,255,0.9)] backdrop-blur-xl
+            dark:bg-[#0f172a]/90 dark:border-amber-500/70 dark:text-amber-300 dark:shadow-[0_0_15px_rgba(245,158,11,0.25)]"
+          title="عرض لوحة شرف المتميزين الكاملة"
         >
-          {/* Right side title: نجوم الأسبوع */}
-          <div className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-amber-500/20 border border-amber-400/60 text-amber-200 text-xs font-black shrink-0 shadow-[0_0_10px_rgba(245,158,11,0.4)]">
-            <span>👑</span>
-            <span>نجوم الأسبوع</span>
-          </div>
+          <span className="text-sm">👑</span>
+          <span className="tracking-wide">نجوم الأسبوع</span>
+        </button>
 
-          {/* Center 3 compact slim trainee cards with 3D colorful glowing lighting */}
-          <div className="grid grid-cols-3 gap-3 flex-1 max-w-3xl mx-auto justify-items-center">
-            {honorTrainees.slice(0, 3).map((trainee, idx) => {
-              const cardGlowStyles = idx === 0
-                ? "bg-gradient-to-r from-amber-500/30 via-yellow-500/25 to-amber-600/30 border-amber-400 text-amber-100 shadow-[0_0_20px_rgba(245,158,11,0.7),inset_0_1px_3px_rgba(255,255,255,0.6)] animate-pulse"
+        {/* Center 3 compact slim trainee cards */}
+        <div className="grid grid-cols-3 gap-2.5 sm:gap-3 flex-1 max-w-3xl mx-auto justify-items-center">
+          {honorTrainees.length === 0 ? (
+            <div className="col-span-3 text-center text-xs font-bold text-amber-900 dark:text-amber-200 flex items-center justify-center gap-2 py-2">
+              <span>✨</span>
+              <span>لوحة شرف المتفوقين — رصد النقاط والنجوم تلقائياً لترتيب المراكز الأولى</span>
+            </div>
+          ) : (
+            honorTrainees.slice(0, 3).map((trainee, idx) => {
+              // Card styles: Exactly matching image.png in dark mode, and glowing glassmorphic in light mode
+              const cardStyles = idx === 0
+                ? "border-amber-400/80 bg-white/70 hover:bg-white/85 shadow-[0_4px_20px_rgba(245,158,11,0.2),inset_0_1px_2px_rgba(255,255,255,0.9)] dark:bg-[#0f172a]/90 dark:border-amber-500/80 dark:shadow-[0_0_18px_rgba(245,158,11,0.3)] dark:hover:border-amber-400"
                 : idx === 1
-                ? "bg-gradient-to-r from-cyan-500/30 via-teal-500/25 to-blue-600/30 border-cyan-400 text-cyan-100 shadow-[0_0_20px_rgba(6,182,212,0.7),inset_0_1px_3px_rgba(255,255,255,0.6)] animate-pulse"
-                : "bg-gradient-to-r from-purple-500/30 via-pink-500/25 to-indigo-600/30 border-purple-400 text-purple-100 shadow-[0_0_20px_rgba(168,85,247,0.7),inset_0_1px_3px_rgba(255,255,255,0.6)] animate-pulse";
+                ? "border-sky-400/80 bg-white/70 hover:bg-white/85 shadow-[0_4px_20px_rgba(14,165,233,0.2),inset_0_1px_2px_rgba(255,255,255,0.9)] dark:bg-[#0f172a]/90 dark:border-cyan-400/80 dark:shadow-[0_0_18px_rgba(6,182,212,0.3)] dark:hover:border-cyan-300"
+                : "border-purple-400/80 bg-white/70 hover:bg-white/85 shadow-[0_4px_20px_rgba(168,85,247,0.2),inset_0_1px_2px_rgba(255,255,255,0.9)] dark:bg-[#0f172a]/90 dark:border-purple-500/80 dark:shadow-[0_0_18px_rgba(168,85,247,0.3)] dark:hover:border-purple-400";
 
-              const badgeColor = idx === 0 ? "bg-amber-400 text-slate-950 shadow-[0_0_10px_#f59e0b]" : idx === 1 ? "bg-cyan-400 text-slate-950 shadow-[0_0_10px_#06b6d4]" : "bg-purple-400 text-slate-950 shadow-[0_0_10px_#a855f7]";
+              const badgeBorder = idx === 0
+                ? "bg-amber-100 border-amber-300 text-amber-900 dark:bg-amber-950/90 dark:border-amber-500/70 dark:text-amber-300"
+                : idx === 1
+                ? "bg-sky-100 border-sky-300 text-sky-900 dark:bg-cyan-950/90 dark:border-cyan-500/70 dark:text-cyan-300"
+                : "bg-purple-100 border-purple-300 text-purple-900 dark:bg-purple-950/90 dark:border-purple-500/70 dark:text-purple-300";
+
+              const avatarBorder = idx === 0
+                ? "border-amber-400 text-amber-900 bg-amber-100 dark:border-amber-500/70 dark:bg-amber-500/20 dark:text-amber-300"
+                : idx === 1
+                ? "border-sky-400 text-sky-900 bg-sky-100 dark:border-cyan-400/70 dark:bg-cyan-500/20 dark:text-cyan-300"
+                : "border-purple-400 text-purple-900 bg-purple-100 dark:border-purple-500/70 dark:bg-purple-500/20 dark:text-purple-300";
+
+              const pointsChip = idx === 0
+                ? "bg-amber-50/90 border-amber-300/80 text-amber-900 dark:bg-slate-950/80 dark:border-amber-500/60 dark:text-amber-300"
+                : idx === 1
+                ? "bg-sky-50/90 border-sky-300/80 text-sky-900 dark:bg-slate-950/80 dark:border-cyan-500/60 dark:text-amber-300"
+                : "bg-purple-50/90 border-purple-300/80 text-purple-900 dark:bg-slate-950/80 dark:border-purple-500/60 dark:text-amber-300";
 
               return (
                 <div 
@@ -166,39 +193,54 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
                     audioService.playChime([523, 659, 783, 1046, 1318]);
                     setTimeout(() => setShowCelebration(false), 9000);
                   }}
-                  className={`w-full px-3.5 py-1.5 rounded-xl border-2 flex items-center justify-between relative group/card hover:scale-105 transition-all cursor-pointer backdrop-blur-md ${cardGlowStyles}`}
+                  className={`w-full px-3 py-1.5 rounded-2xl border-2 flex items-center justify-between relative group/card hover:scale-[1.03] transition-all cursor-pointer backdrop-blur-xl ${cardStyles}`}
                 >
-                  <div className={`absolute -top-2 -right-1.5 font-black text-[9px] w-4 h-4 rounded-full flex items-center justify-center shadow-lg border border-white ${badgeColor}`}>
+                  {/* Medal pinned on top right */}
+                  <div className={`absolute -top-2.5 -right-2 text-[11px] w-6 h-6 rounded-full flex items-center justify-center shadow-md border ${badgeBorder}`}>
                     {idx === 0 ? '🥇' : idx === 1 ? '🥈' : '🥉'}
                   </div>
-                  <div className="flex items-center gap-2 min-w-0">
+
+                  {/* Avatar & Name */}
+                  <div className="flex items-center gap-2 min-w-0 pr-2">
                     {trainee.avatar ? (
                       <img 
                         src={trainee.avatar} 
                         alt={trainee.name}
-                        className="w-6 h-6 rounded-full object-cover border-2 border-white shadow shrink-0"
+                        className={`w-6 h-6 rounded-full object-cover border shadow-xs shrink-0 ${avatarBorder}`}
                       />
                     ) : (
-                      <div className="w-6 h-6 rounded-full bg-slate-900 text-white border-2 border-white flex items-center justify-center font-black text-[10px] shadow shrink-0">
+                      <div className={`w-6 h-6 rounded-full border flex items-center justify-center font-bold text-[10px] shadow-xs shrink-0 ${avatarBorder}`}>
                         {trainee.initial}
                       </div>
                     )}
-                    <span className="text-[11px] font-black text-white truncate">{trainee.name}</span>
+                    <span className="text-xs font-bold text-slate-900 dark:text-slate-100 truncate">
+                      {trainee.name}
+                    </span>
                   </div>
-                  <span className="text-[10px] font-mono font-black px-2 py-0.5 rounded-full bg-black/60 text-amber-300 border border-white/30 shadow-inner shrink-0">
-                    ⭐ {trainee.points}
+
+                  {/* Points Pill */}
+                  <span className={`text-[11px] font-mono font-bold px-2.5 py-0.5 rounded-full border shadow-xs shrink-0 flex items-center gap-1 ${pointsChip}`}>
+                    <span>{trainee.points}</span>
+                    <span className="text-amber-500">⭐</span>
                   </span>
                 </div>
               );
-            })}
-          </div>
-
-          {/* Left side title: دمتم متألقين */}
-          <div className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-purple-500/20 border border-purple-400/60 text-purple-200 text-xs font-black shrink-0 shadow-[0_0_10px_rgba(168,85,247,0.4)]">
-            <span>✨</span>
-            <span>دمتم متألقين</span>
-          </div>
+            })
+          )}
         </div>
+
+        {/* Left side title: دمتم متألقين */}
+        <button
+          type="button"
+          onClick={() => setShowHonorModal(true)}
+          className="px-3.5 sm:px-4 py-2 rounded-2xl text-xs font-bold shrink-0 flex items-center gap-1.5 cursor-pointer hover:scale-105 active:scale-95 transition-all border
+            bg-white/70 border-purple-400/80 text-purple-900 shadow-[0_4px_20px_rgba(168,85,247,0.2),inset_0_1px_1px_rgba(255,255,255,0.9)] backdrop-blur-xl
+            dark:bg-[#0f172a]/90 dark:border-purple-500/70 dark:text-purple-300 dark:shadow-[0_0_15px_rgba(168,85,247,0.25)]"
+          title="تكريم المتميزين"
+        >
+          <span className="text-sm">✨</span>
+          <span className="tracking-wide">دمتم متألقين</span>
+        </button>
       </div>
 
       {/* 2. MAIN 3-COLUMN LAYOUT: LEFT (FINANCE), CENTER (LOGO ORBIT STAGE), RIGHT (METRICS) */}
@@ -207,7 +249,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
         {/* LEFT COLUMN: 5 FINANCIAL & SYSTEM CARDS */}
         <div className="lg:col-span-3 space-y-2.5 order-2 lg:order-1">
           
-          {/* Revenue Card (Bar Graph) */}
+          {/* Revenue Card (Green Bar Graph) */}
           <div
             className="w-full text-right bg-white/80 dark:bg-gradient-to-br dark:from-[#0f172a]/90 dark:via-[#0c1322]/90 dark:to-[#070b14]/90 p-3 rounded-2xl border border-emerald-300/60 dark:border-emerald-500/40 hover:border-emerald-500 flex flex-col justify-between h-[78px] relative overflow-hidden group transition-all shadow-md backdrop-blur-md cursor-pointer"
             onClick={() => onNavigate('finance')}
@@ -223,7 +265,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
                     e.stopPropagation();
                     setShowRev(!showRev);
                   }}
-                  className="w-5 h-5 rounded-full bg-emerald-500/20 hover:bg-emerald-500/40 border border-emerald-500/50 text-[10px] text-emerald-300 flex items-center justify-center transition-all"
+                  className="w-5 h-5 rounded-full bg-emerald-500/20 hover:bg-emerald-500/40 border border-emerald-500/50 text-[10px] text-emerald-700 dark:text-emerald-300 flex items-center justify-center transition-all"
                   title={showRev ? 'إخفاء المبلغ' : 'إظهار المبلغ'}
                 >
                   {showRev ? '👁️' : '🔒'}
@@ -344,7 +386,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
                 <Activity className="w-3.5 h-3.5 text-cyan-600 dark:text-cyan-400 animate-pulse" />
               </div>
               <div className="w-full h-1.5 bg-slate-100 dark:bg-slate-950 rounded-full overflow-hidden flex items-center">
-                <div className="w-full h-full bg-gradient-to-r from-emerald-500 to-cyan-400 rounded-full"></div>
+                <div className="w-full h-full bg-gradient-to-r from-sky-500 to-blue-600 rounded-full"></div>
               </div>
             </div>
           </button>
@@ -483,15 +525,15 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
 
           {/* Center Title Box */}
           <div className="text-center mt-2 relative z-20 w-full flex flex-col items-center justify-center">
-            <div className="inline-flex items-center gap-3 px-6 py-2 rounded-2xl bg-white/90 dark:bg-gradient-to-b dark:from-[#111827]/90 dark:via-[#0f172a]/90 dark:to-[#070b14]/90 border-2 border-purple-300 dark:border-amber-400/80 shadow-md backdrop-blur-md">
-              <div className="p-1.5 bg-amber-100 dark:bg-amber-500/20 rounded-xl text-amber-700 dark:text-amber-300 border border-amber-300">
+            <div className="inline-flex items-center gap-3 px-6 py-2 rounded-2xl bg-white/75 dark:bg-gradient-to-b dark:from-[#111827]/90 dark:via-[#0f172a]/90 dark:to-[#070b14]/90 border-2 border-amber-400/80 shadow-[0_4px_20px_rgba(245,158,11,0.2),inset_0_1px_1px_rgba(255,255,255,0.9)] dark:shadow-[0_0_20px_rgba(245,158,11,0.25)] backdrop-blur-xl">
+              <div className="p-1.5 bg-amber-100 dark:bg-amber-500/20 rounded-xl text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-500/40">
                 <Crown className="w-4 h-4 text-amber-600 dark:text-amber-300 animate-pulse" />
               </div>
-              <h2 className="text-base sm:text-xl font-black text-purple-950 dark:text-transparent dark:bg-clip-text dark:bg-gradient-to-r dark:from-amber-200 dark:via-white dark:to-amber-200 tracking-wide font-sans">
-                {settings?.centerName || 'النجاح للتدريب والاستشارات'}
+              <h2 className="text-base sm:text-xl font-black text-slate-900 dark:text-transparent dark:bg-clip-text dark:bg-gradient-to-r dark:from-amber-200 dark:via-white dark:to-amber-200 tracking-wide font-sans">
+                {settings?.centerName || 'مركز النجاح للتدريب والاستشارات'}
               </h2>
-              <div className="p-1.5 bg-purple-100 dark:bg-amber-500/20 rounded-xl text-purple-700 dark:text-amber-300 border border-amber-300">
-                <Sparkles className="w-4 h-4 text-purple-600 dark:text-amber-300 animate-pulse" />
+              <div className="p-1.5 bg-amber-100 dark:bg-amber-500/20 rounded-xl text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-500/40">
+                <Sparkles className="w-4 h-4 text-amber-600 dark:text-amber-300 animate-pulse" />
               </div>
             </div>
           </div>
@@ -633,7 +675,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
           onClick={() => showToast('جاري تصدير نسخة احتياطية واسعة من النظام...', 'info')}
           className="flex items-center gap-2 bg-emerald-50 dark:bg-emerald-600/25 border border-emerald-300 dark:border-emerald-500/60 hover:bg-emerald-100 text-emerald-800 dark:text-emerald-300 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 active:scale-95 cursor-pointer shadow-sm"
         >
-          <Download className="w-4 h-4" />
+          <Download className="w-4 h-4 text-emerald-700 dark:text-emerald-300" />
           <span>تصدير واسع للاحتياطي</span>
         </button>
 

@@ -70,26 +70,26 @@ export const AITutor = ({ studentName, studentLevel }: { studentName: string, st
   };
 
   return (
-    <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 md:p-8 shadow-xl">
-      <div className="flex items-center gap-3 mb-6 border-b border-slate-800 pb-4">
-        <div className="w-12 h-12 rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center">
+    <div className="bg-white/80 dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-3xl p-5 md:p-8 shadow-xl backdrop-blur-xl">
+      <div className="flex items-center gap-3 mb-6 border-b border-slate-200/80 dark:border-slate-800 pb-4">
+        <div className="w-12 h-12 rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center shadow-md">
           <Bot className="w-6 h-6 text-white" />
         </div>
         <div>
-          <h2 className="text-xl font-black text-white flex items-center gap-2">
-            فهمني واشرحلي <Sparkles className="w-4 h-4 text-amber-400" />
+          <h2 className="text-xl font-black text-slate-900 dark:text-white flex items-center gap-2">
+            فهمني واشرحلي <Sparkles className="w-4 h-4 text-amber-500 dark:text-amber-400" />
           </h2>
-          <p className="text-sm text-slate-400">معلمك الذكي جاهز لمساعدتك في أي وقت</p>
+          <p className="text-sm text-slate-600 dark:text-slate-400">معلمك الذكي جاهز لمساعدتك في أي وقت</p>
         </div>
       </div>
 
       <div className="space-y-4">
         {imageBase64 && (
           <div className="relative inline-block">
-            <img src={imageBase64} className="h-32 rounded-xl border border-slate-700 object-cover" />
+            <img src={imageBase64} className="h-32 rounded-xl border border-slate-200 dark:border-slate-700 object-cover" />
             <button 
               onClick={() => setImageBase64(null)} 
-              className="absolute -top-2 -right-2 bg-rose-500 text-white rounded-full p-1"
+              className="absolute -top-2 -right-2 bg-rose-500 text-white rounded-full p-1 shadow"
             >
               <X className="w-4 h-4" />
             </button>
@@ -101,12 +101,12 @@ export const AITutor = ({ studentName, studentLevel }: { studentName: string, st
             value={question}
             onChange={(e) => setQuestion(e.target.value)}
             placeholder="اكتب سؤالك هنا، أو صور الجزئية اللي مش فاهمها من الكتاب..."
-            className="w-full bg-slate-950 border border-slate-800 rounded-2xl p-4 text-white min-h-[120px] focus:outline-none focus:border-indigo-500 transition-colors resize-none"
+            className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 min-h-[120px] focus:outline-none focus:border-indigo-500 transition-colors resize-none shadow-xs"
           />
           <div className="absolute bottom-3 left-3 flex gap-2">
             <button 
               onClick={() => fileInputRef.current?.click()}
-              className="p-2.5 bg-slate-800 text-slate-300 rounded-xl hover:bg-slate-700 transition-colors"
+              className="p-2.5 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
               title="إرفاق صورة"
             >
               <Camera className="w-5 h-5" />
@@ -124,7 +124,7 @@ export const AITutor = ({ studentName, studentLevel }: { studentName: string, st
         <button
           onClick={askTutor}
           disabled={isAsking || (!question.trim() && !imageBase64)}
-          className="w-full py-4 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white rounded-2xl font-bold flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+          className="w-full py-4 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white rounded-2xl font-bold flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md shadow-indigo-500/20"
         >
           {isAsking ? (
             <>
@@ -141,10 +141,10 @@ export const AITutor = ({ studentName, studentLevel }: { studentName: string, st
       </div>
 
       {response && (
-        <div className="mt-8 bg-slate-950/50 border border-indigo-500/30 rounded-2xl p-6 relative">
+        <div className="mt-8 bg-indigo-50/60 dark:bg-slate-950/50 border border-indigo-200 dark:border-indigo-500/30 rounded-2xl p-6 relative shadow-xs">
           <button 
             onClick={playTTS}
-            className={`absolute top-4 left-4 p-2.5 rounded-full transition-colors ${isPlaying ? 'bg-indigo-600 text-white shadow-md' : 'bg-indigo-500/20 text-indigo-400 hover:bg-indigo-500/40'}`}
+            className={`absolute top-4 left-4 p-2.5 rounded-full transition-colors ${isPlaying ? 'bg-indigo-600 text-white shadow-md' : 'bg-indigo-500/20 text-indigo-700 dark:text-indigo-400 hover:bg-indigo-500/40'}`}
             title={isPlaying ? "إيقاف الصوت" : "استماع للشرح"}
           >
             {isPlaying ? (
@@ -154,12 +154,12 @@ export const AITutor = ({ studentName, studentLevel }: { studentName: string, st
             )}
           </button>
           <div className="flex items-center gap-3 mb-4">
-            <div className="w-8 h-8 rounded-full bg-indigo-500 flex items-center justify-center">
+            <div className="w-8 h-8 rounded-full bg-indigo-500 flex items-center justify-center shadow">
               <Bot className="w-4 h-4 text-white" />
             </div>
-            <span className="font-bold text-indigo-400">شرح المستر الذكي:</span>
+            <span className="font-bold text-indigo-700 dark:text-indigo-400">شرح المستر الذكي:</span>
           </div>
-          <div className="prose prose-invert max-w-none text-slate-300 text-sm leading-loose">
+          <div className="prose dark:prose-invert max-w-none text-slate-800 dark:text-slate-300 text-sm leading-loose">
             <ReactMarkdown>{response}</ReactMarkdown>
           </div>
         </div>

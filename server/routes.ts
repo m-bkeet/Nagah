@@ -7,7 +7,7 @@ import {
   CertificateRepo, CertificateTemplateRepo, UserRepo, AuditLogRepo 
 } from './data/index.ts';
 import { exportAllFirestoreData, previewDatabaseImport, executeDatabaseImport } from './data/phase2b.ts';
-import { handlePublicRegister, matchCourseForRegistration, resolveGradePrefix } from './registerLogic';
+import { handlePublicRegister, handlePublicTrainerRegister, matchCourseForRegistration, resolveGradePrefix } from './registerLogic';
 import express, { Request, Response } from 'express';
 import os from 'os';
 import fs from 'fs';
@@ -3765,6 +3765,7 @@ const handleGetPayments = async (req: Request, res: Response) => {
     const traineeId = req.query.traineeId as string;
     const startDate = req.query.startDate as string;
     const endDate = req.query.endDate as string;
+    const status = req.query.status as string;
 
     let list = await PaymentRepo.getAll();
 
@@ -3772,6 +3773,13 @@ const handleGetPayments = async (req: Request, res: Response) => {
     if (traineeId) list = list.filter(p => p.traineeId === traineeId);
     if (startDate) list = list.filter(p => p.date >= String(startDate));
     if (endDate) list = list.filter(p => p.date <= String(endDate));
+
+    if (status && status !== 'all') {
+      list = list.filter(p => p.status === status);
+    } else if (!status) {
+      // CRITICAL: Unapproved pending proofs and rejected submissions NEVER enter official Treasury payments
+      list = list.filter(p => p.status === 'approved' || (!p.status && !(p as any).proofImageUrl && !(p as any).proofUrl));
+    }
 
     res.json(list);
   } catch(e: any) { res.status(500).json({ success: false, error: e.message }); }
@@ -4129,6 +4137,9 @@ apiRouter.get('/reports/financial_summary', async (req: Request, res: Response) 
       settlements = settlements.filter(s => s.date <= String(endDate));
     }
 
+    // CRITICAL: Exclude unverified pending proofs and rejected submissions from Treasury/Revenue
+    payments = (payments || []).filter(p => p.status === 'approved' || (!p.status && !(p as any).proofImageUrl && !(p as any).proofUrl));
+
     const totalRevenue = payments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
     const totalExpenses = expenses.reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
     const totalTrainerPayouts = settlements.reduce((sum, s) => sum + (Number(s.amount) || 0), 0);
@@ -4200,6 +4211,9 @@ apiRouter.get('/reports/:reportId', async (req: Request, res: Response) => {
       expenses = (expenses || []).filter((e: any) => e.date <= String(endDate));
       attendance = (attendance || []).filter((a: any) => a.date <= String(endDate));
     }
+
+    // Exclude unverified pending proofs and rejected submissions
+    payments = (payments || []).filter((p: any) => p.status === 'approved' || (!p.status && !p.proofImageUrl && !p.proofUrl));
 
     const totalRevenue = (payments || []).reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0);
     const totalExpenses = (expenses || []).reduce((sum: number, e: any) => sum + (Number(e.amount) || 0), 0);
@@ -4327,6 +4341,32 @@ apiRouter.get('/public/branches', async (req: Request, res: Response) => {
   }
 });
 
+apiRouter.get('/public/registration-status', async (req: Request, res: Response) => {
+  try {
+    const settings = await SettingRepo.get();
+    const isOpen = settings.allowOnlineRegistration !== false;
+    res.json({ success: true, allowOnlineRegistration: isOpen, isRegistrationOpen: isOpen });
+  } catch (err: any) {
+    res.json({ success: true, allowOnlineRegistration: true, isRegistrationOpen: true });
+  }
+});
+
+apiRouter.post('/public/toggle-registration-status', async (req: Request, res: Response) => {
+  try {
+    const settings = await SettingRepo.get();
+    const current = settings.allowOnlineRegistration !== false;
+    const nextState = !current;
+    await SettingRepo.update({ allowOnlineRegistration: nextState });
+    res.json({ success: true, allowOnlineRegistration: nextState, isRegistrationOpen: nextState });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+apiRouter.post(['/public/register', '/public/register/'], handlePublicRegister);
+apiRouter.post(['/public/register-trainer', '/public/register-trainer/'], handlePublicTrainerRegister);
+
+
 apiRouter.get('/finance/summary', async (req: Request, res: Response) => {
   try {
     const { branchId, startDate, endDate } = req.query;
@@ -4355,6 +4395,9 @@ apiRouter.get('/finance/summary', async (req: Request, res: Response) => {
       expenses = expenses.filter(e => e.date <= String(endDate));
       settlements = settlements.filter(s => s.date <= String(endDate));
     }
+
+    // Exclude unverified pending proofs and rejected submissions from Treasury summary
+    payments = (payments || []).filter(p => p.status === 'approved' || (!p.status && !(p as any).proofImageUrl && !(p as any).proofUrl));
 
     const totalRevenue = payments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
     const totalExpenses = expenses.reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
@@ -6288,6 +6331,114 @@ function getTraineeRankAndStats(traineeId: string) {
   };
 }
 
+// Robust, strict student/trainee lookup logic
+function normalizeCodeLetter(letter: string): string {
+  const l = (letter || '').trim().toLowerCase();
+  if (l === 'أ' || l === 'ا' || l === 'إ' || l === 'آ' || l === 'a') return 'a';
+  if (l === 'ب' || l === 'b') return 'b';
+  if (l === 'ج' || l === 'c') return 'c';
+  if (l === 'د' || l === 'd') return 'd';
+  if (l === 'ه' || l === 'هـ' || l === 'e') return 'e';
+  if (l === 'م' || l === 'tr') return 'tr';
+  return l;
+}
+
+function findTraineeMatch(trainees: any[], queryStr: string): any | null {
+  if (!Array.isArray(trainees) || !queryStr) return null;
+
+  const rawQuery = String(queryStr).trim();
+  const normQuery = rawQuery
+    .replace(/[٠۰]/g, '0')
+    .replace(/[١۱]/g, '1')
+    .replace(/[٢۲]/g, '2')
+    .replace(/[٣۳]/g, '3')
+    .replace(/[٤۴]/g, '4')
+    .replace(/[٥۵]/g, '5')
+    .replace(/[٦۶]/g, '6')
+    .replace(/[٧۷]/g, '7')
+    .replace(/[٨۸]/g, '8')
+    .replace(/[٩۹]/g, '9')
+    .toLowerCase();
+
+  if (!normQuery) return null;
+
+  const cleanQuery = normQuery.replace(/[\s\-_]/g, '');
+  const digitsQuery = normQuery.replace(/\D/g, '');
+
+  const queryLetterPrefix = cleanQuery.replace(/[0-9]/g, '');
+  const queryNumStr = cleanQuery.replace(/\D/g, '');
+
+  return trainees.find((t: any) => {
+    if (!t) return false;
+
+    const normCode = String(t.code || '')
+      .replace(/[٠۰]/g, '0').replace(/[١۱]/g, '1').replace(/[٢۲]/g, '2').replace(/[٣۳]/g, '3').replace(/[٤۴]/g, '4')
+      .replace(/[٥۵]/g, '5').replace(/[٦۶]/g, '6').replace(/[٧۷]/g, '7').replace(/[٨۸]/g, '8').replace(/[٩۹]/g, '9')
+      .trim().toLowerCase();
+    const cleanCode = normCode.replace(/[\s\-_]/g, '');
+
+    const normId = String(t.id || '').trim().toLowerCase();
+    const normNatId = String(t.nationalId || '').trim().toLowerCase();
+    const normName = String(t.fullName || '').trim().toLowerCase();
+
+    // 1. Direct Exact Matches
+    if (
+      normCode === normQuery ||
+      cleanCode === cleanQuery ||
+      normId === normQuery ||
+      normNatId === normQuery
+    ) {
+      return true;
+    }
+
+    // 2. Strict Letter Prefix + Number Match (e.g. C036 matches c36, ج36, C-036, but NEVER A036 or B036)
+    const codeLetterPrefix = cleanCode.replace(/[0-9]/g, '');
+    const codeNumStr = cleanCode.replace(/\D/g, '');
+
+    if (queryNumStr && codeNumStr) {
+      const queryNum = parseInt(queryNumStr, 10);
+      const codeNum = parseInt(codeNumStr, 10);
+      if (!isNaN(queryNum) && !isNaN(codeNum) && queryNum === codeNum) {
+        const qLetterNorm = normalizeCodeLetter(queryLetterPrefix);
+        const cLetterNorm = normalizeCodeLetter(codeLetterPrefix);
+
+        // If both specify a letter prefix, they MUST strictly match
+        if (qLetterNorm && cLetterNorm) {
+          if (qLetterNorm === cLetterNorm) return true;
+        } else if (!qLetterNorm && !cLetterNorm) {
+          // Both have no letter prefix (pure numbers)
+          return true;
+        }
+      }
+    }
+
+    // 3. Phone Numbers Match (Must be a valid phone length >= 8 to prevent collisions)
+    if (digitsQuery.length >= 8) {
+      const phoneDigits = String(t.phone || '').replace(/\D/g, '');
+      const parentPhoneDigits = String(t.parentPhone || '').replace(/\D/g, '');
+
+      if (phoneDigits && (phoneDigits === digitsQuery || phoneDigits.endsWith(digitsQuery) || digitsQuery.endsWith(phoneDigits))) {
+        return true;
+      }
+      if (parentPhoneDigits && (parentPhoneDigits === digitsQuery || parentPhoneDigits.endsWith(digitsQuery) || digitsQuery.endsWith(parentPhoneDigits))) {
+        return true;
+      }
+    }
+
+    // 4. Exact Full Name Match
+    if (normName && normQuery.length >= 4 && normName === normQuery) {
+      return true;
+    }
+
+    return false;
+  }) || null;
+}
+
+function findAllTraineesMatch(trainees: any[], queryStr: string): any[] {
+  if (!Array.isArray(trainees) || !queryStr) return [];
+  return trainees.filter((t: any) => Boolean(findTraineeMatch([t], queryStr)));
+}
+
 // Student Portal Login Endpoint
 apiRouter.post('/student/login', async (req: Request, res: Response) => {
   const { codeOrPhone, password } = req.body;
@@ -6295,28 +6446,23 @@ apiRouter.post('/student/login', async (req: Request, res: Response) => {
     return res.status(400).json({ error: 'يرجى إدخال كود المتدرب أو رقم هاتفه' });
   }
 
-  const query = codeOrPhone.trim().toLowerCase();
   const trainees = await TraineeRepo.getAll();
-  let trainee = trainees.find(t => {
-    const tCode = (t.code || '').trim().toLowerCase();
-    const tId = (t.id || '').trim().toLowerCase();
-    const tPhone = (t.phone || '').trim();
-    const tParentPhone = (t.parentPhone || '').trim();
-    return (
-      tCode === query ||
-      tCode === `tr-${query}` ||
-      tCode === `م${query}` ||
-      tId === query ||
-      tPhone.includes(query) ||
-      tParentPhone.includes(query) ||
-      t.fullName?.toLowerCase().includes(query)
-    );
-  });
+  const trainee = findTraineeMatch(trainees, codeOrPhone);
 
   if (!trainee) {
     return res.status(404).json({
-      error: 'لم يتم العثور على طالب مسجل بهذا الكود أو رقم الهاتف. يرجى مراجعة إدارة المركز للتسجيل والاشتراك.'
+      error: `لم يتم العثور على طالب مسجل بهذا الكود أو رقم الهاتف (${codeOrPhone}). يرجى التأكد من الرقم أو مراجعة إدارة المركز.`
     });
+  }
+
+  // Check portal password if configured
+  if (trainee.portalPassword && trainee.portalPassword.trim() !== '') {
+    if (!password || password.trim() !== trainee.portalPassword.trim()) {
+      return res.status(401).json({
+        requiresPassword: true,
+        error: '⚠️ هذا الحساب محمي بكلمة مرور. يرجى إدخال كلمة المرور الصحيحة.'
+      });
+    }
   }
 
   const courses = db.getData().courses || [];
@@ -6419,27 +6565,8 @@ apiRouter.post('/agent/student-login', async (req: Request, res: Response) => {
     return res.status(400).json({ error: 'يرجى إدخال كود المتدرب أو رقم هاتفه' });
   }
 
-  const query = codeOrPhone.trim().toLowerCase();
-  const queryDigitsOnly = query.replace(/\D/g, '');
-  const isPhoneQuery = queryDigitsOnly.length >= 8;
-
   const trainees = await TraineeRepo.getAll();
-  const trainee = trainees.find(t => {
-    if (
-      t.code?.toLowerCase() === query ||
-      t.code?.toLowerCase() === `tr-${query}` ||
-      t.code?.toLowerCase() === `م${query}` ||
-      t.id?.toLowerCase() === query ||
-      t.fullName?.toLowerCase().includes(query)
-    ) return true;
-
-    if (isPhoneQuery) {
-      const tPhone = (t.phone || '').replace(/\D/g, '');
-      return tPhone.includes(queryDigitsOnly) || tPhone === queryDigitsOnly;
-    }
-    
-    return t.phone && t.phone.trim() === query;
-  });
+  const trainee = findTraineeMatch(trainees, codeOrPhone);
 
   if (!trainee) {
     return res.status(404).json({ error: 'لم يتم العثور على متدرب مسجل بهذا الكود أو الهاتف' });
@@ -7609,8 +7736,8 @@ apiRouter.get(['/messages/all-portal', '/messages/all-portal/'], async (req: Req
   }
 });
 
-// Endpoint for Student Portal to poll messages live
-apiRouter.get('/student/messages/:traineeId', async (req: Request, res: Response) => {
+// Endpoint for Student and Parent Portals to poll messages live
+apiRouter.get(['/student/messages/:traineeId', '/parent/messages/:traineeId'], async (req: Request, res: Response) => {
   try {
     const { traineeId } = req.params;
     const data = db.getData();
@@ -8429,13 +8556,7 @@ apiRouter.post('/parent/login', async (req: Request, res: Response) => {
     const cleanInputCode = inputVal.toUpperCase();
 
     const trainees = await TraineeRepo.getAll();
-    const matched = trainees.filter(t => {
-      const p1 = (t.parentPhone || '').replace(/\D/g, '');
-      const p2 = (t.phone || '').replace(/\D/g, '');
-      const codeMatch = t.code && t.code.toUpperCase() === cleanInputCode;
-      const phoneMatch = cleanInputDigits.length >= 6 && ((p1 && p1.includes(cleanInputDigits)) || (p2 && p2.includes(cleanInputDigits)));
-      return codeMatch || phoneMatch;
-    });
+    const matched = findAllTraineesMatch(trainees, inputVal);
 
     if (matched.length === 0) {
       return res.status(404).json({ success: false, error: 'لم يتم العثور على ولي أمر أو طالب بهذا الكود أو الرقم. يرجى التواصل مع إدارة المركز.' });

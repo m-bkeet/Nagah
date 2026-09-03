@@ -313,22 +313,6 @@ export const MessagesView: React.FC = () => {
 
       if (!keyId) return;
 
-      // Filter by inbox filter (Parent / Student source)
-      if (inboxFilter === 'parent' && msg.portalSource !== 'parent') return;
-      if (inboxFilter === 'student' && msg.portalSource !== 'student') return;
-
-      // Filter by search query
-      if (inboxSearch) {
-        const q = inboxSearch.toLowerCase();
-        const tName = (msg.traineeName || targetT?.fullName || '').toLowerCase();
-        const pName = (msg.parentName || targetT?.parentName || '').toLowerCase();
-        const tCode = (msg.traineeCode || targetT?.code || '').toLowerCase();
-        const txt = (msg.message || '').toLowerCase();
-        
-        const matches = tName.includes(q) || pName.includes(q) || tCode.includes(q) || txt.includes(q);
-        if (!matches) return;
-      }
-
       if (!groupsMap[keyId]) {
         groupsMap[keyId] = {
           traineeId: keyId,
@@ -358,11 +342,38 @@ export const MessagesView: React.FC = () => {
       }
     });
 
-    // Convert map to array, sort messages inside chronologically, and sort groups by last message time
+    // Convert map to array, sort messages inside chronologically, and filter group threads
     return Object.values(groupsMap)
       .map((g: any) => {
         g.messages.sort((a: any, b: any) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
         return g;
+      })
+      .filter((g: any) => {
+        // Inbox Filter
+        if (inboxFilter === 'parent') {
+          const hasParent = g.messages.some((m: any) => m.portalSource === 'parent' || m.recipientType === 'parent');
+          if (!hasParent) return false;
+        } else if (inboxFilter === 'student') {
+          const hasStudent = g.messages.some((m: any) => m.portalSource === 'student' || m.recipientType === 'student');
+          if (!hasStudent) return false;
+        } else if (inboxFilter === 'unread') {
+          if (g.unreadCount === 0) return false;
+        }
+
+        // Search Filter
+        if (inboxSearch) {
+          const q = inboxSearch.toLowerCase();
+          const tName = (g.traineeName || '').toLowerCase();
+          const pName = (g.parentName || '').toLowerCase();
+          const tCode = (g.traineeCode || '').toLowerCase();
+          const matchesMsg = g.messages.some((m: any) => (m.message || '').toLowerCase().includes(q));
+
+          if (!tName.includes(q) && !pName.includes(q) && !tCode.includes(q) && !matchesMsg) {
+            return false;
+          }
+        }
+
+        return true;
       })
       .sort((a: any, b: any) => b.lastMessageTime.getTime() - a.lastMessageTime.getTime());
   }, [portalMessages, trainees, inboxFilter, inboxSearch]);

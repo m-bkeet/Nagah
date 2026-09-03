@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  Share2, X, Download, Printer, CheckCircle2, ShieldCheck, Zap, QrCode, Copy, ExternalLink, MessageCircle
+  Share2, X, Download, Printer, CheckCircle2, ShieldCheck, Zap, QrCode, Copy, ExternalLink, MessageCircle, Lock, Unlock, RefreshCw
 } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import QRCode from 'qrcode';
@@ -24,8 +24,51 @@ export const WhatsAppShareModal: React.FC<ShareModalProps> = ({
   const [recipientType, setRecipientType] = useState<'parent' | 'student' | 'group'>('parent');
   const [copied, setCopied] = useState(false);
   const [qrDataUrl, setQrDataUrl] = useState<string>('');
+  const [isRegistrationOpen, setIsRegistrationOpen] = useState<boolean>(true);
+  const [isTogglingRegistration, setIsTogglingRegistration] = useState<boolean>(false);
 
   const registrationUrl = getPublicRegistrationUrl();
+
+  const fetchRegistrationStatus = async () => {
+    try {
+      const res = await fetch(`${window.location.origin}/api/public/registration-status`);
+      const data = await res.json();
+      if (data && typeof data.allowOnlineRegistration === 'boolean') {
+        setIsRegistrationOpen(data.allowOnlineRegistration);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleToggleRegistration = async () => {
+    setIsTogglingRegistration(true);
+    try {
+      const res = await fetch(`${window.location.origin}/api/public/toggle-registration-status`, {
+        method: 'POST'
+      });
+      const data = await res.json();
+      if (data && data.success) {
+        setIsRegistrationOpen(data.allowOnlineRegistration);
+        showToast(
+          data.allowOnlineRegistration 
+            ? 'تم فتح باب التسجيل الخارجي بنجاح 🔓' 
+            : 'تم إغلاق باب التسجيل الخارجي (اكتمل العدد) 🔒',
+          'info'
+        );
+      }
+    } catch (err) {
+      showToast('حدث خطأ أثناء تغيير حالة التسجيل', 'error');
+    } finally {
+      setIsTogglingRegistration(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isOpen) {
+      fetchRegistrationStatus();
+    }
+  }, [isOpen]);
 
   useEffect(() => {
     if (isOpen) {
@@ -346,6 +389,58 @@ export const WhatsAppShareModal: React.FC<ShareModalProps> = ({
         {/* Tab 2: Public Registration Link & QR */}
         {tab === 'public_link' && (
           <div className="p-6 md:p-8 space-y-6">
+            {/* Registration Status Toggle Card */}
+            <div className={`p-4 rounded-2xl border transition-all flex flex-col sm:flex-row items-center justify-between gap-3 ${
+              isRegistrationOpen 
+                ? 'bg-emerald-950/40 border-emerald-500/40 text-emerald-200' 
+                : 'bg-rose-950/40 border-rose-500/40 text-rose-200'
+            }`}>
+              <div className="flex items-center gap-3">
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold shrink-0 ${
+                  isRegistrationOpen ? 'bg-emerald-500/20 text-emerald-400' : 'bg-rose-500/20 text-rose-400'
+                }`}>
+                  {isRegistrationOpen ? <Unlock className="w-5 h-5" /> : <Lock className="w-5 h-5" />}
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-black text-sm">
+                      {isRegistrationOpen ? '🟢 التسجيل الخارجي: مفعّل ومفتوح' : '🔴 التسجيل الخارجي: مغلق (اكتمل العدد)'}
+                    </span>
+                  </div>
+                  <p className="text-[11px] opacity-80 mt-0.5">
+                    {isRegistrationOpen 
+                      ? 'الرابط يستقبل تسجيل الطلاب حالياً وتخصيص الأكواد تلقائياً.' 
+                      : 'التسجيل مغلق الآن بقرار إداري لاكتمال العدد. تظهر للزائر رسالة اعتذار وتواصل مباشر مع الإدارة.'}
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleToggleRegistration}
+                disabled={isTogglingRegistration}
+                className={`px-4 py-2.5 rounded-xl text-xs font-black shadow-lg flex items-center gap-2 transition-all shrink-0 ${
+                  isRegistrationOpen
+                    ? 'bg-rose-600 hover:bg-rose-500 text-white shadow-rose-900/30'
+                    : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-900/30'
+                }`}
+              >
+                {isTogglingRegistration ? (
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                ) : isRegistrationOpen ? (
+                  <>
+                    <Lock className="w-4 h-4" />
+                    <span>إغلاق التسجيل (اكتمل العدد)</span>
+                  </>
+                ) : (
+                  <>
+                    <Unlock className="w-4 h-4" />
+                    <span>تفعيل وتكرار فتح التسجيل</span>
+                  </>
+                )}
+              </button>
+            </div>
+
             <div className="bg-emerald-950/30 border border-emerald-500/30 rounded-2xl p-4 flex items-start gap-3">
               <ShieldCheck className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
               <div className="text-xs text-slate-200 space-y-1">

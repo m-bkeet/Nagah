@@ -59,36 +59,36 @@
   [data-color-mode="light"],
   .light {
     color-scheme: light;
-    --theme-bg-main: #faf7ff;
+    --theme-bg-main: #f8f9fc;
     --theme-bg-gradient-start: #ffffff;
-    --theme-bg-gradient-mid: #f5f0ff;
-    --theme-bg-gradient-end: #fffaf0;
+    --theme-bg-gradient-mid: #f3f4f6;
+    --theme-bg-gradient-end: #ede9fe;
     --theme-bg-header: rgba(255, 255, 255, 0.98);
-    --theme-bg-sidebar: #fdfcfe;
+    --theme-bg-sidebar: #ffffff;
     --theme-bg-card: #ffffff;
-    --theme-bg-card-hover: #faf5ff;
-    --theme-bg-card-subtle: #f7f3ff;
+    --theme-bg-card-hover: #f5f3ff;
+    --theme-bg-card-subtle: #fbfbfe;
     --theme-bg-input: #ffffff;
-    --theme-bg-input-focus: #faf5ff;
-    --theme-border: rgba(167, 139, 250, 0.35);
-    --theme-border-subtle: #ede9fe;
+    --theme-bg-input-focus: #f5f3ff;
+    --theme-border: rgba(139, 92, 246, 0.35);
+    --theme-border-subtle: #e2e8f0;
     --theme-border-hover: #7c3aed;
-    --theme-text-primary: #1e1b4b;
-    --theme-text-secondary: #334155;
-    --theme-text-muted: #64748b;
+    --theme-text-primary: #0f172a;
+    --theme-text-secondary: #1e293b;
+    --theme-text-muted: #475569;
     --theme-text-disabled: #94a3b8;
     --theme-accent: #7c3aed;
     --theme-accent-hover: #6d28d9;
     --theme-accent-light: rgba(124, 58, 237, 0.12);
     --theme-accent-text: #6d28d9;
-    --theme-accent-glow: rgba(124, 58, 237, 0.25);
-    --theme-secondary-accent: #d97706;
+    --theme-accent-glow: rgba(124, 58, 237, 0.3);
+    --theme-secondary-accent: #6366f1;
     --theme-gold-tone: #d97706;
-    --theme-shadow-card: 0 4px 20px -2px rgba(124, 58, 237, 0.07), 0 2px 6px -1px rgba(0, 0, 0, 0.03);
-    --theme-shadow-dropdown: 0 14px 30px -5px rgba(124, 58, 237, 0.12), 0 8px 12px -6px rgba(0, 0, 0, 0.05);
+    --theme-shadow-card: 0 4px 20px -2px rgba(124, 58, 237, 0.08), 0 2px 6px -1px rgba(0, 0, 0, 0.04);
+    --theme-shadow-dropdown: 0 14px 30px -5px rgba(124, 58, 237, 0.15), 0 8px 12px -6px rgba(0, 0, 0, 0.05);
 
     --color-primary-navy: #ffffff;
-    --color-primary-dark: #faf7ff;
+    --color-primary-dark: #f8f9fc;
     --color-accent-gold: #d97706;
     --color-accent-gold-light: #b45309;
     --color-accent-purple: #7c3aed;
@@ -117,10 +117,10 @@
 
 /* 1. Main Background and Containers */
 .light .min-h-screen {
-  background-color: var(--theme-bg-main) !important;
+  background: radial-gradient(circle at 10% 20%, rgba(245, 243, 255, 0.85) 0%, rgba(255, 255, 255, 0.95) 45%, rgba(254, 250, 240, 0.8) 100%) !important;
 }
 
-/* 2. All Dark Surface Replacements in Light Mode (No dark black/navy in Day Mode!) */
+/* 2. All Dark Surface Replacements in Light Mode (Royal Luminous 3D Glassmorphism) */
 .light .bg-slate-950,
 .light .bg-slate-900,
 .light .bg-slate-850,
@@ -154,14 +154,15 @@
 .light [class*="from-slate-950"],
 .light [class*="from-indigo-950"],
 .light [class*="via-indigo-950"] {
-  background-color: #ffffff !important;
-  background-image: none !important;
-  color: #0f172a !important;
-  border-color: #e2e8f0 !important;
-  box-shadow: 0 4px 20px -2px rgba(124, 58, 237, 0.05), 0 2px 6px -1px rgba(0, 0, 0, 0.04) !important;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.94) 0%, rgba(250, 251, 255, 0.86) 50%, rgba(255, 253, 248, 0.9) 100%) !important;
+  backdrop-filter: blur(16px) saturate(160%) !important;
+  -webkit-backdrop-filter: blur(16px) saturate(160%) !important;
+  color: #1e244b !important;
+  border-color: rgba(226, 232, 245, 0.85) !important;
+  box-shadow: 0 10px 30px -5px rgba(99, 102, 241, 0.05), 0 4px 12px -2px rgba(15, 23, 42, 0.03), inset 0 1px 1px 0 rgba(255, 255, 255, 1) !important;
 }
 
-/* Make card headers and general text inside light mode cards pitch-perfect dark and crisp */
+/* Make card headers and general text inside light mode cards natural, soft & deep */
 .light [class*="bg-slate-900"] > div > h2,
 .light [class*="bg-slate-900"] h2.text-white,
 .light [class*="bg-slate-900"] h3.text-white,
@@ -173,17 +174,17 @@
 .light .bg-white h2.text-white,
 .light .bg-white h3.text-white,
 .light .bg-white p.text-white {
-  color: #0f172a !important;
+  color: #1e244b !important;
 }
 
 .light [class*="bg-slate-900"] .text-slate-300,
 .light [class*="bg-slate-900"] .text-slate-400,
 .light [class*="bg-slate-950"] .text-slate-300,
 .light [class*="bg-slate-950"] .text-slate-400 {
-  color: #475569 !important;
+  color: #5b6987 !important;
 }
 
-/* Subtle Secondary Surfaces */
+/* Subtle Secondary Glass Surfaces */
 .light .bg-slate-800\/95,
 .light .bg-slate-800\/90,
 .light .bg-slate-800\/80,
@@ -195,43 +196,45 @@
 .light .bg-slate-700,
 .light .bg-slate-700\/80,
 .light .bg-slate-700\/60 {
-  background-color: #f8fafc !important;
-  color: #0f172a !important;
-  border-color: #e2e8f0 !important;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.88) 0%, rgba(246, 248, 253, 0.8) 100%) !important;
+  backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
+  color: #1e244b !important;
+  border-color: rgba(226, 232, 245, 0.85) !important;
+  box-shadow: 0 2px 8px -2px rgba(15, 23, 42, 0.03), inset 0 1px 0 rgba(255, 255, 255, 0.95) !important;
 }
 
 .light .hover\:bg-slate-800:hover,
 .light .hover\:bg-slate-800\/80:hover,
 .light .hover\:bg-slate-700:hover,
 .light .hover\:bg-slate-900:hover {
-  background-color: #f1f5f9 !important;
-  color: #0f172a !important;
+  background: linear-gradient(180deg, #ffffff 0%, #f1f4fb 100%) !important;
+  color: #1e1b4b !important;
 }
 
-/* 3. COLOR BRANCHING & ICON GLOW HARMONY IN LIGHT MODE */
+/* 3. COLOR BRANCHING & ICON GLOW HARMONY IN LIGHT MODE (Harmonious, Soft & Natural) */
 
 /* Emerald Branch (Revenues, Active, Financial Gains, Success) */
 .light [class*="border-emerald-500"],
 .light [class*="border-emerald-400"],
 .light [class*="border-green-500"] {
-  background: linear-gradient(145deg, #ffffff 60%, #ecfdf5 100%) !important;
-  border-color: #6ee7b7 !important;
-  box-shadow: 0 4px 16px -2px rgba(16, 185, 129, 0.12) !important;
+  background: linear-gradient(145deg, #ffffff 60%, #f0fdf4 100%) !important;
+  border-color: rgba(110, 231, 183, 0.7) !important;
+  box-shadow: 0 4px 16px -2px rgba(16, 185, 129, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.9) !important;
 }
 .light .text-emerald-400,
 .light .text-emerald-300,
 .light .text-green-400 {
   color: #059669 !important;
-  filter: drop-shadow(0 1px 1px rgba(16, 185, 129, 0.2));
 }
 .light .bg-emerald-500\/20,
 .light .bg-emerald-500\/15,
 .light .bg-emerald-500\/10,
 .light .bg-green-500\/20 {
-  background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%) !important;
-  color: #047857 !important;
-  border-color: #86efac !important;
-  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.15);
+  background: linear-gradient(180deg, #ecfdf5 0%, #d1fae5 100%) !important;
+  color: #065f46 !important;
+  border-color: rgba(110, 231, 183, 0.6) !important;
+  box-shadow: 0 2px 6px -1px rgba(16, 185, 129, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.9) !important;
 }
 
 /* Rose & Red Branch (Expenses, Debts, Urgent Alerts, High Risk) */
@@ -240,71 +243,68 @@
 .light [class*="border-red-500"],
 .light [class*="border-red-400"] {
   background: linear-gradient(145deg, #ffffff 60%, #fff1f2 100%) !important;
-  border-color: #fda4af !important;
-  box-shadow: 0 4px 16px -2px rgba(244, 63, 94, 0.12) !important;
+  border-color: rgba(253, 164, 175, 0.7) !important;
+  box-shadow: 0 4px 16px -2px rgba(244, 63, 94, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.9) !important;
 }
 .light .text-rose-400,
 .light .text-rose-300,
 .light .text-red-400 {
   color: #e11d48 !important;
-  filter: drop-shadow(0 1px 1px rgba(225, 29, 72, 0.2));
 }
 .light .bg-rose-500\/20,
 .light .bg-rose-500\/15,
 .light .bg-rose-500\/10,
 .light .bg-red-500\/20 {
-  background: linear-gradient(135deg, #ffe4e6 0%, #fecdd3 100%) !important;
+  background: linear-gradient(180deg, #fff1f2 0%, #ffe4e6 100%) !important;
   color: #be123c !important;
-  border-color: #fda4af !important;
-  box-shadow: 0 2px 8px rgba(244, 63, 94, 0.15);
+  border-color: rgba(253, 164, 175, 0.6) !important;
+  box-shadow: 0 2px 6px -1px rgba(244, 63, 94, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.9) !important;
 }
 
 /* Amber & Gold Branch (Treasury, Top Honors, Certificates, Star Ratings) */
 .light [class*="border-amber-500"],
 .light [class*="border-amber-400"],
 .light [class*="border-yellow-500"] {
-  background: linear-gradient(145deg, #ffffff 60%, #fffbeb 100%) !important;
-  border-color: #fde68a !important;
-  box-shadow: 0 4px 16px -2px rgba(245, 158, 11, 0.15) !important;
+  background: linear-gradient(145deg, #ffffff 60%, #fffdf5 100%) !important;
+  border-color: rgba(252, 211, 77, 0.7) !important;
+  box-shadow: 0 4px 16px -2px rgba(245, 158, 11, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.9) !important;
 }
 .light .text-amber-400,
 .light .text-amber-300,
 .light .text-yellow-400 {
   color: #d97706 !important;
-  filter: drop-shadow(0 1px 1px rgba(217, 119, 6, 0.25));
 }
 .light .bg-amber-500\/20,
 .light .bg-amber-500\/15,
 .light .bg-amber-500\/10,
 .light .bg-yellow-500\/20 {
-  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%) !important;
+  background: linear-gradient(180deg, #fffbeb 0%, #fef3c7 100%) !important;
   color: #92400e !important;
-  border-color: #fcd34d !important;
-  box-shadow: 0 2px 8px rgba(245, 158, 11, 0.18);
+  border-color: rgba(251, 191, 36, 0.6) !important;
+  box-shadow: 0 2px 6px -1px rgba(245, 158, 11, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.9) !important;
 }
 
 /* Cyan & Teal Branch (Trainees, Instant Synchronizer, Cloud Network) */
 .light [class*="border-cyan-500"],
 .light [class*="border-cyan-400"],
 .light [class*="border-teal-500"] {
-  background: linear-gradient(145deg, #ffffff 60%, #ecfeff 100%) !important;
-  border-color: #a5f3fc !important;
-  box-shadow: 0 4px 16px -2px rgba(6, 182, 212, 0.12) !important;
+  background: linear-gradient(145deg, #ffffff 60%, #f0fdfa 100%) !important;
+  border-color: rgba(165, 243, 252, 0.7) !important;
+  box-shadow: 0 4px 16px -2px rgba(6, 182, 212, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.9) !important;
 }
 .light .text-cyan-400,
 .light .text-cyan-300,
 .light .text-teal-400 {
   color: #0891b2 !important;
-  filter: drop-shadow(0 1px 1px rgba(8, 145, 178, 0.2));
 }
 .light .bg-cyan-500\/20,
 .light .bg-cyan-500\/15,
 .light .bg-cyan-500\/10,
 .light .bg-teal-500\/20 {
-  background: linear-gradient(135deg, #cffafe 0%, #a5f3fc 100%) !important;
+  background: linear-gradient(180deg, #ecfeff 0%, #cffafe 100%) !important;
   color: #0e7490 !important;
-  border-color: #67e8f9 !important;
-  box-shadow: 0 2px 8px rgba(6, 182, 212, 0.15);
+  border-color: rgba(103, 232, 249, 0.6) !important;
+  box-shadow: 0 2px 6px -1px rgba(6, 182, 212, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.9) !important;
 }
 
 /* Blue & Sky Branch (Branches, Security, Communication Logs) */
@@ -312,23 +312,22 @@
 .light [class*="border-blue-400"],
 .light [class*="border-sky-500"] {
   background: linear-gradient(145deg, #ffffff 60%, #eff6ff 100%) !important;
-  border-color: #bfdbfe !important;
-  box-shadow: 0 4px 16px -2px rgba(59, 130, 246, 0.12) !important;
+  border-color: rgba(191, 219, 254, 0.7) !important;
+  box-shadow: 0 4px 16px -2px rgba(59, 130, 246, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.9) !important;
 }
 .light .text-blue-400,
 .light .text-blue-300,
 .light .text-sky-400 {
   color: #2563eb !important;
-  filter: drop-shadow(0 1px 1px rgba(37, 99, 235, 0.2));
 }
 .light .bg-blue-500\/20,
 .light .bg-blue-500\/15,
 .light .bg-blue-500\/10,
 .light .bg-sky-500\/20 {
-  background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%) !important;
+  background: linear-gradient(180deg, #eff6ff 0%, #dbeafe 100%) !important;
   color: #1d4ed8 !important;
-  border-color: #93c5fd !important;
-  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.15);
+  border-color: rgba(147, 197, 253, 0.6) !important;
+  box-shadow: 0 2px 6px -1px rgba(59, 130, 246, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.9) !important;
 }
 
 /* Purple & Violet Branch (Courses, Exams, Question Banks, Labs) */
@@ -336,44 +335,42 @@
 .light [class*="border-purple-400"],
 .light [class*="border-violet-500"] {
   background: linear-gradient(145deg, #ffffff 60%, #faf5ff 100%) !important;
-  border-color: #e9d5ff !important;
-  box-shadow: 0 4px 16px -2px rgba(168, 85, 247, 0.12) !important;
+  border-color: rgba(233, 213, 255, 0.7) !important;
+  box-shadow: 0 4px 16px -2px rgba(168, 85, 247, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.9) !important;
 }
 .light .text-purple-400,
 .light .text-purple-300,
 .light .text-violet-400 {
-  color: #9333ea !important;
-  filter: drop-shadow(0 1px 1px rgba(147, 51, 234, 0.2));
+  color: #7c3aed !important;
 }
 .light .bg-purple-500\/20,
 .light .bg-purple-500\/15,
 .light .bg-purple-500\/10,
 .light .bg-violet-500\/20 {
-  background: linear-gradient(135deg, #f3e8ff 0%, #e9d5ff 100%) !important;
-  color: #7e22ce !important;
-  border-color: #d8b4fe !important;
-  box-shadow: 0 2px 8px rgba(168, 85, 247, 0.15);
+  background: linear-gradient(180deg, #faf5ff 0%, #f3e8ff 100%) !important;
+  color: #6d28d9 !important;
+  border-color: rgba(216, 180, 254, 0.6) !important;
+  box-shadow: 0 2px 6px -1px rgba(168, 85, 247, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.9) !important;
 }
 
 /* Indigo Branch (Smart AI, Interactive Assistants) */
 .light [class*="border-indigo-500"],
 .light [class*="border-indigo-400"] {
   background: linear-gradient(145deg, #ffffff 60%, #eef2ff 100%) !important;
-  border-color: #c7d2fe !important;
-  box-shadow: 0 4px 16px -2px rgba(99, 102, 241, 0.12) !important;
+  border-color: rgba(199, 210, 254, 0.7) !important;
+  box-shadow: 0 4px 16px -2px rgba(99, 102, 241, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.9) !important;
 }
 .light .text-indigo-400,
 .light .text-indigo-300 {
   color: #4f46e5 !important;
-  filter: drop-shadow(0 1px 1px rgba(79, 70, 229, 0.2));
 }
 .light .bg-indigo-500\/20,
 .light .bg-indigo-500\/15,
 .light .bg-indigo-500\/10 {
-  background: linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%) !important;
+  background: linear-gradient(180deg, #eef2ff 0%, #e0e7ff 100%) !important;
   color: #4338ca !important;
-  border-color: #a5b4fc !important;
-  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.15);
+  border-color: rgba(165, 180, 252, 0.6) !important;
+  box-shadow: 0 2px 6px -1px rgba(99, 102, 241, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.9) !important;
 }
 
 /* Pink Branch (Trainers, Stars, Celebrations) */
@@ -381,42 +378,46 @@
 .light [class*="border-pink-400"],
 .light [class*="border-fuchsia-500"] {
   background: linear-gradient(145deg, #ffffff 60%, #fdf2f8 100%) !important;
-  border-color: #fbcfe8 !important;
-  box-shadow: 0 4px 16px -2px rgba(236, 72, 153, 0.12) !important;
+  border-color: rgba(251, 207, 232, 0.7) !important;
+  box-shadow: 0 4px 16px -2px rgba(236, 72, 153, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.9) !important;
 }
 .light .text-pink-400,
 .light .text-pink-300,
 .light .text-fuchsia-400 {
   color: #db2777 !important;
-  filter: drop-shadow(0 1px 1px rgba(219, 39, 119, 0.2));
 }
 .light .bg-pink-500\/20,
 .light .bg-pink-500\/15,
 .light .bg-pink-500\/10,
 .light .bg-fuchsia-500\/20 {
-  background: linear-gradient(135deg, #fce7f3 0%, #fbcfe8 100%) !important;
+  background: linear-gradient(180deg, #fdf2f8 0%, #fce7f3 100%) !important;
   color: #be185d !important;
-  border-color: #f9a8d4 !important;
-  box-shadow: 0 2px 8px rgba(236, 72, 153, 0.15);
+  border-color: rgba(249, 168, 212, 0.6) !important;
+  box-shadow: 0 2px 6px -1px rgba(236, 72, 153, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.9) !important;
 }
 
-/* 4. BUTTONS & INTERACTIVE CONTROLS ENHANCEMENT */
+/* 4. BUTTONS & INTERACTIVE CONTROLS ENHANCEMENT (Tactile 3D Glass & Royal Elevation) */
 .light button.bg-amber-500,
 .light button[class*="from-amber-500"] {
-  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%) !important;
-  color: #ffffff !important;
-  box-shadow: 0 4px 14px rgba(217, 119, 6, 0.3) !important;
-  border: 1px solid #f59e0b !important;
+  background: linear-gradient(180deg, #fbbf24 0%, #d97706 100%) !important;
+  color: #0f172a !important;
+  font-weight: 800 !important;
+  box-shadow: 0 4px 14px -1px rgba(217, 119, 6, 0.25), 0 2px 4px rgba(0, 0, 0, 0.04), inset 0 1px 1px rgba(255, 255, 255, 0.6) !important;
+  border: 1px solid rgba(217, 119, 6, 0.4) !important;
 }
 .light button.bg-amber-500:hover,
 .light button[class*="from-amber-500"]:hover {
-  background: linear-gradient(135deg, #fbbf24 0%, #b45309 100%) !important;
-  box-shadow: 0 6px 18px rgba(217, 119, 6, 0.4) !important;
+  background: linear-gradient(180deg, #fcd34d 0%, #b45309 100%) !important;
+  box-shadow: 0 6px 18px -1px rgba(217, 119, 6, 0.35), 0 2px 6px rgba(0, 0, 0, 0.06), inset 0 1px 1px rgba(255, 255, 255, 0.8) !important;
   transform: translateY(-1px);
 }
 
-/* Preserve bright white text inside colored action buttons and royal gradient headers */
-.light .bg-amber-500 *,
+/* 3D Glass Action Buttons in Light Mode */
+.light button:not(.btn-primary):not([class*="from-amber"]):not([class*="bg-amber-500"]):not([class*="bg-emerald"]):not([class*="bg-rose"]):not([class*="bg-blue"]):not([class*="bg-indigo"]):not([class*="bg-purple"]) {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Preserve bright white text inside solid colored action buttons */
 .light .bg-amber-600 *,
 .light .bg-emerald-600 *,
 .light .bg-blue-600 *,
@@ -431,7 +432,6 @@
 .light [class*="from-purple-700"] *,
 .light [class*="from-purple-800"] *,
 .light [class*="from-indigo-600"] *,
-.light [class*="from-amber-500"] *,
 .light .btn-primary *,
 .light .royal-banner * {
   color: #ffffff !important;
@@ -483,15 +483,15 @@
   h3:not([class*="text-amber"]):not([class*="text-emerald"]):not([class*="text-rose"]):not([class*="text-purple"]):not([class*="text-indigo"]):not([class*="text-cyan"]):not([class*="text-transparent"]),
   h4:not([class*="text-amber"]):not([class*="text-emerald"]):not([class*="text-rose"]):not([class*="text-purple"]):not([class*="text-indigo"]):not([class*="text-cyan"]):not([class*="text-transparent"]),
   h5, h6 {
-    color: #0f172a !important;
+    color: #1e244b !important;
   }
 
   body:not(.dark) p:not([class*="text-"]),
   body:not(.dark) span:not([class*="text-"]):not([class*="bg-"]) {
-    color: #1e1b4b;
+    color: #1e244b;
   }
 
-  /* White and Very Light Text Classes -> Deep Dark Slate/Indigo */
+  /* White and Very Light Text Classes -> Royal Ink Navy (Natural & Eye-Friendly) */
   .text-white:not(button *):not(.bg-amber-500 *):not(.bg-amber-600 *):not(.bg-emerald-600 *):not(.bg-emerald-500 *):not(.bg-rose-600 *):not(.bg-rose-500 *):not(.bg-indigo-600 *):not(.bg-indigo-700 *):not(.bg-purple-600 *):not(.bg-purple-700 *):not(.bg-blue-600 *):not([class*="from-amber"]):not([class*="from-purple"]):not([class*="from-indigo"]):not([class*="from-emerald"]):not([class*="from-rose"]):not([class*="from-blue"]):not(.btn-primary *):not(.badge-solid *),
   .text-slate-100,
   .text-slate-200,
@@ -499,21 +499,21 @@
   .text-gray-200,
   .text-zinc-100,
   .text-zinc-200 {
-    color: #0f172a !important;
+    color: #1e244b !important;
   }
 
-  /* Secondary Text (Crisp Dark Slate) */
+  /* Secondary Text (Harmonious Balanced Slate) */
   .text-slate-300,
   .text-gray-300,
   .text-zinc-300 {
     color: #334155 !important;
   }
 
-  /* Muted Text (Vibrant Clear Slate - Never Faint) */
+  /* Muted Text (Natural Calm Slate) */
   .text-slate-400,
   .text-gray-400,
   .text-zinc-400 {
-    color: #475569 !important;
+    color: #5b6987 !important;
   }
 
   .text-slate-500,
@@ -665,21 +665,25 @@
   box-shadow: 0 2px 10px rgba(15, 23, 42, 0.05) !important;
 }
 
-.light aside nav button {
-  color: #334155 !important;
+.light aside nav button:not([class*="from-purple"]) {
+  color: #1e293b !important;
 }
 
-.light aside nav button:hover {
-  background-color: #f1f5f9 !important;
-  color: #0f172a !important;
+.light aside nav button:not([class*="from-purple"]):hover {
+  background-color: #f5f3ff !important;
+  color: #6d28d9 !important;
 }
 
-.light aside nav button.border-amber-500\/40,
-.light aside nav button[class*="from-amber-500"] {
-  background: linear-gradient(to right, #fef3c7, #fffbeb) !important;
-  color: #92400e !important;
-  border-color: #f59e0b !important;
+.light aside nav button[class*="from-purple"] {
+  background: linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%) !important;
+  color: #ffffff !important;
+  border-color: #a78bfa !important;
   font-weight: 800 !important;
+  box-shadow: 0 4px 14px rgba(124, 58, 237, 0.35) !important;
+}
+
+.light aside nav button[class*="from-purple"] * {
+  color: #ffffff !important;
 }
 
 /* 9. Tables and Data Grids */
@@ -860,28 +864,32 @@ button:hover .lucide,
 [data-theme="light_mode"],
 [data-color-mode="light"] {
 
-  /* Card Inner Sections (Dark Slate Containers in Light Mode) */
+  /* Card Inner Sections (Royal Glass Containers in Light Mode) */
   .bg-slate-900\/80,
   .bg-slate-900\/60,
   .bg-slate-900\/40,
   .bg-slate-850 {
-    background-color: rgba(248, 250, 252, 0.95) !important;
-    border-color: rgba(203, 213, 225, 0.8) !important;
-    color: #0f172a !important;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.88) 0%, rgba(246, 248, 253, 0.82) 100%) !important;
+    backdrop-filter: blur(14px) !important;
+    -webkit-backdrop-filter: blur(14px) !important;
+    border-color: rgba(226, 232, 245, 0.85) !important;
+    color: #1e244b !important;
+    box-shadow: 0 4px 16px -2px rgba(15, 23, 42, 0.04), inset 0 1px 0 rgba(255, 255, 255, 0.95) !important;
   }
 
-  /* Star Granting Buttons (+1 ⭐, +2 ⭐, +5 🌟) */
+  /* Star Granting Buttons (+1 ⭐, +2 ⭐, +5 🌟) - 3D Tactile Royal Gold */
   .bg-amber-500\/20 {
-    background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%) !important;
+    background: linear-gradient(180deg, #fffbeb 0%, #fef3c7 100%) !important;
     color: #92400e !important;
-    border-color: #f59e0b !important;
-    box-shadow: 0 2px 8px rgba(245, 158, 11, 0.25) !important;
+    border: 1px solid rgba(251, 191, 36, 0.7) !important;
+    box-shadow: 0 2px 6px -1px rgba(245, 158, 11, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.9) !important;
     font-weight: 800 !important;
   }
   .bg-amber-500\/20:hover {
-    background: linear-gradient(135deg, #fde68a 0%, #fcd34d 100%) !important;
+    background: linear-gradient(180deg, #fef3c7 0%, #fde68a 100%) !important;
     color: #78350f !important;
-    box-shadow: 0 4px 14px rgba(245, 158, 11, 0.4) !important;
+    box-shadow: 0 4px 12px -1px rgba(245, 158, 11, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.9) !important;
+    transform: translateY(-1px);
   }
   .bg-amber-500\/20 .text-amber-300,
   .bg-amber-500\/20 .text-amber-400,
@@ -889,19 +897,20 @@ button:hover .lucide,
     color: #92400e !important;
   }
 
-  /* Emerald Payment/Broadcast Buttons */
+  /* Emerald Payment/Broadcast Buttons - 3D Soft Mint Glass */
   .bg-emerald-950\/60,
   .bg-emerald-500\/20 {
-    background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%) !important;
+    background: linear-gradient(180deg, #ecfdf5 0%, #d1fae5 100%) !important;
     color: #065f46 !important;
-    border-color: #10b981 !important;
-    box-shadow: 0 2px 8px rgba(16, 185, 129, 0.25) !important;
+    border: 1px solid rgba(110, 231, 183, 0.7) !important;
+    box-shadow: 0 2px 6px -1px rgba(16, 185, 129, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.9) !important;
   }
   .bg-emerald-950\/60:hover,
   .bg-emerald-500\/20:hover {
-    background: linear-gradient(135deg, #a7f3d0 0%, #6ee7b7 100%) !important;
+    background: linear-gradient(180deg, #d1fae5 0%, #a7f3d0 100%) !important;
     color: #047857 !important;
-    box-shadow: 0 4px 14px rgba(16, 185, 129, 0.4) !important;
+    box-shadow: 0 4px 12px -1px rgba(16, 185, 129, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.9) !important;
+    transform: translateY(-1px);
   }
   .bg-emerald-950\/60 .text-emerald-300,
   .bg-emerald-950\/60 .text-emerald-400,
@@ -909,19 +918,20 @@ button:hover .lucide,
     color: #065f46 !important;
   }
 
-  /* Edit Button (Blue) */
+  /* Edit Button (Blue) - 3D Soft Sky Glass */
   .bg-blue-950\/60,
   .bg-blue-500\/20 {
-    background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%) !important;
+    background: linear-gradient(180deg, #eff6ff 0%, #dbeafe 100%) !important;
     color: #1e40af !important;
-    border-color: #3b82f6 !important;
-    box-shadow: 0 2px 8px rgba(59, 130, 246, 0.25) !important;
+    border: 1px solid rgba(147, 197, 253, 0.7) !important;
+    box-shadow: 0 2px 6px -1px rgba(59, 130, 246, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.9) !important;
   }
   .bg-blue-950\/60:hover,
   .bg-blue-500\/20:hover {
-    background: linear-gradient(135deg, #bfdbfe 0%, #93c5fd 100%) !important;
+    background: linear-gradient(180deg, #dbeafe 0%, #bfdbfe 100%) !important;
     color: #1d4ed8 !important;
-    box-shadow: 0 4px 14px rgba(59, 130, 246, 0.4) !important;
+    box-shadow: 0 4px 12px -1px rgba(59, 130, 246, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.9) !important;
+    transform: translateY(-1px);
   }
   .bg-blue-950\/60 .text-blue-300,
   .bg-blue-950\/60 .text-blue-400,
@@ -929,21 +939,24 @@ button:hover .lucide,
     color: #1e40af !important;
   }
 
-  /* Slate Action Buttons (Print, Profile, Custom Star +) */
+  /* Slate Action Buttons (Print, Profile, Custom Star +) - 3D Luminous Bevel */
   button.bg-slate-800 {
-    background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%) !important;
-    color: #1e293b !important;
-    border-color: #cbd5e1 !important;
-    box-shadow: 0 2px 6px rgba(15, 23, 42, 0.08) !important;
+    background: linear-gradient(180deg, #ffffff 0%, #f4f6fb 100%) !important;
+    color: #1e244b !important;
+    border: 1px solid rgba(214, 222, 238, 0.85) !important;
+    box-shadow: 0 2px 5px -1px rgba(15, 23, 42, 0.05), inset 0 1px 0 rgba(255, 255, 255, 1) !important;
   }
   button.bg-slate-800:hover {
-    background: linear-gradient(135deg, #e2e8f0 0%, #cbd5e1 100%) !important;
-    color: #0f172a !important;
+    background: linear-gradient(180deg, #ffffff 0%, #edf2fc 100%) !important;
+    color: #1e1b4b !important;
+    border-color: rgba(167, 139, 250, 0.5) !important;
+    box-shadow: 0 4px 12px -2px rgba(124, 58, 237, 0.1), inset 0 1px 0 rgba(255, 255, 255, 1) !important;
+    transform: translateY(-1px);
   }
   button.bg-slate-800 .text-slate-300,
   button.bg-slate-800 .text-slate-400,
   button.bg-slate-800 svg {
-    color: #334155 !important;
+    color: #475569 !important;
   }
 }
 

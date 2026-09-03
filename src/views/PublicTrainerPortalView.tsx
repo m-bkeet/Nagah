@@ -43,6 +43,7 @@ import {
   ChevronRight
 } from 'lucide-react';
 import { Trainer, Group, Course, Trainee, AttendanceRecord, HomeworkSubmission, Exam } from '../types';
+import { NextLectureWidget } from '../components/NextLectureWidget';
 import { NextLectureCard } from '../components/trainer/NextLectureCard';
 import { AIPresentationGenerator } from '../components/trainer/AIPresentationGenerator';
 import { LiveLectureStudio } from '../components/trainer/LiveLectureStudio';

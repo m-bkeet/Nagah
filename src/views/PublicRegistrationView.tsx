@@ -1,5 +1,5 @@
 import { api } from '../services/api';
-import { Camera, Upload, Send, CheckCircle2, User, Phone, MapPin, BookOpen, Layers, Copy, ArrowRight, ShieldCheck, QrCode, Share2, Sparkles, RefreshCw, Download, Printer, Award } from "lucide-react";
+import { Camera, Upload, Send, CheckCircle2, User, Phone, MapPin, BookOpen, Layers, Copy, ArrowRight, ShieldCheck, QrCode, Share2, Sparkles, RefreshCw, Download, Printer, Award, Lock, MessageSquare } from "lucide-react";
 import React, { useState, useRef, useEffect } from "react";
 import QRCode from 'qrcode';
 import html2canvas from 'html2canvas';
@@ -33,7 +33,21 @@ export const PublicRegistrationView: React.FC<PublicRegistrationViewProps> = ({ 
     { id: 'branch-1', name: 'فرع المركز الرئيسي - مبنى النجاح للتدريب' },
     { id: 'branch-2', name: 'فرع بدر - سنتر التدريب' }
   ]);
+  const [isRegistrationOpen, setIsRegistrationOpen] = useState<boolean>(true);
+  const [registrationClosedMessage, setRegistrationClosedMessage] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    fetch(`${window.location.origin}/api/public/registration-status`)
+      .then(res => res.json())
+      .then(data => {
+        if (data && data.allowOnlineRegistration === false) {
+          setIsRegistrationOpen(false);
+          setRegistrationClosedMessage('تعتذر إدارة مركز النجاح للتدريب والاستشارات، تم إغلاق باب التسجيل الخارجي حالياً لاكتمال العدد بجميع المجموعات. يرجى التواصل المباشر مع إدارة المركز.');
+        }
+      })
+      .catch(() => {});
+  }, []);
   const [result, setResult] = useState<any>(null);
   const [copiedCode, setCopiedCode] = useState(false);
   const [qrCodeUrl, setQrCodeUrl] = useState<string>('');
@@ -459,7 +473,31 @@ export const PublicRegistrationView: React.FC<PublicRegistrationViewProps> = ({ 
         </div>
 
         {/* Form Container */}
-        <div className="bg-slate-900/90 border border-slate-800 shadow-2xl rounded-3xl p-6 md:p-8 backdrop-blur-xl space-y-6">
+        {!isRegistrationOpen ? (
+          <div className="bg-slate-900/90 border border-amber-500/40 shadow-2xl rounded-3xl p-8 backdrop-blur-xl space-y-6 text-center animate-fadeIn">
+            <div className="w-20 h-20 bg-amber-500/10 border border-amber-500/30 rounded-2xl flex items-center justify-center mx-auto text-amber-400 shadow-inner">
+              <Lock className="w-10 h-10" />
+            </div>
+            <div className="space-y-2">
+              <h2 className="text-xl font-black text-amber-400">باب التسجيل الخارجي مغلق حالياً</h2>
+              <p className="text-slate-300 text-sm leading-relaxed max-w-md mx-auto font-medium">
+                {registrationClosedMessage || 'تعتذر إدارة مركز النجاح للتدريب والاستشارات، تم إغلاق باب التسجيل الخارجي حالياً لاكتمال العدد بجميع المجموعات.'}
+              </p>
+            </div>
+            <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
+              <a
+                href="https://wa.me/201001500686?text=%D8%A3%D9%87%D9%84%D8%A7%D9%8B%20%D8%A8%D9%83%D9%85%D8%8C%20%D8%A3%D8%B1%D8%BA%D8%A8%20%D9%81%D9%8A%20%D8%A7%D9%84%D8%A7%D8%B3%D8%AA%D9%81%D8%B3%D8%A7%D8%B1%20%D8%B9%D9%8BD%20%D8%A7%D9%83%D8%AA%D9%85%D8%A7%D9%84%20%D8%A7%D9%84%D8%B9%D8%AF%D8%AF"
+                target="_blank"
+                rel="noreferrer"
+                className="w-full sm:w-auto px-6 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm shadow-lg shadow-emerald-600/30 transition-all flex items-center justify-center gap-2"
+              >
+                <MessageSquare className="w-5 h-5" />
+                <span>التواصل المباشر مع إدارة المركز (واتساب)</span>
+              </a>
+            </div>
+          </div>
+        ) : (
+          <div className="bg-slate-900/90 border border-slate-800 shadow-2xl rounded-3xl p-6 md:p-8 backdrop-blur-xl space-y-6">
           
           <div className="bg-indigo-950/30 border border-indigo-500/30 rounded-2xl p-3.5 text-center text-xs text-indigo-200 font-medium leading-relaxed">
             ✨ يرجى تعبئة البيانات بالأسفل، وسيتم توليد كودك التدريبي وتسكينك في دورتك ومجموعتك تلقائياً دون الحاجة لتسجيل دخول.
@@ -707,6 +745,7 @@ export const PublicRegistrationView: React.FC<PublicRegistrationViewProps> = ({ 
             </div>
           )}
         </div>
+        )}
       </div>
       <FloatingChatButton />
     </div>

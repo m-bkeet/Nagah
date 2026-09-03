@@ -4,6 +4,7 @@ import { Printer, X, Download, FileText, CheckCircle, QrCode, Sparkles } from 'l
 import QRCode from 'qrcode';
 import { CertificateTemplate } from '../types';
 import { OfficialSealBadge } from './OfficialSealBadge';
+import { AttendanceSheetReport } from './AttendanceSheetReport';
 
 const QRCodeImage: React.FC<{ value: string; size?: number; className?: string }> = ({ value, size = 64, className = '' }) => {
   const [dataUrl, setDataUrl] = useState<string>('');
@@ -102,6 +103,7 @@ export const PrintModal: React.FC = () => {
           .gap-2 { gap: 0.5rem; }
           .gap-4 { gap: 1rem; }
           .w-full { width: 100%; }
+          .no-print { display: none !important; }
         </style>
         <script src="https://cdn.tailwindcss.com"></script>
         <script>
@@ -576,6 +578,16 @@ export const PrintModal: React.FC = () => {
               </div>
             </div>
           </div>
+        );
+      }
+
+      case 'attendance': {
+        return (
+          <AttendanceSheetReport
+            data={printData.data}
+            onPrint={handleDirectPrint}
+            onClose={() => setPrintData(null)}
+          />
         );
       }
 

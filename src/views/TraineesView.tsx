@@ -1263,19 +1263,19 @@ export const TraineesView: React.FC = () => {
   return (
     <div className="space-y-4">
       {/* Top Header & Adaptive Action Toolbar */}
-      <div className="flex flex-col gap-3 bg-slate-800/60 border border-slate-700/70 p-3 sm:p-4 rounded-2xl backdrop-blur-md relative z-30">
+      <div className="flex flex-col gap-3 bg-white/80 dark:bg-slate-800/60 border border-slate-200/90 dark:border-slate-700/70 p-3 sm:p-4 rounded-2xl shadow-[0_8px_30px_rgba(0,0,0,0.05),inset_0_1px_2px_rgba(255,255,255,0.9)] dark:shadow-none backdrop-blur-xl relative z-30">
         
         {/* Title row with stats & refresh */}
         <div className="flex items-center justify-between gap-2">
           <div className="min-w-0">
-            <h2 className="text-base sm:text-lg font-black text-slate-100 flex items-center gap-2 truncate">
-              <Users className="w-5 h-5 text-amber-400 shrink-0" />
+            <h2 className="text-base sm:text-lg font-black text-slate-900 dark:text-slate-100 flex items-center gap-2 truncate">
+              <Users className="w-5 h-5 text-amber-500 dark:text-amber-400 shrink-0" />
               <span className="truncate">إدارة الطلاب والمتدربين</span>
-              <span className="text-[11px] sm:text-xs bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded-full font-mono font-bold shrink-0">
+              <span className="text-[11px] sm:text-xs bg-amber-500/20 text-amber-800 dark:text-amber-300 px-2 py-0.5 rounded-full font-mono font-bold shrink-0">
                 {trainees.length}
               </span>
             </h2>
-            <p className="text-[11px] text-slate-400 mt-0.5 hidden sm:block">
+            <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-0.5 hidden sm:block">
               تسجيل المتدربين، الحسابات المالية، التحفيز والنجوم، ملفات Excel، وطباعة البطاقات
             </p>
           </div>
@@ -1283,11 +1283,11 @@ export const TraineesView: React.FC = () => {
           {/* Quick Refresh & View Switcher */}
           <div className="flex items-center gap-1.5 shrink-0">
             {/* View Mode Toggle: Table or Cards */}
-            <div className="flex items-center bg-slate-900 border border-slate-700 rounded-xl p-0.5 shadow-inner">
+            <div className="flex items-center bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-0.5 shadow-inner">
               <button
                 onClick={() => setViewMode('cards')}
                 className={`flex items-center gap-1 px-2 sm:px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all active:scale-95 ${
-                  viewMode === 'cards' ? 'bg-amber-500 text-slate-950 shadow-sm' : 'text-slate-400 hover:text-white'
+                  viewMode === 'cards' ? 'bg-amber-500 text-slate-950 shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                 }`}
                 title="عرض بطاقات تفاعلية"
               >
@@ -1297,7 +1297,7 @@ export const TraineesView: React.FC = () => {
               <button
                 onClick={() => setViewMode('table')}
                 className={`flex items-center gap-1 px-2 sm:px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all active:scale-95 ${
-                  viewMode === 'table' ? 'bg-amber-500 text-slate-950 shadow-sm' : 'text-slate-400 hover:text-white'
+                  viewMode === 'table' ? 'bg-amber-500 text-slate-950 shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                 }`}
                 title="عرض جدول مفصل"
               >
@@ -1311,7 +1311,7 @@ export const TraineesView: React.FC = () => {
                 loadData();
                 showToast('تم تحديث قائمة الطلاب بنجاح 🔄', 'success');
               }}
-              className="p-2 rounded-xl bg-slate-900/80 hover:bg-slate-800 text-amber-400 border border-slate-700/80 transition-all active:scale-90"
+              className="p-2 rounded-xl bg-white dark:bg-slate-900/80 hover:bg-slate-100 dark:hover:bg-slate-800 text-amber-600 dark:text-amber-400 border border-slate-200 dark:border-slate-700/80 transition-all active:scale-90 shadow-xs"
               title="تحديث البيانات يدوياً"
             >
               <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
@@ -1357,7 +1357,7 @@ export const TraineesView: React.FC = () => {
           </div>
 
           {/* Right Side: Fluid Operations & Primary Add */}
-          <div className="flex items-center gap-1.5 flex-wrap flex-1 sm:flex-initial justify-end">
+          <div className="flex items-center gap-2 flex-wrap flex-1 sm:flex-initial justify-end">
             
             {/* AI Camera Correction (Flexible) */}
             <button
@@ -1365,25 +1365,25 @@ export const TraineesView: React.FC = () => {
                 setScannerTraineeId(undefined);
                 setIsAiScannerModalOpen(true);
               }}
-              className="flex items-center gap-1 p-2 sm:px-3 sm:py-2 rounded-xl bg-indigo-600/90 hover:bg-indigo-600 text-white font-bold text-xs border border-indigo-400/30 shadow-md transition-all active:scale-95"
+              className="flex items-center gap-1.5 p-2 sm:px-3 sm:py-2 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 text-amber-700 dark:text-amber-300 font-bold text-xs border border-amber-300/80 dark:border-amber-500/30 shadow-sm backdrop-blur-md transition-all active:scale-95 cursor-pointer"
               title="تصحيح واجبات واختبارات الطلاب بالكاميرا ورصد الدرجات"
             >
-              <Camera className="w-4 h-4 text-amber-300" />
+              <Camera className="w-4 h-4 text-amber-600 dark:text-amber-400" />
               <span className="hidden md:inline">تصحيح بالكاميرا</span>
             </button>
 
             {/* Broadcast WhatsApp (Flexible) */}
             <button
               onClick={() => handleOpenBroadcastModal()}
-              className="flex items-center gap-1 p-2 sm:px-3 sm:py-2 rounded-xl bg-emerald-600/90 hover:bg-emerald-600 text-white font-bold text-xs border border-emerald-400/30 shadow-md transition-all active:scale-95"
-              title="إرسال كروت وأكواد الطلاب وبوابات الخدمات عبر الواتساب"
+              className="flex items-center gap-1.5 p-2 sm:px-3 sm:py-2 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-700 dark:text-emerald-300 font-bold text-xs border border-emerald-300/80 dark:border-emerald-500/30 shadow-sm backdrop-blur-md transition-all active:scale-95 cursor-pointer"
+              title="إرسال كروت وأكواد الطلاب وبوابات الخدمات"
             >
-              <MessageSquare className="w-4 h-4 text-emerald-200" />
+              <MessageSquare className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
               <span className="hidden lg:inline">إرسال كروت وأكواد الطلاب</span>
             </button>
 
             {/* Desktop Dropdowns */}
-            <div className="hidden md:flex items-center gap-1.5">
+            <div className="hidden md:flex items-center gap-2">
               {/* Dropdown 1: Unified Import Center */}
               <div className="relative">
                 <button
@@ -1392,38 +1392,38 @@ export const TraineesView: React.FC = () => {
                     setPortalsDropdownOpen(false);
                     setToolsDropdownOpen(false);
                   }}
-                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-bold text-xs transition-all"
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100/90 hover:bg-slate-200/90 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs border border-slate-200 dark:border-slate-700 shadow-sm backdrop-blur-md transition-all cursor-pointer active:scale-95"
                 >
-                  <Download className="w-4 h-4 text-emerald-400" />
+                  <Download className="w-4 h-4 text-slate-600 dark:text-slate-300" />
                   <span>مركز الاستيراد 📥</span>
                 </button>
                 {excelDropdownOpen && (
-                  <div className="absolute left-0 sm:right-0 mt-2 w-56 rounded-xl bg-slate-900 border border-slate-700 p-1.5 shadow-2xl z-[999] space-y-1 text-right max-h-[80vh] overflow-y-auto backdrop-blur-xl">
+                  <div className="absolute left-0 sm:right-0 mt-2 w-56 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-1.5 shadow-2xl z-[999] space-y-1 text-right max-h-[80vh] overflow-y-auto backdrop-blur-xl">
                     <button
                       onClick={() => {
                         setImportResults(null);
                         setIsImportModalOpen(true);
                         setExcelDropdownOpen(false);
                       }}
-                      className="w-full flex items-center gap-2 px-3 py-2.5 hover:bg-slate-800 rounded-lg text-slate-200 text-xs transition-colors"
+                      className="w-full flex items-center gap-2 px-3 py-2.5 hover:bg-amber-50 dark:hover:bg-slate-800 rounded-lg text-slate-800 dark:text-slate-200 text-xs transition-colors cursor-pointer"
                     >
-                      <FileSpreadsheet className="w-4 h-4 text-emerald-400 shrink-0" />
+                      <FileSpreadsheet className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
                       <div className="text-right">
                         <div className="font-bold">استيراد من Excel</div>
-                        <div className="text-[9px] text-slate-400">ملفات xlsx, csv</div>
+                        <div className="text-[9px] text-slate-500 dark:text-slate-400">ملفات xlsx, csv</div>
                       </div>
                     </button>
                     <button
                       onClick={() => {
-                        setIsGoogleSheetsModalOpen(true);
+                        setIsGoogleSheetsHubOpen(true);
                         setExcelDropdownOpen(false);
                       }}
-                      className="w-full flex items-center gap-2 px-3 py-2.5 hover:bg-slate-800 rounded-lg text-slate-200 text-xs transition-colors"
+                      className="w-full flex items-center gap-2 px-3 py-2.5 hover:bg-sky-50 dark:hover:bg-slate-800 rounded-lg text-slate-800 dark:text-slate-200 text-xs transition-colors cursor-pointer"
                     >
-                      <Database className="w-4 h-4 text-emerald-400 shrink-0" />
+                      <Database className="w-4 h-4 text-sky-600 dark:text-sky-400 shrink-0" />
                       <div className="text-right">
                         <div className="font-bold">استيراد من Google Sheets</div>
-                        <div className="text-[9px] text-slate-400">جداول جوجل السحابية</div>
+                        <div className="text-[9px] text-slate-500 dark:text-slate-400">جداول جوجل السحابية</div>
                       </div>
                     </button>
                     <button
@@ -1431,24 +1431,24 @@ export const TraineesView: React.FC = () => {
                         setIsFormsImportModalOpen(true);
                         setExcelDropdownOpen(false);
                       }}
-                      className="w-full flex items-center gap-2 px-3 py-2.5 hover:bg-slate-800 rounded-lg text-slate-200 text-xs transition-colors"
+                      className="w-full flex items-center gap-2 px-3 py-2.5 hover:bg-rose-50 dark:hover:bg-slate-800 rounded-lg text-slate-800 dark:text-slate-200 text-xs transition-colors cursor-pointer"
                     >
-                      <MessageSquare className="w-4 h-4 text-purple-400 shrink-0" />
+                      <MessageSquare className="w-4 h-4 text-rose-600 dark:text-rose-400 shrink-0" />
                       <div className="text-right">
                         <div className="font-bold">استيراد من Google Forms</div>
-                        <div className="text-[9px] text-slate-400">استمارات تسجيل الطلاب</div>
+                        <div className="text-[9px] text-slate-500 dark:text-slate-400">استمارات تسجيل الطلاب</div>
                       </div>
                     </button>
 
-                    <div className="my-1 border-t border-slate-800 pt-1">
+                    <div className="my-1 border-t border-slate-200 dark:border-slate-800 pt-1">
                       <button
                         onClick={() => {
                           handleDownloadTemplate('full');
                           setExcelDropdownOpen(false);
                         }}
-                        className="w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-800 rounded-lg text-amber-300 text-xs transition-colors"
+                        className="w-full flex items-center gap-2 px-3 py-2 hover:bg-amber-50 dark:hover:bg-slate-800 rounded-lg text-amber-700 dark:text-amber-300 text-xs transition-colors cursor-pointer font-bold"
                       >
-                        <Download className="w-3.5 h-3.5 shrink-0" />
+                        <Download className="w-3.5 h-3.5 shrink-0 text-amber-600 dark:text-amber-400" />
                         <span>تحميل نموذج Excel فارغ</span>
                       </button>
                       <button
@@ -1456,9 +1456,9 @@ export const TraineesView: React.FC = () => {
                           handleExportExcel();
                           setExcelDropdownOpen(false);
                         }}
-                        className="w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-800 rounded-lg text-cyan-400 text-xs transition-colors"
+                        className="w-full flex items-center gap-2 px-3 py-2 hover:bg-sky-50 dark:hover:bg-slate-800 rounded-lg text-sky-700 dark:text-sky-400 text-xs transition-colors cursor-pointer font-bold"
                       >
-                        <FileSpreadsheet className="w-3.5 h-3.5 shrink-0" />
+                        <FileSpreadsheet className="w-3.5 h-3.5 shrink-0 text-sky-600 dark:text-sky-400" />
                         <span>تصدير ملف Excel محلي</span>
                       </button>
                     </div>
@@ -1474,17 +1474,17 @@ export const TraineesView: React.FC = () => {
                     setExcelDropdownOpen(false);
                     setToolsDropdownOpen(false);
                   }}
-                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-bold text-xs transition-all"
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-sky-500/15 hover:bg-sky-500/25 text-sky-700 dark:text-sky-300 font-bold text-xs border border-sky-300/80 dark:border-sky-500/30 shadow-sm backdrop-blur-md transition-all cursor-pointer active:scale-95"
                 >
-                  <LinkIcon className="w-4 h-4 text-cyan-400" />
+                  <LinkIcon className="w-4 h-4 text-sky-600 dark:text-sky-400" />
                   <span>بوابات وروابط 📱</span>
                 </button>
                 {portalsDropdownOpen && (
-                  <div className="absolute left-0 sm:right-0 mt-2 w-64 rounded-xl bg-slate-900 border border-slate-700 p-2 shadow-2xl z-[999] space-y-2 text-right max-h-[80vh] overflow-y-auto backdrop-blur-xl">
+                  <div className="absolute left-0 sm:right-0 mt-2 w-64 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-2 shadow-2xl z-[999] space-y-2 text-right max-h-[80vh] overflow-y-auto backdrop-blur-xl">
                     {/* Student Portal */}
-                    <div className="p-1 space-y-1 bg-slate-950/40 rounded-lg border border-slate-800">
+                    <div className="p-1 space-y-1 bg-slate-50 dark:bg-slate-950/40 rounded-lg border border-slate-200 dark:border-slate-800">
                       <div className="flex items-center justify-between px-2 py-0.5">
-                        <span className="text-[10px] text-slate-400 font-bold">بوابة الطالب الذكية</span>
+                        <span className="text-[10px] text-slate-700 dark:text-slate-400 font-bold">بوابة الطالب الذكية</span>
                       </div>
                       <div className="flex gap-1">
                         <button
@@ -1492,7 +1492,7 @@ export const TraineesView: React.FC = () => {
                             window.open('/?view=student_portal', '_blank');
                             setPortalsDropdownOpen(false);
                           }}
-                          className="flex-1 py-1 px-2 bg-amber-500/10 hover:bg-amber-500 text-amber-400 hover:text-slate-950 rounded text-[10px] font-bold text-center transition-all"
+                          className="flex-1 py-1 px-2 bg-amber-500 text-slate-950 rounded text-[10px] font-bold text-center transition-all cursor-pointer shadow-sm"
                         >
                           فتح البوابة
                         </button>
@@ -1505,7 +1505,7 @@ export const TraineesView: React.FC = () => {
                             showToast('تم نسخ رابط بوابة الطالب بنجاح! 📋', 'success');
                             setPortalsDropdownOpen(false);
                           }}
-                          className="py-1 px-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-[10px] font-bold transition-all"
+                          className="py-1 px-2 bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-300 rounded text-[10px] font-bold transition-all cursor-pointer"
                         >
                           نسخ الرابط
                         </button>
@@ -1513,9 +1513,9 @@ export const TraineesView: React.FC = () => {
                     </div>
 
                     {/* Parent Portal */}
-                    <div className="p-1 space-y-1 bg-slate-950/40 rounded-lg border border-slate-800">
+                    <div className="p-1 space-y-1 bg-slate-50 dark:bg-slate-950/40 rounded-lg border border-slate-200 dark:border-slate-800">
                       <div className="flex items-center justify-between px-2 py-0.5">
-                        <span className="text-[10px] text-slate-400 font-bold">بوابة ولي الأمر</span>
+                        <span className="text-[10px] text-slate-700 dark:text-slate-400 font-bold">بوابة ولي الأمر</span>
                       </div>
                       <div className="flex gap-1">
                         <button
@@ -1523,7 +1523,7 @@ export const TraineesView: React.FC = () => {
                             window.open('/?view=parent_portal', '_blank');
                             setPortalsDropdownOpen(false);
                           }}
-                          className="flex-1 py-1 px-2 bg-emerald-500/10 hover:bg-emerald-500 text-emerald-400 hover:text-slate-950 rounded text-[10px] font-bold text-center transition-all"
+                          className="flex-1 py-1 px-2 bg-gradient-to-r from-rose-600 to-pink-600 text-white rounded text-[10px] font-bold text-center transition-all cursor-pointer shadow-sm hover:from-rose-500 hover:to-pink-500"
                         >
                           فتح البوابة
                         </button>
@@ -1536,7 +1536,7 @@ export const TraineesView: React.FC = () => {
                             showToast('تم نسخ رابط بوابة ولي الأمر بنجاح! 📋', 'success');
                             setPortalsDropdownOpen(false);
                           }}
-                          className="py-1 px-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-[10px] font-bold transition-all"
+                          className="py-1 px-2 bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-300 rounded text-[10px] font-bold transition-all cursor-pointer"
                         >
                           نسخ الرابط
                         </button>
@@ -1554,24 +1554,24 @@ export const TraineesView: React.FC = () => {
                     setExcelDropdownOpen(false);
                     setPortalsDropdownOpen(false);
                   }}
-                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-bold text-xs transition-all"
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-purple-500/15 hover:bg-purple-500/25 text-purple-700 dark:text-purple-300 font-bold text-xs border border-purple-300/80 dark:border-purple-500/30 shadow-sm backdrop-blur-md transition-all cursor-pointer active:scale-95"
                 >
-                  <Sparkles className="w-4 h-4 text-indigo-400" />
+                  <Sparkles className="w-4 h-4 text-purple-600 dark:text-purple-400" />
                   <span>أدوات متقدمة ⚡</span>
                 </button>
                 {toolsDropdownOpen && (
-                  <div className="absolute left-0 sm:right-0 mt-2 w-64 rounded-xl bg-slate-900 border border-slate-700 p-1.5 shadow-2xl z-[999] space-y-1 text-right max-h-[80vh] overflow-y-auto backdrop-blur-xl">
+                  <div className="absolute left-0 sm:right-0 mt-2 w-64 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-1.5 shadow-2xl z-[999] space-y-1 text-right max-h-[80vh] overflow-y-auto backdrop-blur-xl">
                     <button
                       onClick={() => {
                         setIsPromotionModalOpen(true);
                         setToolsDropdownOpen(false);
                       }}
-                      className="w-full flex items-center gap-2 px-3 py-2.5 hover:bg-slate-800 rounded-lg text-slate-200 text-xs transition-colors"
+                      className="w-full flex items-center gap-2 px-3 py-2.5 hover:bg-purple-50 dark:hover:bg-slate-800 rounded-lg text-slate-800 dark:text-slate-200 text-xs transition-colors cursor-pointer"
                     >
-                      <GraduationCap className="w-4 h-4 text-indigo-400 shrink-0" />
+                      <GraduationCap className="w-4 h-4 text-purple-600 dark:text-indigo-400 shrink-0" />
                       <div>
                         <div className="font-bold">تصعيد وترقية الطلاب 🎓</div>
-                        <div className="text-[9px] text-slate-400">للأعوام الدراسية الجديدة والمجموعات</div>
+                        <div className="text-[9px] text-slate-500 dark:text-slate-400">للأعوام الدراسية الجديدة والمجموعات</div>
                       </div>
                     </button>
                     <button
@@ -1580,12 +1580,12 @@ export const TraineesView: React.FC = () => {
                         setToolsDropdownOpen(false);
                       }}
                       disabled={isSyncingBatch}
-                      className="w-full flex items-center gap-2 px-3 py-2.5 hover:bg-slate-800 rounded-lg text-slate-200 text-xs transition-colors disabled:opacity-50"
+                      className="w-full flex items-center gap-2 px-3 py-2.5 hover:bg-amber-50 dark:hover:bg-slate-800 rounded-lg text-slate-800 dark:text-slate-200 text-xs transition-colors disabled:opacity-50 cursor-pointer"
                     >
-                      <Zap className="w-4 h-4 text-amber-400 shrink-0" />
+                      <Zap className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
                       <div>
                         <div className="font-bold">مزامنة وتحديث الكشوفات ⚡</div>
-                        <div className="text-[9px] text-slate-400">فحص الخصومات والإخوة وتواريخ الميلاد</div>
+                        <div className="text-[9px] text-slate-500 dark:text-slate-400">فحص الخصومات والإخوة وتواريخ الميلاد</div>
                       </div>
                     </button>
                     <button
@@ -1593,12 +1593,12 @@ export const TraineesView: React.FC = () => {
                         setIsDuplicatesModalOpen(true);
                         setToolsDropdownOpen(false);
                       }}
-                      className="w-full flex items-center gap-2 px-3 py-2.5 hover:bg-slate-800 rounded-lg text-rose-300 hover:text-rose-200 text-xs transition-colors border-t border-slate-800 font-bold"
+                      className="w-full flex items-center gap-2 px-3 py-2.5 hover:bg-rose-50 dark:hover:bg-slate-800 rounded-lg text-rose-700 dark:text-rose-300 text-xs transition-colors border-t border-slate-200 dark:border-slate-800 font-bold cursor-pointer"
                     >
-                      <ShieldAlert className="w-4 h-4 text-rose-400 shrink-0" />
+                      <ShieldAlert className="w-4 h-4 text-rose-600 dark:text-rose-400 shrink-0" />
                       <div>
                         <div className="font-bold">فحص الطلاب المكررين 🔍</div>
-                        <div className="text-[9px] text-slate-400">كشف وتدقيق المكررين مع التسامح في (أ/ا، ة/هـ، ى/ي)</div>
+                        <div className="text-[9px] text-slate-500 dark:text-slate-400">كشف وتدقيق المكررين مع التسامح في (أ/ا، ة/هـ، ى/ي)</div>
                       </div>
                     </button>
                     <button
@@ -1606,12 +1606,12 @@ export const TraineesView: React.FC = () => {
                         handleOpenCodeAuditModal();
                         setToolsDropdownOpen(false);
                       }}
-                      className="w-full flex items-center gap-2 px-3 py-2.5 hover:bg-slate-800 rounded-lg text-amber-300 text-xs transition-colors border-t border-slate-800 font-bold"
+                      className="w-full flex items-center gap-2 px-3 py-2.5 hover:bg-amber-50 dark:hover:bg-slate-800 rounded-lg text-amber-700 dark:text-amber-300 text-xs transition-colors border-t border-slate-200 dark:border-slate-800 font-bold cursor-pointer"
                     >
-                      <Sparkles className="w-4 h-4 text-amber-400 shrink-0" />
+                      <Sparkles className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
                       <div>
                         <div className="font-bold">فحص وتصحيح أكواد الطلاب 🏷️</div>
-                        <div className="text-[9px] text-slate-400">توحيد البادئات (A/B/C/D...) وترتيب الأكواد بالتسلسل</div>
+                        <div className="text-[9px] text-slate-500 dark:text-slate-400">توحيد البادئات (A/B/C/D...) وترتيب الأكواد بالتسلسل</div>
                       </div>
                     </button>
                   </div>
@@ -1621,17 +1621,17 @@ export const TraineesView: React.FC = () => {
               {/* Share Registration Link & QR (Desktop) */}
               <button
                 onClick={() => setIsShareModalOpen(true)}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-100 font-bold text-xs shadow-md transition-all border border-slate-700"
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 text-amber-700 dark:text-amber-300 font-bold text-xs shadow-sm border border-amber-300/80 dark:border-amber-500/30 cursor-pointer active:scale-95 transition-all backdrop-blur-md"
               >
-                <Share2 className="w-4 h-4 text-amber-400" />
-                <span>الباركود</span>
+                <Share2 className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+                <span>الباركود 🏷️</span>
               </button>
             </div>
 
             {/* Mobile "More Tools / المزيد ⋯" Button */}
             <button
               onClick={() => setIsMobileToolsDrawerOpen(true)}
-              className="md:hidden flex items-center gap-1 p-2 px-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700 text-xs font-bold transition-all active:scale-95"
+              className="md:hidden flex items-center gap-1 p-2 px-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-900 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 text-xs font-bold transition-all active:scale-95"
               title="المزيد من الأدوات والعمليات"
             >
               <Sparkles className="w-4 h-4 text-amber-400" />
@@ -1641,7 +1641,7 @@ export const TraineesView: React.FC = () => {
             {/* Primary Action Button: Add Trainee */}
             <button
               onClick={handleOpenAddModal}
-              className="flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 hover:to-amber-300 text-slate-950 font-black text-xs shadow-lg shadow-amber-500/20 transition-all active:scale-95 flex-1 sm:flex-initial"
+              className="flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-slate-950 font-black text-xs shadow-lg shadow-amber-500/30 border border-amber-300 transition-all active:scale-95 flex-1 sm:flex-initial cursor-pointer"
             >
               <UserPlus className="w-4 h-4 shrink-0 stroke-[2.5]" />
               <span className="whitespace-nowrap">إضافة متدرب</span>
@@ -1651,7 +1651,7 @@ export const TraineesView: React.FC = () => {
       </div>
 
       {/* Filter & Search Bar with Mobile Accordion Toggle */}
-      <div className="bg-slate-800/40 p-3 rounded-2xl border border-slate-700/60 space-y-2.5">
+      <div className="bg-white/80 dark:bg-slate-800/40 p-3 rounded-2xl border border-slate-200/90 dark:border-slate-700/60 shadow-[0_8px_30px_rgba(0,0,0,0.05),inset_0_1px_2px_rgba(255,255,255,0.9)] dark:shadow-none backdrop-blur-xl space-y-2.5">
         {/* Top Search Input & Mobile Filter Toggle */}
         <div className="flex items-center gap-2">
           <div className="flex-1 relative">
@@ -1662,12 +1662,12 @@ export const TraineesView: React.FC = () => {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && loadData()}
-              className="w-full bg-slate-900 border border-slate-700 rounded-xl pr-9 pl-3 py-2 text-xs text-slate-100 placeholder-slate-400 focus:outline-none focus:border-amber-500"
+              className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl pr-9 pl-3 py-2 text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:border-amber-500 shadow-xs"
             />
             {searchQuery && (
               <button
                 onClick={() => setSearchQuery('')}
-                className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
+                className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-900 dark:hover:text-white"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
@@ -1679,8 +1679,8 @@ export const TraineesView: React.FC = () => {
             onClick={() => setIsMobileFiltersOpen(!isMobileFiltersOpen)}
             className={`sm:hidden flex items-center gap-1.5 px-3 py-2 rounded-xl border text-xs font-bold transition-all active:scale-95 ${
               isMobileFiltersOpen || selectedBranch !== 'all' || selectedCourse !== 'all' || selectedGroup !== 'all' || selectedTrainer !== 'all' || selectedStatus !== 'all' || selectedPaymentStatus !== 'all'
-                ? 'bg-amber-500/20 border-amber-500/50 text-amber-300'
-                : 'bg-slate-900 border-slate-700 text-slate-300'
+                ? 'bg-amber-500/20 border-amber-500/50 text-amber-800 dark:text-amber-300'
+                : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300'
             }`}
           >
             <Filter className="w-3.5 h-3.5" />
@@ -1689,14 +1689,14 @@ export const TraineesView: React.FC = () => {
         </div>
 
         {/* Filters Grid: Always visible on tablet/desktop (sm:), collapsible on mobile */}
-        <div className={`${isMobileFiltersOpen ? 'grid' : 'hidden sm:grid'} grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-700/60`}>
+        <div className={`${isMobileFiltersOpen ? 'grid' : 'hidden sm:grid'} grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-200/80 dark:border-slate-700/60`}>
           
           {/* Sort By Filter */}
           <div>
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value)}
-              className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-amber-500"
+              className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-800 dark:text-slate-200 focus:outline-none focus:border-amber-500 shadow-xs"
             >
               <option value="created_desc">الأحدث إضافة</option>
               <option value="created_asc">الأقدم إضافة</option>
@@ -1715,7 +1715,7 @@ export const TraineesView: React.FC = () => {
             <select
               value={selectedBranch}
               onChange={(e) => setSelectedBranch(e.target.value)}
-              className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-amber-500"
+              className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-800 dark:text-slate-200 focus:outline-none focus:border-amber-500 shadow-xs"
             >
               <option value="all">جميع الفروع</option>
               {branches.map((b) => (
@@ -1731,7 +1731,7 @@ export const TraineesView: React.FC = () => {
             <select
               value={selectedCourse}
               onChange={(e) => setSelectedCourse(e.target.value)}
-              className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-amber-500"
+              className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-800 dark:text-slate-200 focus:outline-none focus:border-amber-500 shadow-xs"
             >
               <option value="all">جميع الدورات</option>
               {courses.map((c) => (
@@ -1747,7 +1747,7 @@ export const TraineesView: React.FC = () => {
             <select
               value={selectedGroup}
               onChange={(e) => setSelectedGroup(e.target.value)}
-              className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-amber-500"
+              className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-800 dark:text-slate-200 focus:outline-none focus:border-amber-500 shadow-xs"
             >
               <option value="all">جميع المجموعات</option>
               {groups.map((g) => (
@@ -1763,7 +1763,7 @@ export const TraineesView: React.FC = () => {
             <select
               value={selectedStatus}
               onChange={(e) => setSelectedStatus(e.target.value)}
-              className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-amber-500"
+              className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-800 dark:text-slate-200 focus:outline-none focus:border-amber-500 shadow-xs"
             >
               <option value="all">جميع الحالات</option>
               <option value="active">نشط ومستمر</option>
@@ -1777,7 +1777,7 @@ export const TraineesView: React.FC = () => {
             <select
               value={selectedPaymentStatus}
               onChange={(e) => setSelectedPaymentStatus(e.target.value)}
-              className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-amber-500"
+              className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-800 dark:text-slate-200 focus:outline-none focus:border-amber-500 shadow-xs"
             >
               <option value="all">جميع الاشتراكات</option>
               <option value="reminder_window">🚨 تنبيه السداد (من 28 لـ 5)</option>
@@ -2033,12 +2033,12 @@ export const TraineesView: React.FC = () => {
               return (
                 <div
                   key={t.id}
-                  className={`bg-slate-800/90 border rounded-2xl shadow-xl overflow-hidden backdrop-blur-md transition-all flex flex-col justify-between relative group ${
-                    isSelected ? 'border-amber-500 ring-1 ring-amber-500/50' : 'border-slate-700/80 hover:border-slate-600'
+                  className={`bg-white dark:bg-slate-800/90 border rounded-2xl shadow-md hover:shadow-xl overflow-hidden backdrop-blur-md transition-all flex flex-col justify-between relative group ${
+                    isSelected ? 'border-amber-500 ring-2 ring-amber-500/50' : 'border-slate-200/80 dark:border-slate-700/80 hover:border-amber-400'
                   }`}
                 >
                   {/* Card Header */}
-                  <div className="p-3.5 bg-gradient-to-r from-slate-900/90 to-slate-850 border-b border-slate-700/60 flex items-center justify-between">
+                  <div className="p-3.5 bg-slate-50/80 dark:bg-gradient-to-r dark:from-slate-900/90 dark:to-slate-850 border-b border-slate-200/80 dark:border-slate-700/60 flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <button
                         onClick={() => {
@@ -2046,11 +2046,11 @@ export const TraineesView: React.FC = () => {
                             isSelected ? prev.filter(id => id !== t.id) : [...prev, t.id]
                           );
                         }}
-                        className="text-slate-400 hover:text-amber-400 transition-colors"
+                        className="text-slate-500 dark:text-slate-400 hover:text-amber-600 dark:hover:text-amber-400 transition-colors"
                       >
-                        {isSelected ? <CheckSquare className="w-4 h-4 text-amber-400" /> : <Square className="w-4 h-4" />}
+                        {isSelected ? <CheckSquare className="w-4 h-4 text-amber-500" /> : <Square className="w-4 h-4" />}
                       </button>
-                      <span className="font-mono text-xs font-black bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded border border-amber-500/30">
+                      <span className="font-mono text-xs font-bold bg-amber-50 dark:bg-amber-500/20 text-amber-900 dark:text-amber-300 px-2 py-0.5 rounded border border-amber-300/80 dark:border-amber-500/30 shadow-xs">
                         {t.code}
                       </span>
                     </div>
@@ -2058,10 +2058,10 @@ export const TraineesView: React.FC = () => {
                     <span
                       className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
                         t.status === 'active'
-                          ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                          ? 'bg-emerald-50 text-emerald-800 border-emerald-300 dark:bg-emerald-500/20 dark:text-emerald-300 dark:border-emerald-500/40'
                           : t.status === 'completed'
-                          ? 'bg-blue-500/20 text-blue-300 border-blue-500/40'
-                          : 'bg-rose-500/20 text-rose-300 border-rose-500/40'
+                          ? 'bg-sky-50 text-sky-800 border-sky-300 dark:bg-sky-500/20 dark:text-sky-300 dark:border-sky-500/40'
+                          : 'bg-rose-50 text-rose-800 border-rose-300 dark:bg-rose-500/20 dark:text-rose-300 dark:border-rose-500/40'
                       }`}
                     >
                       {t.status === 'active' ? 'نشط' : t.status === 'completed' ? 'مكتمل' : 'متوقف'}
@@ -2076,13 +2076,13 @@ export const TraineesView: React.FC = () => {
                         <img
                           src={t.photoUrl}
                           alt={t.fullName}
-                          className="w-12 h-12 rounded-xl object-cover border-2 border-amber-500/60 shadow-md shrink-0 cursor-pointer"
+                          className="w-12 h-12 rounded-xl object-cover border border-amber-500/50 shadow-md shrink-0 cursor-pointer"
                           onClick={() => handleOpenProfile(t)}
                         />
                       ) : (
                         <div
                           onClick={() => handleOpenProfile(t)}
-                          className="w-12 h-12 rounded-xl bg-gradient-to-tr from-amber-600 to-amber-400 text-slate-950 flex items-center justify-center font-black text-lg shadow-md shrink-0 cursor-pointer"
+                          className="w-12 h-12 rounded-xl bg-gradient-to-tr from-amber-500 to-amber-400 text-slate-950 flex items-center justify-center font-black text-lg shadow-md shrink-0 cursor-pointer"
                         >
                           {t.fullName?.charAt(0) || '?'}
                         </div>
@@ -2090,63 +2090,63 @@ export const TraineesView: React.FC = () => {
                       <div className="min-w-0 flex-1">
                         <h4
                           onClick={() => handleOpenProfile(t)}
-                          className="font-bold text-sm text-slate-100 truncate hover:text-amber-300 transition-colors cursor-pointer"
+                          className="font-bold text-sm text-slate-900 dark:text-slate-100 truncate hover:text-amber-600 dark:hover:text-amber-300 transition-colors cursor-pointer"
                           title={t.fullName}
                         >
                           {t.fullName}
                         </h4>
-                        <p className="text-[11px] text-slate-400 truncate mt-0.5">
+                        <p className="text-[11px] text-slate-600 dark:text-slate-400 font-medium truncate mt-0.5">
                           {course?.name || 'دورة تدريبية'} {group?.name ? `• ${group.name}` : ''}
                         </p>
-                        <p className="text-[10px] text-slate-500 font-mono">
+                        <p className="text-[10px] text-slate-500 dark:text-slate-500 font-mono">
                           {t.phone} {t.parentPhone ? `| و.أ: ${t.parentPhone}` : ''}
                         </p>
                       </div>
                     </div>
 
                     {/* Stars & Gamification Interactive Section */}
-                    <div className="bg-slate-900/80 p-3 rounded-xl border border-slate-700/60 space-y-2">
+                    <div className="bg-amber-50/50 dark:bg-slate-900/80 p-3 rounded-xl border border-amber-200/60 dark:border-slate-700/60 space-y-2">
                       <div className="flex items-center justify-between">
                         <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${tier.badgeColor}`}>
                           {tier.name}
                         </span>
-                        <div className="flex items-center gap-1 font-mono font-black text-amber-400 text-xs">
-                          <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+                        <div className="flex items-center gap-1 font-mono font-bold text-amber-700 dark:text-amber-400 text-xs">
+                          <Star className="w-3.5 h-3.5 fill-amber-500 text-amber-500" />
                           <span>{t.totalPoints || t.points || 0} نقطة</span>
                         </div>
                       </div>
 
                       {/* Quick Star Buttons */}
-                      <div className="pt-1.5 border-t border-slate-800 flex items-center justify-between gap-1.5">
-                        <span className="text-[10px] text-slate-400 font-bold">منح نجوم:</span>
+                      <div className="pt-1.5 border-t border-amber-200/60 dark:border-slate-800 flex items-center justify-between gap-1.5">
+                        <span className="text-[10px] text-slate-600 dark:text-slate-400 font-bold">منح نجوم:</span>
                         <div className="flex items-center gap-1">
                           <button
                             onClick={() => handleQuickAward(t, 1, 'مشاركة وتفاعل إيجابي ⭐')}
-                            className="px-2 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 rounded-lg text-[11px] font-bold border border-amber-500/40 transition-colors"
+                            className="px-2 py-1 bg-white/90 hover:bg-amber-50 text-amber-800 border border-amber-300/80 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-amber-300 dark:border-amber-500/40 rounded-lg text-[11px] font-bold shadow-xs transition-colors"
                             title="إضافة 1 نجمة (+10 نقاط)"
                           >
                             +1 ⭐
                           </button>
                           <button
                             onClick={() => handleQuickAward(t, 2, 'إتمام الواجب والتطبيق العملي ⭐⭐')}
-                            className="px-2 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 rounded-lg text-[11px] font-bold border border-amber-500/40 transition-colors"
+                            className="px-2 py-1 bg-white/90 hover:bg-amber-50 text-amber-800 border border-amber-300/80 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-amber-300 dark:border-amber-500/40 rounded-lg text-[11px] font-bold shadow-xs transition-colors"
                             title="إضافة 2 نجوم (+20 نقطة)"
                           >
                             +2 ⭐
                           </button>
                           <button
                             onClick={() => handleQuickAward(t, 5, 'تفوق واختبار متميز 🌟')}
-                            className="px-2 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 rounded-lg text-[11px] font-bold border border-amber-500/40 transition-colors"
+                            className="px-2 py-1 bg-white/90 hover:bg-amber-50 text-amber-800 border border-amber-300/80 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-amber-300 dark:border-amber-500/40 rounded-lg text-[11px] font-bold shadow-xs transition-colors"
                             title="إضافة 5 نجوم (+50 نقطة)"
                           >
                             +5 🌟
                           </button>
                           <button
                             onClick={() => handleOpenStarModal(t)}
-                            className="p-1 bg-slate-800 hover:bg-slate-700 text-amber-400 rounded-lg border border-slate-700 transition-colors"
+                            className="p-1 bg-white/90 hover:bg-amber-50 text-amber-700 border border-amber-300/80 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-amber-400 dark:border-slate-700 rounded-lg shadow-xs transition-colors"
                             title="تخصيص النجوم مع السبب"
                           >
-                            <Plus className="w-3.5 h-3.5" />
+                            <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
                           </button>
                         </div>
                       </div>
@@ -2154,15 +2154,15 @@ export const TraineesView: React.FC = () => {
 
                     {/* Financial Summary & Subscription Status */}
                     <div className="space-y-1.5">
-                      <div className="flex items-center justify-between text-[11px] bg-slate-900/40 p-2 rounded-xl border border-slate-800">
-                        <span className="text-slate-400">المدفوع / المتبقي:</span>
+                      <div className="flex items-center justify-between text-[11px] bg-slate-50/80 dark:bg-slate-900/40 p-2 rounded-xl border border-slate-200/80 dark:border-slate-800">
+                        <span className="text-slate-600 dark:text-slate-400 font-bold">المدفوع / المتبقي:</span>
                         <div className="font-mono font-bold">
-                          <span className="text-emerald-400">{t.paidAmount}</span>
-                          <span className="text-slate-600 mx-1">/</span>
+                          <span className="text-sky-700 dark:text-emerald-400">{t.paidAmount}</span>
+                          <span className="text-slate-400 dark:text-slate-600 mx-1">/</span>
                           {t.remainingAmount > 0 ? (
-                            <span className="text-rose-400">{t.remainingAmount} ج.م</span>
+                            <span className="text-rose-700 dark:text-rose-400">{t.remainingAmount} ج.م</span>
                           ) : (
-                            <span className="text-emerald-400 text-[10px]">خالص ✓</span>
+                            <span className="text-emerald-700 dark:text-emerald-400 text-[10px]">خالص ✓</span>
                           )}
                         </div>
                       </div>
@@ -2173,71 +2173,85 @@ export const TraineesView: React.FC = () => {
                   </div>
 
                   {/* Card Actions Footer */}
-                    <div className="p-3 bg-slate-900/60 border-t border-slate-700/60 flex items-center justify-between gap-1">
-                    <div className="flex items-center gap-1">
+                  <div className="p-3 bg-white/70 dark:bg-slate-900/80 border-t border-slate-200/80 dark:border-slate-700/60 flex items-center justify-between gap-1 backdrop-blur-md">
+                    <div className="flex items-center gap-1.5 flex-wrap">
                       {/* Star Button */}
                       <button
                         onClick={() => handleOpenStarModal(t)}
-                        className="p-1.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 rounded-lg border border-amber-500/40 transition-colors"
+                        className="p-2 rounded-xl border transition-all cursor-pointer active:scale-95 flex items-center justify-center
+                          bg-gradient-to-b from-amber-300 via-amber-400 to-amber-500 hover:from-amber-200 hover:to-amber-300 text-stone-950 border-amber-200 shadow-[0_4px_14px_rgba(245,158,11,0.35),inset_0_1px_1px_rgba(255,255,255,0.8)]
+                          dark:bg-gradient-to-b dark:from-amber-400 dark:via-yellow-400 dark:to-amber-500 dark:border-yellow-200 dark:shadow-md dark:shadow-amber-500/25"
                         title="منح نجوم وتكريم"
                       >
-                        <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+                        <Star className="w-4 h-4 fill-stone-950 text-stone-950" />
                       </button>
 
                       {/* Payment */}
                       <button
                         onClick={() => handleOpenPaymentModal(t)}
-                        className="p-1.5 bg-emerald-950/60 hover:bg-emerald-800 text-emerald-300 rounded-lg border border-emerald-700/60 transition-colors"
+                        className="p-2 rounded-xl transition-all cursor-pointer active:scale-95 border
+                          bg-white/80 hover:bg-emerald-50 text-emerald-700 border-emerald-300/80 shadow-[0_4px_12px_rgba(16,185,129,0.18),inset_0_1px_1px_rgba(255,255,255,0.9)] backdrop-blur-md
+                          dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-300 dark:hover:text-emerald-400 dark:border-slate-700 dark:shadow-none"
                         title="تسجيل دفعة وسند قبض"
                       >
-                        <CreditCard className="w-3.5 h-3.5" />
+                        <CreditCard className="w-4 h-4" />
                       </button>
 
                       {/* Print Badge */}
                       <button
                         onClick={() => handlePrintBadge(t)}
-                        className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg border border-slate-700 transition-colors"
+                        className="p-2 rounded-xl transition-all cursor-pointer active:scale-95 border
+                          bg-white/80 hover:bg-sky-50 text-sky-700 border-sky-300/80 shadow-[0_4px_12px_rgba(14,165,233,0.18),inset_0_1px_1px_rgba(255,255,255,0.9)] backdrop-blur-md
+                          dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-300 dark:hover:text-sky-400 dark:border-slate-700 dark:shadow-none"
                         title="طباعة بطاقة المتدرب الورقية"
                       >
-                        <Printer className="w-3.5 h-3.5 text-slate-400" />
+                        <Printer className="w-4 h-4" />
                       </button>
 
                       {/* Digital ID Card */}
                       <button
                         onClick={() => setSelectedDigitalCardTrainee(t)}
-                        className="p-1.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 rounded-lg border border-amber-500/40 transition-colors flex items-center gap-1"
+                        className="p-2 rounded-xl transition-all cursor-pointer active:scale-95 border
+                          bg-white/80 hover:bg-rose-50 text-rose-700 border-rose-300/80 shadow-[0_4px_12px_rgba(244,63,94,0.18),inset_0_1px_1px_rgba(255,255,255,0.9)] backdrop-blur-md
+                          dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-300 dark:hover:text-rose-400 dark:border-slate-700 dark:shadow-none"
                         title="كارت المتدرب الرقمي المعتمد مع اللوجو والترحيب وتحميل صورة"
                       >
-                        <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                        <Sparkles className="w-4 h-4" />
                       </button>
 
                       {/* WhatsApp / Student Card Broadcast */}
                       <button
                         onClick={() => handleOpenBroadcastModal(t)}
-                        className="p-1.5 bg-emerald-950/60 hover:bg-emerald-800 text-emerald-400 rounded-lg border border-emerald-700/60 transition-colors"
-                        title="إرسال كارت وبيانات كود المتدرب وروابط البوابات عبر الواتساب"
+                        className="p-2 rounded-xl transition-all cursor-pointer active:scale-95 border
+                          bg-white/80 hover:bg-teal-50 text-teal-700 border-teal-300/80 shadow-[0_4px_12px_rgba(20,184,166,0.18),inset_0_1px_1px_rgba(255,255,255,0.9)] backdrop-blur-md
+                          dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-300 dark:hover:text-emerald-400 dark:border-slate-700 dark:shadow-none"
+                        title="إرسال كارت وبيانات كود المتدرب وروابط البوابات"
                       >
-                        <MessageSquare className="w-3.5 h-3.5" />
+                        <MessageSquare className="w-4 h-4" />
                       </button>
                     </div>
 
-                    <div className="flex items-center gap-1">
+                    <div className="flex items-center gap-1.5">
                       {/* Full Profile */}
                       <button
                         onClick={() => handleOpenProfile(t)}
-                        className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg border border-slate-700 transition-colors"
+                        className="p-2 rounded-xl transition-all cursor-pointer active:scale-95 border
+                          bg-white/80 hover:bg-blue-50 text-blue-700 border-blue-300/80 shadow-[0_4px_12px_rgba(59,130,246,0.18),inset_0_1px_1px_rgba(255,255,255,0.9)] backdrop-blur-md
+                          dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-300 dark:hover:text-amber-400 dark:border-slate-700 dark:shadow-none"
                         title="الملف الشامل"
                       >
-                        <Eye className="w-3.5 h-3.5" />
+                        <Eye className="w-4 h-4" />
                       </button>
 
                       {/* Edit */}
                       <button
                         onClick={() => handleOpenEditModal(t)}
-                        className="p-1.5 bg-blue-950/60 hover:bg-blue-800 text-blue-300 rounded-lg border border-blue-700/60 transition-colors"
+                        className="p-2 rounded-xl transition-all cursor-pointer active:scale-95 border
+                          bg-white/80 hover:bg-amber-50 text-amber-700 border-amber-300/80 shadow-[0_4px_12px_rgba(245,158,11,0.18),inset_0_1px_1px_rgba(255,255,255,0.9)] backdrop-blur-md
+                          dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-300 dark:hover:text-rose-400 dark:border-slate-700 dark:shadow-none"
                         title="تعديل"
                       >
-                        <Edit className="w-3.5 h-3.5" />
+                        <Edit className="w-4 h-4" />
                       </button>
                     </div>
                   </div>
@@ -2248,10 +2262,10 @@ export const TraineesView: React.FC = () => {
         )
       ) : (
         /* ------------------ TABLE VIEW ------------------ */
-        <div className="bg-slate-800/80 border border-slate-700/80 rounded-2xl shadow-xl overflow-hidden backdrop-blur-md">
+        <div className="bg-white dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 rounded-2xl shadow-xl overflow-hidden backdrop-blur-md">
           <div className="overflow-x-auto custom-scrollbar relative">
             <table className="w-full text-right text-xs">
-              <thead className="bg-slate-900/90 text-slate-300 font-bold border-b border-slate-700 select-none">
+              <thead className="bg-slate-100 dark:bg-slate-900/90 text-slate-700 dark:text-slate-300 font-bold border-b border-slate-200 dark:border-slate-700 select-none">
                 <tr>
                   <th className="p-3 w-8">
                     <button
@@ -2262,10 +2276,10 @@ export const TraineesView: React.FC = () => {
                           setSelectedTraineeIds(filteredTrainees.map(t => t.id));
                         }
                       }}
-                      className="text-slate-400 hover:text-amber-400 transition-colors"
+                      className="text-slate-500 hover:text-amber-500 dark:text-slate-400 dark:hover:text-amber-400 transition-colors"
                     >
                       {selectedTraineeIds.length === filteredTrainees.length && filteredTrainees.length > 0 ? (
-                        <CheckSquare className="w-4 h-4 text-amber-400" />
+                        <CheckSquare className="w-4 h-4 text-amber-500" />
                       ) : (
                         <Square className="w-4 h-4" />
                       )}
@@ -2281,10 +2295,10 @@ export const TraineesView: React.FC = () => {
                   <th className="p-3">المتبقي</th>
                   <th className="p-3 text-center">النقاط</th>
                   <th className="p-3 text-center">الحالة</th>
-                  <th className="p-3 text-center sticky left-0 bg-slate-900/95 z-20 shadow-[-4px_0_12px_rgba(0,0,0,0.5)] border-l border-slate-700 min-w-[170px]">الإجراءات</th>
+                  <th className="p-3 text-center sticky left-0 bg-slate-100 dark:bg-slate-900 z-20 shadow-[-4px_0_12px_rgba(0,0,0,0.08)] dark:shadow-[-4px_0_12px_rgba(0,0,0,0.5)] border-l border-slate-200 dark:border-slate-700 min-w-[170px]">الإجراءات</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-700/60 text-slate-200">
+              <tbody className="divide-y divide-slate-200 dark:divide-slate-700/60 text-slate-800 dark:text-slate-200">
                 {isLoading ? (
                   <tr>
                     <td colSpan={12} className="py-12 text-center text-slate-400">
@@ -2468,33 +2482,39 @@ export const TraineesView: React.FC = () => {
                         </td>
 
                         {/* Actions */}
-                        <td className="p-3 text-center sticky left-0 bg-slate-900/95 z-10 shadow-[-4px_0_12px_rgba(0,0,0,0.5)] border-l border-slate-700/60 min-w-[170px]">
-                          <div className="grid grid-cols-4 gap-1">
+                        <td className="p-2.5 text-center sticky left-0 bg-white dark:bg-slate-900 z-10 shadow-[-4px_0_12px_rgba(0,0,0,0.08)] dark:shadow-[-4px_0_12px_rgba(0,0,0,0.5)] border-l border-slate-200 dark:border-slate-700/60 min-w-[170px]">
+                          <div className="grid grid-cols-4 gap-1.5">
                             {/* AI Homework Scanner Button */}
                             <button
                               onClick={() => {
                                 setScannerTraineeId(t.id);
                                 setIsAiScannerModalOpen(true);
                               }}
-                              className="p-1.5 bg-indigo-950/60 hover:bg-indigo-800 text-indigo-300 rounded-lg border border-indigo-700/60 transition-colors flex items-center justify-center"
+                              className="p-1.5 rounded-lg transition-all flex items-center justify-center cursor-pointer active:scale-95 border
+                                bg-white/80 hover:bg-sky-50 text-sky-700 border-sky-300/80 shadow-[0_2px_8px_rgba(14,165,233,0.18),inset_0_1px_1px_rgba(255,255,255,0.9)] backdrop-blur-md
+                                dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-300 dark:hover:text-sky-400 dark:border-slate-700 dark:shadow-none"
                               title="تصحيح واجب/اختبار الطالب بالكاميرا والذكاء الاصطناعي"
                             >
-                              <Camera className="w-3.5 h-3.5 text-amber-300" />
+                              <Camera className="w-3.5 h-3.5" />
                             </button>
 
                             {/* Star Reward Button */}
                             <button
                               onClick={() => handleOpenStarModal(t)}
-                              className="p-1.5 bg-amber-500/20 hover:bg-amber-500/40 text-amber-300 rounded-lg border border-amber-500/50 transition-colors flex items-center justify-center"
+                              className="p-1.5 rounded-lg transition-all flex items-center justify-center cursor-pointer active:scale-95 border
+                                bg-gradient-to-b from-amber-300 via-amber-400 to-amber-500 hover:from-amber-200 hover:to-amber-300 text-stone-950 border-amber-200 shadow-[0_2px_8px_rgba(245,158,11,0.35),inset_0_1px_1px_rgba(255,255,255,0.8)]
+                                dark:bg-amber-500/20 dark:hover:bg-amber-500/30 dark:text-amber-300 dark:border-amber-500/40 dark:shadow-none"
                               title="منح نجوم وتكريم المتدرب"
                             >
-                              <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+                              <Star className="w-3.5 h-3.5 fill-current" />
                             </button>
 
                             {/* Payment Button */}
                             <button
                               onClick={() => handleOpenPaymentModal(t)}
-                              className="p-1.5 bg-emerald-950/60 hover:bg-emerald-800 text-emerald-300 rounded-lg border border-emerald-700/60 transition-colors flex items-center justify-center"
+                              className="p-1.5 rounded-lg transition-all flex items-center justify-center cursor-pointer active:scale-95 border
+                                bg-white/80 hover:bg-emerald-50 text-emerald-700 border-emerald-300/80 shadow-[0_2px_8px_rgba(16,185,129,0.18),inset_0_1px_1px_rgba(255,255,255,0.9)] backdrop-blur-md
+                                dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-300 dark:hover:text-emerald-400 dark:border-slate-700 dark:shadow-none"
                               title="تسجيل دفعة وسند قبض"
                             >
                               <CreditCard className="w-3.5 h-3.5" />
@@ -2503,26 +2523,32 @@ export const TraineesView: React.FC = () => {
                             {/* Print Badge */}
                             <button
                               onClick={() => handlePrintBadge(t)}
-                              className="p-1.5 bg-slate-700/60 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg border border-slate-600 transition-colors flex items-center justify-center"
+                              className="p-1.5 rounded-lg transition-all flex items-center justify-center cursor-pointer active:scale-95 border
+                                bg-white/80 hover:bg-sky-50 text-sky-700 border-sky-300/80 shadow-[0_2px_8px_rgba(14,165,233,0.18),inset_0_1px_1px_rgba(255,255,255,0.9)] backdrop-blur-md
+                                dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-300 dark:hover:text-sky-400 dark:border-slate-700 dark:shadow-none"
                               title="طباعة بطاقة المتدرب الورقية"
                             >
-                              <Printer className="w-3.5 h-3.5 text-slate-400" />
+                              <Printer className="w-3.5 h-3.5" />
                             </button>
 
                             {/* Digital ID Card */}
                             <button
                               onClick={() => setSelectedDigitalCardTrainee(t)}
-                              className="p-1.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 rounded-lg border border-amber-500/40 transition-colors flex items-center justify-center"
+                              className="p-1.5 rounded-lg transition-all flex items-center justify-center cursor-pointer active:scale-95 border
+                                bg-white/80 hover:bg-rose-50 text-rose-700 border-rose-300/80 shadow-[0_2px_8px_rgba(244,63,94,0.18),inset_0_1px_1px_rgba(255,255,255,0.9)] backdrop-blur-md
+                                dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-300 dark:hover:text-rose-400 dark:border-slate-700 dark:shadow-none"
                               title="كارت المتدرب الرقمي الرسمي مع اللوجو وتحميل الصورة"
                             >
-                              <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                              <Sparkles className="w-3.5 h-3.5" />
                             </button>
 
                             {/* WhatsApp / Student Card Broadcast */}
                             <button
                               onClick={() => handleOpenBroadcastModal(t)}
-                              className="p-1.5 bg-emerald-950/60 hover:bg-emerald-800 text-emerald-400 rounded-lg border border-emerald-700/60 transition-colors flex items-center justify-center"
-                              title="إرسال عبر WhatsApp"
+                              className="p-1.5 rounded-lg transition-all flex items-center justify-center cursor-pointer active:scale-95 border
+                                bg-white/80 hover:bg-teal-50 text-teal-700 border-teal-300/80 shadow-[0_2px_8px_rgba(20,184,166,0.18),inset_0_1px_1px_rgba(255,255,255,0.9)] backdrop-blur-md
+                                dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-300 dark:hover:text-emerald-400 dark:border-slate-700 dark:shadow-none"
+                              title="إرسال كارت وبيانات الطالب"
                             >
                               <MessageSquare className="w-3.5 h-3.5" />
                             </button>
@@ -2530,7 +2556,9 @@ export const TraineesView: React.FC = () => {
                             {/* Profile */}
                             <button
                               onClick={() => handleOpenProfile(t)}
-                              className="p-1.5 bg-slate-700/60 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg border border-slate-600 transition-colors flex items-center justify-center"
+                              className="p-1.5 rounded-lg transition-all flex items-center justify-center cursor-pointer active:scale-95 border
+                                bg-white/80 hover:bg-blue-50 text-blue-700 border-blue-300/80 shadow-[0_2px_8px_rgba(59,130,246,0.18),inset_0_1px_1px_rgba(255,255,255,0.9)] backdrop-blur-md
+                                dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-300 dark:hover:text-amber-400 dark:border-slate-700 dark:shadow-none"
                               title="الملف الشامل"
                             >
                               <Eye className="w-3.5 h-3.5" />
@@ -2539,7 +2567,9 @@ export const TraineesView: React.FC = () => {
                             {/* Edit */}
                             <button
                               onClick={() => handleOpenEditModal(t)}
-                              className="p-1.5 bg-blue-950/60 hover:bg-blue-800 text-blue-300 rounded-lg border border-blue-700/60 transition-colors flex items-center justify-center"
+                              className="p-1.5 rounded-lg transition-all flex items-center justify-center cursor-pointer active:scale-95 border
+                                bg-white/80 hover:bg-amber-50 text-amber-700 border-amber-300/80 shadow-[0_2px_8px_rgba(245,158,11,0.18),inset_0_1px_1px_rgba(255,255,255,0.9)] backdrop-blur-md
+                                dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-300 dark:hover:text-rose-400 dark:border-slate-700 dark:shadow-none"
                               title="تعديل"
                             >
                               <Edit className="w-3.5 h-3.5" />

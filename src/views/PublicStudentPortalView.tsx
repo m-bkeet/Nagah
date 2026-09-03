@@ -129,7 +129,7 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
   const initialSession = getInitialStudentSession();
 
   // Login State
-  const [studentCodeInput, setStudentCodeInput] = useState(() => initialSession?.student?.code || 'م001');
+  const [studentCodeInput, setStudentCodeInput] = useState(() => initialSession?.student?.code || '');
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [loginError, setLoginError] = useState('');
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(() => !!initialSession?.student);
@@ -137,11 +137,21 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
   const handleLogout = () => {
     setIsLoggedIn(false);
     setStudent(null);
+    setTrainer(null);
+    setBadges([]);
+    setHomeworks([]);
+    setLabSchedules([]);
+    setGroupTasks([]);
+    setCertificates([]);
+    setPortalMessages([]);
     localStorage.removeItem('nagah_student_active_session');
     localStorage.removeItem('nagah_student_cache');
     localStorage.removeItem('student_session_code');
     localStorage.removeItem('student_session_password');
-    resilientOfflineService.saveToCache('student', null);
+    try {
+      resilientOfflineService.saveToCache('student', null);
+    } catch (e) {}
+    setIsOfflineFallbackData(false);
   };
 
   // Loaded Student Data
@@ -291,7 +301,15 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
             localStorage.setItem('student_session_code', data.student?.code || savedCode);
             localStorage.setItem('nagah_student_active_session', JSON.stringify(data));
             resilientOfflineService.saveToCache('student', data);
+            setIsOfflineFallbackData(false);
             console.log('[Auto-Login] Background data revalidation successful. State updated silently.');
+          } else if (res.status === 404 || (data && !data.success)) {
+            // Invalid or deleted session - clear stale session
+            localStorage.removeItem('student_session_code');
+            localStorage.removeItem('student_session_password');
+            localStorage.removeItem('nagah_student_active_session');
+            setIsLoggedIn(false);
+            setStudent(null);
           }
         } catch (err) {
           console.warn('[Auto-Login] Background revalidation failed, using offline cache:', err);
@@ -767,30 +785,64 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
         api.getTrainers().catch(() => [])
       ]);
 
+      const normalizePrefix = (letter: string) => {
+        const l = (letter || '').trim().toLowerCase();
+        if (l === 'أ' || l === 'ا' || l === 'إ' || l === 'آ' || l === 'a') return 'a';
+        if (l === 'ب' || l === 'b') return 'b';
+        if (l === 'ج' || l === 'c') return 'c';
+        if (l === 'د' || l === 'd') return 'd';
+        if (l === 'ه' || l === 'هـ' || l === 'e') return 'e';
+        if (l === 'م' || l === 'tr') return 'tr';
+        return l;
+      };
+
       const matchedTrainee = cloudTrainees.find(t => {
         if (!t) return false;
-        const tCode = normalizeDigits(t.code || '').toLowerCase();
-        const tNatId = normalizeDigits(t.nationalId || '').trim();
-        const tId = (t.id || '').toLowerCase();
+        const normQ = normalizeDigits(rawInput).trim().toLowerCase();
+        const cleanQ = normQ.replace(/[\s\-_]/g, '');
+        const digitsQ = normQ.replace(/\D/g, '');
+        const qLetter = cleanQ.replace(/[0-9]/g, '');
+        const qNumStr = cleanQ.replace(/\D/g, '');
 
-        // Exact or prefixed code match
-        if (
-          (tCode && (tCode === normalizedInput || tCode === `م${normalizedInput}` || `م${tCode}` === normalizedInput || tCode === `tr-${normalizedInput}`)) ||
-          (tNatId && tNatId === normalizedInput) ||
-          (tId && tId === normalizedInput)
-        ) return true;
+        const tCode = normalizeDigits(t.code || '').trim().toLowerCase();
+        const cleanCode = tCode.replace(/[\s\-_]/g, '');
+        const cLetter = cleanCode.replace(/[0-9]/g, '');
+        const cNumStr = cleanCode.replace(/\D/g, '');
 
-        // Phone match
-        if (isPhone) {
-          const tPhoneDigits = cleanPhoneDigits(t.phone || '');
-          const pPhoneDigits = cleanPhoneDigits(t.parentPhone || '');
-          if (tPhoneDigits && (tPhoneDigits === inputDigits || tPhoneDigits.includes(inputDigits) || inputDigits.includes(tPhoneDigits))) return true;
-          if (pPhoneDigits && (pPhoneDigits === inputDigits || pPhoneDigits.includes(inputDigits) || inputDigits.includes(pPhoneDigits))) return true;
+        const tNatId = normalizeDigits(t.nationalId || '').trim().toLowerCase();
+        const tId = (t.id || '').trim().toLowerCase();
+        const tName = normalizeDigits(t.fullName || '').trim().toLowerCase();
+
+        // 1. Exact Matches
+        if (tCode === normQ || cleanCode === cleanQ || tNatId === normQ || tId === normQ) return true;
+
+        // 2. Strict Letter Prefix + Number Match (e.g. C036 matches c36, ج36, C-036, but NEVER A036 or B036)
+        if (qNumStr && cNumStr) {
+          const qNum = parseInt(qNumStr, 10);
+          const cNum = parseInt(cNumStr, 10);
+          if (!isNaN(qNum) && !isNaN(cNum) && qNum === cNum) {
+            const qL = normalizePrefix(qLetter);
+            const cL = normalizePrefix(cLetter);
+            if (qL && cL) {
+              if (qL === cL) return true;
+            } else if (!qL && !cL) {
+              return true;
+            }
+          }
         }
 
-        const tPhoneRaw = normalizeDigits(t.phone || '').trim();
-        const pPhoneRaw = normalizeDigits(t.parentPhone || '').trim();
-        return tPhoneRaw === normalizedInput || pPhoneRaw === normalizedInput;
+        // 3. Phone Match (>= 8 digits)
+        if (digitsQ.length >= 8) {
+          const tPhoneDigits = cleanPhoneDigits(t.phone || '');
+          const pPhoneDigits = cleanPhoneDigits(t.parentPhone || '');
+          if (tPhoneDigits && (tPhoneDigits === digitsQ || tPhoneDigits.endsWith(digitsQ) || digitsQ.endsWith(tPhoneDigits))) return true;
+          if (pPhoneDigits && (pPhoneDigits === digitsQ || pPhoneDigits.endsWith(digitsQ) || digitsQ.endsWith(pPhoneDigits))) return true;
+        }
+
+        // 4. Full Name match
+        if (normQ.length >= 4 && tName === normQ) return true;
+
+        return false;
       });
 
       if (matchedTrainee) {
@@ -1350,9 +1402,9 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
   };
 
   return (
-    <div className="h-screen bg-slate-950 text-slate-100 flex flex-col font-sans overflow-hidden" dir="rtl">
+    <div className="h-screen bg-slate-100 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col font-sans overflow-hidden" dir="rtl">
       {/* UNIFIED PROFESSIONAL TOP HEADER */}
-      <header className="bg-slate-900/95 backdrop-blur-md border-b border-slate-800 px-4 py-2.5 shrink-0 z-40 shadow-xl">
+      <header className="bg-white/80 dark:bg-slate-900/95 backdrop-blur-xl border-b border-slate-200/90 dark:border-slate-800 px-4 py-2.5 shrink-0 z-40 shadow-sm dark:shadow-xl">
         <div className="max-w-6xl mx-auto flex items-center justify-between gap-3">
           
           {/* Logo & Center Brand */}
@@ -1361,13 +1413,13 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
               <img src="/logo.svg" alt="النجاح" className="w-full h-full object-contain" />
             </div>
             <div>
-              <h1 className="font-black text-xs sm:text-sm text-slate-100 flex items-center gap-1.5">
+              <h1 className="font-black text-xs sm:text-sm text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
                 <span>مركز النجاح للتدريب والاستشارات</span>
-                <span className="text-[10px] bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded-full border border-amber-500/30 font-normal">
+                <span className="text-[10px] bg-amber-500/20 text-amber-800 dark:text-amber-300 px-2 py-0.5 rounded-full border border-amber-500/30 font-bold">
                   بوابة الطالب
                 </span>
               </h1>
-              <p className="text-[10px] text-slate-400">
+              <p className="text-[10px] text-slate-600 dark:text-slate-400">
                 {isLoggedIn && student ? `${student.fullName} • كود: ${student.code}` : 'المنصة الذكية للطلاب والتكليفات'}
               </p>
             </div>
@@ -1392,7 +1444,7 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
                 <button
                   type="button"
                   onClick={() => setIsNotificationsOpen(true)}
-                  className="p-2 rounded-xl bg-slate-800 border border-slate-700 text-amber-400 hover:text-white relative transition-all"
+                  className="p-2 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-amber-600 dark:text-amber-400 hover:text-amber-800 dark:hover:text-white relative transition-all shadow-xs"
                   title="الإشعارات والتنبيهات"
                 >
                   <Bell className="w-4 h-4" />
@@ -1402,7 +1454,7 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
                 </button>
 
                 {/* Student Avatar / Mini Profile */}
-                <div className="hidden md:flex items-center gap-2 bg-slate-800/80 border border-slate-700/80 px-2.5 py-1 rounded-xl">
+                <div className="hidden md:flex items-center gap-2 bg-white/80 dark:bg-slate-800/80 border border-slate-200/90 dark:border-slate-700/80 px-2.5 py-1 rounded-xl shadow-xs">
                   {student?.photoUrl ? (
                     <img
                       src={student.photoUrl}
@@ -1414,14 +1466,14 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
                       {student?.fullName?.charAt(0) || 'ط'}
                     </div>
                   )}
-                  <span className="text-xs font-bold text-slate-200">{student?.fullName}</span>
+                  <span className="text-xs font-bold text-slate-800 dark:text-slate-200">{student?.fullName}</span>
                 </div>
 
                 {/* Single Clean Logout Button */}
                 <button
                   type="button"
                   onClick={handleLogout}
-                  className="px-3 py-1.5 rounded-xl bg-rose-600/20 border border-rose-500/30 text-rose-300 hover:bg-rose-600/30 font-bold text-xs flex items-center gap-1 transition-all"
+                  className="px-3 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 dark:bg-rose-600/20 border border-rose-200 dark:border-rose-500/30 text-rose-700 dark:text-rose-300 font-bold text-xs flex items-center gap-1 transition-all shadow-xs"
                   title="تسجيل الخروج"
                 >
                   <LogOut className="w-3.5 h-3.5" />
@@ -1436,7 +1488,7 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
             {/* Share App Button */}
             <button
               onClick={handleShareApp}
-              className="p-2 rounded-xl bg-slate-800 text-amber-400 hover:bg-slate-700 hover:text-amber-300 transition-colors flex items-center gap-1 text-xs font-bold border border-slate-700"
+              className="p-2 rounded-xl bg-white dark:bg-slate-800 text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-slate-700 hover:text-amber-700 dark:hover:text-amber-300 transition-colors flex items-center gap-1 text-xs font-bold border border-slate-200 dark:border-slate-700 shadow-xs"
               title="مشاركة التطبيق"
             >
               <Share2 className="w-4 h-4" />
@@ -1447,7 +1499,7 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
               <button
                 type="button"
                 onClick={onBack}
-                className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-300 text-xs font-bold flex items-center gap-1 transition-colors border border-amber-500/30 shadow"
+                className="px-3 py-1.5 rounded-xl bg-white dark:bg-slate-800 hover:bg-amber-50 dark:hover:bg-slate-700 text-amber-700 dark:text-amber-300 text-xs font-bold flex items-center gap-1 transition-colors border border-amber-300/80 dark:border-amber-500/30 shadow-xs"
                 title="الرجوع للصفحة الرئيسية للمركز"
               >
                 <ArrowRight className="w-3.5 h-3.5" />
@@ -1459,7 +1511,7 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
       </header>
 
       {/* Offline Status & Resilient Sync Queue Banner */}
-      {(!isOnline || isOfflineFallbackData || failoverActive) && (
+      {isLoggedIn && (!isOnline || isOfflineFallbackData || failoverActive) && (
         <div className="bg-gradient-to-r from-amber-600 via-amber-500 to-amber-600 border-b border-amber-400/40 text-slate-950 font-bold text-xs py-2 px-4 shadow-inner flex flex-col sm:flex-row items-center justify-between gap-2 transition-all">
           <div className="flex items-center gap-2">
             <AlertTriangle className="w-4 h-4 animate-pulse shrink-0" />
@@ -1493,27 +1545,27 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
       <main className="flex-1 overflow-y-auto max-w-6xl w-full mx-auto p-4 md:p-6 space-y-6">
         {/* LOGIN FORM SECTION */}
         {!isLoggedIn ? (
-          <div className="max-w-md mx-auto my-8 bg-slate-900/90 border border-slate-800 rounded-3xl p-6 shadow-2xl space-y-5">
+          <div className="max-w-md mx-auto my-8 bg-white/80 dark:bg-slate-900/90 border border-slate-200/90 dark:border-slate-800 rounded-3xl p-6 shadow-2xl backdrop-blur-xl space-y-5">
             <div className="text-center space-y-2">
               <div className="w-20 h-20 mx-auto rounded-3xl bg-white p-2 border border-amber-500/40 shadow-xl flex items-center justify-center">
                 <img src="/logo.svg" alt="مركز النجاح للتدريب والاستشارات" className="w-full h-full object-contain" />
               </div>
-              <h2 className="text-lg font-black text-slate-100">تسجيل دخول الطالب</h2>
-              <p className="text-xs text-slate-400">
-                أدخل كود الطالب الخاص بك (مثلاً: <span className="font-mono text-amber-300">م001</span> أو <span className="font-mono text-amber-300">A001</span>) أو رقم الهاتف المسجل بالمركز
+              <h2 className="text-lg font-black text-slate-900 dark:text-slate-100">تسجيل دخول الطالب</h2>
+              <p className="text-xs text-slate-600 dark:text-slate-400">
+                أدخل كود الطالب الخاص بك (مثلاً: <span className="font-mono text-amber-600 dark:text-amber-300 font-bold">م001</span> أو <span className="font-mono text-amber-600 dark:text-amber-300 font-bold">A001</span>) أو رقم الهاتف المسجل بالمركز
               </p>
             </div>
 
             {loginError && (
-              <div className="p-3 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex items-center gap-2">
-                <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
+              <div className="p-3 rounded-2xl bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/30 text-rose-700 dark:text-rose-300 text-xs flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 text-rose-500 shrink-0" />
                 <span>{loginError}</span>
               </div>
             )}
 
             <form onSubmit={handleStudentLogin} className="space-y-4">
               <div>
-                <label className="block text-xs font-bold text-slate-300 mb-1.5">
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
                   كود الطالب / رقم الهاتف
                 </label>
                 <div className="relative">
@@ -1524,28 +1576,28 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
                     value={studentCodeInput}
                     onChange={(e) => setStudentCodeInput(e.target.value)}
                     placeholder="أدخل كود الطالب مثل م001..."
-                    className="w-full bg-slate-950 border border-slate-700 rounded-2xl pr-9 pl-3 py-2.5 text-sm text-slate-100 focus:outline-none focus:border-amber-500 font-mono"
+                    className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-2xl pr-9 pl-3 py-2.5 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:border-amber-500 font-mono shadow-xs"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-300 mb-1.5 flex justify-between">
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 flex justify-between">
                   <span>كلمة المرور للبوابة</span>
-                  <span className="text-[10px] text-amber-400 font-normal">
+                  <span className="text-[10px] text-amber-600 dark:text-amber-400 font-normal">
                     {requiresPassword ? '⚠️ مطلوبة لحسابك المحمي' : 'اختياري - في حال تفعيل الحماية'}
                   </span>
                 </label>
                 <div className="relative">
-                  <Lock className={`w-4 h-4 absolute right-3 top-3 ${requiresPassword ? 'text-amber-400' : 'text-slate-400'}`} />
+                  <Lock className={`w-4 h-4 absolute right-3 top-3 ${requiresPassword ? 'text-amber-500' : 'text-slate-400'}`} />
                   <input
                     type="password"
                     value={studentPasswordInput}
                     onChange={(e) => setStudentPasswordInput(e.target.value)}
                     placeholder={requiresPassword ? 'أدخل كلمة المرور الخاصة بك...' : 'اتركها فارغة إذا لم تكن قد حميت حسابك...'}
                     required={requiresPassword}
-                    className={`w-full bg-slate-950 border rounded-2xl pr-9 pl-3 py-2.5 text-sm text-slate-100 focus:outline-none focus:border-amber-500 font-mono ${
-                      requiresPassword ? 'border-amber-500 ring-2 ring-amber-500/10' : 'border-slate-700'
+                    className={`w-full bg-white dark:bg-slate-950 border rounded-2xl pr-9 pl-3 py-2.5 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:border-amber-500 font-mono shadow-xs ${
+                      requiresPassword ? 'border-amber-500 ring-2 ring-amber-500/10' : 'border-slate-200 dark:border-slate-700'
                     }`}
                   />
                 </div>
@@ -1567,7 +1619,7 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
                           alert('تعذر طلب كلمة المرور');
                         }
                       }}
-                      className="text-[10px] font-bold text-amber-500 hover:text-amber-400"
+                      className="text-[10px] font-bold text-amber-600 hover:text-amber-700 dark:text-amber-500 dark:hover:text-amber-400"
                     >
                       هل نسيت كلمة المرور؟ (استعادة عبر الهاتف)
                     </button>
@@ -1594,7 +1646,7 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
               </button>
             </form>
 
-            <div className="pt-4 border-t border-slate-800 text-center">
+            <div className="pt-4 border-t border-slate-200 dark:border-slate-800 text-center">
               <span className="text-[11px] text-slate-500">
                 مركز النجاح للتدريب - بوابة التعلم والواجبات المنزلية التفاعلية
               </span>
@@ -1604,7 +1656,7 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
           /* LOGGED IN STUDENT PORTAL VIEW */
           <div className="space-y-6">
             {/* Facebook-style Student Profile Header */}
-            <div className="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-2xl relative">
+            <div className="bg-white/80 dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-3xl overflow-hidden shadow-xl backdrop-blur-xl relative">
               {/* Cover Photo */}
               <div className="h-44 md:h-56 relative bg-gradient-to-r from-amber-600 via-amber-500 to-amber-700 overflow-hidden">
                 <div className="absolute inset-0 bg-black/30 backdrop-blur-[1px]" />
@@ -1625,7 +1677,7 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
                   {/* Avatar & Name */}
                   <div className="flex flex-col md:flex-row items-center md:items-end gap-4 text-center md:text-right">
                     <div className="relative group shrink-0">
-                      <div className="w-28 h-28 md:w-36 md:h-36 rounded-full overflow-hidden border-4 border-slate-900 shadow-2xl bg-slate-950 relative">
+                      <div className="w-28 h-28 md:w-36 md:h-36 rounded-full overflow-hidden border-4 border-white dark:border-slate-900 shadow-2xl bg-white dark:bg-slate-950 relative">
                         {student?.photoUrl ? (
                           <img
                             src={student.photoUrl}
@@ -1646,28 +1698,28 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
                       >
                         <Camera className="w-4 h-4" />
                       </button>
-                      <span className="absolute top-2 right-2 bg-emerald-500 text-slate-950 text-[10px] font-black px-2 py-0.5 rounded-full border-2 border-slate-900 shadow-md">
+                      <span className="absolute top-2 right-2 bg-emerald-500 text-slate-950 text-[10px] font-black px-2 py-0.5 rounded-full border-2 border-white dark:border-slate-900 shadow-md">
                         نشط للبوابة
                       </span>
                     </div>
 
                     <div className="space-y-1.5 md:mb-2">
                       <div className="flex flex-wrap items-center justify-center md:justify-start gap-2">
-                        <h2 className="text-xl md:text-2xl font-black text-slate-100 drop-shadow-md">{student?.fullName}</h2>
-                        <span className="bg-amber-500/20 text-amber-300 font-mono font-bold text-xs px-2.5 py-0.5 rounded-lg border border-amber-500/30">
+                        <h2 className="text-xl md:text-2xl font-black text-slate-900 dark:text-slate-100 drop-shadow-xs">{student?.fullName}</h2>
+                        <span className="bg-amber-500/20 text-amber-800 dark:text-amber-300 font-mono font-bold text-xs px-2.5 py-0.5 rounded-lg border border-amber-500/30">
                           {student?.code}
                         </span>
                       </div>
 
-                      <p className="text-xs text-slate-300 font-medium flex items-center justify-center md:justify-start gap-2">
+                      <p className="text-xs text-slate-600 dark:text-slate-300 font-medium flex items-center justify-center md:justify-start gap-2">
                         <span>{student?.courseName}</span>
-                        <span className="text-slate-600">•</span>
-                        <span className="text-amber-400 font-bold">{student?.groupName}</span>
+                        <span className="text-slate-400 dark:text-slate-600">•</span>
+                        <span className="text-amber-600 dark:text-amber-400 font-bold">{student?.groupName}</span>
                       </p>
 
-                      <p className="text-[11px] text-slate-400 flex items-center justify-center md:justify-start gap-1">
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center justify-center md:justify-start gap-1">
                         <User className="w-3.5 h-3.5 text-amber-500" />
-                        <span>المدرب المحاضر: <strong className="text-slate-200">{trainer?.name || 'المدرب المعتمد'}</strong></span>
+                        <span>المدرب المحاضر: <strong className="text-slate-800 dark:text-slate-200">{trainer?.name || 'المدرب المعتمد'}</strong></span>
                       </p>
                     </div>
                   </div>
@@ -1678,14 +1730,14 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
                     {/* Compact stats */}
                     <NextLectureWidget groupDetails={student?.groupDetails} variant="student" />
 
-                    <div className="flex items-center gap-2 bg-slate-950/60 border border-slate-800 p-2 rounded-2xl backdrop-blur-md">
-                      <div className="px-3 py-1 text-center border-l border-slate-800">
-                        <span className="text-[9px] text-slate-400 font-bold block">رصيد النقاط</span>
-                        <span className="text-sm font-black text-amber-400 font-mono">{student?.totalPoints || 0}</span>
+                    <div className="flex items-center gap-2 bg-white/70 dark:bg-slate-950/60 border border-slate-200/80 dark:border-slate-800 p-2 rounded-2xl backdrop-blur-md shadow-xs">
+                      <div className="px-3 py-1 text-center border-l border-slate-200 dark:border-slate-800">
+                        <span className="text-[9px] text-slate-500 dark:text-slate-400 font-bold block">رصيد النقاط</span>
+                        <span className="text-sm font-black text-amber-600 dark:text-amber-400 font-mono">{student?.totalPoints || 0}</span>
                       </div>
                       <div className="px-3 py-1 text-center">
-                        <span className="text-[9px] text-slate-400 font-bold block">الأوسمة والشهادات</span>
-                        <span className="text-sm font-black text-emerald-400 font-mono">{badges.length + certificates.length}</span>
+                        <span className="text-[9px] text-slate-500 dark:text-slate-400 font-bold block">الأوسمة والشهادات</span>
+                        <span className="text-sm font-black text-emerald-600 dark:text-emerald-400 font-mono">{badges.length + certificates.length}</span>
                       </div>
                     </div>
 
@@ -1693,9 +1745,9 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
                     <button
                       type="button"
                       onClick={() => setIsProfileSettingsOpen(true)}
-                      className="w-full sm:w-auto px-4 py-2.5 rounded-2xl bg-slate-850 hover:bg-slate-800 border border-slate-700 text-slate-200 font-bold text-xs flex items-center justify-center gap-2 transition-all shadow-md"
+                      className="w-full sm:w-auto px-4 py-2.5 rounded-2xl bg-gradient-to-b from-white to-amber-50/40 dark:bg-slate-850 hover:from-white hover:to-amber-100/60 dark:hover:bg-slate-800 border border-amber-200/80 dark:border-slate-700 text-slate-800 dark:text-slate-200 font-bold text-xs flex items-center justify-center gap-2 transition-all duration-200 shadow-xs hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 cursor-pointer"
                     >
-                      <Settings className="w-4 h-4 text-amber-400 animate-spin-slow" />
+                      <Settings className="w-4 h-4 text-amber-500 dark:text-amber-400 animate-spin-slow" />
                       <span>تأمين الحساب وربط السوشيال 🔒</span>
                     </button>
                   </div>
@@ -1703,9 +1755,9 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
                 </div>
 
                 {/* Bio and Social Links row */}
-                <div className="border-t border-slate-800/60 pt-4 flex flex-col md:flex-row items-center justify-between gap-4">
-                  <div className="text-xs text-slate-400 text-center md:text-right">
-                    <p className="font-bold text-slate-300">💡 نبذة عن الحساب:</p>
+                <div className="border-t border-slate-200/80 dark:border-slate-800/60 pt-4 flex flex-col md:flex-row items-center justify-between gap-4">
+                  <div className="text-xs text-slate-500 dark:text-slate-400 text-center md:text-right">
+                    <p className="font-bold text-slate-700 dark:text-slate-300">💡 نبذة عن الحساب:</p>
                     <p className="mt-0.5">طالب متميز بمركز النجاح للتدريب والاستشارات • نسعى للتألق واكتساب المهارات الرقمية والبرمجية.</p>
                   </div>
 
@@ -1717,14 +1769,14 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
                     <button
                       type="button"
                       onClick={() => student?.socialLinks?.facebook ? window.open(student.socialLinks.facebook, '_blank') : setIsProfileSettingsOpen(true)}
-                      className={`p-1.5 rounded-xl border text-xs flex items-center gap-1 transition-all ${
+                      className={`p-1.5 px-2.5 rounded-xl border text-xs flex items-center gap-1.5 transition-all duration-200 cursor-pointer ${
                         student?.socialLinks?.facebook 
-                          ? 'bg-blue-600/15 border-blue-500/30 text-blue-400 hover:bg-blue-600/25' 
-                          : 'bg-slate-950/40 border-slate-800 text-slate-500 hover:text-slate-400'
+                          ? 'bg-gradient-to-b from-blue-50 to-blue-100/60 dark:bg-blue-600/15 border-blue-200 dark:border-blue-500/30 text-blue-700 dark:text-blue-400 shadow-xs hover:shadow-md hover:-translate-y-0.5' 
+                          : 'bg-gradient-to-b from-white to-slate-50 dark:bg-slate-950/40 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:border-slate-300 shadow-xs hover:shadow-md hover:-translate-y-0.5'
                       }`}
                       title={student?.socialLinks?.facebook ? 'عرض الملف الشخصي' : 'اضغط لربط حساب الفيسبوك'}
                     >
-                      <Facebook className="w-3.5 h-3.5" />
+                      <Facebook className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
                       <span className="text-[9px] font-bold">Facebook</span>
                     </button>
 
@@ -1732,14 +1784,14 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
                     <button
                       type="button"
                       onClick={() => student?.socialLinks?.linkedin ? window.open(student.socialLinks.linkedin, '_blank') : setIsProfileSettingsOpen(true)}
-                      className={`p-1.5 rounded-xl border text-xs flex items-center gap-1 transition-all ${
+                      className={`p-1.5 px-2.5 rounded-xl border text-xs flex items-center gap-1.5 transition-all duration-200 cursor-pointer ${
                         student?.socialLinks?.linkedin 
-                          ? 'bg-indigo-600/15 border-indigo-500/30 text-indigo-400 hover:bg-indigo-600/25' 
-                          : 'bg-slate-950/40 border-slate-800 text-slate-500 hover:text-slate-400'
+                          ? 'bg-gradient-to-b from-indigo-50 to-indigo-100/60 dark:bg-indigo-600/15 border-indigo-200 dark:border-indigo-500/30 text-indigo-700 dark:text-indigo-400 shadow-xs hover:shadow-md hover:-translate-y-0.5' 
+                          : 'bg-gradient-to-b from-white to-slate-50 dark:bg-slate-950/40 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:border-slate-300 shadow-xs hover:shadow-md hover:-translate-y-0.5'
                       }`}
                       title={student?.socialLinks?.linkedin ? 'عرض الملف الشخصي' : 'اضغط لربط حساب لينكد إن'}
                     >
-                      <Linkedin className="w-3.5 h-3.5" />
+                      <Linkedin className="w-3.5 h-3.5 text-sky-600 dark:text-sky-400" />
                       <span className="text-[9px] font-bold">LinkedIn</span>
                     </button>
 
@@ -1747,14 +1799,14 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
                     <button
                       type="button"
                       onClick={() => student?.socialLinks?.github ? window.open(student.socialLinks.github, '_blank') : setIsProfileSettingsOpen(true)}
-                      className={`p-1.5 rounded-xl border text-xs flex items-center gap-1 transition-all ${
+                      className={`p-1.5 px-2.5 rounded-xl border text-xs flex items-center gap-1.5 transition-all duration-200 cursor-pointer ${
                         student?.socialLinks?.github 
-                          ? 'bg-purple-600/15 border-purple-500/30 text-purple-400 hover:bg-purple-600/25' 
-                          : 'bg-slate-950/40 border-slate-800 text-slate-500 hover:text-slate-400'
+                          ? 'bg-gradient-to-b from-purple-50 to-purple-100/60 dark:bg-purple-600/15 border-purple-200 dark:border-purple-500/30 text-purple-700 dark:text-purple-400 shadow-xs hover:shadow-md hover:-translate-y-0.5' 
+                          : 'bg-gradient-to-b from-white to-slate-50 dark:bg-slate-950/40 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:border-slate-300 shadow-xs hover:shadow-md hover:-translate-y-0.5'
                       }`}
                       title={student?.socialLinks?.github ? 'عرض الملف الشخصي' : 'اضغط لربط حساب جيت هاب'}
                     >
-                      <Github className="w-3.5 h-3.5" />
+                      <Github className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
                       <span className="text-[9px] font-bold">GitHub</span>
                     </button>
 
@@ -1762,14 +1814,14 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
                     <button
                       type="button"
                       onClick={() => student?.socialLinks?.instagram ? window.open(student.socialLinks.instagram, '_blank') : setIsProfileSettingsOpen(true)}
-                      className={`p-1.5 rounded-xl border text-xs flex items-center gap-1 transition-all ${
+                      className={`p-1.5 px-2.5 rounded-xl border text-xs flex items-center gap-1.5 transition-all duration-200 cursor-pointer ${
                         student?.socialLinks?.instagram 
-                          ? 'bg-pink-600/15 border-pink-500/30 text-pink-400 hover:bg-pink-600/25' 
-                          : 'bg-slate-950/40 border-slate-800 text-slate-500 hover:text-slate-400'
+                          ? 'bg-gradient-to-b from-pink-50 to-pink-100/60 dark:bg-pink-600/15 border-pink-200 dark:border-pink-500/30 text-pink-700 dark:text-pink-400 shadow-xs hover:shadow-md hover:-translate-y-0.5' 
+                          : 'bg-gradient-to-b from-white to-slate-50 dark:bg-slate-950/40 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:border-slate-300 shadow-xs hover:shadow-md hover:-translate-y-0.5'
                       }`}
                       title={student?.socialLinks?.instagram ? 'عرض الملف الشخصي' : 'اضغط لربط حساب إنستغرام'}
                     >
-                      <Instagram className="w-3.5 h-3.5" />
+                      <Instagram className="w-3.5 h-3.5 text-pink-600 dark:text-pink-400" />
                       <span className="text-[9px] font-bold">Instagram</span>
                     </button>
                   </div>
@@ -1915,122 +1967,122 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
             </div>
 
             {/* Facebook-style Mobile Navigation Bar */}
-            <div className="bg-slate-900 border border-slate-800 p-2 rounded-2xl shadow-lg grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2">
+            <div className="bg-white/80 dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 p-2.5 rounded-3xl shadow-xl shadow-indigo-950/5 backdrop-blur-2xl grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-9 gap-2.5">
               <button
                 type="button"
                 onClick={() => setActiveTab('timeline' as any)}
-                className={`p-2.5 rounded-xl font-bold text-xs flex flex-col items-center justify-center gap-1 transition-all ${
+                className={`p-2.5 rounded-2xl font-bold text-xs flex flex-col items-center justify-center gap-1 transition-all duration-200 cursor-pointer ${
                   activeTab === ('timeline' as any)
-                    ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20'
-                    : 'bg-slate-950 text-slate-300 hover:bg-slate-850'
+                    ? 'bg-gradient-to-b from-amber-400 via-amber-500 to-amber-500 text-slate-950 shadow-lg shadow-amber-500/25 border border-amber-300/90 ring-2 ring-amber-400/20 font-black scale-[1.02] -translate-y-0.5'
+                    : 'bg-gradient-to-b from-white to-slate-50/90 dark:from-slate-900 dark:to-slate-950 text-slate-700 dark:text-slate-300 hover:from-white hover:to-indigo-50/60 dark:hover:to-slate-800 hover:text-indigo-950 dark:hover:text-white border border-slate-200/80 dark:border-slate-800 shadow-xs hover:shadow-md hover:-translate-y-0.5 active:translate-y-0'
                 }`}
               >
                 <MessageSquare className="w-4 h-4" />
-                <span className="text-[10px] text-center">المجتمع</span>
+                <span className="text-[10px] text-center font-bold">المجتمع</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => setActiveTab('ai-tutor' as any)}
-                className={`p-2.5 rounded-xl font-bold text-xs flex flex-col items-center justify-center gap-1 transition-all ${
+                className={`p-2.5 rounded-2xl font-bold text-xs flex flex-col items-center justify-center gap-1 transition-all duration-200 cursor-pointer ${
                   activeTab === ('ai-tutor' as any)
-                    ? 'bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-md shadow-indigo-500/20'
-                    : 'bg-slate-950 text-slate-300 hover:bg-slate-850'
+                    ? 'bg-gradient-to-b from-indigo-500 via-purple-500 to-purple-600 text-white shadow-lg shadow-indigo-500/25 border border-indigo-300/60 ring-2 ring-indigo-400/20 font-black scale-[1.02] -translate-y-0.5'
+                    : 'bg-gradient-to-b from-white to-slate-50/90 dark:from-slate-900 dark:to-slate-950 text-slate-700 dark:text-slate-300 hover:from-white hover:to-indigo-50/60 dark:hover:to-slate-800 hover:text-indigo-950 dark:hover:text-white border border-slate-200/80 dark:border-slate-800 shadow-xs hover:shadow-md hover:-translate-y-0.5 active:translate-y-0'
                 }`}
               >
-                <Bot className="w-4 h-4 text-indigo-300" />
-                <span className="text-[10px] text-center">فهمني واشرحلي</span>
+                <Bot className="w-4 h-4 text-indigo-500 dark:text-indigo-300" />
+                <span className="text-[10px] text-center font-bold">فهمني واشرحلي</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => setActiveTab('submit')}
-                className={`p-2.5 rounded-xl font-bold text-xs flex flex-col items-center justify-center gap-1 transition-all ${
+                className={`p-2.5 rounded-2xl font-bold text-xs flex flex-col items-center justify-center gap-1 transition-all duration-200 cursor-pointer ${
                   activeTab === 'submit'
-                    ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20'
-                    : 'bg-slate-950 text-slate-300 hover:bg-slate-850'
+                    ? 'bg-gradient-to-b from-amber-400 via-amber-500 to-amber-500 text-slate-950 shadow-lg shadow-amber-500/25 border border-amber-300/90 ring-2 ring-amber-400/20 font-black scale-[1.02] -translate-y-0.5'
+                    : 'bg-gradient-to-b from-white to-slate-50/90 dark:from-slate-900 dark:to-slate-950 text-slate-700 dark:text-slate-300 hover:from-white hover:to-indigo-50/60 dark:hover:to-slate-800 hover:text-indigo-950 dark:hover:text-white border border-slate-200/80 dark:border-slate-800 shadow-xs hover:shadow-md hover:-translate-y-0.5 active:translate-y-0'
                 }`}
               >
                 <Sparkles className="w-4 h-4" />
-                <span className="text-[10px] text-center">إرسال واجب</span>
+                <span className="text-[10px] text-center font-bold">إرسال واجب</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => setActiveTab('certificates')}
-                className={`p-2.5 rounded-xl font-bold text-xs flex flex-col items-center justify-center gap-1 transition-all ${
+                className={`p-2.5 rounded-2xl font-bold text-xs flex flex-col items-center justify-center gap-1 transition-all duration-200 cursor-pointer ${
                   activeTab === 'certificates'
-                    ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20'
-                    : 'bg-slate-950 text-slate-300 hover:bg-slate-850'
+                    ? 'bg-gradient-to-b from-amber-400 via-amber-500 to-amber-500 text-slate-950 shadow-lg shadow-amber-500/25 border border-amber-300/90 ring-2 ring-amber-400/20 font-black scale-[1.02] -translate-y-0.5'
+                    : 'bg-gradient-to-b from-white to-slate-50/90 dark:from-slate-900 dark:to-slate-950 text-slate-700 dark:text-slate-300 hover:from-white hover:to-indigo-50/60 dark:hover:to-slate-800 hover:text-indigo-950 dark:hover:text-white border border-slate-200/80 dark:border-slate-800 shadow-xs hover:shadow-md hover:-translate-y-0.5 active:translate-y-0'
                 }`}
               >
                 <Award className="w-4 h-4" />
-                <span className="text-[10px] text-center">الشهادات</span>
+                <span className="text-[10px] text-center font-bold">الشهادات</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => setActiveTab('history')}
-                className={`p-2.5 rounded-xl font-bold text-xs flex flex-col items-center justify-center gap-1 transition-all ${
+                className={`p-2.5 rounded-2xl font-bold text-xs flex flex-col items-center justify-center gap-1 transition-all duration-200 cursor-pointer ${
                   activeTab === 'history'
-                    ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20'
-                    : 'bg-slate-950 text-slate-300 hover:bg-slate-850'
+                    ? 'bg-gradient-to-b from-amber-400 via-amber-500 to-amber-500 text-slate-950 shadow-lg shadow-amber-500/25 border border-amber-300/90 ring-2 ring-amber-400/20 font-black scale-[1.02] -translate-y-0.5'
+                    : 'bg-gradient-to-b from-white to-slate-50/90 dark:from-slate-900 dark:to-slate-950 text-slate-700 dark:text-slate-300 hover:from-white hover:to-indigo-50/60 dark:hover:to-slate-800 hover:text-indigo-950 dark:hover:text-white border border-slate-200/80 dark:border-slate-800 shadow-xs hover:shadow-md hover:-translate-y-0.5 active:translate-y-0'
                 }`}
               >
                 <FileText className="w-4 h-4" />
-                <span className="text-[10px] text-center">السجل والتقارير</span>
+                <span className="text-[10px] text-center font-bold">السجل والتقارير</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => setActiveTab('badges')}
-                className={`p-2.5 rounded-xl font-bold text-xs flex flex-col items-center justify-center gap-1 transition-all ${
+                className={`p-2.5 rounded-2xl font-bold text-xs flex flex-col items-center justify-center gap-1 transition-all duration-200 cursor-pointer ${
                   activeTab === 'badges'
-                    ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20'
-                    : 'bg-slate-950 text-slate-300 hover:bg-slate-850'
+                    ? 'bg-gradient-to-b from-amber-400 via-amber-500 to-amber-500 text-slate-950 shadow-lg shadow-amber-500/25 border border-amber-300/90 ring-2 ring-amber-400/20 font-black scale-[1.02] -translate-y-0.5'
+                    : 'bg-gradient-to-b from-white to-slate-50/90 dark:from-slate-900 dark:to-slate-950 text-slate-700 dark:text-slate-300 hover:from-white hover:to-indigo-50/60 dark:hover:to-slate-800 hover:text-indigo-950 dark:hover:text-white border border-slate-200/80 dark:border-slate-800 shadow-xs hover:shadow-md hover:-translate-y-0.5 active:translate-y-0'
                 }`}
               >
                 <Trophy className="w-4 h-4" />
-                <span className="text-[10px] text-center">الأوسمة</span>
+                <span className="text-[10px] text-center font-bold">الأوسمة</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => setActiveTab('schedule')}
-                className={`p-2.5 rounded-xl font-bold text-xs flex flex-col items-center justify-center gap-1 transition-all ${
+                className={`p-2.5 rounded-2xl font-bold text-xs flex flex-col items-center justify-center gap-1 transition-all duration-200 cursor-pointer ${
                   activeTab === 'schedule'
-                    ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20'
-                    : 'bg-slate-950 text-slate-300 hover:bg-slate-850'
+                    ? 'bg-gradient-to-b from-amber-400 via-amber-500 to-amber-500 text-slate-950 shadow-lg shadow-amber-500/25 border border-amber-300/90 ring-2 ring-amber-400/20 font-black scale-[1.02] -translate-y-0.5'
+                    : 'bg-gradient-to-b from-white to-slate-50/90 dark:from-slate-900 dark:to-slate-950 text-slate-700 dark:text-slate-300 hover:from-white hover:to-indigo-50/60 dark:hover:to-slate-800 hover:text-indigo-950 dark:hover:text-white border border-slate-200/80 dark:border-slate-800 shadow-xs hover:shadow-md hover:-translate-y-0.5 active:translate-y-0'
                 }`}
               >
                 <Calendar className="w-4 h-4" />
-                <span className="text-[10px] text-center">المواعيد</span>
+                <span className="text-[10px] text-center font-bold">المواعيد</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => setActiveTab('help' as any)}
-                className={`p-2.5 rounded-xl font-bold text-xs flex flex-col items-center justify-center gap-1 transition-all ${
+                className={`p-2.5 rounded-2xl font-bold text-xs flex flex-col items-center justify-center gap-1 transition-all duration-200 cursor-pointer ${
                   activeTab === ('help' as any)
-                    ? 'bg-rose-500 text-white shadow-md shadow-rose-500/20'
-                    : 'bg-slate-950 text-slate-300 hover:bg-slate-850'
+                    ? 'bg-gradient-to-b from-rose-500 to-rose-600 text-white shadow-lg shadow-rose-500/25 border border-rose-300/60 ring-2 ring-rose-400/20 font-black scale-[1.02] -translate-y-0.5'
+                    : 'bg-gradient-to-b from-white to-slate-50/90 dark:from-slate-900 dark:to-slate-950 text-slate-700 dark:text-slate-300 hover:from-white hover:to-indigo-50/60 dark:hover:to-slate-800 hover:text-indigo-950 dark:hover:text-white border border-slate-200/80 dark:border-slate-800 shadow-xs hover:shadow-md hover:-translate-y-0.5 active:translate-y-0'
                 }`}
               >
                 <HelpCircle className="w-4 h-4" />
-                <span className="text-[10px] text-center">المساعدة</span>
+                <span className="text-[10px] text-center font-bold">المساعدة</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => setActiveTab('language_lab')}
-                className={`p-2.5 rounded-xl font-bold text-xs flex flex-col items-center justify-center gap-1 transition-all ${
+                className={`p-2.5 rounded-2xl font-bold text-xs flex flex-col items-center justify-center gap-1 transition-all duration-200 cursor-pointer ${
                   activeTab === 'language_lab'
-                    ? 'bg-gradient-to-r from-teal-500 to-emerald-500 text-slate-950 shadow-md shadow-teal-500/30'
-                    : 'bg-slate-950 text-teal-300 hover:bg-slate-850 border border-teal-500/30'
+                    ? 'bg-gradient-to-b from-teal-400 to-emerald-500 text-slate-950 shadow-lg shadow-teal-500/25 border border-teal-200/80 ring-2 ring-teal-400/20 font-black scale-[1.02] -translate-y-0.5'
+                    : 'bg-gradient-to-b from-white to-slate-50/90 dark:from-slate-900 dark:to-slate-950 text-teal-700 dark:text-teal-300 hover:from-white hover:to-teal-50/60 dark:hover:to-slate-800 hover:text-teal-950 dark:hover:text-white border border-teal-500/30 shadow-xs hover:shadow-md hover:-translate-y-0.5 active:translate-y-0'
                 }`}
               >
-                <Sparkles className="w-4 h-4 text-teal-300" />
-                <span className="text-[10px] text-center">معملي 🗣️</span>
+                <Sparkles className="w-4 h-4 text-teal-600 dark:text-teal-300" />
+                <span className="text-[10px] text-center font-bold">معملي 🗣️</span>
               </button>
             </div>
 
@@ -2047,15 +2099,15 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
 
             {/* HELP, INQUIRIES & MESSAGES TAB */}
             {activeTab === ('help' as any) && (
-              <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 md:p-8 space-y-6 shadow-xl">
-                <div className="flex items-center justify-between pb-4 border-b border-slate-800">
+              <div className="bg-white/80 dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-3xl p-5 md:p-8 space-y-6 shadow-xl backdrop-blur-xl">
+                <div className="flex items-center justify-between pb-4 border-b border-slate-200/80 dark:border-slate-800">
                   <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-2xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-center text-rose-400">
+                    <div className="w-12 h-12 rounded-2xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-center text-rose-500 dark:text-rose-400">
                       <HelpCircle className="w-6 h-6" />
                     </div>
                     <div>
-                      <h3 className="text-base font-black text-slate-100">قسم الاستفسارات والرسائل والدعم الفني</h3>
-                      <p className="text-xs text-slate-400">إرسال واستلام الرسائل مع الإدارة والمعلم ومتابعة الردود الفورية</p>
+                      <h3 className="text-base font-black text-slate-900 dark:text-slate-100">قسم الاستفسارات والرسائل والدعم الفني</h3>
+                      <p className="text-xs text-slate-600 dark:text-slate-400">إرسال واستلام الرسائل مع الإدارة والمعلم ومتابعة الردود الفورية</p>
                     </div>
                   </div>
                   <button
@@ -2069,8 +2121,8 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
                 </div>
 
                 {/* Send New Inquiry Form */}
-                <div className="bg-slate-950 border border-slate-800 rounded-2xl p-4 md:p-5 space-y-4">
-                  <h4 className="text-xs font-bold text-amber-400 flex items-center gap-2">
+                <div className="bg-white/70 dark:bg-slate-950 border border-slate-200/90 dark:border-slate-800 rounded-2xl p-4 md:p-5 space-y-4 shadow-xs">
+                  <h4 className="text-xs font-bold text-amber-600 dark:text-amber-400 flex items-center gap-2">
                     <Sparkles className="w-4 h-4" />
                     <span>إرسال استفسار جديد إلى المعلم أو إدارة المركز:</span>
                   </h4>
@@ -2079,7 +2131,7 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
                       type="text"
                       id="student-inquiry-input-field"
                       placeholder="اكتب استفسارك أو سؤالك هنا..."
-                      className="flex-1 bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-slate-100 focus:outline-none focus:border-amber-500"
+                      className="flex-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2.5 text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:border-amber-500 shadow-xs"
                       onKeyDown={(e) => {
                         if (e.key === 'Enter') {
                           const val = e.currentTarget.value;
@@ -2108,11 +2160,11 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
 
                 {/* Previously Sent Messages & Inquiries List */}
                 <div className="space-y-3">
-                  <h4 className="text-xs font-bold text-slate-300">سجل الاستفسارات والرسائل السابقة ({portalMessages.length}):</h4>
+                  <h4 className="text-xs font-bold text-slate-700 dark:text-slate-300">سجل الاستفسارات والرسائل السابقة ({portalMessages.length}):</h4>
                   {portalMessages.length === 0 ? (
-                    <div className="p-8 text-center bg-slate-950/40 rounded-2xl border border-slate-800/80">
-                      <MessageSquare className="w-8 h-8 text-slate-600 mx-auto mb-2" />
-                      <p className="text-xs text-slate-400 font-bold">لا توجد رسائل سابقة حتى الآن.</p>
+                    <div className="p-8 text-center bg-white/50 dark:bg-slate-950/40 rounded-2xl border border-slate-200/80 dark:border-slate-800/80">
+                      <MessageSquare className="w-8 h-8 text-slate-400 dark:text-slate-600 mx-auto mb-2" />
+                      <p className="text-xs text-slate-600 dark:text-slate-400 font-bold">لا توجد رسائل سابقة حتى الآن.</p>
                       <p className="text-[11px] text-slate-500">اكتب سؤالك في الحقل أعلاه وسيرد عليك المساعد الذكي والمعلم فوراً!</p>
                     </div>
                   ) : (
@@ -2124,12 +2176,12 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
                             key={msg.id || idx}
                             className={`p-4 rounded-2xl border transition-all space-y-2 ${
                               isStudent 
-                                ? 'bg-slate-950/80 border-slate-800 text-slate-200 me-6' 
-                                : 'bg-indigo-950/30 border-indigo-500/30 text-indigo-100 ms-6'
+                                ? 'bg-white dark:bg-slate-950/80 border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-200 me-6 shadow-xs' 
+                                : 'bg-indigo-50 dark:bg-indigo-950/30 border-indigo-200 dark:border-indigo-500/30 text-indigo-950 dark:text-indigo-100 ms-6 shadow-xs'
                             }`}
                           >
                             <div className="flex items-center justify-between text-[11px]">
-                              <span className="font-bold text-amber-400">{msg.senderName || (isStudent ? student?.fullName : 'المعلم / المساعد الذكي')}</span>
+                              <span className="font-bold text-amber-600 dark:text-amber-400">{msg.senderName || (isStudent ? student?.fullName : 'المعلم / المساعد الذكي')}</span>
                               <span className="text-slate-500">{new Date(msg.createdAt).toLocaleString('ar-EG')}</span>
                             </div>
                             <p className="text-xs leading-relaxed">{msg.message}</p>
@@ -2149,9 +2201,9 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
                 <div className="lg:col-span-2 space-y-6">
                   
                   {/* Create Post Box */}
-                  <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-xl space-y-4">
-                    <div className="flex items-center gap-3 pb-3 border-b border-slate-800">
-                      <div className="w-10 h-10 rounded-full overflow-hidden shrink-0 border border-slate-700">
+                  <div className="bg-white/80 dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-3xl p-5 shadow-xl backdrop-blur-xl space-y-4">
+                    <div className="flex items-center gap-3 pb-3 border-b border-slate-200/80 dark:border-slate-800">
+                      <div className="w-10 h-10 rounded-full overflow-hidden shrink-0 border border-slate-200 dark:border-slate-700">
                         {student?.photoUrl ? (
                           <img src={student.photoUrl} alt={student.fullName} className="w-full h-full object-cover" />
                         ) : (
@@ -2161,7 +2213,7 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
                         )}
                       </div>
                       <div className="text-right">
-                        <span className="text-xs font-black text-slate-200 block">انشر موضوعاً في مجتمع المجموعة</span>
+                        <span className="text-xs font-black text-slate-900 dark:text-slate-200 block">انشر موضوعاً في مجتمع المجموعة</span>
                         <span className="text-[10px] text-slate-500 block">سيراه زملائك في {student?.groupName} والمعلم</span>
                       </div>
                     </div>
@@ -2172,7 +2224,7 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
                         value={newPostContent}
                         onChange={(e) => setNewPostContent(e.target.value)}
                         placeholder={`ماذا يدور في ذهنك اليوم يا ${student?.fullName?.split(' ')[0]}؟ شارك إنجازاً أو اسأل سؤالاً...`}
-                        className={`w-full min-h-[90px] bg-slate-950 border border-slate-800 rounded-2xl p-4 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-amber-500/50 resize-none transition-all ${
+                        className={`w-full min-h-[90px] bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 text-xs text-slate-900 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-600 focus:outline-none focus:border-amber-500/50 resize-none transition-all shadow-xs ${
                           newPostBg === 'gradient-indigo' ? 'bg-gradient-to-r from-indigo-900 to-slate-950 text-white font-bold text-center' :
                           newPostBg === 'gradient-purple' ? 'bg-gradient-to-r from-purple-900 to-slate-950 text-white font-bold text-center' :
                           newPostBg === 'gradient-sunset' ? 'bg-gradient-to-r from-pink-900 via-red-950 to-slate-950 text-white font-bold text-center' :
@@ -2267,24 +2319,24 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
                       communityPosts.map((post) => {
                         const isLikedByMe = student && Array.isArray(post.likes) && post.likes.includes(student.id);
                         return (
-                          <div key={post.id} className="bg-slate-900 border border-slate-800/80 rounded-3xl p-5 shadow-lg space-y-4">
+                          <div key={post.id} className="bg-white/80 dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800/80 rounded-3xl p-5 shadow-lg backdrop-blur-xl space-y-4">
                             {/* Post Header */}
-                            <div className="flex items-center justify-between pb-2 border-b border-slate-800/40">
+                            <div className="flex items-center justify-between pb-2 border-b border-slate-200/60 dark:border-slate-800/40">
                               <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 rounded-full overflow-hidden shrink-0 border border-slate-700 bg-slate-950">
+                                <div className="w-10 h-10 rounded-full overflow-hidden shrink-0 border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-950">
                                   {post.traineePhotoUrl ? (
                                     <img src={post.traineePhotoUrl} alt={post.traineeName} className="w-full h-full object-cover" />
                                   ) : (
-                                    <div className="w-full h-full bg-slate-800 text-slate-300 font-bold flex items-center justify-center text-sm">
+                                    <div className="w-full h-full bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold flex items-center justify-center text-sm">
                                       {post.traineeName?.slice(0, 1)}
                                     </div>
                                   )}
                                 </div>
                                 <div className="text-right">
                                   <div className="flex items-center gap-1">
-                                    <span className="text-xs font-black text-slate-200">{post.traineeName}</span>
+                                    <span className="text-xs font-black text-slate-900 dark:text-slate-200">{post.traineeName}</span>
                                     {post.traineeId === 'supervisor' && (
-                                      <span className="bg-amber-500/20 text-amber-300 text-[8px] font-bold px-1.5 py-0.5 rounded border border-amber-500/30">معلم</span>
+                                      <span className="bg-amber-500/20 text-amber-600 dark:text-amber-300 text-[8px] font-bold px-1.5 py-0.5 rounded border border-amber-500/30">معلم</span>
                                     )}
                                   </div>
                                   <span className="text-[9px] text-slate-500 block font-mono">{post.createdAt ? new Date(post.createdAt).toLocaleString('ar-EG', { hour: '2-digit', minute: '2-digit' }) : 'الآن'}</span>
@@ -2294,9 +2346,9 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
                               <div className="flex items-center gap-1.5">
                                 {/* Type Badge */}
                                 <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full border ${
-                                  post.type === 'congratulations' ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' :
-                                  post.type === 'homework' ? 'bg-sky-500/10 border-sky-500/30 text-sky-400' :
-                                  'bg-slate-800 border-slate-700 text-slate-300'
+                                  post.type === 'congratulations' ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-600 dark:text-emerald-400' :
+                                  post.type === 'homework' ? 'bg-sky-500/10 border-sky-500/30 text-sky-600 dark:text-sky-400' :
+                                  'bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300'
                                 }`}>
                                   {post.type === 'congratulations' ? '🎉 تهنئة وإنجاز' :
                                    post.type === 'homework' ? '❓ سؤال بالواجب' :
@@ -2308,7 +2360,7 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
                                   <button
                                     type="button"
                                     onClick={() => handleDeletePost(post.id)}
-                                    className="p-1 rounded bg-slate-950 border border-slate-800 hover:border-rose-500 hover:text-rose-400 text-slate-500 transition-all"
+                                    className="p-1 rounded bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 hover:border-rose-500 hover:text-rose-500 dark:hover:text-rose-400 text-slate-400 transition-all"
                                     title="حذف المنشور"
                                   >
                                     <Trash2 className="w-3 h-3" />
@@ -2328,24 +2380,24 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
                                 <p className="max-w-md break-words text-sm whitespace-pre-line leading-relaxed drop-shadow">{post.content}</p>
                               </div>
                             ) : (
-                              <div className="text-xs text-slate-300 whitespace-pre-line leading-relaxed px-1">
+                              <div className="text-xs text-slate-800 dark:text-slate-300 whitespace-pre-line leading-relaxed px-1">
                                 {post.content}
                               </div>
                             )}
 
                             {/* Likes and Interactions Footer */}
-                            <div className="flex items-center justify-between pt-2 border-t border-slate-800/30 text-[11px]">
+                            <div className="flex items-center justify-between pt-2 border-t border-slate-200/60 dark:border-slate-800/30 text-[11px]">
                               {/* Like Trigger */}
                               <button
                                 type="button"
                                 onClick={() => handleLikePost(post.id)}
                                 className={`flex items-center gap-1 px-3 py-1.5 rounded-xl border transition-all ${
                                   isLikedByMe 
-                                    ? 'bg-rose-500/10 border-rose-500/30 text-rose-400' 
-                                    : 'bg-slate-950 border-slate-850 text-slate-400 hover:text-rose-400 hover:border-rose-500/30'
+                                    ? 'bg-rose-500/10 border-rose-500/30 text-rose-500 dark:text-rose-400' 
+                                    : 'bg-slate-100 dark:bg-slate-950 border-slate-200 dark:border-slate-850 text-slate-600 dark:text-slate-400 hover:text-rose-500 hover:border-rose-400/50 shadow-xs'
                                 }`}
                               >
-                                <Heart className={`w-3.5 h-3.5 ${isLikedByMe ? 'fill-rose-500' : ''}`} />
+                                <Heart className={`w-3.5 h-3.5 ${isLikedByMe ? 'fill-rose-500 text-rose-500' : ''}`} />
                                 <span className="font-bold">أعجبني ({Array.isArray(post.likes) ? post.likes.length : 0})</span>
                               </button>
 
@@ -2356,27 +2408,27 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
                             </div>
 
                             {/* Comments Container */}
-                            <div className="bg-slate-950/50 p-3 rounded-2xl border border-slate-800/50 space-y-3">
+                            <div className="bg-slate-50/80 dark:bg-slate-950/50 p-3 rounded-2xl border border-slate-200/80 dark:border-slate-800/50 space-y-3">
                               {/* Comments List */}
                               {Array.isArray(post.comments) && post.comments.length > 0 && (
                                 <div className="space-y-2.5 max-h-[180px] overflow-y-auto pr-1">
                                   {post.comments.map((comm: any, idx: number) => (
-                                    <div key={comm.id || idx} className="flex items-start gap-2 text-[10px] border-b border-slate-900/60 pb-2 last:border-0 last:pb-0">
-                                      <div className="w-7 h-7 rounded-full overflow-hidden shrink-0 border border-slate-800 bg-slate-900">
+                                    <div key={comm.id || idx} className="flex items-start gap-2 text-[10px] border-b border-slate-200/60 dark:border-slate-900/60 pb-2 last:border-0 last:pb-0">
+                                      <div className="w-7 h-7 rounded-full overflow-hidden shrink-0 border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900">
                                         {comm.traineePhotoUrl ? (
                                           <img src={comm.traineePhotoUrl} alt={comm.traineeName} className="w-full h-full object-cover" />
                                         ) : (
-                                          <div className="w-full h-full bg-slate-800 text-slate-400 font-bold flex items-center justify-center text-[8px]">
+                                          <div className="w-full h-full bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-bold flex items-center justify-center text-[8px]">
                                             {comm.traineeName?.slice(0, 1)}
                                           </div>
                                         )}
                                       </div>
-                                      <div className="bg-slate-900 p-2 rounded-xl text-right flex-1">
+                                      <div className="bg-white dark:bg-slate-900 p-2 rounded-xl text-right flex-1 border border-slate-200/60 dark:border-transparent">
                                         <div className="flex items-center justify-between mb-0.5">
-                                          <span className="font-black text-slate-300">{comm.traineeName}</span>
+                                          <span className="font-black text-slate-800 dark:text-slate-300">{comm.traineeName}</span>
                                           <span className="text-[8px] text-slate-500">{comm.createdAt ? new Date(comm.createdAt).toLocaleString('ar-EG', { hour: '2-digit', minute: '2-digit' }) : 'منذ قليل'}</span>
                                         </div>
-                                        <p className="text-slate-400 leading-relaxed whitespace-pre-line">{comm.content}</p>
+                                        <p className="text-slate-600 dark:text-slate-400 leading-relaxed whitespace-pre-line">{comm.content}</p>
                                       </div>
                                     </div>
                                   ))}
@@ -2384,7 +2436,7 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
                               )}
 
                               {/* Write Comment Form */}
-                              <div className="flex items-center gap-2 pt-1 border-t border-slate-800/30">
+                              <div className="flex items-center gap-2 pt-1 border-t border-slate-200/60 dark:border-slate-800/30">
                                 <input
                                   type="text"
                                   value={postCommentContent[post.id] || ''}
@@ -2393,7 +2445,7 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
                                     if (e.key === 'Enter') handleCommentPost(post.id);
                                   }}
                                   placeholder="اكتب تعليقك أو استفسارك هنا..."
-                                  className="flex-1 bg-slate-900 border border-slate-800 rounded-xl px-3 py-1.5 text-[11px] text-slate-200 placeholder-slate-600 focus:outline-none focus:border-amber-500/50"
+                                  className="flex-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-1.5 text-[11px] text-slate-900 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-600 focus:outline-none focus:border-amber-500/50 shadow-xs"
                                 />
                                 <button
                                   type="button"
@@ -2418,11 +2470,11 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
                 <div className="space-y-6">
                   
                   {/* PWA / Download Mobile Promo */}
-                  <div className="bg-gradient-to-br from-slate-900 via-amber-950/20 to-slate-900 border border-amber-500/30 rounded-3xl p-5 shadow-xl text-center space-y-3">
-                    <Smartphone className="w-8 h-8 text-amber-400 mx-auto animate-bounce" />
+                  <div className="bg-white/80 dark:bg-gradient-to-br dark:from-slate-900 dark:via-amber-950/20 dark:to-slate-900 border border-amber-500/30 rounded-3xl p-5 shadow-xl backdrop-blur-xl text-center space-y-3">
+                    <Smartphone className="w-8 h-8 text-amber-500 dark:text-amber-400 mx-auto animate-bounce" />
                     <div className="space-y-1">
-                      <h4 className="text-xs font-black text-amber-300">تطبيق النجاح على هاتفك!</h4>
-                      <p className="text-[10px] text-slate-400 leading-relaxed">
+                      <h4 className="text-xs font-black text-amber-600 dark:text-amber-300">تطبيق النجاح على هاتفك!</h4>
+                      <p className="text-[10px] text-slate-600 dark:text-slate-400 leading-relaxed">
                         قم بتثبيت التطبيق للوصول المباشر الفوري للبوابة مع إشعارات التصحيح والأوسمة.
                       </p>
                     </div>
@@ -2437,50 +2489,50 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
                   </div>
 
                   {/* Leaderboard/Achievers Board (Simulated Group rankings) */}
-                  <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-xl space-y-4">
-                    <div className="flex items-center gap-2 pb-2 border-b border-slate-800">
-                      <Trophy className="w-5 h-5 text-amber-400" />
+                  <div className="bg-white/80 dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-3xl p-5 shadow-xl backdrop-blur-xl space-y-4">
+                    <div className="flex items-center gap-2 pb-2 border-b border-slate-200/80 dark:border-slate-800">
+                      <Trophy className="w-5 h-5 text-amber-500 dark:text-amber-400" />
                       <div className="text-right">
-                        <h4 className="text-xs font-black text-slate-200">أوائل دورتك ومجموعتك 🏆</h4>
+                        <h4 className="text-xs font-black text-slate-900 dark:text-slate-200">أوائل دورتك ومجموعتك 🏆</h4>
                         <p className="text-[9px] text-slate-500">حسب نشاط الواجبات والنقاط التراكمية</p>
                       </div>
                     </div>
 
                     <div className="space-y-3">
-                      <div className="flex items-center justify-between p-2 rounded-xl bg-slate-950/50 border border-amber-500/20">
+                      <div className="flex items-center justify-between p-2 rounded-xl bg-amber-50/60 dark:bg-slate-950/50 border border-amber-500/30">
                         <div className="flex items-center gap-2 text-[11px]">
                           <span className="w-5 h-5 rounded-full bg-amber-500 text-slate-950 font-black flex items-center justify-center text-[10px]">١</span>
-                          <span className="font-bold text-amber-300">{student?.fullName?.split(' ')[0]} (أنت)</span>
+                          <span className="font-bold text-amber-700 dark:text-amber-300">{student?.fullName?.split(' ')[0]} (أنت)</span>
                         </div>
-                        <span className="text-xs font-mono font-bold text-amber-400">{student?.totalPoints || 0} ن</span>
+                        <span className="text-xs font-mono font-bold text-amber-600 dark:text-amber-400">{student?.totalPoints || 0} ن</span>
                       </div>
 
-                      <div className="flex items-center justify-between p-2 rounded-xl bg-slate-950/30 border border-slate-850 text-[11px]">
+                      <div className="flex items-center justify-between p-2 rounded-xl bg-slate-50 dark:bg-slate-950/30 border border-slate-200/80 dark:border-slate-850 text-[11px]">
                         <div className="flex items-center gap-2">
-                          <span className="w-5 h-5 rounded-full bg-slate-800 text-slate-400 font-bold flex items-center justify-center text-[10px]">٢</span>
-                          <span className="font-medium text-slate-300">أحمد محمود الكناني</span>
+                          <span className="w-5 h-5 rounded-full bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-400 font-bold flex items-center justify-center text-[10px]">٢</span>
+                          <span className="font-medium text-slate-700 dark:text-slate-300">أحمد محمود الكناني</span>
                         </div>
-                        <span className="text-[11px] font-mono font-bold text-slate-400">٤٢٠ ن</span>
+                        <span className="text-[11px] font-mono font-bold text-slate-600 dark:text-slate-400">٤٢٠ ن</span>
                       </div>
 
-                      <div className="flex items-center justify-between p-2 rounded-xl bg-slate-950/30 border border-slate-850 text-[11px]">
+                      <div className="flex items-center justify-between p-2 rounded-xl bg-slate-50 dark:bg-slate-950/30 border border-slate-200/80 dark:border-slate-850 text-[11px]">
                         <div className="flex items-center gap-2">
-                          <span className="w-5 h-5 rounded-full bg-slate-800 text-slate-400 font-bold flex items-center justify-center text-[10px]">٣</span>
-                          <span className="font-medium text-slate-300">فاطمة الزهراء علي</span>
+                          <span className="w-5 h-5 rounded-full bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-400 font-bold flex items-center justify-center text-[10px]">٣</span>
+                          <span className="font-medium text-slate-700 dark:text-slate-300">فاطمة الزهراء علي</span>
                         </div>
-                        <span className="text-[11px] font-mono font-bold text-slate-400">٣٩٥ ن</span>
+                        <span className="text-[11px] font-mono font-bold text-slate-600 dark:text-slate-400">٣٩٥ ن</span>
                       </div>
                     </div>
 
-                    <div className="pt-2 text-center border-t border-slate-800/40">
+                    <div className="pt-2 text-center border-t border-slate-200/80 dark:border-slate-800/40">
                       <span className="text-[9px] text-slate-500">مجموع النقاط يشمل التصحيح الآلي وسرعة تسليم المهام</span>
                     </div>
                   </div>
 
                   {/* Motivational Quote or Study Tip */}
-                  <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-xl space-y-3">
-                    <span className="text-[10px] text-amber-400 font-bold block">💡 نصيحة اليوم للتعلم السريع:</span>
-                    <p className="text-[11px] text-slate-400 leading-relaxed">
+                  <div className="bg-white/80 dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-3xl p-5 shadow-xl backdrop-blur-xl space-y-3">
+                    <span className="text-[10px] text-amber-600 dark:text-amber-400 font-bold block">💡 نصيحة اليوم للتعلم السريع:</span>
+                    <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed">
                       "البرمجة والتصميم لا تتعلمهما بالقراءة فحسب، بل بكتابة وتعديل الكود بأصابعك. جرب تصحيح الواجب الآن فوراً واستفد من نصائح مساعد الذكاء الاصطناعي لتطوير مهاراتك!"
                     </p>
                   </div>
@@ -2512,15 +2564,15 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
                 )}
 
                 {/* Main Homework Submission Box */}
-                <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 md:p-6 space-y-6 shadow-xl">
-                  <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+                <div className="bg-white/80 dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-3xl p-5 md:p-6 space-y-6 shadow-xl backdrop-blur-xl">
+                  <div className="flex items-center justify-between pb-3 border-b border-slate-200/80 dark:border-slate-800">
                     <div className="flex items-center gap-2">
-                      <Sparkles className="w-5 h-5 text-amber-400" />
-                      <h3 className="text-sm font-black text-slate-100">
+                      <Sparkles className="w-5 h-5 text-amber-500 dark:text-amber-400" />
+                      <h3 className="text-sm font-black text-slate-900 dark:text-slate-100">
                         رفع الواجب أو تصويره للتصحيح بالذكاء الاصطناعي (Gemini 3.7 Flash)
                       </h3>
                     </div>
-                    <span className="text-[11px] bg-emerald-500/20 text-emerald-300 font-bold px-2.5 py-1 rounded-xl border border-emerald-500/30">
+                    <span className="text-[11px] bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 font-bold px-2.5 py-1 rounded-xl border border-emerald-500/30">
                       تصحيح وإصدار تقرير فوري
                     </span>
                   </div>
@@ -2528,7 +2580,7 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
                   <form onSubmit={handleSubmitHomework} className="space-y-5">
                     {/* Task Title Selection */}
                     <div>
-                      <label className="block text-xs font-bold text-slate-300 mb-2">
+                      <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-2">
                         اختر عنوان أو موضوع الواجب المطلوبة تسليمه:
                       </label>
 
@@ -2544,12 +2596,12 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
                               }}
                               className={`p-3 rounded-2xl border text-right transition-all ${
                                 selectedTaskTitle === t.title && !customTaskTitle
-                                  ? 'bg-amber-500/10 border-amber-500 text-amber-300 font-bold'
-                                  : 'bg-slate-950 border-slate-800 text-slate-300 hover:border-slate-700'
+                                  ? 'bg-amber-500/10 border-amber-500 text-amber-700 dark:text-amber-300 font-bold shadow-xs'
+                                  : 'bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-700 shadow-xs'
                               }`}
                             >
                               <p className="text-xs font-bold truncate">{t.title}</p>
-                              <span className="text-[10px] text-slate-400 block mt-1">
+                              <span className="text-[10px] text-slate-500 dark:text-slate-400 block mt-1">
                                 حد أقصى للنقاط: +{t.maxPoints}
                               </span>
                             </button>
@@ -2563,20 +2615,20 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
                           value={customTaskTitle}
                           onChange={(e) => setCustomTaskTitle(e.target.value)}
                           placeholder="أو اكتب عنوان واجب مخصص آخر..."
-                          className="w-full bg-slate-950 border border-slate-700 rounded-2xl px-3.5 py-2.5 text-xs text-slate-100 focus:outline-none focus:border-amber-500"
+                          className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-2xl px-3.5 py-2.5 text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:border-amber-500 shadow-xs"
                         />
                       </div>
                     </div>
 
                     {/* Media Upload Options: Photo / File / Video */}
                     <div className="space-y-2">
-                      <label className="block text-xs font-bold text-slate-300">
+                      <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
                         صورة الواجب أو الفيديو المرفق (يُفضل صورة لورقة الإجابة):
                       </label>
 
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                         {/* Option 1: Mobile Direct Camera Capture (No permission issues) */}
-                        <label className="p-4 rounded-2xl bg-amber-950/30 border border-dashed border-amber-500/50 hover:border-amber-400 text-center space-y-2 cursor-pointer transition-all group block">
+                        <label className="p-4 rounded-2xl bg-amber-500/10 dark:bg-amber-950/30 border border-dashed border-amber-500/50 hover:border-amber-500 text-center space-y-2 cursor-pointer transition-all group block shadow-xs">
                           <input
                             type="file"
                             accept="image/*"
@@ -2584,29 +2636,29 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
                             onChange={handleFileSelect}
                             className="hidden"
                           />
-                          <div className="w-10 h-10 mx-auto rounded-xl bg-amber-500/20 text-amber-300 flex items-center justify-center group-hover:scale-110 transition-transform">
+                          <div className="w-10 h-10 mx-auto rounded-xl bg-amber-500/20 text-amber-600 dark:text-amber-300 flex items-center justify-center group-hover:scale-110 transition-transform shadow-xs">
                             <Camera className="w-5 h-5" />
                           </div>
                           <div>
-                            <p className="text-xs font-bold text-amber-200">📸 تصوير مباشر فوراً (كاميرا الهاتف)</p>
-                            <p className="text-[10px] text-slate-300">يفتح كاميرا المحمول مباشرة لتصوير الواجب بدون أخطاء</p>
+                            <p className="text-xs font-bold text-amber-800 dark:text-amber-200">📸 تصوير مباشر فوراً (كاميرا الهاتف)</p>
+                            <p className="text-[10px] text-slate-600 dark:text-slate-300">يفتح كاميرا المحمول مباشرة لتصوير الواجب بدون أخطاء</p>
                           </div>
                         </label>
 
                         {/* Option 2: Choose File or Video from Gallery */}
-                        <label className="p-4 rounded-2xl bg-slate-950 border border-dashed border-slate-700 hover:border-indigo-500/60 text-center space-y-2 cursor-pointer transition-all group block">
+                        <label className="p-4 rounded-2xl bg-white dark:bg-slate-950 border border-dashed border-slate-300 dark:border-slate-700 hover:border-indigo-500/60 text-center space-y-2 cursor-pointer transition-all group block shadow-xs">
                           <input
                             type="file"
                             accept="image/*,video/*"
                             onChange={handleFileSelect}
                             className="hidden"
                           />
-                          <div className="w-10 h-10 mx-auto rounded-xl bg-indigo-500/10 text-indigo-400 flex items-center justify-center group-hover:scale-110 transition-transform">
+                          <div className="w-10 h-10 mx-auto rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center group-hover:scale-110 transition-transform shadow-xs">
                             <Upload className="w-5 h-5" />
                           </div>
                           <div>
-                            <p className="text-xs font-bold text-slate-200">📁 اختيار صورة أو فيديو من الاستوديو</p>
-                            <p className="text-[10px] text-slate-400">رفع صورة محفوطة مسبقاً أو فيديو من معرض الصور</p>
+                            <p className="text-xs font-bold text-slate-800 dark:text-slate-200">📁 اختيار صورة أو فيديو من الاستوديو</p>
+                            <p className="text-[10px] text-slate-500 dark:text-slate-400">رفع صورة محفوطة مسبقاً أو فيديو من معرض الصور</p>
                           </div>
                         </label>
                       </div>
@@ -2614,14 +2666,14 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
 
                     {/* Camera Modal overlay if active */}
                     {isCameraActive && (
-                      <div className="p-4 rounded-3xl bg-slate-950 border border-amber-500/40 space-y-3">
-                        <div className="flex items-center justify-between text-xs font-bold text-amber-300">
+                      <div className="p-4 rounded-3xl bg-white dark:bg-slate-950 border border-amber-500/40 space-y-3 shadow-lg">
+                        <div className="flex items-center justify-between text-xs font-bold text-amber-600 dark:text-amber-300">
                           <span>وجه الكاميرا نحو ورقة الواجب بالكامل</span>
-                          <button type="button" onClick={stopCamera} className="text-rose-400 hover:underline">
+                          <button type="button" onClick={stopCamera} className="text-rose-500 dark:text-rose-400 hover:underline">
                             إلغاء الكاميرا
                           </button>
                         </div>
-                        <video ref={videoRef} autoPlay playsInline className="w-full max-h-64 object-cover rounded-2xl border border-slate-800" />
+                        <video ref={videoRef} autoPlay playsInline className="w-full max-h-64 object-cover rounded-2xl border border-slate-200 dark:border-slate-800" />
                         <canvas ref={canvasRef} className="hidden" />
                         <button
                           type="button"
@@ -2636,18 +2688,18 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
 
                     {/* Preview Selected Media */}
                     {selectedImageBase64 && (
-                      <div className="p-3 rounded-2xl bg-slate-950 border border-slate-800 flex items-center justify-between">
+                      <div className="p-3 rounded-2xl bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 flex items-center justify-between shadow-xs">
                         <div className="flex items-center gap-3">
                           <img
                             src={selectedImageBase64}
                             alt="معاينة الواجب"
-                            className="w-14 h-14 rounded-xl object-cover border border-slate-700"
+                            className="w-14 h-14 rounded-xl object-cover border border-slate-200 dark:border-slate-700 shadow-xs"
                           />
                           <div>
-                            <p className="text-xs font-bold text-slate-200">
+                            <p className="text-xs font-bold text-slate-900 dark:text-slate-200">
                               {selectedVideoName ? `فيديو: ${selectedVideoName}` : 'تم تجهيز صورة الواجب للتحليل والذكاء الاصطناعي'}
                             </p>
-                            <span className="text-[10px] text-emerald-400 font-bold flex items-center gap-1">
+                            <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-1">
                               <CheckCircle2 className="w-3 h-3" /> جاهز للتصحيح الفوري
                             </span>
                           </div>
@@ -2658,7 +2710,7 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
                             setSelectedImageBase64(null);
                             setSelectedVideoName(null);
                           }}
-                          className="px-2.5 py-1 text-[11px] font-bold text-rose-400 hover:bg-rose-500/10 rounded-lg"
+                          className="px-2.5 py-1 text-[11px] font-bold text-rose-500 dark:text-rose-400 hover:bg-rose-500/10 rounded-lg"
                         >
                           حذف الملف
                         </button>
@@ -2667,7 +2719,7 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
 
                     {/* Student Notes / Text Explanation */}
                     <div>
-                      <label className="block text-xs font-bold text-slate-300 mb-1.5">
+                      <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
                         ملاحظات وشرح الإجابة (اختياري):
                       </label>
                       <textarea
@@ -2675,7 +2727,7 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
                         value={studentNotes}
                         onChange={(e) => setStudentNotes(e.target.value)}
                         placeholder="اكتب هنا أي توضيح للمدرب أو شرح للكود والخطوات..."
-                        className="w-full bg-slate-950 border border-slate-700 rounded-2xl p-3 text-xs text-slate-100 focus:outline-none focus:border-amber-500"
+                        className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-2xl p-3 text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:border-amber-500 shadow-xs"
                       />
                     </div>
 
@@ -2700,8 +2752,8 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
                   </form>
 
                   {submitSuccessMsg && (
-                    <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs font-bold flex items-center gap-2">
-                      <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+                    <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 text-xs font-bold flex items-center gap-2">
+                      <CheckCircle2 className="w-5 h-5 text-emerald-500 dark:text-emerald-400 shrink-0" />
                       <span>{submitSuccessMsg}</span>
                     </div>
                   )}
@@ -2709,48 +2761,48 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
 
                 {/* Instant AI Correction Output Card */}
                 {lastSubmissionResult && (
-                  <div className="bg-slate-900 border border-amber-500/40 rounded-3xl p-5 md:p-6 space-y-4 shadow-2xl relative overflow-hidden">
-                    <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+                  <div className="bg-white/80 dark:bg-slate-900 border border-amber-500/40 rounded-3xl p-5 md:p-6 space-y-4 shadow-2xl relative overflow-hidden backdrop-blur-xl">
+                    <div className="flex items-center justify-between pb-3 border-b border-slate-200/80 dark:border-slate-800">
                       <div className="flex items-center gap-2">
-                        <Sparkles className="w-5 h-5 text-amber-400" />
-                        <h3 className="text-sm font-black text-slate-100">
+                        <Sparkles className="w-5 h-5 text-amber-500 dark:text-amber-400" />
+                        <h3 className="text-sm font-black text-slate-900 dark:text-slate-100">
                           تقرير تصحيح وتصنيف الذكاء الاصطناعي الفوري
                         </h3>
                       </div>
-                      <span className="text-xs font-bold text-amber-400 font-mono">
+                      <span className="text-xs font-bold text-amber-600 dark:text-amber-400 font-mono">
                         {new Date(lastSubmissionResult.submittedAt).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}
                       </span>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                      <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 text-center space-y-1">
-                        <span className="text-[10px] text-slate-400 font-bold block">الدرجة والتقييم</span>
-                        <div className="text-2xl font-black text-emerald-400 font-mono">
+                      <div className="bg-slate-50 dark:bg-slate-950 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 text-center space-y-1 shadow-xs">
+                        <span className="text-[10px] text-slate-500 dark:text-slate-400 font-bold block">الدرجة والتقييم</span>
+                        <div className="text-2xl font-black text-emerald-600 dark:text-emerald-400 font-mono">
                           {lastSubmissionResult.grade} / {lastSubmissionResult.maxGrade}
                         </div>
-                        <span className="text-xs font-bold text-slate-300 block">
+                        <span className="text-xs font-bold text-slate-700 dark:text-slate-300 block">
                           النسبة: {lastSubmissionResult.percentage}% ({lastSubmissionResult.rating})
                         </span>
                       </div>
 
-                      <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 text-center space-y-1">
-                        <span className="text-[10px] text-slate-400 font-bold block">النقاط المضافة لرصيدك</span>
-                        <div className="text-2xl font-black text-amber-400 font-mono">
+                      <div className="bg-slate-50 dark:bg-slate-950 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 text-center space-y-1 shadow-xs">
+                        <span className="text-[10px] text-slate-500 dark:text-slate-400 font-bold block">النقاط المضافة لرصيدك</span>
+                        <div className="text-2xl font-black text-amber-600 dark:text-amber-400 font-mono">
                           +{lastSubmissionResult.pointsAwarded} نقطة
                         </div>
                         {lastSubmissionResult.isSpeedWinner && (
-                          <span className="text-[10px] text-amber-300 font-bold block">
+                          <span className="text-[10px] text-amber-600 dark:text-amber-300 font-bold block">
                             ⚡ شاملة +25 مكافأة السرعة البرقية
                           </span>
                         )}
                       </div>
 
-                      <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 text-center space-y-1">
-                        <span className="text-[10px] text-slate-400 font-bold block">حالة التسليم</span>
-                        <div className="text-lg font-black text-indigo-300 pt-1">
+                      <div className="bg-slate-50 dark:bg-slate-950 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 text-center space-y-1 shadow-xs">
+                        <span className="text-[10px] text-slate-500 dark:text-slate-400 font-bold block">حالة التسليم</span>
+                        <div className="text-lg font-black text-indigo-600 dark:text-indigo-300 pt-1">
                           مسجل لدى المدرب
                         </div>
-                        <span className="text-[10px] text-slate-400 block">
+                        <span className="text-[10px] text-slate-500 dark:text-slate-400 block">
                           القناة: بوابة الطالب المنزلية
                         </span>
                       </div>
@@ -2766,38 +2818,38 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
                               {lastSubmissionResult.badgeAwarded?.icon || '🏆'}
                             </div>
                             <div>
-                              <h4 className="text-xs font-black text-amber-300">
+                              <h4 className="text-xs font-black text-amber-700 dark:text-amber-300">
                                 {lastSubmissionResult.badgeAwarded?.title || 'وسام التفوق والحل الفوري'}
                               </h4>
-                              <p className="text-[11px] text-amber-200/80">
+                              <p className="text-[11px] text-amber-800/80 dark:text-amber-200/80">
                                 تم منحك هذا الوسام وإضافته إلى ملفك الأكاديمي تقديرًا لسرعة ودقة حل الواجب!
                               </p>
                             </div>
                           </div>
-                          <span className="text-xs font-black text-amber-300 bg-amber-500/20 px-3 py-1 rounded-full border border-amber-400/30 shrink-0">
+                          <span className="text-xs font-black text-amber-700 dark:text-amber-300 bg-amber-500/20 px-3 py-1 rounded-full border border-amber-400/30 shrink-0">
                             +{lastSubmissionResult.badgeAwarded?.points || 25} نقطة
                           </span>
                         </div>
                       )}
 
-                      <div className="p-3.5 rounded-2xl bg-slate-950 border border-slate-800 space-y-1.5">
-                        <h4 className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
-                          <Star className="w-4 h-4 text-amber-400" />
+                      <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 space-y-1.5 shadow-xs">
+                        <h4 className="text-xs font-bold text-amber-600 dark:text-amber-300 flex items-center gap-1.5">
+                          <Star className="w-4 h-4 text-amber-500 dark:text-amber-400" />
                           <span>التقرير التحليلي الشامل للمدرب وللطالب:</span>
                         </h4>
-                        <p className="text-xs text-slate-200 leading-relaxed">
+                        <p className="text-xs text-slate-800 dark:text-slate-200 leading-relaxed">
                           {lastSubmissionResult.generalFeedback}
                         </p>
                       </div>
 
                       {/* Strengths */}
                       {lastSubmissionResult?.strengths && lastSubmissionResult.strengths.length > 0 && (
-                        <div className="p-3.5 rounded-2xl bg-emerald-950/20 border border-emerald-500/30 space-y-1">
-                          <h4 className="text-xs font-bold text-emerald-400 flex items-center gap-1.5">
-                            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                        <div className="p-3.5 rounded-2xl bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-500/30 space-y-1 shadow-xs">
+                          <h4 className="text-xs font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
+                            <CheckCircle2 className="w-4 h-4 text-emerald-500 dark:text-emerald-400" />
                             <span>نقاط القوة والإتقان الملحوظة:</span>
                           </h4>
-                          <ul className="list-disc list-inside text-xs text-slate-300 space-y-0.5">
+                          <ul className="list-disc list-inside text-xs text-slate-700 dark:text-slate-300 space-y-0.5">
                             {(lastSubmissionResult.strengths || []).map((s, idx) => (
                               <li key={idx}>{s}</li>
                             ))}
@@ -2807,14 +2859,14 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
 
                       {/* Explanation of Difficult Points / Concepts */}
                       {lastSubmissionResult?.difficultPointsExplained && lastSubmissionResult.difficultPointsExplained.length > 0 && (
-                        <div className="p-3.5 rounded-2xl bg-indigo-950/30 border border-indigo-500/30 space-y-1.5">
-                          <h4 className="text-xs font-bold text-indigo-300 flex items-center gap-1.5">
-                            <BookOpen className="w-4 h-4 text-indigo-400" />
+                        <div className="p-3.5 rounded-2xl bg-indigo-50/70 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-500/30 space-y-1.5 shadow-xs">
+                          <h4 className="text-xs font-bold text-indigo-700 dark:text-indigo-300 flex items-center gap-1.5">
+                            <BookOpen className="w-4 h-4 text-indigo-500 dark:text-indigo-400" />
                             <span>💡 شرح وتوضيح النقاط والمفاهيم الصعبة في هذا الواجب:</span>
                           </h4>
-                          <ul className="space-y-1.5 text-xs text-slate-200">
+                          <ul className="space-y-1.5 text-xs text-slate-800 dark:text-slate-200">
                             {lastSubmissionResult.difficultPointsExplained.map((point, idx) => (
-                              <li key={idx} className="bg-slate-950/80 p-2.5 rounded-xl border border-indigo-500/20 leading-relaxed">
+                              <li key={idx} className="bg-white dark:bg-slate-950/80 p-2.5 rounded-xl border border-indigo-200 dark:border-indigo-500/20 leading-relaxed shadow-xs">
                                 {point}
                               </li>
                             ))}
@@ -2824,12 +2876,12 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
 
                       {/* Corrections if any */}
                       {lastSubmissionResult?.corrections && lastSubmissionResult.corrections.length > 0 && (
-                        <div className="p-3.5 rounded-2xl bg-amber-950/20 border border-amber-500/30 space-y-1">
-                          <h4 className="text-xs font-bold text-amber-400 flex items-center gap-1.5">
-                            <AlertCircle className="w-4 h-4 text-amber-400" />
+                        <div className="p-3.5 rounded-2xl bg-amber-50 dark:bg-amber-950/20 border border-amber-500/30 space-y-1 shadow-xs">
+                          <h4 className="text-xs font-bold text-amber-700 dark:text-amber-400 flex items-center gap-1.5">
+                            <AlertCircle className="w-4 h-4 text-amber-500 dark:text-amber-400" />
                             <span>نقاط للتحسين المرات القادمة:</span>
                           </h4>
-                          <ul className="list-disc list-inside text-xs text-slate-300 space-y-0.5">
+                          <ul className="list-disc list-inside text-xs text-slate-700 dark:text-slate-300 space-y-0.5">
                             {lastSubmissionResult.corrections.map((c, idx) => (
                               <li key={idx}>{c}</li>
                             ))}
@@ -2838,12 +2890,12 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
                       )}
 
                       {/* Trainer Notification Confirmation Alert */}
-                      <div className="p-3 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 text-[11px] font-bold flex items-center justify-between gap-2">
+                      <div className="p-3 rounded-2xl bg-indigo-50 dark:bg-indigo-500/10 border border-indigo-200 dark:border-indigo-500/20 text-indigo-700 dark:text-indigo-300 text-[11px] font-bold flex items-center justify-between gap-2 shadow-xs">
                         <span className="flex items-center gap-2">
-                          <Bell className="w-4 h-4 text-indigo-400 shrink-0" />
+                          <Bell className="w-4 h-4 text-indigo-500 dark:text-indigo-400 shrink-0" />
                           <span>تم إرسال إشعار فوري للمدرب باسمك ({lastSubmissionResult.traineeName}) وكودك والدرجة والتقرير بنجاح!</span>
                         </span>
-                        <span className="bg-indigo-500/20 text-indigo-300 px-2 py-0.5 rounded-full text-[10px]">
+                        <span className="bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 px-2 py-0.5 rounded-full text-[10px]">
                           إشعار فوري 🔔
                         </span>
                       </div>
@@ -2855,16 +2907,16 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
 
             {/* TAB 2: HOMEWORK SUBMISSIONS HISTORY */}
             {activeTab === 'history' && (
-              <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 md:p-6 space-y-4 shadow-xl">
-                <h3 className="text-sm font-black text-slate-100 flex items-center gap-2">
-                  <FileText className="w-5 h-5 text-amber-400" />
+              <div className="bg-white/80 dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-3xl p-5 md:p-6 space-y-4 shadow-xl backdrop-blur-xl">
+                <h3 className="text-sm font-black text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                  <FileText className="w-5 h-5 text-amber-500 dark:text-amber-400" />
                   <span>سجل الواجبات المسلمة وتصحيحات الذكاء الاصطناعي</span>
                 </h3>
 
                 {(!homeworks || homeworks.length === 0) ? (
-                  <div className="p-8 text-center bg-slate-950/50 rounded-2xl border border-slate-800 space-y-2">
-                    <BookOpen className="w-8 h-8 text-slate-600 mx-auto" />
-                    <p className="text-xs text-slate-400 font-bold">لم تقم برفع أي واجبات منزلية بعد.</p>
+                  <div className="p-8 text-center bg-slate-50/80 dark:bg-slate-950/50 rounded-2xl border border-slate-200/80 dark:border-slate-800 space-y-2">
+                    <BookOpen className="w-8 h-8 text-slate-400 dark:text-slate-600 mx-auto" />
+                    <p className="text-xs text-slate-600 dark:text-slate-400 font-bold">لم تقم برفع أي واجبات منزلية بعد.</p>
                     <p className="text-[11px] text-slate-500">
                       يمكنك البدء بالضغط على "إرسال واجب جديد" وتصوير حل التمرين فوراً!
                     </p>
@@ -2874,35 +2926,35 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
                     {(homeworks || []).map((hw) => (
                       <div
                         key={hw.id}
-                        className="p-4 rounded-2xl bg-slate-950 border border-slate-800 hover:border-slate-700 transition-all space-y-3"
+                        className="p-4 rounded-2xl bg-white dark:bg-slate-950 border border-slate-200/90 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 transition-all space-y-3 shadow-xs"
                       >
-                        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-2 pb-2 border-b border-slate-800/80">
+                        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-2 pb-2 border-b border-slate-200/80 dark:border-slate-800/80">
                           <div>
                             <div className="flex items-center gap-2">
-                              <h4 className="text-xs font-bold text-slate-100">{hw.taskTitle}</h4>
+                              <h4 className="text-xs font-bold text-slate-900 dark:text-slate-100">{hw.taskTitle}</h4>
                               {hw.isSpeedWinner && (
-                                <span className="bg-amber-500/20 text-amber-300 text-[10px] font-black px-2 py-0.5 rounded-full border border-amber-500/30">
+                                <span className="bg-amber-500/20 text-amber-700 dark:text-amber-300 text-[10px] font-black px-2 py-0.5 rounded-full border border-amber-500/30">
                                   ⚡ وسام السرعة البرقية
                                 </span>
                               )}
                             </div>
-                            <p className="text-[10px] text-slate-400 mt-0.5">
+                            <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">
                               تاريخ التسليم: {new Date(hw.submittedAt).toLocaleString('ar-EG')}
                             </p>
                           </div>
 
                           <div className="flex items-center gap-2">
-                            <span className="bg-emerald-500/10 text-emerald-300 font-mono font-bold text-xs px-2.5 py-1 rounded-xl border border-emerald-500/30">
+                            <span className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 font-mono font-bold text-xs px-2.5 py-1 rounded-xl border border-emerald-500/30">
                               {hw.grade} / {hw.maxGrade} ({hw.percentage}%)
                             </span>
-                            <span className="bg-amber-500/10 text-amber-300 font-mono font-bold text-xs px-2.5 py-1 rounded-xl border border-amber-500/30">
+                            <span className="bg-amber-500/10 text-amber-700 dark:text-amber-300 font-mono font-bold text-xs px-2.5 py-1 rounded-xl border border-amber-500/30">
                               +{hw.pointsAwarded} نقطة
                             </span>
                           </div>
                         </div>
 
-                        <p className="text-xs text-slate-300 leading-relaxed bg-slate-900/60 p-3 rounded-xl border border-slate-800">
-                          <strong className="text-amber-400 block mb-1">التقرير الذكي:</strong>
+                        <p className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed bg-slate-50 dark:bg-slate-900/60 p-3 rounded-xl border border-slate-200/80 dark:border-slate-800">
+                          <strong className="text-amber-600 dark:text-amber-400 block mb-1">التقرير الذكي:</strong>
                           {hw.generalFeedback}
                         </p>
 
@@ -2912,7 +2964,7 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
                               href={hw.mediaUrl}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="text-[11px] text-indigo-400 hover:underline flex items-center gap-1 font-bold"
+                              className="text-[11px] text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1 font-bold"
                             >
                               <ImageIcon className="w-3.5 h-3.5" />
                               <span>عرض صورة / ملف الواجب المرفوع</span>
@@ -2928,21 +2980,21 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
 
             {/* TAB 3: BADGES AND ACHIEVEMENTS */}
             {activeTab === 'badges' && (
-              <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 md:p-6 space-y-4 shadow-xl">
+              <div className="bg-white/80 dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-3xl p-5 md:p-6 space-y-4 shadow-xl backdrop-blur-xl">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-black text-slate-100 flex items-center gap-2">
-                    <Trophy className="w-5 h-5 text-amber-400" />
+                  <h3 className="text-sm font-black text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                    <Trophy className="w-5 h-5 text-amber-500 dark:text-amber-400" />
                     <span>سجل الأوسمة والجوائز والأوسمة السريعة</span>
                   </h3>
-                  <span className="text-xs text-amber-400 font-bold">
+                  <span className="text-xs text-amber-600 dark:text-amber-400 font-bold">
                     إجمالي الأوسمة: {(badges || []).length}
                   </span>
                 </div>
 
                 {(!badges || badges.length === 0) ? (
-                  <div className="p-8 text-center bg-slate-950/50 rounded-2xl border border-slate-800 space-y-2">
-                    <Award className="w-8 h-8 text-slate-600 mx-auto" />
-                    <p className="text-xs text-slate-400 font-bold">لا يوجد أوسمة مسجلة حالياً.</p>
+                  <div className="p-8 text-center bg-slate-50/80 dark:bg-slate-950/50 rounded-2xl border border-slate-200/80 dark:border-slate-800 space-y-2">
+                    <Award className="w-8 h-8 text-slate-400 dark:text-slate-600 mx-auto" />
+                    <p className="text-xs text-slate-600 dark:text-slate-400 font-bold">لا يوجد أوسمة مسجلة حالياً.</p>
                     <p className="text-[11px] text-slate-500">
                       كن أسرع طالب يسلم الواجب بعد المحاضرة فوراً لتحصل على "وسام السرعة البرقية" ⚡!
                     </p>
@@ -2952,7 +3004,7 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
                     {(badges || []).map((b) => (
                       <div
                         key={b.id}
-                        className="p-4 rounded-2xl bg-slate-950 border border-slate-800 flex items-center justify-between gap-3.5 shadow-md"
+                        className="p-4 rounded-2xl bg-white dark:bg-slate-950 border border-slate-200/90 dark:border-slate-800 flex items-center justify-between gap-3.5 shadow-md"
                       >
                         <div className="flex items-center gap-3.5">
                           <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-500 to-amber-700 text-slate-950 flex items-center justify-center text-2xl font-black shrink-0 shadow-lg">
@@ -2960,9 +3012,9 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
                           </div>
 
                           <div className="space-y-1">
-                            <h4 className="text-xs font-bold text-slate-100">{b.badgeTitle}</h4>
-                            <p className="text-[10px] text-slate-400">
-                              النقاط المستحقة: <strong className="text-amber-400 font-mono">+{b.points} نقطة</strong>
+                            <h4 className="text-xs font-bold text-slate-900 dark:text-slate-100">{b.badgeTitle}</h4>
+                            <p className="text-[10px] text-slate-500 dark:text-slate-400">
+                              النقاط المستحقة: <strong className="text-amber-600 dark:text-amber-400 font-mono">+{b.points} نقطة</strong>
                             </p>
                             <span className="text-[9px] text-slate-500 block">
                               تاريخ الممنح: {new Date(b.awardedAt).toLocaleDateString('ar-EG')}
@@ -2971,7 +3023,7 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
                         </div>
 
                         {/* Social Share for Badge */}
-                        <div className="flex flex-col gap-1 items-center border-r border-slate-800 pr-3 shrink-0">
+                        <div className="flex flex-col gap-1 items-center border-r border-slate-200 dark:border-slate-800 pr-3 shrink-0">
                           <span className="text-[8px] text-slate-500 font-bold">مشاركة:</span>
                           <div className="flex gap-1.5">
                             <button
@@ -2980,7 +3032,7 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
                                 const text = `الحمد لله! حصلت على "${b.badgeTitle}" تميزاً وسرعةً في دورة البرمجة والذكاء الاصطناعي من مركز النجاح للتدريب والاستشارات! ⚡🏆`;
                                 window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, '_blank');
                               }}
-                              className="text-emerald-400 hover:text-emerald-300 transition-colors"
+                              className="text-emerald-500 hover:text-emerald-600 dark:text-emerald-400 dark:hover:text-emerald-300 transition-colors"
                               title="مشاركة عبر واتساب"
                             >
                               <MessageSquare className="w-4 h-4" />
@@ -2991,7 +3043,7 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
                                 const text = `الحمد لله! حصلت على "${b.badgeTitle}" تميزاً وسرعةً في دورة البرمجة والذكاء الاصطناعي من مركز النجاح للتدريب والاستشارات! ⚡🏆`;
                                 window.open(`https://www.facebook.com/sharer/sharer.php?quote=${encodeURIComponent(text)}&u=${encodeURIComponent(window.location.origin)}`, '_blank');
                               }}
-                              className="text-blue-500 hover:text-blue-400 transition-colors"
+                              className="text-blue-500 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
                               title="مشاركة على فيسبوك"
                             >
                               <Facebook className="w-4 h-4" />
@@ -3007,29 +3059,36 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
 
             {/* TAB 4: LAB SCHEDULE */}
             {activeTab === 'schedule' && (
-              <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 md:p-6 space-y-4 shadow-xl">
-                <h3 className="text-sm font-black text-slate-100 flex items-center gap-2">
-                  <Calendar className="w-5 h-5 text-amber-400" />
-                  <span>جدول المواعيد وقاعة المعمل المقررة للمجموعة</span>
-                </h3>
+              <div className="bg-white/80 dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-3xl p-5 md:p-6 space-y-4 shadow-xl backdrop-blur-xl">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-black text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                    <Calendar className="w-5 h-5 text-amber-500 dark:text-amber-400" />
+                    <span>جدول المواعيد وقاعة المعمل المقررة للمجموعة</span>
+                  </h3>
+                </div>
+
+                {/* Prominent Next Lecture Countdown Banner */}
+                {student?.groupDetails && (
+                  <NextLectureWidget groupDetails={student.groupDetails} variant="banner" />
+                )}
 
                 {(!labSchedules || labSchedules.length === 0) ? (
-                  <div className="p-8 text-center bg-slate-950/50 rounded-2xl border border-slate-800 space-y-2">
-                    <Clock className="w-8 h-8 text-slate-600 mx-auto" />
-                    <p className="text-xs text-slate-400 font-bold">مواعيد المعمل مسجلة وفق جدول المجموعة الرئيسي.</p>
+                  <div className="p-8 text-center bg-slate-50/80 dark:bg-slate-950/50 rounded-2xl border border-slate-200/80 dark:border-slate-800 space-y-2">
+                    <Clock className="w-8 h-8 text-slate-400 dark:text-slate-600 mx-auto" />
+                    <p className="text-xs text-slate-600 dark:text-slate-400 font-bold">مواعيد المعمل مسجلة وفق جدول المجموعة الرئيسي.</p>
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {(labSchedules || []).map((s) => (
-                      <div key={s.id} className="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-1.5">
+                      <div key={s.id} className="p-4 rounded-2xl bg-white dark:bg-slate-950 border border-slate-200/90 dark:border-slate-800 space-y-1.5 shadow-xs">
                         <div className="flex items-center justify-between">
-                          <span className="font-bold text-xs text-amber-300">{s.dayOfWeek}</span>
-                          <span className="text-[10px] text-emerald-400 font-bold">{s.roomName}</span>
+                          <span className="font-bold text-xs text-amber-600 dark:text-amber-300">{s.dayOfWeek}</span>
+                          <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold">{s.roomName}</span>
                         </div>
-                        <p className="text-xs text-slate-200">
-                          الوقت: <span className="font-mono text-amber-300 font-bold">{s.timeDisplay || `${s.startTime} - ${s.endTime}`}</span>
+                        <p className="text-xs text-slate-800 dark:text-slate-200">
+                          الوقت: <span className="font-mono text-amber-600 dark:text-amber-300 font-bold">{s.timeDisplay || `${s.startTime} - ${s.endTime}`}</span>
                         </p>
-                        <p className="text-[10px] text-slate-400">
+                        <p className="text-[10px] text-slate-500 dark:text-slate-400">
                           المجموعة: {s.groupName} ({s.courseName})
                         </p>
                       </div>
@@ -3041,21 +3100,21 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
 
             {/* TAB 5: CERTIFICATES */}
             {activeTab === 'certificates' && (
-              <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 md:p-6 space-y-4 shadow-xl">
+              <div className="bg-white/80 dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-3xl p-5 md:p-6 space-y-4 shadow-xl backdrop-blur-xl">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-black text-slate-100 flex items-center gap-2">
-                    <Award className="w-5 h-5 text-amber-400" />
+                  <h3 className="text-sm font-black text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                    <Award className="w-5 h-5 text-amber-500 dark:text-amber-400" />
                     <span>الشهادات التدريبية المعتمدة الصادرة باسم الطالب</span>
                   </h3>
-                  <span className="text-xs text-amber-400 font-bold">
+                  <span className="text-xs text-amber-600 dark:text-amber-400 font-bold">
                     عدد الشهادات: {certificates.length}
                   </span>
                 </div>
 
                 {(!certificates || certificates.length === 0) ? (
-                  <div className="p-8 text-center bg-slate-950/50 rounded-2xl border border-slate-800 space-y-2">
-                    <Award className="w-8 h-8 text-slate-600 mx-auto" />
-                    <p className="text-xs text-slate-400 font-bold">لم يتم إصدار شهادات معتمدة لهذا الطالب بعد.</p>
+                  <div className="p-8 text-center bg-slate-50/80 dark:bg-slate-950/50 rounded-2xl border border-slate-200/80 dark:border-slate-800 space-y-2">
+                    <Award className="w-8 h-8 text-slate-400 dark:text-slate-600 mx-auto" />
+                    <p className="text-xs text-slate-600 dark:text-slate-400 font-bold">لم يتم إصدار شهادات معتمدة لهذا الطالب بعد.</p>
                     <p className="text-[11px] text-slate-500">
                       سيتم ظهور الشهادة هنا فور تم اعتمادها وإصدارها من إدارة المركز.
                     </p>
@@ -3066,7 +3125,7 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
                       <div
                         key={cert.id}
                         id={`cert-card-${cert.id}`}
-                        className="bg-gradient-to-br from-amber-500/10 via-slate-950 to-amber-900/10 border-2 border-amber-500/40 rounded-3xl p-6 relative overflow-hidden shadow-2xl space-y-4"
+                        className="bg-gradient-to-br from-amber-500/5 via-white dark:via-slate-950 to-amber-900/10 border-2 border-amber-500/40 rounded-3xl p-6 relative overflow-hidden shadow-2xl space-y-4 backdrop-blur-xl"
                       >
                         <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border-b border-amber-500/20 pb-4">
                           <div className="flex items-center gap-3">
@@ -3074,11 +3133,11 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
                               <img src="/logo.svg" alt="النجاح" className="w-full h-full object-contain" />
                             </div>
                             <div>
-                              <span className="bg-amber-500/20 text-amber-300 font-bold text-[10px] px-2.5 py-0.5 rounded-full border border-amber-500/30 mb-1 inline-block">
+                              <span className="bg-amber-500/20 text-amber-700 dark:text-amber-300 font-bold text-[10px] px-2.5 py-0.5 rounded-full border border-amber-500/30 mb-1 inline-block">
                                 شهادة معتمدة ورسمية
                               </span>
-                              <h4 className="text-base font-black text-slate-100">{cert.courseName}</h4>
-                              <p className="text-xs text-slate-400 font-mono">رقم الشهادة: {cert.certificateNumber}</p>
+                              <h4 className="text-base font-black text-slate-900 dark:text-slate-100">{cert.courseName}</h4>
+                              <p className="text-xs text-slate-500 dark:text-slate-400 font-mono">رقم الشهادة: {cert.certificateNumber}</p>
                             </div>
                           </div>
 
@@ -3086,41 +3145,41 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
                           <div className="flex items-center gap-3">
                             <div className="text-center">
                               <img src="/stamp.svg" alt="ختم النجاح" className="w-16 h-16 object-contain opacity-90 transform -rotate-6" />
-                              <span className="text-[9px] text-amber-300/80 block mt-0.5">الختم المعتمد</span>
+                              <span className="text-[9px] text-amber-600 dark:text-amber-300/80 block mt-0.5">الختم المعتمد</span>
                             </div>
                           </div>
                         </div>
 
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 bg-slate-900/80 p-3 rounded-2xl border border-slate-800 text-center text-xs">
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 bg-slate-50 dark:bg-slate-900/80 p-3 rounded-2xl border border-slate-200 dark:border-slate-800 text-center text-xs">
                           <div>
-                            <span className="text-[10px] text-slate-400 block">اسم الطالب</span>
-                            <strong className="text-amber-300">{cert.traineeName}</strong>
+                            <span className="text-[10px] text-slate-500 dark:text-slate-400 block">اسم الطالب</span>
+                            <strong className="text-amber-700 dark:text-amber-300">{cert.traineeName}</strong>
                           </div>
                           <div>
-                            <span className="text-[10px] text-slate-400 block">التقدير العام</span>
-                            <strong className="text-emerald-400">{cert.grade || 'ممتاز'}</strong>
+                            <span className="text-[10px] text-slate-500 dark:text-slate-400 block">التقدير العام</span>
+                            <strong className="text-emerald-600 dark:text-emerald-400">{cert.grade || 'ممتاز'}</strong>
                           </div>
                           <div>
-                            <span className="text-[10px] text-slate-400 block">تاريخ الإصدار</span>
-                            <strong className="text-slate-200 font-mono">{cert.issueDate}</strong>
+                            <span className="text-[10px] text-slate-500 dark:text-slate-400 block">تاريخ الإصدار</span>
+                            <strong className="text-slate-800 dark:text-slate-200 font-mono">{cert.issueDate}</strong>
                           </div>
                           <div>
-                            <span className="text-[10px] text-slate-400 block">المدرب المحاضر</span>
-                            <strong className="text-slate-200">{cert.trainerName || 'المدرب المعتمد'}</strong>
+                            <span className="text-[10px] text-slate-500 dark:text-slate-400 block">المدرب المحاضر</span>
+                            <strong className="text-slate-800 dark:text-slate-200">{cert.trainerName || 'المدرب المعتمد'}</strong>
                           </div>
                         </div>
 
                         {/* Actions */}
                         <div className="flex flex-wrap items-center justify-end gap-2 pt-2">
-                          <div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 border border-slate-800 rounded-2xl">
-                            <span className="text-[10px] text-slate-400 font-bold ml-1">مشاركة:</span>
+                          <div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl">
+                            <span className="text-[10px] text-slate-500 dark:text-slate-400 font-bold ml-1">مشاركة:</span>
                             <button
                               type="button"
                               onClick={() => {
                                 const text = `الحمد لله حمداً كثيراً! حصلت على شهادة معتمدة ورسمية في دورة "${cert.courseName}" من مركز النجاح للتدريب والاستشارات! 🎓🏆`;
                                 window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, '_blank');
                               }}
-                              className="text-emerald-400 hover:text-emerald-300 transition-colors"
+                              className="text-emerald-500 hover:text-emerald-600 dark:text-emerald-400 dark:hover:text-emerald-300 transition-colors"
                               title="مشاركة عبر واتساب"
                             >
                               <MessageSquare className="w-4 h-4" />
@@ -3131,7 +3190,7 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
                                 const text = `الحمد لله حمداً كثيراً! حصلت على شهادة معتمدة ورسمية في دورة "${cert.courseName}" من مركز النجاح للتدريب والاستشارات! 🎓🏆`;
                                 window.open(`https://www.facebook.com/sharer/sharer.php?quote=${encodeURIComponent(text)}&u=${encodeURIComponent(window.location.origin)}`, '_blank');
                               }}
-                              className="text-blue-500 hover:text-blue-400 transition-colors"
+                              className="text-blue-500 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
                               title="مشاركة على فيسبوك"
                             >
                               <Facebook className="w-4 h-4" />
@@ -3142,7 +3201,7 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
                                 const text = `الحمد لله! حصلت على شهادة معتمدة ورسمية في دورة "${cert.courseName}" من مركز النجاح للتدريب والاستشارات! 🎓🏆`;
                                 window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`, '_blank');
                               }}
-                              className="text-sky-400 hover:text-sky-300 transition-colors"
+                              className="text-sky-500 hover:text-sky-600 dark:text-sky-400 dark:hover:text-sky-300 transition-colors"
                               title="مشاركة على تويتر"
                             >
                               <Twitter className="w-4 h-4" />
@@ -3153,7 +3212,7 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
                                 const text = `الحمد لله! حصلت على شهادة معتمدة ورسمية في دورة "${cert.courseName}" من مركز النجاح للتدريب والاستشارات! 🎓🏆`;
                                 window.open(`https://www.linkedin.com/feed/?shareActive=true&text=${encodeURIComponent(text)}`, '_blank');
                               }}
-                              className="text-blue-600 hover:text-blue-500 transition-colors"
+                              className="text-blue-600 hover:text-blue-700 dark:hover:text-blue-500 transition-colors"
                               title="مشاركة على لينكد إن"
                             >
                               <Linkedin className="w-4 h-4" />
@@ -3172,9 +3231,9 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
                           <button
                             type="button"
                             onClick={() => handleDownloadCertImage(cert.id, cert.traineeName)}
-                            className="px-4 py-2 rounded-2xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs flex items-center gap-1.5 transition-all border border-slate-700"
+                            className="px-4 py-2 rounded-2xl bg-white hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 font-bold text-xs flex items-center gap-1.5 transition-all border border-slate-200 dark:border-slate-700 shadow-xs"
                           >
-                            <Download className="w-4 h-4 text-amber-400" />
+                            <Download className="w-4 h-4 text-amber-500 dark:text-amber-400" />
                             <span>تحميل كصورة (PNG)</span>
                           </button>
                         </div>
@@ -3187,25 +3246,25 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
 
             {/* TAB: PROFILE (SETTINGS & SECURITY) */}
             {activeTab === 'profile' && (
-              <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 md:p-6 space-y-6 shadow-xl">
-                <div className="flex items-center gap-2 pb-3 border-b border-slate-800">
-                  <Settings className="w-5 h-5 text-amber-400" />
-                  <h3 className="text-sm font-black text-slate-100">إعدادات الملف الشخصي وحماية الحساب</h3>
+              <div className="bg-white/80 dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-3xl p-5 md:p-6 space-y-6 shadow-xl backdrop-blur-xl">
+                <div className="flex items-center gap-2 pb-3 border-b border-slate-200/80 dark:border-slate-800">
+                  <Settings className="w-5 h-5 text-amber-500 dark:text-amber-400" />
+                  <h3 className="text-sm font-black text-slate-900 dark:text-slate-100">إعدادات الملف الشخصي وحماية الحساب</h3>
                 </div>
 
                 <form onSubmit={handleUpdateProfile} className="space-y-6">
                   {/* Account Password Section */}
-                  <div className="space-y-4 p-5 rounded-2xl bg-slate-950 border border-slate-800/80">
-                    <h4 className="text-xs font-black text-amber-400 flex items-center gap-1.5">
+                  <div className="space-y-4 p-5 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-200/80 dark:border-slate-800/80">
+                    <h4 className="text-xs font-black text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
                       <Lock className="w-4 h-4 text-amber-500" />
                       <span>تأمين البوابة الإلكترونية وحماية حساب الطالب</span>
                     </h4>
-                    <p className="text-[11px] text-slate-400 leading-relaxed">
+                    <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed">
                       افتراضياً، يمكنك تسجيل الدخول إلى بوابتك بكود الطالب أو رقم هاتفك. لتجنب دخول أي شخص آخر على ملفك ومتابعتك، ننصحك بتعيين كلمة مرور مخصصة هنا. بعد تفعيلها، سيطلب منك النظام كتابتها في كل مرة تسجل فيها الدخول.
                     </p>
 
                     <div>
-                      <label className="block text-[11px] text-slate-300 font-bold mb-1.5">
+                      <label className="block text-[11px] text-slate-700 dark:text-slate-300 font-bold mb-1.5">
                         كلمة المرور الخاصة بك للبوابة الإلكترونية (أو اتركها فارغة للدخول المباشر):
                       </label>
                       <input
@@ -3213,24 +3272,24 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
                         value={portalPasswordForm}
                         onChange={(e) => setPortalPasswordForm(e.target.value)}
                         placeholder="اكتب كلمة مرور قوية وسهلة التذكر"
-                        className="w-full rounded-xl bg-slate-900 border border-slate-800 px-4 py-2 text-xs sm:text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-transparent"
+                        className="w-full rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 px-4 py-2 text-xs sm:text-sm text-slate-900 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-transparent shadow-xs"
                       />
                     </div>
                   </div>
 
                   {/* Connected Social Profiles */}
-                  <div className="space-y-4 p-5 rounded-2xl bg-slate-950 border border-slate-800/80">
-                    <h4 className="text-xs font-black text-amber-400 flex items-center gap-1.5">
+                  <div className="space-y-4 p-5 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-200/80 dark:border-slate-800/80">
+                    <h4 className="text-xs font-black text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
                       <Globe className="w-4 h-4 text-amber-500" />
                       <span>ربط حساباتك على منصات التواصل الاجتماعي لعرضها لزملائك</span>
                     </h4>
-                    <p className="text-[11px] text-slate-400 leading-relaxed">
+                    <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed">
                       تساعدك هذه الروابط على مشاركة إنجازاتك وتواصل زملائك في المركز معك مباشرة من جدار التميز والمنشورات.
                     </p>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
-                        <label className="text-[11px] text-slate-300 font-bold flex items-center gap-1.5 mb-1">
+                        <label className="text-[11px] text-slate-700 dark:text-slate-300 font-bold flex items-center gap-1.5 mb-1">
                           <Facebook className="w-3.5 h-3.5 text-blue-500" />
                           <span>رابط حساب فيسبوك (Facebook URL):</span>
                         </label>
@@ -3239,14 +3298,14 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
                           value={facebookUrl}
                           onChange={(e) => setFacebookUrl(e.target.value)}
                           placeholder="https://facebook.com/your-username"
-                          className="w-full rounded-xl bg-slate-900 border border-slate-800 px-4 py-2 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-transparent font-mono text-left"
+                          className="w-full rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 px-4 py-2 text-xs text-slate-900 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-transparent font-mono text-left shadow-xs"
                           dir="ltr"
                         />
                       </div>
 
                       <div>
-                        <label className="text-[11px] text-slate-300 font-bold flex items-center gap-1.5 mb-1">
-                          <Linkedin className="w-3.5 h-3.5 text-blue-400" />
+                        <label className="text-[11px] text-slate-700 dark:text-slate-300 font-bold flex items-center gap-1.5 mb-1">
+                          <Linkedin className="w-3.5 h-3.5 text-blue-500" />
                           <span>رابط حساب لينكد إن (LinkedIn URL):</span>
                         </label>
                         <input
@@ -3254,14 +3313,14 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
                           value={linkedinUrl}
                           onChange={(e) => setLinkedinUrl(e.target.value)}
                           placeholder="https://linkedin.com/in/your-username"
-                          className="w-full rounded-xl bg-slate-900 border border-slate-800 px-4 py-2 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-transparent font-mono text-left"
+                          className="w-full rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 px-4 py-2 text-xs text-slate-900 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-transparent font-mono text-left shadow-xs"
                           dir="ltr"
                         />
                       </div>
 
                       <div>
-                        <label className="text-[11px] text-slate-300 font-bold flex items-center gap-1.5 mb-1">
-                          <Twitter className="w-3.5 h-3.5 text-sky-400" />
+                        <label className="text-[11px] text-slate-700 dark:text-slate-300 font-bold flex items-center gap-1.5 mb-1">
+                          <Twitter className="w-3.5 h-3.5 text-sky-500" />
                           <span>رابط حساب تويتر / إكس (Twitter URL):</span>
                         </label>
                         <input
@@ -3269,13 +3328,13 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
                           value={twitterUrl}
                           onChange={(e) => setTwitterUrl(e.target.value)}
                           placeholder="https://twitter.com/your-username"
-                          className="w-full rounded-xl bg-slate-900 border border-slate-800 px-4 py-2 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-transparent font-mono text-left"
+                          className="w-full rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 px-4 py-2 text-xs text-slate-900 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-transparent font-mono text-left shadow-xs"
                           dir="ltr"
                         />
                       </div>
 
                       <div>
-                        <label className="text-[11px] text-slate-300 font-bold flex items-center gap-1.5 mb-1">
+                        <label className="text-[11px] text-slate-700 dark:text-slate-300 font-bold flex items-center gap-1.5 mb-1">
                           <Instagram className="w-3.5 h-3.5 text-pink-500" />
                           <span>رابط حساب انستجرام (Instagram URL):</span>
                         </label>
@@ -3284,14 +3343,14 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
                           value={instagramUrl}
                           onChange={(e) => setInstagramUrl(e.target.value)}
                           placeholder="https://instagram.com/your-username"
-                          className="w-full rounded-xl bg-slate-900 border border-slate-800 px-4 py-2 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-transparent font-mono text-left"
+                          className="w-full rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 px-4 py-2 text-xs text-slate-900 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-transparent font-mono text-left shadow-xs"
                           dir="ltr"
                         />
                       </div>
 
                       <div>
-                        <label className="text-[11px] text-slate-300 font-bold flex items-center gap-1.5 mb-1">
-                          <Github className="w-3.5 h-3.5 text-purple-400" />
+                        <label className="text-[11px] text-slate-700 dark:text-slate-300 font-bold flex items-center gap-1.5 mb-1">
+                          <Github className="w-3.5 h-3.5 text-purple-500" />
                           <span>رابط حساب جيتهاب (GitHub URL):</span>
                         </label>
                         <input
@@ -3299,13 +3358,13 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
                           value={githubUrl}
                           onChange={(e) => setGithubUrl(e.target.value)}
                           placeholder="https://github.com/your-username"
-                          className="w-full rounded-xl bg-slate-900 border border-slate-800 px-4 py-2 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-transparent font-mono text-left"
+                          className="w-full rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 px-4 py-2 text-xs text-slate-900 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-transparent font-mono text-left shadow-xs"
                           dir="ltr"
                         />
                       </div>
 
                       <div>
-                        <label className="text-[11px] text-slate-300 font-bold flex items-center gap-1.5 mb-1">
+                        <label className="text-[11px] text-slate-700 dark:text-slate-300 font-bold flex items-center gap-1.5 mb-1">
                           <Youtube className="w-3.5 h-3.5 text-red-500" />
                           <span>رابط قناة يوتيوب (YouTube URL):</span>
                         </label>
@@ -3314,7 +3373,7 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
                           value={youtubeUrl}
                           onChange={(e) => setYoutubeUrl(e.target.value)}
                           placeholder="https://youtube.com/@your-channel"
-                          className="w-full rounded-xl bg-slate-900 border border-slate-800 px-4 py-2 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-transparent font-mono text-left"
+                          className="w-full rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 px-4 py-2 text-xs text-slate-900 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-transparent font-mono text-left shadow-xs"
                           dir="ltr"
                         />
                       </div>
@@ -3326,7 +3385,7 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
                     <button
                       type="submit"
                       disabled={saveProfileLoading}
-                      className="px-6 py-2.5 rounded-2xl bg-amber-500 hover:bg-amber-400 disabled:bg-slate-850 text-slate-950 font-black text-xs sm:text-sm flex items-center gap-1.5 transition-all shadow-md"
+                      className="px-6 py-2.5 rounded-2xl bg-amber-500 hover:bg-amber-400 disabled:bg-slate-300 dark:disabled:bg-slate-850 text-slate-950 font-black text-xs sm:text-sm flex items-center gap-1.5 transition-all shadow-md"
                     >
                       {saveProfileLoading ? (
                         <>
@@ -3369,29 +3428,29 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
       {/* POPUP MODAL FOR DIRECT MESSAGES FROM CENTER / TRAINER */}
       {activeMessageModal && (
         <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 animate-fadeIn">
-          <div className="bg-slate-900 border-2 border-amber-500/50 rounded-3xl p-6 max-w-lg w-full space-y-5 shadow-2xl relative">
+          <div className="bg-white/95 dark:bg-slate-900 border-2 border-amber-500/50 rounded-3xl p-6 max-w-lg w-full space-y-5 shadow-2xl relative backdrop-blur-xl">
             <button
               type="button"
               onClick={() => setActiveMessageModal(null)}
-              className="absolute left-4 top-4 w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-slate-100 flex items-center justify-center transition-colors"
+              className="absolute left-4 top-4 w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 flex items-center justify-center transition-colors"
             >
               <X className="w-4 h-4" />
             </button>
 
-            <div className="flex items-center gap-3 border-b border-slate-800 pb-3">
-              <div className="w-12 h-12 rounded-2xl bg-amber-500/20 border border-amber-500/40 text-amber-400 flex items-center justify-center text-xl shrink-0">
+            <div className="flex items-center gap-3 border-b border-slate-200 dark:border-slate-800 pb-3">
+              <div className="w-12 h-12 rounded-2xl bg-amber-500/20 border border-amber-500/40 text-amber-500 dark:text-amber-400 flex items-center justify-center text-xl shrink-0">
                 💬
               </div>
               <div>
-                <span className="bg-amber-500/20 text-amber-300 text-[10px] font-bold px-2 py-0.5 rounded-full border border-amber-500/30">
+                <span className="bg-amber-500/20 text-amber-700 dark:text-amber-300 text-[10px] font-bold px-2 py-0.5 rounded-full border border-amber-500/30">
                   رسالة جديدة من إدارة المركز
                 </span>
-                <h3 className="text-base font-black text-slate-100">{activeMessageModal.title || 'تنبيه هـام'}</h3>
-                <p className="text-[11px] text-slate-400">{activeMessageModal.senderName || 'مركز النجاح للتدريب'}</p>
+                <h3 className="text-base font-black text-slate-900 dark:text-slate-100">{activeMessageModal.title || 'تنبيه هـام'}</h3>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">{activeMessageModal.senderName || 'مركز النجاح للتدريب'}</p>
               </div>
             </div>
 
-            <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 text-slate-200 text-xs md:text-sm leading-relaxed whitespace-pre-wrap">
+            <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-200 text-xs md:text-sm leading-relaxed whitespace-pre-wrap">
               {activeMessageModal.message}
             </div>
 
@@ -3409,7 +3468,7 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
               <button
                 type="button"
                 onClick={() => setActiveMessageModal(null)}
-                className="px-5 py-2.5 rounded-2xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs transition-colors"
+                className="px-5 py-2.5 rounded-2xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold text-xs transition-colors"
               >
                 تمت القراءة
               </button>
@@ -3486,7 +3545,7 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
       />
 
       {/* Footer */}
-      <footer className="bg-slate-900 border-t border-slate-800 p-4 text-center text-xs text-slate-500">
+      <footer className="bg-white/80 dark:bg-slate-900 border-t border-slate-200/90 dark:border-slate-800 p-4 text-center text-xs text-slate-500 backdrop-blur-md">
         مركز النجاح للتدريب والاستشارات - نظام المتابعة وتصحيح الواجبات الذكي بالذكاء الاصطناعي © {new Date().getFullYear()}
       </footer>
 

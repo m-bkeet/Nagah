@@ -99,8 +99,8 @@ export const MobileAppNavigation: React.FC<MobileAppNavigationProps> = ({
                 onClick={() => handleTabClick(tab.id)}
                 className={`relative flex items-center justify-center p-2.5 min-w-[48px] rounded-xl transition-all duration-150 active:scale-90 ${
                   isActive
-                    ? 'text-amber-400 bg-amber-500/15 font-bold shadow-sm'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+                    ? 'text-purple-600 dark:text-purple-300 bg-purple-600/15 dark:bg-purple-500/20 font-bold shadow-sm'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-purple-600 dark:hover:text-slate-200 hover:bg-purple-50 dark:hover:bg-slate-800/50'
                 }`}
                 title={tab.label}
               >
@@ -108,7 +108,7 @@ export const MobileAppNavigation: React.FC<MobileAppNavigationProps> = ({
                 
                 {/* Active Indicator Underline Bar */}
                 {isActive && (
-                  <span className="absolute bottom-0 inset-x-2 h-0.5 bg-amber-400 rounded-full" />
+                  <span className="absolute bottom-0 inset-x-2 h-0.5 bg-purple-600 dark:bg-purple-400 rounded-full" />
                 )}
 
                 {/* Optional notification badge / dot */}
@@ -139,7 +139,7 @@ export const MobileAppNavigation: React.FC<MobileAppNavigationProps> = ({
                 isActive ? 'text-amber-400 font-bold' : 'text-slate-400 hover:text-slate-200'
               }`}
             >
-              <div className={`relative p-1.5 rounded-2xl transition-all ${isActive ? 'bg-amber-500/15' : ''}`}>
+              <div className={`relative p-1.5 rounded-2xl transition-all ${isActive ? 'bg-amber-500/15 text-amber-400' : ''}`}>
                 <Icon className={`w-5 h-5 ${isActive ? 'stroke-[2.5]' : 'stroke-2'}`} />
                 
                 {tab.badge && (

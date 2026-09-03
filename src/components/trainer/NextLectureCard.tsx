@@ -46,91 +46,97 @@ export const NextLectureCard: React.FC<NextLectureCardProps> = ({
       return;
     }
 
-    const daysMap: Record<string, number> = {
-      'الأحد': 0, 'الاحد': 0,
-      'الإثنين': 1, 'الاثنين': 1,
-      'الثلاثاء': 2,
-      'الأربعاء': 3, 'الاربعاء': 3,
-      'الخميس': 4,
-      'الجمعة': 5, 'الجمعه': 5,
-      'السبت': 6
-    };
+    const updateCountdown = () => {
+      const daysMap: Record<string, number> = {
+        'الأحد': 0, 'الاحد': 0,
+        'الإثنين': 1, 'الاثنين': 1,
+        'الثلاثاء': 2,
+        'الأربعاء': 3, 'الاربعاء': 3,
+        'الخميس': 4,
+        'الجمعة': 5, 'الجمعه': 5,
+        'السبت': 6
+      };
 
-    const now = new Date();
-    const currentDay = now.getDay();
-    const currentHour = now.getHours();
-    const currentMinute = now.getMinutes();
-    const currentTimeVal = currentHour * 60 + currentMinute;
+      const now = new Date();
+      const currentDay = now.getDay();
+      const currentHour = now.getHours();
+      const currentMinute = now.getMinutes();
+      const currentTimeVal = currentHour * 60 + currentMinute;
 
-    let closestGroup: Group | null = null;
-    let minDiffMinutes = Infinity;
-    let happening = false;
+      let closestGroup: Group | null = null;
+      let minDiffMinutes = Infinity;
+      let happening = false;
 
-    groups.forEach(g => {
-      const gDays = Array.isArray(g.days) ? g.days : (Array.isArray(g.scheduleDays) ? g.scheduleDays : ['السبت']);
-      let startH = 16;
-      let startM = 0;
+      groups.forEach(g => {
+        const gDays = Array.isArray(g.days) ? g.days : (Array.isArray(g.scheduleDays) ? g.scheduleDays : ['السبت']);
+        let startH = 16;
+        let startM = 0;
 
-      if (g.startTime) {
-        const [h, m] = g.startTime.split(':').map(Number);
-        startH = h || 16;
-        startM = m || 0;
-      } else if (g.timeSlot) {
-        const match = g.timeSlot.match(/(\d+):?(\d*)/);
-        if (match) {
-          startH = Number(match[1]) || 16;
-          if (g.timeSlot.includes('م') && startH < 12) startH += 12;
-        }
-      }
-
-      const slotStartMinutes = startH * 60 + startM;
-      const slotEndMinutes = slotStartMinutes + 120;
-
-      gDays.forEach(dayName => {
-        const targetDay = daysMap[dayName.trim()];
-        if (targetDay !== undefined) {
-          let dayDiff = (targetDay - currentDay + 7) % 7;
-          let diffMinutes = dayDiff * 24 * 60 + (slotStartMinutes - currentTimeVal);
-
-          if (dayDiff === 0 && currentTimeVal >= slotStartMinutes && currentTimeVal <= slotEndMinutes) {
-            happening = true;
-            closestGroup = g;
-            minDiffMinutes = 0;
-          } else {
-            if (diffMinutes < 0) {
-              diffMinutes += 7 * 24 * 60;
-            }
-            if (diffMinutes < minDiffMinutes) {
-              minDiffMinutes = diffMinutes;
-              closestGroup = g;
-            }
+        if (g.startTime) {
+          const [h, m] = g.startTime.split(':').map(Number);
+          startH = h || 16;
+          startM = m || 0;
+        } else if (g.timeSlot) {
+          const match = g.timeSlot.match(/(\d+):?(\d*)/);
+          if (match) {
+            startH = Number(match[1]) || 16;
+            if (g.timeSlot.includes('م') && startH < 12) startH += 12;
           }
         }
+
+        const slotStartMinutes = startH * 60 + startM;
+        const slotEndMinutes = slotStartMinutes + 120;
+
+        gDays.forEach(dayName => {
+          const targetDay = daysMap[dayName.trim()];
+          if (targetDay !== undefined) {
+            let dayDiff = (targetDay - currentDay + 7) % 7;
+            let diffMinutes = dayDiff * 24 * 60 + (slotStartMinutes - currentTimeVal);
+
+            if (dayDiff === 0 && currentTimeVal >= slotStartMinutes && currentTimeVal <= slotEndMinutes) {
+              happening = true;
+              closestGroup = g;
+              minDiffMinutes = 0;
+            } else {
+              if (diffMinutes < 0) {
+                diffMinutes += 7 * 24 * 60;
+              }
+              if (diffMinutes < minDiffMinutes) {
+                minDiffMinutes = diffMinutes;
+                closestGroup = g;
+              }
+            }
+          }
+        });
       });
-    });
 
-    const activeSelectedGroup = closestGroup || groups[0];
-    setNextGroup(activeSelectedGroup);
-    setIsHappeningNow(happening);
+      const activeSelectedGroup = closestGroup || groups[0];
+      setNextGroup(activeSelectedGroup);
+      setIsHappeningNow(happening);
 
-    if (happening) {
-      setCountdownStr('المحاضرة جارية الآن بالمعمل!');
-    } else if (minDiffMinutes < Infinity) {
-      const hours = Math.floor(minDiffMinutes / 60);
-      const days = Math.floor(hours / 24);
-      const remHours = hours % 24;
-      const mins = minDiffMinutes % 60;
+      if (happening) {
+        setCountdownStr('المحاضرة جارية الآن بالمعمل!');
+      } else if (minDiffMinutes < Infinity) {
+        const hours = Math.floor(minDiffMinutes / 60);
+        const days = Math.floor(hours / 24);
+        const remHours = hours % 24;
+        const mins = minDiffMinutes % 60;
 
-      if (days > 0) {
-        setCountdownStr(`متبقي ${days} يوم و ${remHours} ساعة`);
-      } else if (hours > 0) {
-        setCountdownStr(`متبقي ${hours} ساعة و ${mins} دقيقة`);
+        if (days > 0) {
+          setCountdownStr(`متبقي ${days} يوم و ${remHours} ساعة`);
+        } else if (hours > 0) {
+          setCountdownStr(`متبقي ${hours} ساعة و ${mins} دقيقة`);
+        } else {
+          setCountdownStr(`متبقي ${mins} دقيقة`);
+        }
       } else {
-        setCountdownStr(`متبقي ${mins} دقيقة`);
+        setCountdownStr('وفقاً للجدول الأسبوعي');
       }
-    } else {
-      setCountdownStr('وفقاً للجدول الأسبوعي');
-    }
+    };
+
+    updateCountdown();
+    const timer = setInterval(updateCountdown, 1000);
+    return () => clearInterval(timer);
   }, [groups]);
 
   // Load group top student for star winner announcement

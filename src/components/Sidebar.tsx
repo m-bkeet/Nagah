@@ -126,7 +126,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       )}
 
       <aside
-        className={`bg-slate-900/95 backdrop-blur-md border-l border-slate-800 transition-all duration-300 flex flex-col justify-between select-none no-print sidebar-container fixed top-0 bottom-0 right-0 h-screen max-h-screen overflow-hidden z-50 shrink-0 ${
+        className={`bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-l border-slate-200/90 dark:border-slate-800 transition-all duration-300 flex flex-col justify-between select-none no-print sidebar-container fixed top-0 bottom-0 right-0 h-screen max-h-screen overflow-hidden z-50 shrink-0 ${
           isCollapsed 
             ? 'w-12 xl:w-14 translate-x-full md:translate-x-0 shadow-lg' 
             : 'w-60 xl:w-64 translate-x-0 shadow-2xl'
@@ -136,20 +136,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
       <div className="flex-1 py-2 px-1.5 overflow-y-auto custom-scrollbar space-y-1">
         <div className="flex items-center justify-between px-2 mb-1.5">
           {!isCollapsed && (
-            <span className="text-[10px] font-bold tracking-wider text-slate-400 uppercase">
+            <span className="text-[10px] font-bold tracking-wider text-slate-500 dark:text-slate-400 uppercase">
               القائمة الرئيسية
             </span>
           )}
           <button
             onClick={handleToggle}
-            className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors mr-auto"
+            className="p-1 rounded-lg text-slate-500 dark:text-slate-400 hover:text-purple-700 dark:hover:text-white hover:bg-purple-50 dark:hover:bg-slate-800 transition-colors mr-auto"
             title={isCollapsed ? 'توسيع القائمة' : 'تصغير القائمة'}
           >
             {isCollapsed ? <Menu className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
           </button>
         </div>
 
-        <nav className="space-y-0.5">
+        <nav className="space-y-1">
           {visibleItems.map((item) => {
             const Icon = item.icon;
             const isActive = current === item.id || (item.id === 'audit' && current === 'audit_logs');
@@ -159,23 +159,23 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 key={item.id}
                 id={isMobile ? `nav-btn-mobile-${item.id}` : `nav-btn-${item.id}`}
                 onClick={() => handleNav(item.id)}
-                className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl font-semibold text-xs transition-all text-right group cursor-pointer ${
+                className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl font-bold text-xs transition-all text-right group cursor-pointer ${
                   isActive
-                    ? 'bg-gradient-to-r from-amber-500/20 to-amber-600/10 text-amber-300 border border-amber-500/40 shadow-sm font-bold'
-                    : 'text-slate-300 hover:text-white hover:bg-slate-800/80 border border-transparent'
+                    ? 'bg-gradient-to-r from-purple-600 via-purple-700 to-indigo-700 text-white shadow-lg shadow-purple-600/30 border border-purple-400 font-black dark:bg-gradient-to-r dark:from-purple-600/40 dark:to-indigo-600/30 dark:text-purple-200 dark:border-purple-400/60'
+                    : 'text-slate-800 hover:text-purple-700 hover:bg-purple-50 dark:text-slate-300 dark:hover:text-white dark:hover:bg-slate-800/80 border border-transparent font-bold'
                 }`}
                 title={isCollapsed ? item.label : undefined}
               >
                 <Icon
                   className={`w-4 h-4 shrink-0 transition-colors ${
-                    isActive ? 'text-amber-400' : 'text-slate-400 group-hover:text-amber-300'
+                    isActive ? 'text-white dark:text-purple-200 stroke-[2.5]' : 'text-slate-600 group-hover:text-purple-600 dark:text-slate-400 dark:group-hover:text-purple-300 stroke-2'
                   }`}
                 />
                 {!isCollapsed && (
-                  <span className="truncate leading-none">{item.label}</span>
+                  <span className="truncate leading-none tracking-wide text-current">{item.label}</span>
                 )}
                 {!isCollapsed && isActive && (
-                  <div className="mr-auto w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+                  <div className="mr-auto w-1.5 h-1.5 rounded-full bg-white dark:bg-purple-300 animate-pulse" />
                 )}
               </button>
             );
@@ -183,12 +183,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </nav>
       </div>
 
-
-
       {!isCollapsed && (
-        <div className="p-1.5 m-2 mt-0 rounded-xl bg-slate-950/60 border border-slate-800 text-center shrink-0">
-          <p className="text-[10px] font-bold text-amber-300">النجاح للتدريب والاستشارات</p>
-          <p className="text-[9px] text-slate-400">Nagah M-S</p>
+        <div className="p-2 m-2 mt-0 rounded-xl bg-gradient-to-r from-amber-500/10 via-amber-500/15 to-amber-600/10 dark:bg-slate-950/60 border border-amber-400/50 dark:border-slate-800 text-center shrink-0 shadow-sm">
+          <p className="text-[11px] font-black text-amber-950 dark:text-amber-300">النجاح للتدريب والاستشارات</p>
+          <p className="text-[9px] font-bold text-amber-800/80 dark:text-slate-400">Nagah M-S</p>
         </div>
       )}
     </aside>

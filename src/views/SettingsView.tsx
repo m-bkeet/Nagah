@@ -1041,7 +1041,7 @@ export const SettingsView: React.FC = () => {
                       />
                     </div>
 
-                    <div>
+                     <div>
                       <label className="block text-amber-600 dark:text-amber-400 font-bold mb-1 flex items-center gap-1">
                         <Lock className="w-3.5 h-3.5" />
                         <span>الرقم السري لدخول الإدارة والمدربين 🔐</span>
@@ -1057,6 +1057,31 @@ export const SettingsView: React.FC = () => {
                         }}
                         className="w-full bg-slate-50 dark:bg-slate-800 border border-amber-300 dark:border-amber-500/40 rounded-xl px-3 py-2 text-amber-800 dark:text-amber-300 font-mono font-bold focus:border-amber-500 focus:outline-none"
                       />
+                    </div>
+
+                    <div className="col-span-1 md:col-span-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 rounded-2xl flex items-center justify-between gap-4">
+                      <div>
+                        <label className="block text-slate-800 dark:text-slate-100 font-bold mb-1 flex items-center gap-2">
+                          <span>🌐 السماح بالتسجيل الإلكتروني الخارجي للطلاب</span>
+                          <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
+                            settings.allowOnlineRegistration !== false ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400' : 'bg-rose-500/20 text-rose-600 dark:text-rose-400'
+                          }`}>
+                            {settings.allowOnlineRegistration !== false ? 'مفتوح 🟢' : 'مغلق (اكتمل العدد) 🔴'}
+                          </span>
+                        </label>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">
+                          عند التفعيل، يستقبل رابط التسجيل الخارجي الطلاب الجدد تلقائياً. عند التعطيل (إغلاق التسجيل)، يتم رفض التسجيلات الجديدة وتوجيههم لرسالة اعتذار وتواصل واتساب الإدارة.
+                        </p>
+                      </div>
+                      <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                        <input
+                          type="checkbox"
+                          checked={settings.allowOnlineRegistration !== false}
+                          onChange={(e) => setSettings({ ...settings, allowOnlineRegistration: e.target.checked })}
+                          className="sr-only peer"
+                        />
+                        <div className="w-11 h-6 bg-slate-300 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:right-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-slate-600 peer-checked:bg-emerald-600"></div>
+                      </label>
                     </div>
 
                     <div>
