@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
+import os from 'os';
 import JSZip from 'jszip';
 import * as XLSX from 'xlsx';
 import { adminDb } from './firebaseAdmin';
@@ -13,13 +14,26 @@ import {
 } from './data/index.ts';
 import { exportAllFirestoreData, executeDatabaseImport, previewDatabaseImport } from './data/phase2b.ts';
 
-const MIGRATION_DIR = path.join(process.cwd(), 'migration-package');
-const BACKUPS_DIR = path.join(process.cwd(), 'data', 'backups');
+const isServerless = Boolean(
+  process.env.VERCEL ||
+  process.env.AWS_LAMBDA_FUNCTION_NAME ||
+  process.env.VERCEL_ENV ||
+  process.cwd().startsWith('/var/task') ||
+  process.cwd() === '/'
+);
+
+const DATA_BASE_DIR = isServerless ? path.join(os.tmpdir(), 'nagah_data') : path.join(process.cwd(), 'data');
+const MIGRATION_DIR = isServerless ? path.join(os.tmpdir(), 'nagah_migration') : path.join(process.cwd(), 'migration-package');
+const BACKUPS_DIR = path.join(DATA_BASE_DIR, 'backups');
 const HISTORY_FILE = path.join(BACKUPS_DIR, 'backup_history.json');
 
 function ensureDirectory(dir: string) {
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
+  try {
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+  } catch (err) {
+    console.warn(`[MigrationService] Notice: Could not create directory ${dir}:`, err);
   }
 }
 
@@ -1399,7 +1413,7 @@ export class MigrationService {
   }
 
   private static getLegacySourceFilesData() {
-    const pkgDir = path.join(process.cwd(), 'migration-package');
+    const pkgDir = MIGRATION_DIR;
     let students: any[] = [];
     let courses: any[] = [];
     let groups: any[] = [];

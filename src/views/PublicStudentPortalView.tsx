@@ -309,6 +309,30 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
     }
   }, [isChatOpen, portalMessages]);
 
+  // Live polling for student messages every 4 seconds when student is logged in
+  useEffect(() => {
+    if (!student?.id && !student?.code) return;
+
+    const pollMessages = async () => {
+      try {
+        const queryId = student.id || student.code;
+        const res = await fetch(`/api/student/messages/${queryId}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success && Array.isArray(data.messages)) {
+            setPortalMessages(data.messages);
+          }
+        }
+      } catch (e) {
+        // silent fail
+      }
+    };
+
+    pollMessages();
+    const interval = setInterval(pollMessages, 4000);
+    return () => clearInterval(interval);
+  }, [student?.id, student?.code]);
+
   // Offline-First & Resilient State Hooks
   const [isOnline, setIsOnline] = useState<boolean>(typeof navigator !== 'undefined' ? navigator.onLine : true);
   const [queueCount, setQueueCount] = useState<number>(0);
@@ -2012,6 +2036,110 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
 
             {activeTab === 'language_lab' && (
               <StudentLanguageLabView student={student} />
+            )}
+
+            {/* AI TUTOR & HOMEWORK SCANNER / GRADER TAB */}
+            {activeTab === ('ai-tutor' as any) && (
+              <div className="space-y-6">
+                <AITutor studentName={student?.fullName || 'الطالب'} studentLevel={student?.courseName} />
+              </div>
+            )}
+
+            {/* HELP, INQUIRIES & MESSAGES TAB */}
+            {activeTab === ('help' as any) && (
+              <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 md:p-8 space-y-6 shadow-xl">
+                <div className="flex items-center justify-between pb-4 border-b border-slate-800">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-2xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-center text-rose-400">
+                      <HelpCircle className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <h3 className="text-base font-black text-slate-100">قسم الاستفسارات والرسائل والدعم الفني</h3>
+                      <p className="text-xs text-slate-400">إرسال واستلام الرسائل مع الإدارة والمعلم ومتابعة الردود الفورية</p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsChatOpen(true)}
+                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-2xl flex items-center gap-2 shadow-lg transition-all cursor-pointer"
+                  >
+                    <MessageSquare className="w-4 h-4" />
+                    <span>فتح الشات الفوري المباشر</span>
+                  </button>
+                </div>
+
+                {/* Send New Inquiry Form */}
+                <div className="bg-slate-950 border border-slate-800 rounded-2xl p-4 md:p-5 space-y-4">
+                  <h4 className="text-xs font-bold text-amber-400 flex items-center gap-2">
+                    <Sparkles className="w-4 h-4" />
+                    <span>إرسال استفسار جديد إلى المعلم أو إدارة المركز:</span>
+                  </h4>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      id="student-inquiry-input-field"
+                      placeholder="اكتب استفسارك أو سؤالك هنا..."
+                      className="flex-1 bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-slate-100 focus:outline-none focus:border-amber-500"
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          const val = e.currentTarget.value;
+                          if (val.trim()) {
+                            handleSendPortalMessage(val);
+                            e.currentTarget.value = '';
+                          }
+                        }
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const input = document.getElementById('student-inquiry-input-field') as HTMLInputElement;
+                        if (input && input.value.trim()) {
+                          handleSendPortalMessage(input.value.trim());
+                          input.value = '';
+                        }
+                      }}
+                      className="px-5 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs rounded-xl shadow transition-all shrink-0 cursor-pointer"
+                    >
+                      إرسال الاستفسار
+                    </button>
+                  </div>
+                </div>
+
+                {/* Previously Sent Messages & Inquiries List */}
+                <div className="space-y-3">
+                  <h4 className="text-xs font-bold text-slate-300">سجل الاستفسارات والرسائل السابقة ({portalMessages.length}):</h4>
+                  {portalMessages.length === 0 ? (
+                    <div className="p-8 text-center bg-slate-950/40 rounded-2xl border border-slate-800/80">
+                      <MessageSquare className="w-8 h-8 text-slate-600 mx-auto mb-2" />
+                      <p className="text-xs text-slate-400 font-bold">لا توجد رسائل سابقة حتى الآن.</p>
+                      <p className="text-[11px] text-slate-500">اكتب سؤالك في الحقل أعلاه وسيرد عليك المساعد الذكي والمعلم فوراً!</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3 max-h-96 overflow-y-auto pr-1">
+                      {portalMessages.map((msg, idx) => {
+                        const isStudent = msg.senderRole === 'student' || msg.senderName === student?.fullName;
+                        return (
+                          <div
+                            key={msg.id || idx}
+                            className={`p-4 rounded-2xl border transition-all space-y-2 ${
+                              isStudent 
+                                ? 'bg-slate-950/80 border-slate-800 text-slate-200 me-6' 
+                                : 'bg-indigo-950/30 border-indigo-500/30 text-indigo-100 ms-6'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between text-[11px]">
+                              <span className="font-bold text-amber-400">{msg.senderName || (isStudent ? student?.fullName : 'المعلم / المساعد الذكي')}</span>
+                              <span className="text-slate-500">{new Date(msg.createdAt).toLocaleString('ar-EG')}</span>
+                            </div>
+                            <p className="text-xs leading-relaxed">{msg.message}</p>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
             )}
 
             {/* TAB 0: STUDENT COMMUNITY TIMELINE & FEED (Facebook Style) */}

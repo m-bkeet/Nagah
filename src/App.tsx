@@ -120,41 +120,50 @@ const AppContent: React.FC = () => {
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
-  // Handle Standalone / Direct Public Portals (accessible without login)
-  if (activeTab === 'kiosk' || activeTab === 'lab' || activeTab === 'lab_kiosk' || activeTab === 'student_kiosk') {
-    return <StudentKioskView />;
-  }
+  // Helper to render public/standalone views without duplicated wrappers
+  const renderPublicView = () => {
+    switch (activeTab) {
+      case 'kiosk':
+      case 'lab':
+      case 'lab_kiosk':
+      case 'student_kiosk':
+        return <StudentKioskView />;
+      case 'projector':
+        return <ProjectorView onExit={() => setActiveTab('dashboard')} />;
+      case 'public_home':
+      case 'public-home':
+      case 'public_landing':
+        return <PublicHomeView onNavigate={(view) => setActiveTab(view)} />;
+      case 'login':
+        return <LoginView />;
+      case 'register':
+        return <PublicRegistrationView onBack={() => setActiveTab('public_home')} />;
+      case 'register-trainer':
+        return <PublicTrainerRegistrationView onBack={() => setActiveTab('public_home')} />;
+      case 'student-portal':
+      case 'student_portal':
+        return <PublicStudentPortalView onBack={() => setActiveTab('public_home')} />;
+      case 'parent-portal':
+      case 'parent_portal':
+        return <PublicParentPortalView onBack={() => setActiveTab('public_home')} />;
+      case 'trainer-portal':
+      case 'trainer_portal':
+        return <PublicTrainerPortalView onBack={() => setActiveTab('public_home')} />;
+      default:
+        return null;
+    }
+  };
 
-  if (activeTab === 'projector') {
-    return <ProjectorView onExit={() => setActiveTab('dashboard')} />;
-  }
-
-  if (activeTab === 'public_home' || activeTab === 'public-home' || activeTab === 'public_landing') {
-    return <PublicHomeView onNavigate={(view) => setActiveTab(view)} />;
-  }
-
-  if (activeTab === 'login') {
-    return <LoginView />;
-  }
-
-  if (activeTab === 'register') {
-    return <PublicRegistrationView onBack={() => setActiveTab('public_home')} />;
-  }
-
-  if (activeTab === 'register-trainer') {
-    return <PublicTrainerRegistrationView onBack={() => setActiveTab('public_home')} />;
-  }
-
-  if (activeTab === 'student-portal' || activeTab === 'student_portal') {
-    return <PublicStudentPortalView onBack={() => setActiveTab('public_home')} />;
-  }
-
-  if (activeTab === 'parent-portal' || activeTab === 'parent_portal') {
-    return <PublicParentPortalView onBack={() => setActiveTab('public_home')} />;
-  }
-
-  if (activeTab === 'trainer-portal' || activeTab === 'trainer_portal') {
-    return <PublicTrainerPortalView onBack={() => setActiveTab('public_home')} />;
+  const standaloneView = renderPublicView();
+  if (standaloneView) {
+    return (
+      <>
+        {standaloneView}
+        <FloatingTeachingToolsOverlay />
+        <ToastContainer />
+        <PwaUpdateToast />
+      </>
+    );
   }
 
   // Authentication check

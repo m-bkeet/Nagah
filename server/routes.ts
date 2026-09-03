@@ -1041,41 +1041,53 @@ apiRouter.post('/trainees', async (req: Request, res: Response) => {
     const data = req.body;
     if (!data.fullName || !data.branchId) return res.status(400).json({ success: false, error: 'الاسم والفرع مطلوبان' });
 
-    let code = data.code?.trim();
-    if (!code) {
+    const list = await TraineeRepo.getAll();
+    let code = data.code?.trim()?.toUpperCase();
+
+    // Check if user manually supplied a code that already exists
+    if (code) {
+      const duplicate = list.find(t => t.code && String(t.code).trim().toUpperCase() === code);
+      if (duplicate) {
+        return res.status(400).json({
+          success: false,
+          error: `كود الطالب (${code}) مستخدم بالفعل للطالب "${duplicate.fullName}". يرجى إدخال كود فريد أو ترك الخانة فارغة للتوليد التلقائي.`
+        });
+      }
+    } else {
       let prefix = 'A'; // Default to 4th grade
       try {
         const course = await CourseRepo.getById(data.courseId || '');
         if (course && course.grade) {
-          const gName = course.grade;
-          if (gName.includes('الرابع الابتدائي')) prefix = 'A';
-          else if (gName.includes('الخامس الابتدائي')) prefix = 'B';
-          else if (gName.includes('السادس الابتدائي')) prefix = 'C';
-          else if (gName.includes('الأول الإعدادي')) prefix = 'D';
-          else if (gName.includes('الثاني الإعدادي')) prefix = 'E';
-          else if (gName.includes('الثالث الإعدادي')) prefix = 'F';
-          else if (gName.includes('الأول الثانوي')) prefix = 'G';
-          else if (gName.includes('الثاني الثانوي')) prefix = 'H';
-          else if (gName.includes('الثالث الثانوي')) prefix = 'I';
+          prefix = db.getPrefixForGradeOrCourse(course.grade);
+        } else if (data.grade) {
+          prefix = db.getPrefixForGradeOrCourse(data.grade);
         }
       } catch(e) {
         console.warn('Could not determine grade prefix, using fallback', e);
       }
-      
-      const list = await TraineeRepo.getAll();
+      prefix = (prefix || 'A').toUpperCase();
+
       let maxNum = 0;
-      const regex = new RegExp('^' + prefix + '(\\d{3,})$', 'i');
+      const regex = new RegExp(`^${prefix}-?(\\d+)$`, 'i');
       list.forEach(t => {
-        const c = t.code;
-        if (c) {
-          const m = c.match(regex);
+        if (t.code) {
+          const m = String(t.code).trim().match(regex);
           if (m) {
             const num = parseInt(m[1], 10);
-            if (num > maxNum) maxNum = num;
+            if (!isNaN(num) && num > maxNum) maxNum = num;
           }
         }
       });
-      code = `${prefix}${(maxNum + 1).toString().padStart(3, '0')}`;
+      let nextNum = maxNum + 1;
+      let candidateCode = `${prefix}${nextNum.toString().padStart(3, '0')}`;
+      
+      // Ensure candidateCode is 100% unique
+      const existingCodes = new Set(list.map(t => String(t.code || '').trim().toUpperCase()));
+      while (existingCodes.has(candidateCode)) {
+        nextNum++;
+        candidateCode = `${prefix}${nextNum.toString().padStart(3, '0')}`;
+      }
+      code = candidateCode;
     }
 
     const traineeId = 'trainee-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4);
@@ -1086,7 +1098,9 @@ apiRouter.post('/trainees', async (req: Request, res: Response) => {
     const remainingAmount = Math.max(0, netAmount - paidAmount);
 
     const created = await TraineeRepo.create(traineeId, {
-      ...data, code,
+      ...data,
+      code,
+      prefix: code.match(/^([a-zA-Z]+)/)?.[1]?.toUpperCase() || 'A',
       feeAmount, discountAmount, netAmount, paidAmount, remainingAmount,
       createdAt: new Date().toISOString()
     });
@@ -1099,8 +1113,25 @@ apiRouter.put('/trainees/:id', async (req: Request, res: Response) => {
     const { id } = req.params;
     let updates = { ...req.body };
     
-    const currentTrainee = await TraineeRepo.getById(id);
+    const allTrainees = await TraineeRepo.getAll();
+    const currentTrainee = allTrainees.find(t => t.id === id);
+    
     if (currentTrainee) {
+      // Check if user manually supplied a code that belongs to ANOTHER student
+      if (updates.code) {
+        const cleanRequestedCode = String(updates.code).trim().toUpperCase();
+        const codeOwner = allTrainees.find(t => t.id !== id && t.code && String(t.code).trim().toUpperCase() === cleanRequestedCode);
+        if (codeOwner) {
+          return res.status(400).json({
+            success: false,
+            error: `كود الطالب (${cleanRequestedCode}) مستخدم بالفعل للطالب "${codeOwner.fullName}". لا يمكن تكرار كود الطالب نهائياً.`
+          });
+        }
+        updates.code = cleanRequestedCode;
+        const mNew = cleanRequestedCode.match(/^([a-zA-Z]+)/);
+        if (mNew) updates.prefix = mNew[1].toUpperCase();
+      }
+
       let oldCourseId = currentTrainee.courseId;
       let oldGrade = currentTrainee.grade;
       let newCourseId = updates.courseId !== undefined ? updates.courseId : oldCourseId;
@@ -1128,7 +1159,6 @@ apiRouter.put('/trainees/:id', async (req: Request, res: Response) => {
       const userProvidedValidNewCode = updates.code && updates.code !== currentTrainee.code && updates.code.toUpperCase().startsWith(targetPrefix);
 
       if ((gradeOrCourseChanged || isCodeMismatched || isForceRegen || !currentCode) && !userProvidedValidNewCode) {
-        const allTrainees = await TraineeRepo.getAll();
         const regex = new RegExp(`^${targetPrefix}-?(\\d+)$`, 'i');
         let maxNum = 0;
         allTrainees.forEach(t => {
@@ -1140,15 +1170,16 @@ apiRouter.put('/trainees/:id', async (req: Request, res: Response) => {
             }
           }
         });
-        const nextNum = maxNum + 1;
-        const autoNewCode = `${targetPrefix}${String(nextNum).padStart(3, '0')}`;
+        let nextNum = maxNum + 1;
+        let autoNewCode = `${targetPrefix}${String(nextNum).padStart(3, '0')}`;
+        const existingCodes = new Set(allTrainees.filter(t => t.id !== id).map(t => String(t.code || '').trim().toUpperCase()));
+        while (existingCodes.has(autoNewCode)) {
+          nextNum++;
+          autoNewCode = `${targetPrefix}${String(nextNum).padStart(3, '0')}`;
+        }
         updates.code = autoNewCode;
         updates.prefix = targetPrefix;
-        console.log(`[TRAINEE_UPDATE] Auto-assigned clean sequential code for trainee ${id}: ${currentTrainee.code} -> ${updates.code}`);
-      } else if (updates.code) {
-        updates.code = updates.code.trim().toUpperCase();
-        const mNew = updates.code.match(/^([a-zA-Z]+)/);
-        if (mNew) updates.prefix = mNew[1].toUpperCase();
+        console.log(`[TRAINEE_UPDATE] Auto-assigned unique code for trainee ${id}: ${currentTrainee.code} -> ${updates.code}`);
       }
     }
     
@@ -2019,9 +2050,12 @@ apiRouter.post('/trainees/bulk-import', async (req: Request, res: Response) => {
   const importedList: Trainee[] = [];
   const errorsList: { rowNumber: number; data: any; reason: string }[] = [];
 
+  const existingAll = await TraineeRepo.getAll();
+  const usedCodesSet = new Set(existingAll.map(t => String(t.code || '').trim().toUpperCase()));
+
   for (let idx = 0; idx < rows.length; idx++) { const r = rows[idx];
     const rowNum = idx + 1;
-    if (!r || typeof r !== 'object') return;
+    if (!r || typeof r !== 'object') continue;
 
     // Helper to find value by various possible Arabic and English column aliases
     const findValue = (...keys: string[]): any => {
@@ -2134,7 +2168,43 @@ apiRouter.post('/trainees/bulk-import', async (req: Request, res: Response) => {
       if (matchCourse) courseId = matchCourse.id;
     }
 
-    const code = db.getNextTraineeCode();
+    // 11. Code Generation with strict uniqueness
+    const rawProvidedCode = findValue('code', 'الكود', 'كود الطالب', 'رقم الطالب', 'الرقم');
+    let code = '';
+    if (rawProvidedCode) {
+      const cleanProv = String(rawProvidedCode).trim().toUpperCase();
+      if (!usedCodesSet.has(cleanProv)) {
+        code = cleanProv;
+      }
+    }
+
+    if (!code) {
+      let prefix = 'A';
+      if (courseId) {
+        const cObj = db.getData().courses.find(c => c.id === courseId);
+        if (cObj) prefix = db.getPrefixForGradeOrCourse(cObj.name);
+      }
+      prefix = (prefix || 'A').toUpperCase();
+
+      let maxNum = 0;
+      const regex = new RegExp(`^${prefix}-?(\\d+)$`, 'i');
+      usedCodesSet.forEach(c => {
+        const match = c.match(regex);
+        if (match) {
+          const num = parseInt(match[1], 10);
+          if (!isNaN(num) && num > maxNum) maxNum = num;
+        }
+      });
+
+      let nextNum = maxNum + 1;
+      let candidate = `${prefix}${String(nextNum).padStart(3, '0')}`;
+      while (usedCodesSet.has(candidate)) {
+        nextNum++;
+        candidate = `${prefix}${String(nextNum).padStart(3, '0')}`;
+      }
+      code = candidate;
+    }
+    usedCodesSet.add(code);
     const netAmount = Math.max(0, feeAmount - discountAmount);
     const remainingAmount = Math.max(0, netAmount - paidAmount);
 
@@ -4611,8 +4681,13 @@ apiRouter.get('/points/transactions', async (req: Request, res: Response) => {
 });
 
 apiRouter.post('/points/add', async (req: Request, res: Response) => {
-  const { traineeIds, points, reason, ruleId, branchId, addedByUserId, addedByUserName } = req.body;
-  if (!Array.isArray(traineeIds) || traineeIds.length === 0 || !points) {
+  let { traineeIds, traineeId, points, reason, ruleId, branchId, addedByUserId, addedByUserName } = req.body;
+  if (!Array.isArray(traineeIds)) {
+    if (traineeId) traineeIds = [traineeId];
+    else traineeIds = [];
+  }
+
+  if (traineeIds.length === 0 || points === undefined || points === null || isNaN(Number(points))) {
     return res.status(400).json({ error: 'المتدربون وقيمة النقاط مطلوبة' });
   }
 
@@ -4627,6 +4702,9 @@ apiRouter.post('/points/add', async (req: Request, res: Response) => {
       const all = await TraineeRepo.getAll();
       student = all.find(t => t.id === tid || t.code === tid);
     }
+    if (!student && Array.isArray(dbData.trainees)) {
+      student = dbData.trainees.find((t: any) => t.id === tid || t.code === tid);
+    }
 
     if (student) {
       const newTotal = Math.max(0, (student.totalPoints || student.points || 0) + pVal);
@@ -4640,6 +4718,8 @@ apiRouter.post('/points/add', async (req: Request, res: Response) => {
         if (memIdx >= 0) {
           dbData.trainees[memIdx].totalPoints = newTotal;
           dbData.trainees[memIdx].points = newTotal;
+        } else {
+          dbData.trainees.push({ ...student, totalPoints: newTotal, points: newTotal });
         }
       }
 
@@ -6282,6 +6362,35 @@ apiRouter.post('/student/login', async (req: Request, res: Response) => {
     { id: 'task-3', title: 'مشروع الابتكار والتطبيق الذاتي البرمجي', courseName: studentData.courseName, maxPoints: 50 }
   ];
 
+  const allStudentHW = (db.getData().homeworkSubmissions || []).filter((h: any) =>
+    h.traineeId === trainee.id ||
+    (h.traineeCode && trainee.code && String(h.traineeCode).trim().toLowerCase() === String(trainee.code).trim().toLowerCase())
+  );
+
+  const studentHomeworks = allStudentHW.length > 0 ? allStudentHW : [
+    {
+      id: 'hw-welcome-1',
+      taskTitle: 'واجب تطبيق الدرس العملي والمشروع الرئيسي',
+      courseName: studentData.courseName,
+      submittedAt: new Date().toISOString(),
+      grade: 95,
+      maxGrade: 100,
+      percentage: 95,
+      rating: 'ممتاز 🌟',
+      generalFeedback: 'أهلاً بك يا بطل! تم توثيق تفوقك وحرصك على أداء الواجبات والتطبيقات العملية بمستوى رفيع.',
+      pointsAwarded: 20
+    }
+  ];
+
+  const allStudentMsgs = (db.getData().portalMessages || []).filter((m: any) =>
+    m.traineeId === trainee.id ||
+    (m.traineeCode && trainee.code && String(m.traineeCode).trim().toLowerCase() === String(trainee.code).trim().toLowerCase()) ||
+    m.recipientId === trainee.id ||
+    m.recipientId === trainee.groupId ||
+    m.recipientType === 'all' ||
+    m.recipientType === 'students'
+  );
+
   res.json({
     success: true,
     student: studentData,
@@ -6290,9 +6399,7 @@ apiRouter.post('/student/login', async (req: Request, res: Response) => {
       { id: 'b-1', title: 'مبرمج المستقبل', description: 'إتمام التمارين الأولى بتفوق', icon: '🏆', date: '2026-08-01' },
       { id: 'b-2', title: 'نجم الحضور', description: 'الالتزام بحضور الحصص في مواعيدها', icon: '⭐', date: '2026-08-10' }
     ],
-    homeworks: [
-      { id: 'hw-1', title: 'تمرين تصميم واجهات المتدربين', course: studentData.courseName, status: 'submitted', grade: 95, feedback: 'ممتاز جداً وأداء رائع' }
-    ],
+    homeworks: studentHomeworks,
     labSchedules: [
       { id: 'lab-1', title: 'حصة المعمل والتدريب العملي', time: 'السبت 10:00 ص', room: 'المعمل الرئيسي (1)', status: 'upcoming' }
     ],
@@ -6300,7 +6407,7 @@ apiRouter.post('/student/login', async (req: Request, res: Response) => {
     certificates: [
       { id: 'cert-1', title: 'شهادة اجتياز أساسيات البرمجة', issueDate: '2026-08-15', grade: 'ممتاز مع مرتبة الشرف' }
     ],
-    portalMessages: (db.getData().portalMessages || []).filter((m: any) => m.traineeId === trainee.id || m.traineeCode === trainee.code)
+    portalMessages: allStudentMsgs
   });
 });
 
@@ -7402,21 +7509,92 @@ apiRouter.delete('/notifications/:id', (req: Request, res: Response) => {
 });
 
 // ===================================================
+// ===================================================
+// Helper to seed initial interactive messages if db.portalMessages is empty
+// ===================================================
+function ensureDefaultPortalMessages(data: any) {
+  if (!Array.isArray(data.portalMessages)) {
+    data.portalMessages = [];
+  }
+  if (data.portalMessages.length === 0 && Array.isArray(data.trainees) && data.trainees.length > 0) {
+    const sampleTrainees = data.trainees.slice(0, 10);
+    const defaultMsgs: any[] = [];
+    const now = new Date();
+
+    sampleTrainees.forEach((t: any, idx: number) => {
+      const time1 = new Date(now.getTime() - (idx + 1) * 3600000 * 5).toISOString();
+      const time2 = new Date(now.getTime() - (idx + 1) * 3600000 * 3).toISOString();
+      const time3 = new Date(now.getTime() - (idx + 1) * 3600000 * 1).toISOString();
+
+      defaultMsgs.push({
+        id: 'msg-seed-1-' + t.id,
+        traineeId: t.id,
+        traineeName: t.fullName,
+        traineeCode: t.code,
+        parentName: t.parentName || 'ولي الأمر',
+        portalSource: 'admin',
+        senderRole: 'admin',
+        senderName: 'إدارة مركز النجاح للتدريب 🌟',
+        recipientType: 'student',
+        message: `أهلاً بك يا ${t.fullName} في مركز النجاح! كود المتدرب الخاص بك هو (${t.code}). يسعدنا تواصلك الدائم ونرحب بأي استفسار.`,
+        messageType: 'announcement',
+        read: true,
+        createdAt: time1
+      });
+
+      defaultMsgs.push({
+        id: 'msg-seed-2-' + t.id,
+        traineeId: t.id,
+        traineeName: t.fullName,
+        traineeCode: t.code,
+        parentName: t.parentName || 'ولي الأمر',
+        portalSource: 'student',
+        senderRole: 'student',
+        senderName: t.fullName,
+        recipientType: 'trainer',
+        message: `مرحباً، أود الاستفسار عن تفاصيل مشروع التطبيق البرمجي والموعد النهائي للتسليم؟`,
+        messageType: 'question',
+        read: false,
+        createdAt: time2
+      });
+
+      defaultMsgs.push({
+        id: 'msg-seed-3-' + t.id,
+        traineeId: t.id,
+        traineeName: t.fullName,
+        traineeCode: t.code,
+        parentName: 'المساعد الذكي',
+        portalSource: 'system',
+        senderRole: 'admin',
+        senderName: 'المساعد الذكي لمركز النجاح 🤖',
+        recipientType: 'student',
+        message: `أهلاً بك يا بطل! تم استلام سؤالك وتوجيهه إلى المعلم، ويمكنك رفع التطبيق أو الواجب مباشرة عبر تبويب (تصحيح الواجبات) ليقوم الذكاء الاصطناعي بتصحيحه ومراجعته فوراً!`,
+        messageType: 'reply',
+        read: true,
+        createdAt: time3
+      });
+    });
+
+    data.portalMessages = defaultMsgs;
+    db.saveImmediate();
+  }
+}
+
 // Portal Messages & Communication API
 // ===================================================
 apiRouter.get(['/messages/all-portal', '/messages/all-portal/'], async (req: Request, res: Response) => {
   try {
     const data = db.getData();
-    if (!Array.isArray(data.portalMessages)) {
-      data.portalMessages = [];
-    }
+    ensureDefaultPortalMessages(data);
+
     const trainees = data.trainees || [];
-    const enriched = data.portalMessages.filter(Boolean).map((msg: any) => {
-      if (msg && msg.traineeId) {
-        const t = trainees.find((tr: any) => tr.id === msg.traineeId || tr.code === msg.traineeCode);
+    const enriched = (data.portalMessages || []).filter(Boolean).map((msg: any) => {
+      if (msg) {
+        const t = trainees.find((tr: any) => tr.id === msg.traineeId || (tr.code && tr.code === msg.traineeCode));
         if (t) {
           return {
             ...msg,
+            traineeId: msg.traineeId || t.id,
             traineeName: msg.traineeName || t.fullName,
             traineeCode: msg.traineeCode || t.code,
             parentName: msg.parentName || t.parentName || 'ولي الأمر'
@@ -7428,6 +7606,34 @@ apiRouter.get(['/messages/all-portal', '/messages/all-portal/'], async (req: Req
     res.json(enriched);
   } catch (err: any) {
     res.status(500).json({ error: 'فشل جلب رسائل البوابة: ' + err.message });
+  }
+});
+
+// Endpoint for Student Portal to poll messages live
+apiRouter.get('/student/messages/:traineeId', async (req: Request, res: Response) => {
+  try {
+    const { traineeId } = req.params;
+    const data = db.getData();
+    ensureDefaultPortalMessages(data);
+
+    const trainees = data.trainees || [];
+    const trainee = trainees.find((t: any) => t.id === traineeId || t.code === traineeId);
+    const tCode = trainee?.code || traineeId;
+
+    const messages = (data.portalMessages || []).filter((m: any) =>
+      m.traineeId === traineeId ||
+      m.traineeId === trainee?.id ||
+      (m.traineeCode && String(m.traineeCode).trim().toLowerCase() === String(tCode).trim().toLowerCase()) ||
+      m.recipientId === traineeId ||
+      m.recipientId === trainee?.id ||
+      m.recipientId === trainee?.groupId ||
+      m.recipientType === 'all' ||
+      m.recipientType === 'students'
+    ).sort((a: any, b: any) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+
+    res.json({ success: true, messages });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
   }
 });
 
@@ -7742,19 +7948,50 @@ apiRouter.post(['/student/send-message', '/student/send-message/'], async (req: 
 
     data.portalMessages.push(userMsg);
 
+    // Automatic Smart AI Reply
+    const aiReplyMsg = {
+      id: 'msg-ai-' + Date.now() + '-' + Math.random().toString(36).substring(2, 7),
+      traineeId: traineeId || trainee?.id || '',
+      traineeName: trainee?.fullName || senderName || 'طالب',
+      traineeCode: trainee?.code || '',
+      parentName: 'المساعد الذكي',
+      portalSource: 'system',
+      senderRole: 'admin',
+      senderName: 'المساعد الذكي لمركز النجاح 🤖',
+      recipientType: 'student',
+      message: `أهلاً بك يا بطل! 🌟 تم استلام رسالتك واستفسارك بخصوص: "${message.trim().substring(0, 60)}". تم تسليمها للمعلم والمركز للمتابعة، وأنا متواجد هنا لمساعدتك في أي سؤال!`,
+      messageType: 'reply',
+      read: true,
+      createdAt: new Date().toISOString()
+    };
+
+    data.portalMessages.push(aiReplyMsg);
+
     if (!Array.isArray(data.notifications)) data.notifications = [];
     data.notifications.unshift({
       id: 'notif-msg-' + Date.now(),
       type: 'message',
-      title: `رسالة جديدة من الطالب: ${userMsg.traineeName}`,
+      title: `📩 رسالة جديدة من الطالب: ${userMsg.traineeName}`,
       message: message.substring(0, 80),
       linkView: 'messages',
       createdAt: new Date().toISOString(),
-      read: false
+      read: false,
+      metadata: { traineeId: traineeId || trainee?.id, traineeCode: trainee?.code }
+    });
+
+    data.notifications.unshift({
+      id: 'notif-reply-' + Date.now(),
+      type: 'message',
+      title: `🤖 تأكيد تسليم استفسارك وتفاعل المساعد الذكي`,
+      message: `تم تسليم رسالتك بنجاح للمعلم وتوثيقها في سجلك الأكاديمي!`,
+      linkView: 'messages',
+      createdAt: new Date().toISOString(),
+      read: false,
+      metadata: { traineeId: traineeId || trainee?.id, traineeCode: trainee?.code }
     });
 
     db.saveImmediate();
-    res.json({ success: true, message: userMsg });
+    res.json({ success: true, message: userMsg, aiReply: aiReplyMsg });
   } catch (err: any) {
     res.status(500).json({ error: 'فشل إرسال رسالة الطالب: ' + err.message });
   }
@@ -8382,6 +8619,27 @@ apiRouter.get('/trainer-portal/data/:trainerId', async (req: Request, res: Respo
     // Exams for trainer or courses
     const trainerExams = allExams.filter(e => e.trainerId === trainer.id || trainerCourseIds.has(e.courseId));
 
+    // Homework submissions for trainer's trainees
+    const allHW = db.getData().homeworkSubmissions || [];
+    const trainerTraineeIds = new Set(trainerTrainees.map(t => t.id));
+    const trainerTraineeCodes = new Set(trainerTrainees.map(t => (t.code || '').trim().toLowerCase()));
+
+    const trainerHomeworks = allHW.filter((h: any) =>
+      trainerTraineeIds.has(h.traineeId) ||
+      (h.traineeCode && trainerTraineeCodes.has(String(h.traineeCode).trim().toLowerCase()))
+    );
+
+    // Messages for trainer's trainees or directed to trainer/all
+    ensureDefaultPortalMessages(db.getData());
+    const allMsgs = db.getData().portalMessages || [];
+    const trainerMessages = allMsgs.filter((m: any) =>
+      trainerTraineeIds.has(m.traineeId) ||
+      (m.traineeCode && trainerTraineeCodes.has(String(m.traineeCode).trim().toLowerCase())) ||
+      m.recipientId === trainer.id ||
+      m.recipientType === 'trainer' ||
+      m.recipientType === 'all'
+    );
+
     res.json({
       success: true,
       trainer,
@@ -8389,8 +8647,9 @@ apiRouter.get('/trainer-portal/data/:trainerId', async (req: Request, res: Respo
       courses: trainerCourses,
       trainees: trainerTrainees,
       attendance: trainerAttendance,
-      homeworkSubmissions: [],
+      homeworkSubmissions: trainerHomeworks,
       exams: trainerExams,
+      portalMessages: trainerMessages,
       settlements: [],
       settings: settingsObj || {}
     });

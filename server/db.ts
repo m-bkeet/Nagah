@@ -74,7 +74,13 @@ export interface DatabaseSchema {
   portalMessages?: any[];
 }
 
-const isServerless = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.VERCEL_ENV);
+const isServerless = Boolean(
+  process.env.VERCEL ||
+  process.env.AWS_LAMBDA_FUNCTION_NAME ||
+  process.env.VERCEL_ENV ||
+  process.cwd().startsWith('/var/task') ||
+  process.cwd() === '/'
+);
 const ACTUAL_DATA_DIR = isServerless ? path.join(os.tmpdir(), 'nagah_data') : path.join(process.cwd(), 'data');
 const BACKUPS_DIR = path.join(ACTUAL_DATA_DIR, 'backups');
 const DB_FILE = path.join(ACTUAL_DATA_DIR, 'database.json');

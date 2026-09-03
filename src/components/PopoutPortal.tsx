@@ -67,37 +67,57 @@ export const PopoutPortal: React.FC<PopoutPortalProps> = ({
     };
 
     const openPip = async () => {
+      // 1. Try synchronous window.open first to preserve user gesture activation in Edge / Windows 11
+      let popup: Window | null = null;
       try {
-        if ('documentPictureInPicture' in window) {
+        const left = Math.max(0, Math.floor((window.screen.width - width) / 2));
+        const top = 80;
+        popup = window.open(
+          'about:blank',
+          'NagahToolsPopoutWindow',
+          `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes,status=no,location=no,toolbar=no,menubar=no`
+        );
+      } catch (winErr) {
+        console.warn("Synchronous window.open failed in iframe:", winErr);
+      }
+
+      if (popup) {
+        pipWindowRef.current = popup;
+        setupWindow(popup);
+        return;
+      }
+
+      // 2. Try Document Picture-in-Picture as alternative
+      if ('documentPictureInPicture' in window) {
+        try {
           const pipWin = await (window as any).documentPictureInPicture.requestWindow({
             width,
             height,
           });
-          pipWindowRef.current = pipWin;
-          setupWindow(pipWin);
-        } else {
-          const left = (window.screen.width - width) / 2;
-          const popup = window.open('', '', `width=${width},height=${height},left=${left},top=100,menubar=no,toolbar=no,location=no,status=no`);
-          if (popup) {
-            pipWindowRef.current = popup;
-            setupWindow(popup);
-          } else {
-            console.error("Popup blocked");
-            onClose();
+          if (pipWin) {
+            pipWindowRef.current = pipWin;
+            setupWindow(pipWin);
+            return;
           }
+        } catch (pipErr) {
+          console.warn("Document Picture-in-Picture blocked or unsupported:", pipErr);
         }
-      } catch (err) {
-        console.error("Error opening popout", err);
-        // Fallback to window open if pip fails
-        try {
-          const popup = window.open('', '', `width=${width},height=${height},menubar=no,toolbar=no,location=no,status=no`);
-          if (popup) {
-            pipWindowRef.current = popup;
-            setupWindow(popup);
-          }
-        } catch (e) {
-          onClose();
+      }
+
+      // 3. Fallback to Desktop Docked Bar inside body
+      if (typeof window !== 'undefined' && (window as any).showToast) {
+        (window as any).showToast('📌 تم تفعيل شريط سطح المكتب الذكي المثبت في أعلى المنصة. يمكنك استخدامه مباشرة!', 'info');
+      }
+
+      if (isMounted) {
+        let fallbackDiv = document.getElementById('nagah-desktop-dock-portal');
+        if (!fallbackDiv) {
+          fallbackDiv = document.createElement('div');
+          fallbackDiv.id = 'nagah-desktop-dock-portal';
+          fallbackDiv.className = 'fixed top-4 left-1/2 -translate-x-1/2 z-[9999] bg-slate-900/95 border-2 border-amber-500/80 rounded-2xl p-2 shadow-[0_0_40px_rgba(245,158,11,0.5)] backdrop-blur-xl animate-fade-in text-white dir-rtl';
+          document.body.appendChild(fallbackDiv);
         }
+        setContainer(fallbackDiv);
       }
     };
 

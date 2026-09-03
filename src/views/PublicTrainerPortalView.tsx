@@ -76,6 +76,10 @@ export const PublicTrainerPortalView: React.FC<PublicTrainerPortalViewProps> = (
   const [exams, setExams] = useState<Exam[]>([]);
   const [settlements, setSettlements] = useState<any[]>([]);
   const [settings, setSettings] = useState<any>({});
+  const [portalMessages, setPortalMessages] = useState<any[]>([]);
+  const [activeTrainerChatTraineeId, setActiveTrainerChatTraineeId] = useState<string | null>(null);
+  const [trainerReplyInput, setTrainerReplyInput] = useState<string>('');
+  const [isSendingTrainerReply, setIsSendingTrainerReply] = useState<boolean>(false);
 
   // Active Tab & Navigation Ref
   const [activeTab, setActiveTab] = useState<'attendance' | 'homework' | 'grades' | 'finances' | 'schedule' | 'ai_presentation' | 'live_lecture' | 'social_feed' | 'ai_exam_maker' | 'ai_assistant' | 'ai_messaging' | 'credentials' | 'language_lab' | 'groups' | 'content_planner'>('attendance');
@@ -110,15 +114,50 @@ export const PublicTrainerPortalView: React.FC<PublicTrainerPortalViewProps> = (
     }
   }, [trainer]);
 
-  const handleToggleLabSession = () => {
+  const handleToggleLabSession = async () => {
     if (!trainer) return;
     const nextState = !isLabActive;
     setTrainerLabSessionState(trainer.branchId || 'b1', trainer.name, nextState, 'المعمل الرئيسي');
     setIsLabActive(nextState);
+
+    try {
+      await api.sendBulkDeviceCommand({
+        branchId: trainer.branchId || 'b1',
+        commandType: nextState ? 'unlock' : 'lock',
+        issuedByUserId: trainer.id || trainer.code,
+        payload: nextState ? 'تم فتح المعمل بواسطة المدرب' : 'تم قفل المعمل وإغلاق الشاشات بقرار المحاضر'
+      });
+    } catch (e) {
+      console.warn('Bulk device command notice:', e);
+    }
+
     if (nextState) {
       showToast('🟢 تم فتح المعمل وتفعيل القاعة وتواجد المدرب بالفرع بنجاح! يمكن للطلاب الدخول وتسجيل الحضور الآن.', 'success');
     } else {
-      showToast('🔴 تم إغلاق المعمل وقفل الحضور وحظر الدخول الخارجي.', 'info');
+      showToast('🔴 تم إغلاق المعمل وقفل الأجهزة وحظر الدخول الخارجي.', 'info');
+    }
+  };
+
+  const handleAwardStudentPoints = async (st: Trainee, pointsDelta: number, reason: string) => {
+    const targetId = st.id || st.code;
+    try {
+      await api.addPoints({
+        traineeId: targetId,
+        traineeIds: [targetId],
+        points: pointsDelta,
+        reason,
+        addedByUserId: trainer?.id,
+        addedByUserName: trainer?.name
+      });
+      setTrainees(prev => prev.map(t => (t.id === st.id || t.code === st.code) ? {
+        ...t,
+        totalPoints: Math.max(0, (t.totalPoints || t.points || 0) + pointsDelta),
+        points: Math.max(0, (t.points || 0) + pointsDelta)
+      } : t));
+      const text = pointsDelta > 0 ? `تم منح +${pointsDelta}` : `تم خصم ${Math.abs(pointsDelta)}`;
+      showToast(`${text} نقاط للطالب ${st.fullName} ${pointsDelta > 0 ? '⭐' : '⚠️'}`, pointsDelta > 0 ? 'success' : 'info');
+    } catch (e) {
+      showToast('تعذر معالجة النقاط', 'error');
     }
   };
 
@@ -226,6 +265,7 @@ export const PublicTrainerPortalView: React.FC<PublicTrainerPortalViewProps> = (
         setExams(data.exams || []);
         setSettlements(data.settlements || []);
         setSettings(data.settings || {});
+        setPortalMessages(data.portalMessages || []);
 
         localStorage.setItem('nagah_active_trainer_id', data.trainer.id);
 
@@ -240,6 +280,58 @@ export const PublicTrainerPortalView: React.FC<PublicTrainerPortalViewProps> = (
       setLoginError('تعذر الاتصال بالخادم، تأكد من اتصال الإنترنت');
     } finally {
       setIsLoadingData(false);
+    }
+  };
+
+  // Live message polling every 4s
+  useEffect(() => {
+    if (!trainer?.id) return;
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/trainer-portal/data/${trainer.id}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success && Array.isArray(data.portalMessages)) {
+            setPortalMessages(data.portalMessages);
+          }
+        }
+      } catch (e) {}
+    }, 4000);
+    return () => clearInterval(interval);
+  }, [trainer?.id]);
+
+  const handleSendTrainerDirectReply = async (targetTraineeId: string) => {
+    if (!trainerReplyInput.trim() || !targetTraineeId || !trainer) return;
+    setIsSendingTrainerReply(true);
+    try {
+      const res = await fetch('/api/messages/send-portal-message', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          traineeId: targetTraineeId,
+          recipientType: 'student',
+          message: trainerReplyInput.trim(),
+          senderRole: 'trainer',
+          senderName: `المدرب / ${trainer.name}`,
+          portalSource: 'trainer'
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast('تم إرسال الرد بنجاح للواجهة وللطالب! 📬', 'success');
+        setTrainerReplyInput('');
+        const reloadRes = await fetch(`/api/trainer-portal/data/${trainer.id}`);
+        const reloadData = await reloadRes.json();
+        if (reloadData.success && Array.isArray(reloadData.portalMessages)) {
+          setPortalMessages(reloadData.portalMessages);
+        }
+      } else {
+        showToast('خطأ: ' + (data.error || 'فشل الإرسال'), 'error');
+      }
+    } catch (err) {
+      showToast('حدث خطأ أثناء إرسال الرد', 'error');
+    } finally {
+      setIsSendingTrainerReply(false);
     }
   };
 
@@ -1221,18 +1313,7 @@ export const PublicTrainerPortalView: React.FC<PublicTrainerPortalViewProps> = (
                                 <span className="text-[10px] text-amber-400 font-bold">نقاط:</span>
                                 <button
                                   type="button"
-                                  onClick={async () => {
-                                    try {
-                                      await api.addPoints({
-                                        traineeId: st.id || st.code,
-                                        points: 10,
-                                        reason: 'مشاركة ممتازة وتفاعل بالحصة'
-                                      });
-                                      showToast(`تم منح +10 نقاط للطالب ${st.fullName} ⭐`, 'success');
-                                    } catch (e) {
-                                      showToast('تعذر منح النقاط', 'error');
-                                    }
-                                  }}
+                                  onClick={() => handleAwardStudentPoints(st, 10, 'مشاركة ممتازة وتفاعل بالحصة')}
                                   className="px-1.5 py-0.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/40 text-amber-300 text-[10px] font-bold"
                                   title="منح +10 نقاط"
                                 >
@@ -1240,18 +1321,7 @@ export const PublicTrainerPortalView: React.FC<PublicTrainerPortalViewProps> = (
                                 </button>
                                 <button
                                   type="button"
-                                  onClick={async () => {
-                                    try {
-                                      await api.addPoints({
-                                        traineeId: st.id || st.code,
-                                        points: 5,
-                                        reason: 'نشاط وتفاعل إيجابي'
-                                      });
-                                      showToast(`تم منح +5 نقاط للطالب ${st.fullName} ⭐`, 'success');
-                                    } catch (e) {
-                                      showToast('تعذر منح النقاط', 'error');
-                                    }
-                                  }}
+                                  onClick={() => handleAwardStudentPoints(st, 5, 'نشاط وتفاعل إيجابي')}
                                   className="px-1.5 py-0.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/30 text-amber-300 text-[10px] font-bold"
                                   title="منح +5 نقاط"
                                 >
@@ -1259,18 +1329,7 @@ export const PublicTrainerPortalView: React.FC<PublicTrainerPortalViewProps> = (
                                 </button>
                                 <button
                                   type="button"
-                                  onClick={async () => {
-                                    try {
-                                      await api.addPoints({
-                                        traineeId: st.id || st.code,
-                                        points: -5,
-                                        reason: 'ملاحظة سلوكية أو عدم انتباه'
-                                      });
-                                      showToast(`تم خصم 5 نقاط من الطالب ${st.fullName} ⚠️`, 'info');
-                                    } catch (e) {
-                                      showToast('تعذر خصم النقاط', 'error');
-                                    }
-                                  }}
+                                  onClick={() => handleAwardStudentPoints(st, -5, 'ملاحظة سلوكية أو عدم انتباه')}
                                   className="px-1.5 py-0.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/30 text-rose-300 text-[10px] font-bold"
                                   title="خصم 5 نقاط"
                                 >
@@ -1955,6 +2014,185 @@ export const PublicTrainerPortalView: React.FC<PublicTrainerPortalViewProps> = (
                         <Send className="w-4 h-4" />
                         <span>إرسال فوري عبر واتساب للرقم 📲</span>
                       </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Direct Student Inquiries & Interactive Chat Inbox */}
+                <div className="bg-slate-900/80 border border-indigo-500/30 rounded-3xl p-5 sm:p-6 shadow-xl space-y-5">
+                  <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-10 h-10 rounded-2xl bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 flex items-center justify-center">
+                        <MessageSquare className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h3 className="font-black text-sm text-slate-100 flex items-center gap-2">
+                          <span>صندوق استفسارات ومحادثات الطلاب مباشرة</span>
+                          <span className="text-[10px] bg-indigo-500/20 text-indigo-300 px-2 py-0.5 rounded-full font-bold border border-indigo-500/30">
+                            محادثة فورية live 🟢
+                          </span>
+                        </h3>
+                        <p className="text-xs text-slate-400">
+                          الرد المباشر على أسئلة المتدربين لتظهر في بوابة الطالب فوراً
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {portalMessages.length === 0 ? (
+                    <div className="text-center py-8 text-slate-400 text-xs bg-slate-950/50 rounded-2xl border border-slate-800">
+                      لا توجد استفسارات أو رسائل جديدة حالياً.
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 min-h-[380px]">
+                      {/* Trainee Threads List */}
+                      <div className="bg-slate-950 rounded-2xl border border-slate-800 p-2 space-y-1 max-h-[420px] overflow-y-auto">
+                        <div className="text-[11px] font-bold text-slate-400 p-2 border-b border-slate-800 flex items-center justify-between">
+                          <span>المحادثات النشطة ({trainees.length})</span>
+                          <span className="text-[10px] text-emerald-400">محدث الآن ⚡</span>
+                        </div>
+                        {trainees.map(t => {
+                          const tMsgs = portalMessages.filter(m => 
+                            m.traineeId === t.id || 
+                            (m.traineeCode && m.traineeCode === t.code)
+                          );
+                          const unread = tMsgs.filter(m => m.senderRole === 'student' && !m.read).length;
+                          const lastMsg = tMsgs[tMsgs.length - 1];
+                          const isSelected = activeTrainerChatTraineeId === t.id || (!activeTrainerChatTraineeId && trainees[0]?.id === t.id);
+
+                          return (
+                            <button
+                              key={t.id}
+                              onClick={() => setActiveTrainerChatTraineeId(t.id)}
+                              className={`w-full text-right p-3 rounded-xl transition-all flex items-start justify-between gap-2 border ${
+                                isSelected 
+                                  ? 'bg-indigo-600/20 border-indigo-500/50 text-white' 
+                                  : 'bg-slate-900/50 border-slate-800/80 hover:bg-slate-900 text-slate-300'
+                              }`}
+                            >
+                              <div className="truncate">
+                                <div className="font-bold text-xs truncate flex items-center gap-1.5">
+                                  <span>{t.fullName}</span>
+                                  <span className="text-[10px] text-slate-400">({t.code})</span>
+                                </div>
+                                <div className="text-[11px] text-slate-400 truncate mt-1">
+                                  {lastMsg ? lastMsg.message : 'لا توجد رسائل سابقة'}
+                                </div>
+                              </div>
+                              {unread > 0 && (
+                                <span className="bg-amber-500 text-slate-950 font-black text-[10px] px-1.5 py-0.5 rounded-full shrink-0">
+                                  {unread}
+                                </span>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      {/* Chat Messages Panel */}
+                      <div className="md:col-span-2 bg-slate-950 rounded-2xl border border-slate-800 p-4 flex flex-col justify-between space-y-3">
+                        {(() => {
+                          const currentTraineeId = activeTrainerChatTraineeId || trainees[0]?.id;
+                          const currentTrainee = trainees.find(t => t.id === currentTraineeId);
+                          const currentMsgs = portalMessages.filter(m => 
+                            m.traineeId === currentTraineeId || 
+                            (m.traineeCode && currentTrainee && m.traineeCode === currentTrainee.code)
+                          );
+
+                          if (!currentTrainee) {
+                            return (
+                              <div className="text-center py-20 text-slate-500 text-xs">
+                                اختر طالباً لعرض المحادثة
+                              </div>
+                            );
+                          }
+
+                          return (
+                            <>
+                              {/* Header */}
+                              <div className="pb-3 border-b border-slate-800 flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                  <div className="w-8 h-8 rounded-full bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 flex items-center justify-center font-bold text-xs">
+                                    {currentTrainee.fullName[0]}
+                                  </div>
+                                  <div>
+                                    <div className="font-bold text-xs text-slate-100">{currentTrainee.fullName}</div>
+                                    <div className="text-[10px] text-slate-400">كود المتدرب: {currentTrainee.code} | {currentTrainee.courseName || 'الدورة البرمجية'}</div>
+                                  </div>
+                                </div>
+                                <span className="text-[10px] bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 px-2 py-0.5 rounded-full">
+                                  متصل بالمنصة 🟢
+                                </span>
+                              </div>
+
+                              {/* Messages History */}
+                              <div className="flex-1 max-h-[260px] overflow-y-auto space-y-3 p-2">
+                                {currentMsgs.length === 0 ? (
+                                  <div className="text-center py-10 text-slate-500 text-xs">
+                                    لا توجد رسائل سابقة مع هذا الطالب.
+                                  </div>
+                                ) : (
+                                  currentMsgs.map((m, idx) => {
+                                    const isTrainerOrAdmin = m.senderRole === 'trainer' || m.senderRole === 'admin' || m.portalSource === 'trainer';
+                                    return (
+                                      <div
+                                        key={m.id || idx}
+                                        className={`flex flex-col max-w-[85%] ${
+                                          isTrainerOrAdmin ? 'mr-auto items-end' : 'ml-auto items-start'
+                                        }`}
+                                      >
+                                        <div className="text-[10px] text-slate-400 mb-1 font-bold">
+                                          {m.senderName || (isTrainerOrAdmin ? 'المدرب' : currentTrainee.fullName)}
+                                        </div>
+                                        <div
+                                          className={`p-3 rounded-2xl text-xs leading-relaxed ${
+                                            isTrainerOrAdmin
+                                              ? 'bg-indigo-600 text-white rounded-tl-none'
+                                              : 'bg-slate-800 text-slate-100 rounded-tr-none border border-slate-700'
+                                          }`}
+                                        >
+                                          {m.message}
+                                        </div>
+                                        <div className="text-[9px] text-slate-500 mt-1">
+                                          {new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                        </div>
+                                      </div>
+                                    );
+                                  })
+                                )}
+                              </div>
+
+                              {/* Reply Form */}
+                              <div className="pt-2 border-t border-slate-800 flex items-center gap-2">
+                                <input
+                                  type="text"
+                                  value={trainerReplyInput}
+                                  onChange={(e) => setTrainerReplyInput(e.target.value)}
+                                  placeholder={`اكتب ردك المباشر للطالب ${currentTrainee.fullName}...`}
+                                  className="flex-1 bg-slate-900 border border-slate-700 rounded-2xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-indigo-500"
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') handleSendTrainerDirectReply(currentTrainee.id);
+                                  }}
+                                />
+                                <button
+                                  onClick={() => handleSendTrainerDirectReply(currentTrainee.id)}
+                                  disabled={isSendingTrainerReply || !trainerReplyInput.trim()}
+                                  className="px-4 py-2.5 rounded-2xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-xs font-black flex items-center gap-1.5 transition-all shadow-lg shadow-indigo-600/30"
+                                >
+                                  {isSendingTrainerReply ? (
+                                    <RefreshCw className="w-4 h-4 animate-spin" />
+                                  ) : (
+                                    <>
+                                      <Send className="w-4 h-4" />
+                                      <span>إرسال</span>
+                                    </>
+                                  )}
+                                </button>
+                              </div>
+                            </>
+                          );
+                        })()}
+                      </div>
                     </div>
                   )}
                 </div>

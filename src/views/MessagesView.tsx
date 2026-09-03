@@ -75,7 +75,30 @@ export const MessagesView: React.FC = () => {
   useEffect(() => {
     loadData();
     loadInboxMessages();
+
+    const interval = setInterval(() => {
+      loadInboxMessagesSilently();
+    }, 4000);
+
+    return () => clearInterval(interval);
   }, [activeBranchId, refreshKey]);
+
+  const loadInboxMessagesSilently = async () => {
+    try {
+      const res = await fetch('/api/messages/all-portal');
+      if (res.ok) {
+        const contentType = res.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+          const data = await res.json();
+          if (Array.isArray(data)) {
+            setPortalMessages(data);
+          }
+        }
+      }
+    } catch (e) {
+      // silent retry
+    }
+  };
 
   useEffect(() => {
     // Scroll active chat to bottom whenever chat changes or messages load
@@ -285,8 +308,10 @@ export const MessagesView: React.FC = () => {
     const groupsMap: { [key: string]: any } = {};
 
     portalMessages.forEach(msg => {
-      const tId = msg.traineeId;
-      if (!tId) return;
+      const targetT = trainees.find(t => t.id === msg.traineeId || (t.code && t.code === msg.traineeCode));
+      const keyId = targetT?.id || msg.traineeId || msg.traineeCode || 'general-' + (msg.traineeName || 'student');
+
+      if (!keyId) return;
 
       // Filter by inbox filter (Parent / Student source)
       if (inboxFilter === 'parent' && msg.portalSource !== 'parent') return;
@@ -295,22 +320,21 @@ export const MessagesView: React.FC = () => {
       // Filter by search query
       if (inboxSearch) {
         const q = inboxSearch.toLowerCase();
-        const tName = (msg.traineeName || '').toLowerCase();
-        const pName = (msg.parentName || '').toLowerCase();
-        const tCode = (msg.traineeCode || '').toLowerCase();
+        const tName = (msg.traineeName || targetT?.fullName || '').toLowerCase();
+        const pName = (msg.parentName || targetT?.parentName || '').toLowerCase();
+        const tCode = (msg.traineeCode || targetT?.code || '').toLowerCase();
         const txt = (msg.message || '').toLowerCase();
         
         const matches = tName.includes(q) || pName.includes(q) || tCode.includes(q) || txt.includes(q);
         if (!matches) return;
       }
 
-      if (!groupsMap[tId]) {
-        const targetT = trainees.find(t => t.id === tId);
-        groupsMap[tId] = {
-          traineeId: tId,
-          traineeName: msg.traineeName || targetT?.fullName || 'متدرب',
-          traineeCode: msg.traineeCode || targetT?.code || '',
-          parentName: msg.parentName || targetT?.parentName || 'ولي الأمر',
+      if (!groupsMap[keyId]) {
+        groupsMap[keyId] = {
+          traineeId: keyId,
+          traineeName: targetT?.fullName || msg.traineeName || 'متدرب',
+          traineeCode: targetT?.code || msg.traineeCode || '',
+          parentName: targetT?.parentName || msg.parentName || 'ولي الأمر',
           phone: targetT?.phone || '',
           groupName: targetT?.groupName || '',
           courseName: targetT?.courseName || '',
@@ -321,16 +345,16 @@ export const MessagesView: React.FC = () => {
         };
       }
 
-      groupsMap[tId].messages.push(msg);
+      groupsMap[keyId].messages.push(msg);
 
       // Increment unread count if message is not from admin and not read yet
       if (msg.senderRole !== 'admin' && !msg.read) {
-        groupsMap[tId].unreadCount += 1;
+        groupsMap[keyId].unreadCount += 1;
       }
 
       const msgTime = new Date(msg.createdAt);
-      if (msgTime > groupsMap[tId].lastMessageTime) {
-        groupsMap[tId].lastMessageTime = msgTime;
+      if (msgTime > groupsMap[keyId].lastMessageTime) {
+        groupsMap[keyId].lastMessageTime = msgTime;
       }
     });
 

@@ -304,7 +304,13 @@ export const FloatingTeachingToolsOverlay: React.FC<FloatingTeachingToolsOverlay
       const formattedList = displayTrainees.map(t => `${t.code || t.id} - ${t.fullName}`);
       setLiveStudents(formattedList);
       setRawTrainees(displayTrainees);
-      setSelectedPointStudentIds(displayTrainees.filter(t => t.attendanceStatus === 'present' || t.isDeviceOnline).map(t => t.id));
+      setSelectedPointStudentIds(prev => {
+        if (prev.length === 0 || forceRefresh) {
+          const presentIds = displayTrainees.filter(t => t.attendanceStatus === 'present' || t.isDeviceOnline).map(t => t.id);
+          return presentIds.length > 0 ? presentIds : displayTrainees.map(t => t.id);
+        }
+        return prev;
+      });
 
       if (formattedList.length > 0) {
         setSelectedTraineeForPoints(formattedList[0]);
@@ -648,40 +654,40 @@ export const FloatingTeachingToolsOverlay: React.FC<FloatingTeachingToolsOverlay
   // Quick Points Award (ClassPoint style)
   const handleAwardPoints = async (toAllPresent: boolean = false) => {
     try {
-      const targetTrainees = toAllPresent
+      let targetTrainees = toAllPresent
         ? rawTrainees.filter(t => t.attendanceStatus === 'present' || t.attendanceStatus === 'late' || t.isDeviceOnline)
         : rawTrainees.filter(t => selectedPointStudentIds.includes(t.id));
+
+      if (targetTrainees.length === 0 && rawTrainees.length > 0) {
+        targetTrainees = rawTrainees;
+      }
 
       if (targetTrainees.length === 0) {
         showToast('الرجاء اختيار طالب واحد على الأقل لمنح النقاط', 'warning');
         return;
       }
 
-      await Promise.all(targetTrainees.map(t =>
-        api.addPoints({
-          traineeId: t.id || t.code,
-          points: pointsAmount,
-          reason: pointsReason
-        }).catch(() => {})
-      ));
+      await api.addPoints({
+        traineeIds: targetTrainees.map(t => t.id || t.code),
+        points: pointsAmount,
+        reason: pointsReason || 'مشاركة متميزة وتفاعل بالمعمل'
+      });
 
       if (pointsAmount > 0) {
         audioService.playCoinSound();
-        if (pointsAmount >= 10 || toAllPresent) {
-          audioService.playCelebrationCheer();
-          setCelebrationOverlay({
-            active: true,
-            title: `🎉 إسناد +${pointsAmount} ⭐ بنجاح!`,
-            pointsBadge: `+${pointsAmount} نقطة تميز`,
-            subtitle: `${targetTrainees.length} طالب حاضر بالمجموعة (${pointsReason})`
-          });
-        }
+        audioService.playCelebrationCheer();
+        setCelebrationOverlay({
+          active: true,
+          title: `🎉 إسناد +${pointsAmount} ⭐ بنجاح!`,
+          pointsBadge: `+${pointsAmount} نقطة تميز`,
+          subtitle: `${targetTrainees.length} طالب بالمجموعة (${pointsReason || 'تفاعل متميز'})`
+        });
       } else {
         audioService.playBuzzerSound();
       }
 
       const signText = pointsAmount >= 0 ? `+${pointsAmount}` : `${pointsAmount}`;
-      showToast(`تم إسناد ${signText} نقطة تميز بنجاح لـ ${targetTrainees.length} طالب حاضر بالمجموعة ⭐🎉`, 'success');
+      showToast(`تم إسناد ${signText} نقطة تميز بنجاح لـ ${targetTrainees.length} طالب بالمجموعة ⭐🎉`, 'success');
       setActiveTool('none');
     } catch (e) {
       showToast('خطأ أثناء إسناد النقاط', 'error');
@@ -800,6 +806,14 @@ export const FloatingTeachingToolsOverlay: React.FC<FloatingTeachingToolsOverlay
       setIsPoppedOut(!isPoppedOut);
       showToast(!isPoppedOut ? 'تم فتح الأدوات في نافذة منفصلة ↗️' : 'تم استعادة الأدوات ↙️', 'info');
       audioService.playChime([700, 900]);
+      if (!isPinned) setIsIsOpen(false);
+      return;
+    }
+    if (toolId === 'points') {
+      setActiveTool(prev => prev === 'points' ? 'none' : 'points');
+      setIsFloatingPointsOpen(true);
+      audioService.playChime([700, 900]);
+      showToast('جاري فتح لوحة منح وإسناد النقاط المباشرة للطلاب ⭐️', 'info');
       if (!isPinned) setIsIsOpen(false);
       return;
     }
@@ -1379,6 +1393,260 @@ export const FloatingTeachingToolsOverlay: React.FC<FloatingTeachingToolsOverlay
             >
               <RotateCcw className="w-4 h-4" />
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* ---------------------------------------------------- */}
+      {/* POPUP MODAL: CLASSPOINT POINTS & REWARDS PANEL */}
+      {/* ---------------------------------------------------- */}
+      {activeTool === 'points' && (
+        <div className="fixed inset-0 z-[9996] bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 dir-rtl">
+          <div className="bg-slate-900 border border-amber-500/40 p-5 sm:p-6 rounded-3xl shadow-2xl text-white max-w-lg w-full space-y-4 relative max-h-[90vh] flex flex-col">
+            <button
+              onClick={() => setActiveTool('none')}
+              className="absolute top-4 left-4 text-slate-400 hover:text-white p-1 rounded-lg"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="flex items-center gap-3 border-b border-slate-800 pb-3">
+              <div className="w-10 h-10 rounded-2xl bg-amber-500/20 text-amber-400 border border-amber-500/40 flex items-center justify-center font-bold">
+                <Star className="w-6 h-6 fill-amber-400" />
+              </div>
+              <div>
+                <h2 className="text-base font-extrabold text-slate-100 flex items-center gap-2">
+                  <span>إسناد ومنح النقاط (ClassPoint ⭐)</span>
+                  <span className="text-[10px] bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded-full border border-amber-500/30">
+                    تفاعل فوري ⚡
+                  </span>
+                </h2>
+                <p className="text-xs text-slate-400">
+                  {activeDetectedGroupName || 'جميع الطلاب بالمعمل'}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between bg-slate-800/80 p-2 rounded-2xl border border-slate-700/70 text-xs gap-2">
+              <div className="flex items-center gap-2 flex-1">
+                <Users className="w-4 h-4 text-amber-400 shrink-0" />
+                <select
+                  value={selectedGroupId}
+                  onChange={(e) => {
+                    setSelectedGroupId(e.target.value);
+                    syncBranchStudents(activeBranchId, true, false, e.target.value);
+                  }}
+                  className="bg-slate-950 text-amber-300 font-bold border border-slate-700 rounded-xl px-2.5 py-1 text-xs focus:outline-none focus:border-amber-400 w-full"
+                >
+                  <option value="auto">المجموعة الحالية (تلقائي)</option>
+                  <option value="all">جميع الطلاب / المجموعات</option>
+                  {availableGroups.map((g) => (
+                    <option key={g.id} value={g.id}>
+                      {g.name} ({g.startTime || ''})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <button
+                onClick={() => syncBranchStudents(activeBranchId, true, false)}
+                disabled={isSyncingStudents}
+                className="px-2.5 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 rounded-xl font-bold flex items-center gap-1 shrink-0 transition-all text-[11px]"
+              >
+                <RotateCcw className={`w-3.5 h-3.5 ${isSyncingStudents ? 'animate-spin' : ''}`} />
+                <span>مزامنة 🔄</span>
+              </button>
+            </div>
+
+            <div className="bg-slate-950/70 border border-slate-800 p-3 rounded-2xl space-y-3">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-extrabold text-amber-300 flex items-center gap-1">
+                  <Zap className="w-4 h-4 text-amber-400 fill-amber-400" />
+                  <span>اختر مقدار النقاط (+ / -):</span>
+                </label>
+                <span className="text-xs font-mono font-black text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-lg border border-amber-500/30">
+                  {pointsAmount > 0 ? `+${pointsAmount}` : pointsAmount} نقطة
+                </span>
+              </div>
+
+              <div className="grid grid-cols-6 gap-1.5">
+                {[5, 10, 15, 20, 50, -5].map((pts) => (
+                  <button
+                    key={pts}
+                    type="button"
+                    onClick={() => setPointsAmount(pts)}
+                    className={`py-1.5 rounded-xl text-xs font-black transition-all border ${
+                      pointsAmount === pts
+                        ? 'bg-amber-500 text-slate-950 border-amber-300 shadow-md scale-105'
+                        : 'bg-slate-900 text-amber-400 hover:bg-slate-800 border-amber-500/30'
+                    }`}
+                  >
+                    {pts > 0 ? `+${pts}` : pts}
+                  </button>
+                ))}
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[11px] font-bold text-slate-400 block">سبب المكافأة / التنبيه:</label>
+                <div className="flex flex-wrap gap-1.5">
+                  {[
+                    'إجابة ممتازة وتسريع الكود',
+                    'إتمام المهمة البرمجية',
+                    'مساعدة الزملاء بالمعمل',
+                    'الانضباط والهدوء',
+                    'الفوز بمسابقة الحصة'
+                  ].map((r) => (
+                    <button
+                      key={r}
+                      type="button"
+                      onClick={() => setPointsReason(r)}
+                      className={`text-[10px] px-2.5 py-1 rounded-lg border transition-all ${
+                        pointsReason === r
+                          ? 'bg-amber-500/20 text-amber-300 border-amber-400 font-bold'
+                          : 'bg-slate-900 text-slate-400 border-slate-800 hover:bg-slate-800'
+                      }`}
+                    >
+                      {r}
+                    </button>
+                  ))}
+                </div>
+                <input
+                  type="text"
+                  value={pointsReason}
+                  onChange={(e) => setPointsReason(e.target.value)}
+                  placeholder="سبب مخصص للنقاط..."
+                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-400"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between text-xs font-bold text-slate-300 bg-slate-800/50 px-3 py-2 rounded-xl border border-slate-700/50">
+              <div className="flex items-center gap-2">
+                <span>المحددون:</span>
+                <span className="text-amber-400 font-mono font-black text-sm">
+                  {selectedPointStudentIds.length} من {rawTrainees.length}
+                </span>
+              </div>
+              <div className="flex items-center gap-2 text-[11px]">
+                <button
+                  type="button"
+                  onClick={() => setSelectedPointStudentIds(rawTrainees.map((t) => t.id))}
+                  className="text-amber-400 hover:underline"
+                >
+                  تحديد الكل ({rawTrainees.length})
+                </button>
+                <span>•</span>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setSelectedPointStudentIds(
+                      rawTrainees.filter((t) => t.attendanceStatus === 'present' || t.isDeviceOnline).map((t) => t.id)
+                    )
+                  }
+                  className="text-emerald-400 hover:underline"
+                >
+                  الحاضرون فقط
+                </button>
+                <span>•</span>
+                <button
+                  type="button"
+                  onClick={() => setSelectedPointStudentIds([])}
+                  className="text-rose-400 hover:underline"
+                >
+                  إلغاء
+                </button>
+              </div>
+            </div>
+
+            <div className="flex-1 bg-slate-950/70 rounded-2xl border border-slate-800 p-2 overflow-y-auto max-h-[220px] space-y-1.5">
+              {rawTrainees.length === 0 ? (
+                <div className="text-center py-8 text-slate-500 text-xs">
+                  لا يوجد طلاب مسجلون في هذه المجموعة حالياً
+                </div>
+              ) : (
+                rawTrainees.map((t) => {
+                  const isSelected = selectedPointStudentIds.includes(t.id);
+                  return (
+                    <div
+                      key={t.id}
+                      onClick={() => {
+                        setSelectedPointStudentIds((prev) =>
+                          prev.includes(t.id) ? prev.filter((id) => id !== t.id) : [...prev, t.id]
+                        );
+                      }}
+                      className={`flex items-center justify-between p-2.5 rounded-xl cursor-pointer transition-all border ${
+                        isSelected
+                          ? 'bg-amber-500/10 border-amber-500/50 text-white'
+                          : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:bg-slate-900'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => {}}
+                          className="w-4 h-4 rounded text-amber-500 focus:ring-amber-500 bg-slate-950 border-slate-700 cursor-pointer"
+                        />
+                        <div>
+                          <div className="font-bold text-xs text-slate-200 flex items-center gap-1.5">
+                            <span>{t.fullName}</span>
+                            <span className="text-[10px] text-slate-400 font-mono">({t.code})</span>
+                          </div>
+                          <div className="text-[10px] text-slate-400 flex items-center gap-2">
+                            <span>النقاط الحالية: {t.totalPoints || t.points || 0} ⭐</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        {t.isDeviceOnline && (
+                          <span className="text-[9px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-1.5 py-0.5 rounded-md font-bold">
+                            جهاز متصل 🟢
+                          </span>
+                        )}
+                        <span
+                          className={`text-[9px] px-2 py-0.5 rounded-md font-bold ${
+                            t.attendanceStatus === 'present'
+                              ? 'bg-emerald-500/20 text-emerald-300'
+                              : t.attendanceStatus === 'late'
+                              ? 'bg-amber-500/20 text-amber-300'
+                              : 'bg-rose-500/20 text-rose-300'
+                          }`}
+                        >
+                          {t.attendanceStatus === 'present'
+                            ? 'حاضر'
+                            : t.attendanceStatus === 'late'
+                            ? 'متأخر'
+                            : 'غائب'}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-800">
+              <button
+                type="button"
+                onClick={() => handleAwardPoints(false)}
+                disabled={selectedPointStudentIds.length === 0}
+                className="py-3 bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-slate-950 font-black rounded-2xl shadow-xl transition-all text-xs disabled:opacity-50 flex items-center justify-center gap-1.5"
+              >
+                <Zap className="w-4 h-4 fill-current" />
+                <span>منح للمحدد ({selectedPointStudentIds.length}) ⭐</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleAwardPoints(true)}
+                disabled={rawTrainees.length === 0}
+                className="py-3 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-black rounded-2xl shadow-xl transition-all text-xs disabled:opacity-50 flex items-center justify-center gap-1.5"
+              >
+                <Award className="w-4 h-4 fill-current" />
+                <span>منح جماعي للكل ({rawTrainees.length}) 🏆</span>
+              </button>
+            </div>
           </div>
         </div>
       )}
