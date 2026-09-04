@@ -9,6 +9,7 @@ import {
   Receipt, PiggyBank, Download, Plus, Trophy, Award, Star, Medal, ArrowUpRight, CheckCircle2, Crown, X, Sparkle, Upload
 } from 'lucide-react';
 import { Trainee, Course, Group } from '../types';
+import { SessionCelebrationOverlay } from '../components/SessionCelebrationOverlay';
 
 interface DashboardViewProps {
   onNavigate: (view: string) => void;
@@ -141,7 +142,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
           type="button"
           onClick={() => setShowHonorModal(true)}
           className="px-3.5 sm:px-4 py-2 rounded-2xl text-xs font-bold shrink-0 flex items-center gap-1.5 cursor-pointer hover:scale-105 active:scale-95 transition-all border
-            bg-white/70 border-amber-400/80 text-amber-900 shadow-[0_4px_20px_rgba(245,158,11,0.2),inset_0_1px_1px_rgba(255,255,255,0.9)] backdrop-blur-xl
+            bg-amber-500/10 border-amber-400/80 text-amber-900 shadow-xs
             dark:bg-[#0f172a]/90 dark:border-amber-500/70 dark:text-amber-300 dark:shadow-[0_0_15px_rgba(245,158,11,0.25)]"
           title="عرض لوحة شرف المتميزين الكاملة"
         >
@@ -158,12 +159,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
             </div>
           ) : (
             honorTrainees.slice(0, 3).map((trainee, idx) => {
-              // Card styles: Exactly matching image.png in dark mode, and glowing glassmorphic in light mode
+              // Card styles: Exactly matching image.png in dark mode, and soft clean glass in light mode
               const cardStyles = idx === 0
-                ? "border-amber-400/80 bg-white/70 hover:bg-white/85 shadow-[0_4px_20px_rgba(245,158,11,0.2),inset_0_1px_2px_rgba(255,255,255,0.9)] dark:bg-[#0f172a]/90 dark:border-amber-500/80 dark:shadow-[0_0_18px_rgba(245,158,11,0.3)] dark:hover:border-amber-400"
+                ? "border-amber-400/80 bg-white/80 hover:bg-white shadow-[0_4px_16px_rgba(245,158,11,0.15)] dark:bg-[#0f172a]/90 dark:border-amber-500/80 dark:shadow-[0_0_18px_rgba(245,158,11,0.3)] dark:hover:border-amber-400"
                 : idx === 1
-                ? "border-sky-400/80 bg-white/70 hover:bg-white/85 shadow-[0_4px_20px_rgba(14,165,233,0.2),inset_0_1px_2px_rgba(255,255,255,0.9)] dark:bg-[#0f172a]/90 dark:border-cyan-400/80 dark:shadow-[0_0_18px_rgba(6,182,212,0.3)] dark:hover:border-cyan-300"
-                : "border-purple-400/80 bg-white/70 hover:bg-white/85 shadow-[0_4px_20px_rgba(168,85,247,0.2),inset_0_1px_2px_rgba(255,255,255,0.9)] dark:bg-[#0f172a]/90 dark:border-purple-500/80 dark:shadow-[0_0_18px_rgba(168,85,247,0.3)] dark:hover:border-purple-400";
+                ? "border-sky-400/80 bg-white/80 hover:bg-white shadow-[0_4px_16px_rgba(14,165,233,0.15)] dark:bg-[#0f172a]/90 dark:border-cyan-400/80 dark:shadow-[0_0_18px_rgba(6,182,212,0.3)] dark:hover:border-cyan-300"
+                : "border-purple-400/80 bg-white/80 hover:bg-white shadow-[0_4px_16px_rgba(168,85,247,0.15)] dark:bg-[#0f172a]/90 dark:border-purple-500/80 dark:shadow-[0_0_18px_rgba(168,85,247,0.3)] dark:hover:border-purple-400";
 
               const badgeBorder = idx === 0
                 ? "bg-amber-100 border-amber-300 text-amber-900 dark:bg-amber-950/90 dark:border-amber-500/70 dark:text-amber-300"
@@ -178,10 +179,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
                 : "border-purple-400 text-purple-900 bg-purple-100 dark:border-purple-500/70 dark:bg-purple-500/20 dark:text-purple-300";
 
               const pointsChip = idx === 0
-                ? "bg-amber-50/90 border-amber-300/80 text-amber-900 dark:bg-slate-950/80 dark:border-amber-500/60 dark:text-amber-300"
+                ? "bg-amber-50 border-amber-300 text-amber-900 dark:bg-slate-950/80 dark:border-amber-500/60 dark:text-amber-300"
                 : idx === 1
-                ? "bg-sky-50/90 border-sky-300/80 text-sky-900 dark:bg-slate-950/80 dark:border-cyan-500/60 dark:text-amber-300"
-                : "bg-purple-50/90 border-purple-300/80 text-purple-900 dark:bg-slate-950/80 dark:border-purple-500/60 dark:text-amber-300";
+                ? "bg-sky-50 border-sky-300 text-sky-900 dark:bg-slate-950/80 dark:border-cyan-500/60 dark:text-amber-300"
+                : "bg-purple-50 border-purple-300 text-purple-900 dark:bg-slate-950/80 dark:border-purple-500/60 dark:text-amber-300";
 
               return (
                 <div 
@@ -191,7 +192,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
                     setSelectedTrainee(trainee);
                     setShowCelebration(true);
                     audioService.playChime([523, 659, 783, 1046, 1318]);
-                    setTimeout(() => setShowCelebration(false), 9000);
                   }}
                   className={`w-full px-3 py-1.5 rounded-2xl border-2 flex items-center justify-between relative group/card hover:scale-[1.03] transition-all cursor-pointer backdrop-blur-xl ${cardStyles}`}
                 >
@@ -205,7 +205,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
                     {trainee.avatar ? (
                       <img 
                         src={trainee.avatar} 
-                        alt={trainee.name}
+                        alt={trainee.name} 
                         className={`w-6 h-6 rounded-full object-cover border shadow-xs shrink-0 ${avatarBorder}`}
                       />
                     ) : (
@@ -213,7 +213,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
                         {trainee.initial}
                       </div>
                     )}
-                    <span className="text-xs font-bold text-slate-900 dark:text-slate-100 truncate">
+                    <span className="text-xs font-bold text-slate-900 dark:text-white truncate">
                       {trainee.name}
                     </span>
                   </div>
@@ -234,7 +234,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
           type="button"
           onClick={() => setShowHonorModal(true)}
           className="px-3.5 sm:px-4 py-2 rounded-2xl text-xs font-bold shrink-0 flex items-center gap-1.5 cursor-pointer hover:scale-105 active:scale-95 transition-all border
-            bg-white/70 border-purple-400/80 text-purple-900 shadow-[0_4px_20px_rgba(168,85,247,0.2),inset_0_1px_1px_rgba(255,255,255,0.9)] backdrop-blur-xl
+            bg-purple-500/10 border-purple-400/80 text-purple-900 shadow-xs
             dark:bg-[#0f172a]/90 dark:border-purple-500/70 dark:text-purple-300 dark:shadow-[0_0_15px_rgba(168,85,247,0.25)]"
           title="تكريم المتميزين"
         >
@@ -251,7 +251,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
           
           {/* Revenue Card (Green Bar Graph) */}
           <div
-            className="w-full text-right bg-white/80 dark:bg-gradient-to-br dark:from-[#0f172a]/90 dark:via-[#0c1322]/90 dark:to-[#070b14]/90 p-3 rounded-2xl border border-emerald-300/60 dark:border-emerald-500/40 hover:border-emerald-500 flex flex-col justify-between h-[78px] relative overflow-hidden group transition-all shadow-md backdrop-blur-md cursor-pointer"
+            className="w-full text-right bg-white/95 dark:bg-slate-900/90 p-3 rounded-2xl border border-emerald-300/80 dark:border-emerald-500/40 hover:border-emerald-500 flex flex-col justify-between h-[78px] relative overflow-hidden group transition-all shadow-xs dark:shadow-md backdrop-blur-md cursor-pointer"
             onClick={() => onNavigate('finance')}
           >
             <div className="flex items-center justify-between">
@@ -272,7 +272,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
                 </button>
               </div>
               <div className="flex items-center gap-1.5">
-                <span className="text-xs font-bold text-slate-700 dark:text-slate-100">الإيرادات</span>
+                <span className="text-xs font-bold text-slate-800 dark:text-slate-100">الإيرادات</span>
                 <div className="p-1 bg-emerald-100 dark:bg-emerald-500/25 rounded-lg text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-500/40">
                   <Building className="w-3.5 h-3.5" />
                 </div>
@@ -293,7 +293,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
 
           {/* Expenses Card (Red Bar Graph) */}
           <div
-            className="w-full text-right bg-white/80 dark:bg-gradient-to-br dark:from-[#0f172a]/90 dark:via-[#0c1322]/90 dark:to-[#070b14]/90 p-3 rounded-2xl border border-rose-300/60 dark:border-rose-500/40 hover:border-rose-500 flex flex-col justify-between h-[78px] relative overflow-hidden group transition-all shadow-md backdrop-blur-md cursor-pointer"
+            className="w-full text-right bg-white/95 dark:bg-slate-900/90 p-3 rounded-2xl border border-rose-300/80 dark:border-rose-500/40 hover:border-rose-500 flex flex-col justify-between h-[78px] relative overflow-hidden group transition-all shadow-xs dark:shadow-md backdrop-blur-md cursor-pointer"
             onClick={() => onNavigate('expenses')}
           >
             <div className="flex items-center justify-between">
@@ -307,14 +307,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
                     e.stopPropagation();
                     setShowExp(!showExp);
                   }}
-                  className="w-5 h-5 rounded-full bg-rose-500/20 hover:bg-rose-500/40 border border-rose-500/50 text-[10px] text-rose-300 flex items-center justify-center transition-all"
+                  className="w-5 h-5 rounded-full bg-rose-500/20 hover:bg-rose-500/40 border border-rose-500/50 text-[10px] text-rose-700 dark:text-rose-300 flex items-center justify-center transition-all"
                   title={showExp ? 'إخفاء المبلغ' : 'إظهار المبلغ'}
                 >
                   {showExp ? '👁️' : '🔒'}
                 </button>
               </div>
               <div className="flex items-center gap-1.5">
-                <span className="text-xs font-bold text-slate-700 dark:text-slate-100">المصروفات</span>
+                <span className="text-xs font-bold text-slate-800 dark:text-slate-100">المصروفات</span>
                 <div className="p-1 bg-rose-100 dark:bg-rose-500/25 rounded-lg text-rose-700 dark:text-rose-300 border border-rose-300 dark:border-rose-500/40">
                   <Receipt className="w-3.5 h-3.5" />
                 </div>
@@ -333,7 +333,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
 
           {/* Treasury Card (Gold Bar Graph) */}
           <div
-            className="w-full text-right bg-white/80 dark:bg-gradient-to-br dark:from-[#0f172a]/90 dark:via-[#0c1322]/90 dark:to-[#070b14]/90 p-3 rounded-2xl border border-amber-300/60 dark:border-amber-500/40 hover:border-amber-500 flex flex-col justify-between h-[78px] relative overflow-hidden group transition-all shadow-md backdrop-blur-md cursor-pointer"
+            className="w-full text-right bg-white/95 dark:bg-slate-900/90 p-3 rounded-2xl border border-amber-300/80 dark:border-amber-500/40 hover:border-amber-500 flex flex-col justify-between h-[78px] relative overflow-hidden group transition-all shadow-xs dark:shadow-md backdrop-blur-md cursor-pointer"
             onClick={() => onNavigate('finance')}
           >
             <div className="flex items-center justify-between">
@@ -347,23 +347,23 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
                     e.stopPropagation();
                     setShowTres(!showTres);
                   }}
-                  className="w-5 h-5 rounded-full bg-amber-500/20 hover:bg-amber-500/40 border border-amber-500/50 text-[10px] text-amber-300 flex items-center justify-center transition-all"
+                  className="w-5 h-5 rounded-full bg-amber-500/20 hover:bg-amber-500/40 border border-amber-500/50 text-[10px] text-amber-700 dark:text-amber-300 flex items-center justify-center transition-all"
                   title={showTres ? 'إخفاء المبلغ' : 'إظهار المبلغ'}
                 >
                   {showTres ? '👁️' : '🔒'}
                 </button>
               </div>
               <div className="flex items-center gap-1.5">
-                <span className="text-xs font-bold text-slate-700 dark:text-slate-100">الخزينة</span>
+                <span className="text-xs font-bold text-slate-800 dark:text-slate-100">الخزينة</span>
                 <div className="p-1 bg-amber-100 dark:bg-amber-500/25 rounded-lg text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-500/40">
                   <PiggyBank className="w-3.5 h-3.5" />
                 </div>
               </div>
             </div>
             <div className="flex items-end gap-1.5 h-5 mt-1 w-full justify-end opacity-85 group-hover:opacity-100 transition-opacity">
-              <div className="w-2.5 bg-amber-300 rounded-t h-[40%]"></div>
+              <div className="w-2.5 bg-amber-400 rounded-t h-[40%]"></div>
               <div className="w-2.5 bg-amber-600 rounded-t h-[90%]"></div>
-              <div className="w-2.5 bg-amber-400 rounded-t h-[60%]"></div>
+              <div className="w-2.5 bg-amber-500 rounded-t h-[60%]"></div>
             </div>
           </div>
 
@@ -371,7 +371,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
           <button
             type="button"
             onClick={() => onNavigate('attendance')}
-            className="w-full text-right bg-white/80 dark:bg-gradient-to-br dark:from-[#0f172a]/90 dark:via-[#0c1322]/90 dark:to-[#070b14]/90 p-2.5 rounded-2xl border border-cyan-300/60 dark:border-cyan-500/40 hover:border-cyan-500 flex items-center justify-between h-[78px] relative overflow-hidden group transition-all shadow-md backdrop-blur-md cursor-pointer"
+            className="w-full text-right bg-white/95 dark:bg-slate-900/90 p-2.5 rounded-2xl border border-cyan-300/80 dark:border-cyan-500/40 hover:border-cyan-500 flex items-center justify-between h-[78px] relative overflow-hidden group transition-all shadow-xs dark:shadow-md backdrop-blur-md cursor-pointer"
           >
             <div className="relative w-10 h-10 flex items-center justify-center shrink-0">
               <svg className="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
@@ -382,7 +382,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
             </div>
             <div className="flex-1 mr-2 flex flex-col justify-center">
               <div className="flex items-center justify-between mb-1">
-                <span className="text-xs font-bold text-slate-700 dark:text-slate-100">الانضباط العام</span>
+                <span className="text-xs font-bold text-slate-800 dark:text-slate-100">الانضباط العام</span>
                 <Activity className="w-3.5 h-3.5 text-cyan-600 dark:text-cyan-400 animate-pulse" />
               </div>
               <div className="w-full h-1.5 bg-slate-100 dark:bg-slate-950 rounded-full overflow-hidden flex items-center">
@@ -395,10 +395,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
           <button
             type="button"
             onClick={() => onNavigate('branches')}
-            className="w-full text-right bg-white/80 dark:bg-gradient-to-br dark:from-[#0f172a]/90 dark:via-[#0c1322]/90 dark:to-[#070b14]/90 p-3 rounded-2xl border border-purple-300/60 dark:border-blue-500/40 hover:border-purple-500 flex items-center justify-between h-[78px] relative overflow-hidden group transition-all shadow-md backdrop-blur-md cursor-pointer"
+            className="w-full text-right bg-white/95 dark:bg-slate-900/90 p-3 rounded-2xl border border-purple-300/80 dark:border-blue-500/40 hover:border-purple-500 flex items-center justify-between h-[78px] relative overflow-hidden group transition-all shadow-xs dark:shadow-md backdrop-blur-md cursor-pointer"
           >
             <div>
-              <div className="text-xs font-bold text-slate-700 dark:text-slate-100">الفروع والمقرات</div>
+              <div className="text-xs font-bold text-slate-800 dark:text-slate-100">الفروع والمقرات</div>
               <div className="text-sm font-black text-purple-700 dark:text-blue-300 font-mono mt-0.5">{branches.length || 2} فرع نشط</div>
             </div>
             <div className="p-2 bg-purple-100 dark:bg-blue-500/25 rounded-xl text-purple-700 dark:text-blue-300 border border-purple-300 dark:border-blue-500/40">
@@ -547,14 +547,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
           <button
             type="button"
             onClick={() => onNavigate('trainees')}
-            className="w-full text-right bg-white/80 dark:bg-gradient-to-br dark:from-[#0f172a]/90 dark:via-[#0c1322]/90 dark:to-[#070b14]/90 p-3 rounded-2xl border border-cyan-300/60 dark:border-cyan-500/40 hover:border-cyan-500 flex flex-col justify-between h-[78px] relative overflow-hidden group transition-all shadow-md backdrop-blur-md cursor-pointer"
+            className="w-full text-right bg-white/95 dark:bg-slate-900/90 p-3 rounded-2xl border border-cyan-300/80 dark:border-cyan-500/40 hover:border-cyan-500 flex flex-col justify-between h-[78px] relative overflow-hidden group transition-all shadow-xs dark:shadow-md backdrop-blur-md cursor-pointer"
           >
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-1.5">
                 <div className="p-1 bg-cyan-100 dark:bg-cyan-500/25 rounded-lg text-cyan-700 dark:text-cyan-300 border border-cyan-300 dark:border-cyan-500/40">
                   <Users className="w-3.5 h-3.5" />
                 </div>
-                <span className="text-xs font-bold text-slate-700 dark:text-slate-100">إجمالي المتدربين</span>
+                <span className="text-xs font-bold text-slate-800 dark:text-slate-100">إجمالي المتدربين</span>
               </div>
               <span className="text-lg font-black text-cyan-700 dark:text-cyan-300 font-mono">
                 {trainees.length}
@@ -574,14 +574,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
           <button
             type="button"
             onClick={() => onNavigate('attendance')}
-            className="w-full text-right bg-white/80 dark:bg-gradient-to-br dark:from-[#0f172a]/90 dark:via-[#0c1322]/90 dark:to-[#070b14]/90 p-3 rounded-2xl border border-purple-300/60 dark:border-purple-500/40 hover:border-purple-500 flex flex-col justify-between h-[78px] relative overflow-hidden group transition-all shadow-md backdrop-blur-md cursor-pointer"
+            className="w-full text-right bg-white/95 dark:bg-slate-900/90 p-3 rounded-2xl border border-purple-300/80 dark:border-purple-500/40 hover:border-purple-500 flex flex-col justify-between h-[78px] relative overflow-hidden group transition-all shadow-xs dark:shadow-md backdrop-blur-md cursor-pointer"
           >
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-1.5">
                 <div className="p-1 bg-purple-100 dark:bg-purple-500/25 rounded-lg text-purple-700 dark:text-purple-300 border border-purple-300 dark:border-purple-500/40">
                   <CalendarCheck className="w-3.5 h-3.5" />
                 </div>
-                <span className="text-xs font-bold text-slate-700 dark:text-slate-100">حضور اليوم</span>
+                <span className="text-xs font-bold text-slate-800 dark:text-slate-100">حضور اليوم</span>
               </div>
               <span className="text-lg font-black text-purple-700 dark:text-purple-300 font-mono">
                 {todayAttendanceCount}
@@ -599,14 +599,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
           <button
             type="button"
             onClick={() => onNavigate('courses')}
-            className="w-full text-right bg-white/80 dark:bg-gradient-to-br dark:from-[#0f172a]/90 dark:via-[#0c1322]/90 dark:to-[#070b14]/90 p-3 rounded-2xl border border-indigo-300/60 dark:border-indigo-500/40 hover:border-indigo-500 flex flex-col justify-between h-[78px] relative overflow-hidden group transition-all shadow-md backdrop-blur-md cursor-pointer"
+            className="w-full text-right bg-white/95 dark:bg-slate-900/90 p-3 rounded-2xl border border-indigo-300/80 dark:border-indigo-500/40 hover:border-indigo-500 flex flex-col justify-between h-[78px] relative overflow-hidden group transition-all shadow-xs dark:shadow-md backdrop-blur-md cursor-pointer"
           >
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-1.5">
                 <div className="p-1 bg-indigo-100 dark:bg-indigo-500/25 rounded-lg text-indigo-700 dark:text-indigo-300 border border-indigo-300 dark:border-indigo-500/40">
                   <BookOpen className="w-3.5 h-3.5" />
                 </div>
-                <span className="text-xs font-bold text-slate-700 dark:text-slate-100">دورات تدريبية فعالة</span>
+                <span className="text-xs font-bold text-slate-800 dark:text-slate-100">دورات تدريبية فعالة</span>
               </div>
               <span className="text-lg font-black text-indigo-700 dark:text-indigo-300 font-mono">
                 {courses.length}
@@ -625,14 +625,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
           <button
             type="button"
             onClick={() => onNavigate('reports')}
-            className="w-full text-right bg-white/80 dark:bg-gradient-to-br dark:from-[#0f172a]/90 dark:via-[#0c1322]/90 dark:to-[#070b14]/90 p-3 rounded-2xl border border-pink-300/60 dark:border-pink-500/40 hover:border-pink-500 flex flex-col justify-between h-[78px] relative overflow-hidden group transition-all shadow-md backdrop-blur-md cursor-pointer"
+            className="w-full text-right bg-white/95 dark:bg-slate-900/90 p-3 rounded-2xl border border-pink-300/80 dark:border-pink-500/40 hover:border-pink-500 flex flex-col justify-between h-[78px] relative overflow-hidden group transition-all shadow-xs dark:shadow-md backdrop-blur-md cursor-pointer"
           >
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-1.5">
                 <div className="p-1 bg-pink-100 dark:bg-pink-500/25 rounded-lg text-pink-700 dark:text-pink-300 border border-pink-300 dark:border-pink-500/40">
                   <Flame className="w-3.5 h-3.5" />
                 </div>
-                <span className="text-xs font-bold text-slate-700 dark:text-slate-100">تقييم المدربين</span>
+                <span className="text-xs font-bold text-slate-800 dark:text-slate-100">تقييم المدربين</span>
               </div>
               <span className="text-lg font-black text-pink-700 dark:text-pink-300 font-mono">
                 4.9
@@ -651,10 +651,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
           <button
             type="button"
             onClick={() => onNavigate('exams')}
-            className="w-full text-right bg-white/80 dark:bg-gradient-to-br dark:from-[#0f172a]/90 dark:via-[#0c1322]/90 dark:to-[#070b14]/90 p-3 rounded-2xl border border-amber-300/60 dark:border-amber-500/40 hover:border-amber-500 flex items-center justify-between h-[78px] relative overflow-hidden group transition-all shadow-md backdrop-blur-md cursor-pointer"
+            className="w-full text-right bg-white/95 dark:bg-slate-900/90 p-3 rounded-2xl border border-amber-300/80 dark:border-amber-500/40 hover:border-amber-500 flex items-center justify-between h-[78px] relative overflow-hidden group transition-all shadow-xs dark:shadow-md backdrop-blur-md cursor-pointer"
           >
             <div>
-              <div className="text-xs font-bold text-slate-700 dark:text-slate-100">الاختبارات والتقييمات</div>
+              <div className="text-xs font-bold text-slate-800 dark:text-slate-100">الاختبارات والتقييمات</div>
               <div className="text-sm font-black text-amber-700 dark:text-amber-300 font-mono mt-0.5">14 اختبار نشط</div>
             </div>
             <div className="p-2 bg-amber-100 dark:bg-amber-500/25 rounded-xl text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-500/40">
@@ -899,6 +899,15 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
           </div>
         </div>
       )}
+
+      {/* Celebration Overlay with Fireworks, Balloons, and Fanfare */}
+      <SessionCelebrationOverlay
+        isOpen={showCelebration}
+        onClose={() => setShowCelebration(false)}
+        sessionTitle="لوحة شرف نجوم الأسبوع المتألقين"
+        starWinnerName={selectedTrainee?.name}
+        starWinnerPoints={selectedTrainee?.points}
+      />
 
     </div>
   );

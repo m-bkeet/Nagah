@@ -197,6 +197,12 @@ export const AttendanceView: React.FC = () => {
           const pts = t.totalPoints || t.points || 0;
           const starsCount = Math.min(5, Math.max(1, Math.floor(pts / 20) + 1));
 
+          const isEarly = entryTime && (entryTime.includes(':0') || entryTime.includes(':1'));
+          const lecturePts = (att?.status === 'present' ? (isEarly ? 15 : 12) : att?.status === 'late' ? 6 : att?.status === 'excused' ? 2 : 0) + (deviceName ? 2 : 0);
+          const weeklyPts = Math.max(lecturePts, Math.round(pts * 0.2) + lecturePts);
+          const monthlyPts = Math.max(weeklyPts, Math.round(pts * 0.5) + lecturePts * 2);
+          const cumulativePts = pts;
+
           return {
             id: t.id,
             code: t.code,
@@ -212,7 +218,11 @@ export const AttendanceView: React.FC = () => {
             totalPoints: pts,
             points: pts,
             stars: starsCount,
-            ranking: t.ranking || idx + 1
+            ranking: t.ranking || idx + 1,
+            lecturePoints: lecturePts,
+            weeklyPoints: weeklyPts,
+            monthlyPoints: monthlyPts,
+            cumulativePoints: cumulativePts
           };
         })
       }

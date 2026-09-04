@@ -1,8 +1,29 @@
 node_modules/
-build/
-dist/
 coverage/
 .DS_Store
 *.log
 .env*
 !.env.example
+
+# Runtime data backups
+data/backups/
+*.backup.json
+
+# Temporary root scripts & patches
+/patch*
+/fix_*
+/rewrite_*
+/update_*
+/test-*
+/test_*
+/audit.*
+/diagnostic.*
+/*.patch
+/master_forensic_output.json
+/generate-snapshot.cjs
+/inspect-zip.cjs
+/reset-db.cjs
+/run-actual-import.cjs
+
+
+

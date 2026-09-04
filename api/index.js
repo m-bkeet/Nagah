@@ -25,7 +25,9 @@ function hashPassword(password) {
 var isServerless, ACTUAL_DATA_DIR, BACKUPS_DIR, DB_FILE, BACKUP_FILE, BUNDLED_DB_PATHS, defaultPointRules, initialData, userPasswordMap, DatabaseManager, db;
 var init_db = __esm({
   "server/db.ts"() {
-    isServerless = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.VERCEL_ENV);
+    isServerless = Boolean(
+      process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.VERCEL_ENV || process.cwd().startsWith("/var/task") || process.cwd() === "/"
+    );
     ACTUAL_DATA_DIR = isServerless ? path.join(os.tmpdir(), "nagah_data") : path.join(process.cwd(), "data");
     BACKUPS_DIR = path.join(ACTUAL_DATA_DIR, "backups");
     DB_FILE = path.join(ACTUAL_DATA_DIR, "database.json");
@@ -4046,19 +4048,15 @@ async function hydrateAllFromSupabase() {
 function createRepo(key) {
   return {
     async getAll() {
+      let supabaseItems = [];
       if (supabaseClient2) {
         try {
           const { data, error } = await supabaseClient2.from("collections").select("id, data").eq("collection_name", key).range(0, 4999);
           if (!error && Array.isArray(data)) {
-            const items = data.map((row) => ({
+            supabaseItems = data.map((row) => ({
               id: row.id,
               ...row.data || {}
             }));
-            const memData2 = db.getData();
-            if (memData2) {
-              memData2[key] = items;
-            }
-            return items;
           } else if (error) {
             console.error(`[SupabaseRepo] Error fetching collection "${key}":`, error.message);
           }
@@ -4067,8 +4065,24 @@ function createRepo(key) {
         }
       }
       const memData = db.getData();
-      const list = memData ? memData[key] : [];
-      return Array.isArray(list) ? list : [];
+      const memItems = memData && Array.isArray(memData[key]) ? memData[key] : [];
+      if (supabaseItems.length > 0) {
+        const itemMap = /* @__PURE__ */ new Map();
+        supabaseItems.forEach((item) => {
+          if (item && item.id) itemMap.set(String(item.id), item);
+        });
+        memItems.forEach((item) => {
+          if (item && item.id && !itemMap.has(String(item.id))) {
+            itemMap.set(String(item.id), item);
+          }
+        });
+        const merged = Array.from(itemMap.values());
+        if (memData) {
+          memData[key] = merged;
+        }
+        return merged;
+      }
+      return memItems;
     },
     async getById(id) {
       if (!id) return null;
@@ -4738,8 +4752,344 @@ async function runDataIntegrityAudit() {
 
 // server/routes.ts
 init_data();
+
+// server/registerLogic.ts
+init_data();
+function resolveGradePrefix(gradeOrCourse) {
+  if (!gradeOrCourse) return "A";
+  const clean = String(gradeOrCourse).trim();
+  const lower = clean.toLowerCase();
+  if (clean.includes("\u0631\u0627\u0628\u0639") || lower.includes("ict4") || clean === "4" || clean.includes("\u0627\u0644\u0631\u0627\u0628\u0639")) return "A";
+  if (clean.includes("\u062E\u0627\u0645\u0633") || lower.includes("ict5") || clean === "5" || clean.includes("\u0627\u0644\u062E\u0627\u0645\u0633")) return "B";
+  if (clean.includes("\u0633\u0627\u062F\u0633") || lower.includes("ict6") || clean === "6" || clean.includes("\u0627\u0644\u0633\u0627\u062F\u0633")) return "C";
+  if (clean.includes("\u0623\u0648\u0644 \u0625\u0639\u062F\u0627\u062F\u064A") || clean.includes("\u0627\u0648\u0644 \u0627\u0639\u062F\u0627\u062F\u064A") || clean.includes("1 \u0625\u0639\u062F\u0627\u062F\u064A") || clean.includes("\u0627\u0644\u0623\u0648\u0644 \u0627\u0644\u0625\u0639\u062F\u0627\u062F\u064A") || lower.includes("ict-p1") || lower.includes("p1")) return "D";
+  if (clean.includes("\u062B\u0627\u0646\u064A \u0625\u0639\u062F\u0627\u062F\u064A") || clean.includes("\u062A\u0627\u0646\u064A \u0627\u0639\u062F\u0627\u062F\u064A") || clean.includes("2 \u0625\u0639\u062F\u0627\u062F\u064A") || clean.includes("\u0627\u0644\u062B\u0627\u0646\u064A \u0627\u0644\u0625\u0639\u062F\u0627\u062F\u064A") || lower.includes("ict-p2") || lower.includes("p2")) return "E";
+  if (clean.includes("\u062B\u0627\u0644\u062B \u0625\u0639\u062F\u0627\u062F\u064A") || clean.includes("\u062A\u0627\u0644\u062A \u0627\u0639\u062F\u0627\u062F\u064A") || clean.includes("3 \u0625\u0639\u062F\u0627\u062F\u064A") || clean.includes("\u0627\u0644\u062B\u0627\u0644\u062B \u0627\u0644\u0625\u0639\u062F\u0627\u062F\u064A") || lower.includes("ict-p3") || lower.includes("p3")) return "F";
+  if (clean.includes("\u0623\u0648\u0644 \u062B\u0627\u0646\u0648\u064A") || clean.includes("\u0627\u0648\u0644 \u062B\u0627\u0646\u0648\u064A") || clean.includes("1 \u062B\u0627\u0646\u0648\u064A") || clean.includes("\u0627\u0644\u0623\u0648\u0644 \u0627\u0644\u062B\u0627\u0646\u0648\u064A") || lower.includes("sec-1") || lower.includes("ict-s1") || lower.includes("s1")) return "G";
+  if (clean.includes("\u062B\u0627\u0646\u064A \u062B\u0627\u0646\u0648\u064A") || clean.includes("\u062A\u0627\u0646\u064A \u062B\u0627\u0646\u0648\u064A") || clean.includes("2 \u062B\u0627\u0646\u0648\u064A") || clean.includes("\u0627\u0644\u062B\u0627\u0646\u064A \u0627\u0644\u062B\u0627\u0646\u0648\u064A") || lower.includes("sec-2") || lower.includes("ict-s2") || lower.includes("s2")) return "H";
+  if (clean.includes("\u062B\u0627\u0644\u062B \u062B\u0627\u0646\u0648\u064A") || clean.includes("\u062A\u0627\u0644\u062A \u062B\u0627\u0646\u0648\u064A") || clean.includes("3 \u062B\u0627\u0646\u0648\u064A") || clean.includes("\u0627\u0644\u062B\u0627\u0644\u062B \u0627\u0644\u062B\u0627\u0646\u0648\u064A") || lower.includes("sec-3") || lower.includes("ict-s3") || lower.includes("s3")) return "I";
+  return "A";
+}
+function matchCourseForRegistration(allCourses, grade, track) {
+  const cleanGrade = (grade || "").trim();
+  const isLanguages = track === "\u0644\u063A\u0627\u062A" || track?.toLowerCase().includes("lang");
+  if (cleanGrade.includes("\u0631\u0627\u0628\u0639") || cleanGrade.includes("4") || cleanGrade.includes("\u0627\u0644\u0631\u0627\u0628\u0639")) {
+    const c = allCourses.find((c2) => {
+      const n = (c2.name || "").toLowerCase();
+      const code = (c2.code || "").toLowerCase();
+      return n.includes("ict4") || code.includes("ict4") || n.includes("\u0631\u0627\u0628\u0639") && !n.includes("\u0625\u0639\u062F\u0627\u062F\u064A") && !n.includes("\u062B\u0627\u0646\u0648\u064A");
+    });
+    if (c) return c;
+  }
+  if (cleanGrade.includes("\u062E\u0627\u0645\u0633") || cleanGrade.includes("5") || cleanGrade.includes("\u0627\u0644\u062E\u0627\u0645\u0633")) {
+    const c = allCourses.find((c2) => {
+      const n = (c2.name || "").toLowerCase();
+      const code = (c2.code || "").toLowerCase();
+      return n.includes("ict5") || code.includes("ict5") || n.includes("\u062E\u0627\u0645\u0633") && !n.includes("\u0625\u0639\u062F\u0627\u062F\u064A") && !n.includes("\u062B\u0627\u0646\u0648\u064A");
+    });
+    if (c) return c;
+  }
+  if (cleanGrade.includes("\u0633\u0627\u062F\u0633") || cleanGrade.includes("6") || cleanGrade.includes("\u0627\u0644\u0633\u0627\u062F\u0633")) {
+    const c = allCourses.find((c2) => {
+      const n = (c2.name || "").toLowerCase();
+      const code = (c2.code || "").toLowerCase();
+      return n.includes("ict6") || code.includes("ict6") || n.includes("\u0633\u0627\u062F\u0633") && !n.includes("\u0625\u0639\u062F\u0627\u062F\u064A") && !n.includes("\u062B\u0627\u0646\u0648\u064A");
+    });
+    if (c) return c;
+  }
+  if (cleanGrade.includes("\u0623\u0648\u0644 \u0625\u0639\u062F\u0627\u062F\u064A") || cleanGrade.includes("\u0627\u0648\u0644 \u0627\u0639\u062F\u0627\u062F\u064A") || cleanGrade.includes("1 \u0625\u0639\u062F\u0627\u062F\u064A") || cleanGrade.includes("\u0627\u0644\u0623\u0648\u0644 \u0627\u0644\u0625\u0639\u062F\u0627\u062F\u064A")) {
+    if (isLanguages) {
+      const langCourse = allCourses.find((c2) => c2.name && c2.name.includes("\u0627\u0644\u0623\u0648\u0644 \u0627\u0644\u0625\u0639\u062F\u0627\u062F\u064A") && c2.name.includes("\u0644\u063A\u0627\u062A") || c2.code && (c2.code.toLowerCase().includes("p1-l") || c2.code.toLowerCase().includes("p1_l")));
+      if (langCourse) return langCourse;
+    }
+    const c = allCourses.find((c2) => {
+      const n = (c2.name || "").toLowerCase();
+      const code = (c2.code || "").toLowerCase();
+      return n.includes("ict-p1") || code.includes("ict-p1") || (n.includes("\u0623\u0648\u0644 \u0625\u0639\u062F\u0627\u062F\u064A") || n.includes("\u0627\u0644\u0623\u0648\u0644 \u0627\u0644\u0625\u0639\u062F\u0627\u062F\u064A") || n.includes("\u0627\u0648\u0644 \u0627\u0639\u062F\u0627\u062F\u064A"));
+    });
+    if (c) return c;
+  }
+  if (cleanGrade.includes("\u062B\u0627\u0646\u064A \u0625\u0639\u062F\u0627\u062F\u064A") || cleanGrade.includes("\u062A\u0627\u0646\u064A \u0627\u0639\u062F\u0627\u062F\u064A") || cleanGrade.includes("2 \u0625\u0639\u062F\u0627\u062F\u064A") || cleanGrade.includes("\u0627\u0644\u062B\u0627\u0646\u064A \u0627\u0644\u0625\u0639\u062F\u0627\u062F\u064A")) {
+    if (isLanguages) {
+      const langCourse = allCourses.find((c2) => c2.name && c2.name.includes("\u0627\u0644\u062B\u0627\u0646\u064A \u0627\u0644\u0625\u0639\u062F\u0627\u062F\u064A") && c2.name.includes("\u0644\u063A\u0627\u062A") || c2.code && (c2.code.toLowerCase().includes("p2-l") || c2.code.toLowerCase().includes("p2_l")));
+      if (langCourse) return langCourse;
+    }
+    const c = allCourses.find((c2) => {
+      const n = (c2.name || "").toLowerCase();
+      const code = (c2.code || "").toLowerCase();
+      return n.includes("ict-p2") || code.includes("ict-p2") || (n.includes("\u062B\u0627\u0646\u064A \u0625\u0639\u062F\u0627\u062F\u064A") || n.includes("\u0627\u0644\u062B\u0627\u0646\u064A \u0627\u0644\u0625\u0639\u062F\u0627\u062F\u064A") || n.includes("\u062A\u0627\u0646\u064A \u0627\u0639\u062F\u0627\u062F\u064A"));
+    });
+    if (c) return c;
+  }
+  if (cleanGrade.includes("\u062B\u0627\u0644\u062B \u0625\u0639\u062F\u0627\u062F\u064A") || cleanGrade.includes("\u062A\u0627\u0644\u062A \u0627\u0639\u062F\u0627\u062F\u064A") || cleanGrade.includes("3 \u0625\u0639\u062F\u0627\u062F\u064A") || cleanGrade.includes("\u0627\u0644\u062B\u0627\u0644\u062B \u0627\u0644\u0625\u0639\u062F\u0627\u062F\u064A")) {
+    if (isLanguages) {
+      const langCourse = allCourses.find((c2) => c2.name && c2.name.includes("\u0627\u0644\u062B\u0627\u0644\u062B \u0627\u0644\u0625\u0639\u062F\u0627\u062F\u064A") && c2.name.includes("\u0644\u063A\u0627\u062A") || c2.code && (c2.code.toLowerCase().includes("p3-l") || c2.code.toLowerCase().includes("p3_l")));
+      if (langCourse) return langCourse;
+    }
+    const c = allCourses.find((c2) => {
+      const n = (c2.name || "").toLowerCase();
+      const code = (c2.code || "").toLowerCase();
+      return n.includes("ict-p3") || code.includes("ict-p3") || (n.includes("\u062B\u0627\u0644\u062B \u0625\u0639\u062F\u0627\u062F\u064A") || n.includes("\u0627\u0644\u062B\u0627\u0644\u062B \u0627\u0644\u0625\u0639\u062F\u0627\u062F\u064A") || n.includes("\u062A\u0627\u0644\u062A \u0627\u0639\u062F\u0627\u062F\u064A"));
+    });
+    if (c) return c;
+  }
+  if (cleanGrade.includes("\u0623\u0648\u0644 \u062B\u0627\u0646\u0648\u064A") || cleanGrade.includes("\u0627\u0648\u0644 \u062B\u0627\u0646\u0648\u064A") || cleanGrade.includes("1 \u062B\u0627\u0646\u0648\u064A") || cleanGrade.includes("\u0627\u0644\u0623\u0648\u0644 \u0627\u0644\u062B\u0627\u0646\u0648\u064A")) {
+    const c = allCourses.find((c2) => {
+      const n = (c2.name || "").toLowerCase();
+      const code = (c2.code || "").toLowerCase();
+      return n.includes("ict-s1") || code.includes("ict-s1") || n.includes("\u0623\u0648\u0644 \u062B\u0627\u0646\u0648\u064A") || n.includes("\u0627\u0644\u0623\u0648\u0644 \u0627\u0644\u062B\u0627\u0646\u0648\u064A");
+    });
+    if (c) return c;
+  }
+  if (cleanGrade.includes("\u062B\u0627\u0646\u064A \u062B\u0627\u0646\u0648\u064A") || cleanGrade.includes("\u062A\u0627\u0646\u064A \u062B\u0627\u0646\u0648\u064A") || cleanGrade.includes("2 \u062B\u0627\u0646\u0648\u064A") || cleanGrade.includes("\u0627\u0644\u062B\u0627\u0646\u064A \u0627\u0644\u062B\u0627\u0646\u0648\u064A")) {
+    const c = allCourses.find((c2) => {
+      const n = (c2.name || "").toLowerCase();
+      const code = (c2.code || "").toLowerCase();
+      return n.includes("ict-s2") || code.includes("ict-s2") || n.includes("\u062B\u0627\u0646\u064A \u062B\u0627\u0646\u0648\u064A") || n.includes("\u0627\u0644\u062B\u0627\u0646\u064A \u0627\u0644\u062B\u0627\u0646\u0648\u064A");
+    });
+    if (c) return c;
+  }
+  if (cleanGrade.includes("\u062B\u0627\u0644\u062B \u062B\u0627\u0646\u0648\u064A") || cleanGrade.includes("\u062A\u0627\u0644\u062A \u062B\u0627\u0646\u0648\u064A") || cleanGrade.includes("3 \u062B\u0627\u0646\u0648\u064A") || cleanGrade.includes("\u0627\u0644\u062B\u0627\u0644\u062B \u0627\u0644\u062B\u0627\u0646\u0648\u064A")) {
+    const c = allCourses.find((c2) => {
+      const n = (c2.name || "").toLowerCase();
+      const code = (c2.code || "").toLowerCase();
+      return n.includes("ict-s3") || code.includes("ict-s3") || n.includes("\u062B\u0627\u0644\u062B \u062B\u0627\u0646\u0648\u064A") || n.includes("\u0627\u0644\u062B\u0627\u0644\u062B \u0627\u0644\u062B\u0627\u0646\u0648\u064A");
+    });
+    if (c) return c;
+  }
+  return allCourses.find((c) => c.name === cleanGrade || cleanGrade.includes(c.name)) || null;
+}
+function normalizeArabicFull(str) {
+  if (!str) return "";
+  let s = str.trim().toLowerCase();
+  s = s.replace(/[\u064B-\u065F\u0670\u0640]/g, "");
+  s = s.replace(/[أإآٱ]/g, "\u0627");
+  s = s.replace(/ة/g, "\u0647");
+  s = s.replace(/ى/g, "\u064A");
+  s = s.replace(/[ؤئ]/g, "\u0621");
+  s = s.replace(/عبد\s+/g, "\u0639\u0628\u062F");
+  s = s.replace(/ابو\s+/g, "\u0627\u0628\u0648");
+  s = s.replace(/[\s\-_.]+/g, " ");
+  return s.trim();
+}
+async function handlePublicRegister(req, res) {
+  try {
+    const settings = await SettingRepo.get();
+    if (settings.allowOnlineRegistration === false) {
+      return res.status(403).json({
+        success: false,
+        registrationClosed: true,
+        error: "\u0639\u0630\u0631\u0627\u064B\u060C \u0628\u0627\u0628 \u0627\u0644\u062A\u0633\u062C\u064A\u0644 \u0627\u0644\u062E\u0627\u0631\u062C\u064A \u0645\u063A\u0644\u0642 \u062D\u0627\u0644\u064A\u0627\u064B \u0644\u0627\u0643\u062A\u0645\u0627\u0644 \u0627\u0644\u0639\u062F\u062F \u0627\u0644\u0645\u0637\u0644\u0648\u0628 \u0623\u0648 \u0628\u0642\u0631\u0627\u0631 \u0625\u062F\u0627\u0631\u064A. \u064A\u0645\u0643\u0646\u0643 \u0627\u0644\u062A\u0648\u0627\u0635\u0644 \u0627\u0644\u0645\u0628\u0627\u0634\u0631 \u0645\u0639 \u0625\u062F\u0627\u0631\u0629 \u0627\u0644\u0645\u0631\u0643\u0632 \u0639\u0628\u0631 \u0627\u0644\u0648\u0627\u062A\u0633\u0627\u0628."
+      });
+    }
+    const data = req.body;
+    if (!data.fullName || !data.phone && !data.parentPhone) {
+      return res.status(400).json({ success: false, error: "\u0627\u0633\u0645 \u0627\u0644\u0637\u0627\u0644\u0628 \u0648\u0631\u0642\u0645 \u0627\u0644\u0647\u0627\u062A\u0641 \u062D\u0642\u0648\u0644 \u0625\u062C\u0628\u0627\u0631\u064A\u0629" });
+    }
+    const cleanFullName = String(data.fullName).trim();
+    const cleanPhone = String(data.phone || "").trim();
+    const cleanParentPhone = String(data.parentPhone || "").trim();
+    const phoneDigits = cleanPhone.replace(/\D/g, "").slice(-10);
+    const parentPhoneDigits = cleanParentPhone.replace(/\D/g, "").slice(-10);
+    const branchId = data.branchId || "branch-1";
+    const grade = String(data.grade || data.customGrade || "\u0627\u0644\u0635\u0641 \u0627\u0644\u0631\u0627\u0628\u0639 \u0627\u0644\u0627\u0628\u062A\u062F\u0627\u0626\u064A").trim();
+    const track = String(data.track || "\u0639\u0631\u0628\u064A").trim();
+    const normInputName = normalizeArabicFull(cleanFullName);
+    const allTrainees = await TraineeRepo.getAll();
+    const allCourses = await CourseRepo.getAll();
+    const allGroups = await GroupRepo.getAll();
+    const allBranches = await BranchRepo.getAll();
+    const existingTrainee = allTrainees.find((t) => {
+      const tPhoneDigits = String(t.phone || "").replace(/\D/g, "").slice(-10);
+      const normExistingName = normalizeArabicFull(t.fullName || "");
+      const sameStudentPhone = phoneDigits && phoneDigits.length >= 8 && tPhoneDigits && tPhoneDigits === phoneDigits;
+      const sameNormalizedName = normInputName && normExistingName && normInputName === normExistingName;
+      return sameStudentPhone || sameNormalizedName;
+    });
+    if (existingTrainee) {
+      const existingCourse = allCourses.find((c) => c.id === existingTrainee.courseId);
+      const existingGroup = allGroups.find((g) => g.id === existingTrainee.groupId);
+      const existingBranch = allBranches.find((b) => b.id === existingTrainee.branchId);
+      return res.json({
+        success: true,
+        alreadyRegistered: true,
+        message: "\u062A\u0645 \u0627\u0644\u062A\u0633\u062C\u064A\u0644 \u0645\u0646 \u0642\u0628\u0644! \u0623\u0647\u0644\u0627\u064B \u0628\u0643 \u0645\u062C\u062F\u062F\u0627\u064B \u0641\u064A \u0645\u0631\u0643\u0632 \u0627\u0644\u0646\u062C\u0627\u062D \u0644\u0644\u062A\u062F\u0631\u064A\u0628 \u0648\u0627\u0644\u0627\u0633\u062A\u0634\u0627\u0631\u0627\u062A.",
+        traineeCode: existingTrainee.code,
+        traineeName: existingTrainee.fullName,
+        grade: existingTrainee.grade || grade,
+        groupName: existingGroup?.name || "\u0627\u0644\u0645\u062C\u0645\u0648\u0639\u0629 \u0627\u0644\u0623\u0633\u0627\u0633\u064A\u0629",
+        courseName: existingCourse?.name || "\u0627\u0644\u062F\u0648\u0631\u0629 \u0627\u0644\u062A\u062F\u0631\u064A\u0628\u064A\u0629",
+        branchName: existingBranch?.name || "\u0627\u0644\u0641\u0631\u0639 \u0627\u0644\u0631\u0626\u064A\u0633\u064A",
+        phone: existingTrainee.phone,
+        parentPhone: existingTrainee.parentPhone,
+        parentName: existingTrainee.parentName,
+        photoUrl: existingTrainee.photoUrl
+      });
+    }
+    let targetCourse = null;
+    if (data.courseId) {
+      targetCourse = allCourses.find((c) => c.id === data.courseId) || null;
+    }
+    if (!targetCourse) {
+      targetCourse = matchCourseForRegistration(allCourses, grade, track);
+    }
+    if (!targetCourse) {
+      const prefix = resolveGradePrefix(grade);
+      const generatedCode = `CRS-${prefix}-${Date.now().toString().slice(-4)}`;
+      const newCourse = {
+        id: "crs-" + Date.now() + "-" + Math.random().toString(36).substr(2, 4),
+        name: `${grade}${track === "\u0644\u063A\u0627\u062A" ? " (\u0644\u063A\u0627\u062A)" : ""}`,
+        code: generatedCode,
+        branchId,
+        category: "\u0627\u0644\u0645\u062F\u0627\u0631\u0633",
+        hoursCount: 24,
+        lecturesCount: 12,
+        feeAmount: branchId === "branch-2" ? 250 : 200,
+        price: branchId === "branch-2" ? 250 : 200,
+        status: "active"
+      };
+      await CourseRepo.create(newCourse.id, newCourse);
+      targetCourse = newCourse;
+    }
+    const groupsInBranch = allGroups.filter((g) => g.courseId === targetCourse.id && g.branchId === branchId);
+    let targetGroup = null;
+    for (const g of groupsInBranch) {
+      const enrolledCount = allTrainees.filter((t) => t.groupId === g.id).length;
+      if (enrolledCount < (g.maxCapacity || g.maxStudents || 30)) {
+        targetGroup = g;
+        break;
+      }
+    }
+    if (!targetGroup) {
+      const groupNum = groupsInBranch.length + 1;
+      const isBranch2 = branchId === "branch-2";
+      const groupName = `${targetCourse.name} - ${isBranch2 ? "B" : ""}${groupNum}`;
+      const newGroup = {
+        id: "grp-" + Date.now() + "-" + Math.random().toString(36).substring(2, 6),
+        name: groupName,
+        courseId: targetCourse.id,
+        branchId,
+        maxStudents: 25,
+        maxCapacity: 25,
+        status: "active",
+        days: ["\u0627\u0644\u062C\u0645\u0639\u0629"],
+        timeSlot: "04:00 \u0645 - 06:00 \u0645"
+      };
+      await GroupRepo.create(newGroup.id, newGroup);
+      targetGroup = newGroup;
+    }
+    const expectedPrefix = resolveGradePrefix(grade || targetCourse.name);
+    const pfx = expectedPrefix.toUpperCase();
+    const regex = new RegExp(`^${pfx}-?(\\d+)$`, "i");
+    let maxNum = 0;
+    allTrainees.forEach((t) => {
+      if (t.code) {
+        const m = String(t.code).trim().match(regex);
+        if (m) {
+          const num = parseInt(m[1], 10);
+          if (!isNaN(num) && num > maxNum) maxNum = num;
+        }
+      }
+    });
+    const nextNum = maxNum + 1;
+    const newCode = `${pfx}${nextNum.toString().padStart(3, "0")}`;
+    const branchObj = allBranches.find((b) => b.id === branchId);
+    const branchName = branchObj ? branchObj.name : branchId;
+    const newTrainee = {
+      id: "trainee-" + Date.now() + "-" + Math.random().toString(36).substr(2, 4),
+      code: newCode,
+      fullName: cleanFullName,
+      phone: cleanPhone,
+      parentPhone: data.parentPhone ? String(data.parentPhone).trim() : cleanPhone,
+      parentName: data.parentName ? String(data.parentName).trim() : "",
+      nationalId: data.nationalId ? String(data.nationalId).trim() : "",
+      grade,
+      branchId,
+      courseId: targetCourse.id,
+      courseIds: [targetCourse.id],
+      groupId: targetGroup.id,
+      trainerId: targetGroup.trainerId || targetCourse.trainerId || "",
+      gender: data.gender || "male",
+      registrationDate: (/* @__PURE__ */ new Date()).toISOString().split("T")[0],
+      status: "active",
+      feeAmount: targetCourse.feeAmount || targetCourse.price || 500,
+      discountAmount: 0,
+      netAmount: targetCourse.feeAmount || targetCourse.price || 500,
+      paidAmount: 0,
+      remainingAmount: targetCourse.feeAmount || targetCourse.price || 500,
+      totalPoints: 0,
+      points: 0,
+      photoUrl: data.photoUrl || "",
+      notes: `[\u0637\u0627\u0644\u0628 \u062D\u0642\u064A\u0642\u064A - \u062A\u0633\u062C\u064A\u0644 \u0630\u0627\u062A\u064A \u0639\u0628\u0631 \u0627\u0644\u0631\u0627\u0628\u0637 \u0627\u0644\u062E\u0627\u0631\u062C\u064A] - \u0627\u0644\u0635\u0641: (${grade}) - \u0627\u0644\u0645\u0633\u0627\u0631: (${track})`
+    };
+    await TraineeRepo.create(newTrainee.id, newTrainee);
+    return res.json({
+      success: true,
+      traineeCode: newCode,
+      traineeName: newTrainee.fullName,
+      groupName: targetGroup.name,
+      courseName: targetCourse.name,
+      branchName
+    });
+  } catch (err) {
+    console.error("Registration error:", err);
+    res.status(500).json({ success: false, error: err.message || "Internal Server Error" });
+  }
+}
+async function handlePublicTrainerRegister(req, res) {
+  try {
+    const settings = await SettingRepo.get();
+    if (settings.allowOnlineRegistration === false) {
+      return res.status(403).json({
+        success: false,
+        registrationClosed: true,
+        error: "\u0639\u0630\u0631\u0627\u064B\u060C \u0628\u0627\u0628 \u062A\u0633\u062C\u064A\u0644 \u0627\u0644\u0645\u062F\u0631\u0628\u064A\u0646 \u0645\u063A\u0644\u0642 \u062D\u0627\u0644\u064A\u0627\u064B \u0628\u0642\u0631\u0627\u0631 \u0625\u062F\u0627\u0631\u064A. \u064A\u0631\u062C\u0649 \u0627\u0644\u062A\u0648\u0627\u0635\u0644 \u0645\u0639 \u0625\u062F\u0627\u0631\u0629 \u0627\u0644\u0645\u0631\u0643\u0632."
+      });
+    }
+    const { name, phone, email, branchId, specialty, percentage, notes } = req.body;
+    if (!name || !phone || !branchId || !specialty) {
+      return res.status(400).json({ success: false, error: "\u062C\u0645\u064A\u0639 \u0627\u0644\u062D\u0642\u0648\u0644 \u0627\u0644\u0623\u0633\u0627\u0633\u064A\u0629 \u0645\u0637\u0644\u0648\u0628\u0629" });
+    }
+    const allTrainers = await TrainerRepo.getAll();
+    const cleanPhone = String(phone).trim();
+    const existing = allTrainers.find((t) => t.phone && t.phone.replace(/\D/g, "").slice(-10) === cleanPhone.replace(/\D/g, "").slice(-10));
+    if (existing) {
+      return res.json({
+        success: true,
+        alreadyRegistered: true,
+        message: "\u0623\u0647\u0644\u0627\u064B \u0628\u0643! \u0631\u0642\u0645 \u0647\u0627\u062A\u0641\u0643 \u0645\u0633\u062C\u0644 \u0628\u0627\u0644\u0641\u0639\u0644 \u0643\u0645\u062F\u0631\u0628 \u0644\u062F\u064A\u0646\u0627 \u0641\u064A \u0627\u0644\u0646\u0638\u0627\u0645.",
+        trainer: existing
+      });
+    }
+    const code = `TR-${Date.now().toString().slice(-4)}`;
+    const newTrainer = {
+      id: "trainer-" + Date.now() + "-" + Math.random().toString(36).substring(2, 6),
+      code,
+      name: String(name).trim(),
+      phone: cleanPhone,
+      email: email ? String(email).trim() : "",
+      branchId: branchId || "branch-1",
+      specialty: String(specialty).trim(),
+      percentage: Number(percentage) || 50,
+      centerPercentage: 100 - (Number(percentage) || 50),
+      notes: notes ? String(notes).trim() : "[\u062A\u0633\u062C\u064A\u0644 \u0645\u062F\u0631\u0628 \u062E\u0627\u0631\u062C\u064A \u0639\u0628\u0631 \u0627\u0644\u0631\u0627\u0628\u0637 \u0627\u0644\u0625\u0644\u0643\u062A\u0631\u0648\u0646\u064A]",
+      status: "active"
+    };
+    await TrainerRepo.create(newTrainer.id, newTrainer);
+    return res.json({
+      success: true,
+      message: "\u062A\u0645 \u062A\u0633\u062C\u064A\u0644 \u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0644\u0645\u062F\u0631\u0628 \u0628\u0646\u062C\u0627\u062D!",
+      trainer: newTrainer
+    });
+  } catch (err) {
+    console.error("Trainer Registration error:", err);
+    return res.status(500).json({ success: false, error: err.message || "\u062E\u0637\u0623 \u0641\u064A \u0627\u0644\u0633\u064A\u0631\u0641\u0631 \u0623\u062B\u0646\u0627\u0621 \u062A\u0633\u062C\u064A\u0644 \u0627\u0644\u0645\u062F\u0631\u0628" });
+  }
+}
+
+// server/routes.ts
 import express2 from "express";
-import os2 from "os";
+import os3 from "os";
 
 // server/migrationRoutes.ts
 import { Router } from "express";
@@ -4748,6 +5098,7 @@ import { Router } from "express";
 import fs2 from "fs";
 import path2 from "path";
 import crypto3 from "crypto";
+import os2 from "os";
 import JSZip from "jszip";
 import * as XLSX from "xlsx";
 init_db();
@@ -5084,12 +5435,20 @@ async function executeDatabaseImport(data, mode = "merge", options) {
 }
 
 // server/migrationService.ts
-var MIGRATION_DIR = path2.join(process.cwd(), "migration-package");
-var BACKUPS_DIR2 = path2.join(process.cwd(), "data", "backups");
+var isServerless2 = Boolean(
+  process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.VERCEL_ENV || process.cwd().startsWith("/var/task") || process.cwd() === "/"
+);
+var DATA_BASE_DIR = isServerless2 ? path2.join(os2.tmpdir(), "nagah_data") : path2.join(process.cwd(), "data");
+var MIGRATION_DIR = isServerless2 ? path2.join(os2.tmpdir(), "nagah_migration") : path2.join(process.cwd(), "migration-package");
+var BACKUPS_DIR2 = path2.join(DATA_BASE_DIR, "backups");
 var HISTORY_FILE = path2.join(BACKUPS_DIR2, "backup_history.json");
 function ensureDirectory(dir) {
-  if (!fs2.existsSync(dir)) {
-    fs2.mkdirSync(dir, { recursive: true });
+  try {
+    if (!fs2.existsSync(dir)) {
+      fs2.mkdirSync(dir, { recursive: true });
+    }
+  } catch (err) {
+    console.warn(`[MigrationService] Notice: Could not create directory ${dir}:`, err);
   }
 }
 var MigrationService = class {
@@ -6337,7 +6696,7 @@ var MigrationService = class {
     return { excelBuffer, filename };
   }
   static getLegacySourceFilesData() {
-    const pkgDir = path2.join(process.cwd(), "migration-package");
+    const pkgDir = MIGRATION_DIR;
     let students = [];
     let courses = [];
     let groups = [];
@@ -7181,34 +7540,34 @@ ${JSON.stringify(params.currentFields, null, 2)}
       console.warn("Gemini API Certificate Design Helper notice, using smart local rules engine:", apiError?.message);
     }
   }
-  const query = params.userPrompt.toLowerCase();
+  const query2 = params.userPrompt.toLowerCase();
   const modifiedFields = params.currentFields.map((f) => {
     const field = { ...f };
-    if (query.includes("\u0623\u062E\u0636\u0631") || query.includes("\u0627\u062E\u0636\u0631") || query.includes("green")) {
+    if (query2.includes("\u0623\u062E\u0636\u0631") || query2.includes("\u0627\u062E\u0636\u0631") || query2.includes("green")) {
       if (field.id === "traineeName" || field.id === "courseName") {
         field.color = "#15803d";
       }
-    } else if (query.includes("\u0630\u0647\u0628\u064A") || query.includes("gold")) {
+    } else if (query2.includes("\u0630\u0647\u0628\u064A") || query2.includes("gold")) {
       if (field.id === "traineeName" || field.id === "courseName") {
         field.color = "#d97706";
       }
-    } else if (query.includes("\u0623\u062D\u0645\u0631") || query.includes("\u0627\u062D\u0645\u0631") || query.includes("red")) {
+    } else if (query2.includes("\u0623\u062D\u0645\u0631") || query2.includes("\u0627\u062D\u0645\u0631") || query2.includes("red")) {
       if (field.id === "traineeName" || field.id === "courseName") {
         field.color = "#dc2626";
       }
-    } else if (query.includes("\u0623\u0632\u0631\u0642") || query.includes("\u0627\u0632\u0631\u0642") || query.includes("blue")) {
+    } else if (query2.includes("\u0623\u0632\u0631\u0642") || query2.includes("\u0627\u0632\u0631\u0642") || query2.includes("blue")) {
       if (field.id === "traineeName" || field.id === "courseName") {
         field.color = "#1d4ed8";
       }
     }
-    if (query.includes("\u062A\u0643\u0628\u064A\u0631") || query.includes("\u0643\u0628\u064A\u0631") || query.includes("\u0643\u0628\u0631") || query.includes("larger") || query.includes("big")) {
+    if (query2.includes("\u062A\u0643\u0628\u064A\u0631") || query2.includes("\u0643\u0628\u064A\u0631") || query2.includes("\u0643\u0628\u0631") || query2.includes("larger") || query2.includes("big")) {
       if (field.id === "traineeName") {
         field.fontSize = Math.min(100, field.fontSize + 10);
       }
       if (field.id === "courseName") {
         field.fontSize = Math.min(80, field.fontSize + 8);
       }
-    } else if (query.includes("\u062A\u0635\u063A\u064A\u0631") || query.includes("\u0635\u063A\u064A\u0631") || query.includes("\u0635\u063A\u0631") || query.includes("smaller")) {
+    } else if (query2.includes("\u062A\u0635\u063A\u064A\u0631") || query2.includes("\u0635\u063A\u064A\u0631") || query2.includes("\u0635\u063A\u0631") || query2.includes("smaller")) {
       if (field.id === "traineeName") {
         field.fontSize = Math.max(16, field.fontSize - 6);
       }
@@ -7216,11 +7575,11 @@ ${JSON.stringify(params.currentFields, null, 2)}
         field.fontSize = Math.max(14, field.fontSize - 4);
       }
     }
-    if (query.includes("\u062A\u062D\u062A") || query.includes("\u0623\u0633\u0641\u0644") || query.includes("down")) {
+    if (query2.includes("\u062A\u062D\u062A") || query2.includes("\u0623\u0633\u0641\u0644") || query2.includes("down")) {
       if (field.id === "traineeName") {
         field.y = Math.min(100, field.y + 10);
       }
-    } else if (query.includes("\u0641\u0648\u0642") || query.includes("\u0623\u0639\u0644\u0649") || query.includes("up")) {
+    } else if (query2.includes("\u0641\u0648\u0642") || query2.includes("\u0623\u0639\u0644\u0649") || query2.includes("up")) {
       if (field.id === "traineeName") {
         field.y = Math.max(0, field.y - 10);
       }
@@ -8768,7 +9127,7 @@ apiRouter.post("/social/posts/:postId/comments", (req, res) => {
   res.status(201).json(newComment);
 });
 function getLocalIp() {
-  const interfaces = os2.networkInterfaces();
+  const interfaces = os3.networkInterfaces();
   const preferredOrder = ["eth0", "eth1", "en0", "en1", "wlan0", "wlan1", "Wi-Fi", "Ethernet"];
   let fallbackIp = "127.0.0.1";
   for (const name of Object.keys(interfaces)) {
@@ -9281,40 +9640,48 @@ apiRouter.post("/trainees", async (req, res) => {
   try {
     const data = req.body;
     if (!data.fullName || !data.branchId) return res.status(400).json({ success: false, error: "\u0627\u0644\u0627\u0633\u0645 \u0648\u0627\u0644\u0641\u0631\u0639 \u0645\u0637\u0644\u0648\u0628\u0627\u0646" });
-    let code = data.code?.trim();
-    if (!code) {
+    const list = await TraineeRepo.getAll();
+    let code = data.code?.trim()?.toUpperCase();
+    if (code) {
+      const duplicate = list.find((t) => t.code && String(t.code).trim().toUpperCase() === code);
+      if (duplicate) {
+        return res.status(400).json({
+          success: false,
+          error: `\u0643\u0648\u062F \u0627\u0644\u0637\u0627\u0644\u0628 (${code}) \u0645\u0633\u062A\u062E\u062F\u0645 \u0628\u0627\u0644\u0641\u0639\u0644 \u0644\u0644\u0637\u0627\u0644\u0628 "${duplicate.fullName}". \u064A\u0631\u062C\u0649 \u0625\u062F\u062E\u0627\u0644 \u0643\u0648\u062F \u0641\u0631\u064A\u062F \u0623\u0648 \u062A\u0631\u0643 \u0627\u0644\u062E\u0627\u0646\u0629 \u0641\u0627\u0631\u063A\u0629 \u0644\u0644\u062A\u0648\u0644\u064A\u062F \u0627\u0644\u062A\u0644\u0642\u0627\u0626\u064A.`
+        });
+      }
+    } else {
       let prefix = "A";
       try {
         const course = await CourseRepo.getById(data.courseId || "");
         if (course && course.grade) {
-          const gName = course.grade;
-          if (gName.includes("\u0627\u0644\u0631\u0627\u0628\u0639 \u0627\u0644\u0627\u0628\u062A\u062F\u0627\u0626\u064A")) prefix = "A";
-          else if (gName.includes("\u0627\u0644\u062E\u0627\u0645\u0633 \u0627\u0644\u0627\u0628\u062A\u062F\u0627\u0626\u064A")) prefix = "B";
-          else if (gName.includes("\u0627\u0644\u0633\u0627\u062F\u0633 \u0627\u0644\u0627\u0628\u062A\u062F\u0627\u0626\u064A")) prefix = "C";
-          else if (gName.includes("\u0627\u0644\u0623\u0648\u0644 \u0627\u0644\u0625\u0639\u062F\u0627\u062F\u064A")) prefix = "D";
-          else if (gName.includes("\u0627\u0644\u062B\u0627\u0646\u064A \u0627\u0644\u0625\u0639\u062F\u0627\u062F\u064A")) prefix = "E";
-          else if (gName.includes("\u0627\u0644\u062B\u0627\u0644\u062B \u0627\u0644\u0625\u0639\u062F\u0627\u062F\u064A")) prefix = "F";
-          else if (gName.includes("\u0627\u0644\u0623\u0648\u0644 \u0627\u0644\u062B\u0627\u0646\u0648\u064A")) prefix = "G";
-          else if (gName.includes("\u0627\u0644\u062B\u0627\u0646\u064A \u0627\u0644\u062B\u0627\u0646\u0648\u064A")) prefix = "H";
-          else if (gName.includes("\u0627\u0644\u062B\u0627\u0644\u062B \u0627\u0644\u062B\u0627\u0646\u0648\u064A")) prefix = "I";
+          prefix = db.getPrefixForGradeOrCourse(course.grade);
+        } else if (data.grade) {
+          prefix = db.getPrefixForGradeOrCourse(data.grade);
         }
       } catch (e) {
         console.warn("Could not determine grade prefix, using fallback", e);
       }
-      const list = await TraineeRepo.getAll();
+      prefix = (prefix || "A").toUpperCase();
       let maxNum = 0;
-      const regex = new RegExp("^" + prefix + "(\\d{3,})$", "i");
+      const regex = new RegExp(`^${prefix}-?(\\d+)$`, "i");
       list.forEach((t) => {
-        const c = t.code;
-        if (c) {
-          const m = c.match(regex);
+        if (t.code) {
+          const m = String(t.code).trim().match(regex);
           if (m) {
             const num = parseInt(m[1], 10);
-            if (num > maxNum) maxNum = num;
+            if (!isNaN(num) && num > maxNum) maxNum = num;
           }
         }
       });
-      code = `${prefix}${(maxNum + 1).toString().padStart(3, "0")}`;
+      let nextNum = maxNum + 1;
+      let candidateCode = `${prefix}${nextNum.toString().padStart(3, "0")}`;
+      const existingCodes = new Set(list.map((t) => String(t.code || "").trim().toUpperCase()));
+      while (existingCodes.has(candidateCode)) {
+        nextNum++;
+        candidateCode = `${prefix}${nextNum.toString().padStart(3, "0")}`;
+      }
+      code = candidateCode;
     }
     const traineeId = "trainee-" + Date.now() + "-" + Math.random().toString(36).substr(2, 4);
     const feeAmount = Number(data.feeAmount) || 0;
@@ -9325,6 +9692,7 @@ apiRouter.post("/trainees", async (req, res) => {
     const created = await TraineeRepo.create(traineeId, {
       ...data,
       code,
+      prefix: code.match(/^([a-zA-Z]+)/)?.[1]?.toUpperCase() || "A",
       feeAmount,
       discountAmount,
       netAmount,
@@ -9341,8 +9709,22 @@ apiRouter.put("/trainees/:id", async (req, res) => {
   try {
     const { id } = req.params;
     let updates = { ...req.body };
-    const currentTrainee = await TraineeRepo.getById(id);
+    const allTrainees = await TraineeRepo.getAll();
+    const currentTrainee = allTrainees.find((t) => t.id === id);
     if (currentTrainee) {
+      if (updates.code) {
+        const cleanRequestedCode = String(updates.code).trim().toUpperCase();
+        const codeOwner = allTrainees.find((t) => t.id !== id && t.code && String(t.code).trim().toUpperCase() === cleanRequestedCode);
+        if (codeOwner) {
+          return res.status(400).json({
+            success: false,
+            error: `\u0643\u0648\u062F \u0627\u0644\u0637\u0627\u0644\u0628 (${cleanRequestedCode}) \u0645\u0633\u062A\u062E\u062F\u0645 \u0628\u0627\u0644\u0641\u0639\u0644 \u0644\u0644\u0637\u0627\u0644\u0628 "${codeOwner.fullName}". \u0644\u0627 \u064A\u0645\u0643\u0646 \u062A\u0643\u0631\u0627\u0631 \u0643\u0648\u062F \u0627\u0644\u0637\u0627\u0644\u0628 \u0646\u0647\u0627\u0626\u064A\u0627\u064B.`
+          });
+        }
+        updates.code = cleanRequestedCode;
+        const mNew = cleanRequestedCode.match(/^([a-zA-Z]+)/);
+        if (mNew) updates.prefix = mNew[1].toUpperCase();
+      }
       let oldCourseId = currentTrainee.courseId;
       let oldGrade = currentTrainee.grade;
       let newCourseId = updates.courseId !== void 0 ? updates.courseId : oldCourseId;
@@ -9366,7 +9748,6 @@ apiRouter.put("/trainees/:id", async (req, res) => {
       const isForceRegen = updates.forceRegenerateCode === true;
       const userProvidedValidNewCode = updates.code && updates.code !== currentTrainee.code && updates.code.toUpperCase().startsWith(targetPrefix);
       if ((gradeOrCourseChanged || isCodeMismatched || isForceRegen || !currentCode) && !userProvidedValidNewCode) {
-        const allTrainees = await TraineeRepo.getAll();
         const regex = new RegExp(`^${targetPrefix}-?(\\d+)$`, "i");
         let maxNum = 0;
         allTrainees.forEach((t) => {
@@ -9378,15 +9759,16 @@ apiRouter.put("/trainees/:id", async (req, res) => {
             }
           }
         });
-        const nextNum = maxNum + 1;
-        const autoNewCode = `${targetPrefix}${String(nextNum).padStart(3, "0")}`;
+        let nextNum = maxNum + 1;
+        let autoNewCode = `${targetPrefix}${String(nextNum).padStart(3, "0")}`;
+        const existingCodes = new Set(allTrainees.filter((t) => t.id !== id).map((t) => String(t.code || "").trim().toUpperCase()));
+        while (existingCodes.has(autoNewCode)) {
+          nextNum++;
+          autoNewCode = `${targetPrefix}${String(nextNum).padStart(3, "0")}`;
+        }
         updates.code = autoNewCode;
         updates.prefix = targetPrefix;
-        console.log(`[TRAINEE_UPDATE] Auto-assigned clean sequential code for trainee ${id}: ${currentTrainee.code} -> ${updates.code}`);
-      } else if (updates.code) {
-        updates.code = updates.code.trim().toUpperCase();
-        const mNew = updates.code.match(/^([a-zA-Z]+)/);
-        if (mNew) updates.prefix = mNew[1].toUpperCase();
+        console.log(`[TRAINEE_UPDATE] Auto-assigned unique code for trainee ${id}: ${currentTrainee.code} -> ${updates.code}`);
       }
     }
     delete updates.forceRegenerateCode;
@@ -10122,10 +10504,12 @@ apiRouter.post("/trainees/bulk-import", async (req, res) => {
   }
   const importedList = [];
   const errorsList = [];
+  const existingAll = await TraineeRepo.getAll();
+  const usedCodesSet = new Set(existingAll.map((t) => String(t.code || "").trim().toUpperCase()));
   for (let idx = 0; idx < rows.length; idx++) {
     const r = rows[idx];
     const rowNum = idx + 1;
-    if (!r || typeof r !== "object") return;
+    if (!r || typeof r !== "object") continue;
     const findValue = (...keys) => {
       for (const k of keys) {
         if (r[k] !== void 0 && r[k] !== null && String(r[k]).trim() !== "") {
@@ -10220,7 +10604,39 @@ apiRouter.post("/trainees/bulk-import", async (req, res) => {
       const matchCourse = db.getData().courses.find((c) => c.name.toLowerCase().includes(cStr) || c.code.toLowerCase() === cStr);
       if (matchCourse) courseId = matchCourse.id;
     }
-    const code = db.getNextTraineeCode();
+    const rawProvidedCode = findValue("code", "\u0627\u0644\u0643\u0648\u062F", "\u0643\u0648\u062F \u0627\u0644\u0637\u0627\u0644\u0628", "\u0631\u0642\u0645 \u0627\u0644\u0637\u0627\u0644\u0628", "\u0627\u0644\u0631\u0642\u0645");
+    let code = "";
+    if (rawProvidedCode) {
+      const cleanProv = String(rawProvidedCode).trim().toUpperCase();
+      if (!usedCodesSet.has(cleanProv)) {
+        code = cleanProv;
+      }
+    }
+    if (!code) {
+      let prefix = "A";
+      if (courseId) {
+        const cObj = db.getData().courses.find((c) => c.id === courseId);
+        if (cObj) prefix = db.getPrefixForGradeOrCourse(cObj.name);
+      }
+      prefix = (prefix || "A").toUpperCase();
+      let maxNum = 0;
+      const regex = new RegExp(`^${prefix}-?(\\d+)$`, "i");
+      usedCodesSet.forEach((c) => {
+        const match = c.match(regex);
+        if (match) {
+          const num = parseInt(match[1], 10);
+          if (!isNaN(num) && num > maxNum) maxNum = num;
+        }
+      });
+      let nextNum = maxNum + 1;
+      let candidate = `${prefix}${String(nextNum).padStart(3, "0")}`;
+      while (usedCodesSet.has(candidate)) {
+        nextNum++;
+        candidate = `${prefix}${String(nextNum).padStart(3, "0")}`;
+      }
+      code = candidate;
+    }
+    usedCodesSet.add(code);
     const netAmount = Math.max(0, feeAmount - discountAmount);
     const remainingAmount = Math.max(0, netAmount - paidAmount);
     let assignedGroupId;
@@ -11561,11 +11977,17 @@ var handleGetPayments = async (req, res) => {
     const traineeId = req.query.traineeId;
     const startDate = req.query.startDate;
     const endDate = req.query.endDate;
+    const status = req.query.status;
     let list = await PaymentRepo.getAll();
     if (branchId && branchId !== "all") list = list.filter((p) => p.branchId === branchId);
     if (traineeId) list = list.filter((p) => p.traineeId === traineeId);
     if (startDate) list = list.filter((p) => p.date >= String(startDate));
     if (endDate) list = list.filter((p) => p.date <= String(endDate));
+    if (status && status !== "all") {
+      list = list.filter((p) => p.status === status);
+    } else if (!status) {
+      list = list.filter((p) => p.status === "approved" || !p.status && !p.proofImageUrl && !p.proofUrl);
+    }
     res.json(list);
   } catch (e) {
     res.status(500).json({ success: false, error: e.message });
@@ -11876,6 +12298,7 @@ apiRouter.get("/reports/financial_summary", async (req, res) => {
       expenses = expenses.filter((e) => e.date <= String(endDate));
       settlements = settlements.filter((s) => s.date <= String(endDate));
     }
+    payments = (payments || []).filter((p) => p.status === "approved" || !p.status && !p.proofImageUrl && !p.proofUrl);
     const totalRevenue = payments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
     const totalExpenses = expenses.reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
     const totalTrainerPayouts = settlements.reduce((sum, s) => sum + (Number(s.amount) || 0), 0);
@@ -11936,6 +12359,7 @@ apiRouter.get("/reports/:reportId", async (req, res) => {
       expenses = (expenses || []).filter((e) => e.date <= String(endDate));
       attendance = (attendance || []).filter((a) => a.date <= String(endDate));
     }
+    payments = (payments || []).filter((p) => p.status === "approved" || !p.status && !p.proofImageUrl && !p.proofUrl);
     const totalRevenue = (payments || []).reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
     const totalExpenses = (expenses || []).reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
     const settlements = data.trainerSettlements || [];
@@ -12047,6 +12471,28 @@ apiRouter.get("/public/branches", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+apiRouter.get("/public/registration-status", async (req, res) => {
+  try {
+    const settings = await SettingRepo.get();
+    const isOpen = settings.allowOnlineRegistration !== false;
+    res.json({ success: true, allowOnlineRegistration: isOpen, isRegistrationOpen: isOpen });
+  } catch (err) {
+    res.json({ success: true, allowOnlineRegistration: true, isRegistrationOpen: true });
+  }
+});
+apiRouter.post("/public/toggle-registration-status", async (req, res) => {
+  try {
+    const settings = await SettingRepo.get();
+    const current = settings.allowOnlineRegistration !== false;
+    const nextState = !current;
+    await SettingRepo.update({ allowOnlineRegistration: nextState });
+    res.json({ success: true, allowOnlineRegistration: nextState, isRegistrationOpen: nextState });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+apiRouter.post(["/public/register", "/public/register/"], handlePublicRegister);
+apiRouter.post(["/public/register-trainer", "/public/register-trainer/"], handlePublicTrainerRegister);
 apiRouter.get("/finance/summary", async (req, res) => {
   try {
     const { branchId, startDate, endDate } = req.query;
@@ -12072,6 +12518,7 @@ apiRouter.get("/finance/summary", async (req, res) => {
       expenses = expenses.filter((e) => e.date <= String(endDate));
       settlements = settlements.filter((s) => s.date <= String(endDate));
     }
+    payments = (payments || []).filter((p) => p.status === "approved" || !p.status && !p.proofImageUrl && !p.proofUrl);
     const totalRevenue = payments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
     const totalExpenses = expenses.reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
     const totalTrainerPayouts = settlements.reduce((sum, s) => sum + (Number(s.amount) || 0), 0);
@@ -12348,8 +12795,12 @@ apiRouter.get("/points/transactions", async (req, res) => {
   }
 });
 apiRouter.post("/points/add", async (req, res) => {
-  const { traineeIds, points, reason, ruleId, branchId, addedByUserId, addedByUserName } = req.body;
-  if (!Array.isArray(traineeIds) || traineeIds.length === 0 || !points) {
+  let { traineeIds, traineeId, points, reason, ruleId, branchId, addedByUserId, addedByUserName } = req.body;
+  if (!Array.isArray(traineeIds)) {
+    if (traineeId) traineeIds = [traineeId];
+    else traineeIds = [];
+  }
+  if (traineeIds.length === 0 || points === void 0 || points === null || isNaN(Number(points))) {
     return res.status(400).json({ error: "\u0627\u0644\u0645\u062A\u062F\u0631\u0628\u0648\u0646 \u0648\u0642\u064A\u0645\u0629 \u0627\u0644\u0646\u0642\u0627\u0637 \u0645\u0637\u0644\u0648\u0628\u0629" });
   }
   const pVal = Number(points);
@@ -12362,6 +12813,9 @@ apiRouter.post("/points/add", async (req, res) => {
       const all = await TraineeRepo.getAll();
       student = all.find((t) => t.id === tid || t.code === tid);
     }
+    if (!student && Array.isArray(dbData.trainees)) {
+      student = dbData.trainees.find((t) => t.id === tid || t.code === tid);
+    }
     if (student) {
       const newTotal = Math.max(0, (student.totalPoints || student.points || 0) + pVal);
       student.totalPoints = newTotal;
@@ -12372,6 +12826,8 @@ apiRouter.post("/points/add", async (req, res) => {
         if (memIdx >= 0) {
           dbData.trainees[memIdx].totalPoints = newTotal;
           dbData.trainees[memIdx].points = newTotal;
+        } else {
+          dbData.trainees.push({ ...student, totalPoints: newTotal, points: newTotal });
         }
       }
       const pt = {
@@ -13673,24 +14129,89 @@ function getTraineeRankAndStats(traineeId) {
     groupName: group?.name || "\u0627\u0644\u0645\u062C\u0645\u0648\u0639\u0629 \u0627\u0644\u062A\u062F\u0631\u064A\u0628\u064A\u0629"
   };
 }
+function normalizeCodeLetter(letter) {
+  const l = (letter || "").trim().toLowerCase();
+  if (l === "\u0623" || l === "\u0627" || l === "\u0625" || l === "\u0622" || l === "a") return "a";
+  if (l === "\u0628" || l === "b") return "b";
+  if (l === "\u062C" || l === "c") return "c";
+  if (l === "\u062F" || l === "d") return "d";
+  if (l === "\u0647" || l === "\u0647\u0640" || l === "e") return "e";
+  if (l === "\u0645" || l === "tr") return "tr";
+  return l;
+}
+function findTraineeMatch(trainees, queryStr) {
+  if (!Array.isArray(trainees) || !queryStr) return null;
+  const rawQuery = String(queryStr).trim();
+  const normQuery = rawQuery.replace(/[٠۰]/g, "0").replace(/[١۱]/g, "1").replace(/[٢۲]/g, "2").replace(/[٣۳]/g, "3").replace(/[٤۴]/g, "4").replace(/[٥۵]/g, "5").replace(/[٦۶]/g, "6").replace(/[٧۷]/g, "7").replace(/[٨۸]/g, "8").replace(/[٩۹]/g, "9").toLowerCase();
+  if (!normQuery) return null;
+  const cleanQuery = normQuery.replace(/[\s\-_]/g, "");
+  const digitsQuery = normQuery.replace(/\D/g, "");
+  const queryLetterPrefix = cleanQuery.replace(/[0-9]/g, "");
+  const queryNumStr = cleanQuery.replace(/\D/g, "");
+  return trainees.find((t) => {
+    if (!t) return false;
+    const normCode = String(t.code || "").replace(/[٠۰]/g, "0").replace(/[١۱]/g, "1").replace(/[٢۲]/g, "2").replace(/[٣۳]/g, "3").replace(/[٤۴]/g, "4").replace(/[٥۵]/g, "5").replace(/[٦۶]/g, "6").replace(/[٧۷]/g, "7").replace(/[٨۸]/g, "8").replace(/[٩۹]/g, "9").trim().toLowerCase();
+    const cleanCode = normCode.replace(/[\s\-_]/g, "");
+    const normId = String(t.id || "").trim().toLowerCase();
+    const normNatId = String(t.nationalId || "").trim().toLowerCase();
+    const normName = String(t.fullName || "").trim().toLowerCase();
+    if (normCode === normQuery || cleanCode === cleanQuery || normId === normQuery || normNatId === normQuery) {
+      return true;
+    }
+    const codeLetterPrefix = cleanCode.replace(/[0-9]/g, "");
+    const codeNumStr = cleanCode.replace(/\D/g, "");
+    if (queryNumStr && codeNumStr) {
+      const queryNum = parseInt(queryNumStr, 10);
+      const codeNum = parseInt(codeNumStr, 10);
+      if (!isNaN(queryNum) && !isNaN(codeNum) && queryNum === codeNum) {
+        const qLetterNorm = normalizeCodeLetter(queryLetterPrefix);
+        const cLetterNorm = normalizeCodeLetter(codeLetterPrefix);
+        if (qLetterNorm && cLetterNorm) {
+          if (qLetterNorm === cLetterNorm) return true;
+        } else if (!qLetterNorm && !cLetterNorm) {
+          return true;
+        }
+      }
+    }
+    if (digitsQuery.length >= 8) {
+      const phoneDigits = String(t.phone || "").replace(/\D/g, "");
+      const parentPhoneDigits = String(t.parentPhone || "").replace(/\D/g, "");
+      if (phoneDigits && (phoneDigits === digitsQuery || phoneDigits.endsWith(digitsQuery) || digitsQuery.endsWith(phoneDigits))) {
+        return true;
+      }
+      if (parentPhoneDigits && (parentPhoneDigits === digitsQuery || parentPhoneDigits.endsWith(digitsQuery) || digitsQuery.endsWith(parentPhoneDigits))) {
+        return true;
+      }
+    }
+    if (normName && normQuery.length >= 4 && normName === normQuery) {
+      return true;
+    }
+    return false;
+  }) || null;
+}
+function findAllTraineesMatch(trainees, queryStr) {
+  if (!Array.isArray(trainees) || !queryStr) return [];
+  return trainees.filter((t) => Boolean(findTraineeMatch([t], queryStr)));
+}
 apiRouter.post("/student/login", async (req, res) => {
   const { codeOrPhone, password } = req.body;
   if (!codeOrPhone) {
     return res.status(400).json({ error: "\u064A\u0631\u062C\u0649 \u0625\u062F\u062E\u0627\u0644 \u0643\u0648\u062F \u0627\u0644\u0645\u062A\u062F\u0631\u0628 \u0623\u0648 \u0631\u0642\u0645 \u0647\u0627\u062A\u0641\u0647" });
   }
-  const query = codeOrPhone.trim().toLowerCase();
   const trainees = await TraineeRepo.getAll();
-  let trainee = trainees.find((t) => {
-    const tCode = (t.code || "").trim().toLowerCase();
-    const tId = (t.id || "").trim().toLowerCase();
-    const tPhone = (t.phone || "").trim();
-    const tParentPhone = (t.parentPhone || "").trim();
-    return tCode === query || tCode === `tr-${query}` || tCode === `\u0645${query}` || tId === query || tPhone.includes(query) || tParentPhone.includes(query) || t.fullName?.toLowerCase().includes(query);
-  });
+  const trainee = findTraineeMatch(trainees, codeOrPhone);
   if (!trainee) {
     return res.status(404).json({
-      error: "\u0644\u0645 \u064A\u062A\u0645 \u0627\u0644\u0639\u062B\u0648\u0631 \u0639\u0644\u0649 \u0637\u0627\u0644\u0628 \u0645\u0633\u062C\u0644 \u0628\u0647\u0630\u0627 \u0627\u0644\u0643\u0648\u062F \u0623\u0648 \u0631\u0642\u0645 \u0627\u0644\u0647\u0627\u062A\u0641. \u064A\u0631\u062C\u0649 \u0645\u0631\u0627\u062C\u0639\u0629 \u0625\u062F\u0627\u0631\u0629 \u0627\u0644\u0645\u0631\u0643\u0632 \u0644\u0644\u062A\u0633\u062C\u064A\u0644 \u0648\u0627\u0644\u0627\u0634\u062A\u0631\u0627\u0643."
+      error: `\u0644\u0645 \u064A\u062A\u0645 \u0627\u0644\u0639\u062B\u0648\u0631 \u0639\u0644\u0649 \u0637\u0627\u0644\u0628 \u0645\u0633\u062C\u0644 \u0628\u0647\u0630\u0627 \u0627\u0644\u0643\u0648\u062F \u0623\u0648 \u0631\u0642\u0645 \u0627\u0644\u0647\u0627\u062A\u0641 (${codeOrPhone}). \u064A\u0631\u062C\u0649 \u0627\u0644\u062A\u0623\u0643\u062F \u0645\u0646 \u0627\u0644\u0631\u0642\u0645 \u0623\u0648 \u0645\u0631\u0627\u062C\u0639\u0629 \u0625\u062F\u0627\u0631\u0629 \u0627\u0644\u0645\u0631\u0643\u0632.`
     });
+  }
+  if (trainee.portalPassword && trainee.portalPassword.trim() !== "") {
+    if (!password || password.trim() !== trainee.portalPassword.trim()) {
+      return res.status(401).json({
+        requiresPassword: true,
+        error: "\u26A0\uFE0F \u0647\u0630\u0627 \u0627\u0644\u062D\u0633\u0627\u0628 \u0645\u062D\u0645\u064A \u0628\u0643\u0644\u0645\u0629 \u0645\u0631\u0648\u0631. \u064A\u0631\u062C\u0649 \u0625\u062F\u062E\u0627\u0644 \u0643\u0644\u0645\u0629 \u0627\u0644\u0645\u0631\u0648\u0631 \u0627\u0644\u0635\u062D\u064A\u062D\u0629."
+      });
+    }
   }
   const courses = db.getData().courses || [];
   const groups = db.getData().groups || [];
@@ -13730,6 +14251,26 @@ apiRouter.post("/student/login", async (req, res) => {
     { id: "task-2", title: "\u062D\u0644 \u062A\u0645\u0627\u0631\u064A\u0646 \u0643\u062A\u0627\u0628 \u0627\u0644\u0623\u0646\u0634\u0637\u0629 \u0648\u062A\u0635\u0648\u064A\u0631 \u0627\u0644\u0635\u0641\u062D\u0629", courseName: studentData.courseName, maxPoints: 30 },
     { id: "task-3", title: "\u0645\u0634\u0631\u0648\u0639 \u0627\u0644\u0627\u0628\u062A\u0643\u0627\u0631 \u0648\u0627\u0644\u062A\u0637\u0628\u064A\u0642 \u0627\u0644\u0630\u0627\u062A\u064A \u0627\u0644\u0628\u0631\u0645\u062C\u064A", courseName: studentData.courseName, maxPoints: 50 }
   ];
+  const allStudentHW = (db.getData().homeworkSubmissions || []).filter(
+    (h) => h.traineeId === trainee.id || h.traineeCode && trainee.code && String(h.traineeCode).trim().toLowerCase() === String(trainee.code).trim().toLowerCase()
+  );
+  const studentHomeworks = allStudentHW.length > 0 ? allStudentHW : [
+    {
+      id: "hw-welcome-1",
+      taskTitle: "\u0648\u0627\u062C\u0628 \u062A\u0637\u0628\u064A\u0642 \u0627\u0644\u062F\u0631\u0633 \u0627\u0644\u0639\u0645\u0644\u064A \u0648\u0627\u0644\u0645\u0634\u0631\u0648\u0639 \u0627\u0644\u0631\u0626\u064A\u0633\u064A",
+      courseName: studentData.courseName,
+      submittedAt: (/* @__PURE__ */ new Date()).toISOString(),
+      grade: 95,
+      maxGrade: 100,
+      percentage: 95,
+      rating: "\u0645\u0645\u062A\u0627\u0632 \u{1F31F}",
+      generalFeedback: "\u0623\u0647\u0644\u0627\u064B \u0628\u0643 \u064A\u0627 \u0628\u0637\u0644! \u062A\u0645 \u062A\u0648\u062B\u064A\u0642 \u062A\u0641\u0648\u0642\u0643 \u0648\u062D\u0631\u0635\u0643 \u0639\u0644\u0649 \u0623\u062F\u0627\u0621 \u0627\u0644\u0648\u0627\u062C\u0628\u0627\u062A \u0648\u0627\u0644\u062A\u0637\u0628\u064A\u0642\u0627\u062A \u0627\u0644\u0639\u0645\u0644\u064A\u0629 \u0628\u0645\u0633\u062A\u0648\u0649 \u0631\u0641\u064A\u0639.",
+      pointsAwarded: 20
+    }
+  ];
+  const allStudentMsgs = (db.getData().portalMessages || []).filter(
+    (m) => m.traineeId === trainee.id || m.traineeCode && trainee.code && String(m.traineeCode).trim().toLowerCase() === String(trainee.code).trim().toLowerCase() || m.recipientId === trainee.id || m.recipientId === trainee.groupId || m.recipientType === "all" || m.recipientType === "students"
+  );
   res.json({
     success: true,
     student: studentData,
@@ -13738,9 +14279,7 @@ apiRouter.post("/student/login", async (req, res) => {
       { id: "b-1", title: "\u0645\u0628\u0631\u0645\u062C \u0627\u0644\u0645\u0633\u062A\u0642\u0628\u0644", description: "\u0625\u062A\u0645\u0627\u0645 \u0627\u0644\u062A\u0645\u0627\u0631\u064A\u0646 \u0627\u0644\u0623\u0648\u0644\u0649 \u0628\u062A\u0641\u0648\u0642", icon: "\u{1F3C6}", date: "2026-08-01" },
       { id: "b-2", title: "\u0646\u062C\u0645 \u0627\u0644\u062D\u0636\u0648\u0631", description: "\u0627\u0644\u0627\u0644\u062A\u0632\u0627\u0645 \u0628\u062D\u0636\u0648\u0631 \u0627\u0644\u062D\u0635\u0635 \u0641\u064A \u0645\u0648\u0627\u0639\u064A\u062F\u0647\u0627", icon: "\u2B50", date: "2026-08-10" }
     ],
-    homeworks: [
-      { id: "hw-1", title: "\u062A\u0645\u0631\u064A\u0646 \u062A\u0635\u0645\u064A\u0645 \u0648\u0627\u062C\u0647\u0627\u062A \u0627\u0644\u0645\u062A\u062F\u0631\u0628\u064A\u0646", course: studentData.courseName, status: "submitted", grade: 95, feedback: "\u0645\u0645\u062A\u0627\u0632 \u062C\u062F\u0627\u064B \u0648\u0623\u062F\u0627\u0621 \u0631\u0627\u0626\u0639" }
-    ],
+    homeworks: studentHomeworks,
     labSchedules: [
       { id: "lab-1", title: "\u062D\u0635\u0629 \u0627\u0644\u0645\u0639\u0645\u0644 \u0648\u0627\u0644\u062A\u062F\u0631\u064A\u0628 \u0627\u0644\u0639\u0645\u0644\u064A", time: "\u0627\u0644\u0633\u0628\u062A 10:00 \u0635", room: "\u0627\u0644\u0645\u0639\u0645\u0644 \u0627\u0644\u0631\u0626\u064A\u0633\u064A (1)", status: "upcoming" }
     ],
@@ -13748,7 +14287,7 @@ apiRouter.post("/student/login", async (req, res) => {
     certificates: [
       { id: "cert-1", title: "\u0634\u0647\u0627\u062F\u0629 \u0627\u062C\u062A\u064A\u0627\u0632 \u0623\u0633\u0627\u0633\u064A\u0627\u062A \u0627\u0644\u0628\u0631\u0645\u062C\u0629", issueDate: "2026-08-15", grade: "\u0645\u0645\u062A\u0627\u0632 \u0645\u0639 \u0645\u0631\u062A\u0628\u0629 \u0627\u0644\u0634\u0631\u0641" }
     ],
-    portalMessages: (db.getData().portalMessages || []).filter((m) => m.traineeId === trainee.id || m.traineeCode === trainee.code)
+    portalMessages: allStudentMsgs
   });
 });
 apiRouter.post("/agent/student-login", async (req, res) => {
@@ -13756,18 +14295,8 @@ apiRouter.post("/agent/student-login", async (req, res) => {
   if (!codeOrPhone) {
     return res.status(400).json({ error: "\u064A\u0631\u062C\u0649 \u0625\u062F\u062E\u0627\u0644 \u0643\u0648\u062F \u0627\u0644\u0645\u062A\u062F\u0631\u0628 \u0623\u0648 \u0631\u0642\u0645 \u0647\u0627\u062A\u0641\u0647" });
   }
-  const query = codeOrPhone.trim().toLowerCase();
-  const queryDigitsOnly = query.replace(/\D/g, "");
-  const isPhoneQuery = queryDigitsOnly.length >= 8;
   const trainees = await TraineeRepo.getAll();
-  const trainee = trainees.find((t) => {
-    if (t.code?.toLowerCase() === query || t.code?.toLowerCase() === `tr-${query}` || t.code?.toLowerCase() === `\u0645${query}` || t.id?.toLowerCase() === query || t.fullName?.toLowerCase().includes(query)) return true;
-    if (isPhoneQuery) {
-      const tPhone = (t.phone || "").replace(/\D/g, "");
-      return tPhone.includes(queryDigitsOnly) || tPhone === queryDigitsOnly;
-    }
-    return t.phone && t.phone.trim() === query;
-  });
+  const trainee = findTraineeMatch(trainees, codeOrPhone);
   if (!trainee) {
     return res.status(404).json({ error: "\u0644\u0645 \u064A\u062A\u0645 \u0627\u0644\u0639\u062B\u0648\u0631 \u0639\u0644\u0649 \u0645\u062A\u062F\u0631\u0628 \u0645\u0633\u062C\u0644 \u0628\u0647\u0630\u0627 \u0627\u0644\u0643\u0648\u062F \u0623\u0648 \u0627\u0644\u0647\u0627\u062A\u0641" });
   }
@@ -14024,7 +14553,7 @@ apiRouter.post("/agent/heartbeat", (req, res) => {
     ip,
     lanIp,
     macAddress,
-    os: os4,
+    os: os5,
     agentVersion,
     status,
     screenshot,
@@ -14047,7 +14576,7 @@ apiRouter.post("/agent/heartbeat", (req, res) => {
       ipAddress: ip || lanIp || "192.168.1.100",
       lanIp: lanIp || ip || "192.168.1.100",
       macAddress: macAddress || "00:1A:2B:3C:4D:5E",
-      os: os4 || "Windows 11 Pro",
+      os: os5 || "Windows 11 Pro",
       agentVersion: agentVersion || "v3.5.0-NativeService",
       lastHeartbeat: now,
       isOnline: true,
@@ -14064,7 +14593,7 @@ apiRouter.post("/agent/heartbeat", (req, res) => {
     if (ip || lanIp) device.ipAddress = ip || lanIp || device.ipAddress;
     if (lanIp) device.lanIp = lanIp;
     if (macAddress) device.macAddress = macAddress;
-    if (os4) device.os = os4;
+    if (os5) device.os = os5;
     if (agentVersion) device.agentVersion = agentVersion;
     if (status) device.status = status;
     if (currentTraineeCode) device.currentTraineeCode = currentTraineeCode;
@@ -14439,7 +14968,7 @@ apiRouter.post("/devices/bulk-command", (req, res) => {
   res.json({ success: true, executedCount: count, message: `\u062A\u0645 \u0625\u0631\u0633\u0627\u0644 \u0627\u0644\u0623\u0645\u0631 \u0628\u0646\u062C\u0627\u062D \u0625\u0644\u0649 ${count} \u062C\u0647\u0627\u0632` });
 });
 apiRouter.post("/devices/enroll", (req, res) => {
-  const { enrollmentKey, pcName, branchId, labName, macAddress, os: os4, agentVersion } = req.body;
+  const { enrollmentKey, pcName, branchId, labName, macAddress, os: os5, agentVersion } = req.body;
   if (!pcName || !branchId) {
     return res.status(400).json({ error: "\u0627\u0633\u0645 \u0627\u0644\u062D\u0627\u0633\u0648\u0628 \u0648\u0631\u0642\u0645 \u0627\u0644\u0641\u0631\u0639 \u0645\u0637\u0644\u0648\u0628\u0627\u0646 \u0644\u0625\u062A\u0645\u0627\u0645 \u0627\u0644\u0631\u0628\u0637" });
   }
@@ -14461,14 +14990,14 @@ apiRouter.post("/devices/enroll", (req, res) => {
       status: "active"
     };
     existing.macAddress = macAddress || "00:1A:2B:3C:4D:5E";
-    existing.os = os4 || "Windows 11 Pro 23H2";
+    existing.os = os5 || "Windows 11 Pro 23H2";
     existing.agentVersion = agentVersion || "v2.4.1";
     existing.enrollmentKey = enrollmentKey || "NAGAH-CERT-2026";
     devices.push(existing);
   } else {
     existing.isOnline = true;
     existing.lastHeartbeat = (/* @__PURE__ */ new Date()).toISOString();
-    if (os4) existing.os = os4;
+    if (os5) existing.os = os5;
     if (agentVersion) existing.agentVersion = agentVersion;
   }
   db.save();
@@ -14652,19 +15181,80 @@ apiRouter.delete("/notifications/:id", (req, res) => {
     res.status(500).json({ error: "\u0641\u0634\u0644 \u062D\u0630\u0641 \u0627\u0644\u0625\u0634\u0639\u0627\u0631: " + err.message });
   }
 });
+function ensureDefaultPortalMessages(data) {
+  if (!Array.isArray(data.portalMessages)) {
+    data.portalMessages = [];
+  }
+  if (data.portalMessages.length === 0 && Array.isArray(data.trainees) && data.trainees.length > 0) {
+    const sampleTrainees = data.trainees.slice(0, 10);
+    const defaultMsgs = [];
+    const now = /* @__PURE__ */ new Date();
+    sampleTrainees.forEach((t, idx) => {
+      const time1 = new Date(now.getTime() - (idx + 1) * 36e5 * 5).toISOString();
+      const time2 = new Date(now.getTime() - (idx + 1) * 36e5 * 3).toISOString();
+      const time3 = new Date(now.getTime() - (idx + 1) * 36e5 * 1).toISOString();
+      defaultMsgs.push({
+        id: "msg-seed-1-" + t.id,
+        traineeId: t.id,
+        traineeName: t.fullName,
+        traineeCode: t.code,
+        parentName: t.parentName || "\u0648\u0644\u064A \u0627\u0644\u0623\u0645\u0631",
+        portalSource: "admin",
+        senderRole: "admin",
+        senderName: "\u0625\u062F\u0627\u0631\u0629 \u0645\u0631\u0643\u0632 \u0627\u0644\u0646\u062C\u0627\u062D \u0644\u0644\u062A\u062F\u0631\u064A\u0628 \u{1F31F}",
+        recipientType: "student",
+        message: `\u0623\u0647\u0644\u0627\u064B \u0628\u0643 \u064A\u0627 ${t.fullName} \u0641\u064A \u0645\u0631\u0643\u0632 \u0627\u0644\u0646\u062C\u0627\u062D! \u0643\u0648\u062F \u0627\u0644\u0645\u062A\u062F\u0631\u0628 \u0627\u0644\u062E\u0627\u0635 \u0628\u0643 \u0647\u0648 (${t.code}). \u064A\u0633\u0639\u062F\u0646\u0627 \u062A\u0648\u0627\u0635\u0644\u0643 \u0627\u0644\u062F\u0627\u0626\u0645 \u0648\u0646\u0631\u062D\u0628 \u0628\u0623\u064A \u0627\u0633\u062A\u0641\u0633\u0627\u0631.`,
+        messageType: "announcement",
+        read: true,
+        createdAt: time1
+      });
+      defaultMsgs.push({
+        id: "msg-seed-2-" + t.id,
+        traineeId: t.id,
+        traineeName: t.fullName,
+        traineeCode: t.code,
+        parentName: t.parentName || "\u0648\u0644\u064A \u0627\u0644\u0623\u0645\u0631",
+        portalSource: "student",
+        senderRole: "student",
+        senderName: t.fullName,
+        recipientType: "trainer",
+        message: `\u0645\u0631\u062D\u0628\u0627\u064B\u060C \u0623\u0648\u062F \u0627\u0644\u0627\u0633\u062A\u0641\u0633\u0627\u0631 \u0639\u0646 \u062A\u0641\u0627\u0635\u064A\u0644 \u0645\u0634\u0631\u0648\u0639 \u0627\u0644\u062A\u0637\u0628\u064A\u0642 \u0627\u0644\u0628\u0631\u0645\u062C\u064A \u0648\u0627\u0644\u0645\u0648\u0639\u062F \u0627\u0644\u0646\u0647\u0627\u0626\u064A \u0644\u0644\u062A\u0633\u0644\u064A\u0645\u061F`,
+        messageType: "question",
+        read: false,
+        createdAt: time2
+      });
+      defaultMsgs.push({
+        id: "msg-seed-3-" + t.id,
+        traineeId: t.id,
+        traineeName: t.fullName,
+        traineeCode: t.code,
+        parentName: "\u0627\u0644\u0645\u0633\u0627\u0639\u062F \u0627\u0644\u0630\u0643\u064A",
+        portalSource: "system",
+        senderRole: "admin",
+        senderName: "\u0627\u0644\u0645\u0633\u0627\u0639\u062F \u0627\u0644\u0630\u0643\u064A \u0644\u0645\u0631\u0643\u0632 \u0627\u0644\u0646\u062C\u0627\u062D \u{1F916}",
+        recipientType: "student",
+        message: `\u0623\u0647\u0644\u0627\u064B \u0628\u0643 \u064A\u0627 \u0628\u0637\u0644! \u062A\u0645 \u0627\u0633\u062A\u0644\u0627\u0645 \u0633\u0624\u0627\u0644\u0643 \u0648\u062A\u0648\u062C\u064A\u0647\u0647 \u0625\u0644\u0649 \u0627\u0644\u0645\u0639\u0644\u0645\u060C \u0648\u064A\u0645\u0643\u0646\u0643 \u0631\u0641\u0639 \u0627\u0644\u062A\u0637\u0628\u064A\u0642 \u0623\u0648 \u0627\u0644\u0648\u0627\u062C\u0628 \u0645\u0628\u0627\u0634\u0631\u0629 \u0639\u0628\u0631 \u062A\u0628\u0648\u064A\u0628 (\u062A\u0635\u062D\u064A\u062D \u0627\u0644\u0648\u0627\u062C\u0628\u0627\u062A) \u0644\u064A\u0642\u0648\u0645 \u0627\u0644\u0630\u0643\u0627\u0621 \u0627\u0644\u0627\u0635\u0637\u0646\u0627\u0639\u064A \u0628\u062A\u0635\u062D\u064A\u062D\u0647 \u0648\u0645\u0631\u0627\u062C\u0639\u062A\u0647 \u0641\u0648\u0631\u0627\u064B!`,
+        messageType: "reply",
+        read: true,
+        createdAt: time3
+      });
+    });
+    data.portalMessages = defaultMsgs;
+    db.saveImmediate();
+  }
+}
 apiRouter.get(["/messages/all-portal", "/messages/all-portal/"], async (req, res) => {
   try {
     const data = db.getData();
-    if (!Array.isArray(data.portalMessages)) {
-      data.portalMessages = [];
-    }
+    ensureDefaultPortalMessages(data);
     const trainees = data.trainees || [];
-    const enriched = data.portalMessages.filter(Boolean).map((msg) => {
-      if (msg && msg.traineeId) {
-        const t = trainees.find((tr) => tr.id === msg.traineeId || tr.code === msg.traineeCode);
+    const enriched = (data.portalMessages || []).filter(Boolean).map((msg) => {
+      if (msg) {
+        const t = trainees.find((tr) => tr.id === msg.traineeId || tr.code && tr.code === msg.traineeCode);
         if (t) {
           return {
             ...msg,
+            traineeId: msg.traineeId || t.id,
             traineeName: msg.traineeName || t.fullName,
             traineeCode: msg.traineeCode || t.code,
             parentName: msg.parentName || t.parentName || "\u0648\u0644\u064A \u0627\u0644\u0623\u0645\u0631"
@@ -14676,6 +15266,22 @@ apiRouter.get(["/messages/all-portal", "/messages/all-portal/"], async (req, res
     res.json(enriched);
   } catch (err) {
     res.status(500).json({ error: "\u0641\u0634\u0644 \u062C\u0644\u0628 \u0631\u0633\u0627\u0626\u0644 \u0627\u0644\u0628\u0648\u0627\u0628\u0629: " + err.message });
+  }
+});
+apiRouter.get(["/student/messages/:traineeId", "/parent/messages/:traineeId"], async (req, res) => {
+  try {
+    const { traineeId } = req.params;
+    const data = db.getData();
+    ensureDefaultPortalMessages(data);
+    const trainees = data.trainees || [];
+    const trainee = trainees.find((t) => t.id === traineeId || t.code === traineeId);
+    const tCode = trainee?.code || traineeId;
+    const messages = (data.portalMessages || []).filter(
+      (m) => m.traineeId === traineeId || m.traineeId === trainee?.id || m.traineeCode && String(m.traineeCode).trim().toLowerCase() === String(tCode).trim().toLowerCase() || m.recipientId === traineeId || m.recipientId === trainee?.id || m.recipientId === trainee?.groupId || m.recipientType === "all" || m.recipientType === "students"
+    ).sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+    res.json({ success: true, messages });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
   }
 });
 apiRouter.post(["/messages/send-portal-message", "/messages/send-portal-message/"], async (req, res) => {
@@ -14954,18 +15560,45 @@ apiRouter.post(["/student/send-message", "/student/send-message/"], async (req, 
       createdAt: (/* @__PURE__ */ new Date()).toISOString()
     };
     data.portalMessages.push(userMsg);
+    const aiReplyMsg = {
+      id: "msg-ai-" + Date.now() + "-" + Math.random().toString(36).substring(2, 7),
+      traineeId: traineeId || trainee?.id || "",
+      traineeName: trainee?.fullName || senderName || "\u0637\u0627\u0644\u0628",
+      traineeCode: trainee?.code || "",
+      parentName: "\u0627\u0644\u0645\u0633\u0627\u0639\u062F \u0627\u0644\u0630\u0643\u064A",
+      portalSource: "system",
+      senderRole: "admin",
+      senderName: "\u0627\u0644\u0645\u0633\u0627\u0639\u062F \u0627\u0644\u0630\u0643\u064A \u0644\u0645\u0631\u0643\u0632 \u0627\u0644\u0646\u062C\u0627\u062D \u{1F916}",
+      recipientType: "student",
+      message: `\u0623\u0647\u0644\u0627\u064B \u0628\u0643 \u064A\u0627 \u0628\u0637\u0644! \u{1F31F} \u062A\u0645 \u0627\u0633\u062A\u0644\u0627\u0645 \u0631\u0633\u0627\u0644\u062A\u0643 \u0648\u0627\u0633\u062A\u0641\u0633\u0627\u0631\u0643 \u0628\u062E\u0635\u0648\u0635: "${message.trim().substring(0, 60)}". \u062A\u0645 \u062A\u0633\u0644\u064A\u0645\u0647\u0627 \u0644\u0644\u0645\u0639\u0644\u0645 \u0648\u0627\u0644\u0645\u0631\u0643\u0632 \u0644\u0644\u0645\u062A\u0627\u0628\u0639\u0629\u060C \u0648\u0623\u0646\u0627 \u0645\u062A\u0648\u0627\u062C\u062F \u0647\u0646\u0627 \u0644\u0645\u0633\u0627\u0639\u062F\u062A\u0643 \u0641\u064A \u0623\u064A \u0633\u0624\u0627\u0644!`,
+      messageType: "reply",
+      read: true,
+      createdAt: (/* @__PURE__ */ new Date()).toISOString()
+    };
+    data.portalMessages.push(aiReplyMsg);
     if (!Array.isArray(data.notifications)) data.notifications = [];
     data.notifications.unshift({
       id: "notif-msg-" + Date.now(),
       type: "message",
-      title: `\u0631\u0633\u0627\u0644\u0629 \u062C\u062F\u064A\u062F\u0629 \u0645\u0646 \u0627\u0644\u0637\u0627\u0644\u0628: ${userMsg.traineeName}`,
+      title: `\u{1F4E9} \u0631\u0633\u0627\u0644\u0629 \u062C\u062F\u064A\u062F\u0629 \u0645\u0646 \u0627\u0644\u0637\u0627\u0644\u0628: ${userMsg.traineeName}`,
       message: message.substring(0, 80),
       linkView: "messages",
       createdAt: (/* @__PURE__ */ new Date()).toISOString(),
-      read: false
+      read: false,
+      metadata: { traineeId: traineeId || trainee?.id, traineeCode: trainee?.code }
+    });
+    data.notifications.unshift({
+      id: "notif-reply-" + Date.now(),
+      type: "message",
+      title: `\u{1F916} \u062A\u0623\u0643\u064A\u062F \u062A\u0633\u0644\u064A\u0645 \u0627\u0633\u062A\u0641\u0633\u0627\u0631\u0643 \u0648\u062A\u0641\u0627\u0639\u0644 \u0627\u0644\u0645\u0633\u0627\u0639\u062F \u0627\u0644\u0630\u0643\u064A`,
+      message: `\u062A\u0645 \u062A\u0633\u0644\u064A\u0645 \u0631\u0633\u0627\u0644\u062A\u0643 \u0628\u0646\u062C\u0627\u062D \u0644\u0644\u0645\u0639\u0644\u0645 \u0648\u062A\u0648\u062B\u064A\u0642\u0647\u0627 \u0641\u064A \u0633\u062C\u0644\u0643 \u0627\u0644\u0623\u0643\u0627\u062F\u064A\u0645\u064A!`,
+      linkView: "messages",
+      createdAt: (/* @__PURE__ */ new Date()).toISOString(),
+      read: false,
+      metadata: { traineeId: traineeId || trainee?.id, traineeCode: trainee?.code }
     });
     db.saveImmediate();
-    res.json({ success: true, message: userMsg });
+    res.json({ success: true, message: userMsg, aiReply: aiReplyMsg });
   } catch (err) {
     res.status(500).json({ error: "\u0641\u0634\u0644 \u0625\u0631\u0633\u0627\u0644 \u0631\u0633\u0627\u0644\u0629 \u0627\u0644\u0637\u0627\u0644\u0628: " + err.message });
   }
@@ -15018,8 +15651,8 @@ apiRouter.post(["/parent/send-message", "/parent/send-message/"], async (req, re
 });
 apiRouter.get(["/search", "/search/"], async (req, res) => {
   try {
-    const query = String(req.query.q || "").trim().toLowerCase();
-    if (!query) {
+    const query2 = String(req.query.q || "").trim().toLowerCase();
+    if (!query2) {
       return res.json({
         trainees: [],
         trainers: [],
@@ -15037,19 +15670,19 @@ apiRouter.get(["/search", "/search/"], async (req, res) => {
     ]);
     const devices = data.devices || [];
     const matchedTrainees = (trainees || []).filter(
-      (t) => t.name && t.name.toLowerCase().includes(query) || t.code && t.code.toLowerCase().includes(query) || t.phone && String(t.phone).includes(query) || t.parentPhone && String(t.parentPhone).includes(query)
+      (t) => t.name && t.name.toLowerCase().includes(query2) || t.code && t.code.toLowerCase().includes(query2) || t.phone && String(t.phone).includes(query2) || t.parentPhone && String(t.parentPhone).includes(query2)
     ).slice(0, 15);
     const matchedTrainers = (trainers || []).filter(
-      (t) => t.name && t.name.toLowerCase().includes(query) || t.phone && String(t.phone).includes(query) || t.specialty && t.specialty.toLowerCase().includes(query)
+      (t) => t.name && t.name.toLowerCase().includes(query2) || t.phone && String(t.phone).includes(query2) || t.specialty && t.specialty.toLowerCase().includes(query2)
     ).slice(0, 10);
     const matchedCourses = (courses || []).filter(
-      (c) => c.name && c.name.toLowerCase().includes(query) || c.code && c.code.toLowerCase().includes(query)
+      (c) => c.name && c.name.toLowerCase().includes(query2) || c.code && c.code.toLowerCase().includes(query2)
     ).slice(0, 10);
     const matchedPayments = (payments || []).filter(
-      (p) => p.receiptNumber && String(p.receiptNumber).toLowerCase().includes(query) || p.traineeName && p.traineeName.toLowerCase().includes(query) || p.notes && p.notes.toLowerCase().includes(query)
+      (p) => p.receiptNumber && String(p.receiptNumber).toLowerCase().includes(query2) || p.traineeName && p.traineeName.toLowerCase().includes(query2) || p.notes && p.notes.toLowerCase().includes(query2)
     ).slice(0, 10);
     const matchedDevices = (devices || []).filter(
-      (d) => d.name && d.name.toLowerCase().includes(query) || d.ipAddress && String(d.ipAddress).includes(query) || d.hostname && d.hostname.toLowerCase().includes(query)
+      (d) => d.name && d.name.toLowerCase().includes(query2) || d.ipAddress && String(d.ipAddress).includes(query2) || d.hostname && d.hostname.toLowerCase().includes(query2)
     ).slice(0, 10);
     res.json({
       trainees: matchedTrainees,
@@ -15348,13 +15981,7 @@ apiRouter.post("/parent/login", async (req, res) => {
     const cleanInputDigits = inputVal.replace(/\D/g, "");
     const cleanInputCode = inputVal.toUpperCase();
     const trainees = await TraineeRepo.getAll();
-    const matched = trainees.filter((t) => {
-      const p1 = (t.parentPhone || "").replace(/\D/g, "");
-      const p2 = (t.phone || "").replace(/\D/g, "");
-      const codeMatch = t.code && t.code.toUpperCase() === cleanInputCode;
-      const phoneMatch = cleanInputDigits.length >= 6 && (p1 && p1.includes(cleanInputDigits) || p2 && p2.includes(cleanInputDigits));
-      return codeMatch || phoneMatch;
-    });
+    const matched = findAllTraineesMatch(trainees, inputVal);
     if (matched.length === 0) {
       return res.status(404).json({ success: false, error: "\u0644\u0645 \u064A\u062A\u0645 \u0627\u0644\u0639\u062B\u0648\u0631 \u0639\u0644\u0649 \u0648\u0644\u064A \u0623\u0645\u0631 \u0623\u0648 \u0637\u0627\u0644\u0628 \u0628\u0647\u0630\u0627 \u0627\u0644\u0643\u0648\u062F \u0623\u0648 \u0627\u0644\u0631\u0642\u0645. \u064A\u0631\u062C\u0649 \u0627\u0644\u062A\u0648\u0627\u0635\u0644 \u0645\u0639 \u0625\u062F\u0627\u0631\u0629 \u0627\u0644\u0645\u0631\u0643\u0632." });
     }
@@ -15492,6 +16119,17 @@ apiRouter.get("/trainer-portal/data/:trainerId", async (req, res) => {
     );
     const trainerAttendance = allAttendance.filter((a) => trainerGroupIds.has(a.groupId));
     const trainerExams = allExams.filter((e) => e.trainerId === trainer.id || trainerCourseIds.has(e.courseId));
+    const allHW = db.getData().homeworkSubmissions || [];
+    const trainerTraineeIds = new Set(trainerTrainees.map((t) => t.id));
+    const trainerTraineeCodes = new Set(trainerTrainees.map((t) => (t.code || "").trim().toLowerCase()));
+    const trainerHomeworks = allHW.filter(
+      (h) => trainerTraineeIds.has(h.traineeId) || h.traineeCode && trainerTraineeCodes.has(String(h.traineeCode).trim().toLowerCase())
+    );
+    ensureDefaultPortalMessages(db.getData());
+    const allMsgs = db.getData().portalMessages || [];
+    const trainerMessages = allMsgs.filter(
+      (m) => trainerTraineeIds.has(m.traineeId) || m.traineeCode && trainerTraineeCodes.has(String(m.traineeCode).trim().toLowerCase()) || m.recipientId === trainer.id || m.recipientType === "trainer" || m.recipientType === "all"
+    );
     res.json({
       success: true,
       trainer,
@@ -15499,8 +16137,9 @@ apiRouter.get("/trainer-portal/data/:trainerId", async (req, res) => {
       courses: trainerCourses,
       trainees: trainerTrainees,
       attendance: trainerAttendance,
-      homeworkSubmissions: [],
+      homeworkSubmissions: trainerHomeworks,
       exams: trainerExams,
+      portalMessages: trainerMessages,
       settlements: [],
       settings: settingsObj || {}
     });
@@ -15683,11 +16322,11 @@ var secureDb = new SecureDbConnector();
 // server/migrationManager.ts
 import fs3 from "fs";
 import path4 from "path";
-import os3 from "os";
+import os4 from "os";
 var MigrationManager = class {
   constructor(historyFilePath) {
-    const isServerless3 = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.VERCEL_ENV);
-    const dataDir = isServerless3 ? path4.join(os3.tmpdir(), "nagah_data") : path4.join(process.cwd(), "data");
+    const isServerless4 = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.VERCEL_ENV);
+    const dataDir = isServerless4 ? path4.join(os4.tmpdir(), "nagah_data") : path4.join(process.cwd(), "data");
     try {
       if (!fs3.existsSync(dataDir)) {
         fs3.mkdirSync(dataDir, { recursive: true });
@@ -15766,8 +16405,8 @@ app.use((req, res, next) => {
   }
   next();
 });
-var isServerless2 = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.VERCEL_ENV);
-if (!isServerless2) {
+var isServerless3 = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.VERCEL_ENV);
+if (!isServerless3) {
   try {
     secureDb.verifyIntegrity();
     migrationManager.runInitialMigrations();
@@ -15787,7 +16426,7 @@ app.get(["/health", "/api/health"], async (req, res) => {
     const fs4 = await import("fs");
     const path5 = await import("path");
     const bPath = path5.join(process.cwd(), "data", "database.json");
-    const tPath = path5.join(await import("os").then((os4) => os4.tmpdir()), "nagah_data", "database.json");
+    const tPath = path5.join(await import("os").then((os5) => os5.tmpdir()), "nagah_data", "database.json");
     if (fs4.existsSync(bPath)) {
       hasBundledData = true;
       bundledDataSize = fs4.statSync(bPath).size;
@@ -15813,7 +16452,7 @@ app.get(["/health", "/api/health"], async (req, res) => {
     status: "ok",
     service: "Nagah Management System",
     environment: process.env.NODE_ENV || "production",
-    serverless: isServerless2,
+    serverless: isServerless3,
     supabase: supabaseStatus,
     cwd: process.cwd(),
     hasBundledData,

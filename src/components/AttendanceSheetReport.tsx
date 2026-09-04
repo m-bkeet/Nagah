@@ -48,7 +48,13 @@ interface TraineeAttendanceItem {
   points?: number;
   stars?: number;
   ranking?: number;
+  lecturePoints?: number;
+  weeklyPoints?: number;
+  monthlyPoints?: number;
+  cumulativePoints?: number;
 }
+
+export type RankingBasisType = 'lecture' | 'weekly' | 'monthly' | 'cumulative';
 
 interface AttendanceSheetReportProps {
   data: {
@@ -88,6 +94,74 @@ export const AttendanceSheetReport: React.FC<AttendanceSheetReportProps> = ({ da
   const [copied, setCopied] = useState(false);
   const [statusFilter, setStatusFilter] = useState<'all' | 'present' | 'absent'>('all');
   const [sortBy, setSortBy] = useState<'excellence' | 'time' | 'code' | 'name'>('excellence');
+  const [rankingBasis, setRankingBasis] = useState<RankingBasisType>('lecture');
+
+  const rankingBasisLabels: Record<RankingBasisType, { name: string; shortName: string; badge: string; desc: string; icon: string }> = {
+    lecture: {
+      name: 'تقييم المحاضرة الحالية',
+      shortName: 'المحاضرة',
+      badge: 'نقاط جلسة اليوم والانضباط الفوري',
+      desc: 'ترتيب فرسان المحاضرة بناءً على الحضور المبكر، تفاعل القاعة، واستخدام المعمل اليوم',
+      icon: '⚡'
+    },
+    weekly: {
+      name: 'تقييم الأسبوع الحالي',
+      shortName: 'أسبوعي',
+      badge: 'أداء الأسبوع التدريبي',
+      desc: 'ترتيب فرسان الأسبوع بناءً على حضور المحاضرات والواجبات الأسبوعية',
+      icon: '📅'
+    },
+    monthly: {
+      name: 'تقييم الشهر الحالي',
+      shortName: 'شهري',
+      badge: 'حصاد الشهر التدريبي',
+      desc: 'ترتيب فرسان الشهر بناءً على التزام الشهر والتقييمات الدورية',
+      icon: '🗓️'
+    },
+    cumulative: {
+      name: 'التقييم التراكمي الشامل',
+      shortName: 'تراكمي عام',
+      badge: 'إجمالي نقاط الكورس والمركز',
+      desc: 'الترتيب العام التراكمي الشامل لرصيد النجوم والنقاط منذ بداية التدريب',
+      icon: '🌟'
+    }
+  };
+
+  const getPointsForBasis = (t: TraineeAttendanceItem, basis: RankingBasisType): number => {
+    if (basis === 'lecture') {
+      if (t.lecturePoints !== undefined) return t.lecturePoints;
+      const isEarly = t.entryTime && (t.entryTime.includes(':0') || t.entryTime.includes(':1'));
+      const base = t.status === 'present' ? (isEarly ? 15 : 12) : t.status === 'late' ? 6 : t.status === 'excused' ? 2 : 0;
+      const devBonus = t.deviceName ? 2 : 0;
+      return base + devBonus;
+    }
+    if (basis === 'weekly') {
+      if (t.weeklyPoints !== undefined) return t.weeklyPoints;
+      const total = t.totalPoints ?? t.points ?? 0;
+      const lec = getPointsForBasis(t, 'lecture');
+      return Math.max(lec, Math.round(total * 0.2) + lec);
+    }
+    if (basis === 'monthly') {
+      if (t.monthlyPoints !== undefined) return t.monthlyPoints;
+      const total = t.totalPoints ?? t.points ?? 0;
+      const lec = getPointsForBasis(t, 'lecture');
+      return Math.max(lec * 2, Math.round(total * 0.5) + lec * 2);
+    }
+    return t.cumulativePoints ?? (t.totalPoints ?? t.points ?? 0);
+  };
+
+  const getStarsForBasis = (pts: number, basis: RankingBasisType): number => {
+    if (basis === 'lecture') {
+      return pts >= 15 ? 5 : pts >= 12 ? 4 : pts >= 8 ? 3 : pts >= 4 ? 2 : 1;
+    }
+    if (basis === 'weekly') {
+      return pts >= 60 ? 5 : pts >= 45 ? 4 : pts >= 30 ? 3 : pts >= 15 ? 2 : 1;
+    }
+    if (basis === 'monthly') {
+      return pts >= 250 ? 5 : pts >= 180 ? 4 : pts >= 120 ? 3 : pts >= 60 ? 2 : 1;
+    }
+    return Math.min(5, Math.max(1, Math.floor(pts / 20) + 1));
+  };
 
   // Normalize data with fallbacks
   const groupName = data.groupName || data.group?.name || 'ICT4 - 3';
@@ -116,7 +190,7 @@ export const AttendanceSheetReport: React.FC<AttendanceSheetReportProps> = ({ da
   } catch {}
 
   // Parse and normalize trainees
-  const allTrainees: TraineeAttendanceItem[] = (data.trainees || []).map((t, idx) => {
+  const allTrainees: (TraineeAttendanceItem & { currentPoints: number; currentStars: number })[] = (data.trainees || []).map((t, idx) => {
     const notesText = t.notes || '';
     let entryTime = t.entryTime || '';
     if (!entryTime && (t.status === 'present' || notesText.includes('حضور') || notesText.includes('جهاز'))) {
@@ -133,7 +207,8 @@ export const AttendanceSheetReport: React.FC<AttendanceSheetReportProps> = ({ da
     }
 
     const pts = t.totalPoints ?? t.points ?? 0;
-    const starsCount = t.stars || Math.min(5, Math.max(1, Math.floor(pts / 20) + 1));
+    const currentPts = getPointsForBasis(t, rankingBasis);
+    const currentSt = getStarsForBasis(currentPts, rankingBasis);
 
     return {
       ...t,
@@ -141,7 +216,9 @@ export const AttendanceSheetReport: React.FC<AttendanceSheetReportProps> = ({ da
       deviceName: devName,
       totalPoints: pts,
       points: pts,
-      stars: starsCount
+      currentPoints: currentPts,
+      currentStars: currentSt,
+      stars: currentSt
     };
   });
 
@@ -154,10 +231,10 @@ export const AttendanceSheetReport: React.FC<AttendanceSheetReportProps> = ({ da
   const smartDeviceCount = allTrainees.filter(t => t.deviceName || t.notes?.includes('جهاز')).length;
   const attendanceRate = totalCount > 0 ? Math.round(((presentCount + lateCount) / totalCount) * 100) : 0;
 
-  // Champions for podium: highest points among attended students
+  // Champions for podium: highest points among attended students for the selected rankingBasis
   const attendedTrainees = allTrainees
     .filter(t => t.status === 'present' || t.status === 'late')
-    .sort((a, b) => (b.totalPoints || 0) - (a.totalPoints || 0));
+    .sort((a, b) => (b.currentPoints || 0) - (a.currentPoints || 0));
 
   const firstStar = attendedTrainees[0];
   const secondStar = attendedTrainees[1];
@@ -174,11 +251,11 @@ export const AttendanceSheetReport: React.FC<AttendanceSheetReportProps> = ({ da
 
   displayTrainees.sort((a, b) => {
     if (sortBy === 'excellence') {
-      // Prioritize present, then by points descending
+      // Prioritize present, then by currentPoints descending
       const statusWeight = (s: string) => (s === 'present' ? 3 : s === 'late' ? 2 : s === 'excused' ? 1 : 0);
       const diff = statusWeight(b.status) - statusWeight(a.status);
       if (diff !== 0) return diff;
-      return (b.totalPoints || 0) - (a.totalPoints || 0);
+      return (b.currentPoints || 0) - (a.currentPoints || 0);
     } else if (sortBy === 'time') {
       if (!a.entryTime && !b.entryTime) return 0;
       if (!a.entryTime) return 1;
@@ -197,7 +274,7 @@ export const AttendanceSheetReport: React.FC<AttendanceSheetReportProps> = ({ da
       .filter(Boolean)
       .map((t, idx) => {
         const medal = idx === 0 ? '🥇 الأول' : idx === 1 ? '🥈 الثاني' : '🥉 الثالث';
-        return `${medal}: *${t?.fullName}* (${t?.code}) - ⭐ ${t?.stars} نجوم (${t?.totalPoints} نقطة)`;
+        return `${medal}: *${t?.fullName}* (${t?.code}) - ⭐ ${t?.currentStars} نجوم (${t?.currentPoints} نقطة)`;
       })
       .join('\n');
 
@@ -207,7 +284,8 @@ export const AttendanceSheetReport: React.FC<AttendanceSheetReportProps> = ({ da
       `📅 *التاريخ:* ${formattedArabicDate}\n` +
       `⏰ *الموعد:* ${timeSlot} | 🏛️ *القاعة:* ${hallName}\n` +
       `👨‍🏫 *المحاضر المشرف:* ${trainerTitle} ${trainerName}\n\n` +
-      `🏆 *لوحة شرف نجوم المحاضرة (Top Stars):*\n` +
+      `🏆 *معيار الترتيب والتقييم المعتمد:* ${rankingBasisLabels[rankingBasis].name} (${rankingBasisLabels[rankingBasis].badge})\n\n` +
+      `🏆 *لوحة شرف نجوم الكشف (Top Stars):*\n` +
       `${topStarsText}\n\n` +
       `📊 *إحصائيات الحضور والالتزام:*\n` +
       `• الحاضرون: ${presentCount} من ${totalCount} (نسبة الحضور: ${attendanceRate}%)\n` +
@@ -225,15 +303,16 @@ export const AttendanceSheetReport: React.FC<AttendanceSheetReportProps> = ({ da
         .filter(Boolean)
         .map((t, idx) => {
           const medal = idx === 0 ? '🥇 الأول' : idx === 1 ? '🥈 الثاني' : '🥉 الثالث';
-          return `${medal}: ${t?.fullName} (${t?.code}) - ${t?.stars} نجوم (${t?.totalPoints} نقطة)`;
+          return `${medal}: ${t?.fullName} (${t?.code}) - ${t?.currentStars} نجوم (${t?.currentPoints} نقطة)`;
         })
         .join('\n');
 
       const text = `كشف حضور وانضباط وتميز المحاضرة - مركز النجاح للتدريب والاستشارات\n` +
         `المجموعة: ${groupName} | الدورة: ${courseName}\n` +
         `التاريخ: ${formattedArabicDate} | الموعد: ${timeSlot}\n` +
-        `المحاضر المشرف: ${trainerTitle} ${trainerName}\n\n` +
-        `لوحة شرف نجوم المحاضرة:\n${topStarsText}\n\n` +
+        `المحاضر المشرف: ${trainerTitle} ${trainerName}\n` +
+        `معيار التقييم والترتيب: ${rankingBasisLabels[rankingBasis].name} (${rankingBasisLabels[rankingBasis].badge})\n\n` +
+        `لوحة شرف نجوم الكشف:\n${topStarsText}\n\n` +
         `نسبة الحضور: ${attendanceRate}% (حاضر: ${presentCount}، غائب: ${absentCount})\n` +
         `مركز النجاح للتدريب والاستشارات`;
 
@@ -299,8 +378,64 @@ export const AttendanceSheetReport: React.FC<AttendanceSheetReportProps> = ({ da
     <div className="space-y-4 max-w-5xl mx-auto font-sans" dir="rtl">
       {/* Interactive Action Toolbar (Hidden during print) */}
       <div className="bg-slate-900 border border-slate-700/80 rounded-2xl p-3.5 shadow-xl flex flex-wrap items-center justify-between gap-3 no-print">
-        {/* Sorting and Filtering Pills */}
+        {/* Ranking Basis, Sorting and Filtering Pills */}
         <div className="flex flex-wrap items-center gap-2 text-xs">
+          {/* Ranking & Evaluation Basis Selector */}
+          <div className="flex items-center gap-1 bg-slate-800/90 border border-amber-500/50 p-1 rounded-xl text-slate-300">
+            <span className="text-[11px] font-black text-amber-400 px-1.5 flex items-center gap-1">
+              <Trophy className="w-3.5 h-3.5 text-amber-400" />
+              معيار التقييم والترتيب:
+            </span>
+            <button
+              type="button"
+              onClick={() => setRankingBasis('lecture')}
+              className={`px-2.5 py-1 rounded-lg font-bold text-xs transition-all ${
+                rankingBasis === 'lecture'
+                  ? 'bg-amber-500 text-slate-950 shadow-md font-black'
+                  : 'text-slate-300 hover:text-white hover:bg-slate-700/60'
+              }`}
+              title="ترتيب الطلاب حسب نقاط المحاضرة الحالية (حضور، انضباط، معمل)"
+            >
+              ⚡ تقييم المحاضرة
+            </button>
+            <button
+              type="button"
+              onClick={() => setRankingBasis('weekly')}
+              className={`px-2.5 py-1 rounded-lg font-bold text-xs transition-all ${
+                rankingBasis === 'weekly'
+                  ? 'bg-amber-500 text-slate-950 shadow-md font-black'
+                  : 'text-slate-300 hover:text-white hover:bg-slate-700/60'
+              }`}
+              title="ترتيب الطلاب حسب تقييم الأسبوع الحالي"
+            >
+              📅 أسبوعي
+            </button>
+            <button
+              type="button"
+              onClick={() => setRankingBasis('monthly')}
+              className={`px-2.5 py-1 rounded-lg font-bold text-xs transition-all ${
+                rankingBasis === 'monthly'
+                  ? 'bg-amber-500 text-slate-950 shadow-md font-black'
+                  : 'text-slate-300 hover:text-white hover:bg-slate-700/60'
+              }`}
+              title="ترتيب الطلاب حسب تقييم الشهر الحالي"
+            >
+              🗓️ شهري
+            </button>
+            <button
+              type="button"
+              onClick={() => setRankingBasis('cumulative')}
+              className={`px-2.5 py-1 rounded-lg font-bold text-xs transition-all ${
+                rankingBasis === 'cumulative'
+                  ? 'bg-amber-500 text-slate-950 shadow-md font-black'
+                  : 'text-slate-300 hover:text-white hover:bg-slate-700/60'
+              }`}
+              title="ترتيب الطلاب حسب التقييم التراكمي الشامل لكامل رصيد النقاط والنجوم"
+            >
+              🌟 التراكمي العام
+            </button>
+          </div>
+
           <div className="flex items-center gap-1 bg-slate-800/90 border border-slate-700 px-2 py-1 rounded-xl text-slate-300">
             <Filter className="w-3.5 h-3.5 text-amber-400" />
             <span className="text-[11px] text-slate-400">التصفية:</span>
@@ -462,9 +597,15 @@ export const AttendanceSheetReport: React.FC<AttendanceSheetReportProps> = ({ da
                     رسمي
                   </span>
                 </h2>
-                <p className="text-[11px] text-slate-300">
-                  تقرير إلكتروني شامل لتسجيل الحضور، وقت الدخول بالقاعة، ورصيد نقاط ونجوم التميز
-                </p>
+                <div className="flex flex-wrap items-center gap-2 mt-0.5">
+                  <p className="text-[11px] text-slate-300">
+                    تقرير إلكتروني شامل لتسجيل الحضور، وقت الدخول بالقاعة، ورصيد نقاط ونجوم التميز
+                  </p>
+                  <span className="inline-flex items-center gap-1 bg-amber-400 text-slate-950 px-2 py-0.5 rounded-md font-black text-[10px] shadow-xs">
+                    <span>{rankingBasisLabels[rankingBasis].icon}</span>
+                    <span>معيار الترتيب: {rankingBasisLabels[rankingBasis].name}</span>
+                  </span>
+                </div>
               </div>
             </div>
 
@@ -522,7 +663,7 @@ export const AttendanceSheetReport: React.FC<AttendanceSheetReportProps> = ({ da
           </div>
         </div>
 
-        {/* 5. ⭐ TOP STARS PODIUM (لوحة شرف نجوم المحاضرة) ⭐ */}
+        {/* 5. ⭐ TOP STARS PODIUM (لوحة شرف نجوم الكشف) ⭐ */}
         {attendedTrainees.length > 0 && (
           <div className="mb-7 bg-gradient-to-br from-amber-500/10 via-amber-100/40 to-slate-50 border-2 border-amber-500/40 rounded-3xl p-5 shadow-sm relative overflow-hidden">
             <div className="flex items-center justify-between mb-4 border-b border-amber-300 pb-2.5">
@@ -532,17 +673,17 @@ export const AttendanceSheetReport: React.FC<AttendanceSheetReportProps> = ({ da
                 </div>
                 <div>
                   <h3 className="text-sm sm:text-base font-black text-slate-900 flex items-center gap-1.5">
-                    لوحة شرف نجوم المحاضرة
+                    لوحة شرف نجوم {rankingBasisLabels[rankingBasis].shortName}
                     <span className="text-amber-600">⭐ TOP STARS ⭐</span>
                   </h3>
                   <p className="text-[10px] text-slate-600">
-                    فرسان المحاضرة الأوائل الأكثر التزاماً وتميزاً في الحضور وجمع النقاط
+                    {rankingBasisLabels[rankingBasis].desc}
                   </p>
                 </div>
               </div>
-              <div className="hidden sm:flex items-center gap-1 text-[11px] font-bold text-amber-800 bg-amber-200/60 px-3 py-1 rounded-full">
-                <Sparkles className="w-3.5 h-3.5 text-amber-600" />
-                <span>أبطال النجاح اليوم</span>
+              <div className="hidden sm:flex items-center gap-1 text-[11px] font-bold text-amber-900 bg-amber-200/80 px-3 py-1 rounded-full border border-amber-300">
+                <Sparkles className="w-3.5 h-3.5 text-amber-700" />
+                <span>أبطال {rankingBasisLabels[rankingBasis].shortName}</span>
               </div>
             </div>
 
@@ -562,19 +703,19 @@ export const AttendanceSheetReport: React.FC<AttendanceSheetReportProps> = ({ da
                       secondStar.fullName?.charAt(0) || '🥈'
                     )}
                   </div>
-                  <p className="font-mono text-xs font-black text-slate-500">{secondStar.code}</p>
-                  <h4 className="font-black text-xs text-slate-900 mt-0.5 truncate" title={secondStar.fullName}>{secondStar.fullName}</h4>
+                  <p className="font-mono text-xs font-black text-slate-600">{secondStar.code}</p>
+                  <h4 className="font-black text-xs text-slate-950 mt-0.5 truncate" style={{ color: '#090d16' }} title={secondStar.fullName}>{secondStar.fullName}</h4>
                   <div className="flex items-center justify-center gap-0.5 text-amber-500 my-1">
-                    {Array.from({ length: secondStar.stars || 4 }).map((_, i) => (
+                    {Array.from({ length: secondStar.currentStars || 4 }).map((_, i) => (
                       <Star key={i} className="w-3 h-3 fill-amber-400 text-amber-500" />
                     ))}
                   </div>
-                  <div className="inline-block bg-slate-100 border border-slate-300 text-slate-800 text-[11px] font-black px-3 py-1 rounded-xl">
-                    {secondStar.totalPoints} نقطة تميز
+                  <div className="inline-block bg-slate-100 border border-slate-300 text-slate-900 text-[11px] font-black px-3 py-1 rounded-xl">
+                    {secondStar.currentPoints} نقطة ({rankingBasisLabels[rankingBasis].shortName})
                   </div>
                   {secondStar.entryTime && (
-                    <p className="text-[10px] text-slate-500 mt-1 flex items-center justify-center gap-1">
-                      <Clock className="w-3 h-3 text-slate-400" />
+                    <p className="text-[10px] text-slate-600 mt-1 flex items-center justify-center gap-1 font-bold">
+                      <Clock className="w-3 h-3 text-slate-500" />
                       حضور: {secondStar.entryTime}
                     </p>
                   )}
@@ -586,7 +727,7 @@ export const AttendanceSheetReport: React.FC<AttendanceSheetReportProps> = ({ da
                 <div className="bg-gradient-to-b from-amber-100 via-white to-amber-50/80 border-2 border-amber-500 rounded-2xl p-5 text-center shadow-lg relative order-1 sm:order-2 transform sm:-translate-y-2">
                   <div className="absolute -top-3.5 left-1/2 transform -translate-x-1/2 bg-gradient-to-r from-amber-500 to-amber-400 text-slate-950 text-xs font-black px-3.5 py-0.5 rounded-full border border-amber-600 shadow flex items-center gap-1">
                     <Crown className="w-3.5 h-3.5 text-slate-950" />
-                    نجم المحاضرة الذهبي
+                    النجم الذهبي الأول
                   </div>
                   <div className="w-16 h-16 mx-auto mt-1 rounded-2xl bg-amber-500/20 border-2 border-amber-500 flex items-center justify-center text-amber-900 font-black text-2xl mb-2 overflow-hidden shadow-md ring-4 ring-amber-300/40">
                     {firstStar.photoUrl ? (
@@ -595,15 +736,15 @@ export const AttendanceSheetReport: React.FC<AttendanceSheetReportProps> = ({ da
                       firstStar.fullName?.charAt(0) || '🥇'
                     )}
                   </div>
-                  <p className="font-mono text-xs font-black text-amber-800">{firstStar.code}</p>
-                  <h4 className="font-black text-sm text-slate-900 mt-0.5 truncate" title={firstStar.fullName}>{firstStar.fullName}</h4>
+                  <p className="font-mono text-xs font-black text-amber-900">{firstStar.code}</p>
+                  <h4 className="font-black text-sm text-slate-950 mt-0.5 truncate" style={{ color: '#090d16' }} title={firstStar.fullName}>{firstStar.fullName}</h4>
                   <div className="flex items-center justify-center gap-0.5 text-amber-500 my-1">
-                    {Array.from({ length: 5 }).map((_, i) => (
+                    {Array.from({ length: firstStar.currentStars || 5 }).map((_, i) => (
                       <Star key={i} className="w-3.5 h-3.5 fill-amber-400 text-amber-500" />
                     ))}
                   </div>
                   <div className="inline-block bg-gradient-to-r from-amber-500 to-amber-400 text-slate-950 text-xs font-black px-4 py-1.5 rounded-xl shadow-sm">
-                    {firstStar.totalPoints} نقطة تميز 🏆
+                    {firstStar.currentPoints} نقطة ({rankingBasisLabels[rankingBasis].shortName}) 🏆
                   </div>
                   {firstStar.entryTime && (
                     <p className="text-[10px] text-amber-900 font-bold mt-1.5 flex items-center justify-center gap-1">
@@ -628,19 +769,19 @@ export const AttendanceSheetReport: React.FC<AttendanceSheetReportProps> = ({ da
                       thirdStar.fullName?.charAt(0) || '🥉'
                     )}
                   </div>
-                  <p className="font-mono text-xs font-black text-amber-800">{thirdStar.code}</p>
-                  <h4 className="font-black text-xs text-slate-900 mt-0.5 truncate" title={thirdStar.fullName}>{thirdStar.fullName}</h4>
+                  <p className="font-mono text-xs font-black text-amber-900">{thirdStar.code}</p>
+                  <h4 className="font-black text-xs text-slate-950 mt-0.5 truncate" style={{ color: '#090d16' }} title={thirdStar.fullName}>{thirdStar.fullName}</h4>
                   <div className="flex items-center justify-center gap-0.5 text-amber-500 my-1">
-                    {Array.from({ length: thirdStar.stars || 3 }).map((_, i) => (
+                    {Array.from({ length: thirdStar.currentStars || 3 }).map((_, i) => (
                       <Star key={i} className="w-3 h-3 fill-amber-400 text-amber-500" />
                     ))}
                   </div>
                   <div className="inline-block bg-amber-100/80 border border-amber-300 text-amber-900 text-[11px] font-black px-3 py-1 rounded-xl">
-                    {thirdStar.totalPoints} نقطة تميز
+                    {thirdStar.currentPoints} نقطة ({rankingBasisLabels[rankingBasis].shortName})
                   </div>
                   {thirdStar.entryTime && (
-                    <p className="text-[10px] text-slate-500 mt-1 flex items-center justify-center gap-1">
-                      <Clock className="w-3 h-3 text-slate-400" />
+                    <p className="text-[10px] text-slate-600 mt-1 flex items-center justify-center gap-1 font-bold">
+                      <Clock className="w-3 h-3 text-slate-500" />
                       حضور: {thirdStar.entryTime}
                     </p>
                   )}
@@ -648,18 +789,25 @@ export const AttendanceSheetReport: React.FC<AttendanceSheetReportProps> = ({ da
               ) : null}
             </div>
 
-            {/* Honor Stars List */}
+            {/* Honor Stars List - High Contrast Clear Names in Light Mode */}
             {honorStars.length > 0 && (
               <div className="mt-4 pt-3 border-t border-amber-200/80 flex flex-wrap items-center justify-center gap-2 text-xs">
-                <span className="text-[11px] font-black text-amber-900 flex items-center gap-1">
-                  <Star className="w-3 h-3 fill-amber-500 text-amber-500" />
-                  فرسان التميز والانضباط بالمحاضرة:
+                <span className="text-[11px] font-black text-slate-950 flex items-center gap-1 bg-amber-200/70 px-2.5 py-1 rounded-lg border border-amber-400">
+                  <Star className="w-3.5 h-3.5 fill-amber-500 text-amber-500" />
+                  <span>فرسان التميز ({rankingBasisLabels[rankingBasis].shortName}):</span>
                 </span>
                 {honorStars.map((t) => (
-                  <span key={t.code} className="inline-flex items-center gap-1 bg-white border border-amber-300 px-2.5 py-1 rounded-xl font-bold text-slate-800 text-[11px] shadow-xs">
-                    <span className="font-mono text-amber-700">{t.code}</span>
-                    <span>{t.fullName}</span>
-                    <span className="text-amber-600 font-mono text-[10px]">({t.totalPoints}ن)</span>
+                  <span
+                    key={t.code}
+                    className="inline-flex items-center gap-1.5 bg-white border-2 border-amber-400 px-3 py-1 rounded-xl shadow-xs font-bold"
+                  >
+                    <span className="font-mono text-amber-800 text-[11px] font-bold">{t.code}</span>
+                    <span className="font-black text-slate-950 text-xs" style={{ color: '#090d16' }}>
+                      {t.fullName}
+                    </span>
+                    <span className="text-amber-950 font-mono text-[10px] font-black bg-amber-200/80 px-1.5 py-0.5 rounded-md">
+                      {t.currentPoints}ن
+                    </span>
                   </span>
                 ))}
               </div>
@@ -677,8 +825,11 @@ export const AttendanceSheetReport: React.FC<AttendanceSheetReportProps> = ({ da
                 <th className="p-3">اسم المتدرب</th>
                 <th className="p-3 text-center">وقت الدخول للقاعة</th>
                 <th className="p-3 text-center">وسيلة التحضير</th>
-                <th className="p-3 text-center">النجوم</th>
-                <th className="p-3 text-center">نقاط التميز</th>
+                <th className="p-3 text-center">النجوم ⭐</th>
+                <th className="p-3 text-center">
+                  <div>نقاط التميز</div>
+                  <div className="text-[10px] text-amber-300 font-normal">({rankingBasisLabels[rankingBasis].shortName})</div>
+                </th>
                 <th className="p-3 text-center">حالة الحضور</th>
                 <th className="p-3">ملاحظات المحاضر / المعمل</th>
                 <th className="p-3 text-center no-print w-16">إرسال</th>
@@ -741,11 +892,11 @@ export const AttendanceSheetReport: React.FC<AttendanceSheetReportProps> = ({ da
                             )}
                           </div>
                           <div>
-                            <span className="font-bold text-slate-900 block text-xs leading-tight">
+                            <span className="font-black text-slate-950 block text-xs leading-tight" style={{ color: '#090d16' }}>
                               {t.fullName}
                             </span>
                             {t.phone && (
-                              <span className="text-[10px] text-slate-400 font-mono block">
+                              <span className="text-[10px] text-slate-500 font-mono block">
                                 {t.phone}
                               </span>
                             )}
@@ -784,16 +935,16 @@ export const AttendanceSheetReport: React.FC<AttendanceSheetReportProps> = ({ da
                       {/* Stars */}
                       <td className="p-3 text-center">
                         <div className="flex items-center justify-center gap-0.5 text-amber-500">
-                          {Array.from({ length: Math.min(5, Math.max(1, t.stars || 1)) }).map((_, sIdx) => (
+                          {Array.from({ length: Math.min(5, Math.max(1, t.currentStars || 1)) }).map((_, sIdx) => (
                             <Star key={sIdx} className="w-3 h-3 fill-amber-400 text-amber-500" />
                           ))}
                         </div>
                       </td>
 
                       {/* Points */}
-                      <td className="p-3 text-center font-mono font-black text-amber-700 text-xs">
-                        <span className="bg-amber-100/70 border border-amber-300/80 px-2 py-0.5 rounded-lg">
-                          +{t.totalPoints || 0}
+                      <td className="p-3 text-center font-mono font-black text-amber-950 text-xs">
+                        <span className="bg-amber-100/90 border border-amber-400 px-2.5 py-0.5 rounded-lg text-slate-950 font-black shadow-xs" style={{ color: '#090d16' }}>
+                          +{t.currentPoints || 0}
                         </span>
                       </td>
 
