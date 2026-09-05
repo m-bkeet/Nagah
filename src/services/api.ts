@@ -661,6 +661,12 @@ export const api = {
       body: JSON.stringify({ traineeId, traineeIds: [traineeId], points, reason })
     });
   },
+  awardPoints: (traineeId: string, points: number, reason: string = 'مكافأة الجلسة التفاعلية') => {
+    return request<{ success: boolean }>('/points/add', {
+      method: 'POST',
+      body: JSON.stringify({ traineeId, traineeIds: [traineeId], points, reason })
+    });
+  },
   getLeaderboard: (params?: Record<string, string>) => {
     const query = new URLSearchParams(params || {}).toString();
     return request<Trainee[]>(`/points/leaderboard${query ? `?${query}` : ''}`);

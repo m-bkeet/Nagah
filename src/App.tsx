@@ -82,6 +82,20 @@ const AppContent: React.FC = () => {
   const { isAiModalOpen, setIsAiModalOpen, aiModalTab, settings } = useCenter();
   const { themeConfig } = useTheme();
 
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('sidebar_collapsed');
+      if (saved !== null) return saved === 'true';
+    }
+    return true; // Collapsed by default as requested
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('sidebar_collapsed', String(isSidebarCollapsed));
+    } catch (e) {}
+  }, [isSidebarCollapsed]);
+
   const [activeTab, setActiveTab] = useState<string>(() => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
