@@ -469,6 +469,15 @@ console.log("نتيجة الطالب:", calculateGrade(48, 50));`);
     });
   };
 
+  const handleClearQuestionBroadcast = async () => {
+    try {
+      await api.clearInteractiveQuestion();
+      showToast('تم إنهاء وإغلاق عرض الأسئلة على جميع شاشات الطلاب بنجاح 🛑', 'success');
+    } catch (err: any) {
+      showToast('فشل إنهاء بث الأسئلة', 'error');
+    }
+  };
+
   // Filtered Question Bank items
   const subjectsList = Array.from(new Set(questionBank.map(q => q.subject || 'عام')));
   const filteredBank = questionBank.filter(q => {
@@ -521,6 +530,15 @@ console.log("نتيجة الطالب:", calculateGrade(48, 50));`);
               </span>
             </div>
           </div>
+
+          <button
+            onClick={handleClearQuestionBroadcast}
+            className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-2xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 transition-colors border border-rose-500/40 text-xs font-bold shadow-lg"
+            title="إغلاق وإنهاء الأسئلة التفاعلية النشطة على الأجهزة"
+          >
+            <XCircle className="w-4 h-4" />
+            <span>إنهاء بث السؤال</span>
+          </button>
 
           <button
             onClick={() => loadSessions()}

@@ -3,6 +3,11 @@
 node_modules/
 .env
 !.env.example
+!dist/
+!dist/**/*
+!build/
+!build/**/*
+
 
 
 

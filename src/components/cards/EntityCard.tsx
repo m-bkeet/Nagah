@@ -44,10 +44,10 @@ export const EntityCard: React.FC<EntityCardProps> = ({
   };
 
   return (
-    <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-4 shadow-lg hover:border-slate-700 transition-all text-slate-100 flex flex-col justify-between">
+    <div className="bg-gradient-to-br from-white via-slate-50/95 to-amber-50/40 dark:bg-slate-900/90 border border-amber-300/80 dark:border-slate-800 rounded-2xl p-4 shadow-[0_20px_50px_rgba(15,23,42,0.12),0_4px_12px_rgba(217,119,6,0.06)] hover:-translate-y-1.5 hover:shadow-[0_30px_70px_rgba(217,119,6,0.2)] transition-all duration-300 text-slate-900 dark:text-slate-100 flex flex-col justify-between ring-1 ring-slate-900/5">
       <div>
         {/* Header */}
-        <div className="flex items-center justify-between pb-3 border-b border-slate-800/80 mb-3">
+        <div className="flex items-center justify-between pb-3 border-b border-amber-200/60 dark:border-slate-800/80 mb-3 bg-gradient-to-r from-slate-100/60 to-transparent -mx-4 -mt-4 p-4 rounded-t-2xl">
           <div className="flex items-center gap-2.5">
             {photoUrl ? (
               <img src={photoUrl} alt={title} className="w-9 h-9 rounded-full object-cover border border-slate-700" />

@@ -226,11 +226,8 @@ export const AIHomeworkScannerModal: React.FC<AIHomeworkScannerModalProps> = ({
           if (fullTrainee?.id) {
             setSelectedTraineeId(fullTrainee.id);
           }
-        } else if (Array.isArray(traineesList) && traineesList.length > 0) {
-          setMatchedTrainee(traineesList[0] || null);
-          if (traineesList[0]?.id) {
-            setSelectedTraineeId(traineesList[0].id);
-          }
+        } else {
+          setMatchedTrainee(null);
         }
 
         setStep('results');

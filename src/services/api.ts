@@ -825,6 +825,10 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(data)
     }),
+  clearInteractiveQuestion: () =>
+    request<{ success: boolean }>('/interactive-sessions/clear-question', {
+      method: 'POST'
+    }),
   broadcastNagahQuiz: (quiz: any) =>
     request<{ success: boolean; count: number }>('/interactive/broadcast-nagah-quiz', {
       method: 'POST',

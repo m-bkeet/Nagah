@@ -25,5 +25,11 @@ data/backups/
 /reset-db.cjs
 /run-actual-import.cjs
 
+!dist/
+!dist/**/*
+!build/
+!build/**/*
+
+
 
 

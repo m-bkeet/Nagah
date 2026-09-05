@@ -99,7 +99,11 @@ const AppContent: React.FC = () => {
     return 'dashboard';
   });
 
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(true);
+  const [visitedTabs, setVisitedTabs] = useState<Record<string, boolean>>({ [activeTab]: true });
+
+  useEffect(() => {
+    setVisitedTabs(prev => ({ ...prev, [activeTab]: true }));
+  }, [activeTab]);
 
   // Sync tab with URL search parameter if present
   useEffect(() => {
@@ -180,8 +184,8 @@ const AppContent: React.FC = () => {
     return <LoginView />;
   }
 
-  // Render Active Tab View with Strict Permission Guarding
-  const renderActiveView = () => {
+  // Render Active Tab View with Keep-Alive Caching for Instant Switching
+  const renderActiveViewCached = () => {
     // Helper to guard view rendering
     const guard = (permId: string, component: React.ReactNode) => {
       if (!hasPermission(user, settings, permId)) {
@@ -190,63 +194,52 @@ const AppContent: React.FC = () => {
       return component;
     };
 
-    switch (activeTab) {
-      case 'dashboard':
-        return guard('dashboard', <DashboardView onNavigate={setActiveTab} />);
-      case 'trainers':
-        return guard('trainers', <TrainersView />);
-      case 'trainees':
-        return guard('trainees', <TraineesView />);
-      case 'programs':
-        return guard('programs', <ProgramsView />);
-      case 'courses':
-        return guard('courses', <CoursesView />);
-      case 'groups':
-        return guard('groups', <GroupsView onNavigate={setActiveTab} />);
-      case 'lab_schedule':
-        return guard('lab_schedule', <LabScheduleView />);
-      case 'attendance':
-        return guard('attendance', <AttendanceView />);
-      case 'finance':
-        return guard('finance', <FinanceView />);
-      case 'expenses':
-        return guard('expenses', <ExpensesView />);
-      case 'points':
-        return guard('points', <PointsView />);
-      case 'exams':
-        return guard('exams', <ExamsView />);
-      case 'homeworks':
-        return guard('homeworks', <HomeworksView />);
-      case 'interactive':
-        return guard('interactive', <InteractiveSessionsView />);
-      case 'social_feed':
-        return guard('social_feed', <SocialFeedView />);
-      case 'devices':
-        return guard('devices', <DevicesView />);
-      case 'messages':
-        return guard('messages', <MessagesView />);
-      case 'reports':
-        return guard('reports', <ReportsView />);
-      case 'certificates':
-        return guard('certificates', <CertificatesView />);
-      case 'branches':
-        return guard('branches', <BranchesView />);
-      case 'ai_developer':
-        return guard('ai_developer', <NagahAiDeveloperView />);
-      case 'audit':
-      case 'audit_logs':
-        return guard('audit', <AuditLogsView />);
-      case 'settings':
-        return guard('settings', <SettingsView />);
-      case 'student_portal':
-        return <PublicStudentPortalView onBack={() => setActiveTab('dashboard')} />;
-      case 'parent_portal':
-        return <PublicParentPortalView onBack={() => setActiveTab('dashboard')} />;
-      case 'trainer_portal':
-        return <PublicTrainerPortalView onBack={() => setActiveTab('dashboard')} />;
-      default:
-        return <DashboardView onNavigate={setActiveTab} />;
-    }
+    const viewsMap: Record<string, React.ReactNode> = {
+      dashboard: guard('dashboard', <DashboardView onNavigate={setActiveTab} />),
+      trainers: guard('trainers', <TrainersView />),
+      trainees: guard('trainees', <TraineesView />),
+      programs: guard('programs', <ProgramsView />),
+      courses: guard('courses', <CoursesView />),
+      groups: guard('groups', <GroupsView onNavigate={setActiveTab} />),
+      lab_schedule: guard('lab_schedule', <LabScheduleView />),
+      attendance: guard('attendance', <AttendanceView />),
+      finance: guard('finance', <FinanceView />),
+      expenses: guard('expenses', <ExpensesView />),
+      points: guard('points', <PointsView />),
+      exams: guard('exams', <ExamsView />),
+      homeworks: guard('homeworks', <HomeworksView />),
+      interactive: guard('interactive', <InteractiveSessionsView />),
+      social_feed: guard('social_feed', <SocialFeedView />),
+      devices: guard('devices', <DevicesView />),
+      messages: guard('messages', <MessagesView />),
+      reports: guard('reports', <ReportsView />),
+      certificates: guard('certificates', <CertificatesView />),
+      branches: guard('branches', <BranchesView />),
+      ai_developer: guard('ai_developer', <NagahAiDeveloperView />),
+      audit: guard('audit', <AuditLogsView />),
+      audit_logs: guard('audit', <AuditLogsView />),
+      settings: guard('settings', <SettingsView />),
+      student_portal: <PublicStudentPortalView onBack={() => setActiveTab('dashboard')} />,
+      parent_portal: <PublicParentPortalView onBack={() => setActiveTab('dashboard')} />,
+      trainer_portal: <PublicTrainerPortalView onBack={() => setActiveTab('dashboard')} />
+    };
+
+    const currentKey = viewsMap[activeTab] ? activeTab : 'dashboard';
+
+    return (
+      <div className="relative w-full h-full">
+        {Object.keys(visitedTabs).map(tabKey => {
+          const comp = viewsMap[tabKey];
+          if (!comp) return null;
+          const isActive = tabKey === currentKey;
+          return (
+            <div key={tabKey} style={{ display: isActive ? 'block' : 'none' }} className="w-full h-full">
+              {comp}
+            </div>
+          );
+        })}
+      </div>
+    );
   };
 
   return (
@@ -281,7 +274,7 @@ const AppContent: React.FC = () => {
         <main className={`flex-1 min-w-0 overflow-y-auto px-3 sm:px-6 py-4 pb-24 md:pb-8 custom-scrollbar transition-all duration-300 ${
           isSidebarCollapsed ? 'md:pr-14 xl:pr-16' : 'md:pr-60 xl:pr-64'
         }`}>
-          {renderActiveView()}
+          {renderActiveViewCached()}
         </main>
       </div>
 

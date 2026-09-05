@@ -466,58 +466,58 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
               </div>
             </label>
 
-            {/* 6 ORBIT NODE PLANETS */}
+            {/* 6 ORBIT NODE PLANETS WITH ROYAL GLOWING HIGHLIGHTS */}
             <button
               type="button"
               onClick={() => onNavigate('trainees')}
-              className="absolute -top-1 sm:top-1 left-1/2 -translate-x-1/2 z-30 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border-2 border-purple-500 text-purple-800 dark:text-purple-300 px-3 py-1 rounded-full text-xs font-black shadow-lg flex items-center gap-1.5 transition-all hover:scale-110 cursor-pointer"
+              className="absolute -top-1 sm:top-1 left-1/2 -translate-x-1/2 z-30 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-2 border-purple-500 text-purple-900 dark:text-purple-200 px-3.5 py-1.5 rounded-full text-xs font-black shadow-[0_0_20px_rgba(168,85,247,0.35)] ring-2 ring-purple-400/50 flex items-center gap-1.5 transition-all hover:scale-110 hover:shadow-[0_0_30px_rgba(168,85,247,0.6)] cursor-pointer"
             >
-              <Users className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
+              <Users className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400 animate-pulse" />
               <span>المتدربون</span>
             </button>
 
             <button
               type="button"
               onClick={() => onNavigate('branches')}
-              className="absolute top-12 sm:top-14 right-2 sm:right-6 z-30 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border-2 border-amber-500 text-amber-800 dark:text-amber-300 px-3 py-1 rounded-full text-xs font-black shadow-lg flex items-center gap-1.5 transition-all hover:scale-110 cursor-pointer"
+              className="absolute top-12 sm:top-14 right-2 sm:right-6 z-30 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-2 border-amber-500 text-amber-900 dark:text-amber-200 px-3.5 py-1.5 rounded-full text-xs font-black shadow-[0_0_20px_rgba(245,158,11,0.35)] ring-2 ring-amber-400/50 flex items-center gap-1.5 transition-all hover:scale-110 hover:shadow-[0_0_30px_rgba(245,158,11,0.6)] cursor-pointer"
             >
-              <Building className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+              <Building className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 animate-pulse" />
               <span>الفروع</span>
             </button>
 
             <button
               type="button"
               onClick={() => onNavigate('reports')}
-              className="absolute bottom-12 sm:bottom-14 right-2 sm:right-6 z-30 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border-2 border-purple-500 text-purple-800 dark:text-purple-300 px-3 py-1 rounded-full text-xs font-black shadow-lg flex items-center gap-1.5 transition-all hover:scale-110 cursor-pointer"
+              className="absolute bottom-12 sm:bottom-14 right-2 sm:right-6 z-30 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-2 border-purple-500 text-purple-900 dark:text-purple-200 px-3.5 py-1.5 rounded-full text-xs font-black shadow-[0_0_20px_rgba(168,85,247,0.35)] ring-2 ring-purple-400/50 flex items-center gap-1.5 transition-all hover:scale-110 hover:shadow-[0_0_30px_rgba(168,85,247,0.6)] cursor-pointer"
             >
-              <Sparkles className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
+              <Sparkles className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400 animate-pulse" />
               <span>ذكاء الأعمال</span>
             </button>
 
             <button
               type="button"
               onClick={() => onNavigate('finance')}
-              className="absolute -bottom-1 sm:bottom-1 left-1/2 -translate-x-1/2 z-30 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border-2 border-emerald-500 text-emerald-800 dark:text-emerald-300 px-3 py-1 rounded-full text-xs font-black shadow-lg flex items-center gap-1.5 transition-all hover:scale-110 cursor-pointer"
+              className="absolute -bottom-1 sm:bottom-1 left-1/2 -translate-x-1/2 z-30 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-2 border-emerald-500 text-emerald-900 dark:text-emerald-200 px-3.5 py-1.5 rounded-full text-xs font-black shadow-[0_0_20px_rgba(16,185,129,0.35)] ring-2 ring-emerald-400/50 flex items-center gap-1.5 transition-all hover:scale-110 hover:shadow-[0_0_30px_rgba(16,185,129,0.6)] cursor-pointer"
             >
-              <DollarSign className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+              <DollarSign className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 animate-pulse" />
               <span>الماليّة</span>
             </button>
 
             <button
               type="button"
               onClick={() => onNavigate('devices')}
-              className="absolute bottom-12 sm:bottom-14 left-2 sm:left-6 z-30 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border-2 border-rose-500 text-rose-800 dark:text-rose-300 px-3 py-1 rounded-full text-xs font-black shadow-lg flex items-center gap-1.5 transition-all hover:scale-110 cursor-pointer"
+              className="absolute bottom-12 sm:bottom-14 left-2 sm:left-6 z-30 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-2 border-rose-500 text-rose-900 dark:text-rose-200 px-3.5 py-1.5 rounded-full text-xs font-black shadow-[0_0_20px_rgba(244,63,94,0.35)] ring-2 ring-rose-400/50 flex items-center gap-1.5 transition-all hover:scale-110 hover:shadow-[0_0_30px_rgba(244,63,94,0.6)] cursor-pointer"
             >
-              <Monitor className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400" />
+              <Monitor className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400 animate-pulse" />
               <span>الأجهزة</span>
             </button>
 
             <button
               type="button"
               onClick={() => onNavigate('settings')}
-              className="absolute top-12 sm:top-14 left-2 sm:left-6 z-30 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border-2 border-amber-500 text-amber-800 dark:text-amber-300 px-3 py-1 rounded-full text-xs font-black shadow-lg flex items-center gap-1.5 transition-all hover:scale-110 cursor-pointer"
+              className="absolute top-12 sm:top-14 left-2 sm:left-6 z-30 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-2 border-amber-500 text-amber-900 dark:text-amber-200 px-3.5 py-1.5 rounded-full text-xs font-black shadow-[0_0_20px_rgba(245,158,11,0.35)] ring-2 ring-amber-400/50 flex items-center gap-1.5 transition-all hover:scale-110 hover:shadow-[0_0_30px_rgba(245,158,11,0.6)] cursor-pointer"
             >
-              <Shield className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+              <Shield className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 animate-pulse" />
               <span>الإعدادات</span>
             </button>
 

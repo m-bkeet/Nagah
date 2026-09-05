@@ -115,6 +115,20 @@ export const StudentKioskView: React.FC = () => {
   const [isLockedByMaster, setIsLockedByMaster] = useState(false);
   const [lockMessage, setLockMessage] = useState('');
 
+  // Track answered questions to prevent repeated popping loops
+  const [answeredQuestionIds, setAnsweredQuestionIds] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('kiosk_answered_q_ids');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+  const answeredQuestionIdsRef = useRef<string[]>(answeredQuestionIds);
+  useEffect(() => {
+    answeredQuestionIdsRef.current = answeredQuestionIds;
+  }, [answeredQuestionIds]);
+
   // Enforce Browser Fullscreen & Suppress All Device Inputs during Lock Screen Mode (Veyon Master Grade)
   useEffect(() => {
     if (!isLockedByMaster) return;
@@ -499,13 +513,20 @@ export const StudentKioskView: React.FC = () => {
           // Sync active question (live competition)
           if (res.masterBroadcast.activeQuestion) {
             const qData = res.masterBroadcast.activeQuestion.question || res.masterBroadcast.activeQuestion;
-            if (qData && (!activeQuestion || activeQuestion.id !== qData.id)) {
-              setActiveQuestion(qData);
-              setSelectedOptionIndex(null);
-              setQuestionAnswered(false);
-              setQuestionStartTime(Date.now());
-              playCelebrationFanfare();
+            const qId = qData?.id || qData?.questionId;
+            if (qData && qId) {
+              if (!answeredQuestionIdsRef.current.includes(qId)) {
+                if (!activeQuestion || activeQuestion.id !== qId) {
+                  setActiveQuestion(qData);
+                  setSelectedOptionIndex(null);
+                  setQuestionAnswered(false);
+                  setQuestionStartTime(Date.now());
+                  playCelebrationFanfare();
+                }
+              }
             }
+          } else if (activeQuestion) {
+            setActiveQuestion(null);
           }
 
           // Sync active quiz
@@ -534,11 +555,15 @@ export const StudentKioskView: React.FC = () => {
                 try { payloadData = JSON.parse(cmd.payload); } catch (e) { payloadData = { text: cmd.payload }; }
               }
               if (payloadData?.action === 'interactive_question' && payloadData.question) {
-                setActiveQuestion(payloadData.question);
-                setSelectedOptionIndex(null);
-                setQuestionAnswered(false);
-                setQuestionStartTime(Date.now());
-                playCelebrationFanfare();
+                const q = payloadData.question;
+                const qId = q?.id || q?.questionId;
+                if (q && qId && !answeredQuestionIdsRef.current.includes(qId)) {
+                  setActiveQuestion(q);
+                  setSelectedOptionIndex(null);
+                  setQuestionAnswered(false);
+                  setQuestionStartTime(Date.now());
+                  playCelebrationFanfare();
+                }
               } else if (payloadData?.action === 'ceremony') {
                 setActiveCeremony(payloadData);
               } else if (payloadData?.action === 'start_quiz' && payloadData.quiz) {
@@ -1903,15 +1928,26 @@ export const StudentKioskView: React.FC = () => {
                 {!questionAnswered ? (
                   <button
                     onClick={() => {
-                      if (selectedOptionIndex !== null) {
+                      if (selectedOptionIndex !== null && activeQuestion) {
                         setQuestionAnswered(true);
+                        const qId = activeQuestion.id || 'q-' + Date.now();
+
+                        // Store in answered list so polling loop won't reopen this question
+                        setAnsweredQuestionIds(prev => {
+                          const updated = Array.from(new Set([...prev, qId]));
+                          try {
+                            localStorage.setItem('kiosk_answered_q_ids', JSON.stringify(updated));
+                          } catch (e) {}
+                          return updated;
+                        });
+
                         const isCorrect = selectedOptionIndex === activeQuestion.correctOptionIndex;
                         const elapsed = Number(((Date.now() - questionStartTime) / 1000).toFixed(1));
 
                         // Submit response to server live
                         api.submitInteractiveAnswer({
                           sessionId: activeSessionId,
-                          questionId: activeQuestion.id || 'q-' + Date.now(),
+                          questionId: qId,
                           traineeId: currentTrainee?.id,
                           traineeName: currentTrainee?.fullName || 'متدرب المعمل',
                           deviceId: deviceId,
@@ -1933,10 +1969,10 @@ export const StudentKioskView: React.FC = () => {
                           }
                           setTimeout(() => setShowRankSparkle(false), 5000);
                         }
-                        // Close after a delay
+                        // Close smoothly after a short delay
                         setTimeout(() => {
                           setActiveQuestion(null);
-                        }, 5000);
+                        }, 3500);
                       }
                     }}
                     disabled={selectedOptionIndex === null}
@@ -1945,14 +1981,22 @@ export const StudentKioskView: React.FC = () => {
                     تأكيد الإجابة وإرسال
                   </button>
                 ) : (
-                  <div className={`px-6 py-2 rounded-xl font-bold text-sm border ${
-                    selectedOptionIndex === activeQuestion.correctOptionIndex
-                      ? 'bg-emerald-500/20 border-emerald-500 text-emerald-300'
-                      : 'bg-rose-500/20 border-rose-500 text-rose-300'
-                  }`}>
-                    {selectedOptionIndex === activeQuestion.correctOptionIndex
-                      ? 'إجابة صحيحة! أحسنت + ' + activeQuestion.points + ' نقطة'
-                      : 'إجابة خاطئة! حظاً أوفر في المرة القادمة'}
+                  <div className="flex flex-col items-center gap-3 animate-in fade-in zoom-in-95">
+                    <div className={`px-6 py-2.5 rounded-xl font-bold text-sm border ${
+                      selectedOptionIndex === activeQuestion.correctOptionIndex
+                        ? 'bg-emerald-500/20 border-emerald-500 text-emerald-300'
+                        : 'bg-rose-500/20 border-rose-500 text-rose-300'
+                    }`}>
+                      {selectedOptionIndex === activeQuestion.correctOptionIndex
+                        ? '🎉 إجابة صحيحة! أحسنت + ' + (activeQuestion.points || 10) + ' نقطة'
+                        : '❌ إجابة خاطئة! حظاً أوفر في المرة القادمة'}
+                    </div>
+                    <button
+                      onClick={() => setActiveQuestion(null)}
+                      className="px-5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-bold transition-all border border-slate-700"
+                    >
+                      إغلاق النافذة الآن
+                    </button>
                   </div>
                 )}
               </div>

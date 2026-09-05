@@ -5040,11 +5040,6 @@ apiRouter.post('/ai/grade-scan', async (req: Request, res: Response) => {
       );
     }
 
-    // Default to first trainee if none matched and fallback
-    if (!matchedTrainee && allTrainees.length > 0) {
-      matchedTrainee = allTrainees?.[0];
-    }
-
     res.json({
       success: true,
       data: result,
@@ -5067,7 +5062,7 @@ apiRouter.post('/ai/grade-scan', async (req: Request, res: Response) => {
 });
 
 // Confirm and Add Graded Homework / Exam to Student Record
-apiRouter.post('/ai/grade-scan/confirm', (req: Request, res: Response) => {
+apiRouter.post('/ai/grade-scan/confirm', async (req: Request, res: Response) => {
   try {
     const {
       traineeId,
@@ -5089,7 +5084,14 @@ apiRouter.post('/ai/grade-scan/confirm', (req: Request, res: Response) => {
     }
 
     const data = db.getData();
-    const trainee = data.trainees.find(t => t.id === traineeId);
+    let trainee = await TraineeRepo.getById(traineeId);
+    if (!trainee) {
+      const allT = await TraineeRepo.getAll();
+      trainee = allT.find(t => t.id === traineeId || t.code === traineeId);
+    }
+    if (!trainee && Array.isArray(data.trainees)) {
+      trainee = data.trainees.find(t => t.id === traineeId || t.code === traineeId);
+    }
     if (!trainee) {
       return res.status(404).json({ error: 'المتدرب غير موجود في النظام' });
     }
@@ -5117,8 +5119,10 @@ apiRouter.post('/ai/grade-scan/confirm', (req: Request, res: Response) => {
         status: 'completed',
         instructions: 'تصحيح ورقي آلي عبر الماسح الذكي وكود المتدرب'
       };
+      if (!data.exams) data.exams = [];
       data.exams.push(newExamItem);
       targetExamId = newExamItem.id;
+      try { await ExamRepo.create(newExamItem.id, newExamItem); } catch (e) { /* ignore */ }
     }
 
     // 2. Create and Save ExamResult Record
@@ -5138,14 +5142,26 @@ apiRouter.post('/ai/grade-scan/confirm', (req: Request, res: Response) => {
     };
 
     if (!data.examResults) data.examResults = [];
-    data.examResults.push(newResult);
+    data.examResults.unshift(newResult);
+    try { await ExamResultRepo.create(newResult.id, newResult); } catch (e) { /* ignore */ }
 
     // 3. Add Points & Star Transaction to Trainee Record
     let pointTx: PointTransaction | null = null;
     if (finalPoints > 0) {
       const currentPts = trainee.totalPoints || trainee.points || 0;
-      trainee.totalPoints = currentPts + finalPoints;
-      trainee.points = trainee.totalPoints;
+      const newTotal = currentPts + finalPoints;
+      trainee.totalPoints = newTotal;
+      trainee.points = newTotal;
+
+      await TraineeRepo.update(trainee.id, { totalPoints: newTotal, points: newTotal });
+
+      if (Array.isArray(data.trainees)) {
+        const memIdx = data.trainees.findIndex(t => t.id === trainee.id);
+        if (memIdx >= 0) {
+          data.trainees[memIdx].totalPoints = newTotal;
+          data.trainees[memIdx].points = newTotal;
+        }
+      }
 
       pointTx = {
         id: 'pt-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
@@ -5153,14 +5169,15 @@ apiRouter.post('/ai/grade-scan/confirm', (req: Request, res: Response) => {
         groupId: trainee.groupId,
         branchId: trainee.branchId,
         points: finalPoints,
-        reason: `⭐ مكافأة إتقان (${itemTitle}): درجة ${finalScore}/${finalMaxScore} (${finalPercentage}%)`,
+        reason: `📝 واجب/تقييم عملي (${itemTitle}): درجة ${finalScore}/${finalMaxScore} (${finalPercentage}%) - ${rating}`,
         addedByUserId: 'ai-scanner',
         addedByUserName: 'مصحح الذكاء الاصطناعي',
         createdAt: new Date().toISOString()
       };
 
       if (!data.pointTransactions) data.pointTransactions = [];
-      data.pointTransactions.push(pointTx);
+      data.pointTransactions.unshift(pointTx);
+      try { await PointTransactionRepo.create(pointTx.id, pointTx); } catch (e) { /* ignore */ }
     }
 
     // 4. Audit Log
@@ -5658,6 +5675,13 @@ apiRouter.post('/interactive-sessions/broadcast-question', (req: Request, res: R
 
   db.save();
   res.json({ success: true, count });
+});
+
+// Clear active question broadcast
+apiRouter.post('/interactive-sessions/clear-question', (req: Request, res: Response) => {
+  masterBroadcast.activeQuestion = null;
+  masterBroadcast.updatedAt = new Date().toISOString();
+  res.json({ success: true });
 });
 
 // Broadcast ceremony podium to all students

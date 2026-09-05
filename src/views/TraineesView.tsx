@@ -2033,12 +2033,12 @@ export const TraineesView: React.FC = () => {
               return (
                 <div
                   key={t.id}
-                  className={`bg-white dark:bg-slate-800/90 border rounded-2xl shadow-md hover:shadow-xl overflow-hidden backdrop-blur-md transition-all flex flex-col justify-between relative group ${
-                    isSelected ? 'border-amber-500 ring-2 ring-amber-500/50' : 'border-slate-200/80 dark:border-slate-700/80 hover:border-amber-400'
+                  className={`bg-gradient-to-br from-white via-slate-50/95 to-amber-50/40 dark:from-slate-900/90 dark:via-slate-900/95 dark:to-slate-850 border rounded-2xl shadow-[0_20px_50px_rgba(15,23,42,0.14),0_4px_16px_rgba(217,119,6,0.08)] dark:shadow-[0_20px_50px_rgba(0,0,0,0.5)] hover:-translate-y-2 hover:shadow-[0_30px_70px_rgba(217,119,6,0.22),0_10px_25px_rgba(15,23,42,0.18)] overflow-hidden backdrop-blur-md transition-all duration-300 flex flex-col justify-between relative group ${
+                    isSelected ? 'border-amber-500 ring-2 ring-amber-500/50 shadow-[0_25px_60px_rgba(217,119,6,0.25)]' : 'border-amber-300/80 dark:border-slate-700/85 ring-1 ring-slate-900/5 dark:ring-white/5 hover:border-amber-400'
                   }`}
                 >
-                  {/* Card Header */}
-                  <div className="p-3.5 bg-slate-50/80 dark:bg-gradient-to-r dark:from-slate-900/90 dark:to-slate-850 border-b border-slate-200/80 dark:border-slate-700/60 flex items-center justify-between">
+                  {/* Card Header with 3D Light Gradient */}
+                  <div className="p-3.5 bg-gradient-to-r from-slate-100/90 via-slate-50 to-amber-50/60 dark:from-slate-900/90 dark:to-slate-850 border-b border-amber-200/60 dark:border-slate-700/60 flex items-center justify-between shadow-xs">
                     <div className="flex items-center gap-2">
                       <button
                         onClick={() => {
