@@ -76,7 +76,8 @@ import {
   Share2,
   RefreshCw,
   Database,
-  Check
+  Check,
+  Loader2
  } from 'lucide-react';
 import { Trainee, Course, Group, Trainer, Branch, PaymentMethod } from '../types';
 import { StudentPhotoCropperModal } from '../components/StudentPhotoCropperModal';
@@ -98,6 +99,9 @@ export const TraineesView: React.FC = () => {
   const [groups, setGroups] = useState<Group[]>([]);
   const [trainers, setTrainers] = useState<Trainer[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isAddingTrainee, setIsAddingTrainee] = useState(false);
+  const [isEditingTrainee, setIsEditingTrainee] = useState(false);
+  const [isSubmittingPayment, setIsSubmittingPayment] = useState(false);
 
   // View Mode: Table or Student Cards (Auto-adaptive default on mobile)
   const [viewMode, setViewMode] = useState<'table' | 'cards'>(() => {
@@ -601,10 +605,14 @@ export const TraineesView: React.FC = () => {
 
   const handleSaveAddTrainee = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isAddingTrainee) return;
+
     if (!formData.fullName || !formData.fullName.trim()) {
       showToast('يرجى إدخال اسم الطالب كاملاً', 'warning');
       return;
     }
+
+    setIsAddingTrainee(true);
     try {
       const netAmt = (Number(formData.feeAmount) || 0) - (Number(formData.discountAmount) || 0);
       const paidAmt = Number(formData.initialPayment) || 0;
@@ -622,7 +630,11 @@ export const TraineesView: React.FC = () => {
 
       const res = await api.createTrainee(payload);
       if (res && res.success) {
-        showToast('تم تسجيل المتدرب الجديد بنجاح 🎉', 'success');
+        if (res.isDuplicatePrevented) {
+          showToast('الطالب مسجل بالفعل بالنظام وتم منع التكرار بنجاح ⚡', 'info');
+        } else {
+          showToast('تم تسجيل المتدرب الجديد بنجاح 🎉', 'success');
+        }
         setIsAddModalOpen(false);
         await loadData();
       } else {
@@ -630,6 +642,8 @@ export const TraineesView: React.FC = () => {
       }
     } catch (err: any) {
       showToast(err.message || 'فشل إضافة المتدرب', 'error');
+    } finally {
+      setIsAddingTrainee(false);
     }
   };
 
@@ -673,8 +687,9 @@ export const TraineesView: React.FC = () => {
 
   const handleSaveEditTrainee = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!activeTrainee) return;
+    if (!activeTrainee || isEditingTrainee) return;
 
+    setIsEditingTrainee(true);
     try {
       const currentPaid = activeTrainee.paidAmount || 0;
       const netAmt = (formData.feeAmount || 0) - (formData.discountAmount || 0);
@@ -688,15 +703,14 @@ export const TraineesView: React.FC = () => {
         updatedByUserName: user?.fullName
       });
       if (res.success) {
-        if (res.trainee) {
-          
-        }
         showToast('تم تحديث بيانات المتدرب بنجاح', 'success');
         setIsEditModalOpen(false);
         loadData();
       }
     } catch (err: any) {
       showToast(err.message || 'فشل تعديل المتدرب', 'error');
+    } finally {
+      setIsEditingTrainee(false);
     }
   };
 
@@ -790,8 +804,9 @@ export const TraineesView: React.FC = () => {
 
   const handleSavePayment = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!activeTrainee || paymentAmount <= 0) return;
+    if (!activeTrainee || paymentAmount <= 0 || isSubmittingPayment) return;
 
+    setIsSubmittingPayment(true);
     try {
       const res = await api.createPayment({
         traineeId: activeTrainee.id,
@@ -825,6 +840,8 @@ export const TraineesView: React.FC = () => {
       }
     } catch (err: any) {
       showToast(err.message || 'فشل تسجيل الدفعة', 'error');
+    } finally {
+      setIsSubmittingPayment(false);
     }
   };
 
@@ -3132,16 +3149,25 @@ export const TraineesView: React.FC = () => {
               <div className="pt-4 border-t border-slate-800 flex items-center justify-end gap-3">
                 <button
                   type="button"
+                  disabled={isAddingTrainee}
                   onClick={() => setIsAddModalOpen(false)}
-                  className="px-4 py-2 bg-slate-800 text-slate-300 hover:text-white rounded-xl"
+                  className="px-4 py-2 bg-slate-800 text-slate-300 hover:text-white rounded-xl disabled:opacity-50"
                 >
                   إلغاء
                 </button>
                 <button
                   type="submit"
-                  className="px-6 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black rounded-xl shadow-lg"
+                  disabled={isAddingTrainee}
+                  className={`px-6 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black rounded-xl shadow-lg flex items-center gap-2 transition-all ${isAddingTrainee ? 'opacity-60 cursor-not-allowed' : ''}`}
                 >
-                  حفظ المتدرب وإصدار السجل
+                  {isAddingTrainee ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin text-slate-950" />
+                      <span>جاري الحفظ والتسجيل...</span>
+                    </>
+                  ) : (
+                    <span>حفظ المتدرب وإصدار السجل</span>
+                  )}
                 </button>
               </div>
             </form>
@@ -3578,16 +3604,25 @@ export const TraineesView: React.FC = () => {
               <div className="pt-4 border-t border-slate-800 flex items-center justify-end gap-3">
                 <button
                   type="button"
+                  disabled={isEditingTrainee}
                   onClick={() => setIsEditModalOpen(false)}
-                  className="px-4 py-2 bg-slate-800 text-slate-300 hover:text-white rounded-xl"
+                  className="px-4 py-2 bg-slate-800 text-slate-300 hover:text-white rounded-xl disabled:opacity-50"
                 >
                   إلغاء
                 </button>
                 <button
                   type="submit"
-                  className="px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white font-black rounded-xl shadow-lg"
+                  disabled={isEditingTrainee}
+                  className={`px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white font-black rounded-xl shadow-lg flex items-center gap-2 transition-all ${isEditingTrainee ? 'opacity-60 cursor-not-allowed' : ''}`}
                 >
-                  حفظ التعديلات
+                  {isEditingTrainee ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin text-white" />
+                      <span>جاري حفظ التعديلات...</span>
+                    </>
+                  ) : (
+                    <span>حفظ التعديلات</span>
+                  )}
                 </button>
               </div>
             </form>
@@ -3694,16 +3729,25 @@ export const TraineesView: React.FC = () => {
               <div className="pt-3 border-t border-slate-800 flex justify-end gap-2">
                 <button
                   type="button"
+                  disabled={isSubmittingPayment}
                   onClick={() => setIsPaymentModalOpen(false)}
-                  className="px-4 py-2 bg-slate-800 text-slate-300 rounded-xl"
+                  className="px-4 py-2 bg-slate-800 text-slate-300 rounded-xl disabled:opacity-50"
                 >
                   إلغاء
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl shadow-lg"
+                  disabled={isSubmittingPayment}
+                  className={`px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl shadow-lg flex items-center gap-2 transition-all ${isSubmittingPayment ? 'opacity-60 cursor-not-allowed' : ''}`}
                 >
-                  حفظ السند وطباعة الإيصال
+                  {isSubmittingPayment ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin text-white" />
+                      <span>جاري الحفظ...</span>
+                    </>
+                  ) : (
+                    <span>حفظ السند وطباعة الإيصال</span>
+                  )}
                 </button>
               </div>
             </form>

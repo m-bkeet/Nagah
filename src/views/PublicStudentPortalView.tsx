@@ -2958,6 +2958,13 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
                           {hw.generalFeedback}
                         </p>
 
+                        {hw.trainerNotes && (
+                          <p className="text-xs text-indigo-800 dark:text-indigo-300 leading-relaxed bg-indigo-50 dark:bg-indigo-950/50 p-3 rounded-xl border border-indigo-200 dark:border-indigo-800/60">
+                            <strong className="text-indigo-600 dark:text-indigo-400 block mb-1">ملاحظات واعتتماد المدرب:</strong>
+                            {hw.trainerNotes}
+                          </p>
+                        )}
+
                         {hw.mediaUrl && (
                           <div className="pt-1">
                             <a

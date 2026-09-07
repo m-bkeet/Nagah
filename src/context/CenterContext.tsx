@@ -171,14 +171,22 @@ export const CenterProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     refreshAll();
     const livePoll = setInterval(async () => {
       try {
-        const devRes = await api.getDevices().catch(() => []);
+        const [devRes, notifsRes] = await Promise.all([
+          api.getDevices().catch(() => []),
+          api.getNotifications().catch(() => null)
+        ]);
+
         let onlineDevCount = 0;
         if (Array.isArray(devRes)) {
           onlineDevCount = devRes.filter((d: any) => d.isOnline).length;
         }
         setLabAttendanceCount(onlineDevCount);
+
+        if (notifsRes && Array.isArray(notifsRes.notifications)) {
+          setNotifications(notifsRes.notifications);
+        }
       } catch (e) {}
-    }, 2500);
+    }, 4000);
     return () => clearInterval(livePoll);
   }, [refreshAll]);
 

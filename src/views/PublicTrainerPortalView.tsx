@@ -1411,38 +1411,83 @@ export const PublicTrainerPortalView: React.FC<PublicTrainerPortalViewProps> = (
                   ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       {homeworkSubmissions.map((sub) => {
-                        const student = trainees.find(t => t.id === sub.studentId);
+                        const student = trainees.find(t =>
+                          t.id === sub.traineeId ||
+                          t.id === sub.studentId ||
+                          (t.code && sub.traineeCode && String(t.code).trim() === String(sub.traineeCode).trim())
+                        );
+                        const isDone = sub.status === 'graded' || sub.status === 'reviewed';
+
                         return (
                           <div
                             key={sub.id}
-                            className="bg-slate-950/70 border border-slate-800 rounded-2xl p-4 flex flex-col justify-between gap-3 hover:border-indigo-500/40 transition-all"
+                            className="bg-slate-950/80 border border-slate-800 rounded-2xl p-4 flex flex-col justify-between gap-3 hover:border-indigo-500/50 transition-all shadow-md"
                           >
-                            <div className="space-y-2">
-                              <div className="flex items-center justify-between">
-                                <span className="font-bold text-xs text-slate-100">{student?.fullName || sub.studentName || 'طالب'}</span>
-                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                                  sub.status === 'graded' ? 'bg-emerald-500/20 text-emerald-300' : 'bg-amber-500/20 text-amber-300'
+                            <div className="space-y-2.5">
+                              <div className="flex items-center justify-between pb-2 border-b border-slate-800/80">
+                                <div className="flex items-center gap-2">
+                                  <span className="font-black text-xs text-slate-100">
+                                    {student?.fullName || sub.traineeName || sub.studentName || 'طالب'}
+                                  </span>
+                                  {(student?.code || sub.traineeCode) && (
+                                    <span className="text-[10px] text-slate-400 font-mono bg-slate-900 px-1.5 py-0.5 rounded-md border border-slate-800">
+                                      #{student?.code || sub.traineeCode}
+                                    </span>
+                                  )}
+                                </div>
+                                <span className={`text-[10px] font-black px-2.5 py-0.5 rounded-full border ${
+                                  isDone
+                                    ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+                                    : 'bg-amber-500/10 border-amber-500/30 text-amber-400'
                                 }`}>
-                                  {sub.status === 'graded' ? `تم التصحيح (${sub.grade}%)` : 'في انتظار التصحيح'}
+                                  {isDone ? `تم التقييم (${sub.grade || 0}/100)` : 'في انتظار المراجعة'}
                                 </span>
                               </div>
 
-                              <p className="text-xs text-indigo-300 font-semibold">{sub.title || 'واجب المحاضرة'}</p>
-                              {sub.notes && <p className="text-xs text-slate-400 bg-slate-900 p-2.5 rounded-xl">{sub.notes}</p>}
+                              <div>
+                                <h4 className="text-xs text-indigo-300 font-bold flex items-center gap-1.5">
+                                  <span>📝 {sub.taskTitle || sub.title || 'واجب المحاضرة'}</span>
+                                </h4>
+                                {sub.submittedAt && (
+                                  <p className="text-[10px] text-slate-500 mt-0.5">
+                                    {new Date(sub.submittedAt).toLocaleString('ar-EG')}
+                                  </p>
+                                )}
+                              </div>
+
+                              {(sub.studentNotes || sub.notes) && (
+                                <p className="text-xs text-slate-300 bg-slate-900/80 p-2.5 rounded-xl border border-slate-800/80 leading-relaxed">
+                                  <strong className="text-amber-400 block text-[10px] mb-0.5">ملاحظات وحل الطالب:</strong>
+                                  {sub.studentNotes || sub.notes}
+                                </p>
+                              )}
+
+                              {sub.codeSolution && (
+                                <pre className="text-[11px] font-mono text-emerald-400 bg-slate-900 p-2.5 rounded-xl border border-slate-800 overflow-x-auto max-h-32 dir-ltr">
+                                  <code>{sub.codeSolution}</code>
+                                </pre>
+                              )}
+
+                              {sub.generalFeedback && (
+                                <div className="text-[11px] text-slate-300 bg-indigo-950/30 p-2.5 rounded-xl border border-indigo-900/40 space-y-1">
+                                  <span className="font-bold text-indigo-400 block text-[10px]">تقرير الذكاء الاصطناعي:</span>
+                                  <p className="leading-relaxed">{sub.generalFeedback}</p>
+                                </div>
+                              )}
 
                               {sub.mediaUrl && (
-                                <div className="mt-2 rounded-xl overflow-hidden border border-slate-800 max-h-40 bg-black">
-                                  <img src={sub.mediaUrl} alt="Homework Media" className="w-full h-full object-contain" />
+                                <div className="mt-2 rounded-xl overflow-hidden border border-slate-800 max-h-48 bg-black">
+                                  <img src={sub.mediaUrl} alt="صورة الواجب" className="w-full h-full object-contain" />
                                 </div>
                               )}
                             </div>
 
                             <button
                               onClick={() => handleOpenReviewHomework(sub)}
-                              className="w-full py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs transition-colors flex items-center justify-center gap-1.5"
+                              className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs transition-colors flex items-center justify-center gap-2 shadow-sm mt-2"
                             >
-                              <Award className="w-4 h-4" />
-                              <span>{sub.status === 'graded' ? 'تعديل التقييم والدرجة' : 'تصحيح الواجب ومنح النقاط'}</span>
+                              <Award className="w-4 h-4 text-amber-300" />
+                              <span>{isDone ? 'تعديل التقييم والدرجات والنقاط' : 'اعتماد التقييم ورصد النقاط'}</span>
                             </button>
                           </div>
                         );

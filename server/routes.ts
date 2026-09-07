@@ -1042,6 +1042,34 @@ apiRouter.post('/trainees', async (req: Request, res: Response) => {
     if (!data.fullName || !data.branchId) return res.status(400).json({ success: false, error: 'الاسم والفرع مطلوبان' });
 
     const list = await TraineeRepo.getAll();
+    const normName = String(data.fullName || '').trim().toLowerCase();
+    const normPhone = String(data.phone || '').trim();
+    const normParentPhone = String(data.parentPhone || '').trim();
+
+    // Prevent rapid duplicate creation (double-click guard)
+    const recentDuplicate = list.find(t => {
+      const sameName = String(t.fullName || '').trim().toLowerCase() === normName;
+      const sameBranch = String(t.branchId) === String(data.branchId);
+      const samePhone = normPhone && t.phone && String(t.phone).trim() === normPhone;
+      const sameParentPhone = normParentPhone && t.parentPhone && String(t.parentPhone).trim() === normParentPhone;
+      
+      const createdRecently = t.createdAt && (Date.now() - new Date(t.createdAt).getTime() < 30000);
+
+      if (sameName && sameBranch && (samePhone || sameParentPhone || createdRecently)) {
+        return true;
+      }
+      return false;
+    });
+
+    if (recentDuplicate) {
+      return res.json({
+        success: true,
+        trainee: recentDuplicate,
+        isDuplicatePrevented: true,
+        message: 'تم إضافة الطالب بالفعل بالنظام ومكافحة التكرار بنجاح.'
+      });
+    }
+
     let code = data.code?.trim()?.toUpperCase();
 
     // Check if user manually supplied a code that already exists
@@ -5389,6 +5417,135 @@ apiRouter.post('/homeworks/batch-grade', async (req: Request, res: Response) => 
   res.json({ success: true, updatedCount, message: `تم تصحيح ${updatedCount} واجبات جماعياً وإرسال الدرجات بنجاح` });
 });
 
+// GET All Homework Submissions
+apiRouter.get(['/homeworks', '/homeworks/'], (req: Request, res: Response) => {
+  try {
+    const data = db.getData();
+    let submissions = data.homeworkSubmissions || [];
+
+    const { branchId, courseId, groupId, traineeId, status } = req.query;
+    if (branchId && branchId !== 'all') {
+      submissions = submissions.filter((s: any) => s.branchId === branchId);
+    }
+    if (courseId) {
+      submissions = submissions.filter((s: any) => s.courseId === courseId);
+    }
+    if (groupId) {
+      submissions = submissions.filter((s: any) => s.groupId === groupId);
+    }
+    if (traineeId) {
+      submissions = submissions.filter((s: any) =>
+        s.traineeId === traineeId ||
+        s.studentId === traineeId ||
+        (s.traineeCode && String(s.traineeCode).trim() === String(traineeId).trim())
+      );
+    }
+    if (status) {
+      submissions = submissions.filter((s: any) => s.status === status);
+    }
+
+    res.json(submissions);
+  } catch (err: any) {
+    res.status(500).json({ error: 'فشل جلب قائمة الواجبات: ' + err.message });
+  }
+});
+
+// GET Single Homework Submission by ID
+apiRouter.get('/homeworks/:id', (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const data = db.getData();
+    const sub = (data.homeworkSubmissions || []).find((s: any) => s.id === id);
+    if (!sub) {
+      return res.status(404).json({ error: 'الواجب غير موجود بالنظام' });
+    }
+    res.json(sub);
+  } catch (err: any) {
+    res.status(500).json({ error: 'فشل جلب تفاصيل الواجب: ' + err.message });
+  }
+});
+
+// PUT Update Homework Submission (Report, Grade, Feedback, Audio, Bonus Points)
+apiRouter.put('/homeworks/:id', (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { grade, trainerNotes, generalFeedback, stars, audioFeedbackUrl, bonusPoints, status } = req.body;
+    const data = db.getData();
+    if (!Array.isArray(data.homeworkSubmissions)) data.homeworkSubmissions = [];
+
+    const sub = data.homeworkSubmissions.find((s: any) => s.id === id);
+    if (!sub) {
+      return res.status(404).json({ error: 'تسليم الواجب غير موجود' });
+    }
+
+    if (grade !== undefined && grade !== null && grade !== '') {
+      sub.grade = Number(grade);
+      sub.percentage = Math.round((sub.grade / (sub.maxGrade || 100)) * 100);
+    }
+    if (trainerNotes !== undefined) sub.trainerNotes = trainerNotes;
+    if (generalFeedback !== undefined) sub.generalFeedback = generalFeedback;
+    if (stars !== undefined) sub.stars = stars;
+    if (audioFeedbackUrl !== undefined) sub.audioFeedbackUrl = audioFeedbackUrl;
+    sub.status = status || 'reviewed';
+
+    // Award Bonus Points
+    if (bonusPoints && Number(bonusPoints) > 0) {
+      const pts = Number(bonusPoints);
+      sub.pointsAwarded = (sub.pointsAwarded || 0) + pts;
+
+      const trainee = (data.trainees || []).find((t: any) =>
+        t.id === sub.traineeId ||
+        t.id === sub.studentId ||
+        (t.code && sub.traineeCode && String(t.code).trim() === String(sub.traineeCode).trim())
+      );
+
+      if (trainee) {
+        trainee.totalPoints = Number(trainee.totalPoints || trainee.points || 0) + pts;
+        trainee.points = trainee.totalPoints;
+
+        if (!Array.isArray(data.pointTransactions)) data.pointTransactions = [];
+        data.pointTransactions.unshift({
+          id: 'pt-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6),
+          traineeId: trainee.id,
+          groupId: trainee.groupId,
+          branchId: trainee.branchId,
+          points: pts,
+          reason: `🌟 نقاط تميز إضافية لتصحيح الواجب (${sub.taskTitle || 'التطبيق المباشر'})`,
+          addedByUserId: 'trainer',
+          addedByUserName: 'المعلم/الإدارة',
+          createdAt: new Date().toISOString()
+        });
+      }
+    }
+
+    // Add Notification for Trainee
+    const trainee = (data.trainees || []).find((t: any) =>
+      t.id === sub.traineeId ||
+      t.id === sub.studentId ||
+      (t.code && sub.traineeCode && String(t.code).trim() === String(sub.traineeCode).trim())
+    );
+
+    if (trainee) {
+      if (!Array.isArray(data.notifications)) data.notifications = [];
+      data.notifications.unshift({
+        id: 'notif-rev-' + Date.now(),
+        type: 'system',
+        title: `✨ تحديث نتيجة وتقييم الواجب: ${sub.taskTitle || 'الواجب المطلوب'}`,
+        message: `تم رصد نتيجة الواجب بنجاح (${sub.grade}/${sub.maxGrade || 100}). ${sub.generalFeedback ? `الملاحظات: ${sub.generalFeedback}` : ''}`,
+        linkView: 'student_portal',
+        createdAt: new Date().toISOString(),
+        read: false,
+        metadata: { traineeId: trainee.id, submissionId: sub.id, grade: sub.grade }
+      });
+    }
+
+    db.saveImmediate();
+    res.json(sub);
+  } catch (err: any) {
+    res.status(500).json({ error: 'فشل حفظ التعديلات على التقرير: ' + err.message });
+  }
+});
+
 
 // Create Full Exam with Questions at once
 apiRouter.post('/exams/create-full', (req: Request, res: Response) => {
@@ -7988,8 +8145,11 @@ apiRouter.post(['/student/submit-homework', '/student/submit-homework/'], async 
       id: 'sub-' + Date.now() + '-' + Math.random().toString(36).substring(2, 7),
       assignmentId: assignmentId || '',
       traineeId: trainee.id,
+      studentId: trainee.id,
       traineeCode: trainee.code || '',
+      studentCode: trainee.code || '',
       traineeName: trainee.fullName || 'طالب',
+      studentName: trainee.fullName || 'طالب',
       groupId: groupId || trainee.groupId || '',
       courseId: courseId || trainee.courseId || '',
       courseName: courseName,
@@ -8771,7 +8931,12 @@ apiRouter.get('/trainer-portal/data/:trainerId', async (req: Request, res: Respo
 
     const trainerHomeworks = allHW.filter((h: any) =>
       trainerTraineeIds.has(h.traineeId) ||
-      (h.traineeCode && trainerTraineeCodes.has(String(h.traineeCode).trim().toLowerCase()))
+      trainerTraineeIds.has(h.studentId) ||
+      (h.traineeCode && trainerTraineeCodes.has(String(h.traineeCode).trim().toLowerCase())) ||
+      (h.studentCode && trainerTraineeCodes.has(String(h.studentCode).trim().toLowerCase())) ||
+      (h.groupId && trainerGroupIds.has(h.groupId)) ||
+      (h.courseId && trainerCourseIds.has(h.courseId)) ||
+      trainerTrainees.length === 0
     );
 
     // Messages for trainer's trainees or directed to trainer/all
@@ -8859,8 +9024,75 @@ apiRouter.post('/trainer-portal/attendance', async (req: Request, res: Response)
 // Review Homework Submission
 apiRouter.post('/trainer-portal/review-homework', async (req: Request, res: Response) => {
   try {
-    const { submissionId, trainerId, grade, trainerFeedback, pointsToAward } = req.body;
-    res.json({ success: true });
+    const { submissionId, trainerId, grade, trainerFeedback, pointsToAward, trainerNotes } = req.body;
+    const data = db.getData();
+    if (!Array.isArray(data.homeworkSubmissions)) data.homeworkSubmissions = [];
+
+    const sub = data.homeworkSubmissions.find((s: any) => s.id === submissionId);
+    if (!sub) {
+      return res.status(404).json({ success: false, error: 'تسليم الواجب غير موجود بالنظام' });
+    }
+
+    if (grade !== undefined && grade !== null && grade !== '') {
+      sub.grade = Number(grade);
+      sub.percentage = Math.round((sub.grade / (sub.maxGrade || 100)) * 100);
+    }
+    if (trainerFeedback) sub.generalFeedback = trainerFeedback;
+    if (trainerNotes) sub.trainerNotes = trainerNotes;
+    sub.status = 'reviewed';
+    sub.reviewedAt = new Date().toISOString();
+    sub.reviewedByTrainerId = trainerId;
+
+    if (pointsToAward && Number(pointsToAward) > 0) {
+      const pts = Number(pointsToAward);
+      sub.pointsAwarded = (sub.pointsAwarded || 0) + pts;
+
+      const trainee = (data.trainees || []).find((t: any) =>
+        t.id === sub.traineeId ||
+        t.id === sub.studentId ||
+        (t.code && sub.traineeCode && String(t.code).trim() === String(sub.traineeCode).trim())
+      );
+
+      if (trainee) {
+        trainee.totalPoints = Number(trainee.totalPoints || trainee.points || 0) + pts;
+        trainee.points = trainee.totalPoints;
+
+        if (!Array.isArray(data.pointTransactions)) data.pointTransactions = [];
+        data.pointTransactions.unshift({
+          id: 'pt-tr-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6),
+          traineeId: trainee.id,
+          groupId: trainee.groupId,
+          branchId: trainee.branchId,
+          points: pts,
+          reason: `🌟 نقاط تميز إضافية معتمدة من المدرب للواجب: (${sub.taskTitle || 'الواجب المباشر'})`,
+          addedByUserId: trainerId || 'trainer',
+          addedByUserName: 'المدرب المشرف',
+          createdAt: new Date().toISOString()
+        });
+      }
+    }
+
+    // Add Notification for Trainee & System
+    const trainee = (data.trainees || []).find((t: any) =>
+      t.id === sub.traineeId ||
+      t.id === sub.studentId ||
+      (t.code && sub.traineeCode && String(t.code).trim() === String(sub.traineeCode).trim())
+    );
+
+    if (!Array.isArray(data.notifications)) data.notifications = [];
+    data.notifications.unshift({
+      id: 'notif-tr-rev-' + Date.now(),
+      type: 'system',
+      title: `✨ تم مراجعة واجب المتدرب: ${sub.traineeName || sub.studentName || trainee?.fullName || 'طالب'}`,
+      message: `قام المدرب بمراجعة واعتتماد التقييم بدرجة ${sub.grade}/${sub.maxGrade || 100} وإضافة النقاط لسجله الأكاديمي.`,
+      linkView: 'homeworks',
+      createdAt: new Date().toISOString(),
+      read: false,
+      metadata: { traineeId: trainee?.id || sub.traineeId, submissionId: sub.id, grade: sub.grade }
+    });
+
+    db.saveImmediate();
+    res.json({ success: true, submission: sub, message: 'تم حفظ اعتماد الواجب ورصد النقاط والتقارير بنجاح' });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
   }

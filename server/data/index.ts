@@ -136,70 +136,13 @@ if (supabaseClient) {
 function createRepo<T extends { id: string }>(key: string) {
   return {
     async getAll(): Promise<T[]> {
-      let supabaseItems: T[] = [];
-      if (supabaseClient) {
-        try {
-          const { data, error } = await supabaseClient
-            .from('collections')
-            .select('id, data')
-            .eq('collection_name', key)
-            .range(0, 4999);
-
-          if (!error && Array.isArray(data)) {
-            supabaseItems = data.map((row: any) => ({
-              id: row.id,
-              ...(row.data || {})
-            })) as T[];
-          } else if (error) {
-            console.error(`[SupabaseRepo] Error fetching collection "${key}":`, error.message);
-          }
-        } catch (err: any) {
-          console.error(`[SupabaseRepo] Exception querying Supabase collection "${key}":`, err.message);
-        }
-      }
-
       const memData = db.getData() as any;
       const memItems = (memData && Array.isArray(memData[key])) ? (memData[key] as T[]) : [];
-
-      if (supabaseItems.length > 0) {
-        const itemMap = new Map<string, T>();
-        supabaseItems.forEach(item => {
-          if (item && item.id) itemMap.set(String(item.id), item);
-        });
-        memItems.forEach(item => {
-          if (item && item.id && !itemMap.has(String(item.id))) {
-            itemMap.set(String(item.id), item);
-          }
-        });
-        const merged = Array.from(itemMap.values());
-        if (memData) {
-          memData[key] = merged;
-        }
-        return merged;
-      }
-
       return memItems;
     },
 
     async getById(id: string): Promise<T | null> {
       if (!id) return null;
-      if (supabaseClient) {
-        try {
-          const { data, error } = await supabaseClient
-            .from('collections')
-            .select('id, data')
-            .eq('collection_name', key)
-            .eq('id', id)
-            .maybeSingle();
-
-          if (!error && data) {
-            return { id: data.id, ...(data.data || {}) } as T;
-          }
-        } catch (e: any) {
-          console.warn(`[SupabaseRepo] getById error for ${key}/${id}:`, e.message);
-        }
-      }
-
       const all = await this.getAll();
       const idStr = String(id).trim().toLowerCase();
       return all.find(item => {
@@ -395,19 +338,6 @@ export const TraineeScreenshotRepo = createRepo<TraineeScreenshot>('traineeScree
 
 export const SettingRepo = {
   async get(): Promise<CenterSettings> {
-    if (supabaseClient) {
-      try {
-        const { data, error } = await supabaseClient
-          .from('collections')
-          .select('id, data')
-          .eq('collection_name', 'settings')
-          .eq('id', 'main')
-          .maybeSingle();
-        if (!error && data && data.data) {
-          return data.data as CenterSettings;
-        }
-      } catch {}
-    }
     return db.getData().settings || {} as CenterSettings;
   },
   async update(updates: Partial<CenterSettings>): Promise<CenterSettings> {
