@@ -4720,13 +4720,6 @@ app.use("/api", (req, res) => {
 });
 
 async function startServer() {
-  // Hydrate authoritative data from Supabase collections
-  try {
-    await hydrateAllFromSupabase();
-  } catch (err) {
-    console.error('[Startup] Supabase hydration warning:', err);
-  }
-
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
       server: { middlewareMode: true },
@@ -4750,6 +4743,10 @@ async function startServer() {
 
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`Nagah Core Production Server running on port ${PORT}`);
+    // Non-blocking background data hydration from Supabase
+    hydrateAllFromSupabase().catch((err) => {
+      console.error('[Startup] Supabase background hydration warning:', err);
+    });
   });
 }
 

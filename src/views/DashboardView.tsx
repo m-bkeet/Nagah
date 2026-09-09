@@ -34,13 +34,21 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
 
   const activeBranch = branches.find(b => b.id === activeBranchId);
 
+  const initialFetchRef = useRef(false);
+
   useEffect(() => {
-    fetchData();
+    const isFirst = !initialFetchRef.current;
+    if (isFirst) {
+      initialFetchRef.current = true;
+    }
+    fetchData(isFirst);
   }, [activeBranchId, refreshKey, selectedDate]);
 
-  const fetchData = async () => {
+  const fetchData = async (showFullLoading = false) => {
     try {
-      setIsLoading(true);
+      if (showFullLoading || trainees.length === 0) {
+        setIsLoading(true);
+      }
       const [trRes, crRes, grRes, fnRes, attRes] = await Promise.allSettled([
         api.getTrainees(activeBranchId !== 'all' ? { branchId: activeBranchId } : {}),
         api.getCourses(),

@@ -6656,7 +6656,7 @@ apiRouter.post('/student/login', async (req: Request, res: Response) => {
 
   const studentData = {
     id: trainee.id,
-    code: trainee.code || query.toUpperCase(),
+    code: trainee.code || (codeOrPhone ? String(codeOrPhone).toUpperCase() : ''),
     fullName: trainee.fullName || 'طالب متميز',
     phone: trainee.phone || '',
     nationalId: trainee.nationalId || '',
