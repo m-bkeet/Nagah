@@ -630,10 +630,27 @@ export const TraineesView: React.FC = () => {
 
       const res = await api.createTrainee(payload);
       if (res && res.success) {
+        const newTrainee = res.trainee;
+        if (newTrainee && newTrainee.id) {
+          setTrainees(prev => {
+            const list = Array.isArray(prev) ? prev : [];
+            const filtered = list.filter(t => t.id !== newTrainee.id);
+            const newList = [newTrainee, ...filtered];
+            try { localStorage.setItem('nagah_trainees', JSON.stringify(newList)); } catch {}
+            return newList;
+          });
+          // Ensure branch filter doesn't hide the new student
+          if (selectedBranch !== 'all' && selectedBranch !== newTrainee.branchId) {
+            setSelectedBranch('all');
+          }
+        }
+        const traineeName = newTrainee?.fullName || formData.fullName || 'المتدرب';
+        const traineeCode = newTrainee?.code || '';
+
         if (res.isDuplicatePrevented) {
-          showToast('الطالب مسجل بالفعل بالنظام وتم منع التكرار بنجاح ⚡', 'info');
+          showToast(`الطالب (${traineeName}${traineeCode ? ` - كود: ${traineeCode}` : ''}) مسجل بالفعل بالنظام وتم منع التكرار ⚡`, 'info');
         } else {
-          showToast('تم تسجيل المتدرب الجديد بنجاح 🎉', 'success');
+          showToast(`تم تسجيل المتدرب الجديد (${traineeName}${traineeCode ? ` - كود: ${traineeCode}` : ''}) بنجاح 🎉`, 'success');
         }
         setIsAddModalOpen(false);
         await loadData();

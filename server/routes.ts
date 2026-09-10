@@ -1046,16 +1046,16 @@ apiRouter.post('/trainees', async (req: Request, res: Response) => {
     const normPhone = String(data.phone || '').trim();
     const normParentPhone = String(data.parentPhone || '').trim();
 
-    // Prevent rapid duplicate creation (double-click guard)
+    // Prevent accidental rapid double-click submissions or exact duplicates by (Name + Student Phone) or rapid submit (<4s)
     const recentDuplicate = list.find(t => {
       const sameName = String(t.fullName || '').trim().toLowerCase() === normName;
       const sameBranch = String(t.branchId) === String(data.branchId);
-      const samePhone = normPhone && t.phone && String(t.phone).trim() === normPhone;
-      const sameParentPhone = normParentPhone && t.parentPhone && String(t.parentPhone).trim() === normParentPhone;
+      const sameStudentPhone = normPhone && t.phone && String(t.phone).trim() === normPhone;
       
-      const createdRecently = t.createdAt && (Date.now() - new Date(t.createdAt).getTime() < 30000);
+      const createdInDoubleTapWindow = t.createdAt && (Date.now() - new Date(t.createdAt).getTime() < 4000);
 
-      if (sameName && sameBranch && (samePhone || sameParentPhone || createdRecently)) {
+      // Same name & branch AND (same student phone OR double-clicked within last 4s)
+      if (sameName && sameBranch && (sameStudentPhone || createdInDoubleTapWindow)) {
         return true;
       }
       return false;
@@ -1226,6 +1226,29 @@ apiRouter.put('/trainees/:id', async (req: Request, res: Response) => {
 
     res.json({ success: true, trainee: updated });
   } catch(e: any) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+// GET & POST /api/classpoint-code for ClassPoint integration
+apiRouter.get('/classpoint-code', (req: Request, res: Response) => {
+  const memData = db.getData() as any;
+  const code = memData.classPointCode || '';
+  res.json({ success: true, classPointCode: code });
+});
+
+apiRouter.post('/classpoint-code', (req: Request, res: Response) => {
+  const { code } = req.body || {};
+  const cleanCode = String(code || '').trim();
+  const memData = db.getData() as any;
+  memData.classPointCode = cleanCode;
+  db.saveImmediate();
+
+  try {
+    if ((global as any).io) {
+      (global as any).io.emit('classpoint_code_updated', { classPointCode: cleanCode });
+    }
+  } catch (e) {}
+
+  res.json({ success: true, classPointCode: cleanCode, message: 'تم تحديث كود كلاس بوينت وتعميمه بنجاح' });
 });
 
 // Update Student Photo from Student Portal or Trainer Portal

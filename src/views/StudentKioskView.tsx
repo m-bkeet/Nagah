@@ -112,8 +112,30 @@ export const StudentKioskView: React.FC = () => {
   const [activeSessionId, setActiveSessionId] = useState<string>('session-live');
   const [activeExternalSession, setActiveExternalSession] = useState<any>(null);
   const [kahootPinInput, setKahootPinInput] = useState('');
+  
+  // ClassPoint Integration States
+  const [classPointCode, setClassPointCode] = useState<string>('');
+  const [userClassPointInput, setUserClassPointInput] = useState<string>('');
+  const [isClassPointModalOpen, setIsClassPointModalOpen] = useState<boolean>(false);
+  const [classPointCopiedStatus, setClassPointCopiedStatus] = useState<boolean>(false);
+
   const [isLockedByMaster, setIsLockedByMaster] = useState(false);
   const [lockMessage, setLockMessage] = useState('');
+
+  // Fetch broadcasted ClassPoint code periodically
+  useEffect(() => {
+    const fetchCPCode = async () => {
+      try {
+        const res = await api.getClassPointCode();
+        if (res && res.success && res.classPointCode) {
+          setClassPointCode(res.classPointCode);
+        }
+      } catch (e) {}
+    };
+    fetchCPCode();
+    const interval = setInterval(fetchCPCode, 4000);
+    return () => clearInterval(interval);
+  }, []);
 
   // Track answered questions to prevent repeated popping loops
   const [answeredQuestionIds, setAnsweredQuestionIds] = useState<string[]>(() => {
@@ -1224,6 +1246,20 @@ export const StudentKioskView: React.FC = () => {
                     >
                       <span>⚙️ تعديل بياناتي الشخصية</span>
                     </button>
+
+                    <button
+                      onClick={() => setIsClassPointModalOpen(true)}
+                      className="px-3 py-1 bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-500 hover:to-purple-500 text-white rounded-xl text-[11px] font-black transition-all flex items-center gap-1.5 shadow-lg shadow-pink-500/20 active:scale-95"
+                      title="الدخول الفوري لجلسة ClassPoint التفاعلية"
+                    >
+                      <span className="animate-bounce">🚀</span>
+                      <span>كلاس بوينت ClassPoint</span>
+                      {classPointCode && (
+                        <span className="bg-white/20 px-1.5 py-0.5 rounded text-[10px] font-mono">
+                          {classPointCode}
+                        </span>
+                      )}
+                    </button>
                   </div>
                   <p className="text-xs text-slate-400 mt-0.5 font-mono">
                     {currentTrainee.courseName} • {currentTrainee.groupName}
@@ -1323,6 +1359,20 @@ export const StudentKioskView: React.FC = () => {
 
               {/* Student Incentive Quick Action Grid */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-2 border-t border-purple-500/30">
+                <button
+                  onClick={() => setIsClassPointModalOpen(true)}
+                  className="p-3 rounded-2xl bg-gradient-to-br from-pink-950/90 to-purple-950/90 hover:from-pink-900 hover:to-purple-900 border-2 border-pink-500/60 text-right space-y-1 group transition-all shadow-lg shadow-pink-500/10 active:scale-95"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-base">🚀</span>
+                    <span className="text-[10px] text-pink-300 font-bold bg-pink-500/20 px-2 py-0.5 rounded-full border border-pink-500/40 font-mono">
+                      {classPointCode ? `PIN: ${classPointCode}` : 'مباشر'}
+                    </span>
+                  </div>
+                  <div className="text-xs font-black text-pink-200 group-hover:text-white">الدخول لـ ClassPoint</div>
+                  <div className="text-[10px] text-pink-300/80">انضمام باسمك المسجل بالمعمل</div>
+                </button>
+
                 <button
                   onClick={() => {
                     setActiveExternalSession({
@@ -2077,6 +2127,110 @@ export const StudentKioskView: React.FC = () => {
               >
                 الدخول للرابط الآن 🚀
               </a>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 🚀 CLASSPOINT DIRECT LAUNCH MODAL 🚀 */}
+      {isClassPointModalOpen && (
+        <div className="fixed inset-0 bg-slate-950/90 flex items-center justify-center z-[130] p-4 backdrop-blur-md">
+          <div className="bg-slate-900 border-2 border-pink-500/80 rounded-3xl p-6 max-w-lg w-full shadow-2xl space-y-5 animate-in zoom-in-95 relative text-right">
+            <button
+              onClick={() => setIsClassPointModalOpen(false)}
+              className="absolute top-4 left-4 p-2 rounded-xl bg-slate-800 hover:bg-rose-600 text-slate-400 hover:text-white transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-2xl bg-pink-500/20 border border-pink-500/50 flex items-center justify-center text-pink-400 font-black text-2xl shrink-0">
+                🚀
+              </div>
+              <div>
+                <h3 className="text-lg font-black text-white flex items-center gap-2">
+                  <span>الدخول لكلاس بوينت ClassPoint</span>
+                  <span className="text-xs bg-pink-500/20 text-pink-300 px-2 py-0.5 rounded-full border border-pink-500/40">
+                    رسمي
+                  </span>
+                </h3>
+                <p className="text-xs text-slate-400">
+                  انضم للجلسة التفاعلية باسمك المسجل بالمعمل تلقائياً
+                </p>
+              </div>
+            </div>
+
+            <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-3">
+              <div>
+                <label className="text-[11px] font-bold text-slate-400 block mb-1">
+                  اسم الطالب المعتمد بالمعمل (سيتم استخدامه في ClassPoint):
+                </label>
+                <div className="bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm font-black text-amber-300 flex items-center justify-between">
+                  <span>{currentTrainee?.fullName || 'طالب المعمل'}</span>
+                  <span className="text-[10px] bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-full border border-emerald-500/40">
+                    ✓ مسجل بالمعمل
+                  </span>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[11px] font-bold text-slate-400 block mb-1">
+                  كود الجلسة (ClassPoint Code):
+                </label>
+                {classPointCode ? (
+                  <div className="bg-pink-950/40 border-2 border-pink-500/60 rounded-xl p-3 text-center">
+                    <span className="text-[10px] text-pink-300 font-bold block mb-1">الكود المعتمد من المنصة الآن:</span>
+                    <span className="text-3xl font-black font-mono text-pink-400 tracking-widest">
+                      {classPointCode}
+                    </span>
+                  </div>
+                ) : (
+                  <div>
+                    <input
+                      type="text"
+                      placeholder="أدخل كود الكلاس (مثال: 55431)"
+                      value={userClassPointInput}
+                      onChange={(e) => setUserClassPointInput(e.target.value)}
+                      className="w-full bg-slate-900 border-2 border-pink-500/50 rounded-xl p-3 text-center text-sm font-mono font-bold text-amber-300 focus:outline-none focus:border-pink-400 placeholder-slate-500"
+                    />
+                    <span className="text-[10px] text-slate-500 mt-1 block text-center">
+                      (لم يقم المدرب بتثبيت كود تلقائي بالمنصة - اكتب الكود المعروض على شاشة المعمل)
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <button
+                onClick={() => {
+                  const targetCode = classPointCode || userClassPointInput.trim();
+                  const studentName = currentTrainee?.fullName || 'طالب المعمل';
+                  
+                  // Copy student name to clipboard for easy pasting
+                  try {
+                    navigator.clipboard.writeText(studentName);
+                    setClassPointCopiedStatus(true);
+                    setTimeout(() => setClassPointCopiedStatus(false), 3000);
+                  } catch (e) {}
+
+                  // Launch ClassPoint app
+                  const url = targetCode
+                    ? `https://classpoint.app/join?code=${encodeURIComponent(targetCode)}&name=${encodeURIComponent(studentName)}`
+                    : 'https://classpoint.app/join';
+                  
+                  window.open(url, '_blank', 'noopener,noreferrer');
+                }}
+                className="w-full py-4 rounded-2xl bg-gradient-to-r from-pink-600 via-rose-600 to-purple-600 hover:from-pink-500 hover:to-purple-500 text-white font-black text-sm shadow-xl shadow-pink-500/20 active:scale-95 transition-all flex items-center justify-center gap-2"
+              >
+                <span>الانتقال لـ ClassPoint الآن (مع نسخ الاسم) 🚀</span>
+              </button>
+
+              {classPointCopiedStatus && (
+                <p className="text-center text-xs font-bold text-emerald-400 animate-pulse">
+                  ✓ تم نسخ الاسم ({currentTrainee?.fullName || 'طالب المعمل'}) للحافظة بنجاح!
+                </p>
+              )}
             </div>
           </div>
         </div>

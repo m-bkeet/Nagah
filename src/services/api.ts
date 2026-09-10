@@ -1697,7 +1697,16 @@ export const api = {
     }),
 
   languageLabGetParentInsights: (studentId: string) =>
-    request<{ success: boolean; insights: any }>(`/language-lab/parent/${studentId}`)
+    request<{ success: boolean; insights: any }>(`/language-lab/parent/${studentId}`),
+
+  getClassPointCode: () =>
+    request<{ success: boolean; classPointCode: string }>('/classpoint-code'),
+
+  setClassPointCode: (code: string) =>
+    request<{ success: boolean; classPointCode: string; message: string }>('/classpoint-code', {
+      method: 'POST',
+      body: JSON.stringify({ code })
+    })
 };
 
 

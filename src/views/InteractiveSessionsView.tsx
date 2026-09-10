@@ -327,7 +327,7 @@ console.log("نتيجة الطالب:", calculateGrade(48, 50));`);
     }
   };
 
-  // 🚀 Action 1: Broadcast External Session (Kahoot / Quizizz / Google Forms / Live Link)
+  // 🚀 Action 1: Broadcast External Session (Kahoot / Quizizz / ClassPoint / Google Forms / Live Link)
   const handleBroadcastExternal = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!externalUrl.trim()) {
@@ -336,6 +336,12 @@ console.log("نتيجة الطالب:", calculateGrade(48, 50));`);
     }
 
     try {
+      if (externalPlatform === 'ClassPoint' || externalGamePin) {
+        try {
+          await api.setClassPointCode(externalGamePin);
+        } catch (e) {}
+      }
+
       // 1. Create or update session in backend
       const newSessionRes = await api.createInteractiveSession({
         title: externalTitle,
@@ -1840,6 +1846,7 @@ console.log("نتيجة الطالب:", calculateGrade(48, 50));`);
                 <label className="block text-slate-300 font-bold mb-2">اختر المنصة التفاعلية الخارجية:</label>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
                   {[
+                    { id: 'ClassPoint', name: 'ClassPoint (كلاس بوينت) 🚀', defaultUrl: 'https://classpoint.app/join', color: 'border-pink-500/60 bg-pink-950/40 text-pink-300' },
                     { id: 'Kahoot', name: 'Kahoot! (كاهوت)', defaultUrl: 'https://kahoot.it', color: 'border-purple-500/60 bg-purple-950/40 text-purple-300' },
                     { id: 'Quizizz', name: 'Quizizz (كويزيز)', defaultUrl: 'https://quizizz.com/join', color: 'border-cyan-500/60 bg-cyan-950/40 text-cyan-300' },
                     { id: 'Google Meet', name: 'Google Meet (اجتماع حي)', defaultUrl: 'https://meet.google.com/new', color: 'border-teal-500/60 bg-teal-950/40 text-teal-300' },
@@ -1865,6 +1872,7 @@ console.log("نتيجة الطالب:", calculateGrade(48, 50));`);
                           return;
                         }
                         setExternalUrl(p.defaultUrl);
+                        if (p.id === 'ClassPoint') setExternalTitle('جلسة كلاس بوينت التفاعلية بالمعمل - ClassPoint Live');
                         if (p.id === 'Kahoot') setExternalTitle('مسابقة التحدي التفاعلي - كاهوت (Kahoot Live)');
                         if (p.id === 'Quizizz') setExternalTitle('اختبار السرعة الذكي - Quizizz Live');
                         if (p.id === 'Google Forms') setExternalTitle('استبيان واختبار التقييم الحقيقي - Google Forms');
