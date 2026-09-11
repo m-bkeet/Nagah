@@ -39,12 +39,8 @@ function cleanSupabaseUrl(raw?: string): string {
 
 const SUPABASE_URL = cleanSupabaseUrl(process.env.SUPABASE_URL);
 const SUPABASE_KEY = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpkYnJ3d2t5eGp1anJva3pqYW5nIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4ODA0ODY0MiwiZXhwIjoyMTAzNjI0NjQyfQ._JEu3kjLDPWS1uCabeVMyTRIeDS0NpnjTPUjyuL6_Ec').trim();
-const hasValidSupabase = Boolean(
-  SUPABASE_URL &&
-  !SUPABASE_URL.includes('placeholder') &&
-  SUPABASE_KEY &&
-  !SUPABASE_KEY.includes('placeholder')
-);
+// Completely migrated to Neon PostgreSQL to prevent latency, timeouts, and overwriting data
+const hasValidSupabase = false;
 
 export let supabaseClient: any = null;
 let isSupabaseQuotaRestricted = false;

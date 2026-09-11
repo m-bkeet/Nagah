@@ -94,11 +94,46 @@ export const TraineesView: React.FC = () => {
   const { branches, activeBranchId, showToast, setPrintData, refreshKey, settings } = useCenter();
   const { user } = useAuth();
 
-  const [trainees, setTrainees] = useState<Trainee[]>([]);
-  const [courses, setCourses] = useState<Course[]>([]);
-  const [groups, setGroups] = useState<Group[]>([]);
-  const [trainers, setTrainers] = useState<Trainer[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [trainees, setTrainees] = useState<Trainee[]>(() => {
+    try {
+      const cached = localStorage.getItem('nagah_trainees');
+      return cached ? JSON.parse(cached) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [courses, setCourses] = useState<Course[]>(() => {
+    try {
+      const cached = localStorage.getItem('nagah_courses');
+      return cached ? JSON.parse(cached) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [groups, setGroups] = useState<Group[]>(() => {
+    try {
+      const cached = localStorage.getItem('nagah_groups');
+      return cached ? JSON.parse(cached) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [trainers, setTrainers] = useState<Trainer[]>(() => {
+    try {
+      const cached = localStorage.getItem('nagah_trainers');
+      return cached ? JSON.parse(cached) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [isLoading, setIsLoading] = useState(() => {
+    try {
+      const cached = localStorage.getItem('nagah_trainees');
+      return cached ? JSON.parse(cached).length === 0 : true;
+    } catch {
+      return true;
+    }
+  });
   const [isAddingTrainee, setIsAddingTrainee] = useState(false);
   const [isEditingTrainee, setIsEditingTrainee] = useState(false);
   const [isSubmittingPayment, setIsSubmittingPayment] = useState(false);
@@ -392,7 +427,17 @@ export const TraineesView: React.FC = () => {
   }, []);
 
   const loadData = async () => {
-    setIsLoading(true);
+    const now = Date.now();
+    const lastFetch = (window as any).lastTraineesFetchTime || 0;
+    
+    // Throttling: If data loaded in the last 15 seconds, skip refetch to prevent unnecessary Vercel/Neon network overhead
+    if (trainees.length > 0 && (now - lastFetch < 15000)) {
+      setIsLoading(false);
+      return;
+    }
+
+    // Background Loading: Only show the visible loading spinner if there is zero cached data to display
+    setIsLoading(trainees.length === 0);
     try {
       const [traineesRes, coursesRes, groupsRes, trainersRes] = await Promise.all([
         api.getTrainees().catch((e) => { console.warn('getTrainees failed:', e); return null; }),
@@ -443,6 +488,8 @@ export const TraineesView: React.FC = () => {
           try { setTrainers(JSON.parse(cached)); } catch {}
         }
       }
+      
+      (window as any).lastTraineesFetchTime = now;
     } catch (err: any) {
       console.warn('loadData warning:', err);
     } finally {

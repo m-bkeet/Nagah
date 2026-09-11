@@ -3949,6 +3949,27 @@ var init_db = __esm({
   }
 });
 
+// server/dbNeon.ts
+import { Pool, neonConfig } from "@neondatabase/serverless";
+import ws from "ws";
+async function queryNeon(text, params) {
+  const client = await neonPool.connect();
+  try {
+    const res = await client.query(text, params);
+    return res;
+  } finally {
+    client.release();
+  }
+}
+var DATABASE_URL, neonPool;
+var init_dbNeon = __esm({
+  "server/dbNeon.ts"() {
+    neonConfig.webSocketConstructor = ws;
+    DATABASE_URL = process.env.DATABASE_URL || "postgresql://neondb_owner:npg_KDx6y4vLjRIE@ep-tiny-feather-b1gwujlu-pooler.c-5.eu-central-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require";
+    neonPool = new Pool({ connectionString: DATABASE_URL });
+  }
+});
+
 // server/data/index.ts
 var data_exports = {};
 __export(data_exports, {
@@ -3976,6 +3997,7 @@ __export(data_exports, {
   TraineeScreenshotRepo: () => TraineeScreenshotRepo,
   TrainerRepo: () => TrainerRepo,
   UserRepo: () => UserRepo,
+  hydrateAllFromNeon: () => hydrateAllFromNeon,
   hydrateAllFromSupabase: () => hydrateAllFromSupabase,
   supabaseClient: () => supabaseClient2
 });
@@ -3988,15 +4010,29 @@ function cleanSupabaseUrl2(raw) {
   }
   return url.trim() || "https://zdbrwwkyxjujrokzjang.supabase.co";
 }
+function handleSupabaseError(action, key, id, msg) {
+  if (msg.includes("exceed_egress_quota") || msg.includes("restricted") || msg.includes("quota")) {
+    if (!isSupabaseQuotaRestricted) {
+      isSupabaseQuotaRestricted = true;
+      console.warn("[SupabaseRepo] Quota restriction reached (exceed_egress_quota). Seamlessly operating in resilient local storage mode.");
+    }
+  } else {
+    console.error(`[SupabaseRepo] ${action} error for ${key}/${id}:`, msg);
+  }
+}
 async function hydrateAllFromSupabase() {
-  if (!supabaseClient2) {
-    console.warn("[Hydration] No active Supabase client configured.");
+  if (!supabaseClient2 || isSupabaseQuotaRestricted) {
     return 0;
   }
   try {
     const { data, error } = await supabaseClient2.from("collections").select("collection_name, id, data, updated_at").range(0, 4999);
     if (error) {
-      console.error("[Hydration] Error reading collections from Supabase:", error.message);
+      if (error.message && (error.message.includes("exceed_egress_quota") || error.message.includes("restricted") || error.message.includes("quota"))) {
+        isSupabaseQuotaRestricted = true;
+        console.warn("[Hydration] Supabase project exceeded egress quota. Running seamlessly on local storage without interruption.");
+      } else {
+        console.error("[Hydration] Error reading collections from Supabase:", error.message);
+      }
       return 0;
     }
     if (Array.isArray(data)) {
@@ -4045,57 +4081,341 @@ async function hydrateAllFromSupabase() {
   }
   return 0;
 }
+async function hydrateAllFromNeon() {
+  console.log("[Neon Hydration] Commencing live database hydration from Neon PostgreSQL...");
+  try {
+    const memData = db.getData();
+    const b = await queryNeon("SELECT * FROM branches");
+    if (b && b.rows.length) {
+      memData.branches = b.rows.map((r) => ({
+        id: r.id,
+        code: r.code || "",
+        name: r.name,
+        city: r.city || "",
+        address: r.address || "",
+        phone: r.phone || "",
+        managerName: r.manager_name || "",
+        status: r.status || "active"
+      }));
+    }
+    const t = await queryNeon("SELECT * FROM trainers");
+    if (t && t.rows.length) {
+      memData.trainers = t.rows.map((r) => ({
+        id: r.id,
+        code: r.code || "",
+        name: r.name,
+        email: r.email || "",
+        phone: r.phone || "",
+        branchId: r.branch_id || null,
+        specialty: r.specialty || "",
+        status: r.status || "active"
+      }));
+    }
+    const c = await queryNeon("SELECT * FROM courses");
+    if (c && c.rows.length) {
+      memData.courses = c.rows.map((r) => ({
+        id: r.id,
+        code: r.code || "",
+        name: r.name,
+        category: r.category || "",
+        grade: r.grade || "",
+        branchId: r.branch_id || null,
+        feeAmount: Number(r.fee_amount) || 0,
+        status: r.status || "active"
+      }));
+    }
+    const g = await queryNeon("SELECT * FROM groups");
+    if (g && g.rows.length) {
+      memData.groups = g.rows.map((r) => ({
+        id: r.id,
+        name: r.name,
+        courseId: r.course_id || null,
+        trainerId: r.trainer_id || null,
+        branchId: r.branch_id || null,
+        track: r.track || "\u0639\u0631\u0628\u064A",
+        grade: r.grade || "",
+        roomName: r.room_name || "",
+        status: r.status || "active"
+      }));
+    }
+    const s = await queryNeon("SELECT * FROM students");
+    if (s && s.rows.length) {
+      const existingTraineesMap = /* @__PURE__ */ new Map();
+      (memData.trainees || []).forEach((x) => existingTraineesMap.set(x.id, x));
+      memData.trainees = s.rows.map((r) => {
+        const old = existingTraineesMap.get(r.id) || {};
+        return {
+          ...old,
+          id: r.id,
+          code: r.student_code,
+          studentCode: r.student_code,
+          traineeCode: r.student_code,
+          fullName: r.full_name,
+          phone: r.phone || "",
+          parentPhone: r.parent_phone || "",
+          parentName: r.parent_name || "",
+          branchId: r.branch_id || null,
+          groupId: r.group_id || null,
+          courseId: r.course_id || null,
+          track: r.track || "",
+          grade: r.grade || "",
+          points: r.points || 0,
+          totalPoints: r.points || 0,
+          status: r.status || "active"
+        };
+      });
+    }
+    const cert = await queryNeon("SELECT * FROM certificates");
+    if (cert && cert.rows.length) {
+      memData.certificates = cert.rows.map((r) => ({
+        id: r.id,
+        traineeId: r.student_id,
+        courseName: r.course_name,
+        issueDate: r.issue_date ? r.issue_date.toISOString().slice(0, 10) : "",
+        verificationCode: r.verification_code,
+        qrToken: r.qr_token || ""
+      }));
+    }
+    const fin = await queryNeon("SELECT * FROM finance");
+    if (fin && fin.rows.length) {
+      memData.payments = fin.rows.map((r) => ({
+        id: r.id,
+        traineeId: r.student_id,
+        amount: Number(r.amount) || 0,
+        paymentType: r.payment_type,
+        receiptNumber: r.receipt_number || "",
+        notes: r.notes || ""
+      }));
+    }
+    const gp = await queryNeon("SELECT * FROM gamification_points");
+    if (gp && gp.rows.length) {
+      memData.pointTransactions = gp.rows.map((r) => ({
+        id: r.id,
+        traineeId: r.student_id,
+        points: r.points || 0,
+        badge: r.badge || "\u0646\u062C\u0645 \u0627\u0644\u0623\u0633\u0628\u0648\u0639",
+        reason: r.reason || ""
+      }));
+    }
+    console.log(`[Neon Hydration] Hydrated ${s.rows.length} students from Neon PostgreSQL successfully!`);
+  } catch (err) {
+    console.error("[Neon Hydration] Error loading from Neon:", err.message);
+  }
+}
+async function syncItemToNeon(key, item, isDelete = false) {
+  try {
+    if (isDelete) {
+      if (key === "trainees") {
+        await queryNeon("DELETE FROM students WHERE id = $1", [item.id]);
+      } else if (key === "branches") {
+        await queryNeon("DELETE FROM branches WHERE id = $1", [item.id]);
+      } else if (key === "trainers") {
+        await queryNeon("DELETE FROM trainers WHERE id = $1", [item.id]);
+      } else if (key === "courses") {
+        await queryNeon("DELETE FROM courses WHERE id = $1", [item.id]);
+      } else if (key === "groups") {
+        await queryNeon("DELETE FROM groups WHERE id = $1", [item.id]);
+      } else if (key === "payments") {
+        await queryNeon("DELETE FROM finance WHERE id = $1", [item.id]);
+      } else if (key === "certificates") {
+        await queryNeon("DELETE FROM certificates WHERE id = $1", [item.id]);
+      } else if (key === "pointTransactions") {
+        await queryNeon("DELETE FROM gamification_points WHERE id = $1", [item.id]);
+      }
+      return;
+    }
+    if (key === "trainees") {
+      const code = item.code || item.studentCode || item.traineeCode || item.id;
+      const memData = db.getData();
+      const grp = (memData.groups || []).find((g) => g.id === item.groupId);
+      const grpName = grp ? grp.name : "";
+      await queryNeon(`
+        INSERT INTO students (id, student_code, full_name, phone, parent_phone, parent_name, branch_id, group_id, course_id, track, grade, group_name, points, status)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+        ON CONFLICT (id) DO UPDATE SET
+          student_code = EXCLUDED.student_code,
+          full_name = EXCLUDED.full_name,
+          phone = EXCLUDED.phone,
+          parent_phone = EXCLUDED.parent_phone,
+          parent_name = EXCLUDED.parent_name,
+          branch_id = EXCLUDED.branch_id,
+          group_id = EXCLUDED.group_id,
+          course_id = EXCLUDED.course_id,
+          track = EXCLUDED.track,
+          grade = EXCLUDED.grade,
+          group_name = EXCLUDED.group_name,
+          points = EXCLUDED.points,
+          status = EXCLUDED.status
+      `, [
+        item.id,
+        code,
+        item.fullName || item.name || "",
+        item.phone || "",
+        item.parentPhone || "",
+        item.parentName || "",
+        item.branchId || null,
+        item.groupId || null,
+        item.courseId || null,
+        item.track || "",
+        item.grade || "",
+        grpName,
+        item.points || item.totalPoints || 0,
+        item.status || "active"
+      ]);
+    } else if (key === "branches") {
+      await queryNeon(`
+        INSERT INTO branches (id, code, name, address, phone, manager_name, status)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        ON CONFLICT (id) DO UPDATE SET
+          code = EXCLUDED.code,
+          name = EXCLUDED.name,
+          address = EXCLUDED.address,
+          phone = EXCLUDED.phone,
+          manager_name = EXCLUDED.manager_name,
+          status = EXCLUDED.status
+      `, [
+        item.id,
+        item.code || "",
+        item.name || "",
+        item.address || "",
+        item.phone || "",
+        item.managerName || "",
+        item.status || "active"
+      ]);
+    } else if (key === "trainers") {
+      await queryNeon(`
+        INSERT INTO trainers (id, code, name, email, phone, branch_id, specialty, status)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        ON CONFLICT (id) DO UPDATE SET
+          code = EXCLUDED.code,
+          name = EXCLUDED.name,
+          email = EXCLUDED.email,
+          phone = EXCLUDED.phone,
+          branch_id = EXCLUDED.branch_id,
+          specialty = EXCLUDED.specialty,
+          status = EXCLUDED.status
+      `, [
+        item.id,
+        item.code || "",
+        item.name || "",
+        item.email || "",
+        item.phone || "",
+        item.branchId || null,
+        item.specialty || "",
+        item.status || "active"
+      ]);
+    } else if (key === "courses") {
+      await queryNeon(`
+        INSERT INTO courses (id, code, name, category, grade, branch_id, fee_amount, status)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        ON CONFLICT (id) DO UPDATE SET
+          code = EXCLUDED.code,
+          name = EXCLUDED.name,
+          category = EXCLUDED.category,
+          grade = EXCLUDED.grade,
+          branch_id = EXCLUDED.branch_id,
+          fee_amount = EXCLUDED.fee_amount,
+          status = EXCLUDED.status
+      `, [
+        item.id,
+        item.code || "",
+        item.name || "",
+        item.category || "",
+        item.grade || "",
+        item.branchId || null,
+        item.feeAmount || 0,
+        item.status || "active"
+      ]);
+    } else if (key === "groups") {
+      await queryNeon(`
+        INSERT INTO groups (id, name, course_id, trainer_id, branch_id, track, grade, room_name, status)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        ON CONFLICT (id) DO UPDATE SET
+          name = EXCLUDED.name,
+          course_id = EXCLUDED.course_id,
+          trainer_id = EXCLUDED.trainer_id,
+          branch_id = EXCLUDED.branch_id,
+          track = EXCLUDED.track,
+          grade = EXCLUDED.grade,
+          room_name = EXCLUDED.room_name,
+          status = EXCLUDED.status
+      `, [
+        item.id,
+        item.name || "",
+        item.courseId || null,
+        item.trainerId || null,
+        item.branchId || null,
+        item.track || "\u0639\u0631\u0628\u064A",
+        item.grade || "",
+        item.roomName || item.hallName || "",
+        item.status || "active"
+      ]);
+    } else if (key === "payments") {
+      await queryNeon(`
+        INSERT INTO finance (id, student_id, amount, payment_type, receipt_number, notes)
+        VALUES ($1, $2, $3, $4, $5, $6)
+        ON CONFLICT (id) DO UPDATE SET
+          student_id = EXCLUDED.student_id,
+          amount = EXCLUDED.amount,
+          payment_type = EXCLUDED.payment_type,
+          receipt_number = EXCLUDED.receipt_number,
+          notes = EXCLUDED.notes
+      `, [
+        item.id,
+        item.traineeId || item.studentId || null,
+        item.amount || 0,
+        item.paymentType || "\u0633\u0646\u062F \u0642\u0628\u0636",
+        item.receiptNumber || item.id,
+        item.notes || ""
+      ]);
+    } else if (key === "certificates") {
+      await queryNeon(`
+        INSERT INTO certificates (id, student_id, course_name, issue_date, verification_code, qr_token)
+        VALUES ($1, $2, $3, $4, $5, $6)
+        ON CONFLICT (id) DO UPDATE SET
+          student_id = EXCLUDED.student_id,
+          course_name = EXCLUDED.course_name,
+          issue_date = EXCLUDED.issue_date,
+          verification_code = EXCLUDED.verification_code,
+          qr_token = EXCLUDED.qr_token
+      `, [
+        item.id,
+        item.traineeId || item.studentId || null,
+        item.courseName || "",
+        item.issueDate || (/* @__PURE__ */ new Date()).toISOString().slice(0, 10),
+        item.verificationCode || item.certificateCode || item.id,
+        item.qrToken || ""
+      ]);
+    } else if (key === "pointTransactions") {
+      await queryNeon(`
+        INSERT INTO gamification_points (id, student_id, points, badge, reason)
+        VALUES ($1, $2, $3, $4, $5)
+        ON CONFLICT (id) DO UPDATE SET
+          student_id = EXCLUDED.student_id,
+          points = EXCLUDED.points,
+          badge = EXCLUDED.badge,
+          reason = EXCLUDED.reason
+      `, [
+        item.id,
+        item.traineeId || item.studentId || null,
+        item.points || 0,
+        item.badge || "\u0646\u062C\u0645 \u0627\u0644\u0623\u0633\u0628\u0648\u0639",
+        item.reason || ""
+      ]);
+    }
+  } catch (err) {
+    console.error(`[Neon Sync] Non-critical error syncing key ${key}:`, err.message);
+  }
+}
 function createRepo(key) {
   return {
     async getAll() {
-      let supabaseItems = [];
-      if (supabaseClient2) {
-        try {
-          const { data, error } = await supabaseClient2.from("collections").select("id, data").eq("collection_name", key).range(0, 4999);
-          if (!error && Array.isArray(data)) {
-            supabaseItems = data.map((row) => ({
-              id: row.id,
-              ...row.data || {}
-            }));
-          } else if (error) {
-            console.error(`[SupabaseRepo] Error fetching collection "${key}":`, error.message);
-          }
-        } catch (err) {
-          console.error(`[SupabaseRepo] Exception querying Supabase collection "${key}":`, err.message);
-        }
-      }
       const memData = db.getData();
       const memItems = memData && Array.isArray(memData[key]) ? memData[key] : [];
-      if (supabaseItems.length > 0) {
-        const itemMap = /* @__PURE__ */ new Map();
-        supabaseItems.forEach((item) => {
-          if (item && item.id) itemMap.set(String(item.id), item);
-        });
-        memItems.forEach((item) => {
-          if (item && item.id && !itemMap.has(String(item.id))) {
-            itemMap.set(String(item.id), item);
-          }
-        });
-        const merged = Array.from(itemMap.values());
-        if (memData) {
-          memData[key] = merged;
-        }
-        return merged;
-      }
       return memItems;
     },
     async getById(id) {
       if (!id) return null;
-      if (supabaseClient2) {
-        try {
-          const { data, error } = await supabaseClient2.from("collections").select("id, data").eq("collection_name", key).eq("id", id).maybeSingle();
-          if (!error && data) {
-            return { id: data.id, ...data.data || {} };
-          }
-        } catch (e) {
-          console.warn(`[SupabaseRepo] getById error for ${key}/${id}:`, e.message);
-        }
-      }
       const all = await this.getAll();
       const idStr = String(id).trim().toLowerCase();
       return all.find((item) => {
@@ -4150,7 +4470,7 @@ function createRepo(key) {
     async create(id, itemData) {
       const docId = id || itemData.id || "doc-" + Date.now() + "-" + Math.random().toString(36).substring(2, 6);
       const fullItem = { ...itemData, id: docId };
-      if (supabaseClient2) {
+      if (supabaseClient2 && !isSupabaseQuotaRestricted) {
         try {
           const { error } = await supabaseClient2.from("collections").upsert({
             collection_name: key,
@@ -4159,10 +4479,10 @@ function createRepo(key) {
             updated_at: (/* @__PURE__ */ new Date()).toISOString()
           }, { onConflict: "collection_name,id" });
           if (error) {
-            console.error(`[SupabaseRepo] Create error for ${key}/${docId}:`, error.message);
+            handleSupabaseError("Create", key, docId, error.message);
           }
         } catch (e) {
-          console.error(`[SupabaseRepo] Create exception for ${key}/${docId}:`, e.message);
+          handleSupabaseError("Create", key, docId, e.message);
         }
       }
       const memData = db.getData();
@@ -4173,13 +4493,14 @@ function createRepo(key) {
         if (idx >= 0) list[idx] = fullItem;
         else list.push(fullItem);
       }
+      await syncItemToNeon(key, fullItem, false);
       return fullItem;
     },
     async update(id, updates) {
       const existing = await this.getById(id);
       const docId = existing ? existing.id : id;
       const updatedItem = { ...existing || {}, ...updates, id: docId, updatedAt: (/* @__PURE__ */ new Date()).toISOString() };
-      if (supabaseClient2) {
+      if (supabaseClient2 && !isSupabaseQuotaRestricted) {
         try {
           const { error } = await supabaseClient2.from("collections").upsert({
             collection_name: key,
@@ -4188,10 +4509,10 @@ function createRepo(key) {
             updated_at: (/* @__PURE__ */ new Date()).toISOString()
           }, { onConflict: "collection_name,id" });
           if (error) {
-            console.error(`[SupabaseRepo] Update error for ${key}/${docId}:`, error.message);
+            handleSupabaseError("Update", key, docId, error.message);
           }
         } catch (e) {
-          console.error(`[SupabaseRepo] Update exception for ${key}/${docId}:`, e.message);
+          handleSupabaseError("Update", key, docId, e.message);
         }
       }
       const memData = db.getData();
@@ -4200,17 +4521,18 @@ function createRepo(key) {
         const idx = list.findIndex((i) => i.id === docId);
         if (idx >= 0) list[idx] = updatedItem;
       }
+      await syncItemToNeon(key, updatedItem, false);
       return updatedItem;
     },
     async delete(id) {
-      if (supabaseClient2) {
+      if (supabaseClient2 && !isSupabaseQuotaRestricted) {
         try {
           const { error } = await supabaseClient2.from("collections").delete().eq("collection_name", key).eq("id", id);
           if (error) {
-            console.error(`[SupabaseRepo] Delete error for ${key}/${id}:`, error.message);
+            handleSupabaseError("Delete", key, id, error.message);
           }
         } catch (e) {
-          console.error(`[SupabaseRepo] Delete exception for ${key}/${id}:`, e.message);
+          handleSupabaseError("Delete", key, id, e.message);
         }
       }
       const memData = db.getData();
@@ -4219,22 +4541,23 @@ function createRepo(key) {
         const idx = list.findIndex((i) => i.id === id);
         if (idx >= 0) list.splice(idx, 1);
       }
+      await syncItemToNeon(key, { id }, true);
       return true;
     },
     invalidateCache() {
     }
   };
 }
-var SUPABASE_URL2, SUPABASE_KEY2, hasValidSupabase2, supabaseClient2, TraineeRepo, BranchRepo, CourseRepo, ProgramRepo, GroupRepo, TrainerRepo, AttendanceRepo, PaymentRepo, ExpenseRepo, ExamRepo, ExamQuestionRepo, ExamResultRepo, PointRuleRepo, PointTransactionRepo, CertificateRepo, CertificateTemplateRepo, UserRepo, DeviceRepo, DeviceCommandRepo, ComputerLabRepo, InteractiveSessionRepo, TraineeScreenshotRepo, SettingRepo, AuditLogRepo;
+var SUPABASE_URL2, SUPABASE_KEY2, hasValidSupabase2, supabaseClient2, isSupabaseQuotaRestricted, TraineeRepo, BranchRepo, CourseRepo, ProgramRepo, GroupRepo, TrainerRepo, AttendanceRepo, PaymentRepo, ExpenseRepo, ExamRepo, ExamQuestionRepo, ExamResultRepo, PointRuleRepo, PointTransactionRepo, CertificateRepo, CertificateTemplateRepo, UserRepo, DeviceRepo, DeviceCommandRepo, ComputerLabRepo, InteractiveSessionRepo, TraineeScreenshotRepo, SettingRepo, AuditLogRepo;
 var init_data = __esm({
   "server/data/index.ts"() {
     init_db();
+    init_dbNeon();
     SUPABASE_URL2 = cleanSupabaseUrl2(process.env.SUPABASE_URL);
     SUPABASE_KEY2 = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpkYnJ3d2t5eGp1anJva3pqYW5nIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4ODA0ODY0MiwiZXhwIjoyMTAzNjI0NjQyfQ._JEu3kjLDPWS1uCabeVMyTRIeDS0NpnjTPUjyuL6_Ec").trim();
-    hasValidSupabase2 = Boolean(
-      SUPABASE_URL2 && !SUPABASE_URL2.includes("placeholder") && SUPABASE_KEY2 && !SUPABASE_KEY2.includes("placeholder")
-    );
+    hasValidSupabase2 = false;
     supabaseClient2 = null;
+    isSupabaseQuotaRestricted = false;
     if (hasValidSupabase2) {
       try {
         supabaseClient2 = createClient(SUPABASE_URL2, SUPABASE_KEY2, {
@@ -4245,11 +4568,15 @@ var init_data = __esm({
         supabaseClient2 = null;
       }
     }
-    if (supabaseClient2) {
-      hydrateAllFromSupabase().catch((err) => {
-        console.error("[Hydration] Auto-hydration on load failed:", err);
-      });
-    }
+    hydrateAllFromNeon().then(() => {
+      if (supabaseClient2) {
+        hydrateAllFromSupabase().catch((err) => {
+          console.error("[Hydration] Auto-hydration on load failed:", err);
+        });
+      }
+    }).catch((err) => {
+      console.error("[Neon Hydration] Load failed:", err);
+    });
     TraineeRepo = createRepo("trainees");
     BranchRepo = createRepo("branches");
     CourseRepo = createRepo("courses");
@@ -4280,30 +4607,24 @@ var init_data = __esm({
     TraineeScreenshotRepo = createRepo("traineeScreenshots");
     SettingRepo = {
       async get() {
-        if (supabaseClient2) {
-          try {
-            const { data, error } = await supabaseClient2.from("collections").select("id, data").eq("collection_name", "settings").eq("id", "main").maybeSingle();
-            if (!error && data && data.data) {
-              return data.data;
-            }
-          } catch {
-          }
-        }
         return db.getData().settings || {};
       },
       async update(updates) {
         const current = await this.get();
         const finalSettings = { ...current, ...updates };
-        if (supabaseClient2) {
+        if (supabaseClient2 && !isSupabaseQuotaRestricted) {
           try {
-            await supabaseClient2.from("collections").upsert({
+            const { error } = await supabaseClient2.from("collections").upsert({
               collection_name: "settings",
               id: "main",
               data: finalSettings,
               updated_at: (/* @__PURE__ */ new Date()).toISOString()
             }, { onConflict: "collection_name,id" });
+            if (error) {
+              handleSupabaseError("Update", "settings", "main", error.message);
+            }
           } catch (e) {
-            console.error("[SettingRepo] Supabase update error:", e.message);
+            handleSupabaseError("Update", "settings", "main", e.message);
           }
         }
         const data = db.getData();
@@ -6673,8 +6994,8 @@ var MigrationService = class {
         }
         return clean;
       });
-      const ws = XLSX.utils.json_to_sheet(formatted.length > 0 ? formatted : [{ info: "\u0644\u0627 \u062A\u0648\u062C\u062F \u0628\u064A\u0627\u0646\u0627\u062A" }]);
-      XLSX.utils.book_append_sheet(wb, ws, sheetName.substring(0, 31));
+      const ws2 = XLSX.utils.json_to_sheet(formatted.length > 0 ? formatted : [{ info: "\u0644\u0627 \u062A\u0648\u062C\u062F \u0628\u064A\u0627\u0646\u0627\u062A" }]);
+      XLSX.utils.book_append_sheet(wb, ws2, sheetName.substring(0, 31));
     };
     addSheet("\u0627\u0644\u0637\u0644\u0627\u0628 (Students)", data.allStudents);
     addSheet("\u0627\u0644\u0645\u062F\u0631\u0628\u0648\u0646 (Trainers)", data.allTrainers);
@@ -7540,34 +7861,34 @@ ${JSON.stringify(params.currentFields, null, 2)}
       console.warn("Gemini API Certificate Design Helper notice, using smart local rules engine:", apiError?.message);
     }
   }
-  const query2 = params.userPrompt.toLowerCase();
+  const query = params.userPrompt.toLowerCase();
   const modifiedFields = params.currentFields.map((f) => {
     const field = { ...f };
-    if (query2.includes("\u0623\u062E\u0636\u0631") || query2.includes("\u0627\u062E\u0636\u0631") || query2.includes("green")) {
+    if (query.includes("\u0623\u062E\u0636\u0631") || query.includes("\u0627\u062E\u0636\u0631") || query.includes("green")) {
       if (field.id === "traineeName" || field.id === "courseName") {
         field.color = "#15803d";
       }
-    } else if (query2.includes("\u0630\u0647\u0628\u064A") || query2.includes("gold")) {
+    } else if (query.includes("\u0630\u0647\u0628\u064A") || query.includes("gold")) {
       if (field.id === "traineeName" || field.id === "courseName") {
         field.color = "#d97706";
       }
-    } else if (query2.includes("\u0623\u062D\u0645\u0631") || query2.includes("\u0627\u062D\u0645\u0631") || query2.includes("red")) {
+    } else if (query.includes("\u0623\u062D\u0645\u0631") || query.includes("\u0627\u062D\u0645\u0631") || query.includes("red")) {
       if (field.id === "traineeName" || field.id === "courseName") {
         field.color = "#dc2626";
       }
-    } else if (query2.includes("\u0623\u0632\u0631\u0642") || query2.includes("\u0627\u0632\u0631\u0642") || query2.includes("blue")) {
+    } else if (query.includes("\u0623\u0632\u0631\u0642") || query.includes("\u0627\u0632\u0631\u0642") || query.includes("blue")) {
       if (field.id === "traineeName" || field.id === "courseName") {
         field.color = "#1d4ed8";
       }
     }
-    if (query2.includes("\u062A\u0643\u0628\u064A\u0631") || query2.includes("\u0643\u0628\u064A\u0631") || query2.includes("\u0643\u0628\u0631") || query2.includes("larger") || query2.includes("big")) {
+    if (query.includes("\u062A\u0643\u0628\u064A\u0631") || query.includes("\u0643\u0628\u064A\u0631") || query.includes("\u0643\u0628\u0631") || query.includes("larger") || query.includes("big")) {
       if (field.id === "traineeName") {
         field.fontSize = Math.min(100, field.fontSize + 10);
       }
       if (field.id === "courseName") {
         field.fontSize = Math.min(80, field.fontSize + 8);
       }
-    } else if (query2.includes("\u062A\u0635\u063A\u064A\u0631") || query2.includes("\u0635\u063A\u064A\u0631") || query2.includes("\u0635\u063A\u0631") || query2.includes("smaller")) {
+    } else if (query.includes("\u062A\u0635\u063A\u064A\u0631") || query.includes("\u0635\u063A\u064A\u0631") || query.includes("\u0635\u063A\u0631") || query.includes("smaller")) {
       if (field.id === "traineeName") {
         field.fontSize = Math.max(16, field.fontSize - 6);
       }
@@ -7575,11 +7896,11 @@ ${JSON.stringify(params.currentFields, null, 2)}
         field.fontSize = Math.max(14, field.fontSize - 4);
       }
     }
-    if (query2.includes("\u062A\u062D\u062A") || query2.includes("\u0623\u0633\u0641\u0644") || query2.includes("down")) {
+    if (query.includes("\u062A\u062D\u062A") || query.includes("\u0623\u0633\u0641\u0644") || query.includes("down")) {
       if (field.id === "traineeName") {
         field.y = Math.min(100, field.y + 10);
       }
-    } else if (query2.includes("\u0641\u0648\u0642") || query2.includes("\u0623\u0639\u0644\u0649") || query2.includes("up")) {
+    } else if (query.includes("\u0641\u0648\u0642") || query.includes("\u0623\u0639\u0644\u0649") || query.includes("up")) {
       if (field.id === "traineeName") {
         field.y = Math.max(0, field.y - 10);
       }
@@ -8839,6 +9160,7 @@ languageLabRouter.get("/parent/:studentId", async (req, res) => {
 });
 
 // server/routes.ts
+init_dbNeon();
 var apiRouter = express2.Router();
 apiRouter.use("/language-lab", languageLabRouter);
 apiRouter.use("/migration", migrationRouter);
@@ -9641,6 +9963,27 @@ apiRouter.post("/trainees", async (req, res) => {
     const data = req.body;
     if (!data.fullName || !data.branchId) return res.status(400).json({ success: false, error: "\u0627\u0644\u0627\u0633\u0645 \u0648\u0627\u0644\u0641\u0631\u0639 \u0645\u0637\u0644\u0648\u0628\u0627\u0646" });
     const list = await TraineeRepo.getAll();
+    const normName = String(data.fullName || "").trim().toLowerCase();
+    const normPhone = String(data.phone || "").trim();
+    const normParentPhone = String(data.parentPhone || "").trim();
+    const recentDuplicate = list.find((t) => {
+      const sameName = String(t.fullName || "").trim().toLowerCase() === normName;
+      const sameBranch = String(t.branchId) === String(data.branchId);
+      const sameStudentPhone = normPhone && t.phone && String(t.phone).trim() === normPhone;
+      const createdInDoubleTapWindow = t.createdAt && Date.now() - new Date(t.createdAt).getTime() < 4e3;
+      if (sameName && sameBranch && (sameStudentPhone || createdInDoubleTapWindow)) {
+        return true;
+      }
+      return false;
+    });
+    if (recentDuplicate) {
+      return res.json({
+        success: true,
+        trainee: recentDuplicate,
+        isDuplicatePrevented: true,
+        message: "\u062A\u0645 \u0625\u0636\u0627\u0641\u0629 \u0627\u0644\u0637\u0627\u0644\u0628 \u0628\u0627\u0644\u0641\u0639\u0644 \u0628\u0627\u0644\u0646\u0638\u0627\u0645 \u0648\u0645\u0643\u0627\u0641\u062D\u0629 \u0627\u0644\u062A\u0643\u0631\u0627\u0631 \u0628\u0646\u062C\u0627\u062D."
+      });
+    }
     let code = data.code?.trim()?.toUpperCase();
     if (code) {
       const duplicate = list.find((t) => t.code && String(t.code).trim().toUpperCase() === code);
@@ -9785,6 +10128,25 @@ apiRouter.put("/trainees/:id", async (req, res) => {
   } catch (e) {
     res.status(500).json({ success: false, error: e.message });
   }
+});
+apiRouter.get("/classpoint-code", (req, res) => {
+  const memData = db.getData();
+  const code = memData.classPointCode || "";
+  res.json({ success: true, classPointCode: code });
+});
+apiRouter.post("/classpoint-code", (req, res) => {
+  const { code } = req.body || {};
+  const cleanCode = String(code || "").trim();
+  const memData = db.getData();
+  memData.classPointCode = cleanCode;
+  db.saveImmediate();
+  try {
+    if (global.io) {
+      global.io.emit("classpoint_code_updated", { classPointCode: cleanCode });
+    }
+  } catch (e) {
+  }
+  res.json({ success: true, classPointCode: cleanCode, message: "\u062A\u0645 \u062A\u062D\u062F\u064A\u062B \u0643\u0648\u062F \u0643\u0644\u0627\u0633 \u0628\u0648\u064A\u0646\u062A \u0648\u062A\u0639\u0645\u064A\u0645\u0647 \u0628\u0646\u062C\u0627\u062D" });
 });
 apiRouter.post(["/student/update-photo", "/trainees/update-photo"], async (req, res) => {
   try {
@@ -13051,9 +13413,6 @@ apiRouter.post("/ai/grade-scan", async (req, res) => {
         (t) => (t.fullName || "").toLowerCase().includes(detectedName) || detectedName.includes((t.fullName || "").toLowerCase())
       );
     }
-    if (!matchedTrainee && allTrainees.length > 0) {
-      matchedTrainee = allTrainees?.[0];
-    }
     res.json({
       success: true,
       data: result,
@@ -13074,7 +13433,7 @@ apiRouter.post("/ai/grade-scan", async (req, res) => {
     res.status(500).json({ error: error.message || "\u0641\u0634\u0644 \u0627\u0644\u0630\u0643\u0627\u0621 \u0627\u0644\u0627\u0635\u0637\u0646\u0627\u0639\u064A \u0641\u064A \u0645\u0633\u062D \u0648\u062A\u0635\u062D\u064A\u062D \u0627\u0644\u0648\u0627\u062C\u0628" });
   }
 });
-apiRouter.post("/ai/grade-scan/confirm", (req, res) => {
+apiRouter.post("/ai/grade-scan/confirm", async (req, res) => {
   try {
     const {
       traineeId,
@@ -13094,7 +13453,14 @@ apiRouter.post("/ai/grade-scan/confirm", (req, res) => {
       return res.status(400).json({ error: "\u064A\u0631\u062C\u0649 \u062A\u062D\u062F\u064A\u062F \u0627\u0644\u0645\u062A\u062F\u0631\u0628 \u0627\u0644\u0645\u0631\u0627\u062F \u062D\u0641\u0638 \u0627\u0644\u062F\u0631\u062C\u0629 \u0641\u064A \u0633\u062C\u0644\u0647" });
     }
     const data = db.getData();
-    const trainee = data.trainees.find((t) => t.id === traineeId);
+    let trainee = await TraineeRepo.getById(traineeId);
+    if (!trainee) {
+      const allT = await TraineeRepo.getAll();
+      trainee = allT.find((t) => t.id === traineeId || t.code === traineeId);
+    }
+    if (!trainee && Array.isArray(data.trainees)) {
+      trainee = data.trainees.find((t) => t.id === traineeId || t.code === traineeId);
+    }
     if (!trainee) {
       return res.status(404).json({ error: "\u0627\u0644\u0645\u062A\u062F\u0631\u0628 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F \u0641\u064A \u0627\u0644\u0646\u0638\u0627\u0645" });
     }
@@ -13119,8 +13485,13 @@ apiRouter.post("/ai/grade-scan/confirm", (req, res) => {
         status: "completed",
         instructions: "\u062A\u0635\u062D\u064A\u062D \u0648\u0631\u0642\u064A \u0622\u0644\u064A \u0639\u0628\u0631 \u0627\u0644\u0645\u0627\u0633\u062D \u0627\u0644\u0630\u0643\u064A \u0648\u0643\u0648\u062F \u0627\u0644\u0645\u062A\u062F\u0631\u0628"
       };
+      if (!data.exams) data.exams = [];
       data.exams.push(newExamItem);
       targetExamId = newExamItem.id;
+      try {
+        await ExamRepo.create(newExamItem.id, newExamItem);
+      } catch (e) {
+      }
     }
     const examResultId = "res-" + Date.now() + "-" + Math.random().toString(36).substr(2, 4);
     const newResult = {
@@ -13137,25 +13508,42 @@ apiRouter.post("/ai/grade-scan/confirm", (req, res) => {
       submittedAt: (/* @__PURE__ */ new Date()).toISOString()
     };
     if (!data.examResults) data.examResults = [];
-    data.examResults.push(newResult);
+    data.examResults.unshift(newResult);
+    try {
+      await ExamResultRepo.create(newResult.id, newResult);
+    } catch (e) {
+    }
     let pointTx = null;
     if (finalPoints > 0) {
       const currentPts = trainee.totalPoints || trainee.points || 0;
-      trainee.totalPoints = currentPts + finalPoints;
-      trainee.points = trainee.totalPoints;
+      const newTotal = currentPts + finalPoints;
+      trainee.totalPoints = newTotal;
+      trainee.points = newTotal;
+      await TraineeRepo.update(trainee.id, { totalPoints: newTotal, points: newTotal });
+      if (Array.isArray(data.trainees)) {
+        const memIdx = data.trainees.findIndex((t) => t.id === trainee.id);
+        if (memIdx >= 0) {
+          data.trainees[memIdx].totalPoints = newTotal;
+          data.trainees[memIdx].points = newTotal;
+        }
+      }
       pointTx = {
         id: "pt-" + Date.now() + "-" + Math.random().toString(36).substr(2, 4),
         traineeId: trainee.id,
         groupId: trainee.groupId,
         branchId: trainee.branchId,
         points: finalPoints,
-        reason: `\u2B50 \u0645\u0643\u0627\u0641\u0623\u0629 \u0625\u062A\u0642\u0627\u0646 (${itemTitle}): \u062F\u0631\u062C\u0629 ${finalScore}/${finalMaxScore} (${finalPercentage}%)`,
+        reason: `\u{1F4DD} \u0648\u0627\u062C\u0628/\u062A\u0642\u064A\u064A\u0645 \u0639\u0645\u0644\u064A (${itemTitle}): \u062F\u0631\u062C\u0629 ${finalScore}/${finalMaxScore} (${finalPercentage}%) - ${rating}`,
         addedByUserId: "ai-scanner",
         addedByUserName: "\u0645\u0635\u062D\u062D \u0627\u0644\u0630\u0643\u0627\u0621 \u0627\u0644\u0627\u0635\u0637\u0646\u0627\u0639\u064A",
         createdAt: (/* @__PURE__ */ new Date()).toISOString()
       };
       if (!data.pointTransactions) data.pointTransactions = [];
-      data.pointTransactions.push(pointTx);
+      data.pointTransactions.unshift(pointTx);
+      try {
+        await PointTransactionRepo.create(pointTx.id, pointTx);
+      } catch (e) {
+      }
     }
     db.logAudit({
       userId: "ai-scanner",
@@ -13330,6 +13718,110 @@ apiRouter.post("/homeworks/batch-grade", async (req, res) => {
   }
   db.save();
   res.json({ success: true, updatedCount, message: `\u062A\u0645 \u062A\u0635\u062D\u064A\u062D ${updatedCount} \u0648\u0627\u062C\u0628\u0627\u062A \u062C\u0645\u0627\u0639\u064A\u0627\u064B \u0648\u0625\u0631\u0633\u0627\u0644 \u0627\u0644\u062F\u0631\u062C\u0627\u062A \u0628\u0646\u062C\u0627\u062D` });
+});
+apiRouter.get(["/homeworks", "/homeworks/"], (req, res) => {
+  try {
+    const data = db.getData();
+    let submissions = data.homeworkSubmissions || [];
+    const { branchId, courseId, groupId, traineeId, status } = req.query;
+    if (branchId && branchId !== "all") {
+      submissions = submissions.filter((s) => s.branchId === branchId);
+    }
+    if (courseId) {
+      submissions = submissions.filter((s) => s.courseId === courseId);
+    }
+    if (groupId) {
+      submissions = submissions.filter((s) => s.groupId === groupId);
+    }
+    if (traineeId) {
+      submissions = submissions.filter(
+        (s) => s.traineeId === traineeId || s.studentId === traineeId || s.traineeCode && String(s.traineeCode).trim() === String(traineeId).trim()
+      );
+    }
+    if (status) {
+      submissions = submissions.filter((s) => s.status === status);
+    }
+    res.json(submissions);
+  } catch (err) {
+    res.status(500).json({ error: "\u0641\u0634\u0644 \u062C\u0644\u0628 \u0642\u0627\u0626\u0645\u0629 \u0627\u0644\u0648\u0627\u062C\u0628\u0627\u062A: " + err.message });
+  }
+});
+apiRouter.get("/homeworks/:id", (req, res) => {
+  try {
+    const { id } = req.params;
+    const data = db.getData();
+    const sub = (data.homeworkSubmissions || []).find((s) => s.id === id);
+    if (!sub) {
+      return res.status(404).json({ error: "\u0627\u0644\u0648\u0627\u062C\u0628 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F \u0628\u0627\u0644\u0646\u0638\u0627\u0645" });
+    }
+    res.json(sub);
+  } catch (err) {
+    res.status(500).json({ error: "\u0641\u0634\u0644 \u062C\u0644\u0628 \u062A\u0641\u0627\u0635\u064A\u0644 \u0627\u0644\u0648\u0627\u062C\u0628: " + err.message });
+  }
+});
+apiRouter.put("/homeworks/:id", (req, res) => {
+  try {
+    const { id } = req.params;
+    const { grade, trainerNotes, generalFeedback, stars, audioFeedbackUrl, bonusPoints, status } = req.body;
+    const data = db.getData();
+    if (!Array.isArray(data.homeworkSubmissions)) data.homeworkSubmissions = [];
+    const sub = data.homeworkSubmissions.find((s) => s.id === id);
+    if (!sub) {
+      return res.status(404).json({ error: "\u062A\u0633\u0644\u064A\u0645 \u0627\u0644\u0648\u0627\u062C\u0628 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F" });
+    }
+    if (grade !== void 0 && grade !== null && grade !== "") {
+      sub.grade = Number(grade);
+      sub.percentage = Math.round(sub.grade / (sub.maxGrade || 100) * 100);
+    }
+    if (trainerNotes !== void 0) sub.trainerNotes = trainerNotes;
+    if (generalFeedback !== void 0) sub.generalFeedback = generalFeedback;
+    if (stars !== void 0) sub.stars = stars;
+    if (audioFeedbackUrl !== void 0) sub.audioFeedbackUrl = audioFeedbackUrl;
+    sub.status = status || "reviewed";
+    if (bonusPoints && Number(bonusPoints) > 0) {
+      const pts = Number(bonusPoints);
+      sub.pointsAwarded = (sub.pointsAwarded || 0) + pts;
+      const trainee2 = (data.trainees || []).find(
+        (t) => t.id === sub.traineeId || t.id === sub.studentId || t.code && sub.traineeCode && String(t.code).trim() === String(sub.traineeCode).trim()
+      );
+      if (trainee2) {
+        trainee2.totalPoints = Number(trainee2.totalPoints || trainee2.points || 0) + pts;
+        trainee2.points = trainee2.totalPoints;
+        if (!Array.isArray(data.pointTransactions)) data.pointTransactions = [];
+        data.pointTransactions.unshift({
+          id: "pt-" + Date.now() + "-" + Math.random().toString(36).substring(2, 6),
+          traineeId: trainee2.id,
+          groupId: trainee2.groupId,
+          branchId: trainee2.branchId,
+          points: pts,
+          reason: `\u{1F31F} \u0646\u0642\u0627\u0637 \u062A\u0645\u064A\u0632 \u0625\u0636\u0627\u0641\u064A\u0629 \u0644\u062A\u0635\u062D\u064A\u062D \u0627\u0644\u0648\u0627\u062C\u0628 (${sub.taskTitle || "\u0627\u0644\u062A\u0637\u0628\u064A\u0642 \u0627\u0644\u0645\u0628\u0627\u0634\u0631"})`,
+          addedByUserId: "trainer",
+          addedByUserName: "\u0627\u0644\u0645\u0639\u0644\u0645/\u0627\u0644\u0625\u062F\u0627\u0631\u0629",
+          createdAt: (/* @__PURE__ */ new Date()).toISOString()
+        });
+      }
+    }
+    const trainee = (data.trainees || []).find(
+      (t) => t.id === sub.traineeId || t.id === sub.studentId || t.code && sub.traineeCode && String(t.code).trim() === String(sub.traineeCode).trim()
+    );
+    if (trainee) {
+      if (!Array.isArray(data.notifications)) data.notifications = [];
+      data.notifications.unshift({
+        id: "notif-rev-" + Date.now(),
+        type: "system",
+        title: `\u2728 \u062A\u062D\u062F\u064A\u062B \u0646\u062A\u064A\u062C\u0629 \u0648\u062A\u0642\u064A\u064A\u0645 \u0627\u0644\u0648\u0627\u062C\u0628: ${sub.taskTitle || "\u0627\u0644\u0648\u0627\u062C\u0628 \u0627\u0644\u0645\u0637\u0644\u0648\u0628"}`,
+        message: `\u062A\u0645 \u0631\u0635\u062F \u0646\u062A\u064A\u062C\u0629 \u0627\u0644\u0648\u0627\u062C\u0628 \u0628\u0646\u062C\u0627\u062D (${sub.grade}/${sub.maxGrade || 100}). ${sub.generalFeedback ? `\u0627\u0644\u0645\u0644\u0627\u062D\u0638\u0627\u062A: ${sub.generalFeedback}` : ""}`,
+        linkView: "student_portal",
+        createdAt: (/* @__PURE__ */ new Date()).toISOString(),
+        read: false,
+        metadata: { traineeId: trainee.id, submissionId: sub.id, grade: sub.grade }
+      });
+    }
+    db.saveImmediate();
+    res.json(sub);
+  } catch (err) {
+    res.status(500).json({ error: "\u0641\u0634\u0644 \u062D\u0641\u0638 \u0627\u0644\u062A\u0639\u062F\u064A\u0644\u0627\u062A \u0639\u0644\u0649 \u0627\u0644\u062A\u0642\u0631\u064A\u0631: " + err.message });
+  }
 });
 apiRouter.post("/exams/create-full", (req, res) => {
   const { exam, questions } = req.body;
@@ -13569,6 +14061,11 @@ apiRouter.post("/interactive-sessions/broadcast-question", (req, res) => {
   });
   db.save();
   res.json({ success: true, count });
+});
+apiRouter.post("/interactive-sessions/clear-question", (req, res) => {
+  masterBroadcast.activeQuestion = null;
+  masterBroadcast.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
+  res.json({ success: true });
 });
 apiRouter.post("/interactive-sessions/broadcast-ceremony", (req, res) => {
   const { step, top3, sessionName, isStarting, isFinished } = req.body;
@@ -14221,7 +14718,7 @@ apiRouter.post("/student/login", async (req, res) => {
   const trainer = group ? trainers.find((tr) => tr.id === group.trainerId) : trainers[0];
   const studentData = {
     id: trainee.id,
-    code: trainee.code || query.toUpperCase(),
+    code: trainee.code || (codeOrPhone ? String(codeOrPhone).toUpperCase() : ""),
     fullName: trainee.fullName || "\u0637\u0627\u0644\u0628 \u0645\u062A\u0645\u064A\u0632",
     phone: trainee.phone || "",
     nationalId: trainee.nationalId || "",
@@ -15460,8 +15957,11 @@ apiRouter.post(["/student/submit-homework", "/student/submit-homework/"], async 
       id: "sub-" + Date.now() + "-" + Math.random().toString(36).substring(2, 7),
       assignmentId: assignmentId || "",
       traineeId: trainee.id,
+      studentId: trainee.id,
       traineeCode: trainee.code || "",
+      studentCode: trainee.code || "",
       traineeName: trainee.fullName || "\u0637\u0627\u0644\u0628",
+      studentName: trainee.fullName || "\u0637\u0627\u0644\u0628",
       groupId: groupId || trainee.groupId || "",
       courseId: courseId || trainee.courseId || "",
       courseName,
@@ -15651,8 +16151,8 @@ apiRouter.post(["/parent/send-message", "/parent/send-message/"], async (req, re
 });
 apiRouter.get(["/search", "/search/"], async (req, res) => {
   try {
-    const query2 = String(req.query.q || "").trim().toLowerCase();
-    if (!query2) {
+    const query = String(req.query.q || "").trim().toLowerCase();
+    if (!query) {
       return res.json({
         trainees: [],
         trainers: [],
@@ -15670,19 +16170,19 @@ apiRouter.get(["/search", "/search/"], async (req, res) => {
     ]);
     const devices = data.devices || [];
     const matchedTrainees = (trainees || []).filter(
-      (t) => t.name && t.name.toLowerCase().includes(query2) || t.code && t.code.toLowerCase().includes(query2) || t.phone && String(t.phone).includes(query2) || t.parentPhone && String(t.parentPhone).includes(query2)
+      (t) => t.name && t.name.toLowerCase().includes(query) || t.code && t.code.toLowerCase().includes(query) || t.phone && String(t.phone).includes(query) || t.parentPhone && String(t.parentPhone).includes(query)
     ).slice(0, 15);
     const matchedTrainers = (trainers || []).filter(
-      (t) => t.name && t.name.toLowerCase().includes(query2) || t.phone && String(t.phone).includes(query2) || t.specialty && t.specialty.toLowerCase().includes(query2)
+      (t) => t.name && t.name.toLowerCase().includes(query) || t.phone && String(t.phone).includes(query) || t.specialty && t.specialty.toLowerCase().includes(query)
     ).slice(0, 10);
     const matchedCourses = (courses || []).filter(
-      (c) => c.name && c.name.toLowerCase().includes(query2) || c.code && c.code.toLowerCase().includes(query2)
+      (c) => c.name && c.name.toLowerCase().includes(query) || c.code && c.code.toLowerCase().includes(query)
     ).slice(0, 10);
     const matchedPayments = (payments || []).filter(
-      (p) => p.receiptNumber && String(p.receiptNumber).toLowerCase().includes(query2) || p.traineeName && p.traineeName.toLowerCase().includes(query2) || p.notes && p.notes.toLowerCase().includes(query2)
+      (p) => p.receiptNumber && String(p.receiptNumber).toLowerCase().includes(query) || p.traineeName && p.traineeName.toLowerCase().includes(query) || p.notes && p.notes.toLowerCase().includes(query)
     ).slice(0, 10);
     const matchedDevices = (devices || []).filter(
-      (d) => d.name && d.name.toLowerCase().includes(query2) || d.ipAddress && String(d.ipAddress).includes(query2) || d.hostname && d.hostname.toLowerCase().includes(query2)
+      (d) => d.name && d.name.toLowerCase().includes(query) || d.ipAddress && String(d.ipAddress).includes(query) || d.hostname && d.hostname.toLowerCase().includes(query)
     ).slice(0, 10);
     res.json({
       trainees: matchedTrainees,
@@ -16123,7 +16623,7 @@ apiRouter.get("/trainer-portal/data/:trainerId", async (req, res) => {
     const trainerTraineeIds = new Set(trainerTrainees.map((t) => t.id));
     const trainerTraineeCodes = new Set(trainerTrainees.map((t) => (t.code || "").trim().toLowerCase()));
     const trainerHomeworks = allHW.filter(
-      (h) => trainerTraineeIds.has(h.traineeId) || h.traineeCode && trainerTraineeCodes.has(String(h.traineeCode).trim().toLowerCase())
+      (h) => trainerTraineeIds.has(h.traineeId) || trainerTraineeIds.has(h.studentId) || h.traineeCode && trainerTraineeCodes.has(String(h.traineeCode).trim().toLowerCase()) || h.studentCode && trainerTraineeCodes.has(String(h.studentCode).trim().toLowerCase()) || h.groupId && trainerGroupIds.has(h.groupId) || h.courseId && trainerCourseIds.has(h.courseId) || trainerTrainees.length === 0
     );
     ensureDefaultPortalMessages(db.getData());
     const allMsgs = db.getData().portalMessages || [];
@@ -16195,8 +16695,61 @@ apiRouter.post("/trainer-portal/attendance", async (req, res) => {
 });
 apiRouter.post("/trainer-portal/review-homework", async (req, res) => {
   try {
-    const { submissionId, trainerId, grade, trainerFeedback, pointsToAward } = req.body;
-    res.json({ success: true });
+    const { submissionId, trainerId, grade, trainerFeedback, pointsToAward, trainerNotes } = req.body;
+    const data = db.getData();
+    if (!Array.isArray(data.homeworkSubmissions)) data.homeworkSubmissions = [];
+    const sub = data.homeworkSubmissions.find((s) => s.id === submissionId);
+    if (!sub) {
+      return res.status(404).json({ success: false, error: "\u062A\u0633\u0644\u064A\u0645 \u0627\u0644\u0648\u0627\u062C\u0628 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F \u0628\u0627\u0644\u0646\u0638\u0627\u0645" });
+    }
+    if (grade !== void 0 && grade !== null && grade !== "") {
+      sub.grade = Number(grade);
+      sub.percentage = Math.round(sub.grade / (sub.maxGrade || 100) * 100);
+    }
+    if (trainerFeedback) sub.generalFeedback = trainerFeedback;
+    if (trainerNotes) sub.trainerNotes = trainerNotes;
+    sub.status = "reviewed";
+    sub.reviewedAt = (/* @__PURE__ */ new Date()).toISOString();
+    sub.reviewedByTrainerId = trainerId;
+    if (pointsToAward && Number(pointsToAward) > 0) {
+      const pts = Number(pointsToAward);
+      sub.pointsAwarded = (sub.pointsAwarded || 0) + pts;
+      const trainee2 = (data.trainees || []).find(
+        (t) => t.id === sub.traineeId || t.id === sub.studentId || t.code && sub.traineeCode && String(t.code).trim() === String(sub.traineeCode).trim()
+      );
+      if (trainee2) {
+        trainee2.totalPoints = Number(trainee2.totalPoints || trainee2.points || 0) + pts;
+        trainee2.points = trainee2.totalPoints;
+        if (!Array.isArray(data.pointTransactions)) data.pointTransactions = [];
+        data.pointTransactions.unshift({
+          id: "pt-tr-" + Date.now() + "-" + Math.random().toString(36).substring(2, 6),
+          traineeId: trainee2.id,
+          groupId: trainee2.groupId,
+          branchId: trainee2.branchId,
+          points: pts,
+          reason: `\u{1F31F} \u0646\u0642\u0627\u0637 \u062A\u0645\u064A\u0632 \u0625\u0636\u0627\u0641\u064A\u0629 \u0645\u0639\u062A\u0645\u062F\u0629 \u0645\u0646 \u0627\u0644\u0645\u062F\u0631\u0628 \u0644\u0644\u0648\u0627\u062C\u0628: (${sub.taskTitle || "\u0627\u0644\u0648\u0627\u062C\u0628 \u0627\u0644\u0645\u0628\u0627\u0634\u0631"})`,
+          addedByUserId: trainerId || "trainer",
+          addedByUserName: "\u0627\u0644\u0645\u062F\u0631\u0628 \u0627\u0644\u0645\u0634\u0631\u0641",
+          createdAt: (/* @__PURE__ */ new Date()).toISOString()
+        });
+      }
+    }
+    const trainee = (data.trainees || []).find(
+      (t) => t.id === sub.traineeId || t.id === sub.studentId || t.code && sub.traineeCode && String(t.code).trim() === String(sub.traineeCode).trim()
+    );
+    if (!Array.isArray(data.notifications)) data.notifications = [];
+    data.notifications.unshift({
+      id: "notif-tr-rev-" + Date.now(),
+      type: "system",
+      title: `\u2728 \u062A\u0645 \u0645\u0631\u0627\u062C\u0639\u0629 \u0648\u0627\u062C\u0628 \u0627\u0644\u0645\u062A\u062F\u0631\u0628: ${sub.traineeName || sub.studentName || trainee?.fullName || "\u0637\u0627\u0644\u0628"}`,
+      message: `\u0642\u0627\u0645 \u0627\u0644\u0645\u062F\u0631\u0628 \u0628\u0645\u0631\u0627\u062C\u0639\u0629 \u0648\u0627\u0639\u062A\u062A\u0645\u0627\u062F \u0627\u0644\u062A\u0642\u064A\u064A\u0645 \u0628\u062F\u0631\u062C\u0629 ${sub.grade}/${sub.maxGrade || 100} \u0648\u0625\u0636\u0627\u0641\u0629 \u0627\u0644\u0646\u0642\u0627\u0637 \u0644\u0633\u062C\u0644\u0647 \u0627\u0644\u0623\u0643\u0627\u062F\u064A\u0645\u064A.`,
+      linkView: "homeworks",
+      createdAt: (/* @__PURE__ */ new Date()).toISOString(),
+      read: false,
+      metadata: { traineeId: trainee?.id || sub.traineeId, submissionId: sub.id, grade: sub.grade }
+    });
+    db.saveImmediate();
+    res.json({ success: true, submission: sub, message: "\u062A\u0645 \u062D\u0641\u0638 \u0627\u0639\u062A\u0645\u0627\u062F \u0627\u0644\u0648\u0627\u062C\u0628 \u0648\u0631\u0635\u062F \u0627\u0644\u0646\u0642\u0627\u0637 \u0648\u0627\u0644\u062A\u0642\u0627\u0631\u064A\u0631 \u0628\u0646\u062C\u0627\u062D" });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -16250,6 +16803,42 @@ apiRouter.post("/trainer-portal/poll-vote", async (req, res) => {
       post.votedUserIds.push(userId);
     }
     res.json({ success: true, post });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+apiRouter.get("/materials", async (req, res) => {
+  try {
+    const groupName = req.query.group_name;
+    let query = "SELECT * FROM course_materials";
+    let params = [];
+    if (groupName) {
+      query += " WHERE group_name = $1 OR group_name = $2";
+      params = [groupName, "\u0639\u0627\u0645"];
+    }
+    query += " ORDER BY created_at DESC";
+    const result = await queryNeon(query, params);
+    res.json(result.rows);
+  } catch (err) {
+    res.json([
+      { id: "mat-1", title: "\u0645\u0630\u0643\u0631\u0629 \u0623\u0633\u0627\u0633\u064A\u0627\u062A \u0627\u0644\u0628\u0631\u0645\u062C\u0629 \u0648\u062A\u0637\u0648\u064A\u0631 \u0627\u0644\u0648\u064A\u0628", course_name: "\u0628\u0631\u0645\u062C\u0629 \u0627\u0644\u0648\u064A\u0628", branch_id: "branch-najah", group_name: "\u0645\u062C\u0645\u0648\u0639\u0629 \u0627\u0644\u0635\u0628\u0627\u062D", drive_file_id: "1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs" },
+      { id: "mat-2", title: "\u062F\u0644\u064A\u0644 \u0635\u064A\u0627\u0646\u0629 \u0634\u0628\u0643\u0627\u062A \u0627\u0644\u062D\u0627\u0633\u0628 \u0627\u0644\u0622\u0644\u064A", course_name: "\u0634\u0628\u0643\u0627\u062A \u0627\u0644\u062D\u0627\u0633\u0628", branch_id: "branch-badr", group_name: "\u0639\u0627\u0645", drive_file_id: "1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs" }
+    ]);
+  }
+});
+apiRouter.post("/materials", async (req, res) => {
+  try {
+    const { id, title, course_name, branch_id, group_name, drive_file_id } = req.body;
+    const matId = id || "mat-" + Date.now();
+    try {
+      await queryNeon("ALTER TABLE course_materials ADD COLUMN IF NOT EXISTS group_name VARCHAR(100) DEFAULT '\u0639\u0627\u0645'");
+    } catch (e) {
+    }
+    await queryNeon(
+      "INSERT INTO course_materials (id, title, course_name, branch_id, group_name, drive_file_id) VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT (id) DO UPDATE SET title = $2, course_name = $3, branch_id = $4, group_name = $5, drive_file_id = $6",
+      [matId, title, course_name, branch_id || "branch-najah", group_name || "\u0639\u0627\u0645", drive_file_id]
+    );
+    res.json({ success: true, id: matId });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -16440,6 +17029,10 @@ app.get(["/health", "/api/health"], async (req, res) => {
       const { data, error } = await supabaseClient3.from("collections").select("id", { count: "exact", head: true });
       if (!error) {
         supabaseStatus = "connected";
+      } else if (error.message?.includes("exceed_egress_quota") || error.message?.includes("restricted")) {
+        supabaseStatus = "quota_restricted_local_fallback";
+      } else {
+        supabaseStatus = `notice: ${error.message}`;
       }
     }
     if (db2) {
