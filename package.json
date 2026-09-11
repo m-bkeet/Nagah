@@ -51,5 +51,8 @@
     "typescript": "^5.8.2",
     "vite": "^6.2.3",
     "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "sharp": "^0.35.4"
   }
 }

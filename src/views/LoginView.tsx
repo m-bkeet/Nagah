@@ -128,12 +128,8 @@ export const LoginView: React.FC = () => {
         <div className="text-center space-y-2">
           <div className="inline-flex items-center justify-center w-24 h-24 rounded-2xl bg-slate-900 border border-slate-800 shadow-xl shadow-amber-500/10 mb-2 p-3">
             <img 
-              src="/logo.png" 
+              src="/logo.svg" 
               alt="مركز النجاح" 
-              onError={(e) => {
-                e.currentTarget.onerror = null;
-                e.currentTarget.src = '/logo.svg';
-              }}
               className="w-full h-full object-contain" 
             />
           </div>

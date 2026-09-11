@@ -125,12 +125,8 @@ export const PublicHomeView: React.FC<PublicHomeViewProps> = ({ onNavigate }) =>
             <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-amber-500 to-amber-600 p-0.5 shadow-lg shadow-amber-500/20">
               <div className="w-full h-full bg-slate-950 rounded-[14px] flex items-center justify-center p-1.5">
                 <img 
-                  src="/logo.png" 
+                  src="/logo.svg" 
                   alt="مركز النجاح" 
-                  onError={(e) => {
-                    e.currentTarget.onerror = null;
-                    e.currentTarget.src = '/logo.svg';
-                  }}
                   className="w-full h-full object-contain" 
                 />
               </div>
