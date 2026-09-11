@@ -136,11 +136,18 @@ export interface CourseMaterial {
   title: string;
   fileUrl: string;
   fileName: string;
-  fileType: 'pdf' | 'ppt' | 'pptx' | 'doc' | 'docx' | 'other';
+  fileType: 'pdf' | 'ppt' | 'pptx' | 'doc' | 'docx' | 'gdrive' | 'other';
   fileSize?: string;
   uploadedAt: string;
   description?: string;
   educationType?: 'arabic' | 'languages' | 'international' | 'general';
+  track?: 'arabic' | 'languages' | 'general' | 'عربي' | 'لغات';
+  driveFileId?: string;
+  drivePreviewUrl?: string;
+  isGoogleDrive?: boolean;
+  groupName?: string;
+  groupId?: string;
+  courseId?: string;
   convertedSlides?: {
     slideNumber: number;
     title: string;
@@ -250,6 +257,9 @@ export interface Course {
   educationType?: 'arabic' | 'languages' | 'international' | 'general';
   lessonPlans?: any[];
   materials?: CourseMaterial[];
+  arabicMaterial?: CourseMaterial;
+  languagesMaterial?: CourseMaterial;
+  googleDriveFileId?: string;
   assessments?: CourseAssessment[];
 }
 
@@ -298,6 +308,9 @@ export interface Group {
   grade?: string;
   track?: string;
   materials?: CourseMaterial[];
+  arabicMaterial?: CourseMaterial;
+  languagesMaterial?: CourseMaterial;
+  googleDriveFileId?: string;
   assessments?: CourseAssessment[];
 }
 

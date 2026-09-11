@@ -204,40 +204,15 @@ export function onSnapshot(queryRef: any, onNext: any, onError?: any) {
     onNext({ forEach: () => {}, docs: [] });
     return () => {};
   }
-  const cName = queryRef.type === 'collection' ? queryRef.name : queryRef.collectionName;
   
-  // Initial fetch
+  // Initial fetch only (Realtime channels disabled permanently to protect Supabase quota)
   getDocs(queryRef).then(snapshot => {
     onNext(snapshot);
   }).catch(err => {
     if (onError) onError(err);
   });
 
-  // Subscribe to realtime updates
-  try {
-    const channel = supabase.channel(`public:collections:${cName}`)
-      .on('postgres_changes', { 
-        event: '*', 
-        schema: 'public', 
-        table: 'collections', 
-        filter: `collection_name=eq.${cName}` 
-      }, payload => {
-        getDocs(queryRef).then(snapshot => {
-          onNext(snapshot);
-        }).catch(err => {
-          if (onError) onError(err);
-        });
-      })
-      .subscribe();
-
-    return () => {
-      try {
-        supabase.removeChannel(channel);
-      } catch (e) {}
-    };
-  } catch (e) {
-    return () => {};
-  }
+  return () => {};
 }
 
 export type Unsubscribe = () => void;

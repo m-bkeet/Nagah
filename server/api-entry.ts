@@ -61,6 +61,10 @@ app.get(['/health', '/api/health'], async (req, res) => {
         .select('id', { count: 'exact', head: true });
       if (!error) {
         supabaseStatus = 'connected';
+      } else if (error.message?.includes('exceed_egress_quota') || error.message?.includes('restricted')) {
+        supabaseStatus = 'quota_restricted_local_fallback';
+      } else {
+        supabaseStatus = `notice: ${error.message}`;
       }
     }
     if (db) {

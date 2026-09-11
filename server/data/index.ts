@@ -46,6 +46,8 @@ const hasValidSupabase = Boolean(
 );
 
 export let supabaseClient: any = null;
+let isSupabaseQuotaRestricted = false;
+
 if (hasValidSupabase) {
   try {
     supabaseClient = createClient(SUPABASE_URL, SUPABASE_KEY, {
@@ -57,9 +59,19 @@ if (hasValidSupabase) {
   }
 }
 
+function handleSupabaseError(action: string, key: string, id: string, msg: string) {
+  if (msg.includes('exceed_egress_quota') || msg.includes('restricted') || msg.includes('quota')) {
+    if (!isSupabaseQuotaRestricted) {
+      isSupabaseQuotaRestricted = true;
+      console.warn('[SupabaseRepo] Quota restriction reached (exceed_egress_quota). Seamlessly operating in resilient local storage mode.');
+    }
+  } else {
+    console.error(`[SupabaseRepo] ${action} error for ${key}/${id}:`, msg);
+  }
+}
+
 export async function hydrateAllFromSupabase(): Promise<number> {
-  if (!supabaseClient) {
-    console.warn('[Hydration] No active Supabase client configured.');
+  if (!supabaseClient || isSupabaseQuotaRestricted) {
     return 0;
   }
 
@@ -70,7 +82,12 @@ export async function hydrateAllFromSupabase(): Promise<number> {
       .range(0, 4999);
 
     if (error) {
-      console.error('[Hydration] Error reading collections from Supabase:', error.message);
+      if (error.message && (error.message.includes('exceed_egress_quota') || error.message.includes('restricted') || error.message.includes('quota'))) {
+        isSupabaseQuotaRestricted = true;
+        console.warn('[Hydration] Supabase project exceeded egress quota. Running seamlessly on local storage without interruption.');
+      } else {
+        console.error('[Hydration] Error reading collections from Supabase:', error.message);
+      }
       return 0;
     }
 
@@ -209,7 +226,7 @@ function createRepo<T extends { id: string }>(key: string) {
       const docId = id || itemData.id || ('doc-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6));
       const fullItem = { ...itemData, id: docId };
 
-      if (supabaseClient) {
+      if (supabaseClient && !isSupabaseQuotaRestricted) {
         try {
           const { error } = await supabaseClient
             .from('collections')
@@ -221,10 +238,10 @@ function createRepo<T extends { id: string }>(key: string) {
             }, { onConflict: 'collection_name,id' });
 
           if (error) {
-            console.error(`[SupabaseRepo] Create error for ${key}/${docId}:`, error.message);
+            handleSupabaseError('Create', key, docId, error.message);
           }
         } catch (e: any) {
-          console.error(`[SupabaseRepo] Create exception for ${key}/${docId}:`, e.message);
+          handleSupabaseError('Create', key, docId, e.message);
         }
       }
 
@@ -245,7 +262,7 @@ function createRepo<T extends { id: string }>(key: string) {
       const docId = existing ? existing.id : id;
       const updatedItem = { ...(existing || {}), ...updates, id: docId, updatedAt: new Date().toISOString() };
 
-      if (supabaseClient) {
+      if (supabaseClient && !isSupabaseQuotaRestricted) {
         try {
           const { error } = await supabaseClient
             .from('collections')
@@ -257,10 +274,10 @@ function createRepo<T extends { id: string }>(key: string) {
             }, { onConflict: 'collection_name,id' });
 
           if (error) {
-            console.error(`[SupabaseRepo] Update error for ${key}/${docId}:`, error.message);
+            handleSupabaseError('Update', key, docId, error.message);
           }
         } catch (e: any) {
-          console.error(`[SupabaseRepo] Update exception for ${key}/${docId}:`, e.message);
+          handleSupabaseError('Update', key, docId, e.message);
         }
       }
 
@@ -275,7 +292,7 @@ function createRepo<T extends { id: string }>(key: string) {
     },
 
     async delete(id: string): Promise<boolean> {
-      if (supabaseClient) {
+      if (supabaseClient && !isSupabaseQuotaRestricted) {
         try {
           const { error } = await supabaseClient
             .from('collections')
@@ -284,10 +301,10 @@ function createRepo<T extends { id: string }>(key: string) {
             .eq('id', id);
 
           if (error) {
-            console.error(`[SupabaseRepo] Delete error for ${key}/${id}:`, error.message);
+            handleSupabaseError('Delete', key, id, error.message);
           }
         } catch (e: any) {
-          console.error(`[SupabaseRepo] Delete exception for ${key}/${id}:`, e.message);
+          handleSupabaseError('Delete', key, id, e.message);
         }
       }
 
@@ -344,9 +361,9 @@ export const SettingRepo = {
     const current = await this.get();
     const finalSettings = { ...current, ...updates };
 
-    if (supabaseClient) {
+    if (supabaseClient && !isSupabaseQuotaRestricted) {
       try {
-        await supabaseClient
+        const { error } = await supabaseClient
           .from('collections')
           .upsert({
             collection_name: 'settings',
@@ -354,8 +371,11 @@ export const SettingRepo = {
             data: finalSettings,
             updated_at: new Date().toISOString()
           }, { onConflict: 'collection_name,id' });
+        if (error) {
+          handleSupabaseError('Update', 'settings', 'main', error.message);
+        }
       } catch (e: any) {
-        console.error('[SettingRepo] Supabase update error:', e.message);
+        handleSupabaseError('Update', 'settings', 'main', e.message);
       }
     }
 

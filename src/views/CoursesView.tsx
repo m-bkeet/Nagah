@@ -29,6 +29,7 @@ import {
 } from 'lucide-react';
 import { Course, Group } from '../types';
 import { GoogleClassroomImportModal } from '../components/GoogleClassroomImportModal';
+import { CourseGroupMaterialsModal } from '../components/CourseGroupMaterialsModal';
 
 export const GRADE_OPTIONS = [
   'الصف الرابع الابتدائي',
@@ -248,7 +249,8 @@ export const CoursesView: React.FC = () => {
     trainerSharePercentage: 35,
     centerSharePercentage: 65,
     branchId: '',
-    status: 'active'
+    status: 'active',
+    googleDriveFileId: ''
   });
 
   // Dynamic suggestions from existing courses
@@ -312,7 +314,8 @@ export const CoursesView: React.FC = () => {
       trainerSharePercentage: 35,
       centerSharePercentage: 65,
       branchId: activeBranchId !== 'all' ? activeBranchId : branches?.[0]?.id || 'branch-1',
-      status: 'active'
+      status: 'active',
+      googleDriveFileId: ''
     });
     setIsAddModalOpen(true);
   };
@@ -358,7 +361,8 @@ export const CoursesView: React.FC = () => {
       trainerSharePercentage: c.trainerSharePercentage,
       centerSharePercentage: c.centerSharePercentage,
       branchId: c.branchId,
-      status: c.status
+      status: c.status,
+      googleDriveFileId: (c as any).googleDriveFileId || ''
     });
     setIsEditModalOpen(true);
   };
@@ -706,19 +710,25 @@ export const CoursesView: React.FC = () => {
                   </div>
 
                   <div className="flex items-center gap-1.5 flex-wrap justify-end">
-                    {/* Course Materials Button */}
+                    {/* Course Materials & Google Drive (Arabic / Languages) Button */}
                     <button
                       onClick={() => {
                         setSelectedCourseForMaterials(c);
                         setIsMaterialsModalOpen(true);
                       }}
-                      className="p-1.5 rounded-lg bg-indigo-500/20 hover:bg-indigo-600 text-indigo-300 hover:text-white border border-indigo-500/40 transition-colors flex items-center gap-1 text-[11px] font-bold px-2"
-                      title="رفع / إظهار المادة العلمية (PDF/PowerPoint)"
+                      className="p-1.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-600 text-emerald-300 hover:text-white border border-emerald-500/40 transition-all flex items-center gap-1.5 text-[11px] font-bold px-2.5 shadow-sm cursor-pointer"
+                      title="إدارة مناهج ومذكرات الدورة (Google Drive - عربي ولغات)"
                     >
-                      <FileText className="w-3.5 h-3.5" />
-                      <span className="hidden sm:inline">المادة العلمية</span>
+                      <BookOpen className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>المناهج و Drive</span>
+                      {(c.arabicMaterial || c.materials?.some(m => m.track === 'arabic' || m.track === 'عربي' || m.educationType === 'arabic')) && (
+                        <span className="bg-emerald-700 text-emerald-100 text-[9px] px-1 rounded font-bold" title="منهج عربي مربوط">عربي</span>
+                      )}
+                      {(c.languagesMaterial || c.materials?.some(m => m.track === 'languages' || m.track === 'لغات' || m.educationType === 'languages')) && (
+                        <span className="bg-blue-700 text-blue-100 text-[9px] px-1 rounded font-bold" title="منهج لغات مربوط">لغات</span>
+                      )}
                       {(c.materials?.length || 0) > 0 && (
-                        <span className="bg-indigo-600 text-white text-[10px] px-1.5 rounded-full font-mono font-bold">
+                        <span className="bg-emerald-600 text-white text-[10px] px-1.5 rounded-full font-mono font-bold">
                           {c.materials?.length}
                         </span>
                       )}
@@ -955,6 +965,22 @@ export const CoursesView: React.FC = () => {
                 </div>
               </div>
 
+              <div className="bg-indigo-950/40 p-3 rounded-xl border border-indigo-500/30">
+                <label className="block text-indigo-300 font-bold mb-1 flex items-center gap-1.5 text-xs">
+                  <span>📚 ربط منهج Google Drive (معرّف الملف - File ID)</span>
+                </label>
+                <input
+                  type="text"
+                  value={formData.googleDriveFileId ?? ''}
+                  onChange={(e) => setFormData({ ...formData, googleDriveFileId: e.target.value })}
+                  placeholder="مثال: 1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs"
+                  className="w-full bg-slate-900 border border-indigo-500/50 rounded-xl px-3 py-2 text-xs text-indigo-100 font-mono focus:outline-none focus:border-indigo-400"
+                />
+                <p className="text-[11px] text-slate-400 mt-1">
+                  اربط كتاب أو مذكرة جوجل درايف لهذه الدورة (مثل العربي أو اللغات) مرة واحدة هنا، وسيرتبط تلقائياً بجميع المجموعات المرتبطة والطلاب والمدربين.
+                </p>
+              </div>
+
               <div>
                 <label className="block text-slate-300 font-bold mb-1">وصف الدورة والمحتوى</label>
                 <textarea
@@ -1138,6 +1164,22 @@ export const CoursesView: React.FC = () => {
                     className="w-full bg-slate-800/60 border border-slate-700/60 rounded-xl px-3 py-2 text-slate-400 font-mono"
                   />
                 </div>
+              </div>
+
+              <div className="bg-indigo-950/40 p-3 rounded-xl border border-indigo-500/30">
+                <label className="block text-indigo-300 font-bold mb-1 flex items-center gap-1.5 text-xs">
+                  <span>📚 ربط منهج Google Drive (معرّف الملف - File ID)</span>
+                </label>
+                <input
+                  type="text"
+                  value={formData.googleDriveFileId ?? ''}
+                  onChange={(e) => setFormData({ ...formData, googleDriveFileId: e.target.value })}
+                  placeholder="مثال: 1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs"
+                  className="w-full bg-slate-900 border border-indigo-500/50 rounded-xl px-3 py-2 text-xs text-indigo-100 font-mono focus:outline-none focus:border-indigo-400"
+                />
+                <p className="text-[11px] text-slate-400 mt-1">
+                  تحديث رابط المنهج هنا سيحدثه فوراً لكل المجموعات التابعة لهذه الدورة (مثل العربي أو اللغات).
+                </p>
               </div>
 
               <div>
@@ -1370,161 +1412,18 @@ export const CoursesView: React.FC = () => {
         </div>
       )}
 
-      {/* Course Scientific Materials Modal */}
+      {/* Unified Course Materials & Google Drive Curriculum Modal */}
       {isMaterialsModalOpen && selectedCourseForMaterials && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-fadeIn">
-          <div className="bg-slate-900 border border-indigo-500/30 rounded-3xl shadow-2xl max-w-2xl w-full p-6 text-slate-100 max-h-[90vh] flex flex-col justify-between">
-            <div className="space-y-4 overflow-y-auto pr-1">
-              <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-2xl bg-indigo-500/20 border border-indigo-500/40 flex items-center justify-center text-indigo-400">
-                    <FileText className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h3 className="font-black text-base text-slate-100">
-                      إدارة المادة العلمية للدورة (PDF / PowerPoint)
-                    </h3>
-                    <p className="text-xs text-slate-400">
-                      دورة: <span className="text-indigo-300 font-bold">{selectedCourseForMaterials.name}</span> ({selectedCourseForMaterials.code})
-                    </p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => setIsMaterialsModalOpen(false)}
-                  className="p-1.5 rounded-xl bg-slate-800 text-slate-400 hover:text-white"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-
-              {/* Upload Form */}
-              <div className="bg-slate-950/70 p-4 rounded-2xl border border-indigo-900/40 space-y-3">
-                <h4 className="text-xs font-bold text-indigo-300 flex items-center gap-1.5">
-                  <Upload className="w-4 h-4" />
-                  <span>رفع مادة علمية جديدة للدورة</span>
-                </h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-[11px] text-slate-300 font-bold block mb-1">عنوان المادة *</label>
-                    <input
-                      type="text"
-                      placeholder="مثال: مذكرة المحاضرة الأولى - الشرح والتمارين"
-                      value={materialTitle}
-                      onChange={(e) => setMaterialTitle(e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-indigo-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[11px] text-slate-300 font-bold block mb-1">اختيار الملف (PDF أو PPT) *</label>
-                    <input
-                      type="file"
-                      accept=".pdf,.ppt,.pptx"
-                      onChange={(e) => setMaterialFile(e.target.files?.[0] || null)}
-                      className="w-full text-xs text-slate-400 file:mr-2 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-indigo-600 file:text-white hover:file:bg-indigo-500 cursor-pointer"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="text-[11px] text-slate-300 font-bold block mb-1">وصف المادة أو تعليمات الدراسة (اختياري)</label>
-                  <input
-                    type="text"
-                    placeholder="مثال: يرجى طباعة المذكرة ومراجعة التمارين من صفحة 5 إلى 12"
-                    value={materialDesc}
-                    onChange={(e) => setMaterialDesc(e.target.value)}
-                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-indigo-500"
-                  />
-                </div>
-
-                <div className="flex justify-end pt-1">
-                  <button
-                    type="button"
-                    onClick={handleUploadMaterial}
-                    disabled={isUploadingMaterial || !materialTitle.trim() || !materialFile}
-                    className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-indigo-600/30 flex items-center gap-1.5 disabled:opacity-50"
-                  >
-                    <Upload className="w-4 h-4" />
-                    <span>{isUploadingMaterial ? 'جاري الرفع والمزامنة...' : 'رفع المادة ومزامنتها مع المجموعات'}</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* Uploaded Materials List */}
-              <div className="space-y-2 pt-2">
-                <h4 className="text-xs font-bold text-slate-300 flex items-center gap-2">
-                  <Paperclip className="w-4 h-4 text-indigo-400" />
-                  <span>المواد العلمية المرفوعة المتاحة ({selectedCourseForMaterials.materials?.length || 0})</span>
-                </h4>
-
-                {(!selectedCourseForMaterials.materials || selectedCourseForMaterials.materials.length === 0) ? (
-                  <div className="p-6 text-center bg-slate-950/40 rounded-2xl border border-slate-800/60 text-slate-400 text-xs">
-                    لا توجد مواد علمية مرفوعة لهذه الدورة حتى الآن. يمكنك رفع المذكرات والعروض التقديمية أعلاه لتتزامن تلقائياً مع المجموعات وبوابات الطلاب والمدربين.
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    {selectedCourseForMaterials.materials.map((mat) => (
-                      <div
-                        key={mat.id}
-                        className="bg-slate-950/60 p-3 rounded-2xl border border-slate-800 flex items-center justify-between gap-3 hover:border-indigo-500/40 transition-colors"
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-xs font-bold ${
-                            mat.fileType === 'ppt' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' : 'bg-red-500/20 text-red-400 border border-red-500/30'
-                          }`}>
-                            {mat.fileType === 'ppt' ? 'PPT' : 'PDF'}
-                          </div>
-                          <div>
-                            <h5 className="font-bold text-xs text-slate-200">{mat.title}</h5>
-                            <p className="text-[10px] text-slate-400 flex items-center gap-2 mt-0.5">
-                              <span>{mat.fileName}</span>
-                              {mat.fileSize && <span className="font-mono text-indigo-300">({mat.fileSize})</span>}
-                              {mat.uploadedAt && <span>• {new Date(mat.uploadedAt).toLocaleDateString('ar-EG')}</span>}
-                            </p>
-                            {mat.description && <p className="text-[11px] text-slate-300 mt-1">{mat.description}</p>}
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-2">
-                          {mat.fileUrl && (
-                            <a
-                              href={mat.fileUrl}
-                              download={mat.fileName}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="p-2 rounded-xl bg-indigo-600/20 hover:bg-indigo-600 text-indigo-300 hover:text-white border border-indigo-500/30 text-xs font-bold flex items-center gap-1"
-                              title="تحميل / معاينة الملف"
-                            >
-                              <Download className="w-3.5 h-3.5" />
-                              <span className="hidden sm:inline">تحميل</span>
-                            </a>
-                          )}
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteMaterial(mat.id)}
-                            className="p-2 rounded-xl bg-rose-950/60 hover:bg-rose-900 text-rose-300 border border-rose-800/60"
-                            title="حذف المادة"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <div className="pt-4 border-t border-slate-800 flex justify-end">
-              <button
-                type="button"
-                onClick={() => setIsMaterialsModalOpen(false)}
-                className="px-5 py-2 bg-slate-800 text-slate-300 rounded-xl hover:bg-slate-700 text-xs font-bold"
-              >
-                إغلاق النافذة
-              </button>
-            </div>
-          </div>
-        </div>
+        <CourseGroupMaterialsModal
+          isOpen={isMaterialsModalOpen}
+          onClose={() => setIsMaterialsModalOpen(false)}
+          targetType="course"
+          target={selectedCourseForMaterials}
+          onUpdated={(updatedCourse) => {
+            setSelectedCourseForMaterials(updatedCourse as Course);
+            setCourses(prev => prev.map(c => c.id === updatedCourse.id ? (updatedCourse as Course) : c));
+          }}
+        />
       )}
 
       {/* Course Paper Assessments & Weekly Exams Modal */}

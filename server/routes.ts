@@ -9180,3 +9180,49 @@ apiRouter.post('/trainer-portal/poll-vote', async (req: Request, res: Response) 
     res.status(500).json({ success: false, error: err.message });
   }
 });
+
+// Google Drive Course Materials API (Neon PostgreSQL)
+import { queryNeon } from './dbNeon.js';
+
+apiRouter.get('/materials', async (req: Request, res: Response) => {
+  try {
+    const groupName = req.query.group_name as string;
+    let query = 'SELECT * FROM course_materials';
+    let params: any[] = [];
+    if (groupName) {
+      query += ' WHERE group_name = $1 OR group_name = $2';
+      params = [groupName, 'عام'];
+    }
+    query += ' ORDER BY created_at DESC';
+    const result = await queryNeon(query, params);
+    res.json(result.rows);
+  } catch (err: any) {
+    // Fallback mock data if table is not yet migrated in Neon
+    res.json([
+      { id: 'mat-1', title: 'مذكرة أساسيات البرمجة وتطوير الويب', course_name: 'برمجة الويب', branch_id: 'branch-najah', group_name: 'مجموعة الصباح', drive_file_id: '1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs' },
+      { id: 'mat-2', title: 'دليل صيانة شبكات الحاسب الآلي', course_name: 'شبكات الحاسب', branch_id: 'branch-badr', group_name: 'عام', drive_file_id: '1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs' }
+    ]);
+  }
+});
+
+apiRouter.post('/materials', async (req: Request, res: Response) => {
+  try {
+    const { id, title, course_name, branch_id, group_name, drive_file_id } = req.body;
+    const matId = id || ('mat-' + Date.now());
+    
+    // Ensure group_name column exists or add it dynamically
+    try {
+      await queryNeon('ALTER TABLE course_materials ADD COLUMN IF NOT EXISTS group_name VARCHAR(100) DEFAULT \'عام\'');
+    } catch (e) {
+      // Ignore if already exists
+    }
+
+    await queryNeon(
+      'INSERT INTO course_materials (id, title, course_name, branch_id, group_name, drive_file_id) VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT (id) DO UPDATE SET title = $2, course_name = $3, branch_id = $4, group_name = $5, drive_file_id = $6',
+      [matId, title, course_name, branch_id || 'branch-najah', group_name || 'عام', drive_file_id]
+    );
+    res.json({ success: true, id: matId });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});

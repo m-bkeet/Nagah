@@ -12780,6 +12780,34 @@
       "details": "تم تصدير قاعدة بيانات المركز كاملة بصيغة إكسيل: Nagah_Full_Database_Center_2026-09-03.xlsx",
       "userName": "المدير العام",
       "timestamp": "2026-09-03T10:45:42.195Z"
+    },
+    {
+      "id": "audit-1789139463842",
+      "action": "FULL_BACKUP_GENERATED",
+      "details": "تم إنشاء نسخة احتياطية كاملة: nagah_full_backup_2026-09-11_15-11.json بحجم 2574029 بايت",
+      "userName": "المدير العام",
+      "timestamp": "2026-09-11T15:11:03.842Z"
+    },
+    {
+      "id": "audit-1789139506662",
+      "action": "FULL_DATABASE_EXCEL_EXPORT",
+      "details": "تم تصدير قاعدة بيانات المركز كاملة بصيغة إكسيل: Nagah_Full_Database_Center_2026-09-11.xlsx",
+      "userName": "المدير العام",
+      "timestamp": "2026-09-11T15:11:46.662Z"
+    },
+    {
+      "id": "audit-1789139539887",
+      "action": "FULL_DATABASE_EXCEL_EXPORT",
+      "details": "تم تصدير قاعدة بيانات المركز كاملة بصيغة إكسيل: Nagah_Full_Database_Center_2026-09-11.xlsx",
+      "userName": "المدير العام",
+      "timestamp": "2026-09-11T15:12:19.887Z"
+    },
+    {
+      "id": "audit-1789139576603",
+      "action": "DELTA_SYNC_PACKAGE_EXPORT",
+      "details": "تم تصدير حزمة المزامنة (Delta Sync) للمنصة الجديدة: NAGAH_DELTA_SYNC_BATCH_001.zip",
+      "userName": "المدير العام",
+      "timestamp": "2026-09-11T15:12:56.603Z"
     }
   ],
   "settings": {

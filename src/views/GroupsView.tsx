@@ -35,6 +35,7 @@ import {
   Video
 } from 'lucide-react';
 import { Group, Course, Trainer, Branch, Trainee } from '../types';
+import { CourseGroupMaterialsModal } from '../components/CourseGroupMaterialsModal';
 
 interface GroupsViewProps {
   onNavigate?: (view: string) => void;
@@ -47,6 +48,10 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ onNavigate }) => {
   const [trainers, setTrainers] = useState<Trainer[]>([]);
   const [trainees, setTrainees] = useState<Trainee[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Curriculum & Google Drive Modal state
+  const [isMaterialsModalOpen, setIsMaterialsModalOpen] = useState(false);
+  const [selectedGroupForMaterials, setSelectedGroupForMaterials] = useState<Group | null>(null);
 
   // Search & Filter state
   const [searchQuery, setSearchQuery] = useState('');
@@ -974,6 +979,24 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ onNavigate }) => {
                 <div className="pt-3 border-t border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-1.5">
                   {/* Primary Tools */}
                   <div className="flex items-center gap-1">
+                    {/* Curriculum & Google Drive Button */}
+                    <button
+                      onClick={() => {
+                        setSelectedGroupForMaterials(g);
+                        setIsMaterialsModalOpen(true);
+                      }}
+                      className="px-2.5 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200/80 shadow-xs dark:bg-emerald-950/70 dark:hover:bg-emerald-900 dark:text-emerald-300 dark:border-emerald-800/80 text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer"
+                      title="منهج ومذكرات المجموعة وربط Google Drive"
+                    >
+                      <BookOpen className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                      <span>المنهج (Drive)</span>
+                      {g.track && (
+                        <span className="text-[9px] px-1 py-0.2 rounded bg-emerald-200 dark:bg-emerald-800 text-emerald-900 dark:text-emerald-200 font-bold">
+                          {g.track}
+                        </span>
+                      )}
+                    </button>
+
                     {/* Trainees List Button */}
                     <button
                       onClick={() => {
@@ -1161,6 +1184,17 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ onNavigate }) => {
 
                       <td className="p-3.5 text-center">
                         <div className="flex items-center justify-center gap-1">
+                          <button
+                            onClick={() => {
+                              setSelectedGroupForMaterials(g);
+                              setIsMaterialsModalOpen(true);
+                            }}
+                            className="p-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200/80 shadow-xs dark:bg-slate-800 dark:hover:bg-emerald-500/20 dark:text-slate-300 dark:hover:text-emerald-400 dark:border-slate-700 dark:shadow-none cursor-pointer"
+                            title="منهج ومذكرات المجموعة (Google Drive)"
+                          >
+                            <BookOpen className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                          </button>
+
                           <button
                             onClick={() => handleOpenQuickSchedule(g)}
                             className="p-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200/80 shadow-xs dark:bg-slate-800 dark:hover:bg-amber-500/20 dark:text-slate-300 dark:hover:text-amber-400 dark:border-slate-700 dark:shadow-none cursor-pointer"
@@ -1444,6 +1478,33 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ onNavigate }) => {
                   </select>
                 </div>
               </div>
+
+              {/* Linked Curriculum & Google Drive Status */}
+              {formData.courseId && (
+                <div className="bg-emerald-950/40 border border-emerald-500/30 rounded-2xl p-3 flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
+                      <BookOpen className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-emerald-300">
+                        منهج مسار ({formData.track === 'لغات' ? 'اللغات' : 'العربي'}):
+                      </p>
+                      <p className="text-[11px] text-slate-300">
+                        {(() => {
+                          const crs = courses.find(c => c.id === formData.courseId);
+                          const isLang = formData.track === 'لغات';
+                          const mat = isLang ? crs?.languagesMaterial : crs?.arabicMaterial;
+                          if (mat) {
+                            return `مربوط تلقائياً من الدورة: ${mat.title} (${mat.isGoogleDrive ? 'Google Drive' : 'ملف'})`;
+                          }
+                          return 'يتم ربط منهج الدورة تلقائياً للطلاب فور حفظ المجموعة، أو يمكنك إضافة منهج خاص للمجموعة لاحقاً.';
+                        })()}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Fee Amount Override per Group */}
               <div>
@@ -1776,6 +1837,50 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ onNavigate }) => {
                   </select>
                 </div>
               </div>
+
+              {/* Linked Curriculum & Google Drive Status and Manage Button */}
+              {formData.courseId && (
+                <div className="bg-emerald-950/40 border border-emerald-500/30 rounded-2xl p-3 flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
+                      <BookOpen className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-emerald-300">
+                        منهج مسار ({formData.track === 'لغات' ? 'اللغات' : 'العربي'}):
+                      </p>
+                      <p className="text-[11px] text-slate-300">
+                        {(() => {
+                          const crs = courses.find(c => c.id === formData.courseId);
+                          const isLang = formData.track === 'لغات';
+                          const grpMat = isLang ? activeGroup?.languagesMaterial : activeGroup?.arabicMaterial;
+                          const crsMat = isLang ? crs?.languagesMaterial : crs?.arabicMaterial;
+                          if (grpMat) {
+                            return `مربوط مخصص لهذه المجموعة: ${grpMat.title} (${grpMat.isGoogleDrive ? 'Google Drive' : 'ملف'})`;
+                          }
+                          if (crsMat) {
+                            return `مربوط تلقائياً من الدورة: ${crsMat.title} (${crsMat.isGoogleDrive ? 'Google Drive' : 'ملف'})`;
+                          }
+                          return 'لا يوجد منهج مربوط بعد. يمكنك رفعه أو ربط رابط Google Drive الآن.';
+                        })()}
+                      </p>
+                    </div>
+                  </div>
+                  {activeGroup && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedGroupForMaterials(activeGroup);
+                        setIsMaterialsModalOpen(true);
+                      }}
+                      className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold shrink-0 flex items-center gap-1.5 shadow cursor-pointer"
+                    >
+                      <BookOpen className="w-3.5 h-3.5" />
+                      <span>إدارة المنهج و Drive</span>
+                    </button>
+                  )}
+                </div>
+              )}
 
               {/* Fee Amount Override per Group */}
               <div>
@@ -2606,6 +2711,20 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ onNavigate }) => {
             </div>
           </div>
         </div>
+      )}
+      {/* Curriculum & Google Drive Materials Modal for Groups */}
+      {isMaterialsModalOpen && selectedGroupForMaterials && (
+        <CourseGroupMaterialsModal
+          isOpen={isMaterialsModalOpen}
+          onClose={() => setIsMaterialsModalOpen(false)}
+          targetType="group"
+          target={selectedGroupForMaterials}
+          parentCourse={courses.find(c => c.id === selectedGroupForMaterials.courseId) || null}
+          onUpdated={(updatedGroup) => {
+            setSelectedGroupForMaterials(updatedGroup as Group);
+            setGroups(prev => prev.map(g => g.id === updatedGroup.id ? (updatedGroup as Group) : g));
+          }}
+        />
       )}
     </div>
   );

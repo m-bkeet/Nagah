@@ -543,6 +543,24 @@ export const api = {
       method: 'POST',
       body: overrides ? JSON.stringify(overrides) : undefined
     }),
+  addGroupMaterial: (groupId: string, materialData: any) =>
+    request<{ success: boolean; material: any; group: Group }>(`/groups/${groupId}/materials`, {
+      method: 'POST',
+      body: JSON.stringify(materialData)
+    }),
+  deleteGroupMaterial: (groupId: string, materialId: string) =>
+    request<{ success: boolean; group: Group }>(`/groups/${groupId}/materials/${materialId}`, {
+      method: 'DELETE'
+    }),
+  getMaterials: async (params?: Record<string, string>) => {
+    const query = new URLSearchParams(params || {}).toString();
+    return request<{ success: boolean; materials: any[] }>(`/materials${query ? `?${query}` : ''}`);
+  },
+  addMaterial: (materialData: any) =>
+    request<{ success: boolean; material: any }>('/materials', {
+      method: 'POST',
+      body: JSON.stringify(materialData)
+    }),
 
   // Attendance
   getAttendance: async (params?: Record<string, string>) => {

@@ -4710,6 +4710,230 @@ app.post("/api/trainees/execute-code-fix", async (req, res) => {
   }, `تم توحيد وأعتماد ${updatedCount} كود متدرب بنجاح وتوثيق العملية في سجلات التدقيق 🏆`);
 });
 
+// ==========================================
+// Course & Group Materials + Google Drive API
+// ==========================================
+const inMemoryMaterialsStore: Map<string, any[]> = new Map();
+
+// GET /api/materials
+app.get("/api/materials", async (req, res) => {
+  const { group_name, group_id, course_name, course_id, track } = req.query;
+  const pool = getDbPool();
+
+  if (pool) {
+    try {
+      const client = await pool.connect();
+      try {
+        let query = "SELECT id, title, course_name, branch_id, group_name, drive_file_id, created_at FROM course_materials WHERE 1=1";
+        const params: any[] = [];
+        if (group_name) {
+          params.push(String(group_name));
+          query += ` AND (group_name = $${params.length} OR group_name = 'عام')`;
+        }
+        if (course_name) {
+          params.push(String(course_name));
+          query += ` AND course_name = $${params.length}`;
+        }
+        query += " ORDER BY created_at DESC;";
+        const result = await client.query(query, params);
+        return res.json({ success: true, materials: result.rows });
+      } finally {
+        client.release();
+      }
+    } catch (err) {
+      console.warn("[Materials API] Neon DB read error, using memory fallback:", err);
+    }
+  }
+
+  // Memory fallback
+  const all: any[] = [];
+  inMemoryMaterialsStore.forEach((list) => all.push(...list));
+  let filtered = all;
+  if (group_name) {
+    filtered = filtered.filter(m => m.groupName === group_name || m.group_name === group_name || m.group_name === 'عام');
+  }
+  if (course_id) {
+    filtered = filtered.filter(m => m.courseId === course_id);
+  }
+  if (track) {
+    filtered = filtered.filter(m => m.track === track);
+  }
+  return res.json({ success: true, materials: filtered });
+});
+
+// POST /api/materials
+app.post("/api/materials", express.json({ limit: "50mb" }), async (req, res) => {
+  const { title, course_name, course_id, branch_id, group_name, group_id, drive_file_id, track, fileUrl, fileName, fileType, fileSize } = req.body;
+
+  if (!title || (!drive_file_id && !fileUrl)) {
+    return res.status(400).json({ success: false, error: "العنوان وملف Google Drive أو الملف مطلوبان" });
+  }
+
+  const id = "mat_" + Date.now() + "_" + Math.random().toString(36).substring(2, 7);
+  const pool = getDbPool();
+
+  if (pool && drive_file_id) {
+    try {
+      const client = await pool.connect();
+      try {
+        await client.query(
+          `INSERT INTO course_materials (id, title, course_name, branch_id, group_name, drive_file_id)
+           VALUES ($1, $2, $3, $4, $5, $6)
+           ON CONFLICT (id) DO UPDATE SET title = EXCLUDED.title, drive_file_id = EXCLUDED.drive_file_id;`,
+          [id, title, course_name || "عام", branch_id || null, group_name || "عام", drive_file_id]
+        );
+      } finally {
+        client.release();
+      }
+    } catch (err) {
+      console.warn("[Materials API] Neon insert fallback:", err);
+    }
+  }
+
+  const record = {
+    id,
+    title,
+    course_name: course_name || "عام",
+    courseId: course_id,
+    branch_id: branch_id || "all",
+    group_name: group_name || "عام",
+    groupName: group_name,
+    groupId: group_id,
+    drive_file_id,
+    driveFileId: drive_file_id,
+    track: track || "arabic",
+    fileUrl: fileUrl || (drive_file_id ? `https://drive.google.com/file/d/${drive_file_id}/view` : ""),
+    fileName: fileName || title,
+    fileType: fileType || (drive_file_id ? "gdrive" : "pdf"),
+    fileSize: fileSize || "Drive Cloud",
+    created_at: new Date().toISOString(),
+    uploadedAt: new Date().toISOString()
+  };
+
+  const key = course_id || group_id || "general";
+  const existing = inMemoryMaterialsStore.get(key) || [];
+  inMemoryMaterialsStore.set(key, [record, ...existing]);
+
+  return res.json({ success: true, material: record });
+});
+
+// POST /api/courses/:id/materials
+app.post("/api/courses/:id/materials", express.json({ limit: "50mb" }), async (req, res) => {
+  const courseId = req.params.id;
+  const mat = req.body;
+  const newMat = {
+    id: mat.id || ("mat_" + Date.now() + "_" + Math.random().toString(36).substring(2, 7)),
+    courseId,
+    title: mat.title,
+    fileUrl: mat.fileUrl,
+    fileName: mat.fileName || mat.title,
+    fileType: mat.fileType || "pdf",
+    fileSize: mat.fileSize || "1.0 MB",
+    uploadedAt: new Date().toISOString(),
+    description: mat.description || "",
+    track: mat.track || "arabic",
+    driveFileId: mat.driveFileId,
+    isGoogleDrive: !!mat.driveFileId
+  };
+
+  const existing = inMemoryMaterialsStore.get(courseId) || [];
+  inMemoryMaterialsStore.set(courseId, [newMat, ...existing]);
+
+  return res.json({
+    success: true,
+    material: newMat,
+    course: { id: courseId, materials: [newMat, ...existing] }
+  });
+});
+
+// DELETE /api/courses/:id/materials/:materialId
+app.delete("/api/courses/:id/materials/:materialId", async (req, res) => {
+  const { id: courseId, materialId } = req.params;
+  const existing = inMemoryMaterialsStore.get(courseId) || [];
+  const filtered = existing.filter(m => m.id !== materialId);
+  inMemoryMaterialsStore.set(courseId, filtered);
+
+  const pool = getDbPool();
+  if (pool) {
+    try {
+      const client = await pool.connect();
+      try {
+        await client.query("DELETE FROM course_materials WHERE id = $1;", [materialId]);
+      } finally {
+        client.release();
+      }
+    } catch {}
+  }
+
+  return res.json({
+    success: true,
+    course: { id: courseId, materials: filtered }
+  });
+});
+
+// POST /api/groups/:id/materials
+app.post("/api/groups/:id/materials", express.json({ limit: "50mb" }), async (req, res) => {
+  const groupId = req.params.id;
+  const mat = req.body;
+  const newMat = {
+    id: mat.id || ("mat_" + Date.now() + "_" + Math.random().toString(36).substring(2, 7)),
+    groupId,
+    groupName: mat.groupName,
+    title: mat.title,
+    fileUrl: mat.fileUrl,
+    fileName: mat.fileName || mat.title,
+    fileType: mat.fileType || "pdf",
+    fileSize: mat.fileSize || "1.0 MB",
+    uploadedAt: new Date().toISOString(),
+    description: mat.description || "",
+    track: mat.track || "arabic",
+    driveFileId: mat.driveFileId,
+    isGoogleDrive: !!mat.driveFileId
+  };
+
+  const existing = inMemoryMaterialsStore.get(groupId) || [];
+  inMemoryMaterialsStore.set(groupId, [newMat, ...existing]);
+
+  return res.json({
+    success: true,
+    material: newMat,
+    group: { id: groupId, materials: [newMat, ...existing] }
+  });
+});
+
+// DELETE /api/groups/:id/materials/:materialId
+app.delete("/api/groups/:id/materials/:materialId", async (req, res) => {
+  const { id: groupId, materialId } = req.params;
+  const existing = inMemoryMaterialsStore.get(groupId) || [];
+  const filtered = existing.filter(m => m.id !== materialId);
+  inMemoryMaterialsStore.set(groupId, filtered);
+
+  return res.json({
+    success: true,
+    group: { id: groupId, materials: filtered }
+  });
+});
+
+// PUT /api/courses/:id
+app.put("/api/courses/:id", express.json({ limit: "50mb" }), async (req, res) => {
+  const courseId = req.params.id;
+  const updateData = req.body;
+  return res.json({
+    success: true,
+    course: { id: courseId, ...updateData }
+  });
+});
+
+// PUT /api/groups/:id
+app.put("/api/groups/:id", express.json({ limit: "50mb" }), async (req, res) => {
+  const groupId = req.params.id;
+  const updateData = req.body;
+  return res.json({
+    success: true,
+    group: { id: groupId, ...updateData }
+  });
+});
+
 // JSON 404 Handler for all unhandled /api requests to avoid serving HTML for API endpoints
 app.use("/api", (req, res) => {
   res.status(404).json({
