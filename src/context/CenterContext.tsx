@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { Branch, CenterSettings, SystemNotification } from '../types';
+import { Branch, CenterSettings, SystemNotification, Trainee, Trainer, Course, Group } from '../types';
 import { api } from '../services/api';
 import { isTrainerSessionActive, setTrainerLabSessionState } from '../utils/labSecurity';
 
@@ -44,6 +44,18 @@ interface CenterContextType {
   showDateStatsModal: boolean;
   setShowDateStatsModal: (show: boolean) => void;
   toggleTrainerLabSession: (branchId?: string, trainerName?: string, active?: boolean, roomName?: string) => void;
+
+  // Unified Shared States for Core Entities
+  trainees: Trainee[];
+  setTrainees: React.Dispatch<React.SetStateAction<Trainee[]>>;
+  courses: Course[];
+  setCourses: React.Dispatch<React.SetStateAction<Course[]>>;
+  groups: Group[];
+  setGroups: React.Dispatch<React.SetStateAction<Group[]>>;
+  trainers: Trainer[];
+  setTrainers: React.Dispatch<React.SetStateAction<Trainer[]>>;
+  isLoadingData: boolean;
+  refreshCoreData: (force?: boolean) => Promise<void>;
 }
 
 const CenterContext = createContext<CenterContextType | undefined>(undefined);
@@ -62,6 +74,41 @@ export const CenterProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [labAttendanceCount, setLabAttendanceCount] = useState<number>(0);
   const [selectedDate, setSelectedDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
   const [showDateStatsModal, setShowDateStatsModal] = useState<boolean>(false);
+
+  // Core entities global states with localStorage hydration
+  const [trainees, setTrainees] = useState<Trainee[]>(() => {
+    try {
+      const cached = localStorage.getItem('nagah_trainees');
+      return cached ? JSON.parse(cached) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [courses, setCourses] = useState<Course[]>(() => {
+    try {
+      const cached = localStorage.getItem('nagah_courses');
+      return cached ? JSON.parse(cached) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [groups, setGroups] = useState<Group[]>(() => {
+    try {
+      const cached = localStorage.getItem('nagah_groups');
+      return cached ? JSON.parse(cached) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [trainers, setTrainers] = useState<Trainer[]>(() => {
+    try {
+      const cached = localStorage.getItem('nagah_trainers');
+      return cached ? JSON.parse(cached) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [isLoadingData, setIsLoadingData] = useState(false);
 
   // Sync lab active state on branch change or custom event
   useEffect(() => {
@@ -112,13 +159,54 @@ export const CenterProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     setToasts(prev => prev.filter(t => t.id !== id));
   }, []);
 
+  const refreshCoreData = useCallback(async (force = true) => {
+    const now = Date.now();
+    const lastFetch = (window as any).lastCoreDataFetchTime || 0;
+
+    if (!force && trainees.length > 0 && (now - lastFetch < 20000)) {
+      return;
+    }
+
+    setIsLoadingData(trainees.length === 0);
+    try {
+      const [traineesRes, coursesRes, groupsRes, trainersRes] = await Promise.all([
+        api.getTrainees().catch((e) => { console.warn('getTrainees failed:', e); return null; }),
+        api.getCourses().catch((e) => { console.warn('getCourses failed:', e); return null; }),
+        api.getGroups().catch((e) => { console.warn('getGroups failed:', e); return null; }),
+        api.getTrainers().catch((e) => { console.warn('getTrainers failed:', e); return null; })
+      ]);
+
+      if (Array.isArray(traineesRes)) {
+        setTrainees(traineesRes);
+        try { localStorage.setItem('nagah_trainees', JSON.stringify(traineesRes)); } catch {}
+      }
+      if (Array.isArray(coursesRes)) {
+        setCourses(coursesRes);
+        try { localStorage.setItem('nagah_courses', JSON.stringify(coursesRes)); } catch {}
+      }
+      if (Array.isArray(groupsRes)) {
+        setGroups(groupsRes);
+        try { localStorage.setItem('nagah_groups', JSON.stringify(groupsRes)); } catch {}
+      }
+      if (Array.isArray(trainersRes)) {
+        setTrainers(trainersRes);
+        try { localStorage.setItem('nagah_trainers', JSON.stringify(trainersRes)); } catch {}
+      }
+      (window as any).lastCoreDataFetchTime = Date.now();
+    } catch (err) {
+      console.error('Error refreshing core data:', err);
+    } finally {
+      setIsLoadingData(false);
+    }
+  }, [trainees.length]);
+
   const refreshAll = useCallback(async () => {
     try {
       const safeCall = async <T,>(p: Promise<T>): Promise<T | null> => {
         try { return await p; } catch (e) { console.warn('[CenterContext] API fetch warning:', e); return null; }
       };
 
-       const [branchesRes, settingsRes, notifsRes, sysRes, attRes, devRes] = await Promise.all([
+      const [branchesRes, settingsRes, notifsRes, sysRes, attRes, devRes] = await Promise.all([
         safeCall(api.getBranches()),
         safeCall(api.getSettings()),
         safeCall(api.getNotifications()),
@@ -162,13 +250,17 @@ export const CenterProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       // Reflect only currently connected online devices
       setLabAttendanceCount(onlineDevCount);
       setRefreshKey(k => k + 1);
+
+      // Centralized core data refresh triggered synchronously during full refresh
+      await refreshCoreData(true);
     } catch (err) {
       console.error('Error refreshing center data:', err);
     }
-  }, []);
+  }, [refreshCoreData]);
 
   useEffect(() => {
     refreshAll();
+    refreshCoreData(false); // background populate core entities on load
     const livePoll = setInterval(async () => {
       try {
         const [devRes, notifsRes] = await Promise.all([
@@ -188,7 +280,7 @@ export const CenterProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       } catch (e) {}
     }, 4000);
     return () => clearInterval(livePoll);
-  }, [refreshAll]);
+  }, [refreshAll, refreshCoreData]);
 
   // Keyboard shortcut Ctrl+K for search
   useEffect(() => {
@@ -234,7 +326,19 @@ export const CenterProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         setSelectedDate,
         showDateStatsModal,
         setShowDateStatsModal,
-        toggleTrainerLabSession
+        toggleTrainerLabSession,
+
+        // Exposing global core states
+        trainees,
+        setTrainees,
+        courses,
+        setCourses,
+        groups,
+        setGroups,
+        trainers,
+        setTrainers,
+        isLoadingData,
+        refreshCoreData
       }}
     >
       {children}

@@ -91,49 +91,27 @@ import { GoogleSheetsService } from '../services/googleSheets';
 import { GoogleFormsImportModal } from '../components/GoogleFormsImportModal';
 
 export const TraineesView: React.FC = () => {
-  const { branches, activeBranchId, showToast, setPrintData, refreshKey, settings } = useCenter();
+  const { 
+    branches, 
+    activeBranchId, 
+    showToast, 
+    setPrintData, 
+    refreshKey, 
+    settings,
+    trainees,
+    setTrainees,
+    courses,
+    setCourses,
+    groups,
+    setGroups,
+    trainers,
+    setTrainers,
+    isLoadingData: isGlobalLoading,
+    refreshCoreData
+  } = useCenter();
   const { user } = useAuth();
 
-  const [trainees, setTrainees] = useState<Trainee[]>(() => {
-    try {
-      const cached = localStorage.getItem('nagah_trainees');
-      return cached ? JSON.parse(cached) : [];
-    } catch {
-      return [];
-    }
-  });
-  const [courses, setCourses] = useState<Course[]>(() => {
-    try {
-      const cached = localStorage.getItem('nagah_courses');
-      return cached ? JSON.parse(cached) : [];
-    } catch {
-      return [];
-    }
-  });
-  const [groups, setGroups] = useState<Group[]>(() => {
-    try {
-      const cached = localStorage.getItem('nagah_groups');
-      return cached ? JSON.parse(cached) : [];
-    } catch {
-      return [];
-    }
-  });
-  const [trainers, setTrainers] = useState<Trainer[]>(() => {
-    try {
-      const cached = localStorage.getItem('nagah_trainers');
-      return cached ? JSON.parse(cached) : [];
-    } catch {
-      return [];
-    }
-  });
-  const [isLoading, setIsLoading] = useState(() => {
-    try {
-      const cached = localStorage.getItem('nagah_trainees');
-      return cached ? JSON.parse(cached).length === 0 : true;
-    } catch {
-      return true;
-    }
-  });
+  const [isLoading, setIsLoading] = useState(false);
   const [isAddingTrainee, setIsAddingTrainee] = useState(false);
   const [isEditingTrainee, setIsEditingTrainee] = useState(false);
   const [isSubmittingPayment, setIsSubmittingPayment] = useState(false);
@@ -411,91 +389,12 @@ export const TraineesView: React.FC = () => {
   }, [activeBranchId]);
 
   useEffect(() => {
-    loadData();
-  }, [refreshKey]);
+    refreshCoreData(false);
+  }, [refreshKey, refreshCoreData]);
 
-  useEffect(() => {
-    // Realtime live subscription to cloud Firestore trainees
-    const unsubscribe = cloudDb.listenToTrainees((cloudTrainees) => {
-      if (cloudTrainees && Array.isArray(cloudTrainees)) {
-        setTrainees(cloudTrainees);
-        try { localStorage.setItem('nagah_trainees', JSON.stringify(cloudTrainees)); } catch {}
-      }
-    });
-
-    return () => unsubscribe();
-  }, []);
-
-  const loadData = async () => {
-    const now = Date.now();
-    const lastFetch = (window as any).lastTraineesFetchTime || 0;
-    
-    // Throttling: If data loaded in the last 15 seconds, skip refetch to prevent unnecessary Vercel/Neon network overhead
-    if (trainees.length > 0 && (now - lastFetch < 15000)) {
-      setIsLoading(false);
-      return;
-    }
-
-    // Background Loading: Only show the visible loading spinner if there is zero cached data to display
-    setIsLoading(trainees.length === 0);
-    try {
-      const [traineesRes, coursesRes, groupsRes, trainersRes] = await Promise.all([
-        api.getTrainees().catch((e) => { console.warn('getTrainees failed:', e); return null; }),
-        api.getCourses().catch((e) => { console.warn('getCourses failed:', e); return null; }),
-        api.getGroups().catch((e) => { console.warn('getGroups failed:', e); return null; }),
-        api.getTrainers().catch((e) => { console.warn('getTrainers failed:', e); return null; })
-      ]);
-
-      if (Array.isArray(traineesRes)) {
-        const traineeMap = new Map<string, Trainee>();
-        traineesRes.forEach(t => traineeMap.set(t.id, t));
-        const freshList = Array.from(traineeMap.values());
-        setTrainees(freshList);
-        try { localStorage.setItem('nagah_trainees', JSON.stringify(freshList)); } catch {}
-      } else {
-        const cached = localStorage.getItem('nagah_trainees');
-        if (cached) {
-          try { setTrainees(JSON.parse(cached)); } catch {}
-        }
-      }
-
-      if (Array.isArray(coursesRes)) {
-        setCourses(coursesRes);
-        try { localStorage.setItem('nagah_courses', JSON.stringify(coursesRes)); } catch {}
-      } else {
-        const cached = localStorage.getItem('nagah_courses');
-        if (cached) {
-          try { setCourses(JSON.parse(cached)); } catch {}
-        }
-      }
-
-      if (Array.isArray(groupsRes)) {
-        setGroups(groupsRes);
-        try { localStorage.setItem('nagah_groups', JSON.stringify(groupsRes)); } catch {}
-      } else {
-        const cached = localStorage.getItem('nagah_groups');
-        if (cached) {
-          try { setGroups(JSON.parse(cached)); } catch {}
-        }
-      }
-
-      if (Array.isArray(trainersRes)) {
-        setTrainers(trainersRes);
-        try { localStorage.setItem('nagah_trainers', JSON.stringify(trainersRes)); } catch {}
-      } else {
-        const cached = localStorage.getItem('nagah_trainers');
-        if (cached) {
-          try { setTrainers(JSON.parse(cached)); } catch {}
-        }
-      }
-      
-      (window as any).lastTraineesFetchTime = now;
-    } catch (err: any) {
-      console.warn('loadData warning:', err);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  const loadData = useCallback(async (force = true) => {
+    await refreshCoreData(force);
+  }, [refreshCoreData]);
 
   const detectedSiblings = React.useMemo(() => {
     if (!formData.parentPhone && !formData.parentName) return [];

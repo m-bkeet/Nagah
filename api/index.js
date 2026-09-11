@@ -4407,9 +4407,135 @@ async function syncItemToNeon(key, item, isDelete = false) {
     console.error(`[Neon Sync] Non-critical error syncing key ${key}:`, err.message);
   }
 }
+async function fetchKeyFromNeon(key) {
+  try {
+    if (key === "branches") {
+      const b = await queryNeon("SELECT * FROM branches");
+      return b.rows.map((r) => ({
+        id: r.id,
+        code: r.code || "",
+        name: r.name,
+        city: r.city || "",
+        address: r.address || "",
+        phone: r.phone || "",
+        managerName: r.manager_name || "",
+        status: r.status || "active"
+      }));
+    }
+    if (key === "trainers") {
+      const t = await queryNeon("SELECT * FROM trainers");
+      return t.rows.map((r) => ({
+        id: r.id,
+        code: r.code || "",
+        name: r.name,
+        email: r.email || "",
+        phone: r.phone || "",
+        branchId: r.branch_id || null,
+        specialty: r.specialty || "",
+        status: r.status || "active"
+      }));
+    }
+    if (key === "courses") {
+      const c = await queryNeon("SELECT * FROM courses");
+      return c.rows.map((r) => ({
+        id: r.id,
+        code: r.code || "",
+        name: r.name,
+        category: r.category || "",
+        grade: r.grade || "",
+        branchId: r.branch_id || null,
+        feeAmount: Number(r.fee_amount) || 0,
+        status: r.status || "active"
+      }));
+    }
+    if (key === "groups") {
+      const g = await queryNeon("SELECT * FROM groups");
+      return g.rows.map((r) => ({
+        id: r.id,
+        name: r.name,
+        courseId: r.course_id || null,
+        trainerId: r.trainer_id || null,
+        branchId: r.branch_id || null,
+        track: r.track || "\u0639\u0631\u0628\u064A",
+        grade: r.grade || "",
+        roomName: r.room_name || "",
+        status: r.status || "active"
+      }));
+    }
+    if (key === "trainees") {
+      const s = await queryNeon("SELECT * FROM students");
+      const memData = db.getData();
+      const existingTraineesMap = /* @__PURE__ */ new Map();
+      (memData.trainees || []).forEach((x) => existingTraineesMap.set(x.id, x));
+      return s.rows.map((r) => {
+        const old = existingTraineesMap.get(r.id) || {};
+        return {
+          ...old,
+          id: r.id,
+          code: r.student_code,
+          studentCode: r.student_code,
+          traineeCode: r.student_code,
+          fullName: r.full_name,
+          phone: r.phone || "",
+          parentPhone: r.parent_phone || "",
+          parentName: r.parent_name || "",
+          branchId: r.branch_id || null,
+          groupId: r.group_id || null,
+          courseId: r.course_id || null,
+          track: r.track || "",
+          grade: r.grade || "",
+          points: r.points || 0,
+          totalPoints: r.points || 0,
+          status: r.status || "active"
+        };
+      });
+    }
+    if (key === "certificates") {
+      const cert = await queryNeon("SELECT * FROM certificates");
+      return cert.rows.map((r) => ({
+        id: r.id,
+        traineeId: r.student_id,
+        courseName: r.course_name,
+        issueDate: r.issue_date ? r.issue_date.toISOString().slice(0, 10) : "",
+        verificationCode: r.verification_code,
+        qrToken: r.qr_token || ""
+      }));
+    }
+    if (key === "payments") {
+      const fin = await queryNeon("SELECT * FROM finance");
+      return fin.rows.map((r) => ({
+        id: r.id,
+        traineeId: r.student_id,
+        amount: Number(r.amount) || 0,
+        paymentType: r.payment_type,
+        receiptNumber: r.receipt_number || "",
+        notes: r.notes || ""
+      }));
+    }
+    if (key === "pointTransactions") {
+      const gp = await queryNeon("SELECT * FROM gamification_points");
+      return gp.rows.map((r) => ({
+        id: r.id,
+        traineeId: r.student_id,
+        points: r.points || 0,
+        badge: r.badge || "\u0646\u062C\u0645 \u0627\u0644\u0623\u0633\u0628\u0648\u0639",
+        reason: r.reason || ""
+      }));
+    }
+  } catch (err) {
+    console.error(`[fetchKeyFromNeon] Error for key ${key}:`, err.message);
+  }
+  return null;
+}
 function createRepo(key) {
   return {
     async getAll() {
+      const liveItems = await fetchKeyFromNeon(key);
+      if (liveItems !== null) {
+        const memData2 = db.getData();
+        memData2[key] = liveItems;
+        return liveItems;
+      }
       const memData = db.getData();
       const memItems = memData && Array.isArray(memData[key]) ? memData[key] : [];
       return memItems;

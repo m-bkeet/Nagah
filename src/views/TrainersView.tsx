@@ -100,16 +100,6 @@ export const TrainersView: React.FC = () => {
     loadData();
   }, [activeBranchId, refreshKey]);
 
-  useEffect(() => {
-    // Realtime live subscription to cloud Firestore trainers
-    const unsubscribe = cloudDb.listenToCollection<Trainer>('trainers', (cloudTrainers) => {
-      if (cloudTrainers && Array.isArray(cloudTrainers)) {
-        setTrainers(activeBranchId !== 'all' ? cloudTrainers.filter(t => t.branchId === activeBranchId) : cloudTrainers);
-      }
-    });
-    return () => unsubscribe();
-  }, [activeBranchId]);
-
   const loadData = async () => {
     setIsLoading(true);
     try {
