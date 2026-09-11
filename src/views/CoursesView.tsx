@@ -30,6 +30,8 @@ import {
 import { Course, Group } from '../types';
 import { GoogleClassroomImportModal } from '../components/GoogleClassroomImportModal';
 import { CourseGroupMaterialsModal } from '../components/CourseGroupMaterialsModal';
+import { GoogleDriveService } from '../services/googleDrive';
+import { getGoogleDriveViewUrl, getGoogleDrivePreviewUrl } from '../utils/googleDriveHelper';
 
 export const GRADE_OPTIONS = [
   'الصف الرابع الابتدائي',
@@ -84,32 +86,49 @@ export const CoursesView: React.FC = () => {
 
     setIsUploadingMaterial(true);
     try {
-      const reader = new FileReader();
-      reader.readAsDataURL(materialFile);
-      reader.onload = async () => {
-        const fileUrl = reader.result as string;
-        const fileType = (materialFile.name.endsWith('.ppt') || materialFile.name.endsWith('.pptx')) ? 'ppt' : 'pdf';
-        const fileSize = (materialFile.size / (1024 * 1024)).toFixed(2) + ' MB';
-
-        const res = await api.addCourseMaterial(selectedCourseForMaterials.id, {
-          title: materialTitle,
-          description: materialDesc,
-          fileUrl,
-          fileName: materialFile.name,
-          fileType,
-          fileSize
-        });
-
-        if (res.success && res.course) {
-          showToast(' تم رفع المادة العلمية ومزامنتها بنجاح مع كافة المجموعات والمحاضرات وبوابات الطلاب والمدربين!', 'success');
-          setSelectedCourseForMaterials(res.course);
-          setMaterialTitle('');
-          setMaterialDesc('');
-          setMaterialFile(null);
-          loadCourses();
+      let token = GoogleDriveService.getStoredToken();
+      if (!token) {
+        showToast('جاري الاتصال بحساب Google لرفع المنهج مباشرة إلى Drive...', 'info');
+        token = await GoogleDriveService.requestAccessToken();
+        if (!token) {
+          throw new Error('فشل تسجيل الدخول بحساب Google Drive');
         }
-        setIsUploadingMaterial(false);
-      };
+      }
+
+      showToast('جاري إنشاء مجلد المناهج ورفع الملف إلى Google Drive...', 'info');
+      const folderId = await GoogleDriveService.getOrCreateCurriculumFolder(token);
+      const uploadRes = await GoogleDriveService.uploadFile(materialFile, folderId, token);
+
+      if (!uploadRes.success || !uploadRes.fileId) {
+        throw new Error('فشل رفع الملف إلى Google Drive. يرجى التحقق من اتصال الإنترنت وحساب Google الخاص بك.');
+      }
+
+      const fileUrl = getGoogleDriveViewUrl(uploadRes.fileId);
+      const fileType = (materialFile.name.endsWith('.ppt') || materialFile.name.endsWith('.pptx')) ? 'ppt' : 'pdf';
+      const matSizeMB = materialFile.size / (1024 * 1024);
+      const fileSize = matSizeMB >= 1024 ? (matSizeMB / 1024).toFixed(2) + ' GB' : matSizeMB.toFixed(2) + ' MB';
+
+      const res = await api.addCourseMaterial(selectedCourseForMaterials.id, {
+        title: materialTitle,
+        description: materialDesc,
+        fileUrl,
+        fileName: materialFile.name,
+        fileType,
+        fileSize,
+        driveFileId: uploadRes.fileId,
+        drivePreviewUrl: getGoogleDrivePreviewUrl(uploadRes.fileId),
+        isGoogleDrive: true
+      } as any);
+
+      if (res.success && res.course) {
+        showToast(' تم رفع المادة العلمية ومزامنتها بنجاح مع كافة المجموعات والمحاضرات وبوابات الطلاب والمدربين!', 'success');
+        setSelectedCourseForMaterials(res.course);
+        setMaterialTitle('');
+        setMaterialDesc('');
+        setMaterialFile(null);
+        loadCourses();
+      }
+      setIsUploadingMaterial(false);
     } catch (err: any) {
       showToast('فشل رفع المادة العلمية: ' + err.message, 'error');
       setIsUploadingMaterial(false);
@@ -138,34 +157,51 @@ export const CoursesView: React.FC = () => {
 
     setIsUploadingAssessment(true);
     try {
-      const reader = new FileReader();
-      reader.readAsDataURL(assessmentFile);
-      reader.onload = async () => {
-        const fileUrl = reader.result as string;
-        const fileSize = (assessmentFile.size / (1024 * 1024)).toFixed(2) + ' MB';
-
-        const res = await api.addCourseAssessment(selectedCourseForAssessments.id, {
-          title: assessmentTitle,
-          type: assessmentType,
-          weekOrGrade: assessmentWeek,
-          description: assessmentDesc,
-          fileUrl,
-          fileName: assessmentFile.name,
-          fileType: 'pdf',
-          fileSize
-        });
-
-        if (res.success && res.course) {
-          showToast(' تم رفع التقييم/الاختبار الورقي ومزامنته فورياً مع المجموعات والمحاضرات وبوابات الطالب والمدرب!', 'success');
-          setSelectedCourseForAssessments(res.course);
-          setAssessmentTitle('');
-          setAssessmentDesc('');
-          setAssessmentWeek('');
-          setAssessmentFile(null);
-          loadCourses();
+      let token = GoogleDriveService.getStoredToken();
+      if (!token) {
+        showToast('جاري الاتصال بحساب Google لرفع التقييم مباشرة إلى Drive...', 'info');
+        token = await GoogleDriveService.requestAccessToken();
+        if (!token) {
+          throw new Error('فشل تسجيل الدخول بحساب Google Drive');
         }
-        setIsUploadingAssessment(false);
-      };
+      }
+
+      showToast('جاري إنشاء مجلد المناهج ورفع التقييم إلى Google Drive...', 'info');
+      const folderId = await GoogleDriveService.getOrCreateCurriculumFolder(token);
+      const uploadRes = await GoogleDriveService.uploadFile(assessmentFile, folderId, token);
+
+      if (!uploadRes.success || !uploadRes.fileId) {
+        throw new Error('فشل رفع التقييم إلى Google Drive. يرجى التحقق من اتصال الإنترنت وحساب Google الخاص بك.');
+      }
+
+      const fileUrl = getGoogleDriveViewUrl(uploadRes.fileId);
+      const assessSizeMB = assessmentFile.size / (1024 * 1024);
+      const fileSize = assessSizeMB >= 1024 ? (assessSizeMB / 1024).toFixed(2) + ' GB' : assessSizeMB.toFixed(2) + ' MB';
+
+      const res = await api.addCourseAssessment(selectedCourseForAssessments.id, {
+        title: assessmentTitle,
+        type: assessmentType,
+        weekOrGrade: assessmentWeek,
+        description: assessmentDesc,
+        fileUrl,
+        fileName: assessmentFile.name,
+        fileType: 'pdf',
+        fileSize,
+        driveFileId: uploadRes.fileId,
+        drivePreviewUrl: getGoogleDrivePreviewUrl(uploadRes.fileId),
+        isGoogleDrive: true
+      } as any);
+
+      if (res.success && res.course) {
+        showToast(' تم رفع التقييم/الاختبار الورقي ومزامنته فورياً مع المجموعات والمحاضرات وبوابات الطالب والمدرب!', 'success');
+        setSelectedCourseForAssessments(res.course);
+        setAssessmentTitle('');
+        setAssessmentDesc('');
+        setAssessmentWeek('');
+        setAssessmentFile(null);
+        loadCourses();
+      }
+      setIsUploadingAssessment(false);
     } catch (err: any) {
       showToast('فشل رفع التقييم الورقي: ' + err.message, 'error');
       setIsUploadingAssessment(false);

@@ -668,6 +668,18 @@ export const TraineesView: React.FC = () => {
       if (res.success) {
         showToast('تم تحديث بيانات المتدرب بنجاح', 'success');
         setIsEditModalOpen(false);
+        const updatedTraineeObj = res.trainee || {
+          ...activeTrainee,
+          ...formData,
+          netAmount: netAmt,
+          remainingAmount: remainingAmt
+        };
+        setTrainees(prev => {
+          const list = Array.isArray(prev) ? prev : [];
+          const next = list.map(t => t.id === activeTrainee.id ? { ...t, ...updatedTraineeObj } : t);
+          try { localStorage.setItem('nagah_trainees', JSON.stringify(next)); } catch {}
+          return next;
+        });
         loadData();
       }
     } catch (err: any) {

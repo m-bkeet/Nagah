@@ -375,4 +375,226 @@ export class GoogleDriveService {
       return { success: true, fileId: createData.id };
     }
   }
+
+  // Find or create a specific folder for curriculum files to keep user's Google Drive organized
+  static async getOrCreateCurriculumFolder(tokenOverride?: string): Promise<string> {
+    const token = tokenOverride || this.getStoredToken();
+    if (!token) return '';
+
+    if (token.startsWith('mock_drive_token_')) {
+      return 'mock_folder_id';
+    }
+
+    const folderName = 'مناهج مركز النجاح للتدريب';
+    const query = `name = '${folderName}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`;
+    const searchUrl = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id)`;
+
+    try {
+      const searchRes = await fetch(searchUrl, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      if (searchRes.ok) {
+        const searchData = await searchRes.json();
+        if (searchData.files && searchData.files.length > 0) {
+          return searchData.files[0].id;
+        }
+      }
+
+      // Create the folder if not found
+      const createUrl = 'https://www.googleapis.com/drive/v3/files';
+      const createRes = await fetch(createUrl, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          name: folderName,
+          mimeType: 'application/vnd.google-apps.folder',
+          description: 'مجلد مخصص لرفع وحفظ مناهج ومذكرات دورات مركز النجاح للتدريب والاستشارات تلقائياً'
+        })
+      });
+
+      if (createRes.ok) {
+        const createData = await createRes.json();
+        return createData.id;
+      }
+    } catch (err) {
+      console.error('Error finding/creating curriculum folder:', err);
+    }
+
+    return '';
+  }
+
+  // Upload binary file directly to Google Drive with support for any file size (Resumable Upload for large files up to 5TB)
+  static async uploadFile(
+    file: File, 
+    folderId?: string, 
+    tokenOverride?: string,
+    onProgress?: (percent: number, loadedBytes: number, totalBytes: number) => void
+  ): Promise<{ success: boolean; fileId: string; webViewLink?: string }> {
+    const token = tokenOverride || this.getStoredToken();
+    if (!token) {
+      throw new Error('يرجى تسجيل الدخول بحساب Google أولاً لرفع المناهج مباشرة إلى Drive');
+    }
+
+    if (token.startsWith('mock_drive_token_')) {
+      const fileId = 'mock_drive_file_' + Date.now();
+      if (onProgress) onProgress(100, file.size, file.size);
+      return {
+        success: true,
+        fileId,
+        webViewLink: `https://drive.google.com/file/d/${fileId}/preview`
+      };
+    }
+
+    const metadata = {
+      name: file.name,
+      mimeType: file.type || 'application/octet-stream',
+      parents: folderId ? [folderId] : undefined
+    };
+
+    try {
+      // Step 1: Initiate Google Drive Resumable Upload Session
+      const initResponse = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json; charset=UTF-8',
+          'X-Upload-Content-Type': file.type || 'application/octet-stream',
+          'X-Upload-Content-Length': file.size.toString()
+        },
+        body: JSON.stringify(metadata)
+      });
+
+      if (!initResponse.ok) {
+        const err = await initResponse.text();
+        if (initResponse.status === 401) {
+          this.disconnect();
+          throw new Error('انتهت صلاحية الجلسة في Google Drive، يرجى إعادة تسجيل الدخول');
+        }
+        console.warn('Resumable init returned non-ok, trying multipart:', err);
+        return this.uploadFileMultipart(file, folderId, token);
+      }
+
+      const uploadUrl = initResponse.headers.get('Location') || initResponse.headers.get('location');
+      if (!uploadUrl) {
+        return this.uploadFileMultipart(file, folderId, token);
+      }
+
+      // Step 2: Stream file binary directly via PUT with real-time upload progress
+      return await new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('PUT', uploadUrl, true);
+        xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
+
+        if (xhr.upload && onProgress) {
+          xhr.upload.onprogress = (e) => {
+            if (e.lengthComputable && e.total > 0) {
+              const pct = Math.round((e.loaded / e.total) * 100);
+              onProgress(pct, e.loaded, e.total);
+            }
+          };
+        }
+
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            try {
+              const data = JSON.parse(xhr.responseText);
+              if (onProgress) onProgress(100, file.size, file.size);
+              resolve({
+                success: true,
+                fileId: data.id,
+                webViewLink: data.webViewLink || `https://drive.google.com/file/d/${data.id}/view?usp=sharing`
+              });
+            } catch (e) {
+              resolve({
+                success: true,
+                fileId: 'uploaded_' + Date.now(),
+                webViewLink: `https://drive.google.com/file`
+              });
+            }
+          } else if (xhr.status === 401) {
+            GoogleDriveService.disconnect();
+            reject(new Error('انتهت صلاحية الجلسة في Google Drive، يرجى إعادة تسجيل الدخول'));
+          } else {
+            reject(new Error(`فشل رفع الملف إلى Google Drive (رمز الخطأ: ${xhr.status}): ${xhr.responseText}`));
+          }
+        };
+
+        xhr.onerror = () => {
+          reject(new Error('انقطع الاتصال أثناء رفع الملف إلى Google Drive. يرجى التحقق من سرعة اتصال الإنترنت والمحاولة ثانية.'));
+        };
+
+        xhr.send(file);
+      });
+    } catch (err: any) {
+      if (err.message && err.message.includes('انتهت صلاحية الجلسة')) {
+        throw err;
+      }
+      console.warn('Resumable upload failed, attempting multipart fallback:', err);
+      return this.uploadFileMultipart(file, folderId, token);
+    }
+  }
+
+  // Fallback multipart upload for small files
+  private static async uploadFileMultipart(file: File, folderId?: string, token?: string): Promise<{ success: boolean; fileId: string; webViewLink?: string }> {
+    const activeToken = token || this.getStoredToken();
+    if (!activeToken) throw new Error('يرجى تسجيل الدخول بحساب Google');
+
+    const metadata = {
+      name: file.name,
+      mimeType: file.type || 'application/octet-stream',
+      parents: folderId ? [folderId] : undefined
+    };
+
+    const boundary = '-------314159265358979323846';
+    const delimiter = `\r\n--${boundary}\r\n`;
+    const closeDelimiter = `\r\n--${boundary}--`;
+
+    const fileData = await file.arrayBuffer();
+
+    const encoder = new TextEncoder();
+    const metadataPart = 
+      `Content-Type: application/json; charset=UTF-8\r\n\r\n` +
+      JSON.stringify(metadata) +
+      `\r\n`;
+
+    const fileHeaderPart = 
+      `Content-Type: ${file.type || 'application/octet-stream'}\r\n\r\n`;
+
+    const metadataBytes = encoder.encode(delimiter + metadataPart + delimiter + fileHeaderPart);
+    const closeBytes = encoder.encode('\r\n' + closeDelimiter);
+
+    const bodyBytes = new Uint8Array(metadataBytes.length + fileData.byteLength + closeBytes.length);
+    bodyBytes.set(metadataBytes, 0);
+    bodyBytes.set(new Uint8Array(fileData), metadataBytes.length);
+    bodyBytes.set(closeBytes, metadataBytes.length + fileData.byteLength);
+
+    const response = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,webViewLink', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${activeToken}`,
+        'Content-Type': `multipart/related; boundary=${boundary}`
+      },
+      body: bodyBytes
+    });
+
+    if (!response.ok) {
+      const err = await response.text();
+      if (response.status === 401) {
+        this.disconnect();
+        throw new Error('انتهت صلاحية الجلسة في Google Drive، يرجى إعادة تسجيل الدخول');
+      }
+      throw new Error(`فشل رفع الملف إلى Google Drive: ${err}`);
+    }
+
+    const data = await response.json();
+    return {
+      success: true,
+      fileId: data.id,
+      webViewLink: data.webViewLink
+    };
+  }
 }

@@ -64,6 +64,8 @@ export const CourseGroupMaterialsModal: React.FC<CourseGroupMaterialsModalProps>
   const [materialDesc, setMaterialDesc] = useState('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+  const [uploadStatusText, setUploadStatusText] = useState('');
 
   // In-app embedded document/drive previewer state
   const [previewMaterial, setPreviewMaterial] = useState<{
@@ -188,27 +190,57 @@ export const CourseGroupMaterialsModal: React.FC<CourseGroupMaterialsModalProps>
         showToast('يرجى اختيار ملف المنهج من جهازك أولاً (PDF أو PowerPoint أو Word)', 'warning');
         return;
       }
+      
+      const fileSizeMB = selectedFile.size / (1024 * 1024);
       finalFileName = selectedFile.name;
       const ext = selectedFile.name.split('.').pop()?.toLowerCase();
       if (ext === 'ppt' || ext === 'pptx') finalFileType = 'ppt';
       else if (ext === 'doc' || ext === 'docx') finalFileType = 'doc';
       else finalFileType = 'pdf';
 
-      finalFileSize = (selectedFile.size / (1024 * 1024)).toFixed(2) + ' MB';
+      finalFileSize = fileSizeMB >= 1024 
+        ? (fileSizeMB / 1024).toFixed(2) + ' GB' 
+        : fileSizeMB.toFixed(2) + ' MB';
     }
 
     setIsSubmitting(true);
 
     try {
-      // If local file, read as Data URL
+      // If local file, upload directly to Google Drive
       if (inputMode === 'upload' && selectedFile) {
-        const reader = new FileReader();
-        const readPromise = new Promise<string>((resolve, reject) => {
-          reader.onload = () => resolve(reader.result as string);
-          reader.onerror = reject;
-        });
-        reader.readAsDataURL(selectedFile);
-        finalFileUrl = await readPromise;
+        let token = GoogleDriveService.getStoredToken();
+        if (!token) {
+          showToast('جاري الاتصال بحساب Google لرفع الملف مباشرة إلى Drive وحفظه بأمان...', 'info');
+          token = await GoogleDriveService.requestAccessToken();
+          if (!token) {
+            throw new Error('فشل تسجيل الدخول بحساب Google Drive');
+          }
+        }
+        
+        setUploadProgress(0);
+        setUploadStatusText('جاري فحص وتجهيز مجلد المناهج في Google Drive...');
+        showToast('جاري إنشاء مجلد المناهج ورفع الملف إلى Google Drive...', 'info');
+        const folderId = await GoogleDriveService.getOrCreateCurriculumFolder(token);
+        
+        setUploadStatusText(`جاري رفع الملف إلى Google Drive (${finalFileSize})...`);
+        const uploadRes = await GoogleDriveService.uploadFile(
+          selectedFile, 
+          folderId, 
+          token,
+          (pct, loaded, total) => {
+            setUploadProgress(pct);
+            const loadedMB = (loaded / (1024 * 1024)).toFixed(1);
+            const totalMB = (total / (1024 * 1024)).toFixed(1);
+            setUploadStatusText(`جاري رفع الملف إلى Google Drive: ${pct}% (${loadedMB} MB من ${totalMB} MB)...`);
+          }
+        );
+        
+        if (!uploadRes.success || !uploadRes.fileId) {
+          throw new Error('فشل رفع الملف إلى Google Drive. يرجى التحقق من اتصال الإنترنت وحساب Google الخاص بك.');
+        }
+        
+        finalDriveId = uploadRes.fileId;
+        finalFileUrl = getGoogleDriveViewUrl(uploadRes.fileId);
       }
 
       const newMaterial: CourseMaterial = {
@@ -281,6 +313,8 @@ export const CourseGroupMaterialsModal: React.FC<CourseGroupMaterialsModalProps>
       showToast(err.message || 'فشل حفظ المنهج', 'error');
     } finally {
       setIsSubmitting(false);
+      setUploadProgress(null);
+      setUploadStatusText('');
     }
   };
 
@@ -647,6 +681,41 @@ export const CourseGroupMaterialsModal: React.FC<CourseGroupMaterialsModalProps>
                         />
                       </div>
                     </div>
+
+                    {selectedFile && (
+                      <div className="p-3 bg-slate-900/90 border border-slate-700/80 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+                        <div className="flex items-center gap-2 text-slate-200 min-w-0">
+                          <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0"></span>
+                          <span className="font-bold text-white truncate max-w-xs">{selectedFile.name}</span>
+                          <span className="text-[11px] text-slate-400 shrink-0">
+                            ({(selectedFile.size / (1024 * 1024)).toFixed(2)} MB)
+                          </span>
+                        </div>
+                        <span className="text-[11px] text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-lg border border-emerald-500/20 font-medium whitespace-nowrap self-start sm:self-auto">
+                          ☁️ مدعوم بالكامل على حساب Google Drive (5 TB)
+                        </span>
+                      </div>
+                    )}
+
+                    {uploadProgress !== null && (
+                      <div className="p-3 bg-slate-900 border border-emerald-500/40 rounded-xl space-y-2 animate-fadeIn">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="text-emerald-300 font-bold flex items-center gap-1.5">
+                            <RefreshCw className="w-3.5 h-3.5 animate-spin text-emerald-400" />
+                            {uploadStatusText || 'جاري الرفع إلى Google Drive...'}
+                          </span>
+                          <span className="font-mono font-bold text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-500/30">
+                            {uploadProgress}%
+                          </span>
+                        </div>
+                        <div className="w-full bg-slate-800 rounded-full h-2.5 overflow-hidden p-0.5 border border-slate-700">
+                          <div 
+                            className="bg-gradient-to-r from-emerald-500 via-teal-400 to-emerald-400 h-full rounded-full transition-all duration-200"
+                            style={{ width: `${uploadProgress}%` }}
+                          />
+                        </div>
+                      </div>
+                    )}
 
                     <div>
                       <label className="text-[11px] text-slate-300 font-bold block mb-1">وصف أو تعليمات المنهج (اختياري)</label>
