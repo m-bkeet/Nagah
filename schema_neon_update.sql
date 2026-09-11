@@ -77,9 +77,14 @@ CREATE INDEX IF NOT EXISTS idx_finance_student ON finance(student_id);
 CREATE INDEX IF NOT EXISTS idx_certificates_code ON certificates(verification_code);
 CREATE INDEX IF NOT EXISTS idx_materials_course ON course_materials(course_name);
 
--- Seed initial branches
-INSERT INTO branches (id, name, city, phone, status) 
+-- Seed real branches
+INSERT INTO branches (id, name, address, phone, manager_name, status) 
 VALUES 
-  ('branch-najah', 'فرع النجاح', 'المنصورة', '01000000001', 'active'),
-  ('branch-badr', 'فرع بدر', 'القاهرة', '01000000002', 'active')
-ON CONFLICT (id) DO NOTHING;
+  ('branch-1', 'فرع النجاح', 'المقر الرئيسي - مبنى النجاح للتدريب', '01001500686', 'د. محمد رمضان بخيت', 'active'),
+  ('branch-2', 'فرع بدر', 'مركز بدر - أمام المراقبة الزراعية', '01066264312', 'د. عماد حامد مصطفى', 'active')
+ON CONFLICT (id) DO UPDATE SET
+  name = EXCLUDED.name,
+  address = EXCLUDED.address,
+  phone = EXCLUDED.phone,
+  manager_name = EXCLUDED.manager_name,
+  status = EXCLUDED.status;

@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { db } from '../db';
+import { queryNeon } from '../dbNeon';
 import {
   Trainee,
   Branch,
@@ -143,12 +144,357 @@ export async function hydrateAllFromSupabase(): Promise<number> {
   return 0;
 }
 
-// Initial hydration attempt on module load
-if (supabaseClient) {
-  hydrateAllFromSupabase().catch((err) => {
-    console.error('[Hydration] Auto-hydration on load failed:', err);
-  });
+export async function hydrateAllFromNeon(): Promise<void> {
+  console.log('[Neon Hydration] Commencing live database hydration from Neon PostgreSQL...');
+  try {
+    const memData = db.getData() as any;
+
+    const b = await queryNeon('SELECT * FROM branches');
+    if (b && b.rows.length) {
+      memData.branches = b.rows.map(r => ({
+        id: r.id,
+        code: r.code || '',
+        name: r.name,
+        city: r.city || '',
+        address: r.address || '',
+        phone: r.phone || '',
+        managerName: r.manager_name || '',
+        status: r.status || 'active'
+      }));
+    }
+
+    const t = await queryNeon('SELECT * FROM trainers');
+    if (t && t.rows.length) {
+      memData.trainers = t.rows.map(r => ({
+        id: r.id,
+        code: r.code || '',
+        name: r.name,
+        email: r.email || '',
+        phone: r.phone || '',
+        branchId: r.branch_id || null,
+        specialty: r.specialty || '',
+        status: r.status || 'active'
+      }));
+    }
+
+    const c = await queryNeon('SELECT * FROM courses');
+    if (c && c.rows.length) {
+      memData.courses = c.rows.map(r => ({
+        id: r.id,
+        code: r.code || '',
+        name: r.name,
+        category: r.category || '',
+        grade: r.grade || '',
+        branchId: r.branch_id || null,
+        feeAmount: Number(r.fee_amount) || 0,
+        status: r.status || 'active'
+      }));
+    }
+
+    const g = await queryNeon('SELECT * FROM groups');
+    if (g && g.rows.length) {
+      memData.groups = g.rows.map(r => ({
+        id: r.id,
+        name: r.name,
+        courseId: r.course_id || null,
+        trainerId: r.trainer_id || null,
+        branchId: r.branch_id || null,
+        track: r.track || 'عربي',
+        grade: r.grade || '',
+        roomName: r.room_name || '',
+        status: r.status || 'active'
+      }));
+    }
+
+    const s = await queryNeon('SELECT * FROM students');
+    if (s && s.rows.length) {
+      const existingTraineesMap = new Map();
+      (memData.trainees || []).forEach((x: any) => existingTraineesMap.set(x.id, x));
+
+      memData.trainees = s.rows.map(r => {
+        const old = existingTraineesMap.get(r.id) || {};
+        return {
+          ...old,
+          id: r.id,
+          code: r.student_code,
+          studentCode: r.student_code,
+          traineeCode: r.student_code,
+          fullName: r.full_name,
+          phone: r.phone || '',
+          parentPhone: r.parent_phone || '',
+          parentName: r.parent_name || '',
+          branchId: r.branch_id || null,
+          groupId: r.group_id || null,
+          courseId: r.course_id || null,
+          track: r.track || '',
+          grade: r.grade || '',
+          points: r.points || 0,
+          totalPoints: r.points || 0,
+          status: r.status || 'active'
+        };
+      });
+    }
+
+    const cert = await queryNeon('SELECT * FROM certificates');
+    if (cert && cert.rows.length) {
+      memData.certificates = cert.rows.map(r => ({
+        id: r.id,
+        traineeId: r.student_id,
+        courseName: r.course_name,
+        issueDate: r.issue_date ? r.issue_date.toISOString().slice(0, 10) : '',
+        verificationCode: r.verification_code,
+        qrToken: r.qr_token || ''
+      }));
+    }
+
+    const fin = await queryNeon('SELECT * FROM finance');
+    if (fin && fin.rows.length) {
+      memData.payments = fin.rows.map(r => ({
+        id: r.id,
+        traineeId: r.student_id,
+        amount: Number(r.amount) || 0,
+        paymentType: r.payment_type,
+        receiptNumber: r.receipt_number || '',
+        notes: r.notes || ''
+      }));
+    }
+
+    const gp = await queryNeon('SELECT * FROM gamification_points');
+    if (gp && gp.rows.length) {
+      memData.pointTransactions = gp.rows.map(r => ({
+        id: r.id,
+        traineeId: r.student_id,
+        points: r.points || 0,
+        badge: r.badge || 'نجم الأسبوع',
+        reason: r.reason || ''
+      }));
+    }
+
+    console.log(`[Neon Hydration] Hydrated ${s.rows.length} students from Neon PostgreSQL successfully!`);
+  } catch (err: any) {
+    console.error('[Neon Hydration] Error loading from Neon:', err.message);
+  }
 }
+
+async function syncItemToNeon(key: string, item: any, isDelete = false) {
+  try {
+    if (isDelete) {
+      if (key === 'trainees') {
+        await queryNeon('DELETE FROM students WHERE id = $1', [item.id]);
+      } else if (key === 'branches') {
+        await queryNeon('DELETE FROM branches WHERE id = $1', [item.id]);
+      } else if (key === 'trainers') {
+        await queryNeon('DELETE FROM trainers WHERE id = $1', [item.id]);
+      } else if (key === 'courses') {
+        await queryNeon('DELETE FROM courses WHERE id = $1', [item.id]);
+      } else if (key === 'groups') {
+        await queryNeon('DELETE FROM groups WHERE id = $1', [item.id]);
+      } else if (key === 'payments') {
+        await queryNeon('DELETE FROM finance WHERE id = $1', [item.id]);
+      } else if (key === 'certificates') {
+        await queryNeon('DELETE FROM certificates WHERE id = $1', [item.id]);
+      } else if (key === 'pointTransactions') {
+        await queryNeon('DELETE FROM gamification_points WHERE id = $1', [item.id]);
+      }
+      return;
+    }
+
+    if (key === 'trainees') {
+      const code = item.code || item.studentCode || item.traineeCode || item.id;
+      const memData = db.getData() as any;
+      const grp = (memData.groups || []).find((g: any) => g.id === item.groupId);
+      const grpName = grp ? grp.name : '';
+      await queryNeon(`
+        INSERT INTO students (id, student_code, full_name, phone, parent_phone, parent_name, branch_id, group_id, course_id, track, grade, group_name, points, status)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+        ON CONFLICT (id) DO UPDATE SET
+          student_code = EXCLUDED.student_code,
+          full_name = EXCLUDED.full_name,
+          phone = EXCLUDED.phone,
+          parent_phone = EXCLUDED.parent_phone,
+          parent_name = EXCLUDED.parent_name,
+          branch_id = EXCLUDED.branch_id,
+          group_id = EXCLUDED.group_id,
+          course_id = EXCLUDED.course_id,
+          track = EXCLUDED.track,
+          grade = EXCLUDED.grade,
+          group_name = EXCLUDED.group_name,
+          points = EXCLUDED.points,
+          status = EXCLUDED.status
+      `, [
+        item.id,
+        code,
+        item.fullName || item.name || '',
+        item.phone || '',
+        item.parentPhone || '',
+        item.parentName || '',
+        item.branchId || null,
+        item.groupId || null,
+        item.courseId || null,
+        item.track || '',
+        item.grade || '',
+        grpName,
+        item.points || item.totalPoints || 0,
+        item.status || 'active'
+      ]);
+    } else if (key === 'branches') {
+      await queryNeon(`
+        INSERT INTO branches (id, code, name, address, phone, manager_name, status)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        ON CONFLICT (id) DO UPDATE SET
+          code = EXCLUDED.code,
+          name = EXCLUDED.name,
+          address = EXCLUDED.address,
+          phone = EXCLUDED.phone,
+          manager_name = EXCLUDED.manager_name,
+          status = EXCLUDED.status
+      `, [
+        item.id,
+        item.code || '',
+        item.name || '',
+        item.address || '',
+        item.phone || '',
+        item.managerName || '',
+        item.status || 'active'
+      ]);
+    } else if (key === 'trainers') {
+      await queryNeon(`
+        INSERT INTO trainers (id, code, name, email, phone, branch_id, specialty, status)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        ON CONFLICT (id) DO UPDATE SET
+          code = EXCLUDED.code,
+          name = EXCLUDED.name,
+          email = EXCLUDED.email,
+          phone = EXCLUDED.phone,
+          branch_id = EXCLUDED.branch_id,
+          specialty = EXCLUDED.specialty,
+          status = EXCLUDED.status
+      `, [
+        item.id,
+        item.code || '',
+        item.name || '',
+        item.email || '',
+        item.phone || '',
+        item.branchId || null,
+        item.specialty || '',
+        item.status || 'active'
+      ]);
+    } else if (key === 'courses') {
+      await queryNeon(`
+        INSERT INTO courses (id, code, name, category, grade, branch_id, fee_amount, status)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        ON CONFLICT (id) DO UPDATE SET
+          code = EXCLUDED.code,
+          name = EXCLUDED.name,
+          category = EXCLUDED.category,
+          grade = EXCLUDED.grade,
+          branch_id = EXCLUDED.branch_id,
+          fee_amount = EXCLUDED.fee_amount,
+          status = EXCLUDED.status
+      `, [
+        item.id,
+        item.code || '',
+        item.name || '',
+        item.category || '',
+        item.grade || '',
+        item.branchId || null,
+        item.feeAmount || 0,
+        item.status || 'active'
+      ]);
+    } else if (key === 'groups') {
+      await queryNeon(`
+        INSERT INTO groups (id, name, course_id, trainer_id, branch_id, track, grade, room_name, status)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        ON CONFLICT (id) DO UPDATE SET
+          name = EXCLUDED.name,
+          course_id = EXCLUDED.course_id,
+          trainer_id = EXCLUDED.trainer_id,
+          branch_id = EXCLUDED.branch_id,
+          track = EXCLUDED.track,
+          grade = EXCLUDED.grade,
+          room_name = EXCLUDED.room_name,
+          status = EXCLUDED.status
+      `, [
+        item.id,
+        item.name || '',
+        item.courseId || null,
+        item.trainerId || null,
+        item.branchId || null,
+        item.track || 'عربي',
+        item.grade || '',
+        item.roomName || item.hallName || '',
+        item.status || 'active'
+      ]);
+    } else if (key === 'payments') {
+      await queryNeon(`
+        INSERT INTO finance (id, student_id, amount, payment_type, receipt_number, notes)
+        VALUES ($1, $2, $3, $4, $5, $6)
+        ON CONFLICT (id) DO UPDATE SET
+          student_id = EXCLUDED.student_id,
+          amount = EXCLUDED.amount,
+          payment_type = EXCLUDED.payment_type,
+          receipt_number = EXCLUDED.receipt_number,
+          notes = EXCLUDED.notes
+      `, [
+        item.id,
+        item.traineeId || item.studentId || null,
+        item.amount || 0,
+        item.paymentType || 'سند قبض',
+        item.receiptNumber || item.id,
+        item.notes || ''
+      ]);
+    } else if (key === 'certificates') {
+      await queryNeon(`
+        INSERT INTO certificates (id, student_id, course_name, issue_date, verification_code, qr_token)
+        VALUES ($1, $2, $3, $4, $5, $6)
+        ON CONFLICT (id) DO UPDATE SET
+          student_id = EXCLUDED.student_id,
+          course_name = EXCLUDED.course_name,
+          issue_date = EXCLUDED.issue_date,
+          verification_code = EXCLUDED.verification_code,
+          qr_token = EXCLUDED.qr_token
+      `, [
+        item.id,
+        item.traineeId || item.studentId || null,
+        item.courseName || '',
+        item.issueDate || new Date().toISOString().slice(0, 10),
+        item.verificationCode || item.certificateCode || item.id,
+        item.qrToken || ''
+      ]);
+    } else if (key === 'pointTransactions') {
+      await queryNeon(`
+        INSERT INTO gamification_points (id, student_id, points, badge, reason)
+        VALUES ($1, $2, $3, $4, $5)
+        ON CONFLICT (id) DO UPDATE SET
+          student_id = EXCLUDED.student_id,
+          points = EXCLUDED.points,
+          badge = EXCLUDED.badge,
+          reason = EXCLUDED.reason
+      `, [
+        item.id,
+        item.traineeId || item.studentId || null,
+        item.points || 0,
+        item.badge || 'نجم الأسبوع',
+        item.reason || ''
+      ]);
+    }
+  } catch (err: any) {
+    console.error(`[Neon Sync] Non-critical error syncing key ${key}:`, err.message);
+  }
+}
+
+// Initial hydration attempt on module load
+hydrateAllFromNeon()
+  .then(() => {
+    if (supabaseClient) {
+      hydrateAllFromSupabase().catch((err) => {
+        console.error('[Hydration] Auto-hydration on load failed:', err);
+      });
+    }
+  })
+  .catch((err) => {
+    console.error('[Neon Hydration] Load failed:', err);
+  });
 
 function createRepo<T extends { id: string }>(key: string) {
   return {
@@ -254,6 +600,9 @@ function createRepo<T extends { id: string }>(key: string) {
         else list.push(fullItem);
       }
 
+      // Sync to Neon Live PostgreSQL!
+      await syncItemToNeon(key, fullItem, false);
+
       return fullItem as T;
     },
 
@@ -288,6 +637,9 @@ function createRepo<T extends { id: string }>(key: string) {
         if (idx >= 0) list[idx] = updatedItem;
       }
 
+      // Sync to Neon Live PostgreSQL!
+      await syncItemToNeon(key, updatedItem, false);
+
       return updatedItem as T;
     },
 
@@ -314,6 +666,9 @@ function createRepo<T extends { id: string }>(key: string) {
         const idx = list.findIndex(i => i.id === id);
         if (idx >= 0) list.splice(idx, 1);
       }
+
+      // Sync to Neon Live PostgreSQL!
+      await syncItemToNeon(key, { id }, true);
 
       return true;
     },
