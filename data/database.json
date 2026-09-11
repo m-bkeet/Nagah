@@ -4715,7 +4715,26 @@
       "grade": "",
       "points": 0,
       "totalPoints": 0,
-      "status": "active"
+      "status": "active",
+      "nationalId": "",
+      "birthDate": "",
+      "gender": "male",
+      "address": "",
+      "trainerId": "trainer-1787349806643",
+      "feeAmount": 200,
+      "discountAmount": 0,
+      "initialPayment": 0,
+      "initialPaymentMethod": "cash",
+      "photoUrl": "",
+      "notes": "",
+      "portalPassword": "",
+      "parentPortalPassword": "",
+      "netAmount": 200,
+      "remainingAmount": 200,
+      "updatedByUserId": "user-admin",
+      "updatedByUserName": "مدير عام النظام",
+      "prefix": "A",
+      "updatedAt": "2026-09-11T21:11:04.135Z"
     }
   ],
   "courses": [
@@ -9718,6 +9737,16 @@
     }
   ],
   "auditLogs": [
+    {
+      "userId": "user-admin",
+      "userName": "مدير عام النظام",
+      "action": "تسجيل دخول",
+      "entity": "المستخدمين",
+      "entityId": "user-admin",
+      "details": "تم تسجيل الدخول بنجاح للمستخدم (admin) دور: super_admin",
+      "id": "log-1789161021803-3xo1",
+      "timestamp": "2026-09-11T21:10:21.803Z"
+    },
     {
       "id": "log-1788073029266-y363",
       "action": "تسجيل دخول",

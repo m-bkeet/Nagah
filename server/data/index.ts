@@ -554,6 +554,7 @@ async function fetchKeyFromNeon(key: string): Promise<any[] | null> {
       (memData.trainees || []).forEach((x: any) => existingTraineesMap.set(x.id, x));
       return s.rows.map(r => {
         const old = existingTraineesMap.get(r.id) || {};
+        const isoDate = r.created_at ? (r.created_at instanceof Date ? r.created_at.toISOString() : new Date(r.created_at).toISOString()) : new Date().toISOString();
         return {
           ...old,
           id: r.id,
@@ -571,7 +572,9 @@ async function fetchKeyFromNeon(key: string): Promise<any[] | null> {
           grade: r.grade || '',
           points: r.points || 0,
           totalPoints: r.points || 0,
-          status: r.status || 'active'
+          status: r.status || 'active',
+          createdAt: isoDate,
+          registrationDate: isoDate.slice(0, 10)
         };
       });
     }
