@@ -378,11 +378,11 @@ export const CourseGroupMaterialsModal: React.FC<CourseGroupMaterialsModalProps>
 
   return (
     <>
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-fadeIn">
-        <div className="bg-slate-900 border border-emerald-500/30 rounded-3xl shadow-2xl max-w-3xl w-full p-6 text-slate-100 max-h-[92vh] flex flex-col justify-between overflow-hidden">
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/80 backdrop-blur-md animate-fadeIn overflow-hidden">
+        <div className="bg-slate-900 border border-emerald-500/30 rounded-3xl shadow-2xl max-w-3xl w-full text-slate-100 max-h-[90vh] flex flex-col overflow-hidden">
           
           {/* Modal Header */}
-          <div className="flex items-start justify-between border-b border-slate-800 pb-4">
+          <div className="shrink-0 p-4 sm:p-5 flex items-start justify-between border-b border-slate-800 bg-slate-900/90">
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 rounded-2xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 shrink-0">
                 <BookOpen className="w-6 h-6" />
@@ -407,14 +407,14 @@ export const CourseGroupMaterialsModal: React.FC<CourseGroupMaterialsModalProps>
             </div>
             <button
               onClick={onClose}
-              className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors"
+              className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors cursor-pointer"
             >
               <X className="w-5 h-5" />
             </button>
           </div>
 
           {/* Body Content */}
-          <div className="flex-1 overflow-y-auto py-4 space-y-4 pr-1">
+          <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 custom-scrollbar">
 
             {/* Smart Track Tabs */}
             <div className="flex items-center gap-2 p-1.5 bg-slate-950/80 rounded-2xl border border-slate-800">
@@ -809,7 +809,7 @@ export const CourseGroupMaterialsModal: React.FC<CourseGroupMaterialsModalProps>
           </div>
 
           {/* Modal Footer */}
-          <div className="border-t border-slate-800 pt-3 flex items-center justify-between text-xs text-slate-400">
+          <div className="shrink-0 border-t border-slate-800 p-4 flex items-center justify-between text-xs text-slate-400 bg-slate-900/95">
             <div className="flex items-center gap-1.5">
               <Sparkles className="w-4 h-4 text-emerald-400" />
               <span>مربوط بسلاسة مع Google Drive وقاعدة بيانات الإنتاج</span>

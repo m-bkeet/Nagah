@@ -7,9 +7,6 @@ import * as XLSX from "xlsx";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
 import pg from "pg";
-import { deviceRegistryService } from "./src/server/deviceRegistryService.js";
-import { screenFrameRegistryService } from "./src/server/screenFrameRegistryService.js";
-import { remoteControlSessionRegistry } from "./src/server/remoteControlSessionRegistryService.js";
 import { monitoringSessionService } from "./src/server/monitoringSessionService.js";
 import { screenshotService } from "./src/server/screenshotService.js";
 import { examRecordingService } from "./src/server/examRecordingService.js";
@@ -29,7 +26,6 @@ import { aiMemoryService } from "./src/server/aiMemoryService.js";
 import { aiFeedbackService } from "./src/server/aiFeedbackService.js";
 import { domainRouter } from "./src/server/domainRoutes.js";
 import { apiRouter } from "./server/routes.js";
-import { hydrateAllFromSupabase } from "./server/data/index.js";
 
 const { Pool } = pg;
 
@@ -95,7 +91,7 @@ app.get("/api/health", (req, res) => {
   sendResponse(res, true, {
     service: "Nagah Cloud Run Backend",
     status: "healthy",
-    database: process.env.SUPABASE_URL ? "connected (Supabase PostgreSQL)" : "configured",
+    database: "active",
     aiProvider: aiClient ? "Google Gemini Active" : "Configured (API Key Required)",
     timestamp: new Date().toISOString(),
     environment: process.env.NODE_ENV || "development",
@@ -222,7 +218,7 @@ app.post("/api/auth/logout", (req, res) => {
 });
 
 
-// Students API (PostgreSQL / Supabase Adapter with local fallback)
+// Students API (PostgreSQL / Local DB Adapter with fallback)
 app.get("/api/students", async (req, res, next) => {
   const pool = getDbPool();
   if (!pool) {
@@ -267,7 +263,7 @@ app.get("/api/students", async (req, res, next) => {
       sendResponse(res, true, {
         students: result.rows,
         total: Number(countRes.rows[0].total),
-        source: "SUPABASE_POSTGRESQL",
+        source: "LOCAL_DB",
       });
     } finally {
       client.release();
@@ -504,7 +500,7 @@ app.get("/api/courses", async (req, res, next) => {
       sendResponse(res, true, {
         courses: result.rows,
         total: result.rows.length,
-        source: "SUPABASE_POSTGRESQL",
+        source: "LOCAL_DB",
       });
     } finally {
       client.release();
@@ -540,7 +536,7 @@ app.get("/api/groups", async (req, res, next) => {
       sendResponse(res, true, {
         groups: result.rows,
         total: result.rows.length,
-        source: "SUPABASE_POSTGRESQL",
+        source: "LOCAL_DB",
       });
     } finally {
       client.release();
@@ -576,7 +572,7 @@ app.get("/api/attendance", async (req, res, next) => {
       sendResponse(res, true, {
         attendance: result.rows,
         total: result.rows.length,
-        source: "SUPABASE_POSTGRESQL",
+        source: "LOCAL_DB",
       });
     } finally {
       client.release();
@@ -614,7 +610,7 @@ app.get("/api/payments", async (req, res, next) => {
       sendResponse(res, true, {
         payments: result.rows,
         total: result.rows.length,
-        source: "SUPABASE_POSTGRESQL",
+        source: "LOCAL_DB",
       });
     } finally {
       client.release();
@@ -650,7 +646,7 @@ app.get("/api/trainers", async (req, res, next) => {
       sendResponse(res, true, {
         trainers: result.rows,
         total: result.rows.length,
-        source: "SUPABASE_POSTGRESQL",
+        source: "LOCAL_DB",
       });
     } finally {
       client.release();
@@ -1436,6 +1432,90 @@ app.post("/api/classroom/exam/stop", async (req, res) => {
   }
 });
 
+// ==========================================
+// QUICK INTERACTIVE CHALLENGE & LAB QUESTION
+// ==========================================
+let activeLabQuickQuestion: {
+  id: string;
+  type: 'choices' | 'true_false';
+  questionText?: string;
+  correctAnswer?: string;
+  options?: { key: string; label: string; color: string }[];
+  createdAt: string;
+  answers: Record<string, { studentCode: string; studentName: string; answer: string; isCorrect: boolean; timestamp: string }>;
+} | null = null;
+
+// GET /api/lab/quick-question - Active question for lab devices
+app.get("/api/lab/quick-question", (req, res) => {
+  res.json({ success: true, data: activeLabQuickQuestion });
+});
+
+// POST /api/lab/quick-question/broadcast - Trainer sends quick question
+app.post("/api/lab/quick-question/broadcast", (req, res) => {
+  try {
+    const { type, questionText, correctAnswer, options } = req.body;
+    if (!type) {
+      activeLabQuickQuestion = null;
+      return res.json({ success: true, message: "Question cleared" });
+    }
+
+    const defaultOptions = type === 'true_false' ? [
+      { key: 'true', label: 'صح ✔️', color: 'bg-emerald-600 hover:bg-emerald-500' },
+      { key: 'false', label: 'خطأ ❌', color: 'bg-rose-600 hover:bg-rose-500' }
+    ] : [
+      { key: 'A', label: 'أ / A (أحمر)', color: 'bg-rose-600 hover:bg-rose-500' },
+      { key: 'B', label: 'ب / B (أزرق)', color: 'bg-blue-600 hover:bg-blue-500' },
+      { key: 'C', label: 'ج / C (أصفر)', color: 'bg-amber-500 hover:bg-amber-400' },
+      { key: 'D', label: 'د / D (أخضر)', color: 'bg-emerald-600 hover:bg-emerald-500' }
+    ];
+
+    activeLabQuickQuestion = {
+      id: "QQ-" + Date.now(),
+      type: type || 'choices',
+      questionText: questionText || '',
+      correctAnswer: correctAnswer || (type === 'true_false' ? 'true' : 'A'),
+      options: options && options.length > 0 ? options : defaultOptions,
+      createdAt: new Date().toISOString(),
+      answers: {}
+    };
+
+    res.json({ success: true, data: activeLabQuickQuestion });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// POST /api/lab/quick-question/answer - Student submits answer from kiosk
+app.post("/api/lab/quick-question/answer", (req, res) => {
+  try {
+    const { studentCode, studentName, answer } = req.body;
+    if (!activeLabQuickQuestion) {
+      return res.status(400).json({ success: false, error: "لا يوجد سؤال نشط حالياً بالمعمل." });
+    }
+    const cleanAnswer = String(answer || '').trim();
+    const correctAns = String(activeLabQuickQuestion.correctAnswer || '').trim();
+    const isCorrect = cleanAnswer.toLowerCase() === correctAns.toLowerCase();
+
+    activeLabQuickQuestion.answers[studentCode] = {
+      studentCode,
+      studentName: studentName || studentCode,
+      answer: cleanAnswer,
+      isCorrect,
+      timestamp: new Date().toLocaleTimeString('ar-EG')
+    };
+
+    res.json({ success: true, isCorrect, receivedAnswer: cleanAnswer });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// POST /api/lab/quick-question/clear - Clear question
+app.post("/api/lab/quick-question/clear", (req, res) => {
+  activeLabQuickQuestion = null;
+  res.json({ success: true, message: "تم إنهاء السؤال النشط." });
+});
+
 // POST /api/ai/copilot/route - Context-aware AI Copilot with Model Routing
 app.post("/api/ai/copilot/route", async (req, res) => {
   try {
@@ -2104,7 +2184,7 @@ app.get("/api/certificates/verify/:id", (req, res) => {
 app.get("/api/realtime/status", (req, res) => {
   sendResponse(res, true, {
     transport: "REST_FALLBACK",
-    supportedTransports: ["WEBSOCKET", "REST_FALLBACK", "SUPABASE_REALTIME"],
+    supportedTransports: ["WEBSOCKET", "REST_FALLBACK"],
     status: "active",
     activeChannels: ["system:notifications", "devices:heartbeat", "lab:commands"],
     serverTime: new Date().toISOString(),
@@ -2431,7 +2511,7 @@ async function executePostgresSnapshot(pool: pg.Pool): Promise<SnapshotMetadata>
 
     const sqlContent = sqlOutput.join('\n');
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const snapshotFileName = `nagah_supabase_prod_snapshot_${timestamp}.sql`;
+    const snapshotFileName = `nagah_prod_snapshot_${timestamp}.sql`;
     const snapshotPath = path.join(SNAPSHOTS_DATA_DIR, snapshotFileName);
 
     fs.writeFileSync(snapshotPath, sqlContent, 'utf-8');
@@ -4354,7 +4434,7 @@ app.post("/api/migration/delta-merge", async (req, res) => {
       // 6. Record Audit Log
       await client.query(
         "INSERT INTO public.audit_logs (actor, action, target, status) VALUES ($1, $2, $3, $4);",
-        ["DELTA_MERGE_ENGINE", "PRODUCTION_DELTA_MERGE_SYNC", "SUPABASE_POSTGRESQL", "SUCCESS"]
+        ["DELTA_MERGE_ENGINE", "PRODUCTION_DELTA_MERGE_SYNC", "LOCAL_DB", "SUCCESS"]
       );
 
       // 7. Commit Transaction
@@ -4967,10 +5047,6 @@ async function startServer() {
 
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`Nagah Core Production Server running on port ${PORT}`);
-    // Non-blocking background data hydration from Supabase
-    hydrateAllFromSupabase().catch((err) => {
-      console.error('[Startup] Supabase background hydration warning:', err);
-    });
   });
 }
 

@@ -37,6 +37,20 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  // Bypass service worker in dev environments and for Vite internals
+  if (
+    requestUrl.hostname === 'localhost' ||
+    requestUrl.hostname === '127.0.0.1' ||
+    requestUrl.hostname.includes('ais-dev') ||
+    requestUrl.hostname.includes('ais-pre') ||
+    requestUrl.pathname.includes('/@vite/') ||
+    requestUrl.pathname.includes('/node_modules/') ||
+    requestUrl.search.includes('?v=') ||
+    requestUrl.search.includes('?t=')
+  ) {
+    return;
+  }
+
   // If request is navigation or HTML document -> ALWAYS Network-First
   if (event.request.mode === 'navigate' || event.request.destination === 'document' || requestUrl.pathname.endsWith('.html') || requestUrl.pathname === '/') {
     event.respondWith(
@@ -87,18 +101,16 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Static Assets (JS, CSS, SVGs, Images) -> Stale-While-Revalidate
+  // Static Assets (JS, CSS, SVGs, Images) -> Network First then Cache
   event.respondWith(
-    caches.match(event.request).then((cachedResponse) => {
-      const fetchPromise = fetch(event.request).then((networkResponse) => {
+    fetch(event.request)
+      .then((networkResponse) => {
         if (networkResponse && networkResponse.status === 200 && event.request.method === 'GET') {
           const responseClone = networkResponse.clone();
           caches.open(CACHE_NAME).then((cache) => cache.put(event.request, responseClone)).catch(() => {});
         }
         return networkResponse;
-      }).catch(() => null);
-
-      return cachedResponse || fetchPromise;
-    })
+      })
+      .catch(() => caches.match(event.request))
   );
 });

@@ -3683,15 +3683,19 @@ class DatabaseManager {
           }
         }
 
+        // Preserve full original database data
+        const rawTrainees = Array.isArray(parsed.trainees) ? parsed.trainees : [];
+
         // Merge with defaults in case of missing or empty keys
         return {
           ...initialData,
           ...parsed,
           branches: (parsed.branches && parsed.branches.length > 0) ? parsed.branches : initialData.branches,
-          trainees: (parsed.trainees && parsed.trainees.length > 0) ? parsed.trainees : initialData.trainees,
+          trainees: rawTrainees.length > 0 ? rawTrainees : initialData.trainees,
           trainers: (parsed.trainers && parsed.trainers.length > 0) ? parsed.trainers : initialData.trainers,
           courses: (parsed.courses && parsed.courses.length > 0) ? parsed.courses : initialData.courses,
           groups: (parsed.groups && parsed.groups.length > 0) ? parsed.groups : initialData.groups,
+          attendance: (parsed.attendance && parsed.attendance.length > 0) ? parsed.attendance : (initialData.attendance || []),
           certificateTemplates: (parsed.certificateTemplates && parsed.certificateTemplates.length > 0) ? parsed.certificateTemplates : initialData.certificateTemplates,
           exams: (parsed.exams && parsed.exams.length > 0) ? parsed.exams : initialData.exams,
           questions: (parsed.questions && parsed.questions.length > 0) ? parsed.questions : initialData.questions,

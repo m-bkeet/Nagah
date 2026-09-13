@@ -24,10 +24,9 @@ export const MobileAppNavigation: React.FC<MobileAppNavigationProps> = ({
   const { user } = useAuth();
   const { settings, showToast, unreadNotifsCount, setIsSearchOpen, openAiModal } = useCenter();
 
-  // Top Clean Icon Tabs (Facebook App Top Bar Style)
+  // Top Clean Icon Tabs
   const topIconTabs = [
     { id: 'dashboard', label: 'الرئيسية', icon: Home },
-    { id: 'social_feed', label: 'المجتمع', icon: Sparkles, badge: 'جديد' },
     { id: 'trainees', label: 'الطلاب', icon: Users },
     { id: 'courses', label: 'الدورات', icon: BookOpen },
     { id: 'homeworks', label: 'الواجبات', icon: CheckSquare },
@@ -37,10 +36,10 @@ export const MobileAppNavigation: React.FC<MobileAppNavigationProps> = ({
     { id: 'more_menu', label: 'القائمة', icon: Menu },
   ];
 
-  // Primary 5 Bottom Tabs (WhatsApp / Facebook Mobile Native App Style)
+  // Primary Bottom Tabs
   const bottomTabs = [
     { id: 'dashboard', label: 'الرئيسية', icon: Home },
-    { id: 'social_feed', label: 'المجتمع', icon: Sparkles },
+    { id: 'trainees', label: 'الطلاب', icon: Users },
     { id: 'student_portal', label: 'الطالب', icon: GraduationCap },
     { id: 'messages', label: 'المحادثات', icon: MessageSquare, badge: 2 },
     { id: 'more_menu', label: 'القائمة', icon: Menu },
@@ -49,19 +48,20 @@ export const MobileAppNavigation: React.FC<MobileAppNavigationProps> = ({
   // All Menu Items (Facebook Menu Grid / Shortcuts Style)
   const allSections = [
     { id: 'dashboard', label: 'الرئيسية', cat: 'أساسي', icon: Home, color: 'bg-blue-500/20 text-blue-400 border-blue-500/30' },
-    { id: 'social_feed', label: 'مجتمع التفاعل', cat: 'تواصل', icon: Sparkles, color: 'bg-purple-500/20 text-purple-400 border-purple-500/30' },
-    { id: 'trainees', label: 'شؤون الطلاب', cat: 'أكاديمي', icon: Users, color: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' },
-    { id: 'trainers', label: 'المدربين والمعلمين', cat: 'أكاديمي', icon: GraduationCap, color: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30' },
-    { id: 'courses', label: 'المواد والدورات', cat: 'أكاديمي', icon: BookOpen, color: 'bg-amber-500/20 text-amber-400 border-amber-500/30' },
+    { id: 'trainees', label: 'المتدربون', cat: 'أكاديمي', icon: Users, color: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' },
+    { id: 'trainers', label: 'المدربون', cat: 'أكاديمي', icon: GraduationCap, color: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30' },
+    { id: 'programs', label: 'البرامج التدريبية', cat: 'أكاديمي', icon: BookOpen, color: 'bg-purple-500/20 text-purple-400 border-purple-500/30' },
+    { id: 'courses', label: 'الدورات التدريبية', cat: 'أكاديمي', icon: BookOpen, color: 'bg-amber-500/20 text-amber-400 border-amber-500/30' },
+    { id: 'groups', label: 'المجموعات التدريبية', cat: 'أكاديمي', icon: Users, color: 'bg-teal-500/20 text-teal-400 border-teal-500/30' },
     { id: 'homeworks', label: 'الواجبات والتكاليف', cat: 'أكاديمي', icon: CheckSquare, color: 'bg-rose-500/20 text-rose-400 border-rose-500/30' },
-    { id: 'exams', label: 'الاختبارات والتقييم', cat: 'أكاديمي', icon: Award, color: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30' },
-    { id: 'attendance', label: 'الحضور والانصراف', cat: 'أكاديمي', icon: Calendar, color: 'bg-teal-500/20 text-teal-400 border-teal-500/30' },
+    { id: 'exams', label: 'الاختبارات والدرجات', cat: 'أكاديمي', icon: Award, color: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30' },
+    { id: 'attendance', label: 'الحضور والغياب', cat: 'أكاديمي', icon: Calendar, color: 'bg-teal-500/20 text-teal-400 border-teal-500/30' },
+    { id: 'interactive', label: 'المعمل التفاعلي', cat: 'تفاعل', icon: Sparkles, color: 'bg-amber-500/20 text-amber-400 border-amber-500/30' },
     { id: 'student_portal', label: 'بوابة الطالب', cat: 'بوابات', icon: GraduationCap, color: 'bg-indigo-500/20 text-indigo-400 border-indigo-500/30' },
     { id: 'parent_portal', label: 'بوابة ولي الأمر', cat: 'بوابات', icon: UserCheck, color: 'bg-lime-500/20 text-lime-400 border-lime-500/30' },
-    { id: 'messages', label: 'المحادثات المباشرة', cat: 'تواصل', icon: MessageSquare, color: 'bg-sky-500/20 text-sky-400 border-sky-500/30' },
-    { id: 'finance', label: 'المالية والاشتراكات', cat: 'إدارة', icon: Wallet, color: 'bg-green-500/20 text-green-400 border-green-500/30' },
-    { id: 'devices', label: 'أجهزة المعمل والـ Kiosk', cat: 'نظام', icon: Smartphone, color: 'bg-orange-500/20 text-orange-400 border-orange-500/30' },
-    { id: 'reports', label: 'التقارير والإحصائيات', cat: 'إدارة', icon: FileText, color: 'bg-violet-500/20 text-violet-400 border-violet-500/30' },
+    { id: 'messages', label: 'الرسائل والتواصل', cat: 'تواصل', icon: MessageSquare, color: 'bg-sky-500/20 text-sky-400 border-sky-500/30' },
+    { id: 'finance', label: 'الخزنة والحسابات', cat: 'إدارة', icon: Wallet, color: 'bg-green-500/20 text-green-400 border-green-500/30' },
+    { id: 'reports', label: 'مركز التقارير', cat: 'إدارة', icon: FileText, color: 'bg-violet-500/20 text-violet-400 border-violet-500/30' },
     { id: 'settings', label: 'إعدادات النظام', cat: 'نظام', icon: Settings, color: 'bg-slate-500/20 text-slate-300 border-slate-500/30' }
   ];
 

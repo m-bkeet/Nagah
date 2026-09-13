@@ -1,4 +1,5 @@
 import React, { useRef, useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import {
   X,
   Download,
@@ -124,8 +125,8 @@ export const TraineeDigitalCardModal: React.FC<TraineeDigitalCardModalProps> = (
     window.print();
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-slate-950 text-slate-100 overflow-hidden animate-in fade-in duration-200" dir="rtl">
+  const content = (
+    <div className="fixed inset-0 z-[99999] flex flex-col bg-slate-950 text-slate-100 overflow-hidden animate-in fade-in duration-200" dir="rtl">
       {/* Top Header */}
       <div className="bg-slate-900 border-b border-slate-800 px-6 py-3.5 flex items-center justify-between shrink-0 shadow-lg">
         <div className="flex items-center gap-3">
@@ -283,4 +284,6 @@ export const TraineeDigitalCardModal: React.FC<TraineeDigitalCardModalProps> = (
         </div>
       </div>
   );
+
+  return typeof document !== 'undefined' ? createPortal(content, document.body) : content;
 };

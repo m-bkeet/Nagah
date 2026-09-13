@@ -1,4 +1,5 @@
 import React, { useRef, useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useCenter } from '../context/CenterContext';
 import { Printer, X, Download, FileText, CheckCircle, QrCode, Sparkles } from 'lucide-react';
 import QRCode from 'qrcode';
@@ -604,9 +605,9 @@ export const PrintModal: React.FC = () => {
     }
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md print-modal-overlay">
-      <div className="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl max-w-5xl w-full max-h-[92vh] flex flex-col overflow-hidden text-slate-100 print-modal-box">
+  const modalContent = (
+    <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md overflow-y-auto print-modal-overlay">
+      <div className="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl max-w-5xl w-full my-auto max-h-[85vh] flex flex-col overflow-hidden text-slate-100 print-modal-box">
         {/* Modal Topbar (hidden during print) */}
         <div className="p-4 border-b border-slate-800 flex items-center justify-between no-print bg-slate-900 modal-topbar">
           <div className="flex items-center gap-2">
@@ -638,4 +639,6 @@ export const PrintModal: React.FC = () => {
       </div>
     </div>
   );
+
+  return typeof document !== 'undefined' ? createPortal(modalContent, document.body) : modalContent;
 };

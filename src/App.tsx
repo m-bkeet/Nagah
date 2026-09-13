@@ -17,6 +17,7 @@ import { FloatingChatButton } from './components/FloatingChatButton';
 import { FloatingTeachingToolsOverlay } from './components/FloatingTeachingToolsOverlay';
 import { AudioAutoplayUnlockBanner } from './components/AudioAutoplayUnlockBanner';
 import { PwaUpdateToast } from './components/PwaUpdateToast';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
 // Core Views
 import { LoginView } from './views/LoginView';
@@ -34,8 +35,6 @@ import { PointsView } from './views/PointsView';
 import { ExamsView } from './views/ExamsView';
 import { HomeworksView } from './views/HomeworksView';
 import { InteractiveSessionsView } from './views/InteractiveSessionsView';
-import { SocialFeedView } from './views/SocialFeedView';
-import { DevicesView } from './views/DevicesView';
 import { MessagesView } from './views/MessagesView';
 import { ReportsView } from './views/ReportsView';
 import { CertificatesView } from './views/CertificatesView';
@@ -113,12 +112,6 @@ const AppContent: React.FC = () => {
     return 'dashboard';
   });
 
-  const [visitedTabs, setVisitedTabs] = useState<Record<string, boolean>>({ [activeTab]: true });
-
-  useEffect(() => {
-    setVisitedTabs(prev => ({ ...prev, [activeTab]: true }));
-  }, [activeTab]);
-
   // Sync tab with URL search parameter if present
   useEffect(() => {
     const handlePopState = () => {
@@ -177,7 +170,7 @@ const AppContent: React.FC = () => {
     return (
       <>
         {standaloneView}
-        <FloatingTeachingToolsOverlay />
+        {activeTab === 'trainer_portal' && <FloatingTeachingToolsOverlay />}
         <ToastContainer />
         <PwaUpdateToast />
       </>
@@ -198,8 +191,8 @@ const AppContent: React.FC = () => {
     return <LoginView />;
   }
 
-  // Render Active Tab View with Keep-Alive Caching for Instant Switching
-  const renderActiveViewCached = () => {
+  // Render Active Tab View Directly & Safely
+  const renderActiveView = () => {
     // Helper to guard view rendering
     const guard = (permId: string, component: React.ReactNode) => {
       if (!hasPermission(user, settings, permId)) {
@@ -208,52 +201,59 @@ const AppContent: React.FC = () => {
       return component;
     };
 
-    const viewsMap: Record<string, React.ReactNode> = {
-      dashboard: guard('dashboard', <DashboardView onNavigate={setActiveTab} />),
-      trainers: guard('trainers', <TrainersView />),
-      trainees: guard('trainees', <TraineesView />),
-      programs: guard('programs', <ProgramsView />),
-      courses: guard('courses', <CoursesView />),
-      groups: guard('groups', <GroupsView onNavigate={setActiveTab} />),
-      lab_schedule: guard('lab_schedule', <LabScheduleView />),
-      attendance: guard('attendance', <AttendanceView />),
-      finance: guard('finance', <FinanceView />),
-      expenses: guard('expenses', <ExpensesView />),
-      points: guard('points', <PointsView />),
-      exams: guard('exams', <ExamsView />),
-      homeworks: guard('homeworks', <HomeworksView />),
-      interactive: guard('interactive', <InteractiveSessionsView />),
-      social_feed: guard('social_feed', <SocialFeedView />),
-      devices: guard('devices', <DevicesView />),
-      messages: guard('messages', <MessagesView />),
-      reports: guard('reports', <ReportsView />),
-      certificates: guard('certificates', <CertificatesView />),
-      branches: guard('branches', <BranchesView />),
-      ai_developer: guard('ai_developer', <NagahAiDeveloperView />),
-      audit: guard('audit', <AuditLogsView />),
-      audit_logs: guard('audit', <AuditLogsView />),
-      settings: guard('settings', <SettingsView />),
-      student_portal: <PublicStudentPortalView onBack={() => setActiveTab('dashboard')} />,
-      parent_portal: <PublicParentPortalView onBack={() => setActiveTab('dashboard')} />,
-      trainer_portal: <PublicTrainerPortalView onBack={() => setActiveTab('dashboard')} />
-    };
-
-    const currentKey = viewsMap[activeTab] ? activeTab : 'dashboard';
-
-    return (
-      <div className="relative w-full h-full">
-        {Object.keys(visitedTabs).map(tabKey => {
-          const comp = viewsMap[tabKey];
-          if (!comp) return null;
-          const isActive = tabKey === currentKey;
-          return (
-            <div key={tabKey} style={{ display: isActive ? 'block' : 'none' }} className="w-full h-full">
-              {comp}
-            </div>
-          );
-        })}
-      </div>
-    );
+    switch (activeTab) {
+      case 'dashboard':
+        return guard('dashboard', <DashboardView onNavigate={setActiveTab} />);
+      case 'trainers':
+        return guard('trainers', <TrainersView />);
+      case 'trainees':
+        return guard('trainees', <TraineesView />);
+      case 'programs':
+        return guard('programs', <ProgramsView />);
+      case 'courses':
+        return guard('courses', <CoursesView />);
+      case 'groups':
+        return guard('groups', <GroupsView onNavigate={setActiveTab} />);
+      case 'lab_schedule':
+        return guard('lab_schedule', <LabScheduleView />);
+      case 'attendance':
+        return guard('attendance', <AttendanceView />);
+      case 'finance':
+        return guard('finance', <FinanceView />);
+      case 'expenses':
+        return guard('finance', <FinanceView initialTab="expenses" />);
+      case 'points':
+        return guard('points', <PointsView />);
+      case 'exams':
+        return guard('exams', <ExamsView />);
+      case 'homeworks':
+        return guard('homeworks', <HomeworksView />);
+      case 'interactive':
+        return guard('interactive', <InteractiveSessionsView />);
+      case 'messages':
+        return guard('messages', <MessagesView />);
+      case 'reports':
+        return guard('reports', <ReportsView />);
+      case 'certificates':
+        return guard('certificates', <CertificatesView />);
+      case 'branches':
+        return guard('branches', <BranchesView />);
+      case 'ai_developer':
+        return guard('ai_developer', <NagahAiDeveloperView />);
+      case 'audit':
+      case 'audit_logs':
+        return guard('audit', <AuditLogsView />);
+      case 'settings':
+        return guard('settings', <SettingsView />);
+      case 'student_portal':
+        return <PublicStudentPortalView onBack={() => setActiveTab('dashboard')} />;
+      case 'parent_portal':
+        return <PublicParentPortalView onBack={() => setActiveTab('dashboard')} />;
+      case 'trainer_portal':
+        return <PublicTrainerPortalView onBack={() => setActiveTab('dashboard')} />;
+      default:
+        return guard('dashboard', <DashboardView onNavigate={setActiveTab} />);
+    }
   };
 
   return (
@@ -285,10 +285,12 @@ const AppContent: React.FC = () => {
         />
 
         {/* Dynamic Main View Area */}
-        <main className={`flex-1 min-w-0 overflow-y-auto px-3 sm:px-6 py-4 pb-24 md:pb-8 custom-scrollbar transition-all duration-300 ${
+        <main className={`flex-1 min-w-0 overflow-y-auto px-3 sm:px-6 py-4 pb-6 custom-scrollbar transition-all duration-300 ${
           isSidebarCollapsed ? 'md:pr-14 xl:pr-16' : 'md:pr-60 xl:pr-64'
         }`}>
-          {renderActiveViewCached()}
+          <ErrorBoundary key={activeTab} fallbackTitle={`حدث خطأ في تحميل هذا التبويب (${activeTab})`}>
+            {renderActiveView()}
+          </ErrorBoundary>
         </main>
       </div>
 
@@ -307,8 +309,13 @@ const AppContent: React.FC = () => {
         onClose={() => setIsAiModalOpen(false)} 
         initialTab={aiModalTab} 
       />
-      <FloatingChatButton />
-      <FloatingTeachingToolsOverlay />
+      {/* Conditional Floating Chat & Tools (Only on Main Dashboard and Trainer Portal) */}
+      {(activeTab === 'dashboard' || activeTab === 'trainer_portal') && (
+        <>
+          <FloatingChatButton />
+          <FloatingTeachingToolsOverlay />
+        </>
+      )}
       <AudioAutoplayUnlockBanner />
       <PwaUpdateToast />
     </div>

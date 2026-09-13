@@ -95,7 +95,7 @@ migrationRouter.get('/manifest', async (req: Request, res: Response) => {
       schemaVersion: '1.0.0',
       migrationVersion: '2026.08.v1',
       sourcePlatform: 'nagah-legacy-firestore',
-      targetPlatform: 'nagah-production-supabase',
+      targetPlatform: 'nagah-production-db',
       exportedAt: new Date().toISOString(),
       summary: {
         totalStudents: extracted.allStudents.length,

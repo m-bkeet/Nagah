@@ -850,8 +850,8 @@ export const HomeworksView: React.FC = () => {
 
       {/* SUBMISSION EVALUATION MODAL */}
       {selectedSubmission && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md overflow-y-auto">
-          <div className="bg-slate-900 border border-slate-700 rounded-3xl shadow-2xl max-w-4xl w-full flex flex-col max-h-[90vh]">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-2 sm:p-4 bg-slate-950/80 backdrop-blur-md overflow-hidden">
+          <div className="bg-slate-900 border border-slate-700 rounded-3xl shadow-2xl max-w-4xl w-full flex flex-col max-h-[90vh] overflow-hidden">
             <div className="flex items-center justify-between p-4 border-b border-slate-800 bg-slate-800/50 rounded-t-3xl">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 bg-amber-500/20 text-amber-400 rounded-2xl flex items-center justify-center border border-amber-500/30">

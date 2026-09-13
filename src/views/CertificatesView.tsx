@@ -559,19 +559,19 @@ export const CertificatesView: React.FC = () => {
 
       {/* MODAL: Issue Certificate */}
       {isAddModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md overflow-y-auto">
-          <div className="bg-slate-900 border border-slate-700 rounded-3xl shadow-2xl max-w-lg w-full p-6 text-slate-100 my-8">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-800 mb-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/80 backdrop-blur-md overflow-hidden">
+          <div className="bg-slate-900 border border-slate-700 rounded-3xl shadow-2xl max-w-lg w-full max-h-[90vh] flex flex-col overflow-hidden text-slate-100">
+            <div className="shrink-0 p-4 border-b border-slate-800 flex items-center justify-between bg-slate-900/90">
               <div className="flex items-center gap-2">
                 <Award className="w-5 h-5 text-amber-400" />
                 <h3 className="font-bold text-sm">إصدار وتوثيق شهادة تدريبية معتمدة</h3>
               </div>
-              <button onClick={() => setIsAddModalOpen(false)} className="text-slate-400 hover:text-white">
+              <button onClick={() => setIsAddModalOpen(false)} className="text-slate-400 hover:text-white cursor-pointer">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleSaveCertificate} className="space-y-3 text-xs">
+            <form onSubmit={handleSaveCertificate} className="flex-1 overflow-y-auto custom-scrollbar p-4 sm:p-6 space-y-3 text-xs">
               <div>
                 <label className="block text-slate-300 font-bold mb-1">اختر المتدرب *</label>
                 <select
@@ -705,19 +705,19 @@ export const CertificatesView: React.FC = () => {
 
       {/* MODAL: Create Certificate Template */}
       {isAddTemplateModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md overflow-y-auto">
-          <div className="bg-slate-900 border border-slate-700 rounded-3xl shadow-2xl max-w-lg w-full p-6 text-slate-100 my-8">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-800 mb-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/80 backdrop-blur-md overflow-hidden">
+          <div className="bg-slate-900 border border-slate-700 rounded-3xl shadow-2xl max-w-lg w-full max-h-[90vh] flex flex-col overflow-hidden text-slate-100">
+            <div className="shrink-0 p-4 border-b border-slate-800 flex items-center justify-between bg-slate-900/90">
               <div className="flex items-center gap-2">
                 <LayoutTemplate className="w-5 h-5 text-indigo-400" />
                 <h3 className="font-bold text-sm">تصميم نموذج شهادة جديد</h3>
               </div>
-              <button onClick={() => setIsAddTemplateModalOpen(false)} className="text-slate-400 hover:text-white">
+              <button onClick={() => setIsAddTemplateModalOpen(false)} className="text-slate-400 hover:text-white cursor-pointer">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleSaveTemplate} className="space-y-3 text-xs">
+            <form onSubmit={handleSaveTemplate} className="flex-1 overflow-y-auto custom-scrollbar p-4 sm:p-6 space-y-3 text-xs">
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-slate-300 font-bold mb-1">اسم النموذج *</label>

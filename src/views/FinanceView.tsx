@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useCenter } from '../context/CenterContext';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../services/api';
@@ -35,11 +35,18 @@ import {
 import { Payment, TrainerSettlement, Trainee, Course } from '../types';
 import { OfficialReceiptModal } from '../components/OfficialReceiptModal';
 import { GoogleSheetsHubModal } from '../components/GoogleSheetsHubModal';
+import { ExpensesView } from './ExpensesView';
 
-export const FinanceView: React.FC = () => {
+interface FinanceViewProps {
+  initialTab?: 'payments' | 'expenses' | 'pendingProofs' | 'settlements' | 'exemptions';
+}
+
+export const FinanceView: React.FC<FinanceViewProps> = ({ initialTab }) => {
   const { branches, activeBranchId, showToast, setPrintData, refreshKey, openAiModal } = useCenter();
   const { user, canAccess } = useAuth();
-  const [activeTab, setActiveTab] = useState<'payments' | 'pendingProofs' | 'settlements' | 'exemptions'>('payments');
+  const [activeTab, setActiveTab] = useState<'payments' | 'expenses' | 'pendingProofs' | 'settlements' | 'exemptions'>(
+    initialTab || 'payments'
+  );
   const [isGoogleSheetsModalOpen, setIsGoogleSheetsModalOpen] = useState(false);
   const [payments, setPayments] = useState<Payment[]>([]);
   const [pendingProofs, setPendingProofs] = useState<Payment[]>([]);
@@ -80,6 +87,23 @@ export const FinanceView: React.FC = () => {
 
   const [isResetSecretTreasuryConfirmOpen, setIsResetSecretTreasuryConfirmOpen] = useState(false);
   const [isExecutingSecretReset, setIsExecutingSecretReset] = useState(false);
+  const [exemptionSubTab, setExemptionSubTab] = useState<'all' | 'exempt' | 'sibling' | 'custom'>('all');
+  const [isSyncingTrainees, setIsSyncingTrainees] = useState(false);
+
+  const handleBatchSyncRecords = async () => {
+    setIsSyncingTrainees(true);
+    try {
+      const res = await api.request<any>('/trainees/batch-sync-records', { method: 'POST' });
+      if (res.success) {
+        showToast(`تمت مزامنة الكشوف بنجاح! تم استخراج ${res.siblingsLinkedCount || 0} إخوة وتطوير كشوف الإعفاءات.`, 'success');
+        loadFinanceData();
+      }
+    } catch (err: any) {
+      showToast(err.message || 'حدث خطأ أثناء المزامنة', 'error');
+    } finally {
+      setIsSyncingTrainees(false);
+    }
+  };
 
   const secretTreasuryBalance = Math.max(0, secretArchives.reduce((sum, arch) => sum + (Number(arch.summary?.netTreasury) || 0), 0));
 
@@ -255,13 +279,124 @@ export const FinanceView: React.FC = () => {
       (p.traineeCode && p.traineeCode.toLowerCase().includes(searchQuery.toLowerCase()))
   );
 
-  const exemptTrainees = trainees.filter((t) => t.isExempt || t.exemptReason);
-  const siblingDiscountTrainees = trainees.filter((t) => (t.siblingIds && t.siblingIds.length > 0) || (t.notes && t.notes.includes('خصم الأخوات')));
+  const getTraineeCourseFee = (t: Trainee) => {
+    if (t.feeAmount && t.feeAmount > 0) return t.feeAmount;
+    const course = courses.find((c) => c.id === t.courseId || c.name === t.courseName);
+    return course ? (course.price || course.feeAmount || 200) : 200;
+  };
 
-  const totalExemptValue = exemptTrainees.reduce((acc, t) => acc + (t.feeAmount || 0), 0);
-  const mgmtChildrenCount = exemptTrainees.filter((t) => t.exemptReason === 'management_children').length;
-  const friendChildrenCount = exemptTrainees.filter((t) => t.exemptReason === 'friend_children').length;
-  const scholarshipCount = exemptTrainees.filter((t) => t.exemptReason === 'scholarship' || t.exemptReason === 'other' || !t.exemptReason).length;
+  const exemptTrainees = useMemo(() => {
+    return trainees.filter((t) => {
+      const courseFee = getTraineeCourseFee(t);
+      const isExNote = Boolean(t.notes && /إعفاء|معفي|منحة|أبناء المالك|أبناء الإدارة|مجاني/i.test(t.notes));
+      const is100Disc = t.discountAmount > 0 && t.discountAmount >= courseFee;
+      return Boolean(t.isExempt) || String(t.isExempt) === 'true' || Boolean(t.exemptReason) || isExNote || is100Disc;
+    });
+  }, [trainees, courses]);
+
+  const siblingDiscountTrainees = useMemo(() => {
+    return trainees.filter((t) => {
+      const hasSibIds = Boolean(t.siblingIds && t.siblingIds.length > 0);
+      const hasSibNote = Boolean(t.notes && /خصم الأخوات|خصم اخوات|خصم أخت|خصم أخ/i.test(t.notes));
+      return hasSibIds || hasSibNote;
+    });
+  }, [trainees]);
+
+  const customDiscountTrainees = useMemo(() => {
+    return trainees.filter((t) => {
+      if (exemptTrainees.some((ex) => ex.id === t.id)) return false;
+      if (siblingDiscountTrainees.some((sib) => sib.id === t.id)) return false;
+      return (t.discountAmount && t.discountAmount > 0) || Boolean(t.notes && /خصم/i.test(t.notes));
+    });
+  }, [trainees, exemptTrainees, siblingDiscountTrainees]);
+
+  const allDiscountAndExemptTrainees = useMemo(() => {
+    const map = new Map<string, any>();
+
+    // 1. Exempt trainees (100% discount)
+    exemptTrainees.forEach((t) => {
+      const courseFee = getTraineeCourseFee(t);
+      const note = t.notes || '';
+      let label = '✨ إعفاء كامل 100%';
+      if (t.exemptReason === 'management_children' || /مالك|إداري|إدارة/i.test(note)) {
+        label = '👑 أبناء إداري / مالك (إعفاء 100%)';
+      } else if (t.exemptReason === 'friend_children' || /أصدقاء|معارف/i.test(note)) {
+        label = '🤝 أبناء أصدقاء ومعارف (إعفاء 100%)';
+      } else if (t.exemptReason === 'scholarship' || /منحة/i.test(note)) {
+        label = '🎓 منحة استثنائية (إعفاء 100%)';
+      }
+
+      map.set(t.id, {
+        ...t,
+        categoryType: 'exempt',
+        discountLabel: label,
+        computedFee: courseFee,
+        computedDiscount: courseFee,
+        computedNet: 0
+      });
+    });
+
+    // 2. Sibling discount trainees
+    siblingDiscountTrainees.forEach((t) => {
+      if (!map.has(t.id)) {
+        const courseFee = getTraineeCourseFee(t);
+        const discVal = t.discountAmount > 0 ? t.discountAmount : Math.round(courseFee * 0.2);
+        map.set(t.id, {
+          ...t,
+          categoryType: 'sibling_discount',
+          discountLabel: '👨‍👩‍👧‍👦 خصم الأخوات 20%',
+          computedFee: courseFee,
+          computedDiscount: discVal,
+          computedNet: Math.max(0, courseFee - discVal)
+        });
+      }
+    });
+
+    // 3. Custom discount trainees
+    customDiscountTrainees.forEach((t) => {
+      if (!map.has(t.id)) {
+        const courseFee = getTraineeCourseFee(t);
+        const discVal = t.discountAmount > 0 ? t.discountAmount : Math.round(courseFee * 0.1);
+        map.set(t.id, {
+          ...t,
+          categoryType: 'custom_discount',
+          discountLabel: '🏷️ خصم استثنائي خاص',
+          computedFee: courseFee,
+          computedDiscount: discVal,
+          computedNet: Math.max(0, courseFee - discVal)
+        });
+      }
+    });
+
+    return Array.from(map.values());
+  }, [exemptTrainees, siblingDiscountTrainees, customDiscountTrainees, courses]);
+
+  const displayedExemptTrainees = useMemo(() => {
+    if (exemptionSubTab === 'exempt') return allDiscountAndExemptTrainees.filter((t) => t.categoryType === 'exempt');
+    if (exemptionSubTab === 'sibling') return allDiscountAndExemptTrainees.filter((t) => t.categoryType === 'sibling_discount');
+    if (exemptionSubTab === 'custom') return allDiscountAndExemptTrainees.filter((t) => t.categoryType === 'custom_discount');
+    return allDiscountAndExemptTrainees;
+  }, [allDiscountAndExemptTrainees, exemptionSubTab]);
+
+  const totalExemptValue = useMemo(() => {
+    return exemptTrainees.reduce((acc, t) => acc + getTraineeCourseFee(t), 0);
+  }, [exemptTrainees, courses]);
+
+  const totalSiblingDiscountValue = useMemo(() => {
+    return siblingDiscountTrainees.reduce((acc, t) => {
+      const fee = getTraineeCourseFee(t);
+      const disc = t.discountAmount > 0 ? t.discountAmount : Math.round(fee * 0.2);
+      return acc + disc;
+    }, 0);
+  }, [siblingDiscountTrainees, courses]);
+
+  const totalAllDiscountsAndExemptionsValue = useMemo(() => {
+    return allDiscountAndExemptTrainees.reduce((acc, t) => acc + (t.computedDiscount || 0), 0);
+  }, [allDiscountAndExemptTrainees]);
+
+  const mgmtChildrenCount = exemptTrainees.filter((t) => t.exemptReason === 'management_children' || (t.notes && /مالك|إداري|إدارة/i.test(t.notes))).length;
+  const friendChildrenCount = exemptTrainees.filter((t) => t.exemptReason === 'friend_children' || (t.notes && /أصدقاء|معارف/i.test(t.notes))).length;
+  const scholarshipCount = exemptTrainees.filter((t) => t.exemptReason === 'scholarship' || (t.notes && /منحة/i.test(t.notes)) || (!t.exemptReason && !/مالك|إداري|أصدقاء/i.test(t.notes || ''))).length;
 
   return (
     <div className="space-y-5">
@@ -468,6 +603,18 @@ export const FinanceView: React.FC = () => {
         </button>
 
         <button
+          onClick={() => setActiveTab('expenses')}
+          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+            activeTab === 'expenses'
+              ? 'bg-rose-600 text-white shadow-lg shadow-rose-600/30'
+              : 'text-rose-300 hover:text-white bg-rose-950/40 border border-rose-500/40'
+          }`}
+        >
+          <Receipt className="w-3.5 h-3.5 text-rose-400" />
+          <span>إدارة المصروفات والنفقات</span>
+        </button>
+
+        <button
           onClick={() => setActiveTab('pendingProofs')}
           className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
             activeTab === 'pendingProofs'
@@ -509,6 +656,11 @@ export const FinanceView: React.FC = () => {
           </button>
         )}
       </div>
+
+      {/* Expenses Management View */}
+      {activeTab === 'expenses' && (
+        <ExpensesView />
+      )}
 
       {/* Pending Proofs Review View */}
       {activeTab === 'pendingProofs' && (
@@ -762,80 +914,150 @@ export const FinanceView: React.FC = () => {
       {activeTab === 'exemptions' && isManagerOrAccountant && (
         <div className="space-y-4 animate-fadeIn">
           {/* Secret Alert Banner */}
-          <div className="bg-purple-950/80 border border-purple-500/60 p-4 rounded-2xl flex items-center justify-between gap-3 shadow-2xl">
+          <div className="bg-purple-950/80 border border-purple-500/60 p-4 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-2xl">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-purple-900/90 border border-purple-400 flex items-center justify-center shrink-0">
                 <Lock className="w-5 h-5 text-purple-300" />
               </div>
               <div>
                 <h3 className="font-black text-sm text-purple-100 flex items-center gap-2">
-                  تقرير إحصائي خاص ومحمي: الإعفاءات الكاملة واستثناءات رسوم الدورات
+                  تقرير إحصائي خاص ومحمي: الخصومات الإجمالية والإعفاءات الكاملة
                 </h3>
                 <p className="text-xs text-purple-300/80 mt-0.5">
-                  هذه البيانات مشفرة وسرية، ومتاحة فقط لمدير النظام والمدير المالي لمتابعة كشوف أبناء المالك، الأصدقاء، والخصومات الاستثنائية.
+                  بيانات سرية ومحسوبة بدقة لمدير النظام والمدير المالي، تشمل إعفاءات أبناء المالك، المنح، وخصومات الأخوات (20%).
                 </p>
               </div>
             </div>
-            <span className="text-xs font-bold text-purple-300 bg-purple-900/80 px-3 py-1.5 rounded-xl border border-purple-500/40 shrink-0">
-              🔒 سري للغاية
-            </span>
+            
+            <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+              <button
+                onClick={handleBatchSyncRecords}
+                disabled={isSyncingTrainees}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-800 hover:bg-purple-700 text-purple-100 text-xs font-bold rounded-xl border border-purple-500/50 shadow transition-all active:scale-95 disabled:opacity-50"
+                title="إعادة فحص ومزامنة كشوفات الأخوات والإعفاءات تلقائياً"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isSyncingTrainees ? 'animate-spin' : ''}`} />
+                <span>{isSyncingTrainees ? 'جاري التدقيق...' : '🔄 تدقيق وتطوير الكشوف تلقائياً'}</span>
+              </button>
+              <span className="text-xs font-bold text-purple-300 bg-purple-900/80 px-3 py-1.5 rounded-xl border border-purple-500/40 shrink-0">
+                🔒 سري للغاية
+              </span>
+            </div>
           </div>
 
           {/* Stats Summary Grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3.5">
             <div className="p-4 rounded-2xl bg-slate-800/90 border border-amber-500/40 space-y-1">
-              <span className="text-xs text-slate-400 font-bold block">إجمالي الطلاب المعفيين</span>
+              <span className="text-xs text-slate-400 font-bold block">إجمالي المستفيدين (خصومات وإعفاءات)</span>
               <span className="text-2xl font-black text-amber-400 font-mono">
-                {exemptTrainees.length} <span className="text-xs font-bold">طالب</span>
+                {allDiscountAndExemptTrainees.length} <span className="text-xs font-bold">طالب</span>
               </span>
-              <div className="text-[11px] text-slate-400">نسبة الإعفاء الكلي 100%</div>
+              <div className="text-[11px] text-amber-300 font-mono font-bold">
+                الوفر الإجمالي: {totalAllDiscountsAndExemptionsValue.toLocaleString()} ج.م
+              </div>
             </div>
 
             <div className="p-4 rounded-2xl bg-slate-800/90 border border-purple-500/40 space-y-1">
-              <span className="text-xs text-slate-400 font-bold block">القيمة التقديرية للإعفاءات</span>
+              <span className="text-xs text-slate-400 font-bold block">الإعفاءات الكلية (100%)</span>
               <span className="text-2xl font-black text-purple-300 font-mono">
-                {totalExemptValue.toLocaleString()} <span className="text-xs font-bold">ج.م</span>
+                {exemptTrainees.length} <span className="text-xs font-bold">طالب</span>
               </span>
-              <div className="text-[11px] text-slate-400">إجمالي الرسوم المستثناة</div>
+              <div className="text-[11px] text-purple-200 font-mono font-bold">
+                القيمة: {totalExemptValue.toLocaleString()} ج.م
+              </div>
             </div>
 
             <div className="p-4 rounded-2xl bg-slate-800/90 border border-cyan-500/40 space-y-1">
-              <span className="text-xs text-slate-400 font-bold block">أبناء المالك والإدارة</span>
+              <span className="text-xs text-slate-400 font-bold block">خصم الأخوات المسجل (20%)</span>
               <span className="text-2xl font-black text-cyan-400 font-mono">
-                {mgmtChildrenCount} <span className="text-xs font-bold">طالب</span>
+                {siblingDiscountTrainees.length} <span className="text-xs font-bold">طالب</span>
               </span>
-              <div className="text-[11px] text-slate-400">إعفاء أبناء الإدارة والمركز</div>
+              <div className="text-[11px] text-cyan-200 font-mono font-bold">
+                الوفر: {totalSiblingDiscountValue.toLocaleString()} ج.م
+              </div>
             </div>
 
             <div className="p-4 rounded-2xl bg-slate-800/90 border border-emerald-500/40 space-y-1">
-              <span className="text-xs text-slate-400 font-bold block">أبناء الأصدقاء والمنح</span>
+              <span className="text-xs text-slate-400 font-bold block">أبناء المالك والإدارة والمنح</span>
               <span className="text-2xl font-black text-emerald-400 font-mono">
-                {friendChildrenCount + scholarshipCount} <span className="text-xs font-bold">طالب</span>
+                {mgmtChildrenCount + friendChildrenCount + scholarshipCount} <span className="text-xs font-bold">طالب</span>
               </span>
-              <div className="text-[11px] text-slate-400">إعفاء المعارف والمنح</div>
+              <div className="text-[11px] text-slate-400">
+                إدارة: {mgmtChildrenCount} | أصدقاء ومنح: {friendChildrenCount + scholarshipCount}
+              </div>
             </div>
           </div>
 
-          {/* Sibling Discounts Count Card */}
-          {siblingDiscountTrainees.length > 0 && (
-            <div className="bg-slate-800/80 border border-purple-500/30 p-3.5 rounded-2xl flex items-center justify-between">
-              <div className="flex items-center gap-2 text-xs font-bold text-purple-200">
-                <Users className="w-4 h-4 text-purple-400" />
-                إجمالي الطلاب المستفيدين من خصم الأخوات المسجل: <span className="font-mono text-amber-300 text-sm">{siblingDiscountTrainees.length} طالب</span>
-              </div>
-              <span className="text-[11px] text-slate-400">خصم الأخوات 20%</span>
-            </div>
-          )}
+          {/* Sub-Filter Tabs */}
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 select-none">
+            <button
+              onClick={() => setExemptionSubTab('all')}
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 ${
+                exemptionSubTab === 'all'
+                  ? 'bg-amber-500 text-slate-950 shadow-md'
+                  : 'bg-slate-800 text-slate-300 hover:bg-slate-700 border border-slate-700'
+              }`}
+            >
+              <span>كل الخصومات والإعفاءات</span>
+              <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-slate-900/30 font-mono">
+                {allDiscountAndExemptTrainees.length}
+              </span>
+            </button>
+
+            <button
+              onClick={() => setExemptionSubTab('exempt')}
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 ${
+                exemptionSubTab === 'exempt'
+                  ? 'bg-purple-600 text-white shadow-md shadow-purple-600/30'
+                  : 'bg-slate-800 text-slate-300 hover:bg-slate-700 border border-slate-700'
+              }`}
+            >
+              <span>👑 الإعفاءات الكاملة (100%)</span>
+              <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-purple-950/60 font-mono text-purple-200">
+                {exemptTrainees.length}
+              </span>
+            </button>
+
+            <button
+              onClick={() => setExemptionSubTab('sibling')}
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 ${
+                exemptionSubTab === 'sibling'
+                  ? 'bg-cyan-600 text-white shadow-md shadow-cyan-600/30'
+                  : 'bg-slate-800 text-slate-300 hover:bg-slate-700 border border-slate-700'
+              }`}
+            >
+              <span>👨‍👩‍👧‍👦 خصم الأخوات (20%)</span>
+              <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-cyan-950/60 font-mono text-cyan-200">
+                {siblingDiscountTrainees.length}
+              </span>
+            </button>
+
+            {customDiscountTrainees.length > 0 && (
+              <button
+                onClick={() => setExemptionSubTab('custom')}
+                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 ${
+                  exemptionSubTab === 'custom'
+                    ? 'bg-emerald-600 text-white shadow-md'
+                    : 'bg-slate-800 text-slate-300 hover:bg-slate-700 border border-slate-700'
+                }`}
+              >
+                <span>🏷️ خصومات استثنائية</span>
+                <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-emerald-950/60 font-mono text-emerald-200">
+                  {customDiscountTrainees.length}
+                </span>
+              </button>
+            )}
+          </div>
 
           {/* Detailed Confidential Table */}
           <div className="bg-slate-800/90 border border-slate-700/80 rounded-2xl shadow-xl overflow-hidden">
             <div className="p-3.5 bg-slate-900 border-b border-slate-700 flex items-center justify-between">
               <h4 className="font-bold text-xs text-slate-200 flex items-center gap-2">
                 <ShieldCheck className="w-4 h-4 text-amber-400" />
-                كشف تفصيلي بالطلاب المعفيين من رسوم الدورات (خاص بالمحيط المالي)
+                كشف تفصيلي بالطلاب المستفيدين من الخصومات والإعفاءات (خاص بالإدارة)
               </h4>
-              <span className="text-[10px] text-slate-400 font-mono">
-                عدد السجلات: {exemptTrainees.length}
+              <span className="text-[11px] text-slate-400 font-mono font-bold">
+                عدد السجلات: {displayedExemptTrainees.length}
               </span>
             </div>
 
@@ -846,22 +1068,23 @@ export const FinanceView: React.FC = () => {
                     <th className="p-3.5">الكود</th>
                     <th className="p-3.5">اسم المتدرب</th>
                     <th className="p-3.5">ولي الأمر والهاتف</th>
-                    <th className="p-3.5">الدورة التدريبية</th>
-                    <th className="p-3.5">تصنيف سبب الإعفاء</th>
-                    <th className="p-3.5">قيمة الدورة المعفاة</th>
-                    <th className="p-3.5">ملاحظات السرية</th>
+                    <th className="p-3.5">الدورة التدريبية وسعرها</th>
+                    <th className="p-3.5">نوع ونسبة الخصم / الإعفاء</th>
+                    <th className="p-3.5">قيمة التخفيض</th>
+                    <th className="p-3.5">الصافي المطلـوب</th>
+                    <th className="p-3.5">ملاحظات وقيد السرية</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-700/60 text-slate-200">
-                  {exemptTrainees.length === 0 ? (
+                  {displayedExemptTrainees.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="py-12 text-center text-slate-400">
-                        لا يوجد طلاب معفيين مسجلين بالنظام حالياً.
+                      <td colSpan={8} className="py-12 text-center text-slate-400">
+                        لا توجد سجلات مطابقة للتصنيف المحدد حالياً.
                       </td>
                     </tr>
                   ) : (
-                    exemptTrainees.map((t) => {
-                      const course = courses.find((c) => c.id === t.courseId);
+                    displayedExemptTrainees.map((t) => {
+                      const course = courses.find((c) => c.id === t.courseId || c.name === t.courseName);
                       return (
                         <tr key={t.id} className="hover:bg-slate-700/40 transition-colors">
                           <td className="p-3.5 font-mono font-bold text-amber-400">{t.code}</td>
@@ -870,23 +1093,29 @@ export const FinanceView: React.FC = () => {
                             <div>{t.parentName || 'غير مدون'}</div>
                             <div className="text-[10px] text-slate-400 font-mono">{t.parentPhone || t.phone}</div>
                           </td>
-                          <td className="p-3.5 text-slate-300">{course?.name || 'دورة عامة'}</td>
+                          <td className="p-3.5 text-slate-300">
+                            <div className="font-semibold">{course?.name || t.courseName || 'دورة تدريبية'}</div>
+                            <div className="text-[10px] text-slate-400 font-mono">السعر: {t.computedFee} ج.م</div>
+                          </td>
                           <td className="p-3.5">
-                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-purple-900/70 border border-purple-500/50 text-purple-200">
-                              {t.exemptReason === 'management_children'
-                                ? '👑 أبناء إداري / مالك'
-                                : t.exemptReason === 'friend_children'
-                                ? '🤝 أبناء أصدقاء ومعارف'
-                                : t.exemptReason === 'scholarship'
-                                ? '🎓 منحة استثنائية'
-                                : '✨ إعفاء خاص'}
+                            <span className={`px-2.5 py-1 rounded-xl text-[10px] font-bold border ${
+                              t.categoryType === 'exempt'
+                                ? 'bg-purple-900/70 border-purple-500/50 text-purple-200'
+                                : t.categoryType === 'sibling_discount'
+                                ? 'bg-cyan-900/70 border-cyan-500/50 text-cyan-200'
+                                : 'bg-emerald-900/70 border-emerald-500/50 text-emerald-200'
+                            }`}>
+                              {t.discountLabel}
                             </span>
                           </td>
                           <td className="p-3.5 font-mono font-black text-amber-400 text-sm">
-                            {t.feeAmount || 0} ج.م
+                            {t.computedDiscount} ج.م
+                          </td>
+                          <td className="p-3.5 font-mono font-bold text-emerald-400 text-sm">
+                            {t.computedNet} ج.م
                           </td>
                           <td className="p-3.5 text-slate-400 text-[11px] max-w-xs truncate">
-                            {t.notes || 'لا توجد ملاحظات سرية إضافية'}
+                            {t.notes || 'مسجل بالنظام المالي'}
                           </td>
                         </tr>
                       );

@@ -851,7 +851,7 @@ export class MigrationService {
       schemaVersion: '1.0.0',
       migrationVersion: '2026.08.v1',
       sourcePlatform: 'nagah-legacy-firestore',
-      targetPlatform: 'nagah-production-supabase',
+      targetPlatform: 'nagah-production-db',
       exportedAt: now.toISOString(),
       packageFilename: filename,
       summary: {
@@ -1120,7 +1120,7 @@ export class MigrationService {
       batchId,
       previousSyncId,
       sourcePlatform: 'nagah-legacy-firestore',
-      targetPlatform: 'nagah-production-supabase',
+      targetPlatform: 'nagah-production-db',
       exportedAt: now.toISOString(),
       packageFilename: `NAGAH_DELTA_SYNC_${batchId}.zip`,
       summary: {

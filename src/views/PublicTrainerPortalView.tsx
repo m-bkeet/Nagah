@@ -48,7 +48,6 @@ import { NextLectureCard } from '../components/trainer/NextLectureCard';
 import { AIPresentationGenerator } from '../components/trainer/AIPresentationGenerator';
 import { LiveLectureStudio } from '../components/trainer/LiveLectureStudio';
 import { ThemeQuickSwitcher } from '../components/ThemeQuickSwitcher';
-import { TrainerSocialFeed } from '../components/trainer/TrainerSocialFeed';
 import { AdvancedExamMaker } from '../components/trainer/AdvancedExamMaker';
 import { TrainerLanguageLabView } from '../components/languageLab/TrainerLanguageLabView';
 import { TrainerGroupsManager } from '../components/trainer/TrainerGroupsManager';
@@ -83,7 +82,7 @@ export const PublicTrainerPortalView: React.FC<PublicTrainerPortalViewProps> = (
   const [isSendingTrainerReply, setIsSendingTrainerReply] = useState<boolean>(false);
 
   // Active Tab & Navigation Ref
-  const [activeTab, setActiveTab] = useState<'attendance' | 'homework' | 'grades' | 'finances' | 'schedule' | 'ai_presentation' | 'live_lecture' | 'social_feed' | 'ai_exam_maker' | 'ai_assistant' | 'ai_messaging' | 'credentials' | 'language_lab' | 'groups' | 'content_planner'>('attendance');
+  const [activeTab, setActiveTab] = useState<'attendance' | 'homework' | 'grades' | 'finances' | 'schedule' | 'ai_presentation' | 'live_lecture' | 'ai_exam_maker' | 'ai_assistant' | 'ai_messaging' | 'credentials' | 'language_lab' | 'groups' | 'content_planner'>('attendance');
   const [tabCategory, setTabCategory] = useState<'all' | 'teaching' | 'interactive' | 'eval' | 'ai' | 'account'>('all');
   const tabContainerRef = React.useRef<HTMLDivElement>(null);
 
@@ -1020,20 +1019,6 @@ export const PublicTrainerPortalView: React.FC<PublicTrainerPortalViewProps> = (
                     </button>
                   )}
 
-                  {(tabCategory === 'all' || tabCategory === 'interactive') && (
-                    <button
-                      onClick={() => setActiveTab('social_feed')}
-                      className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-black transition-all shrink-0 border border-sky-500/40 ${
-                        activeTab === 'social_feed'
-                          ? 'bg-gradient-to-r from-sky-600 to-blue-600 text-white shadow-lg shadow-sky-600/30 ring-2 ring-sky-400'
-                          : 'bg-slate-900/90 text-sky-300 hover:text-white hover:bg-sky-900/30'
-                      }`}
-                    >
-                      <Share2 className="w-4 h-4" />
-                      <span>التواصل والمسابقات 🏆</span>
-                    </button>
-                  )}
-
                   {(tabCategory === 'all' || tabCategory === 'eval') && (
                     <button
                       onClick={() => setActiveTab('homework')}
@@ -1912,18 +1897,6 @@ export const PublicTrainerPortalView: React.FC<PublicTrainerPortalViewProps> = (
                 trainer={trainer}
                 activeGroup={groups.find(g => g.id === selectedGroupId) || null}
                 groups={groups}
-                onShowToast={(msg, type) => showToast(msg, type || 'info')}
-              />
-            )}
-
-            {/* TAB 4: TRAINER SOCIAL FEED & CHALLENGES & POLLS */}
-            {activeTab === 'social_feed' && (
-              <TrainerSocialFeed
-                trainer={trainer}
-                onUpdateTrainerPhoto={(photoUrl) => {
-                  setTrainer(prev => prev ? { ...prev, photoUrl } : prev);
-                  showToast('تم تحديث صورة المدرب بنجاح 📸', 'success');
-                }}
                 onShowToast={(msg, type) => showToast(msg, type || 'info')}
               />
             )}

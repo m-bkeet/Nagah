@@ -103,11 +103,11 @@ export const OfficialReceiptModal: React.FC<OfficialReceiptModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md overflow-y-auto print:p-0 print:bg-white print:static">
-      <div className="relative w-full max-w-xl bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl overflow-hidden print:border-none print:shadow-none print:bg-white print:text-black print:w-full">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/80 backdrop-blur-md overflow-hidden print:p-0 print:bg-white print:static">
+      <div className="relative w-full max-w-xl bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl max-h-[90vh] flex flex-col overflow-hidden print:border-none print:shadow-none print:bg-white print:text-black print:w-full">
         
         {/* Modal Action Bar (Hidden on Print) */}
-        <div className="p-4 bg-slate-950 border-b border-slate-800 flex items-center justify-between print:hidden">
+        <div className="shrink-0 p-4 bg-slate-950 border-b border-slate-800 flex items-center justify-between print:hidden">
           <div className="flex items-center gap-2">
             <Receipt className="w-4 h-4 text-emerald-400" />
             <span className="text-emerald-400 font-bold text-xs">سند قبض مالي معتمد</span>
@@ -157,7 +157,7 @@ export const OfficialReceiptModal: React.FC<OfficialReceiptModalProps> = ({
         </div>
 
         {/* PRINTABLE RECEIPT CARD BODY */}
-        <div ref={receiptRef} className={`p-6 md:p-8 space-y-6 bg-slate-900 text-slate-100 print:bg-white print:text-slate-900 ${isThermalMode ? 'max-w-[320px] mx-auto text-xs space-y-3 font-mono print:w-[80mm]' : ''}`}>
+        <div ref={receiptRef} className={`flex-1 overflow-y-auto custom-scrollbar p-6 md:p-8 space-y-6 bg-slate-900 text-slate-100 print:bg-white print:text-slate-900 ${isThermalMode ? 'max-w-[320px] mx-auto text-xs space-y-3 font-mono print:w-[80mm]' : ''}`}>
           {isThermalMode ? (
             /* POS 80mm Thermal Receipt Layout */
             <div className="text-center space-y-2 border-b border-dashed border-slate-700 pb-3 print:border-black">

@@ -1,11 +1,5 @@
 var __defProp = Object.defineProperty;
 var __getOwnPropNames = Object.getOwnPropertyNames;
-var __require = /* @__PURE__ */ ((x) => typeof require !== "undefined" ? require : typeof Proxy !== "undefined" ? new Proxy(x, {
-  get: (a, b) => (typeof require !== "undefined" ? require : a)[b]
-}) : x)(function(x) {
-  if (typeof require !== "undefined") return require.apply(this, arguments);
-  throw Error('Dynamic require of "' + x + '" is not supported');
-});
 var __esm = (fn, res) => function __init() {
   return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
 };
@@ -15,6 +9,11 @@ var __export = (target, all) => {
 };
 
 // server/db.ts
+var db_exports = {};
+__export(db_exports, {
+  db: () => db,
+  hashPassword: () => hashPassword
+});
 import fs from "fs";
 import path from "path";
 import crypto from "crypto";
@@ -3600,14 +3599,16 @@ var init_db = __esm({
                 match.fullName = defaultUser.fullName;
               }
             }
+            const rawTrainees = Array.isArray(parsed.trainees) ? parsed.trainees : [];
             return {
               ...initialData,
               ...parsed,
               branches: parsed.branches && parsed.branches.length > 0 ? parsed.branches : initialData.branches,
-              trainees: parsed.trainees && parsed.trainees.length > 0 ? parsed.trainees : initialData.trainees,
+              trainees: rawTrainees.length > 0 ? rawTrainees : initialData.trainees,
               trainers: parsed.trainers && parsed.trainers.length > 0 ? parsed.trainers : initialData.trainers,
               courses: parsed.courses && parsed.courses.length > 0 ? parsed.courses : initialData.courses,
               groups: parsed.groups && parsed.groups.length > 0 ? parsed.groups : initialData.groups,
+              attendance: parsed.attendance && parsed.attendance.length > 0 ? parsed.attendance : initialData.attendance || [],
               certificateTemplates: parsed.certificateTemplates && parsed.certificateTemplates.length > 0 ? parsed.certificateTemplates : initialData.certificateTemplates,
               exams: parsed.exams && parsed.exams.length > 0 ? parsed.exams : initialData.exams,
               questions: parsed.questions && parsed.questions.length > 0 ? parsed.questions : initialData.questions,
@@ -3949,835 +3950,6 @@ var init_db = __esm({
   }
 });
 
-// server/dbNeon.ts
-import { Pool, neonConfig } from "@neondatabase/serverless";
-import ws from "ws";
-async function queryNeon(text, params) {
-  const client = await neonPool.connect();
-  try {
-    const res = await client.query(text, params);
-    return res;
-  } finally {
-    client.release();
-  }
-}
-var DATABASE_URL, neonPool;
-var init_dbNeon = __esm({
-  "server/dbNeon.ts"() {
-    neonConfig.webSocketConstructor = ws;
-    DATABASE_URL = process.env.DATABASE_URL || "postgresql://neondb_owner:npg_KDx6y4vLjRIE@ep-tiny-feather-b1gwujlu-pooler.c-5.eu-central-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require";
-    neonPool = new Pool({ connectionString: DATABASE_URL });
-  }
-});
-
-// server/data/index.ts
-var data_exports = {};
-__export(data_exports, {
-  AttendanceRepo: () => AttendanceRepo,
-  AuditLogRepo: () => AuditLogRepo,
-  BranchRepo: () => BranchRepo,
-  CertificateRepo: () => CertificateRepo,
-  CertificateTemplateRepo: () => CertificateTemplateRepo,
-  ComputerLabRepo: () => ComputerLabRepo,
-  CourseRepo: () => CourseRepo,
-  DeviceCommandRepo: () => DeviceCommandRepo,
-  DeviceRepo: () => DeviceRepo,
-  ExamQuestionRepo: () => ExamQuestionRepo,
-  ExamRepo: () => ExamRepo,
-  ExamResultRepo: () => ExamResultRepo,
-  ExpenseRepo: () => ExpenseRepo,
-  GroupRepo: () => GroupRepo,
-  InteractiveSessionRepo: () => InteractiveSessionRepo,
-  PaymentRepo: () => PaymentRepo,
-  PointRuleRepo: () => PointRuleRepo,
-  PointTransactionRepo: () => PointTransactionRepo,
-  ProgramRepo: () => ProgramRepo,
-  SettingRepo: () => SettingRepo,
-  TraineeRepo: () => TraineeRepo,
-  TraineeScreenshotRepo: () => TraineeScreenshotRepo,
-  TrainerRepo: () => TrainerRepo,
-  UserRepo: () => UserRepo,
-  hydrateAllFromNeon: () => hydrateAllFromNeon,
-  hydrateAllFromSupabase: () => hydrateAllFromSupabase,
-  supabaseClient: () => supabaseClient2
-});
-import { createClient } from "@supabase/supabase-js";
-function cleanSupabaseUrl2(raw) {
-  if (!raw) return "https://zdbrwwkyxjujrokzjang.supabase.co";
-  let url = raw.trim().replace(/\/+$/, "");
-  while (/\/rest\/v1$/i.test(url)) {
-    url = url.replace(/\/rest\/v1$/i, "").replace(/\/+$/, "");
-  }
-  return url.trim() || "https://zdbrwwkyxjujrokzjang.supabase.co";
-}
-function handleSupabaseError(action, key, id, msg) {
-  if (msg.includes("exceed_egress_quota") || msg.includes("restricted") || msg.includes("quota")) {
-    if (!isSupabaseQuotaRestricted) {
-      isSupabaseQuotaRestricted = true;
-      console.warn("[SupabaseRepo] Quota restriction reached (exceed_egress_quota). Seamlessly operating in resilient local storage mode.");
-    }
-  } else {
-    console.error(`[SupabaseRepo] ${action} error for ${key}/${id}:`, msg);
-  }
-}
-async function hydrateAllFromSupabase() {
-  if (!supabaseClient2 || isSupabaseQuotaRestricted) {
-    return 0;
-  }
-  try {
-    const { data, error } = await supabaseClient2.from("collections").select("collection_name, id, data, updated_at").range(0, 4999);
-    if (error) {
-      if (error.message && (error.message.includes("exceed_egress_quota") || error.message.includes("restricted") || error.message.includes("quota"))) {
-        isSupabaseQuotaRestricted = true;
-        console.warn("[Hydration] Supabase project exceeded egress quota. Running seamlessly on local storage without interruption.");
-      } else {
-        console.error("[Hydration] Error reading collections from Supabase:", error.message);
-      }
-      return 0;
-    }
-    if (Array.isArray(data)) {
-      const memData = db.getData();
-      const grouped = {};
-      data.forEach((row) => {
-        const cName = row.collection_name;
-        if (!grouped[cName]) grouped[cName] = [];
-        grouped[cName].push({ id: row.id, ...row.data || {} });
-      });
-      for (const [colName, items] of Object.entries(grouped)) {
-        memData[colName] = items;
-      }
-      console.log(`[Hydration] Successfully loaded ${data.length} documents from Supabase public.collections across ${Object.keys(grouped).length} collections.`);
-      if (false) {
-        console.log("[Hydration] Supabase is empty. Seeding from local memory data...");
-        const inserts = [];
-        for (const [cName, cItems] of Object.entries(memData)) {
-          if (Array.isArray(cItems) && cItems.length > 0) {
-            for (const item of cItems) {
-              if (item && item.id) {
-                inserts.push({
-                  collection_name: cName,
-                  id: item.id,
-                  data: item,
-                  updated_at: (/* @__PURE__ */ new Date()).toISOString()
-                });
-              }
-            }
-          }
-        }
-        if (inserts.length > 0) {
-          const chunkSize = 500;
-          for (let i = 0; i < inserts.length; i += chunkSize) {
-            const chunk = inserts.slice(i, i + chunkSize);
-            const { error: seedError } = await supabaseClient2.from("collections").insert(chunk);
-            if (seedError) console.error("[Hydration] Error seeding Supabase:", seedError);
-            else console.log(`[Hydration] Seeded chunk of ${chunk.length} items.`);
-          }
-        }
-      }
-      return data.length;
-    }
-  } catch (err) {
-    console.error("[Hydration] Exception hydrating from Supabase:", err.message);
-  }
-  return 0;
-}
-async function hydrateAllFromNeon() {
-  console.log("[Neon Hydration] Commencing live database hydration from Neon PostgreSQL...");
-  try {
-    const memData = db.getData();
-    const b = await queryNeon("SELECT * FROM branches");
-    if (b && b.rows.length) {
-      memData.branches = b.rows.map((r) => ({
-        id: r.id,
-        code: r.code || "",
-        name: r.name,
-        city: r.city || "",
-        address: r.address || "",
-        phone: r.phone || "",
-        managerName: r.manager_name || "",
-        status: r.status || "active"
-      }));
-    }
-    const t = await queryNeon("SELECT * FROM trainers");
-    if (t && t.rows.length) {
-      memData.trainers = t.rows.map((r) => ({
-        id: r.id,
-        code: r.code || "",
-        name: r.name,
-        email: r.email || "",
-        phone: r.phone || "",
-        branchId: r.branch_id || null,
-        specialty: r.specialty || "",
-        status: r.status || "active"
-      }));
-    }
-    const c = await queryNeon("SELECT * FROM courses");
-    if (c && c.rows.length) {
-      memData.courses = c.rows.map((r) => ({
-        id: r.id,
-        code: r.code || "",
-        name: r.name,
-        category: r.category || "",
-        grade: r.grade || "",
-        branchId: r.branch_id || null,
-        feeAmount: Number(r.fee_amount) || 0,
-        status: r.status || "active"
-      }));
-    }
-    const g = await queryNeon("SELECT * FROM groups");
-    if (g && g.rows.length) {
-      memData.groups = g.rows.map((r) => ({
-        id: r.id,
-        name: r.name,
-        courseId: r.course_id || null,
-        trainerId: r.trainer_id || null,
-        branchId: r.branch_id || null,
-        track: r.track || "\u0639\u0631\u0628\u064A",
-        grade: r.grade || "",
-        roomName: r.room_name || "",
-        status: r.status || "active"
-      }));
-    }
-    const s = await queryNeon("SELECT * FROM students");
-    if (s && s.rows.length) {
-      const existingTraineesMap = /* @__PURE__ */ new Map();
-      (memData.trainees || []).forEach((x) => existingTraineesMap.set(x.id, x));
-      memData.trainees = s.rows.map((r) => {
-        const old = existingTraineesMap.get(r.id) || {};
-        return {
-          ...old,
-          id: r.id,
-          code: r.student_code,
-          studentCode: r.student_code,
-          traineeCode: r.student_code,
-          fullName: r.full_name,
-          phone: r.phone || "",
-          parentPhone: r.parent_phone || "",
-          parentName: r.parent_name || "",
-          branchId: r.branch_id || null,
-          groupId: r.group_id || null,
-          courseId: r.course_id || null,
-          track: r.track || "",
-          grade: r.grade || "",
-          points: r.points || 0,
-          totalPoints: r.points || 0,
-          status: r.status || "active"
-        };
-      });
-    }
-    const cert = await queryNeon("SELECT * FROM certificates");
-    if (cert && cert.rows.length) {
-      memData.certificates = cert.rows.map((r) => ({
-        id: r.id,
-        traineeId: r.student_id,
-        courseName: r.course_name,
-        issueDate: r.issue_date ? r.issue_date.toISOString().slice(0, 10) : "",
-        verificationCode: r.verification_code,
-        qrToken: r.qr_token || ""
-      }));
-    }
-    const fin = await queryNeon("SELECT * FROM finance");
-    if (fin && fin.rows.length) {
-      memData.payments = fin.rows.map((r) => ({
-        id: r.id,
-        traineeId: r.student_id,
-        amount: Number(r.amount) || 0,
-        paymentType: r.payment_type,
-        receiptNumber: r.receipt_number || "",
-        notes: r.notes || ""
-      }));
-    }
-    const gp = await queryNeon("SELECT * FROM gamification_points");
-    if (gp && gp.rows.length) {
-      memData.pointTransactions = gp.rows.map((r) => ({
-        id: r.id,
-        traineeId: r.student_id,
-        points: r.points || 0,
-        badge: r.badge || "\u0646\u062C\u0645 \u0627\u0644\u0623\u0633\u0628\u0648\u0639",
-        reason: r.reason || ""
-      }));
-    }
-    console.log(`[Neon Hydration] Hydrated ${s.rows.length} students from Neon PostgreSQL successfully!`);
-  } catch (err) {
-    console.error("[Neon Hydration] Error loading from Neon:", err.message);
-  }
-}
-async function syncItemToNeon(key, item, isDelete = false) {
-  try {
-    if (isDelete) {
-      if (key === "trainees") {
-        await queryNeon("DELETE FROM students WHERE id = $1", [item.id]);
-      } else if (key === "branches") {
-        await queryNeon("DELETE FROM branches WHERE id = $1", [item.id]);
-      } else if (key === "trainers") {
-        await queryNeon("DELETE FROM trainers WHERE id = $1", [item.id]);
-      } else if (key === "courses") {
-        await queryNeon("DELETE FROM courses WHERE id = $1", [item.id]);
-      } else if (key === "groups") {
-        await queryNeon("DELETE FROM groups WHERE id = $1", [item.id]);
-      } else if (key === "payments") {
-        await queryNeon("DELETE FROM finance WHERE id = $1", [item.id]);
-      } else if (key === "certificates") {
-        await queryNeon("DELETE FROM certificates WHERE id = $1", [item.id]);
-      } else if (key === "pointTransactions") {
-        await queryNeon("DELETE FROM gamification_points WHERE id = $1", [item.id]);
-      }
-      return;
-    }
-    if (key === "trainees") {
-      const code = item.code || item.studentCode || item.traineeCode || item.id;
-      const memData = db.getData();
-      const grp = (memData.groups || []).find((g) => g.id === item.groupId);
-      const grpName = grp ? grp.name : "";
-      await queryNeon(`
-        INSERT INTO students (id, student_code, full_name, phone, parent_phone, parent_name, branch_id, group_id, course_id, track, grade, group_name, points, status)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
-        ON CONFLICT (id) DO UPDATE SET
-          student_code = EXCLUDED.student_code,
-          full_name = EXCLUDED.full_name,
-          phone = EXCLUDED.phone,
-          parent_phone = EXCLUDED.parent_phone,
-          parent_name = EXCLUDED.parent_name,
-          branch_id = EXCLUDED.branch_id,
-          group_id = EXCLUDED.group_id,
-          course_id = EXCLUDED.course_id,
-          track = EXCLUDED.track,
-          grade = EXCLUDED.grade,
-          group_name = EXCLUDED.group_name,
-          points = EXCLUDED.points,
-          status = EXCLUDED.status
-      `, [
-        item.id,
-        code,
-        item.fullName || item.name || "",
-        item.phone || "",
-        item.parentPhone || "",
-        item.parentName || "",
-        item.branchId || null,
-        item.groupId || null,
-        item.courseId || null,
-        item.track || "",
-        item.grade || "",
-        grpName,
-        item.points || item.totalPoints || 0,
-        item.status || "active"
-      ]);
-    } else if (key === "branches") {
-      await queryNeon(`
-        INSERT INTO branches (id, code, name, address, phone, manager_name, status)
-        VALUES ($1, $2, $3, $4, $5, $6, $7)
-        ON CONFLICT (id) DO UPDATE SET
-          code = EXCLUDED.code,
-          name = EXCLUDED.name,
-          address = EXCLUDED.address,
-          phone = EXCLUDED.phone,
-          manager_name = EXCLUDED.manager_name,
-          status = EXCLUDED.status
-      `, [
-        item.id,
-        item.code || "",
-        item.name || "",
-        item.address || "",
-        item.phone || "",
-        item.managerName || "",
-        item.status || "active"
-      ]);
-    } else if (key === "trainers") {
-      await queryNeon(`
-        INSERT INTO trainers (id, code, name, email, phone, branch_id, specialty, status)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-        ON CONFLICT (id) DO UPDATE SET
-          code = EXCLUDED.code,
-          name = EXCLUDED.name,
-          email = EXCLUDED.email,
-          phone = EXCLUDED.phone,
-          branch_id = EXCLUDED.branch_id,
-          specialty = EXCLUDED.specialty,
-          status = EXCLUDED.status
-      `, [
-        item.id,
-        item.code || "",
-        item.name || "",
-        item.email || "",
-        item.phone || "",
-        item.branchId || null,
-        item.specialty || "",
-        item.status || "active"
-      ]);
-    } else if (key === "courses") {
-      await queryNeon(`
-        INSERT INTO courses (id, code, name, category, grade, branch_id, fee_amount, status)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-        ON CONFLICT (id) DO UPDATE SET
-          code = EXCLUDED.code,
-          name = EXCLUDED.name,
-          category = EXCLUDED.category,
-          grade = EXCLUDED.grade,
-          branch_id = EXCLUDED.branch_id,
-          fee_amount = EXCLUDED.fee_amount,
-          status = EXCLUDED.status
-      `, [
-        item.id,
-        item.code || "",
-        item.name || "",
-        item.category || "",
-        item.grade || "",
-        item.branchId || null,
-        item.feeAmount || 0,
-        item.status || "active"
-      ]);
-    } else if (key === "groups") {
-      await queryNeon(`
-        INSERT INTO groups (id, name, course_id, trainer_id, branch_id, track, grade, room_name, status)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-        ON CONFLICT (id) DO UPDATE SET
-          name = EXCLUDED.name,
-          course_id = EXCLUDED.course_id,
-          trainer_id = EXCLUDED.trainer_id,
-          branch_id = EXCLUDED.branch_id,
-          track = EXCLUDED.track,
-          grade = EXCLUDED.grade,
-          room_name = EXCLUDED.room_name,
-          status = EXCLUDED.status
-      `, [
-        item.id,
-        item.name || "",
-        item.courseId || null,
-        item.trainerId || null,
-        item.branchId || null,
-        item.track || "\u0639\u0631\u0628\u064A",
-        item.grade || "",
-        item.roomName || item.hallName || "",
-        item.status || "active"
-      ]);
-    } else if (key === "payments") {
-      await queryNeon(`
-        INSERT INTO finance (id, student_id, amount, payment_type, receipt_number, notes)
-        VALUES ($1, $2, $3, $4, $5, $6)
-        ON CONFLICT (id) DO UPDATE SET
-          student_id = EXCLUDED.student_id,
-          amount = EXCLUDED.amount,
-          payment_type = EXCLUDED.payment_type,
-          receipt_number = EXCLUDED.receipt_number,
-          notes = EXCLUDED.notes
-      `, [
-        item.id,
-        item.traineeId || item.studentId || null,
-        item.amount || 0,
-        item.paymentType || "\u0633\u0646\u062F \u0642\u0628\u0636",
-        item.receiptNumber || item.id,
-        item.notes || ""
-      ]);
-    } else if (key === "certificates") {
-      await queryNeon(`
-        INSERT INTO certificates (id, student_id, course_name, issue_date, verification_code, qr_token)
-        VALUES ($1, $2, $3, $4, $5, $6)
-        ON CONFLICT (id) DO UPDATE SET
-          student_id = EXCLUDED.student_id,
-          course_name = EXCLUDED.course_name,
-          issue_date = EXCLUDED.issue_date,
-          verification_code = EXCLUDED.verification_code,
-          qr_token = EXCLUDED.qr_token
-      `, [
-        item.id,
-        item.traineeId || item.studentId || null,
-        item.courseName || "",
-        item.issueDate || (/* @__PURE__ */ new Date()).toISOString().slice(0, 10),
-        item.verificationCode || item.certificateCode || item.id,
-        item.qrToken || ""
-      ]);
-    } else if (key === "pointTransactions") {
-      await queryNeon(`
-        INSERT INTO gamification_points (id, student_id, points, badge, reason)
-        VALUES ($1, $2, $3, $4, $5)
-        ON CONFLICT (id) DO UPDATE SET
-          student_id = EXCLUDED.student_id,
-          points = EXCLUDED.points,
-          badge = EXCLUDED.badge,
-          reason = EXCLUDED.reason
-      `, [
-        item.id,
-        item.traineeId || item.studentId || null,
-        item.points || 0,
-        item.badge || "\u0646\u062C\u0645 \u0627\u0644\u0623\u0633\u0628\u0648\u0639",
-        item.reason || ""
-      ]);
-    }
-  } catch (err) {
-    console.error(`[Neon Sync] Non-critical error syncing key ${key}:`, err.message);
-  }
-}
-async function fetchKeyFromNeon(key) {
-  try {
-    if (key === "branches") {
-      const b = await queryNeon("SELECT * FROM branches");
-      return b.rows.map((r) => ({
-        id: r.id,
-        code: r.code || "",
-        name: r.name,
-        city: r.city || "",
-        address: r.address || "",
-        phone: r.phone || "",
-        managerName: r.manager_name || "",
-        status: r.status || "active"
-      }));
-    }
-    if (key === "trainers") {
-      const t = await queryNeon("SELECT * FROM trainers");
-      return t.rows.map((r) => ({
-        id: r.id,
-        code: r.code || "",
-        name: r.name,
-        email: r.email || "",
-        phone: r.phone || "",
-        branchId: r.branch_id || null,
-        specialty: r.specialty || "",
-        status: r.status || "active"
-      }));
-    }
-    if (key === "courses") {
-      const c = await queryNeon("SELECT * FROM courses");
-      return c.rows.map((r) => ({
-        id: r.id,
-        code: r.code || "",
-        name: r.name,
-        category: r.category || "",
-        grade: r.grade || "",
-        branchId: r.branch_id || null,
-        feeAmount: Number(r.fee_amount) || 0,
-        status: r.status || "active"
-      }));
-    }
-    if (key === "groups") {
-      const g = await queryNeon("SELECT * FROM groups");
-      return g.rows.map((r) => ({
-        id: r.id,
-        name: r.name,
-        courseId: r.course_id || null,
-        trainerId: r.trainer_id || null,
-        branchId: r.branch_id || null,
-        track: r.track || "\u0639\u0631\u0628\u064A",
-        grade: r.grade || "",
-        roomName: r.room_name || "",
-        status: r.status || "active"
-      }));
-    }
-    if (key === "trainees") {
-      const s = await queryNeon("SELECT * FROM students");
-      const memData = db.getData();
-      const existingTraineesMap = /* @__PURE__ */ new Map();
-      (memData.trainees || []).forEach((x) => existingTraineesMap.set(x.id, x));
-      return s.rows.map((r) => {
-        const old = existingTraineesMap.get(r.id) || {};
-        return {
-          ...old,
-          id: r.id,
-          code: r.student_code,
-          studentCode: r.student_code,
-          traineeCode: r.student_code,
-          fullName: r.full_name,
-          phone: r.phone || "",
-          parentPhone: r.parent_phone || "",
-          parentName: r.parent_name || "",
-          branchId: r.branch_id || null,
-          groupId: r.group_id || null,
-          courseId: r.course_id || null,
-          track: r.track || "",
-          grade: r.grade || "",
-          points: r.points || 0,
-          totalPoints: r.points || 0,
-          status: r.status || "active"
-        };
-      });
-    }
-    if (key === "certificates") {
-      const cert = await queryNeon("SELECT * FROM certificates");
-      return cert.rows.map((r) => ({
-        id: r.id,
-        traineeId: r.student_id,
-        courseName: r.course_name,
-        issueDate: r.issue_date ? r.issue_date.toISOString().slice(0, 10) : "",
-        verificationCode: r.verification_code,
-        qrToken: r.qr_token || ""
-      }));
-    }
-    if (key === "payments") {
-      const fin = await queryNeon("SELECT * FROM finance");
-      return fin.rows.map((r) => ({
-        id: r.id,
-        traineeId: r.student_id,
-        amount: Number(r.amount) || 0,
-        paymentType: r.payment_type,
-        receiptNumber: r.receipt_number || "",
-        notes: r.notes || ""
-      }));
-    }
-    if (key === "pointTransactions") {
-      const gp = await queryNeon("SELECT * FROM gamification_points");
-      return gp.rows.map((r) => ({
-        id: r.id,
-        traineeId: r.student_id,
-        points: r.points || 0,
-        badge: r.badge || "\u0646\u062C\u0645 \u0627\u0644\u0623\u0633\u0628\u0648\u0639",
-        reason: r.reason || ""
-      }));
-    }
-  } catch (err) {
-    console.error(`[fetchKeyFromNeon] Error for key ${key}:`, err.message);
-  }
-  return null;
-}
-function createRepo(key) {
-  return {
-    async getAll() {
-      const liveItems = await fetchKeyFromNeon(key);
-      if (liveItems !== null) {
-        const memData2 = db.getData();
-        memData2[key] = liveItems;
-        return liveItems;
-      }
-      const memData = db.getData();
-      const memItems = memData && Array.isArray(memData[key]) ? memData[key] : [];
-      return memItems;
-    },
-    async getById(id) {
-      if (!id) return null;
-      const all = await this.getAll();
-      const idStr = String(id).trim().toLowerCase();
-      return all.find((item) => {
-        const itemObj = item;
-        return item.id && String(item.id).trim().toLowerCase() === idStr || itemObj.legacyId && String(itemObj.legacyId).trim().toLowerCase() === idStr || itemObj.code && String(itemObj.code).trim().toLowerCase() === idStr || itemObj.studentCode && String(itemObj.studentCode).trim().toLowerCase() === idStr || itemObj.traineeCode && String(itemObj.traineeCode).trim().toLowerCase() === idStr;
-      }) || null;
-    },
-    async getByTraineeId(traineeId) {
-      const all = await this.getAll();
-      if (!traineeId) return [];
-      const idStr = String(traineeId).trim().toLowerCase();
-      return all.filter((item) => {
-        const itemObj = item;
-        const candidates = [
-          itemObj.traineeId,
-          itemObj.studentId,
-          itemObj.trainee_id,
-          itemObj.student_id,
-          itemObj.traineeCode,
-          itemObj.studentCode,
-          itemObj.trainee_code,
-          itemObj.student_code
-        ];
-        return candidates.some((c) => c && String(c).trim().toLowerCase() === idStr);
-      });
-    },
-    async getByStudentId(studentId) {
-      return this.getByTraineeId(studentId);
-    },
-    async getByExamId(examId) {
-      const all = await this.getAll();
-      if (!examId) return [];
-      const idStr = String(examId).trim().toLowerCase();
-      return all.filter((item) => {
-        const itemObj = item;
-        return itemObj.examId && String(itemObj.examId).trim().toLowerCase() === idStr;
-      });
-    },
-    async query(filters) {
-      const all = await this.getAll();
-      if (!Array.isArray(filters) || filters.length === 0) return all;
-      return all.filter((item) => {
-        const itemObj = item;
-        return filters.every((f) => {
-          const val = itemObj[f.field];
-          if (f.operator === "==" || f.operator === "===") return val === f.value;
-          if (f.operator === "!=") return val !== f.value;
-          return true;
-        });
-      });
-    },
-    async create(id, itemData) {
-      const docId = id || itemData.id || "doc-" + Date.now() + "-" + Math.random().toString(36).substring(2, 6);
-      const fullItem = { ...itemData, id: docId };
-      if (supabaseClient2 && !isSupabaseQuotaRestricted) {
-        try {
-          const { error } = await supabaseClient2.from("collections").upsert({
-            collection_name: key,
-            id: docId,
-            data: fullItem,
-            updated_at: (/* @__PURE__ */ new Date()).toISOString()
-          }, { onConflict: "collection_name,id" });
-          if (error) {
-            handleSupabaseError("Create", key, docId, error.message);
-          }
-        } catch (e) {
-          handleSupabaseError("Create", key, docId, e.message);
-        }
-      }
-      const memData = db.getData();
-      if (memData) {
-        if (!Array.isArray(memData[key])) memData[key] = [];
-        const list = memData[key];
-        const idx = list.findIndex((i) => i.id === docId);
-        if (idx >= 0) list[idx] = fullItem;
-        else list.push(fullItem);
-      }
-      await syncItemToNeon(key, fullItem, false);
-      return fullItem;
-    },
-    async update(id, updates) {
-      const existing = await this.getById(id);
-      const docId = existing ? existing.id : id;
-      const updatedItem = { ...existing || {}, ...updates, id: docId, updatedAt: (/* @__PURE__ */ new Date()).toISOString() };
-      if (supabaseClient2 && !isSupabaseQuotaRestricted) {
-        try {
-          const { error } = await supabaseClient2.from("collections").upsert({
-            collection_name: key,
-            id: docId,
-            data: updatedItem,
-            updated_at: (/* @__PURE__ */ new Date()).toISOString()
-          }, { onConflict: "collection_name,id" });
-          if (error) {
-            handleSupabaseError("Update", key, docId, error.message);
-          }
-        } catch (e) {
-          handleSupabaseError("Update", key, docId, e.message);
-        }
-      }
-      const memData = db.getData();
-      if (memData && Array.isArray(memData[key])) {
-        const list = memData[key];
-        const idx = list.findIndex((i) => i.id === docId);
-        if (idx >= 0) list[idx] = updatedItem;
-      }
-      await syncItemToNeon(key, updatedItem, false);
-      return updatedItem;
-    },
-    async delete(id) {
-      if (supabaseClient2 && !isSupabaseQuotaRestricted) {
-        try {
-          const { error } = await supabaseClient2.from("collections").delete().eq("collection_name", key).eq("id", id);
-          if (error) {
-            handleSupabaseError("Delete", key, id, error.message);
-          }
-        } catch (e) {
-          handleSupabaseError("Delete", key, id, e.message);
-        }
-      }
-      const memData = db.getData();
-      if (memData && Array.isArray(memData[key])) {
-        const list = memData[key];
-        const idx = list.findIndex((i) => i.id === id);
-        if (idx >= 0) list.splice(idx, 1);
-      }
-      await syncItemToNeon(key, { id }, true);
-      return true;
-    },
-    invalidateCache() {
-    }
-  };
-}
-var SUPABASE_URL2, SUPABASE_KEY2, hasValidSupabase2, supabaseClient2, isSupabaseQuotaRestricted, TraineeRepo, BranchRepo, CourseRepo, ProgramRepo, GroupRepo, TrainerRepo, AttendanceRepo, PaymentRepo, ExpenseRepo, ExamRepo, ExamQuestionRepo, ExamResultRepo, PointRuleRepo, PointTransactionRepo, CertificateRepo, CertificateTemplateRepo, UserRepo, DeviceRepo, DeviceCommandRepo, ComputerLabRepo, InteractiveSessionRepo, TraineeScreenshotRepo, SettingRepo, AuditLogRepo;
-var init_data = __esm({
-  "server/data/index.ts"() {
-    init_db();
-    init_dbNeon();
-    SUPABASE_URL2 = cleanSupabaseUrl2(process.env.SUPABASE_URL);
-    SUPABASE_KEY2 = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpkYnJ3d2t5eGp1anJva3pqYW5nIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4ODA0ODY0MiwiZXhwIjoyMTAzNjI0NjQyfQ._JEu3kjLDPWS1uCabeVMyTRIeDS0NpnjTPUjyuL6_Ec").trim();
-    hasValidSupabase2 = false;
-    supabaseClient2 = null;
-    isSupabaseQuotaRestricted = false;
-    if (hasValidSupabase2) {
-      try {
-        supabaseClient2 = createClient(SUPABASE_URL2, SUPABASE_KEY2, {
-          auth: { persistSession: false }
-        });
-      } catch (e) {
-        console.error("[DataLayer] Failed to create Supabase client:", e.message);
-        supabaseClient2 = null;
-      }
-    }
-    hydrateAllFromNeon().then(() => {
-      if (supabaseClient2) {
-        hydrateAllFromSupabase().catch((err) => {
-          console.error("[Hydration] Auto-hydration on load failed:", err);
-        });
-      }
-    }).catch((err) => {
-      console.error("[Neon Hydration] Load failed:", err);
-    });
-    TraineeRepo = createRepo("trainees");
-    BranchRepo = createRepo("branches");
-    CourseRepo = createRepo("courses");
-    ProgramRepo = createRepo("programs");
-    GroupRepo = createRepo("groups");
-    TrainerRepo = createRepo("trainers");
-    AttendanceRepo = createRepo("attendance");
-    PaymentRepo = {
-      ...createRepo("payments"),
-      async getPendingProofs() {
-        const all = await createRepo("payments").getAll();
-        return all.filter((p) => p.status === "pending" || p.status === "pending_approval" || Boolean(p.proofUrl));
-      }
-    };
-    ExpenseRepo = createRepo("expenses");
-    ExamRepo = createRepo("exams");
-    ExamQuestionRepo = createRepo("questions");
-    ExamResultRepo = createRepo("examResults");
-    PointRuleRepo = createRepo("pointRules");
-    PointTransactionRepo = createRepo("pointTransactions");
-    CertificateRepo = createRepo("certificates");
-    CertificateTemplateRepo = createRepo("certificateTemplates");
-    UserRepo = createRepo("users");
-    DeviceRepo = createRepo("devices");
-    DeviceCommandRepo = createRepo("deviceCommands");
-    ComputerLabRepo = createRepo("computerLabs");
-    InteractiveSessionRepo = createRepo("interactiveSessions");
-    TraineeScreenshotRepo = createRepo("traineeScreenshots");
-    SettingRepo = {
-      async get() {
-        return db.getData().settings || {};
-      },
-      async update(updates) {
-        const current = await this.get();
-        const finalSettings = { ...current, ...updates };
-        if (supabaseClient2 && !isSupabaseQuotaRestricted) {
-          try {
-            const { error } = await supabaseClient2.from("collections").upsert({
-              collection_name: "settings",
-              id: "main",
-              data: finalSettings,
-              updated_at: (/* @__PURE__ */ new Date()).toISOString()
-            }, { onConflict: "collection_name,id" });
-            if (error) {
-              handleSupabaseError("Update", "settings", "main", error.message);
-            }
-          } catch (e) {
-            handleSupabaseError("Update", "settings", "main", e.message);
-          }
-        }
-        const data = db.getData();
-        data.settings = finalSettings;
-        db.save();
-        return finalSettings;
-      }
-    };
-    AuditLogRepo = {
-      ...createRepo("auditLogs"),
-      async log(action, details, user) {
-        const logItem = {
-          id: "log-" + Date.now() + "-" + Math.random().toString(36).substring(2, 6),
-          userId: user || "SYSTEM",
-          userName: user || "\u0645\u062F\u064A\u0631 \u0627\u0644\u0646\u0638\u0627\u0645",
-          action,
-          entity: "\u0627\u0644\u0646\u0638\u0627\u0645",
-          details,
-          timestamp: (/* @__PURE__ */ new Date()).toISOString()
-        };
-        await this.create(logItem.id, logItem);
-        return logItem;
-      }
-    };
-  }
-});
-
 // server/api-entry.ts
 import express3 from "express";
 import cors from "cors";
@@ -4788,30 +3960,6 @@ import { Router as Router2 } from "express";
 // server/firebaseAdmin.ts
 init_db();
 import * as crypto2 from "crypto";
-function cleanSupabaseUrl(raw) {
-  if (!raw) return "https://zdbrwwkyxjujrokzjang.supabase.co";
-  let url = raw.trim().replace(/\/+$/, "");
-  while (/\/rest\/v1$/i.test(url)) {
-    url = url.replace(/\/rest\/v1$/i, "").replace(/\/+$/, "");
-  }
-  return url.trim() || "https://zdbrwwkyxjujrokzjang.supabase.co";
-}
-var SUPABASE_URL = cleanSupabaseUrl(process.env.SUPABASE_URL);
-var SUPABASE_KEY = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpkYnJ3d2t5eGp1anJva3pqYW5nIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4ODA0ODY0MiwiZXhwIjoyMTAzNjI0NjQyfQ._JEu3kjLDPWS1uCabeVMyTRIeDS0NpnjTPUjyuL6_Ec").trim();
-var hasValidSupabase = Boolean(
-  SUPABASE_URL && !SUPABASE_URL.includes("placeholder") && SUPABASE_KEY && !SUPABASE_KEY.includes("placeholder")
-);
-var supabaseClient = null;
-if (hasValidSupabase) {
-  try {
-    const { createClient: createClient2 } = __require("@supabase/supabase-js");
-    supabaseClient = createClient2(SUPABASE_URL, SUPABASE_KEY, {
-      auth: { persistSession: false }
-    });
-  } catch (e) {
-    supabaseClient = null;
-  }
-}
 function generateId() {
   return crypto2.randomUUID().replace(/-/g, "").substring(0, 20);
 }
@@ -4958,17 +4106,6 @@ var DocumentReference = class {
       items.push(finalData);
     }
     saveCollectionStore(this.collectionName, items);
-    if (supabaseClient) {
-      try {
-        await supabaseClient.from("collections").upsert({
-          collection_name: this.collectionName,
-          id: this.id,
-          data: finalData,
-          updated_at: (/* @__PURE__ */ new Date()).toISOString()
-        }, { onConflict: "collection_name,id" });
-      } catch (e) {
-      }
-    }
   }
   async update(data) {
     const items = getCollectionStore(this.collectionName);
@@ -4984,12 +4121,6 @@ var DocumentReference = class {
     const items = getCollectionStore(this.collectionName);
     const filtered = items.filter((i) => String(i.id) !== String(this.id));
     saveCollectionStore(this.collectionName, filtered);
-    if (supabaseClient) {
-      try {
-        await supabaseClient.from("collections").delete().eq("collection_name", this.collectionName).eq("id", this.id);
-      } catch (e) {
-      }
-    }
   }
 };
 var CollectionReference = class extends Query {
@@ -5059,8 +4190,172 @@ var AdminDbMock = class {
 };
 var adminDb = new AdminDbMock();
 
+// server/data/index.ts
+init_db();
+function createRepo(key) {
+  return {
+    async getAll() {
+      const memData = db.getData();
+      if (!memData || !Array.isArray(memData[key])) {
+        return [];
+      }
+      return memData[key];
+    },
+    async getById(id) {
+      if (!id) return null;
+      const all = await this.getAll();
+      const idStr = String(id).trim().toLowerCase();
+      return all.find((item) => {
+        const itemObj = item;
+        return item.id && String(item.id).trim().toLowerCase() === idStr || itemObj.legacyId && String(itemObj.legacyId).trim().toLowerCase() === idStr || itemObj.code && String(itemObj.code).trim().toLowerCase() === idStr || itemObj.studentCode && String(itemObj.studentCode).trim().toLowerCase() === idStr || itemObj.traineeCode && String(itemObj.traineeCode).trim().toLowerCase() === idStr;
+      }) || null;
+    },
+    async getByTraineeId(traineeId) {
+      const all = await this.getAll();
+      if (!traineeId) return [];
+      const idStr = String(traineeId).trim().toLowerCase();
+      return all.filter((item) => {
+        const itemObj = item;
+        const candidates = [
+          itemObj.traineeId,
+          itemObj.studentId,
+          itemObj.trainee_id,
+          itemObj.student_id,
+          itemObj.traineeCode,
+          itemObj.studentCode,
+          itemObj.trainee_code,
+          itemObj.student_code
+        ];
+        return candidates.some((c) => c && String(c).trim().toLowerCase() === idStr);
+      });
+    },
+    async getByStudentId(studentId) {
+      return this.getByTraineeId(studentId);
+    },
+    async getByExamId(examId) {
+      const all = await this.getAll();
+      if (!examId) return [];
+      const idStr = String(examId).trim().toLowerCase();
+      return all.filter((item) => {
+        const itemObj = item;
+        return itemObj.examId && String(itemObj.examId).trim().toLowerCase() === idStr;
+      });
+    },
+    async query(filters) {
+      const all = await this.getAll();
+      if (!Array.isArray(filters) || filters.length === 0) return all;
+      return all.filter((item) => {
+        const itemObj = item;
+        return filters.every((f) => {
+          const val = itemObj[f.field];
+          if (f.operator === "==" || f.operator === "===") return val === f.value;
+          if (f.operator === "!=") return val !== f.value;
+          return true;
+        });
+      });
+    },
+    async create(id, itemData) {
+      const docId = id || itemData.id || "doc-" + Date.now() + "-" + Math.random().toString(36).substring(2, 6);
+      const fullItem = { ...itemData, id: docId };
+      const memData = db.getData();
+      if (memData) {
+        if (!Array.isArray(memData[key])) memData[key] = [];
+        const list = memData[key];
+        const idx = list.findIndex((i) => i.id === docId);
+        if (idx >= 0) list[idx] = fullItem;
+        else list.push(fullItem);
+        db.saveImmediate();
+      }
+      return fullItem;
+    },
+    async update(id, updates) {
+      const existing = await this.getById(id);
+      const docId = existing ? existing.id : id;
+      const updatedItem = { ...existing || {}, ...updates, id: docId, updatedAt: (/* @__PURE__ */ new Date()).toISOString() };
+      const memData = db.getData();
+      if (memData) {
+        if (!Array.isArray(memData[key])) memData[key] = [];
+        const list = memData[key];
+        const idx = list.findIndex((i) => i.id === docId);
+        if (idx >= 0) list[idx] = updatedItem;
+        else list.push(updatedItem);
+        db.saveImmediate();
+      }
+      return updatedItem;
+    },
+    async delete(id) {
+      const memData = db.getData();
+      if (memData && Array.isArray(memData[key])) {
+        const list = memData[key];
+        const idx = list.findIndex((i) => i.id === id);
+        if (idx >= 0) list.splice(idx, 1);
+        db.saveImmediate();
+      }
+      return true;
+    },
+    invalidateCache() {
+    }
+  };
+}
+var TraineeRepo = createRepo("trainees");
+var BranchRepo = createRepo("branches");
+var CourseRepo = createRepo("courses");
+var ProgramRepo = createRepo("programs");
+var GroupRepo = createRepo("groups");
+var TrainerRepo = createRepo("trainers");
+var AttendanceRepo = createRepo("attendance");
+var PaymentRepo = {
+  ...createRepo("payments"),
+  async getPendingProofs() {
+    const all = await createRepo("payments").getAll();
+    return all.filter((p) => p.status === "pending" || p.status === "pending_approval" || Boolean(p.proofUrl));
+  }
+};
+var ExpenseRepo = createRepo("expenses");
+var ExamRepo = createRepo("exams");
+var ExamQuestionRepo = createRepo("questions");
+var ExamResultRepo = createRepo("examResults");
+var PointRuleRepo = createRepo("pointRules");
+var PointTransactionRepo = createRepo("pointTransactions");
+var CertificateRepo = createRepo("certificates");
+var CertificateTemplateRepo = createRepo("certificateTemplates");
+var UserRepo = createRepo("users");
+var DeviceRepo = createRepo("devices");
+var DeviceCommandRepo = createRepo("deviceCommands");
+var ComputerLabRepo = createRepo("computerLabs");
+var InteractiveSessionRepo = createRepo("interactiveSessions");
+var TraineeScreenshotRepo = createRepo("traineeScreenshots");
+var SettingRepo = {
+  async get() {
+    return db.getData().settings || {};
+  },
+  async update(updates) {
+    const current = await this.get();
+    const finalSettings = { ...current, ...updates };
+    const data = db.getData();
+    data.settings = finalSettings;
+    db.save();
+    return finalSettings;
+  }
+};
+var AuditLogRepo = {
+  ...createRepo("auditLogs"),
+  async log(action, details, user) {
+    const logItem = {
+      id: "log-" + Date.now() + "-" + Math.random().toString(36).substring(2, 6),
+      userId: user || "SYSTEM",
+      userName: user || "\u0645\u062F\u064A\u0631 \u0627\u0644\u0646\u0638\u0627\u0645",
+      action,
+      entity: "\u0627\u0644\u0646\u0638\u0627\u0645",
+      details,
+      timestamp: (/* @__PURE__ */ new Date()).toISOString()
+    };
+    await this.create(logItem.id, logItem);
+    return logItem;
+  }
+};
+
 // server/securityMiddleware.ts
-init_data();
 function authMiddleware(req, res, next) {
   const authHeader = req.headers.authorization;
   const roleHeader = req.headers["x-user-role"];
@@ -5197,11 +4492,7 @@ async function runDataIntegrityAudit() {
   }
 }
 
-// server/routes.ts
-init_data();
-
 // server/registerLogic.ts
-init_data();
 function resolveGradePrefix(gradeOrCourse) {
   if (!gradeOrCourse) return "A";
   const clean = String(gradeOrCourse).trim();
@@ -5537,6 +4828,8 @@ async function handlePublicTrainerRegister(req, res) {
 // server/routes.ts
 import express2 from "express";
 import os3 from "os";
+import fs3 from "fs";
+import path3 from "path";
 
 // server/migrationRoutes.ts
 import { Router } from "express";
@@ -6649,7 +5942,7 @@ var MigrationService = class {
       schemaVersion: "1.0.0",
       migrationVersion: "2026.08.v1",
       sourcePlatform: "nagah-legacy-firestore",
-      targetPlatform: "nagah-production-supabase",
+      targetPlatform: "nagah-production-db",
       exportedAt: now.toISOString(),
       packageFilename: filename,
       summary: {
@@ -6883,7 +6176,7 @@ var MigrationService = class {
       batchId,
       previousSyncId,
       sourcePlatform: "nagah-legacy-firestore",
-      targetPlatform: "nagah-production-supabase",
+      targetPlatform: "nagah-production-db",
       exportedAt: now.toISOString(),
       packageFilename: `NAGAH_DELTA_SYNC_${batchId}.zip`,
       summary: {
@@ -7120,8 +6413,8 @@ var MigrationService = class {
         }
         return clean;
       });
-      const ws2 = XLSX.utils.json_to_sheet(formatted.length > 0 ? formatted : [{ info: "\u0644\u0627 \u062A\u0648\u062C\u062F \u0628\u064A\u0627\u0646\u0627\u062A" }]);
-      XLSX.utils.book_append_sheet(wb, ws2, sheetName.substring(0, 31));
+      const ws = XLSX.utils.json_to_sheet(formatted.length > 0 ? formatted : [{ info: "\u0644\u0627 \u062A\u0648\u062C\u062F \u0628\u064A\u0627\u0646\u0627\u062A" }]);
+      XLSX.utils.book_append_sheet(wb, ws, sheetName.substring(0, 31));
     };
     addSheet("\u0627\u0644\u0637\u0644\u0627\u0628 (Students)", data.allStudents);
     addSheet("\u0627\u0644\u0645\u062F\u0631\u0628\u0648\u0646 (Trainers)", data.allTrainers);
@@ -7284,7 +6577,6 @@ var MigrationService = class {
 };
 
 // server/migrationRoutes.ts
-init_data();
 var migrationRouter = Router();
 migrationRouter.get("/export-package", async (req, res) => {
   try {
@@ -7360,7 +6652,7 @@ migrationRouter.get("/manifest", async (req, res) => {
       schemaVersion: "1.0.0",
       migrationVersion: "2026.08.v1",
       sourcePlatform: "nagah-legacy-firestore",
-      targetPlatform: "nagah-production-supabase",
+      targetPlatform: "nagah-production-db",
       exportedAt: (/* @__PURE__ */ new Date()).toISOString(),
       summary: {
         totalStudents: extracted.allStudents.length,
@@ -9286,7 +8578,6 @@ languageLabRouter.get("/parent/:studentId", async (req, res) => {
 });
 
 // server/routes.ts
-init_dbNeon();
 var apiRouter = express2.Router();
 apiRouter.use("/language-lab", languageLabRouter);
 apiRouter.use("/migration", migrationRouter);
@@ -9306,7 +8597,7 @@ apiRouter.get("/health", (req, res) => {
     data: {
       service: "Nagah Cloud Run Backend",
       status: "healthy",
-      database: process.env.SUPABASE_URL ? "connected (Supabase PostgreSQL)" : "configured",
+      database: "active",
       aiProvider: "Google Gemini Active",
       timestamp: (/* @__PURE__ */ new Date()).toISOString(),
       environment: process.env.NODE_ENV || "development"
@@ -9510,70 +8801,6 @@ apiRouter.post("/ai/explain", async (req, res) => {
   return res.json({ success: true, explanation: fallbackAnswer });
 });
 apiRouter.use(express2.json({ limit: "20mb" }));
-apiRouter.get("/social/posts", (req, res) => {
-  const posts = db.getData().studentPosts || [];
-  res.json(posts.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
-});
-apiRouter.post("/social/posts", (req, res) => {
-  const { authorId, authorName, authorRole, content, mediaUrl, mediaType } = req.body;
-  const newPost = {
-    id: "post-" + Date.now(),
-    authorId,
-    authorName,
-    authorRole,
-    content,
-    mediaUrl,
-    mediaType,
-    createdAt: (/* @__PURE__ */ new Date()).toISOString(),
-    likes: [],
-    commentsCount: 0
-  };
-  const data = db.getData();
-  data.studentPosts = [...data.studentPosts || [], newPost];
-  db.save();
-  res.status(201).json(newPost);
-});
-apiRouter.post("/social/posts/:postId/like", (req, res) => {
-  const { postId } = req.params;
-  const { userId } = req.body;
-  const data = db.getData();
-  const post = data.studentPosts?.find((p) => p.id === postId);
-  if (!post) return res.status(404).json({ error: "Post not found" });
-  const index = post.likes.indexOf(userId);
-  if (index > -1) {
-    post.likes.splice(index, 1);
-  } else {
-    post.likes.push(userId);
-  }
-  db.save();
-  res.json(post);
-});
-apiRouter.get("/social/posts/:postId/comments", (req, res) => {
-  const { postId } = req.params;
-  const data = db.getData();
-  const comments = (data.socialComments || []).filter((c) => c.postId === postId);
-  res.json(comments.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()));
-});
-apiRouter.post("/social/posts/:postId/comments", (req, res) => {
-  const { postId } = req.params;
-  const { authorId, authorName, content } = req.body;
-  const newComment = {
-    id: "comment-" + Date.now(),
-    postId,
-    authorId,
-    authorName,
-    content,
-    createdAt: (/* @__PURE__ */ new Date()).toISOString()
-  };
-  const data = db.getData();
-  data.socialComments = [...data.socialComments || [], newComment];
-  const post = data.studentPosts?.find((p) => p.id === postId);
-  if (post) {
-    post.commentsCount = (post.commentsCount || 0) + 1;
-  }
-  db.save();
-  res.status(201).json(newComment);
-});
 function getLocalIp() {
   const interfaces = os3.networkInterfaces();
   const preferredOrder = ["eth0", "eth1", "en0", "en1", "wlan0", "wlan1", "Wi-Fi", "Ethernet"];
@@ -9644,6 +8871,122 @@ apiRouter.get("/system/info", async (req, res) => {
       branchesCount: branches.length,
       traineesCount: trainees.length,
       activeDevicesCount: (db.getData().devices || []).filter((d) => d.isOnline).length
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+apiRouter.get(["/backup", "/backup/download"], (req, res) => {
+  try {
+    const data = db.getData();
+    const filename = `nagah_backup_${(/* @__PURE__ */ new Date()).toISOString().slice(0, 10)}_${Date.now()}.json`;
+    res.setHeader("Content-Type", "application/json");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ success: false, error: "\u0641\u0634\u0644 \u062A\u0635\u062F\u064A\u0631 \u0627\u0644\u0646\u0633\u062E\u0629 \u0627\u0644\u0627\u062D\u062A\u064A\u0627\u0637\u064A\u0629: " + err.message });
+  }
+});
+apiRouter.post(["/restore", "/restore-backup", "/system/restore"], async (req, res) => {
+  try {
+    const payload = req.body;
+    if (!payload || typeof payload !== "object" && typeof payload !== "string") {
+      return res.status(400).json({ success: false, error: "\u0628\u064A\u0627\u0646\u0627\u062A \u063A\u064A\u0631 \u0635\u0627\u0644\u062D\u0629 \u0644\u0627\u0633\u062A\u0639\u0627\u062F\u0629 \u0627\u0644\u0646\u0633\u062E\u0629 \u0627\u0644\u0627\u062D\u062A\u064A\u0627\u0637\u064A\u0629" });
+    }
+    let snapshot = payload;
+    if (typeof payload === "string") {
+      try {
+        snapshot = JSON.parse(payload);
+      } catch (e) {
+        return res.status(400).json({ success: false, error: "\u0645\u0644\u0641 JSON \u063A\u064A\u0631 \u0635\u0627\u0644\u062D \u0623\u0648 \u062A\u0627\u0644\u0641" });
+      }
+    }
+    if (snapshot.backupData && typeof snapshot.backupData === "object") {
+      snapshot = snapshot.backupData;
+    } else if (snapshot.data && typeof snapshot.data === "object" && !Array.isArray(snapshot.data)) {
+      snapshot = snapshot.data;
+    } else if (snapshot.snapshotData && typeof snapshot.snapshotData === "object") {
+      snapshot = snapshot.snapshotData;
+    }
+    const hasCoreCollections = Boolean(
+      Array.isArray(snapshot.trainees) && snapshot.trainees.length > 0 || Array.isArray(snapshot.trainers) && snapshot.trainers.length > 0 || Array.isArray(snapshot.courses) && snapshot.courses.length > 0 || Array.isArray(snapshot.users) && snapshot.users.length > 0 || Array.isArray(snapshot.branches) && snapshot.branches.length > 0 || Array.isArray(snapshot.groups) && snapshot.groups.length > 0
+    );
+    if (!hasCoreCollections) {
+      return res.status(400).json({
+        success: false,
+        error: "\u0645\u0644\u0641 \u0627\u0644\u0646\u0633\u062E\u0629 \u0627\u0644\u0627\u062D\u062A\u064A\u0627\u0637\u064A\u0629 \u0641\u0627\u0631\u063A \u0623\u0648 \u0644\u0627 \u064A\u062D\u062A\u0648\u064A \u0639\u0644\u0649 \u0627\u0644\u062C\u062F\u0627\u0648\u0644 \u0627\u0644\u0623\u0633\u0627\u0633\u064A\u0629 \u0644\u0644\u0646\u0638\u0627\u0645 (\u0627\u0644\u0637\u0644\u0627\u0628\u060C \u0627\u0644\u0645\u062F\u0631\u0628\u064A\u0646\u060C \u0627\u0644\u0643\u0648\u0631\u0633\u0627\u062A)"
+      });
+    }
+    db.restore(snapshot);
+    try {
+      db.logAudit({
+        userId: req.user?.id || "admin",
+        userName: req.user?.name || "\u0627\u0644\u0645\u062F\u064A\u0631 \u0627\u0644\u0639\u0627\u0645",
+        action: "RESTORE_BACKUP",
+        entity: "\u0627\u0644\u0646\u0638\u0627\u0645 \u0648\u0642\u0648\u0627\u0639\u062F \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A",
+        details: `\u062A\u0645\u062A \u0627\u0633\u062A\u0639\u0627\u062F\u0629 \u0627\u0644\u0646\u0633\u062E\u0629 \u0627\u0644\u0627\u062D\u062A\u064A\u0627\u0637\u064A\u0629 \u0628\u0646\u062C\u0627\u062D. \u0639\u062F\u062F \u0627\u0644\u0637\u0644\u0627\u0628: ${snapshot.trainees?.length || 0}\u060C \u0639\u062F\u062F \u0627\u0644\u0643\u0648\u0631\u0633\u0627\u062A: ${snapshot.courses?.length || 0}`
+      });
+    } catch {
+    }
+    res.json({
+      success: true,
+      message: "\u062A\u0645\u062A \u0627\u0633\u062A\u0639\u0627\u062F\u0629 \u0642\u0627\u0639\u062F\u0629 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A \u0648\u0627\u0644\u0637\u0644\u0627\u0628 \u0628\u0627\u0644\u0643\u0627\u0645\u0644 \u0628\u0646\u062C\u0627\u062D! \u{1F504}",
+      traineesCount: snapshot.trainees?.length || 0,
+      coursesCount: snapshot.courses?.length || 0
+    });
+  } catch (err) {
+    console.error("Error restoring backup:", err);
+    res.status(500).json({ success: false, error: "\u0641\u0634\u0644 \u0627\u0633\u062A\u0639\u0627\u062F\u0629 \u0627\u0644\u0646\u0633\u062E\u0629 \u0627\u0644\u0627\u062D\u062A\u064A\u0627\u0637\u064A\u0629: " + err.message });
+  }
+});
+apiRouter.post("/settings/reset", (req, res) => {
+  try {
+    const { options, userId, userName } = req.body || {};
+    db.resetData(options || {});
+    db.logAudit({
+      userId: userId || "admin",
+      userName: userName || "\u0627\u0644\u0645\u062F\u064A\u0631 \u0627\u0644\u0639\u0627\u0645",
+      action: "SYSTEM_RESET",
+      entity: "\u0627\u0644\u0646\u0638\u0627\u0645 \u0648\u0627\u0644\u0642\u0648\u0627\u0639\u062F",
+      details: "\u062A\u0645 \u0625\u062C\u0631\u0627\u0621 \u062A\u0635\u0641\u064A\u0631 \u0644\u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0644\u0646\u0638\u0627\u0645 \u062D\u0633\u0628 \u0627\u0644\u062E\u064A\u0627\u0631\u0627\u062A \u0627\u0644\u0645\u062D\u062F\u062F\u0629"
+    });
+    res.json({ success: true, message: "\u062A\u0645 \u0625\u0639\u0627\u062F\u0629 \u062A\u0647\u064A\u0626\u0629 \u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0644\u0646\u0638\u0627\u0645 \u0628\u0646\u062C\u0627\u062D" });
+  } catch (err) {
+    res.status(500).json({ success: false, error: "\u0641\u0634\u0644 \u062A\u0635\u0641\u064A\u0631 \u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0644\u0646\u0638\u0627\u0645: " + err.message });
+  }
+});
+apiRouter.post("/system/restore-clean-database", async (req, res) => {
+  try {
+    const fullBackupPath = path3.join(process.cwd(), "data", "database.backup_before_cleanup_1789259428.json");
+    const targetPath = fs3.existsSync(fullBackupPath) ? fullBackupPath : path3.join(process.cwd(), "data", "database.json");
+    if (!fs3.existsSync(targetPath)) {
+      return res.status(404).json({ error: "Database backup file not found" });
+    }
+    const raw = fs3.readFileSync(targetPath, "utf-8");
+    const fullData = JSON.parse(raw);
+    db.restore(fullData);
+    const backupsDir = path3.join(process.cwd(), "data", "backups");
+    const corruptedBackups = [
+      "backup_2026-09-12_21.json",
+      "backup_2026-09-12_22.json",
+      "backup_2026-09-12_23.json",
+      "backup_2026-09-13_00.json"
+    ];
+    for (const file of corruptedBackups) {
+      const p = path3.join(backupsDir, file);
+      if (fs3.existsSync(p)) {
+        try {
+          fs3.unlinkSync(p);
+        } catch {
+        }
+      }
+    }
+    const currentTrainees = db.getData().trainees || [];
+    res.json({
+      success: true,
+      message: "\u062A\u0645\u062A \u0627\u0633\u062A\u0639\u0627\u062F\u0629 \u0642\u0627\u0639\u062F\u0629 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0644\u0623\u0635\u0644\u064A\u0629 \u0628\u0646\u062C\u0627\u062D \u0648\u062D\u0630\u0641 \u0643\u0627\u0641\u0629 \u0627\u0644\u0637\u0644\u0627\u0628 \u0648\u0627\u0644\u0633\u062C\u0644\u0627\u062A \u0627\u0644\u0648\u0647\u0645\u064A\u0629",
+      traineesCount: currentTrainees.length,
+      trainees: currentTrainees.map((t) => ({ id: t.id, code: t.code, fullName: t.fullName }))
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -10665,12 +10008,19 @@ apiRouter.post("/trainees/promote-batch", async (req, res) => {
   });
 });
 apiRouter.post("/trainees/batch-sync-records", (req, res) => {
-  const allTrainees = db.getData().trainees;
+  const dbData = db.getData();
+  const allTrainees = dbData.trainees;
+  const coursesList = dbData.courses || [];
   let updatedCount = 0;
   let parentNamesAutoFilledCount = 0;
   let birthDatesExtractedCount = 0;
   let siblingsLinkedCount = 0;
   let exemptionsProcessedCount = 0;
+  const getCourseFee = (t) => {
+    if (t.feeAmount && t.feeAmount > 0) return t.feeAmount;
+    const crs = coursesList.find((c) => c.id === t.courseId || c.name === t.courseName);
+    return crs ? crs.price || crs.feeAmount || 200 : 200;
+  };
   const extractBirthDate = (nationalId) => {
     const cleaned = (nationalId || "").replace(/\D/g, "");
     if (cleaned.length !== 14) return null;
@@ -10718,7 +10068,9 @@ apiRouter.post("/trainees/batch-sync-records", (req, res) => {
           t.exemptReason = "scholarship";
         }
       }
-      t.discountAmount = t.feeAmount || 1500;
+      const actualCourseFee = getCourseFee(t);
+      t.feeAmount = actualCourseFee;
+      t.discountAmount = actualCourseFee;
       t.netAmount = 0;
       t.remainingAmount = 0;
       exemptionsProcessedCount++;
@@ -10752,9 +10104,11 @@ apiRouter.post("/trainees/batch-sync-records", (req, res) => {
         siblingsLinkedCount++;
       }
       if (!tA.isExempt && (tA.discountAmount === 0 || !tA.discountAmount)) {
-        const discVal = Math.round((tA.feeAmount || 1500) * 0.2);
+        const actualFee = getCourseFee(tA);
+        tA.feeAmount = actualFee;
+        const discVal = Math.round(actualFee * 0.2);
         tA.discountAmount = discVal;
-        tA.netAmount = Math.max(0, tA.feeAmount - discVal);
+        tA.netAmount = Math.max(0, actualFee - discVal);
         tA.remainingAmount = Math.max(0, tA.netAmount - (tA.paidAmount || 0));
         const sibNote = `\u062A\u0645 \u062A\u0637\u0628\u064A\u0642 \u062E\u0635\u0645 \u0627\u0644\u0623\u062E\u0648\u0627\u062A 20% \u0644\u0631\u0628\u0637\u0647 \u0645\u0639 (${siblingMatches.map((s) => s.fullName).join("\u060C ")})`;
         if (!tA.notes?.includes("\u062E\u0635\u0645 \u0627\u0644\u0623\u062E\u0648\u0627\u062A")) {
@@ -15222,10 +14576,7 @@ apiRouter.post("/agent/heartbeat", (req, res) => {
     if (currentTraineeCode) device.currentTraineeCode = currentTraineeCode;
     if (currentTraineeName) device.currentTraineeName = currentTraineeName;
   }
-  if (screenshot) {
-    device.lastScreenshotUrl = screenshot;
-    device.lastScreenshotTime = now;
-  }
+  delete device.lastScreenshotUrl;
   const activeSessionIndex = activeAssistanceSessions.findIndex((s) => s.deviceId === device.deviceId && s.status === "active");
   let activeSession = null;
   if (activeSessionIndex >= 0) {
@@ -16456,23 +15807,8 @@ while ($true) {
         if ($res -and $res.success) {
             # Check if On-Demand Capture is requested (Monitoring or Assistance)
             if ($res.isMonitoring -or $res.isAssisting) {
-                $bounds = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
-                $bmp = New-Object System.Drawing.Bitmap $bounds.Width, $bounds.Height
-                $graphics = [System.Drawing.Graphics]::FromImage($bmp)
-                $graphics.CopyFromScreen($bounds.Location, [System.Drawing.Point]::Empty, $bounds.Size)
-                
-                $ms = New-Object System.IO.MemoryStream
-                $bmp.Save($ms, [System.Drawing.Imaging.ImageFormat]::Jpeg)
-                $bytes = $ms.ToArray()
-                $base64 = [Convert]::ToBase64String($bytes)
-                $imgStr = "data:image/jpeg;base64," + $base64
-                
-                $graphics.Dispose()
-                $bmp.Dispose()
-                $ms.Dispose()
-
-                # Send screenshot frame
-                $hbPayload["screenshot"] = $imgStr
+                # Screenshots disabled
+                $hbPayload["screenshot"] = $null
                 $hbPayload["streamingQuality"] = $res.streamingQuality
                 $hbJson = $hbPayload | ConvertTo-Json -Depth 4
                 $res = Invoke-RestMethod -Uri "$Server/api/agent/heartbeat" -Method Post -Body $hbJson -ContentType "application/json" -ErrorAction SilentlyContinue
@@ -16892,78 +16228,41 @@ apiRouter.post("/trainer-portal/upload-photo", async (req, res) => {
     res.status(500).json({ success: false, error: err.message });
   }
 });
-var inMemoryTrainerPosts = [];
-apiRouter.get("/public/student-posts", async (req, res) => {
-  res.json({ success: true, posts: inMemoryTrainerPosts });
-});
-apiRouter.post("/trainer-portal/posts", async (req, res) => {
-  try {
-    const { trainerId, trainerName, trainerPhotoUrl, content, bgStyle, type, pollOptions, challengePoints, challengeTask } = req.body;
-    const newPost = {
-      id: `post-${Date.now()}`,
-      trainerId,
-      trainerName,
-      trainerPhotoUrl,
-      content,
-      bgStyle: bgStyle || "default",
-      type: type || "standard",
-      createdAt: (/* @__PURE__ */ new Date()).toISOString(),
-      pollOptions: pollOptions ? pollOptions.map((opt) => ({ text: opt, votes: 0 })) : void 0,
-      challengePoints,
-      challengeTask,
-      votedUserIds: []
-    };
-    inMemoryTrainerPosts.unshift(newPost);
-    res.json({ success: true, post: newPost });
-  } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
-apiRouter.post("/trainer-portal/poll-vote", async (req, res) => {
-  try {
-    const { postId, optionIndex, userId } = req.body;
-    const post = inMemoryTrainerPosts.find((p) => p.id === postId);
-    if (post && post.pollOptions && post.pollOptions[optionIndex]) {
-      post.pollOptions[optionIndex].votes = (post.pollOptions[optionIndex].votes || 0) + 1;
-      if (!post.votedUserIds) post.votedUserIds = [];
-      post.votedUserIds.push(userId);
-    }
-    res.json({ success: true, post });
-  } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
 apiRouter.get("/materials", async (req, res) => {
   try {
     const groupName = req.query.group_name;
-    let query = "SELECT * FROM course_materials";
-    let params = [];
-    if (groupName) {
-      query += " WHERE group_name = $1 OR group_name = $2";
-      params = [groupName, "\u0639\u0627\u0645"];
+    const data = db.getData();
+    let materials = Array.isArray(data.courseMaterials) ? data.courseMaterials : [];
+    if (materials.length === 0) {
+      materials = [
+        { id: "mat-1", title: "\u0645\u0630\u0643\u0631\u0629 \u0623\u0633\u0627\u0633\u064A\u0627\u062A \u0627\u0644\u0628\u0631\u0645\u062C\u0629 \u0648\u062A\u0637\u0648\u064A\u0631 \u0627\u0644\u0648\u064A\u0628", course_name: "\u0628\u0631\u0645\u062C\u0629 \u0627\u0644\u0648\u064A\u0628", branch_id: "branch-najah", group_name: "\u0645\u062C\u0645\u0648\u0639\u0629 \u0627\u0644\u0635\u0628\u0627\u062D", drive_file_id: "1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs" },
+        { id: "mat-2", title: "\u062F\u0644\u064A\u0644 \u0635\u064A\u0627\u0646\u0629 \u0634\u0628\u0643\u0627\u062A \u0627\u0644\u062D\u0627\u0633\u0628 \u0627\u0644\u0622\u0644\u064A", course_name: "\u0634\u0628\u0643\u0627\u062A \u0627\u0644\u062D\u0627\u0633\u0628", branch_id: "branch-badr", group_name: "\u0639\u0627\u0645", drive_file_id: "1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs" }
+      ];
+      data.courseMaterials = materials;
+      db.save();
     }
-    query += " ORDER BY created_at DESC";
-    const result = await queryNeon(query, params);
-    res.json(result.rows);
+    if (groupName) {
+      materials = materials.filter((m) => m.group_name === groupName || m.group_name === "\u0639\u0627\u0645");
+    }
+    res.json(materials);
   } catch (err) {
-    res.json([
-      { id: "mat-1", title: "\u0645\u0630\u0643\u0631\u0629 \u0623\u0633\u0627\u0633\u064A\u0627\u062A \u0627\u0644\u0628\u0631\u0645\u062C\u0629 \u0648\u062A\u0637\u0648\u064A\u0631 \u0627\u0644\u0648\u064A\u0628", course_name: "\u0628\u0631\u0645\u062C\u0629 \u0627\u0644\u0648\u064A\u0628", branch_id: "branch-najah", group_name: "\u0645\u062C\u0645\u0648\u0639\u0629 \u0627\u0644\u0635\u0628\u0627\u062D", drive_file_id: "1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs" },
-      { id: "mat-2", title: "\u062F\u0644\u064A\u0644 \u0635\u064A\u0627\u0646\u0629 \u0634\u0628\u0643\u0627\u062A \u0627\u0644\u062D\u0627\u0633\u0628 \u0627\u0644\u0622\u0644\u064A", course_name: "\u0634\u0628\u0643\u0627\u062A \u0627\u0644\u062D\u0627\u0633\u0628", branch_id: "branch-badr", group_name: "\u0639\u0627\u0645", drive_file_id: "1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs" }
-    ]);
+    res.json([]);
   }
 });
 apiRouter.post("/materials", async (req, res) => {
   try {
     const { id, title, course_name, branch_id, group_name, drive_file_id } = req.body;
     const matId = id || "mat-" + Date.now();
-    try {
-      await queryNeon("ALTER TABLE course_materials ADD COLUMN IF NOT EXISTS group_name VARCHAR(100) DEFAULT '\u0639\u0627\u0645'");
-    } catch (e) {
+    const data = db.getData();
+    if (!Array.isArray(data.courseMaterials)) data.courseMaterials = [];
+    const item = { id: matId, title, course_name, branch_id: branch_id || "branch-najah", group_name: group_name || "\u0639\u0627\u0645", drive_file_id };
+    const idx = data.courseMaterials.findIndex((m) => m.id === matId);
+    if (idx >= 0) {
+      data.courseMaterials[idx] = item;
+    } else {
+      data.courseMaterials.push(item);
     }
-    await queryNeon(
-      "INSERT INTO course_materials (id, title, course_name, branch_id, group_name, drive_file_id) VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT (id) DO UPDATE SET title = $2, course_name = $3, branch_id = $4, group_name = $5, drive_file_id = $6",
-      [matId, title, course_name, branch_id || "branch-najah", group_name || "\u0639\u0627\u0645", drive_file_id]
-    );
+    db.save();
     res.json({ success: true, id: matId });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
@@ -16998,12 +16297,12 @@ versionRouter.use("/", apiRouter);
 
 // server/secureDbConnection.ts
 init_db();
-import path3 from "path";
+import path4 from "path";
 var SecureDbConnector = class {
   constructor() {
     const env = process.env.NODE_ENV || "development";
     const isStaging = env === "development" || env === "staging";
-    const dbPath = process.env.STAGING_DB_PATH || process.env.PRODUCTION_DB_PATH || path3.join(process.cwd(), "data", "database.json");
+    const dbPath = process.env.STAGING_DB_PATH || process.env.PRODUCTION_DB_PATH || path4.join(process.cwd(), "data", "database.json");
     this.config = {
       env,
       dbPath,
@@ -17035,26 +16334,26 @@ var SecureDbConnector = class {
 var secureDb = new SecureDbConnector();
 
 // server/migrationManager.ts
-import fs3 from "fs";
-import path4 from "path";
+import fs4 from "fs";
+import path5 from "path";
 import os4 from "os";
 var MigrationManager = class {
   constructor(historyFilePath) {
     const isServerless4 = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.VERCEL_ENV);
-    const dataDir = isServerless4 ? path4.join(os4.tmpdir(), "nagah_data") : path4.join(process.cwd(), "data");
+    const dataDir = isServerless4 ? path5.join(os4.tmpdir(), "nagah_data") : path5.join(process.cwd(), "data");
     try {
-      if (!fs3.existsSync(dataDir)) {
-        fs3.mkdirSync(dataDir, { recursive: true });
+      if (!fs4.existsSync(dataDir)) {
+        fs4.mkdirSync(dataDir, { recursive: true });
       }
     } catch (e) {
       console.warn("[MigrationManager] Non-critical dataDir creation notice:", e);
     }
-    this.historyFilePath = historyFilePath || path4.join(dataDir, "migrations_history.json");
+    this.historyFilePath = historyFilePath || path5.join(dataDir, "migrations_history.json");
   }
   getHistory() {
     try {
-      if (fs3.existsSync(this.historyFilePath)) {
-        const raw = fs3.readFileSync(this.historyFilePath, "utf-8");
+      if (fs4.existsSync(this.historyFilePath)) {
+        const raw = fs4.readFileSync(this.historyFilePath, "utf-8");
         return JSON.parse(raw);
       }
     } catch (err) {
@@ -17064,7 +16363,7 @@ var MigrationManager = class {
   }
   saveHistory(records) {
     try {
-      fs3.writeFileSync(this.historyFilePath, JSON.stringify(records, null, 2), "utf-8");
+      fs4.writeFileSync(this.historyFilePath, JSON.stringify(records, null, 2), "utf-8");
     } catch (err) {
       console.warn("[MigrationManager] Non-critical error writing migration history:", err);
     }
@@ -17091,7 +16390,7 @@ var MigrationManager = class {
         newAppliedCount++;
       }
     }
-    if (newAppliedCount > 0 || !fs3.existsSync(this.historyFilePath)) {
+    if (newAppliedCount > 0 || !fs4.existsSync(this.historyFilePath)) {
       this.saveHistory(history);
       console.log(`[MigrationManager] Successfully recorded ${newAppliedCount} new migration(s). Total applied: ${history.length}`);
     } else {
@@ -17130,49 +16429,36 @@ if (!isServerless3) {
   }
 }
 app.get(["/health", "/api/health"], async (req, res) => {
-  let supabaseStatus = "disconnected";
-  let supabaseCount = 0;
   let hasBundledData = false;
   let hasTmpData = false;
   let tmpDataSize = 0;
   let bundledDataSize = 0;
   let memDataKeys = [];
   try {
-    const fs4 = await import("fs");
-    const path5 = await import("path");
-    const bPath = path5.join(process.cwd(), "data", "database.json");
-    const tPath = path5.join(await import("os").then((os5) => os5.tmpdir()), "nagah_data", "database.json");
-    if (fs4.existsSync(bPath)) {
+    const fs5 = await import("fs");
+    const path6 = await import("path");
+    const bPath = path6.join(process.cwd(), "data", "database.json");
+    const tPath = path6.join(await import("os").then((os5) => os5.tmpdir()), "nagah_data", "database.json");
+    if (fs5.existsSync(bPath)) {
       hasBundledData = true;
-      bundledDataSize = fs4.statSync(bPath).size;
+      bundledDataSize = fs5.statSync(bPath).size;
     }
-    if (fs4.existsSync(tPath)) {
+    if (fs5.existsSync(tPath)) {
       hasTmpData = true;
-      tmpDataSize = fs4.statSync(tPath).size;
+      tmpDataSize = fs5.statSync(tPath).size;
     }
-    const { supabaseClient: supabaseClient3, db: db2 } = await Promise.resolve().then(() => (init_data(), data_exports));
-    if (supabaseClient3) {
-      const { data, error } = await supabaseClient3.from("collections").select("id", { count: "exact", head: true });
-      if (!error) {
-        supabaseStatus = "connected";
-      } else if (error.message?.includes("exceed_egress_quota") || error.message?.includes("restricted")) {
-        supabaseStatus = "quota_restricted_local_fallback";
-      } else {
-        supabaseStatus = `notice: ${error.message}`;
-      }
-    }
+    const { db: db2 } = await Promise.resolve().then(() => (init_db(), db_exports));
     if (db2) {
-      memDataKeys = Object.keys(supabaseClient3 ? {} : {});
+      memDataKeys = Object.keys(db2.getData() || {});
     }
   } catch (e) {
-    supabaseStatus = `error: ${e.message || e}`;
   }
   res.json({
     status: "ok",
     service: "Nagah Management System",
     environment: process.env.NODE_ENV || "production",
     serverless: isServerless3,
-    supabase: supabaseStatus,
+    database: "active",
     cwd: process.cwd(),
     hasBundledData,
     bundledDataSize,

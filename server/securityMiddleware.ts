@@ -154,7 +154,7 @@ export async function runDataIntegrityAudit() {
         validCount++;
       }
 
-      // Update in Supabase / DB with audit flags
+      // Update in DB with audit flags
       await TraineeRepo.update(t.id, {
         isTestRecord: isTest,
         creditBalance,

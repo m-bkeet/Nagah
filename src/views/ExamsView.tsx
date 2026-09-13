@@ -1688,16 +1688,16 @@ export const ExamsView: React.FC = () => {
       {/* MODAL 1: ADD EXAM MODAL */}
       {/* ---------------------------------------------------- */}
       {isAddExamModalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white dark:bg-slate-800 rounded-3xl max-w-2xl w-full p-6 shadow-2xl border border-slate-200 dark:border-slate-700 space-y-5">
-            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-700 pb-3">
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 overflow-hidden">
+          <div className="bg-white dark:bg-slate-800 rounded-3xl max-w-2xl w-full max-h-[90vh] flex flex-col shadow-2xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+            <div className="shrink-0 p-4 flex items-center justify-between border-b border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
               <h3 className="text-lg font-bold text-slate-900 dark:text-white">إنشاء اختبار محمي جديد</h3>
-              <button onClick={() => setIsAddExamModalOpen(false)} className="text-slate-400 hover:text-slate-600">
+              <button onClick={() => setIsAddExamModalOpen(false)} className="text-slate-400 hover:text-slate-600 cursor-pointer">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="space-y-4 text-sm">
+            <div className="flex-1 overflow-y-auto custom-scrollbar p-4 sm:p-6 space-y-4 text-sm">
               <div>
                 <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">عنوان الاختبار</label>
                 <input

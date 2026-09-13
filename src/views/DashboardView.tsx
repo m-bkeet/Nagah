@@ -513,11 +513,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
 
             <button
               type="button"
-              onClick={() => onNavigate('devices')}
+              onClick={() => onNavigate('certificates')}
               className="absolute bottom-12 sm:bottom-14 left-2 sm:left-6 z-30 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-2 border-rose-500 text-rose-900 dark:text-rose-200 px-3.5 py-1.5 rounded-full text-xs font-black shadow-[0_0_20px_rgba(244,63,94,0.35)] ring-2 ring-rose-400/50 flex items-center gap-1.5 transition-all hover:scale-110 hover:shadow-[0_0_30px_rgba(244,63,94,0.6)] cursor-pointer"
             >
-              <Monitor className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400 animate-pulse" />
-              <span>الأجهزة</span>
+              <Award className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400 animate-pulse" />
+              <span>الشهادات</span>
             </button>
 
             <button

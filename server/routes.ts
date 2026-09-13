@@ -39,8 +39,7 @@ import {
   CertificateTemplate,
   Branch,
   User,
-  HomeworkSubmission,
-  SocialPost
+  HomeworkSubmission
 } from '../src/types';
 
 export const apiRouter = express.Router();
@@ -70,7 +69,7 @@ apiRouter.get('/health', (req: Request, res: Response) => {
     data: {
       service: "Nagah Cloud Run Backend",
       status: "healthy",
-      database: process.env.SUPABASE_URL ? "connected (Supabase PostgreSQL)" : "configured",
+      database: "active",
       aiProvider: "Google Gemini Active",
       timestamp: new Date().toISOString(),
       environment: process.env.NODE_ENV || "development",
@@ -378,80 +377,6 @@ function formatTime12h(time24?: string): string {
 }
 apiRouter.use(express.json({ limit: '20mb' }));
 
-// Social Feed routes
-apiRouter.get('/social/posts', (req, res) => {
-  const posts = db.getData().studentPosts || [];
-  res.json(posts.sort((a: SocialPost, b: SocialPost) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
-});
-
-apiRouter.post('/social/posts', (req, res) => {
-  const { authorId, authorName, authorRole, content, mediaUrl, mediaType } = req.body;
-  const newPost: SocialPost = {
-    id: 'post-' + Date.now(),
-    authorId,
-    authorName,
-    authorRole,
-    content,
-    mediaUrl,
-    mediaType,
-    createdAt: new Date().toISOString(),
-    likes: [],
-    commentsCount: 0
-  };
-  const data = db.getData();
-  data.studentPosts = [...(data.studentPosts || []), newPost];
-  db.save();
-  res.status(201).json(newPost);
-});
-
-apiRouter.post('/social/posts/:postId/like', (req, res) => {
-  const { postId } = req.params;
-  const { userId } = req.body;
-  const data = db.getData();
-  const post = data.studentPosts?.find((p: SocialPost) => p.id === postId);
-  if (!post) return res.status(404).json({ error: 'Post not found' });
-  
-  const index = post.likes.indexOf(userId);
-  if (index > -1) {
-    post.likes.splice(index, 1);
-  } else {
-    post.likes.push(userId);
-  }
-  db.save();
-  res.json(post);
-});
-
-apiRouter.get('/social/posts/:postId/comments', (req, res) => {
-  const { postId } = req.params;
-  const data = db.getData();
-  const comments = (data.socialComments || []).filter((c: any) => c.postId === postId);
-  res.json(comments.sort((a: any, b: any) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()));
-});
-
-apiRouter.post('/social/posts/:postId/comments', (req, res) => {
-  const { postId } = req.params;
-  const { authorId, authorName, content } = req.body;
-  const newComment = {
-    id: 'comment-' + Date.now(),
-    postId,
-    authorId,
-    authorName,
-    content,
-    createdAt: new Date().toISOString()
-  };
-  const data = db.getData();
-  data.socialComments = [...(data.socialComments || []), newComment];
-  
-  // Update post comments count
-  const post = data.studentPosts?.find((p: any) => p.id === postId);
-  if (post) {
-    post.commentsCount = (post.commentsCount || 0) + 1;
-  }
-  
-  db.save();
-  res.status(201).json(newComment);
-});
-
 // Helper to get local IP address
 function getLocalIp(): string {
   const interfaces = os.networkInterfaces();
@@ -543,6 +468,147 @@ apiRouter.get('/system/info', async (req: Request, res: Response) => {
       branchesCount: branches.length,
       traineesCount: trainees.length,
       activeDevicesCount: (db.getData().devices || []).filter(d => d.isOnline).length
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/backup & GET /api/backup/download - Full backup data JSON
+apiRouter.get(['/backup', '/backup/download'], (req: Request, res: Response) => {
+  try {
+    const data = db.getData();
+    const filename = `nagah_backup_${new Date().toISOString().slice(0, 10)}_${Date.now()}.json`;
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.json(data);
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: 'فشل تصدير النسخة الاحتياطية: ' + err.message });
+  }
+});
+
+// POST /api/restore & POST /api/restore-backup - Restore full database snapshot JSON
+apiRouter.post(['/restore', '/restore-backup', '/system/restore'], async (req: Request, res: Response) => {
+  try {
+    const payload = req.body;
+    if (!payload || (typeof payload !== 'object' && typeof payload !== 'string')) {
+      return res.status(400).json({ success: false, error: 'بيانات غير صالحة لاستعادة النسخة الاحتياطية' });
+    }
+
+    let snapshot = payload;
+    if (typeof payload === 'string') {
+      try {
+        snapshot = JSON.parse(payload);
+      } catch (e) {
+        return res.status(400).json({ success: false, error: 'ملف JSON غير صالح أو تالف' });
+      }
+    }
+
+    // Handle nested snapshot wrapper formats
+    if (snapshot.backupData && typeof snapshot.backupData === 'object') {
+      snapshot = snapshot.backupData;
+    } else if (snapshot.data && typeof snapshot.data === 'object' && !Array.isArray(snapshot.data)) {
+      snapshot = snapshot.data;
+    } else if (snapshot.snapshotData && typeof snapshot.snapshotData === 'object') {
+      snapshot = snapshot.snapshotData;
+    }
+
+    // Basic structure validation
+    const hasCoreCollections = Boolean(
+      (Array.isArray(snapshot.trainees) && snapshot.trainees.length > 0) ||
+      (Array.isArray(snapshot.trainers) && snapshot.trainers.length > 0) ||
+      (Array.isArray(snapshot.courses) && snapshot.courses.length > 0) ||
+      (Array.isArray(snapshot.users) && snapshot.users.length > 0) ||
+      (Array.isArray(snapshot.branches) && snapshot.branches.length > 0) ||
+      (Array.isArray(snapshot.groups) && snapshot.groups.length > 0)
+    );
+
+    if (!hasCoreCollections) {
+      return res.status(400).json({
+        success: false,
+        error: 'ملف النسخة الاحتياطية فارغ أو لا يحتوي على الجداول الأساسية للنظام (الطلاب، المدربين، الكورسات)'
+      });
+    }
+
+    // Perform database restoration
+    db.restore(snapshot);
+
+    // Write audit log
+    try {
+      db.logAudit({
+        userId: (req as any).user?.id || 'admin',
+        userName: (req as any).user?.name || 'المدير العام',
+        action: 'RESTORE_BACKUP',
+        entity: 'النظام وقواعد البيانات',
+        details: `تمت استعادة النسخة الاحتياطية بنجاح. عدد الطلاب: ${snapshot.trainees?.length || 0}، عدد الكورسات: ${snapshot.courses?.length || 0}`
+      });
+    } catch {}
+
+    res.json({
+      success: true,
+      message: 'تمت استعادة قاعدة البيانات والطلاب بالكامل بنجاح! 🔄',
+      traineesCount: snapshot.trainees?.length || 0,
+      coursesCount: snapshot.courses?.length || 0
+    });
+  } catch (err: any) {
+    console.error('Error restoring backup:', err);
+    res.status(500).json({ success: false, error: 'فشل استعادة النسخة الاحتياطية: ' + err.message });
+  }
+});
+
+// POST /api/settings/reset - System reset option
+apiRouter.post('/settings/reset', (req: Request, res: Response) => {
+  try {
+    const { options, userId, userName } = req.body || {};
+    db.resetData(options || {});
+    db.logAudit({
+      userId: userId || 'admin',
+      userName: userName || 'المدير العام',
+      action: 'SYSTEM_RESET',
+      entity: 'النظام والقواعد',
+      details: 'تم إجراء تصفير لبيانات النظام حسب الخيارات المحددة'
+    });
+    res.json({ success: true, message: 'تم إعادة تهيئة بيانات النظام بنجاح' });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: 'فشل تصفير بيانات النظام: ' + err.message });
+  }
+});
+
+// Restore original clean database (removes all auto-generated fake test students)
+apiRouter.post('/system/restore-clean-database', async (req: Request, res: Response) => {
+  try {
+    const fullBackupPath = path.join(process.cwd(), 'data', 'database.backup_before_cleanup_1789259428.json');
+    const targetPath = fs.existsSync(fullBackupPath) ? fullBackupPath : path.join(process.cwd(), 'data', 'database.json');
+    if (!fs.existsSync(targetPath)) {
+      return res.status(404).json({ error: 'Database backup file not found' });
+    }
+    const raw = fs.readFileSync(targetPath, 'utf-8');
+    const fullData = JSON.parse(raw);
+
+    // Call db.restore to update in-memory data and immediately write clean database.json
+    db.restore(fullData);
+
+    // Also overwrite/remove polluted backup files
+    const backupsDir = path.join(process.cwd(), 'data', 'backups');
+    const corruptedBackups = [
+      'backup_2026-09-12_21.json',
+      'backup_2026-09-12_22.json',
+      'backup_2026-09-12_23.json',
+      'backup_2026-09-13_00.json'
+    ];
+    for (const file of corruptedBackups) {
+      const p = path.join(backupsDir, file);
+      if (fs.existsSync(p)) {
+        try { fs.unlinkSync(p); } catch {}
+      }
+    }
+
+    const currentTrainees = db.getData().trainees || [];
+    res.json({
+      success: true,
+      message: 'تمت استعادة قاعدة البيانات الأصلية بنجاح وحذف كافة الطلاب والسجلات الوهمية',
+      traineesCount: currentTrainees.length,
+      trainees: currentTrainees.map((t: any) => ({ id: t.id, code: t.code, fullName: t.fullName }))
     });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -1272,7 +1338,7 @@ apiRouter.post(['/student/update-photo', '/trainees/update-photo'], async (req: 
       }
     }
 
-    // Update in Supabase / Local SQLite / Memory Repo
+    // Update in Local Repo
     if (trainee) {
       await TraineeRepo.update(targetId, { photoUrl: finalPhoto, photo: finalPhoto });
     }
@@ -1331,7 +1397,7 @@ apiRouter.delete('/trainees/:id', async (req: Request, res: Response) => {
     const trainee = await TraineeRepo.getById(id);
     if (!trainee) return res.status(404).json({ success: false, error: 'المتدرب غير موجود' });
 
-    // 1. Delete from TraineeRepo (Supabase + local memory)
+    // 1. Delete from TraineeRepo (Local memory)
     await TraineeRepo.delete(id);
 
     // 2. Explicitly remove from db.getData().trainees
@@ -1697,12 +1763,20 @@ apiRouter.post('/trainees/promote-batch', async (req: Request, res: Response) =>
 });
 
 apiRouter.post('/trainees/batch-sync-records', (req: Request, res: Response) => {
-  const allTrainees = db.getData().trainees;
+  const dbData = db.getData();
+  const allTrainees = dbData.trainees;
+  const coursesList = dbData.courses || [];
   let updatedCount = 0;
   let parentNamesAutoFilledCount = 0;
   let birthDatesExtractedCount = 0;
   let siblingsLinkedCount = 0;
   let exemptionsProcessedCount = 0;
+
+  const getCourseFee = (t: any) => {
+    if (t.feeAmount && t.feeAmount > 0) return t.feeAmount;
+    const crs = coursesList.find((c: any) => c.id === t.courseId || c.name === t.courseName);
+    return crs ? (crs.price || crs.feeAmount || 200) : 200;
+  };
 
   // Helper for Egyptian National ID birthdate extraction
   const extractBirthDate = (nationalId: string) => {
@@ -1767,7 +1841,9 @@ apiRouter.post('/trainees/batch-sync-records', (req: Request, res: Response) => 
           t.exemptReason = 'scholarship';
         }
       }
-      t.discountAmount = t.feeAmount || 1500;
+      const actualCourseFee = getCourseFee(t);
+      t.feeAmount = actualCourseFee;
+      t.discountAmount = actualCourseFee;
       t.netAmount = 0;
       t.remainingAmount = 0;
       exemptionsProcessedCount++;
@@ -1810,9 +1886,11 @@ apiRouter.post('/trainees/batch-sync-records', (req: Request, res: Response) => 
 
       // Apply sibling discount 20% if not exempt and discount is 0
       if (!tA.isExempt && (tA.discountAmount === 0 || !tA.discountAmount)) {
-        const discVal = Math.round((tA.feeAmount || 1500) * 0.2);
+        const actualFee = getCourseFee(tA);
+        tA.feeAmount = actualFee;
+        const discVal = Math.round(actualFee * 0.2);
         tA.discountAmount = discVal;
-        tA.netAmount = Math.max(0, tA.feeAmount - discVal);
+        tA.netAmount = Math.max(0, actualFee - discVal);
         tA.remainingAmount = Math.max(0, tA.netAmount - (tA.paidAmount || 0));
         const sibNote = `تم تطبيق خصم الأخوات 20% لربطه مع (${siblingMatches.map(s => s.fullName).join('، ')})`;
         if (!tA.notes?.includes('خصم الأخوات')) {
@@ -7154,11 +7232,8 @@ apiRouter.post('/agent/heartbeat', (req: Request, res: Response) => {
     if (currentTraineeName) device.currentTraineeName = currentTraineeName;
   }
 
-  // Update screenshot if provided during active monitoring or assistance
-  if (screenshot) {
-    device.lastScreenshotUrl = screenshot;
-    device.lastScreenshotTime = now;
-  }
+  // Ignore screenshots completely to preserve bandwidth and database limits
+  delete device.lastScreenshotUrl;
 
   // Check active assistance session expiration (Fail-Closed timeout)
   const activeSessionIndex = activeAssistanceSessions.findIndex(s => s.deviceId === device.deviceId && s.status === 'active');
@@ -8595,23 +8670,8 @@ while (\$true) {
         if (\$res -and \$res.success) {
             # Check if On-Demand Capture is requested (Monitoring or Assistance)
             if (\$res.isMonitoring -or \$res.isAssisting) {
-                \$bounds = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
-                \$bmp = New-Object System.Drawing.Bitmap \$bounds.Width, \$bounds.Height
-                \$graphics = [System.Drawing.Graphics]::FromImage(\$bmp)
-                \$graphics.CopyFromScreen(\$bounds.Location, [System.Drawing.Point]::Empty, \$bounds.Size)
-                
-                \$ms = New-Object System.IO.MemoryStream
-                \$bmp.Save(\$ms, [System.Drawing.Imaging.ImageFormat]::Jpeg)
-                \$bytes = \$ms.ToArray()
-                \$base64 = [Convert]::ToBase64String(\$bytes)
-                \$imgStr = "data:image/jpeg;base64," + \$base64
-                
-                \$graphics.Dispose()
-                \$bmp.Dispose()
-                \$ms.Dispose()
-
-                # Send screenshot frame
-                \$hbPayload["screenshot"] = \$imgStr
+                # Screenshots disabled
+                \$hbPayload["screenshot"] = \$null
                 \$hbPayload["streamingQuality"] = \$res.streamingQuality
                 \$hbJson = \$hbPayload | ConvertTo-Json -Depth 4
                 \$res = Invoke-RestMethod -Uri "\$Server/api/agent/heartbeat" -Method Post -Body \$hbJson -ContentType "application/json" -ErrorAction SilentlyContinue
@@ -9135,73 +9195,26 @@ apiRouter.post('/trainer-portal/upload-photo', async (req: Request, res: Respons
   }
 });
 
-// Trainer Social Feed & Posts
-const inMemoryTrainerPosts: any[] = [];
-
-apiRouter.get('/public/student-posts', async (req: Request, res: Response) => {
-  res.json({ success: true, posts: inMemoryTrainerPosts });
-});
-
-apiRouter.post('/trainer-portal/posts', async (req: Request, res: Response) => {
-  try {
-    const { trainerId, trainerName, trainerPhotoUrl, content, bgStyle, type, pollOptions, challengePoints, challengeTask } = req.body;
-    const newPost = {
-      id: `post-${Date.now()}`,
-      trainerId,
-      trainerName,
-      trainerPhotoUrl,
-      content,
-      bgStyle: bgStyle || 'default',
-      type: type || 'standard',
-      createdAt: new Date().toISOString(),
-      pollOptions: pollOptions ? pollOptions.map((opt: string) => ({ text: opt, votes: 0 })) : undefined,
-      challengePoints,
-      challengeTask,
-      votedUserIds: []
-    };
-    inMemoryTrainerPosts.unshift(newPost);
-    res.json({ success: true, post: newPost });
-  } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
-
-apiRouter.post('/trainer-portal/poll-vote', async (req: Request, res: Response) => {
-  try {
-    const { postId, optionIndex, userId } = req.body;
-    const post = inMemoryTrainerPosts.find(p => p.id === postId);
-    if (post && post.pollOptions && post.pollOptions[optionIndex]) {
-      post.pollOptions[optionIndex].votes = (post.pollOptions[optionIndex].votes || 0) + 1;
-      if (!post.votedUserIds) post.votedUserIds = [];
-      post.votedUserIds.push(userId);
-    }
-    res.json({ success: true, post });
-  } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
-
-// Google Drive Course Materials API (Neon PostgreSQL)
-import { queryNeon } from './dbNeon.js';
-
+// Course Materials API
 apiRouter.get('/materials', async (req: Request, res: Response) => {
   try {
     const groupName = req.query.group_name as string;
-    let query = 'SELECT * FROM course_materials';
-    let params: any[] = [];
-    if (groupName) {
-      query += ' WHERE group_name = $1 OR group_name = $2';
-      params = [groupName, 'عام'];
+    const data = db.getData() as any;
+    let materials = Array.isArray(data.courseMaterials) ? data.courseMaterials : [];
+    if (materials.length === 0) {
+      materials = [
+        { id: 'mat-1', title: 'مذكرة أساسيات البرمجة وتطوير الويب', course_name: 'برمجة الويب', branch_id: 'branch-najah', group_name: 'مجموعة الصباح', drive_file_id: '1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs' },
+        { id: 'mat-2', title: 'دليل صيانة شبكات الحاسب الآلي', course_name: 'شبكات الحاسب', branch_id: 'branch-badr', group_name: 'عام', drive_file_id: '1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs' }
+      ];
+      data.courseMaterials = materials;
+      db.save();
     }
-    query += ' ORDER BY created_at DESC';
-    const result = await queryNeon(query, params);
-    res.json(result.rows);
+    if (groupName) {
+      materials = materials.filter((m: any) => m.group_name === groupName || m.group_name === 'عام');
+    }
+    res.json(materials);
   } catch (err: any) {
-    // Fallback mock data if table is not yet migrated in Neon
-    res.json([
-      { id: 'mat-1', title: 'مذكرة أساسيات البرمجة وتطوير الويب', course_name: 'برمجة الويب', branch_id: 'branch-najah', group_name: 'مجموعة الصباح', drive_file_id: '1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs' },
-      { id: 'mat-2', title: 'دليل صيانة شبكات الحاسب الآلي', course_name: 'شبكات الحاسب', branch_id: 'branch-badr', group_name: 'عام', drive_file_id: '1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs' }
-    ]);
+    res.json([]);
   }
 });
 
@@ -9209,18 +9222,16 @@ apiRouter.post('/materials', async (req: Request, res: Response) => {
   try {
     const { id, title, course_name, branch_id, group_name, drive_file_id } = req.body;
     const matId = id || ('mat-' + Date.now());
-    
-    // Ensure group_name column exists or add it dynamically
-    try {
-      await queryNeon('ALTER TABLE course_materials ADD COLUMN IF NOT EXISTS group_name VARCHAR(100) DEFAULT \'عام\'');
-    } catch (e) {
-      // Ignore if already exists
+    const data = db.getData() as any;
+    if (!Array.isArray(data.courseMaterials)) data.courseMaterials = [];
+    const item = { id: matId, title, course_name, branch_id: branch_id || 'branch-najah', group_name: group_name || 'عام', drive_file_id };
+    const idx = data.courseMaterials.findIndex((m: any) => m.id === matId);
+    if (idx >= 0) {
+      data.courseMaterials[idx] = item;
+    } else {
+      data.courseMaterials.push(item);
     }
-
-    await queryNeon(
-      'INSERT INTO course_materials (id, title, course_name, branch_id, group_name, drive_file_id) VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT (id) DO UPDATE SET title = $2, course_name = $3, branch_id = $4, group_name = $5, drive_file_id = $6',
-      [matId, title, course_name, branch_id || 'branch-najah', group_name || 'عام', drive_file_id]
-    );
+    db.save();
     res.json({ success: true, id: matId });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });

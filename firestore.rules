@@ -1,0 +1,72 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Global Helper Functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // Default catch-all
+    match /{document=**} {
+      allow read, write: if isSignedIn();
+    }
+
+    // Trainees
+    match /trainees/{traineeId} {
+      allow read, write: if isSignedIn();
+    }
+
+    // Groups
+    match /groups/{groupId} {
+      allow read, write: if isSignedIn();
+    }
+
+    // Courses
+    match /courses/{courseId} {
+      allow read, write: if isSignedIn();
+    }
+
+    // Trainers
+    match /trainers/{trainerId} {
+      allow read, write: if isSignedIn();
+    }
+
+    // Programs
+    match /programs/{programId} {
+      allow read, write: if isSignedIn();
+    }
+
+    // Certificates
+    match /certificates/{certificateId} {
+      allow read, write: if isSignedIn();
+    }
+
+    // Attendance
+    match /attendance/{attendanceId} {
+      allow read, write: if isSignedIn();
+    }
+
+    // Exams
+    match /exams/{examId} {
+      allow read, write: if isSignedIn();
+    }
+
+    // Posts & Comments
+    match /posts/{postId} {
+      allow read, write: if isSignedIn();
+      match /comments/{commentId} {
+        allow read, write: if isSignedIn();
+      }
+    }
+
+    // Profiles
+    match /profiles/{userId} {
+      allow read, write: if isSignedIn();
+    }
+  }
+}

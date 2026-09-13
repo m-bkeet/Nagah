@@ -79,7 +79,12 @@ export const CenterProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [trainees, setTrainees] = useState<Trainee[]>(() => {
     try {
       const cached = localStorage.getItem('nagah_trainees');
-      return cached ? JSON.parse(cached) : [];
+      if (!cached) return [];
+      const parsed = JSON.parse(cached);
+      if (Array.isArray(parsed)) {
+        return parsed;
+      }
+      return [];
     } catch {
       return [];
     }

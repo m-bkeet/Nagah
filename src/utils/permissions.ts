@@ -22,8 +22,6 @@ export const ALL_PERMISSIONS: PermissionItem[] = [
   { id: 'exams', label: '📝 الاختبارات والدرجات والنتائج', category: 'الأكاديميا', description: 'إنشاء بنوك الأسئلة ورصد التقييمات' },
   { id: 'homeworks', label: '✅ الواجبات والتقييمات المباشرة', category: 'الأكاديميا', description: 'متابعة الواجبات وتصحيحها' },
   { id: 'interactive', label: '🔗 الجلسات التفاعلية والسبورة', category: 'التشغيل', description: 'إدارة البث المباشر للشاشات المعملية' },
-  { id: 'social_feed', label: '🌐 مجتمع التفاعل والنشر', category: 'التواصل', description: 'مشاركة المنشورات والإعلانات للمتدربين' },
-  { id: 'devices', label: '🖥️ إدارة الأجهزة والتحكم عن بُعد', category: 'التشغيل', description: 'التحكم في أجهزة المعامل وسحب اللقطات' },
   { id: 'messages', label: '💬 مركز الرسائل والواتساب', category: 'التواصل', description: 'إرسال التنبيهات والرسائل الجماعية' },
   { id: 'reports', label: '📊 مركز التقارير والإحصائيات', category: 'التقارير', description: 'عرض وتصدير تقارير الأداء والمالية' },
   { id: 'certificates', label: '🎓 الشهادات المعتمدة وطباعتها', category: 'الشهادات', description: 'إصدار وتوثيق الشهادات للطلاب' },
@@ -65,13 +63,13 @@ export function hasPermission(
     branch_manager: [
       'dashboard', 'trainees', 'trainers', 'courses', 'programs', 'groups', 
       'lab_schedule', 'attendance', 'finance', 'expenses', 'points', 'exams', 
-      'homeworks', 'interactive', 'social_feed', 'devices', 'messages', 
+      'homeworks', 'interactive', 'messages', 
       'reports', 'certificates'
     ],
     accountant: ['dashboard', 'finance', 'expenses', 'reports'],
     receptionist: ['dashboard', 'trainees', 'courses', 'programs', 'groups', 'attendance', 'messages', 'certificates'],
-    trainer: ['dashboard', 'trainees', 'courses', 'groups', 'lab_schedule', 'attendance', 'points', 'exams', 'homeworks', 'interactive', 'social_feed', 'devices'],
-    general_manager: ['dashboard', 'interactive', 'social_feed', 'reports', 'finance', 'expenses'],
+    trainer: ['dashboard', 'trainees', 'courses', 'groups', 'lab_schedule', 'attendance', 'points', 'exams', 'homeworks', 'interactive'],
+    general_manager: ['dashboard', 'interactive', 'reports', 'finance', 'expenses'],
     admin_staff: ['dashboard', 'trainees', 'trainers', 'courses', 'programs', 'groups', 'lab_schedule', 'attendance', 'finance', 'expenses', 'points', 'exams', 'homeworks', 'messages', 'reports', 'certificates'],
     student: ['dashboard'],
     parent: ['dashboard']

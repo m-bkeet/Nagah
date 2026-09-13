@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ar" dir="rtl">
+<html lang="ar" dir="rtl" style="background-color: #080a14; color: #f8fafc; min-height: 100vh;">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -18,47 +18,63 @@
     <link rel="icon" type="image/svg+xml" href="/logo.svg" />
     <link rel="apple-touch-icon" href="/logo.svg" />
   </head>
-  <body class="bg-slate-950 text-slate-100 antialiased font-sans selection:bg-amber-500/30 selection:text-amber-200">
+  <body class="bg-slate-950 text-slate-100 antialiased font-sans selection:bg-amber-500/30 selection:text-amber-200" style="background-color: #080a14; color: #f8fafc; min-height: 100vh; margin: 0; padding: 0;">
     <div id="root">
-      <div style="min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #090d16; color: #f8fafc; font-family: 'Cairo', sans-serif; text-align: center; padding: 20px;">
+      <div id="nagah-initial-loader" style="min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #080a14; color: #f8fafc; font-family: 'Cairo', sans-serif; text-align: center; padding: 20px;">
         <div style="width: 64px; height: 64px; border-radius: 20px; background: rgba(245, 158, 11, 0.15); border: 2px solid rgba(245, 158, 11, 0.4); display: flex; align-items: center; justify-content: center; margin-bottom: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
           <div style="width: 24px; height: 24px; border: 3px solid #f59e0b; border-top-color: transparent; border-radius: 50%; animation: nagahSpin 0.8s linear infinite;"></div>
         </div>
         <h2 style="font-size: 20px; font-weight: 800; margin: 0 0 8px 0; color: #ffffff;">مؤسسة النجاح للتدريب والاستشارات</h2>
-        <p style="font-size: 13px; color: #94a3b8; margin: 0;">جاري تحميل النظام والمزامنة السحابية...</p>
+        <p style="font-size: 13px; color: #94a3b8; margin: 0;">جاري تشغيل المنصة والمزامنة...</p>
+        <div id="nagah-troubleshoot" style="display: none; margin-top: 24px;">
+          <button onclick="nagahForceReload()" style="padding: 10px 20px; border-radius: 12px; background: #f59e0b; color: #000; font-weight: bold; border: none; cursor: pointer; font-family: 'Cairo', sans-serif; font-size: 14px;">
+            تحديث المنصة الآن 🔄
+          </button>
+        </div>
         <style>
           @keyframes nagahSpin { to { transform: rotate(360deg); } }
         </style>
       </div>
     </div>
     <script>
-      // Automatic recovery from Vite chunk loading errors or stale Service Worker caches
+      function nagahForceReload() {
+        try {
+          if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.getRegistrations().then(function(regs) {
+              regs.forEach(function(r) { r.unregister(); });
+            });
+          }
+          if ('caches' in window) {
+            caches.keys().then(function(keys) {
+              keys.forEach(function(k) { caches.delete(k); });
+            });
+          }
+        } catch(e) {}
+        window.location.reload();
+      }
+
+      // Show reload helper if mounting takes longer than 6 seconds
+      setTimeout(function() {
+        var loader = document.getElementById('nagah-initial-loader');
+        var troubleshoot = document.getElementById('nagah-troubleshoot');
+        if (loader && troubleshoot) {
+          troubleshoot.style.display = 'block';
+        }
+      }, 6000);
+
+      // Automatic recovery from chunk/module cache mismatch
       window.addEventListener('error', function (e) {
         var msg = e && e.message ? e.message.toLowerCase() : '';
         if (msg.indexOf('fetch') !== -1 || msg.indexOf('dynamically imported module') !== -1 || msg.indexOf('chunk') !== -1 || msg.indexOf('import') !== -1) {
           var hasReloaded = sessionStorage.getItem('nagah_chunk_reload');
           if (!hasReloaded) {
             sessionStorage.setItem('nagah_chunk_reload', 'true');
-            if ('serviceWorker' in navigator) {
-              navigator.serviceWorker.getRegistrations().then(function(regs) {
-                regs.forEach(function(r) { r.unregister(); });
-                window.location.reload();
-              }).catch(function() { window.location.reload(); });
-            } else {
-              window.location.reload();
-            }
+            nagahForceReload();
           }
         }
       }, true);
     </script>
     <script type="module" src="/src/main.tsx"></script>
-    <script>
-      if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/sw.js').catch(() => {});
-        });
-      }
-    </script>
   </body>
 </html>
 

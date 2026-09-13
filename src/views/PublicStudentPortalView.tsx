@@ -551,8 +551,8 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
-  // Tabs inside Student Portal (Default to 'timeline' for Facebook profile feel)
-  const [activeTab, setActiveTab] = useState<'timeline' | 'submit' | 'history' | 'badges' | 'schedule' | 'certificates' | 'profile' | 'language_lab' | 'finance'>('timeline');
+  // Tabs inside Student Portal
+  const [activeTab, setActiveTab] = useState<'submit' | 'history' | 'badges' | 'schedule' | 'certificates' | 'profile' | 'language_lab' | 'finance'>('submit');
   const [isTrainerLabSessionActive, setIsTrainerLabSessionActive] = useState<boolean>(() => isTrainerSessionActive(student?.branchId));
 
   useEffect(() => {
@@ -582,36 +582,6 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
   const [githubUrl, setGithubUrl] = useState('');
   const [youtubeUrl, setYoutubeUrl] = useState('');
   const [saveProfileLoading, setSaveProfileLoading] = useState(false);
-
-  // Community Feed States
-  const [communityPosts, setCommunityPosts] = useState<any[]>([]);
-  const [isLoadingPosts, setIsLoadingPosts] = useState(false);
-  const [newPostContent, setNewPostContent] = useState('');
-  const [newPostBg, setNewPostBg] = useState('classic'); // 'classic', 'gradient-indigo', 'gradient-purple', 'gradient-sunset', 'emerald'
-  const [newPostType, setNewPostType] = useState<'status' | 'congratulations' | 'homework'>('status');
-  const [postCommentContent, setPostCommentContent] = useState<Record<string, string>>({});
-  const [isSubmittingPost, setIsSubmittingPost] = useState(false);
-
-  const fetchCommunityPosts = async () => {
-    setIsLoadingPosts(true);
-    try {
-      const res = await fetch('/api/student/posts');
-      const data = await res.json();
-      if (data.success) {
-        setCommunityPosts(data.posts || []);
-      }
-    } catch (err) {
-      console.error("Error fetching community posts:", err);
-    } finally {
-      setIsLoadingPosts(false);
-    }
-  };
-
-  useEffect(() => {
-    if (isLoggedIn) {
-      fetchCommunityPosts();
-    }
-  }, [isLoggedIn, activeTab]);
 
   useEffect(() => {
     if (student) {
@@ -1019,97 +989,6 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
       }
     } finally {
       setIsSendingMessage(false);
-    }
-  };
-
-  const handleCreatePost = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!student || !newPostContent.trim()) return;
-
-    setIsSubmittingPost(true);
-    try {
-      const res = await fetch('/api/student/posts', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          traineeId: student.id,
-          traineeName: student.fullName,
-          traineePhotoUrl: student.photoUrl,
-          content: newPostContent.trim(),
-          bgStyle: newPostBg,
-          type: newPostType
-        })
-      });
-      const data = await res.json();
-      if (data.success) {
-        setNewPostContent('');
-        setNewPostBg('classic');
-        setNewPostType('status');
-        fetchCommunityPosts();
-      }
-    } catch (err) {
-      console.error("Error creating post:", err);
-    } finally {
-      setIsSubmittingPost(false);
-    }
-  };
-
-  const handleLikePost = async (postId: string) => {
-    if (!student) return;
-    try {
-      const res = await fetch(`/api/student/posts/${postId}/like`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ traineeId: student.id })
-      });
-      const data = await res.json();
-      if (data.success) {
-        setCommunityPosts(prev => prev.map(p => p.id === postId ? { ...p, likes: data.likes } : p));
-      }
-    } catch (err) {
-      console.error("Error liking post:", err);
-    }
-  };
-
-  const handleCommentPost = async (postId: string) => {
-    const commentText = postCommentContent[postId];
-    if (!student || !commentText || !commentText.trim()) return;
-
-    try {
-      const res = await fetch(`/api/student/posts/${postId}/comment`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          traineeId: student.id,
-          traineeName: student.fullName,
-          traineePhotoUrl: student.photoUrl,
-          content: commentText.trim()
-        })
-      });
-      const data = await res.json();
-      if (data.success) {
-        setPostCommentContent(prev => ({ ...prev, [postId]: '' }));
-        setCommunityPosts(prev => prev.map(p => p.id === postId ? { ...p, comments: data.comments } : p));
-      }
-    } catch (err) {
-      console.error("Error commenting on post:", err);
-    }
-  };
-
-  const handleDeletePost = async (postId: string) => {
-    if (!student || !window.confirm('هل أنت متأكد من رغبتك في حذف هذا المنشور؟')) return;
-    try {
-      const res = await fetch(`/api/student/posts/${postId}`, {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ traineeId: student.id })
-      });
-      const data = await res.json();
-      if (data.success) {
-        fetchCommunityPosts();
-      }
-    } catch (err) {
-      console.error("Error deleting post:", err);
     }
   };
 
@@ -1966,21 +1845,8 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
               </div>
             </div>
 
-            {/* Facebook-style Mobile Navigation Bar */}
-            <div className="bg-white/80 dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 p-2.5 rounded-3xl shadow-xl shadow-indigo-950/5 backdrop-blur-2xl grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-9 gap-2.5">
-              <button
-                type="button"
-                onClick={() => setActiveTab('timeline' as any)}
-                className={`p-2.5 rounded-2xl font-bold text-xs flex flex-col items-center justify-center gap-1 transition-all duration-200 cursor-pointer ${
-                  activeTab === ('timeline' as any)
-                    ? 'bg-gradient-to-b from-amber-400 via-amber-500 to-amber-500 text-slate-950 shadow-lg shadow-amber-500/25 border border-amber-300/90 ring-2 ring-amber-400/20 font-black scale-[1.02] -translate-y-0.5'
-                    : 'bg-gradient-to-b from-white to-slate-50/90 dark:from-slate-900 dark:to-slate-950 text-slate-700 dark:text-slate-300 hover:from-white hover:to-indigo-50/60 dark:hover:to-slate-800 hover:text-indigo-950 dark:hover:text-white border border-slate-200/80 dark:border-slate-800 shadow-xs hover:shadow-md hover:-translate-y-0.5 active:translate-y-0'
-                }`}
-              >
-                <MessageSquare className="w-4 h-4" />
-                <span className="text-[10px] text-center font-bold">المجتمع</span>
-              </button>
-
+            {/* Navigation Bar */}
+            <div className="bg-white/80 dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 p-2.5 rounded-3xl shadow-xl shadow-indigo-950/5 backdrop-blur-2xl grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-8 gap-2.5">
               <button
                 type="button"
                 onClick={() => setActiveTab('ai-tutor' as any)}
@@ -2190,353 +2056,6 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
                       })}
                     </div>
                   )}
-                </div>
-              </div>
-            )}
-
-            {/* TAB 0: STUDENT COMMUNITY TIMELINE & FEED (Facebook Style) */}
-            {activeTab === ('timeline' as any) && (
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* Main Feed (Columns 1 & 2) */}
-                <div className="lg:col-span-2 space-y-6">
-                  
-                  {/* Create Post Box */}
-                  <div className="bg-white/80 dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-3xl p-5 shadow-xl backdrop-blur-xl space-y-4">
-                    <div className="flex items-center gap-3 pb-3 border-b border-slate-200/80 dark:border-slate-800">
-                      <div className="w-10 h-10 rounded-full overflow-hidden shrink-0 border border-slate-200 dark:border-slate-700">
-                        {student?.photoUrl ? (
-                          <img src={student.photoUrl} alt={student.fullName} className="w-full h-full object-cover" />
-                        ) : (
-                          <div className="w-full h-full bg-amber-500 text-slate-950 font-bold flex items-center justify-center text-sm">
-                            {student?.fullName?.slice(0, 1)}
-                          </div>
-                        )}
-                      </div>
-                      <div className="text-right">
-                        <span className="text-xs font-black text-slate-900 dark:text-slate-200 block">انشر موضوعاً في مجتمع المجموعة</span>
-                        <span className="text-[10px] text-slate-500 block">سيراه زملائك في {student?.groupName} والمعلم</span>
-                      </div>
-                    </div>
-
-                    <form onSubmit={handleCreatePost} className="space-y-4">
-                      {/* Textarea */}
-                      <textarea
-                        value={newPostContent}
-                        onChange={(e) => setNewPostContent(e.target.value)}
-                        placeholder={`ماذا يدور في ذهنك اليوم يا ${student?.fullName?.split(' ')[0]}؟ شارك إنجازاً أو اسأل سؤالاً...`}
-                        className={`w-full min-h-[90px] bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 text-xs text-slate-900 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-600 focus:outline-none focus:border-amber-500/50 resize-none transition-all shadow-xs ${
-                          newPostBg === 'gradient-indigo' ? 'bg-gradient-to-r from-indigo-900 to-slate-950 text-white font-bold text-center' :
-                          newPostBg === 'gradient-purple' ? 'bg-gradient-to-r from-purple-900 to-slate-950 text-white font-bold text-center' :
-                          newPostBg === 'gradient-sunset' ? 'bg-gradient-to-r from-pink-900 via-red-950 to-slate-950 text-white font-bold text-center' :
-                          newPostBg === 'emerald' ? 'bg-gradient-to-r from-emerald-950 to-slate-950 text-white font-bold text-center' : ''
-                        }`}
-                      />
-
-                      {/* Post Options Grid */}
-                      <div className="flex flex-wrap items-center justify-between gap-3 pt-1 text-xs">
-                        
-                        {/* Background Styles (Facebook style) */}
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-[10px] text-slate-500 font-bold">الخلفية:</span>
-                          <button
-                            type="button"
-                            onClick={() => setNewPostBg('classic')}
-                            className={`w-5 h-5 rounded-full border border-slate-700 bg-slate-950 ${newPostBg === 'classic' ? 'ring-2 ring-amber-500' : ''}`}
-                            title="افتراضي"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => setNewPostBg('gradient-indigo')}
-                            className={`w-5 h-5 rounded-full bg-indigo-700 ${newPostBg === 'gradient-indigo' ? 'ring-2 ring-amber-500' : ''}`}
-                            title="تدرج أزرق"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => setNewPostBg('gradient-purple')}
-                            className={`w-5 h-5 rounded-full bg-purple-700 ${newPostBg === 'gradient-purple' ? 'ring-2 ring-amber-500' : ''}`}
-                            title="تدرج بنفسجي"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => setNewPostBg('gradient-sunset')}
-                            className={`w-5 h-5 rounded-full bg-gradient-to-r from-pink-500 to-amber-500 ${newPostBg === 'gradient-sunset' ? 'ring-2 ring-amber-500' : ''}`}
-                            title="غروب الشمس"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => setNewPostBg('emerald')}
-                            className={`w-5 h-5 rounded-full bg-emerald-600 ${newPostBg === 'emerald' ? 'ring-2 ring-amber-500' : ''}`}
-                            title="زمردي"
-                          />
-                        </div>
-
-                        {/* Post Type Selector */}
-                        <div className="flex items-center gap-2">
-                          <span className="text-[10px] text-slate-500 font-bold">النوع:</span>
-                          <select
-                            value={newPostType}
-                            onChange={(e: any) => setNewPostType(e.target.value)}
-                            className="bg-slate-950 border border-slate-850 rounded-xl px-2 py-1 text-[11px] text-slate-300 focus:outline-none focus:border-amber-500"
-                          >
-                            <option value="status">💬 منشور عادي</option>
-                            <option value="congratulations">🎉 تهنئة وإنجاز</option>
-                            <option value="homework">❓ مساعدة بالواجب</option>
-                          </select>
-                        </div>
-
-                        <button
-                          type="submit"
-                          disabled={isSubmittingPost || !newPostContent.trim()}
-                          className="px-5 py-2 rounded-2xl bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 hover:to-amber-300 text-slate-950 font-black text-xs shadow-md shadow-amber-500/15 disabled:opacity-50 transition-all flex items-center gap-1"
-                        >
-                          {isSubmittingPost ? 'جاري النشر...' : 'نشر بالجروب 🚀'}
-                        </button>
-                      </div>
-                    </form>
-                  </div>
-
-                  {/* Feed List */}
-                  <div className="space-y-4">
-                    <h3 className="text-xs font-black text-slate-400 flex items-center gap-2 px-1">
-                      <MessageSquare className="w-4 h-4 text-amber-500" />
-                      <span>آخر التفاعلات والمشاركات في مجموعتك الدراسية</span>
-                    </h3>
-
-                    {isLoadingPosts ? (
-                      <div className="p-12 text-center bg-slate-900/40 border border-slate-800 rounded-3xl space-y-3">
-                        <RefreshCw className="w-8 h-8 animate-spin text-amber-500 mx-auto" />
-                        <p className="text-xs text-slate-400 font-bold">جاري تحميل المنشورات والمجتمع...</p>
-                      </div>
-                    ) : communityPosts.length === 0 ? (
-                      <div className="p-10 text-center bg-slate-900 border border-slate-850 rounded-3xl space-y-3">
-                        <Smile className="w-8 h-8 text-slate-600 mx-auto" />
-                        <p className="text-xs text-slate-400 font-black">المجتمع بانتظار مشاركتك الأولى!</p>
-                        <p className="text-[10px] text-slate-500">
-                          اكتب منشوراً الآن لتشجيع زملائك بالدورة التدريبية ومشاركة فرحة التعلم.
-                        </p>
-                      </div>
-                    ) : (
-                      communityPosts.map((post) => {
-                        const isLikedByMe = student && Array.isArray(post.likes) && post.likes.includes(student.id);
-                        return (
-                          <div key={post.id} className="bg-white/80 dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800/80 rounded-3xl p-5 shadow-lg backdrop-blur-xl space-y-4">
-                            {/* Post Header */}
-                            <div className="flex items-center justify-between pb-2 border-b border-slate-200/60 dark:border-slate-800/40">
-                              <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 rounded-full overflow-hidden shrink-0 border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-950">
-                                  {post.traineePhotoUrl ? (
-                                    <img src={post.traineePhotoUrl} alt={post.traineeName} className="w-full h-full object-cover" />
-                                  ) : (
-                                    <div className="w-full h-full bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold flex items-center justify-center text-sm">
-                                      {post.traineeName?.slice(0, 1)}
-                                    </div>
-                                  )}
-                                </div>
-                                <div className="text-right">
-                                  <div className="flex items-center gap-1">
-                                    <span className="text-xs font-black text-slate-900 dark:text-slate-200">{post.traineeName}</span>
-                                    {post.traineeId === 'supervisor' && (
-                                      <span className="bg-amber-500/20 text-amber-600 dark:text-amber-300 text-[8px] font-bold px-1.5 py-0.5 rounded border border-amber-500/30">معلم</span>
-                                    )}
-                                  </div>
-                                  <span className="text-[9px] text-slate-500 block font-mono">{post.createdAt ? new Date(post.createdAt).toLocaleString('ar-EG', { hour: '2-digit', minute: '2-digit' }) : 'الآن'}</span>
-                                </div>
-                              </div>
-
-                              <div className="flex items-center gap-1.5">
-                                {/* Type Badge */}
-                                <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full border ${
-                                  post.type === 'congratulations' ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-600 dark:text-emerald-400' :
-                                  post.type === 'homework' ? 'bg-sky-500/10 border-sky-500/30 text-sky-600 dark:text-sky-400' :
-                                  'bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300'
-                                }`}>
-                                  {post.type === 'congratulations' ? '🎉 تهنئة وإنجاز' :
-                                   post.type === 'homework' ? '❓ سؤال بالواجب' :
-                                   '💬 منشور'}
-                                </span>
-
-                                {/* Delete button for own posts */}
-                                {student && post.traineeId === student.id && (
-                                  <button
-                                    type="button"
-                                    onClick={() => handleDeletePost(post.id)}
-                                    className="p-1 rounded bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 hover:border-rose-500 hover:text-rose-500 dark:hover:text-rose-400 text-slate-400 transition-all"
-                                    title="حذف المنشور"
-                                  >
-                                    <Trash2 className="w-3 h-3" />
-                                  </button>
-                                )}
-                              </div>
-                            </div>
-
-                            {/* Post Content */}
-                            {post.bgStyle && post.bgStyle !== 'classic' ? (
-                              <div className={`p-6 rounded-2xl text-center flex items-center justify-center min-h-[110px] text-xs font-black text-white shadow-inner bg-gradient-to-r ${
-                                post.bgStyle === 'gradient-indigo' ? 'from-indigo-600 via-indigo-700 to-slate-950' :
-                                post.bgStyle === 'gradient-purple' ? 'from-purple-600 via-violet-700 to-slate-950' :
-                                post.bgStyle === 'gradient-sunset' ? 'from-pink-600 via-red-600 to-amber-600' :
-                                post.bgStyle === 'emerald' ? 'from-emerald-600 via-teal-700 to-slate-950' : ''
-                              }`}>
-                                <p className="max-w-md break-words text-sm whitespace-pre-line leading-relaxed drop-shadow">{post.content}</p>
-                              </div>
-                            ) : (
-                              <div className="text-xs text-slate-800 dark:text-slate-300 whitespace-pre-line leading-relaxed px-1">
-                                {post.content}
-                              </div>
-                            )}
-
-                            {/* Likes and Interactions Footer */}
-                            <div className="flex items-center justify-between pt-2 border-t border-slate-200/60 dark:border-slate-800/30 text-[11px]">
-                              {/* Like Trigger */}
-                              <button
-                                type="button"
-                                onClick={() => handleLikePost(post.id)}
-                                className={`flex items-center gap-1 px-3 py-1.5 rounded-xl border transition-all ${
-                                  isLikedByMe 
-                                    ? 'bg-rose-500/10 border-rose-500/30 text-rose-500 dark:text-rose-400' 
-                                    : 'bg-slate-100 dark:bg-slate-950 border-slate-200 dark:border-slate-850 text-slate-600 dark:text-slate-400 hover:text-rose-500 hover:border-rose-400/50 shadow-xs'
-                                }`}
-                              >
-                                <Heart className={`w-3.5 h-3.5 ${isLikedByMe ? 'fill-rose-500 text-rose-500' : ''}`} />
-                                <span className="font-bold">أعجبني ({Array.isArray(post.likes) ? post.likes.length : 0})</span>
-                              </button>
-
-                              {/* Comment icon summary */}
-                              <span className="text-slate-500 font-bold">
-                                {Array.isArray(post.comments) ? post.comments.length : 0} تعليقات ومشاركات ردود
-                              </span>
-                            </div>
-
-                            {/* Comments Container */}
-                            <div className="bg-slate-50/80 dark:bg-slate-950/50 p-3 rounded-2xl border border-slate-200/80 dark:border-slate-800/50 space-y-3">
-                              {/* Comments List */}
-                              {Array.isArray(post.comments) && post.comments.length > 0 && (
-                                <div className="space-y-2.5 max-h-[180px] overflow-y-auto pr-1">
-                                  {post.comments.map((comm: any, idx: number) => (
-                                    <div key={comm.id || idx} className="flex items-start gap-2 text-[10px] border-b border-slate-200/60 dark:border-slate-900/60 pb-2 last:border-0 last:pb-0">
-                                      <div className="w-7 h-7 rounded-full overflow-hidden shrink-0 border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900">
-                                        {comm.traineePhotoUrl ? (
-                                          <img src={comm.traineePhotoUrl} alt={comm.traineeName} className="w-full h-full object-cover" />
-                                        ) : (
-                                          <div className="w-full h-full bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-bold flex items-center justify-center text-[8px]">
-                                            {comm.traineeName?.slice(0, 1)}
-                                          </div>
-                                        )}
-                                      </div>
-                                      <div className="bg-white dark:bg-slate-900 p-2 rounded-xl text-right flex-1 border border-slate-200/60 dark:border-transparent">
-                                        <div className="flex items-center justify-between mb-0.5">
-                                          <span className="font-black text-slate-800 dark:text-slate-300">{comm.traineeName}</span>
-                                          <span className="text-[8px] text-slate-500">{comm.createdAt ? new Date(comm.createdAt).toLocaleString('ar-EG', { hour: '2-digit', minute: '2-digit' }) : 'منذ قليل'}</span>
-                                        </div>
-                                        <p className="text-slate-600 dark:text-slate-400 leading-relaxed whitespace-pre-line">{comm.content}</p>
-                                      </div>
-                                    </div>
-                                  ))}
-                                </div>
-                              )}
-
-                              {/* Write Comment Form */}
-                              <div className="flex items-center gap-2 pt-1 border-t border-slate-200/60 dark:border-slate-800/30">
-                                <input
-                                  type="text"
-                                  value={postCommentContent[post.id] || ''}
-                                  onChange={(e) => setPostCommentContent(prev => ({ ...prev, [post.id]: e.target.value }))}
-                                  onKeyDown={(e) => {
-                                    if (e.key === 'Enter') handleCommentPost(post.id);
-                                  }}
-                                  placeholder="اكتب تعليقك أو استفسارك هنا..."
-                                  className="flex-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-1.5 text-[11px] text-slate-900 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-600 focus:outline-none focus:border-amber-500/50 shadow-xs"
-                                />
-                                <button
-                                  type="button"
-                                  onClick={() => handleCommentPost(post.id)}
-                                  className="p-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold"
-                                  title="إرسال التعليق"
-                                >
-                                  <Send className="w-3.5 h-3.5" />
-                                </button>
-                              </div>
-                            </div>
-
-                          </div>
-                        );
-                      })
-                    )}
-                  </div>
-
-                </div>
-
-                {/* Sidebar Widget (Column 3) */}
-                <div className="space-y-6">
-                  
-                  {/* PWA / Download Mobile Promo */}
-                  <div className="bg-white/80 dark:bg-gradient-to-br dark:from-slate-900 dark:via-amber-950/20 dark:to-slate-900 border border-amber-500/30 rounded-3xl p-5 shadow-xl backdrop-blur-xl text-center space-y-3">
-                    <Smartphone className="w-8 h-8 text-amber-500 dark:text-amber-400 mx-auto animate-bounce" />
-                    <div className="space-y-1">
-                      <h4 className="text-xs font-black text-amber-600 dark:text-amber-300">تطبيق النجاح على هاتفك!</h4>
-                      <p className="text-[10px] text-slate-600 dark:text-slate-400 leading-relaxed">
-                        قم بتثبيت التطبيق للوصول المباشر الفوري للبوابة مع إشعارات التصحيح والأوسمة.
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={handleInstallPwa}
-                      className="w-full py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-400 text-slate-950 font-bold text-[11px] hover:scale-[1.01] active:scale-[0.99] transition-all shadow-md flex items-center justify-center gap-1.5"
-                    >
-                      <Download className="w-4 h-4" />
-                      <span>تثبيت التطبيق الآن 📲</span>
-                    </button>
-                  </div>
-
-                  {/* Leaderboard/Achievers Board (Simulated Group rankings) */}
-                  <div className="bg-white/80 dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-3xl p-5 shadow-xl backdrop-blur-xl space-y-4">
-                    <div className="flex items-center gap-2 pb-2 border-b border-slate-200/80 dark:border-slate-800">
-                      <Trophy className="w-5 h-5 text-amber-500 dark:text-amber-400" />
-                      <div className="text-right">
-                        <h4 className="text-xs font-black text-slate-900 dark:text-slate-200">أوائل دورتك ومجموعتك 🏆</h4>
-                        <p className="text-[9px] text-slate-500">حسب نشاط الواجبات والنقاط التراكمية</p>
-                      </div>
-                    </div>
-
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between p-2 rounded-xl bg-amber-50/60 dark:bg-slate-950/50 border border-amber-500/30">
-                        <div className="flex items-center gap-2 text-[11px]">
-                          <span className="w-5 h-5 rounded-full bg-amber-500 text-slate-950 font-black flex items-center justify-center text-[10px]">١</span>
-                          <span className="font-bold text-amber-700 dark:text-amber-300">{student?.fullName?.split(' ')[0]} (أنت)</span>
-                        </div>
-                        <span className="text-xs font-mono font-bold text-amber-600 dark:text-amber-400">{student?.totalPoints || 0} ن</span>
-                      </div>
-
-                      <div className="flex items-center justify-between p-2 rounded-xl bg-slate-50 dark:bg-slate-950/30 border border-slate-200/80 dark:border-slate-850 text-[11px]">
-                        <div className="flex items-center gap-2">
-                          <span className="w-5 h-5 rounded-full bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-400 font-bold flex items-center justify-center text-[10px]">٢</span>
-                          <span className="font-medium text-slate-700 dark:text-slate-300">أحمد محمود الكناني</span>
-                        </div>
-                        <span className="text-[11px] font-mono font-bold text-slate-600 dark:text-slate-400">٤٢٠ ن</span>
-                      </div>
-
-                      <div className="flex items-center justify-between p-2 rounded-xl bg-slate-50 dark:bg-slate-950/30 border border-slate-200/80 dark:border-slate-850 text-[11px]">
-                        <div className="flex items-center gap-2">
-                          <span className="w-5 h-5 rounded-full bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-400 font-bold flex items-center justify-center text-[10px]">٣</span>
-                          <span className="font-medium text-slate-700 dark:text-slate-300">فاطمة الزهراء علي</span>
-                        </div>
-                        <span className="text-[11px] font-mono font-bold text-slate-600 dark:text-slate-400">٣٩٥ ن</span>
-                      </div>
-                    </div>
-
-                    <div className="pt-2 text-center border-t border-slate-200/80 dark:border-slate-800/40">
-                      <span className="text-[9px] text-slate-500">مجموع النقاط يشمل التصحيح الآلي وسرعة تسليم المهام</span>
-                    </div>
-                  </div>
-
-                  {/* Motivational Quote or Study Tip */}
-                  <div className="bg-white/80 dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-3xl p-5 shadow-xl backdrop-blur-xl space-y-3">
-                    <span className="text-[10px] text-amber-600 dark:text-amber-400 font-bold block">💡 نصيحة اليوم للتعلم السريع:</span>
-                    <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed">
-                      "البرمجة والتصميم لا تتعلمهما بالقراءة فحسب، بل بكتابة وتعديل الكود بأصابعك. جرب تصحيح الواجب الآن فوراً واستفد من نصائح مساعد الذكاء الاصطناعي لتطوير مهاراتك!"
-                    </p>
-                  </div>
-
                 </div>
               </div>
             )}
@@ -3745,18 +3264,18 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
       {isLoggedIn && (
         <div className="fixed bottom-0 left-0 right-0 z-40 bg-slate-900 border-t border-slate-800 flex justify-around py-2 px-1 shadow-2xl md:hidden">
           <button
-            onClick={() => setActiveTab('timeline')}
-            className={`flex flex-col items-center gap-1 flex-1 py-1 transition-all ${activeTab === 'timeline' ? 'text-amber-400 scale-105' : 'text-slate-400'}`}
-          >
-            <BookOpen className="w-4 h-4" />
-            <span className="text-[9px] font-bold">الرئيسية</span>
-          </button>
-          <button
             onClick={() => setActiveTab('submit')}
             className={`flex flex-col items-center gap-1 flex-1 py-1 transition-all ${activeTab === 'submit' ? 'text-amber-400 scale-105' : 'text-slate-400'}`}
           >
             <Upload className="w-4 h-4" />
             <span className="text-[9px] font-bold">تسليم واجب</span>
+          </button>
+          <button
+            onClick={() => setActiveTab('history')}
+            className={`flex flex-col items-center gap-1 flex-1 py-1 transition-all ${activeTab === 'history' ? 'text-amber-400 scale-105' : 'text-slate-400'}`}
+          >
+            <BookOpen className="w-4 h-4" />
+            <span className="text-[9px] font-bold">السجل</span>
           </button>
           <button
             onClick={() => setActiveTab('badges')}

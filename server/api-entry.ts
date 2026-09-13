@@ -38,13 +38,11 @@ if (!isServerless) {
 
 // Health check endpoints
 app.get(['/health', '/api/health'], async (req, res) => {
-  let supabaseStatus = 'disconnected';
-  let supabaseCount = 0;
   let hasBundledData = false;
   let hasTmpData = false;
   let tmpDataSize = 0;
   let bundledDataSize = 0;
-  let memDataKeys = [];
+  let memDataKeys: string[] = [];
   
   try {
     const fs = await import('fs');
@@ -54,24 +52,12 @@ app.get(['/health', '/api/health'], async (req, res) => {
     if (fs.existsSync(bPath)) { hasBundledData = true; bundledDataSize = fs.statSync(bPath).size; }
     if (fs.existsSync(tPath)) { hasTmpData = true; tmpDataSize = fs.statSync(tPath).size; }
     
-    const { supabaseClient, db } = await import('./data/index.js');
-    if (supabaseClient) {
-      const { data, error } = await supabaseClient
-        .from('collections')
-        .select('id', { count: 'exact', head: true });
-      if (!error) {
-        supabaseStatus = 'connected';
-      } else if (error.message?.includes('exceed_egress_quota') || error.message?.includes('restricted')) {
-        supabaseStatus = 'quota_restricted_local_fallback';
-      } else {
-        supabaseStatus = `notice: ${error.message}`;
-      }
-    }
+    const { db } = await import('./db.js');
     if (db) {
-      memDataKeys = Object.keys((supabaseClient ? {} : {}));
+      memDataKeys = Object.keys(db.getData() || {});
     }
   } catch (e) {
-    supabaseStatus = `error: ${e.message || e}`;
+    // ignore
   }
 
   res.json({
@@ -79,7 +65,7 @@ app.get(['/health', '/api/health'], async (req, res) => {
     service: 'Nagah Management System',
     environment: process.env.NODE_ENV || 'production',
     serverless: isServerless,
-    supabase: supabaseStatus,
+    database: 'active',
     cwd: process.cwd(),
     hasBundledData,
     bundledDataSize,

@@ -148,11 +148,11 @@ export const TrainerAttestationsManagerModal: React.FC<TrainerAttestationsManage
 
   return (
     <>
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md overflow-y-auto dir-rtl">
-        <div className="relative w-full max-w-4xl bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl overflow-hidden text-slate-100">
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/80 backdrop-blur-md overflow-hidden dir-rtl">
+        <div className="relative w-full max-w-4xl max-h-[90vh] flex flex-col bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl overflow-hidden text-slate-100">
           
           {/* Header */}
-          <div className="p-5 bg-slate-950 border-b border-slate-800 flex items-center justify-between">
+          <div className="shrink-0 p-5 bg-slate-950 border-b border-slate-800 flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="p-2.5 rounded-2xl bg-amber-500/20 text-amber-400 border border-amber-500/30">
                 <Award className="w-6 h-6" />
@@ -211,7 +211,7 @@ export const TrainerAttestationsManagerModal: React.FC<TrainerAttestationsManage
           </div>
 
           {/* Modal Content */}
-          <div className="p-6">
+          <div className="flex-1 overflow-y-auto custom-scrollbar p-6">
             
             {activeTab === 'list' ? (
               <div className="space-y-4">

@@ -36,6 +36,7 @@ import {
 } from 'lucide-react';
 import { Group, Course, Trainer, Branch, Trainee } from '../types';
 import { CourseGroupMaterialsModal } from '../components/CourseGroupMaterialsModal';
+import { LabScheduleView } from './LabScheduleView';
 
 interface GroupsViewProps {
   onNavigate?: (view: string) => void;
@@ -58,7 +59,7 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ onNavigate }) => {
   const [selectedCourseFilter, setSelectedCourseFilter] = useState('all');
   const [selectedTrainerFilter, setSelectedTrainerFilter] = useState('all');
   const [selectedStatusFilter, setSelectedStatusFilter] = useState('all');
-  const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
+  const [viewMode, setViewMode] = useState<'grid' | 'table' | 'schedule'>('grid');
   const [sortBy, setSortBy] = useState<'createdAt' | 'name' | 'course' | 'branch' | 'startTime' | 'day'>('createdAt');
 
   // Modals state
@@ -612,6 +613,18 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ onNavigate }) => {
               <List className="w-4 h-4" />
               <span className="hidden sm:inline">جدول</span>
             </button>
+            <button
+              onClick={() => setViewMode('schedule')}
+              className={`p-2 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all ${
+                viewMode === 'schedule'
+                  ? 'bg-amber-500 text-slate-950 shadow-md'
+                  : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
+              }`}
+              title="عرض الجدول الزمني الأسبوعي"
+            >
+              <Calendar className="w-4 h-4" />
+              <span className="hidden sm:inline">الجدول الزمني</span>
+            </button>
           </div>
 
           <button
@@ -812,6 +825,11 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ onNavigate }) => {
           >
             <Plus className="w-4 h-4" /> إنشاء مجموعة جديدة الآن
           </button>
+        </div>
+      ) : viewMode === 'schedule' ? (
+        /* SCHEDULE / TIMETABLE VIEW */
+        <div className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-sm">
+          <LabScheduleView />
         </div>
       ) : viewMode === 'grid' ? (
         /* GRID CARDS VIEW */
@@ -1249,9 +1267,9 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ onNavigate }) => {
       {/* BATCH CREATE GROUPS MODAL                                                */}
       {/* ========================================================================= */}
       {isBatchModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-fadeIn">
-          <div className="bg-slate-900 border border-slate-700 rounded-3xl shadow-2xl max-w-lg w-full p-6 text-slate-100">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-800 mb-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/80 backdrop-blur-md animate-fadeIn overflow-hidden">
+          <div className="bg-slate-900 border border-slate-700 rounded-3xl shadow-2xl max-w-lg w-full text-slate-100 max-h-[90vh] flex flex-col overflow-hidden">
+            <div className="shrink-0 p-4 sm:p-5 flex items-center justify-between border-b border-slate-800 bg-slate-900/90">
               <div className="flex items-center gap-2.5">
                 <div className="w-8 h-8 rounded-xl bg-purple-500/20 border border-purple-500/40 flex items-center justify-center text-purple-400">
                   <Layers className="w-4 h-4" />
@@ -1261,104 +1279,106 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ onNavigate }) => {
                   <p className="text-[11px] text-slate-400">إنشاء عدة مجموعات بنفس الدورة والفرع وتحديد رسوم فرع معينة</p>
                 </div>
               </div>
-              <button onClick={() => setIsBatchModalOpen(false)} className="text-slate-400 hover:text-white p-1">
+              <button onClick={() => setIsBatchModalOpen(false)} className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleSaveBatch} className="space-y-4 text-xs">
-              <div>
-                <label className="block text-slate-300 font-bold mb-1">الدورة التدريبية *</label>
-                <select
-                  value={batchFormData.courseId ?? ''}
-                  onChange={(e) => setBatchFormData({ ...batchFormData, courseId: e.target.value })}
-                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 focus:outline-none focus:border-amber-500"
-                >
-                  {courses.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name} ({c.feeAmount} ج.م)
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <form onSubmit={handleSaveBatch} className="flex-1 flex flex-col min-h-0">
+              <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 text-xs custom-scrollbar">
                 <div>
-                  <label className="block text-slate-300 font-bold mb-1">الفرع *</label>
+                  <label className="block text-slate-300 font-bold mb-1">الدورة التدريبية *</label>
                   <select
-                    value={batchFormData.branchId ?? ''}
-                    onChange={(e) => setBatchFormData({ ...batchFormData, branchId: e.target.value })}
+                    value={batchFormData.courseId ?? ''}
+                    onChange={(e) => setBatchFormData({ ...batchFormData, courseId: e.target.value })}
                     className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 focus:outline-none focus:border-amber-500"
                   >
-                    {branches.map((b) => (
-                      <option key={b.id} value={b.id}>
-                        {b.name}
+                    {courses.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name} ({c.feeAmount} ج.م)
                       </option>
                     ))}
                   </select>
                 </div>
 
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-slate-300 font-bold mb-1">الفرع *</label>
+                    <select
+                      value={batchFormData.branchId ?? ''}
+                      onChange={(e) => setBatchFormData({ ...batchFormData, branchId: e.target.value })}
+                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 focus:outline-none focus:border-amber-500"
+                    >
+                      {branches.map((b) => (
+                        <option key={b.id} value={b.id}>
+                          {b.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-300 font-bold mb-1">عدد المجموعات المراد إنشاؤها *</label>
+                    <input
+                      type="number"
+                      min="1"
+                      max="10"
+                      value={batchFormData.count}
+                      onChange={(e) => setBatchFormData({ ...batchFormData, count: Number(e.target.value) })}
+                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 font-mono font-bold"
+                    />
+                  </div>
+                </div>
+
+                {/* Fee Amount Override */}
                 <div>
-                  <label className="block text-slate-300 font-bold mb-1">عدد المجموعات المراد إنشاؤها *</label>
+                  <label className="block text-amber-300 font-bold mb-1">رسوم الدورة لهذه المجموعات (اختياري)</label>
                   <input
                     type="number"
-                    min="1"
-                    max="10"
-                    value={batchFormData.count}
-                    onChange={(e) => setBatchFormData({ ...batchFormData, count: Number(e.target.value) })}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 font-mono font-bold"
+                    value={batchFormData.feeAmount ?? ''}
+                    onChange={(e) => setBatchFormData({ ...batchFormData, feeAmount: e.target.value })}
+                    placeholder="مثال: 250 لفرع بدر أو 200 لفرع النجاح"
+                    className="w-full bg-slate-800 border border-amber-500/50 rounded-xl px-3.5 py-2.5 text-amber-300 font-mono font-bold"
                   />
+                  <p className="text-[10px] text-slate-400 mt-1">تحديد سعر خاص للفرع (يترك فارغاً للاستعانة بالسعر الأساسي للدورة)</p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-slate-300 font-bold mb-1">المسار / الشعبة</label>
+                    <input
+                      type="text"
+                      value={batchFormData.track}
+                      onChange={(e) => setBatchFormData({ ...batchFormData, track: e.target.value })}
+                      placeholder="عربي / إنجليزي"
+                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-slate-300 font-bold mb-1">بادئة اسم المجموعة (اختياري)</label>
+                    <input
+                      type="text"
+                      value={batchFormData.prefixName}
+                      onChange={(e) => setBatchFormData({ ...batchFormData, prefixName: e.target.value })}
+                      placeholder="مثال: مجموعة الذكاء الاصطناعي"
+                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100"
+                    />
+                  </div>
                 </div>
               </div>
 
-              {/* Fee Amount Override */}
-              <div>
-                <label className="block text-amber-300 font-bold mb-1">رسوم الدورة لهذه المجموعات (اختياري)</label>
-                <input
-                  type="number"
-                  value={batchFormData.feeAmount ?? ''}
-                  onChange={(e) => setBatchFormData({ ...batchFormData, feeAmount: e.target.value })}
-                  placeholder="مثال: 250 لفرع بدر أو 200 لفرع النجاح"
-                  className="w-full bg-slate-800 border border-amber-500/50 rounded-xl px-3.5 py-2.5 text-amber-300 font-mono font-bold"
-                />
-                <p className="text-[10px] text-slate-400 mt-1">تحديد سعر خاص للفرع (يترك فارغاً للاستعانة بالسعر الأساسي للدورة)</p>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-slate-300 font-bold mb-1">المسار / الشعبة</label>
-                  <input
-                    type="text"
-                    value={batchFormData.track}
-                    onChange={(e) => setBatchFormData({ ...batchFormData, track: e.target.value })}
-                    placeholder="عربي / إنجليزي"
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100"
-                  />
-                </div>
-                <div>
-                  <label className="block text-slate-300 font-bold mb-1">بادئة اسم المجموعة (اختياري)</label>
-                  <input
-                    type="text"
-                    value={batchFormData.prefixName}
-                    onChange={(e) => setBatchFormData({ ...batchFormData, prefixName: e.target.value })}
-                    placeholder="مثال: مجموعة الذكاء الاصطناعي"
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100"
-                  />
-                </div>
-              </div>
-
-              <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-800">
+              <div className="shrink-0 p-4 border-t border-slate-800 flex items-center justify-end gap-2.5 bg-slate-900/95">
                 <button
                   type="button"
                   onClick={() => setIsBatchModalOpen(false)}
-                  className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold"
+                  className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold cursor-pointer"
                 >
                   إلغاء
                 </button>
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="px-5 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-black shadow-lg shadow-purple-600/30 flex items-center gap-2"
+                  className="px-5 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-black shadow-lg shadow-purple-600/30 flex items-center gap-2 cursor-pointer"
                 >
                   {isSubmitting ? 'جاري الإنشاء...' : 'إنشاء المجموعات الآن 🚀'}
                 </button>
@@ -1372,9 +1392,9 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ onNavigate }) => {
       {/* 1. ADD GROUP MODAL                                                       */}
       {/* ========================================================================= */}
       {isAddModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-fadeIn">
-          <div className="bg-slate-900 border border-slate-700 rounded-3xl shadow-2xl max-w-2xl w-full p-6 text-slate-100 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-800 mb-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/80 backdrop-blur-md animate-fadeIn overflow-hidden">
+          <div className="bg-slate-900 border border-slate-700 rounded-3xl shadow-2xl max-w-2xl w-full text-slate-100 max-h-[90vh] flex flex-col overflow-hidden">
+            <div className="shrink-0 p-4 sm:p-5 flex items-center justify-between border-b border-slate-800 bg-slate-900/90">
               <div className="flex items-center gap-2.5">
                 <div className="w-8 h-8 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400">
                   <Plus className="w-4 h-4" />
@@ -1384,344 +1404,346 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ onNavigate }) => {
                   <p className="text-[11px] text-slate-400">حدد بيانات وتوقيت وأيام القاعة للمجموعة</p>
                 </div>
               </div>
-              <button onClick={() => setIsAddModalOpen(false)} className="text-slate-400 hover:text-white p-1">
+              <button onClick={() => setIsAddModalOpen(false)} className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 cursor-pointer">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleSaveAdd} className="space-y-4 text-xs">
-              <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 flex items-center gap-2">
-                <Clock className="w-4 h-4 shrink-0 text-amber-400" />
-                <span>نظام المنهج المقرر: <strong>محاضرة لمدة ساعة واحدة فقط</strong>، بواقع <strong>يومان أسبوعياً</strong> (إجمالي ساعتين أسبوعياً).</span>
-              </div>
-              <div>
-                <label className="block text-slate-300 font-bold mb-1">اسم المجموعة التدريبية *</label>
-                <input
-                  type="text"
-                  required
-                  list="group-name-suggestions"
-                  value={formData.name ?? ''}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  placeholder="مثال: مجموعة البرمجة والذكاء الاصطناعي - فوج المساء"
-                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2.5 text-slate-100 focus:outline-none focus:border-amber-500 font-bold text-sm"
-                />
-              </div>
-
-              {/* Arabic Grade Dropdown */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-slate-300 font-bold mb-1">الصف الدراسي (لتوزيع الطلاب تلقائياً) *</label>
-                  <select
-                    required
-                    value={formData.grade ?? ''}
-                    onChange={(e) => setFormData({ ...formData, grade: e.target.value })}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 text-slate-100 focus:outline-none focus:border-amber-500 font-bold"
-                  >
-                    <option value="">-- اختر الصف الدراسي --</option>
-                    <option value="الصف الرابع الابتدائي">الصف الرابع الابتدائي</option>
-                    <option value="الصف الخامس الابتدائي">الصف الخامس الابتدائي</option>
-                    <option value="الصف السادس الابتدائي">الصف السادس الابتدائي</option>
-                    <option value="الصف الأول الإعدادي">الصف الأول الإعدادي</option>
-                    <option value="الصف الثاني الإعدادي">الصف الثاني الإعدادي</option>
-                    <option value="الصف الثالث الإعدادي">الصف الثالث الإعدادي</option>
-                    <option value="الصف الأول الثانوي">الصف الأول الثانوي</option>
-                    <option value="الصف الثاني الثانوي">الصف الثاني الثانوي</option>
-                    <option value="الصف الثالث الثانوي">الصف الثالث الثانوي</option>
-                  </select>
+            <form onSubmit={handleSaveAdd} className="flex-1 flex flex-col min-h-0">
+              <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 text-xs custom-scrollbar">
+                <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 flex items-center gap-2">
+                  <Clock className="w-4 h-4 shrink-0 text-amber-400" />
+                  <span>نظام المنهج المقرر: <strong>محاضرة لمدة ساعة واحدة فقط</strong>، بواقع <strong>يومان أسبوعياً</strong> (إجمالي ساعتين أسبوعياً).</span>
                 </div>
-
                 <div>
-                  <label className="block text-slate-300 font-bold mb-1">المسار / نوع التعليم *</label>
-                  <select
-                    required
-                    value={formData.track ?? 'عربي'}
-                    onChange={(e) => setFormData({ ...formData, track: e.target.value })}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 text-slate-100 focus:outline-none focus:border-amber-500 font-bold"
-                  >
-                    <option value="عربي">عربي (الدراسة باللغة العربية)</option>
-                    <option value="لغات">لغات (الدراسة باللغة الإنجليزية/الفرنسية)</option>
-                    <option value="أزهري">أزهري</option>
-                    <option value="دولي">دولي</option>
-                  </select>
-                </div>
-              </div>
-
-              {/* Branch + Course */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-slate-300 font-bold mb-1">الفرع *</label>
-                  <select
-                    value={formData.branchId ?? ''}
-                    onChange={(e) => setFormData({ ...formData, branchId: e.target.value })}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 focus:outline-none focus:border-amber-500"
-                  >
-                    {branches.map((b) => (
-                      <option key={b.id} value={b.id}>
-                        {b.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-slate-300 font-bold mb-1">الدورة التدريبية *</label>
-                  <select
-                    value={formData.courseId ?? ''}
-                    onChange={(e) => setFormData({ ...formData, courseId: e.target.value })}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 focus:outline-none focus:border-amber-500"
-                  >
-                    {courses.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name} ({c.code})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              {/* Linked Curriculum & Google Drive Status */}
-              {formData.courseId && (
-                <div className="bg-emerald-950/40 border border-emerald-500/30 rounded-2xl p-3 flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
-                      <BookOpen className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <p className="text-xs font-bold text-emerald-300">
-                        منهج مسار ({formData.track === 'لغات' ? 'اللغات' : 'العربي'}):
-                      </p>
-                      <p className="text-[11px] text-slate-300">
-                        {(() => {
-                          const crs = courses.find(c => c.id === formData.courseId);
-                          const isLang = formData.track === 'لغات';
-                          const mat = isLang ? crs?.languagesMaterial : crs?.arabicMaterial;
-                          if (mat) {
-                            return `مربوط تلقائياً من الدورة: ${mat.title} (${mat.isGoogleDrive ? 'Google Drive' : 'ملف'})`;
-                          }
-                          return 'يتم ربط منهج الدورة تلقائياً للطلاب فور حفظ المجموعة، أو يمكنك إضافة منهج خاص للمجموعة لاحقاً.';
-                        })()}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Fee Amount Override per Group */}
-              <div>
-                <label className="block text-amber-300 font-bold mb-1">رسوم الدورة لهذه المجموعة (اختياري)</label>
-                <input
-                  type="number"
-                  value={formData.feeAmount ?? ''}
-                  onChange={(e) => setFormData({ ...formData, feeAmount: e.target.value !== '' ? Number(e.target.value) : '' })}
-                  placeholder="يترك فارغاً لاستخدام السعر الافتراضي للدورة"
-                  className="w-full bg-slate-800 border border-amber-500/50 rounded-xl px-3 py-2 text-amber-300 font-mono font-bold"
-                />
-                <p className="text-[10px] text-slate-400 mt-1">مثال: فرع بدر 250، فرع النجاح 200 (يتطبق تلقائياً للمتدربين بهذه المجموعة)</p>
-              </div>
-
-              {/* Trainer + Room / Lab */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-slate-300 font-bold mb-1">المدرب المشرف</label>
-                  <select
-                    value={formData.trainerId ?? ''}
-                    onChange={(e) => setFormData({ ...formData, trainerId: e.target.value })}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 focus:outline-none focus:border-amber-500"
-                  >
-                    <option value="">-- بدون تحديد مدرب حالياً --</option>
-                    {trainers.map((tr) => (
-                      <option key={tr.id} value={tr.id}>
-                        {tr.name} - {tr.specialty || 'مدرب معتمد'}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-slate-300 font-bold mb-1">المعمل / القاعة</label>
+                  <label className="block text-slate-300 font-bold mb-1">اسم المجموعة التدريبية *</label>
                   <input
                     type="text"
-                    list="room-name-suggestions"
-                    value={formData.roomName ?? ''}
-                    onChange={(e) => setFormData({ ...formData, roomName: e.target.value })}
-                    placeholder="معمل الحاسب الرئيسي (Lab 1)"
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 focus:outline-none focus:border-amber-500"
+                    required
+                    list="group-name-suggestions"
+                    value={formData.name ?? ''}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    placeholder="مثال: مجموعة البرمجة والذكاء الاصطناعي - فوج المساء"
+                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2.5 text-slate-100 focus:outline-none focus:border-amber-500 font-bold text-sm"
                   />
                 </div>
-              </div>
 
-              {/* Days Selection with Quick Presets */}
-              <div className="bg-slate-950/60 p-3.5 rounded-2xl border border-slate-800 space-y-2">
-                <div className="flex items-center justify-between">
-                  <label className="text-slate-300 font-bold">أيام المحاضرات الأسبوعية</label>
-                  <div className="text-[10px] text-slate-400">نماذج سريعة:</div>
-                </div>
-
-                {/* Day Presets */}
-                <div className="flex flex-wrap gap-1.5 pb-1">
-                  {dayPresets.map((preset, idx) => (
-                    <button
-                      type="button"
-                      key={idx}
-                      onClick={() => applyDayPreset(preset.days)}
-                      className="px-2.5 py-1 rounded-lg bg-slate-850 hover:bg-slate-800 border border-slate-700 text-slate-300 text-[10px] font-bold transition-all"
-                    >
-                      {preset.label}
-                    </button>
-                  ))}
-                </div>
-
-                {/* Individual Days Chips */}
-                <div className="flex flex-wrap gap-1.5 pt-1">
-                  {daysList.map((day) => {
-                    const isSel = (formData.scheduleDays || []).includes(day);
-                    return (
-                      <button
-                        type="button"
-                        key={day}
-                        onClick={() => toggleDay(day)}
-                        className={`px-3 py-1.5 rounded-xl border font-bold text-xs transition-all ${
-                          isSel
-                            ? 'bg-amber-500 text-slate-950 border-amber-500 shadow-md font-black'
-                            : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-white'
-                        }`}
-                      >
-                        {day}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Timing Selection with Presets */}
-              <div className="bg-slate-950/60 p-3.5 rounded-2xl border border-slate-800 space-y-2">
-                <div className="flex items-center justify-between">
-                  <label className="text-slate-300 font-bold">توقيت المحاضرات</label>
-                  <div className="text-[10px] text-slate-400">أوقات شائعة:</div>
-                </div>
-
-                {/* Time Slot Presets */}
-                <div className="flex flex-wrap gap-1.5 pb-1">
-                  {timePresets.map((preset, idx) => (
-                    <button
-                      type="button"
-                      key={idx}
-                      onClick={() => applyTimePreset(preset.start, preset.end)}
-                      className="px-2 py-0.5 rounded-lg bg-slate-850 hover:bg-slate-800 border border-slate-700 text-slate-300 text-[10px] font-mono font-semibold"
-                    >
-                      {preset.label} ({preset.start}-{preset.end})
-                    </button>
-                  ))}
-                </div>
-
-                <div className="grid grid-cols-2 gap-3 pt-1">
+                {/* Arabic Grade Dropdown */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-slate-400 mb-1">وقت البدء</label>
-                    <input
-                      type="time"
-                      value={formData.startTime ?? ''}
-                      onChange={(e) => setFormData({ ...formData, startTime: e.target.value })}
-                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 font-mono text-center font-bold"
-                    />
+                    <label className="block text-slate-300 font-bold mb-1">الصف الدراسي (لتوزيع الطلاب تلقائياً) *</label>
+                    <select
+                      required
+                      value={formData.grade ?? ''}
+                      onChange={(e) => setFormData({ ...formData, grade: e.target.value })}
+                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 text-slate-100 focus:outline-none focus:border-amber-500 font-bold"
+                    >
+                      <option value="">-- اختر الصف الدراسي --</option>
+                      <option value="الصف الرابع الابتدائي">الصف الرابع الابتدائي</option>
+                      <option value="الصف الخامس الابتدائي">الصف الخامس الابتدائي</option>
+                      <option value="الصف السادس الابتدائي">الصف السادس الابتدائي</option>
+                      <option value="الصف الأول الإعدادي">الصف الأول الإعدادي</option>
+                      <option value="الصف الثاني الإعدادي">الصف الثاني الإعدادي</option>
+                      <option value="الصف الثالث الإعدادي">الصف الثالث الإعدادي</option>
+                      <option value="الصف الأول الثانوي">الصف الأول الثانوي</option>
+                      <option value="الصف الثاني الثانوي">الصف الثاني الثانوي</option>
+                      <option value="الصف الثالث الثانوي">الصف الثالث الثانوي</option>
+                    </select>
                   </div>
+
                   <div>
-                    <label className="block text-slate-400 mb-1">وقت الانتهاء</label>
-                    <input
-                      type="time"
-                      value={formData.endTime ?? ''}
-                      onChange={(e) => setFormData({ ...formData, endTime: e.target.value })}
-                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 font-mono text-center font-bold"
-                    />
+                    <label className="block text-slate-300 font-bold mb-1">المسار / نوع التعليم *</label>
+                    <select
+                      required
+                      value={formData.track ?? 'عربي'}
+                      onChange={(e) => setFormData({ ...formData, track: e.target.value })}
+                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 text-slate-100 focus:outline-none focus:border-amber-500 font-bold"
+                    >
+                      <option value="عربي">عربي (الدراسة باللغة العربية)</option>
+                      <option value="لغات">لغات (الدراسة باللغة الإنجليزية/الفرنسية)</option>
+                      <option value="أزهري">أزهري</option>
+                      <option value="دولي">دولي</option>
+                    </select>
                   </div>
                 </div>
-              </div>
 
-              {/* Dates + Capacity + Status */}
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-                <div>
-                  <label className="block text-slate-300 font-bold mb-1">تاريخ البدء</label>
-                  <input
-                    type="date"
-                    value={formData.startDate ?? ''}
-                    onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 font-mono"
-                  />
+                {/* Branch + Course */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-slate-300 font-bold mb-1">الفرع *</label>
+                    <select
+                      value={formData.branchId ?? ''}
+                      onChange={(e) => setFormData({ ...formData, branchId: e.target.value })}
+                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 focus:outline-none focus:border-amber-500"
+                    >
+                      {branches.map((b) => (
+                        <option key={b.id} value={b.id}>
+                          {b.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-300 font-bold mb-1">الدورة التدريبية *</label>
+                    <select
+                      value={formData.courseId ?? ''}
+                      onChange={(e) => setFormData({ ...formData, courseId: e.target.value })}
+                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 focus:outline-none focus:border-amber-500"
+                    >
+                      {courses.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name} ({c.code})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
 
-                <div>
-                  <label className="block text-slate-300 font-bold mb-1">تاريخ الانتهاء</label>
-                  <input
-                    type="date"
-                    value={formData.endDate ?? ''}
-                    onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 font-mono"
-                  />
-                </div>
+                {/* Linked Curriculum & Google Drive Status */}
+                {formData.courseId && (
+                  <div className="bg-emerald-950/40 border border-emerald-500/30 rounded-2xl p-3 flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
+                        <BookOpen className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <p className="text-xs font-bold text-emerald-300">
+                          منهج مسار ({formData.track === 'لغات' ? 'اللغات' : 'العربي'}):
+                        </p>
+                        <p className="text-[11px] text-slate-300">
+                          {(() => {
+                            const crs = courses.find(c => c.id === formData.courseId);
+                            const isLang = formData.track === 'لغات';
+                            const mat = isLang ? crs?.languagesMaterial : crs?.arabicMaterial;
+                            if (mat) {
+                              return `مربوط تلقائياً من الدورة: ${mat.title} (${mat.isGoogleDrive ? 'Google Drive' : 'ملف'})`;
+                            }
+                            return 'يتم ربط منهج الدورة تلقائياً للطلاب فور حفظ المجموعة، أو يمكنك إضافة منهج خاص للمجموعة لاحقاً.';
+                          })()}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
+                {/* Fee Amount Override per Group */}
                 <div>
-                  <label className="block text-slate-300 font-bold mb-1">سعة المقاعد</label>
+                  <label className="block text-amber-300 font-bold mb-1">رسوم الدورة لهذه المجموعة (اختياري)</label>
                   <input
                     type="number"
-                    min="1"
-                    max="100"
-                    value={formData.maxCapacity ?? ''}
-                    onChange={(e) => setFormData({ ...formData, maxCapacity: Number(e.target.value) })}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 font-mono text-center font-bold"
+                    value={formData.feeAmount ?? ''}
+                    onChange={(e) => setFormData({ ...formData, feeAmount: e.target.value !== '' ? Number(e.target.value) : '' })}
+                    placeholder="يترك فارغاً لاستخدام السعر الافتراضي للدورة"
+                    className="w-full bg-slate-800 border border-amber-500/50 rounded-xl px-3 py-2 text-amber-300 font-mono font-bold"
                   />
+                  <p className="text-[10px] text-slate-400 mt-1">مثال: فرع بدر 250، فرع النجاح 200 (يتطبق تلقائياً للمتدربين بهذه المجموعة)</p>
                 </div>
 
-                <div>
-                  <label className="block text-slate-300 font-bold mb-1">الحالة</label>
-                  <select
-                    value={formData.status ?? ''}
-                    onChange={(e) => setFormData({ ...formData, status: e.target.value })}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100"
-                  >
-                    <option value="active">جارية (نشطة)</option>
-                    <option value="upcoming">قادمة (مجدولة)</option>
-                    <option value="completed">مكتملة</option>
-                    <option value="cancelled">ملغاة</option>
-                  </select>
+                {/* Trainer + Room / Lab */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-slate-300 font-bold mb-1">المدرب المشرف</label>
+                    <select
+                      value={formData.trainerId ?? ''}
+                      onChange={(e) => setFormData({ ...formData, trainerId: e.target.value })}
+                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 focus:outline-none focus:border-amber-500"
+                    >
+                      <option value="">-- بدون تحديد مدرب حالياً --</option>
+                      {trainers.map((tr) => (
+                        <option key={tr.id} value={tr.id}>
+                          {tr.name} - {tr.specialty || 'مدرب معتمد'}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-300 font-bold mb-1">المعمل / القاعة</label>
+                    <input
+                      type="text"
+                      list="room-name-suggestions"
+                      value={formData.roomName ?? ''}
+                      onChange={(e) => setFormData({ ...formData, roomName: e.target.value })}
+                      placeholder="معمل الحاسب الرئيسي (Lab 1)"
+                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 focus:outline-none focus:border-amber-500"
+                    />
+                  </div>
+                </div>
+
+                {/* Days Selection with Quick Presets */}
+                <div className="bg-slate-950/60 p-3.5 rounded-2xl border border-slate-800 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-slate-300 font-bold">أيام المحاضرات الأسبوعية</label>
+                    <div className="text-[10px] text-slate-400">نماذج سريعة:</div>
+                  </div>
+
+                  {/* Day Presets */}
+                  <div className="flex flex-wrap gap-1.5 pb-1">
+                    {dayPresets.map((preset, idx) => (
+                      <button
+                        type="button"
+                        key={idx}
+                        onClick={() => applyDayPreset(preset.days)}
+                        className="px-2.5 py-1 rounded-lg bg-slate-850 hover:bg-slate-800 border border-slate-700 text-slate-300 text-[10px] font-bold transition-all cursor-pointer"
+                      >
+                        {preset.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Individual Days Chips */}
+                  <div className="flex flex-wrap gap-1.5 pt-1">
+                    {daysList.map((day) => {
+                      const isSel = (formData.scheduleDays || []).includes(day);
+                      return (
+                        <button
+                          type="button"
+                          key={day}
+                          onClick={() => toggleDay(day)}
+                          className={`px-3 py-1.5 rounded-xl border font-bold text-xs transition-all cursor-pointer ${
+                            isSel
+                              ? 'bg-amber-500 text-slate-950 border-amber-500 shadow-md font-black'
+                              : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-white'
+                          }`}
+                        >
+                          {day}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Timing Selection with Presets */}
+                <div className="bg-slate-950/60 p-3.5 rounded-2xl border border-slate-800 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-slate-300 font-bold">توقيت المحاضرات</label>
+                    <div className="text-[10px] text-slate-400">أوقات شائعة:</div>
+                  </div>
+
+                  {/* Time Slot Presets */}
+                  <div className="flex flex-wrap gap-1.5 pb-1">
+                    {timePresets.map((preset, idx) => (
+                      <button
+                        type="button"
+                        key={idx}
+                        onClick={() => applyTimePreset(preset.start, preset.end)}
+                        className="px-2 py-0.5 rounded-lg bg-slate-850 hover:bg-slate-800 border border-slate-700 text-slate-300 text-[10px] font-mono font-semibold cursor-pointer"
+                      >
+                        {preset.label} ({preset.start}-{preset.end})
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3 pt-1">
+                    <div>
+                      <label className="block text-slate-400 mb-1">وقت البدء</label>
+                      <input
+                        type="time"
+                        value={formData.startTime ?? ''}
+                        onChange={(e) => setFormData({ ...formData, startTime: e.target.value })}
+                        className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 font-mono text-center font-bold"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-slate-400 mb-1">وقت الانتهاء</label>
+                      <input
+                        type="time"
+                        value={formData.endTime ?? ''}
+                        onChange={(e) => setFormData({ ...formData, endTime: e.target.value })}
+                        className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 font-mono text-center font-bold"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Dates + Capacity + Status */}
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                  <div>
+                    <label className="block text-slate-300 font-bold mb-1">تاريخ البدء</label>
+                    <input
+                      type="date"
+                      value={formData.startDate ?? ''}
+                      onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
+                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 font-mono"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-300 font-bold mb-1">تاريخ الانتهاء</label>
+                    <input
+                      type="date"
+                      value={formData.endDate ?? ''}
+                      onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
+                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 font-mono"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-300 font-bold mb-1">سعة المقاعد</label>
+                    <input
+                      type="number"
+                      min="1"
+                      max="100"
+                      value={formData.maxCapacity ?? ''}
+                      onChange={(e) => setFormData({ ...formData, maxCapacity: Number(e.target.value) })}
+                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 font-mono text-center font-bold"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-300 font-bold mb-1">الحالة</label>
+                    <select
+                      value={formData.status ?? ''}
+                      onChange={(e) => setFormData({ ...formData, status: e.target.value })}
+                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100"
+                    >
+                      <option value="active">جارية (نشطة)</option>
+                      <option value="upcoming">قادمة (مجدولة)</option>
+                      <option value="completed">مكتملة</option>
+                      <option value="cancelled">ملغاة</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* WhatsApp Link + Notes */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-slate-300 font-bold mb-1">رابط قروب WhatsApp للمجموعة</label>
+                    <input
+                      type="url"
+                      value={formData.whatsappGroupLink ?? ''}
+                      onChange={(e) => setFormData({ ...formData, whatsappGroupLink: e.target.value })}
+                      placeholder="https://chat.whatsapp.com/..."
+                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 font-mono text-xs focus:outline-none focus:border-amber-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-300 font-bold mb-1">ملاحظات وتعليمات</label>
+                    <input
+                      type="text"
+                      value={formData.notes ?? ''}
+                      onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                      placeholder="مثال: يرجى إحضار اللابتوب في المعمل"
+                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 focus:outline-none focus:border-amber-500"
+                    />
+                  </div>
                 </div>
               </div>
 
-              {/* WhatsApp Link + Notes */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-slate-300 font-bold mb-1">رابط قروب WhatsApp للمجموعة</label>
-                  <input
-                    type="url"
-                    value={formData.whatsappGroupLink ?? ''}
-                    onChange={(e) => setFormData({ ...formData, whatsappGroupLink: e.target.value })}
-                    placeholder="https://chat.whatsapp.com/..."
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 font-mono text-xs focus:outline-none focus:border-amber-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-slate-300 font-bold mb-1">ملاحظات وتعليمات</label>
-                  <input
-                    type="text"
-                    value={formData.notes ?? ''}
-                    onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                    placeholder="مثال: يرجى إحضار اللابتوب في المعمل"
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 focus:outline-none focus:border-amber-500"
-                  />
-                </div>
-              </div>
-
-              <div className="pt-4 border-t border-slate-800 flex justify-end gap-2.5">
+              <div className="shrink-0 p-4 border-t border-slate-800 flex items-center justify-end gap-2.5 bg-slate-900/95">
                 <button
                   type="button"
                   onClick={() => setIsAddModalOpen(false)}
-                  className="px-4 py-2 bg-slate-800 text-slate-300 rounded-xl hover:bg-slate-700 font-bold"
+                  className="px-4 py-2 bg-slate-800 text-slate-300 rounded-xl hover:bg-slate-700 font-bold cursor-pointer"
                 >
                   إلغاء
                 </button>
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="px-6 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black rounded-xl shadow-lg shadow-amber-500/25 flex items-center gap-2"
+                  className="px-6 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black rounded-xl shadow-lg shadow-amber-500/25 flex items-center gap-2 cursor-pointer"
                 >
                   {isSubmitting ? 'جاري الحفظ...' : 'حفظ وإنشاء المجموعة'}
                 </button>
@@ -1735,357 +1757,362 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ onNavigate }) => {
       {/* 2. COMPREHENSIVE EDIT GROUP MODAL                                        */}
       {/* ========================================================================= */}
       {isEditModalOpen && activeGroup && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-fadeIn">
-          <div className="bg-slate-900 border border-slate-700 rounded-3xl shadow-2xl max-w-2xl w-full p-6 text-slate-100 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-800 mb-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/80 backdrop-blur-md animate-fadeIn overflow-hidden">
+          <div className="bg-slate-900 border border-slate-700 rounded-3xl shadow-2xl max-w-2xl w-full text-slate-100 max-h-[90vh] flex flex-col overflow-hidden">
+            {/* Modal Header */}
+            <div className="shrink-0 p-4 sm:p-5 flex items-center justify-between border-b border-slate-800 bg-slate-900/90">
               <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-blue-500/20 border border-blue-500/40 flex items-center justify-center text-blue-400">
-                  <Edit3 className="w-4 h-4" />
+                <div className="w-9 h-9 rounded-xl bg-blue-500/20 border border-blue-500/40 flex items-center justify-center text-blue-400">
+                  <Edit3 className="w-4.5 h-4.5" />
                 </div>
                 <div>
                   <h3 className="font-black text-sm text-slate-100">تعديل كافة بيانات المجموعة: {activeGroup.name}</h3>
                   <p className="text-[11px] text-slate-400">يمكنك تعديل الاسم، المواعيد، الأيام، المدرب، والقاعة</p>
                 </div>
               </div>
-              <button onClick={() => setIsEditModalOpen(false)} className="text-slate-400 hover:text-white p-1">
+              <button onClick={() => setIsEditModalOpen(false)} className="text-slate-400 hover:text-white p-1.5 rounded-xl hover:bg-slate-800 cursor-pointer">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleSaveEdit} className="space-y-4 text-xs">
-              {/* Group Name */}
-              <div>
-                <label className="block text-slate-300 font-bold mb-1">اسم المجموعة التدريبية *</label>
-                <input
-                  type="text"
-                  required
-                  list="group-name-suggestions"
-                  value={formData.name ?? ''}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2.5 text-slate-100 focus:outline-none focus:border-blue-500 font-bold text-sm"
-                />
-              </div>
-
-              {/* Arabic Grade Dropdown */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <form onSubmit={handleSaveEdit} className="flex-1 flex flex-col min-h-0">
+              {/* Form Content (Scrollable) */}
+              <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 text-xs custom-scrollbar">
+                {/* Group Name */}
                 <div>
-                  <label className="block text-slate-300 font-bold mb-1">الصف الدراسي (لتوزيع الطلاب تلقائياً) *</label>
-                  <select
-                    required
-                    value={formData.grade ?? ''}
-                    onChange={(e) => setFormData({ ...formData, grade: e.target.value })}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 text-slate-100 focus:outline-none focus:border-blue-500 font-bold"
-                  >
-                    <option value="">-- اختر الصف الدراسي العربي --</option>
-                    <option value="الصف الرابع الابتدائي">الصف الرابع الابتدائي</option>
-                    <option value="الصف الخامس الابتدائي">الصف الخامس الابتدائي</option>
-                    <option value="الصف السادس الابتدائي">الصف السادس الابتدائي</option>
-                    <option value="الصف الأول الإعدادي">الصف الأول الإعدادي</option>
-                    <option value="الصف الثاني الإعدادي">الصف الثاني الإعدادي</option>
-                    <option value="الصف الثالث الإعدادي">الصف الثالث الإعدادي</option>
-                    <option value="الصف الأول الثانوي">الصف الأول الثانوي</option>
-                    <option value="الصف الثاني الثانوي">الصف الثاني الثانوي</option>
-                    <option value="الصف الثالث الثانوي">الصف الثالث الثانوي</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-slate-300 font-bold mb-1">المسار / نوع التعليم *</label>
-                  <select
-                    required
-                    value={formData.track ?? 'عربي'}
-                    onChange={(e) => setFormData({ ...formData, track: e.target.value })}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 text-slate-100 focus:outline-none focus:border-blue-500 font-bold"
-                  >
-                    <option value="عربي">عربي (الدراسة باللغة العربية)</option>
-                    <option value="لغات">لغات (الدراسة باللغة الإنجليزية/الفرنسية)</option>
-                    <option value="أزهري">أزهري</option>
-                    <option value="دولي">دولي</option>
-                  </select>
-                </div>
-              </div>
-
-              {/* Branch + Course */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-slate-300 font-bold mb-1">الفرع *</label>
-                  <select
-                    value={formData.branchId ?? ''}
-                    onChange={(e) => setFormData({ ...formData, branchId: e.target.value })}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 focus:outline-none focus:border-blue-500"
-                  >
-                    {branches.map((b) => (
-                      <option key={b.id} value={b.id}>
-                        {b.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-slate-300 font-bold mb-1">الدورة التدريبية *</label>
-                  <select
-                    value={formData.courseId ?? ''}
-                    onChange={(e) => setFormData({ ...formData, courseId: e.target.value })}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 focus:outline-none focus:border-blue-500"
-                  >
-                    {courses.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name} ({c.code})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              {/* Linked Curriculum & Google Drive Status and Manage Button */}
-              {formData.courseId && (
-                <div className="bg-emerald-950/40 border border-emerald-500/30 rounded-2xl p-3 flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
-                      <BookOpen className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <p className="text-xs font-bold text-emerald-300">
-                        منهج مسار ({formData.track === 'لغات' ? 'اللغات' : 'العربي'}):
-                      </p>
-                      <p className="text-[11px] text-slate-300">
-                        {(() => {
-                          const crs = courses.find(c => c.id === formData.courseId);
-                          const isLang = formData.track === 'لغات';
-                          const grpMat = isLang ? activeGroup?.languagesMaterial : activeGroup?.arabicMaterial;
-                          const crsMat = isLang ? crs?.languagesMaterial : crs?.arabicMaterial;
-                          if (grpMat) {
-                            return `مربوط مخصص لهذه المجموعة: ${grpMat.title} (${grpMat.isGoogleDrive ? 'Google Drive' : 'ملف'})`;
-                          }
-                          if (crsMat) {
-                            return `مربوط تلقائياً من الدورة: ${crsMat.title} (${crsMat.isGoogleDrive ? 'Google Drive' : 'ملف'})`;
-                          }
-                          return 'لا يوجد منهج مربوط بعد. يمكنك رفعه أو ربط رابط Google Drive الآن.';
-                        })()}
-                      </p>
-                    </div>
-                  </div>
-                  {activeGroup && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSelectedGroupForMaterials(activeGroup);
-                        setIsMaterialsModalOpen(true);
-                      }}
-                      className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold shrink-0 flex items-center gap-1.5 shadow cursor-pointer"
-                    >
-                      <BookOpen className="w-3.5 h-3.5" />
-                      <span>إدارة المنهج و Drive</span>
-                    </button>
-                  )}
-                </div>
-              )}
-
-              {/* Fee Amount Override per Group */}
-              <div>
-                <label className="block text-blue-300 font-bold mb-1">رسوم الدورة لهذه المجموعة (اختياري)</label>
-                <input
-                  type="number"
-                  value={formData.feeAmount ?? ''}
-                  onChange={(e) => setFormData({ ...formData, feeAmount: e.target.value !== '' ? Number(e.target.value) : '' })}
-                  placeholder="يترك فارغاً لاستخدام السعر الافتراضي للدورة"
-                  className="w-full bg-slate-800 border border-blue-500/50 rounded-xl px-3 py-2 text-blue-300 font-mono font-bold"
-                />
-                <p className="text-[10px] text-slate-400 mt-1">مثال: فرع بدر 250، فرع النجاح 200</p>
-              </div>
-
-              {/* Trainer + Room / Lab */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-slate-300 font-bold mb-1">المدرب المشرف</label>
-                  <select
-                    value={formData.trainerId ?? ''}
-                    onChange={(e) => setFormData({ ...formData, trainerId: e.target.value })}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 focus:outline-none focus:border-blue-500"
-                  >
-                    <option value="">-- بدون تحديد مدرب --</option>
-                    {trainers.map((tr) => (
-                      <option key={tr.id} value={tr.id}>
-                        {tr.name} - {tr.specialty || 'مدرب معتمد'}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-slate-300 font-bold mb-1">المعمل / القاعة</label>
+                  <label className="block text-slate-300 font-bold mb-1">اسم المجموعة التدريبية *</label>
                   <input
                     type="text"
-                    list="room-name-suggestions"
-                    value={formData.roomName ?? ''}
-                    onChange={(e) => setFormData({ ...formData, roomName: e.target.value })}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 focus:outline-none focus:border-blue-500"
+                    required
+                    list="group-name-suggestions"
+                    value={formData.name ?? ''}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2.5 text-slate-100 focus:outline-none focus:border-blue-500 font-bold text-sm"
                   />
                 </div>
-              </div>
 
-              {/* Days Selection */}
-              <div className="bg-slate-950/60 p-3.5 rounded-2xl border border-slate-800 space-y-2">
-                <div className="flex items-center justify-between">
-                  <label className="text-slate-300 font-bold">أيام المحاضرات</label>
-                  <div className="text-[10px] text-slate-400">نماذج سريعة:</div>
-                </div>
-
-                <div className="flex flex-wrap gap-1.5 pb-1">
-                  {dayPresets.map((preset, idx) => (
-                    <button
-                      type="button"
-                      key={idx}
-                      onClick={() => applyDayPreset(preset.days)}
-                      className="px-2.5 py-1 rounded-lg bg-slate-850 hover:bg-slate-800 border border-slate-700 text-slate-300 text-[10px] font-bold"
+                {/* Arabic Grade Dropdown */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-slate-300 font-bold mb-1">الصف الدراسي (لتوزيع الطلاب تلقائياً) *</label>
+                    <select
+                      required
+                      value={formData.grade ?? ''}
+                      onChange={(e) => setFormData({ ...formData, grade: e.target.value })}
+                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 text-slate-100 focus:outline-none focus:border-blue-500 font-bold"
                     >
-                      {preset.label}
-                    </button>
-                  ))}
+                      <option value="">-- اختر الصف الدراسي العربي --</option>
+                      <option value="الصف الرابع الابتدائي">الصف الرابع الابتدائي</option>
+                      <option value="الصف الخامس الابتدائي">الصف الخامس الابتدائي</option>
+                      <option value="الصف السادس الابتدائي">الصف السادس الابتدائي</option>
+                      <option value="الصف الأول الإعدادي">الصف الأول الإعدادي</option>
+                      <option value="الصف الثاني الإعدادي">الصف الثاني الإعدادي</option>
+                      <option value="الصف الثالث الإعدادي">الصف الثالث الإعدادي</option>
+                      <option value="الصف الأول الثانوي">الصف الأول الثانوي</option>
+                      <option value="الصف الثاني الثانوي">الصف الثاني الثانوي</option>
+                      <option value="الصف الثالث الثانوي">الصف الثالث الثانوي</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-300 font-bold mb-1">المسار / نوع التعليم *</label>
+                    <select
+                      required
+                      value={formData.track ?? 'عربي'}
+                      onChange={(e) => setFormData({ ...formData, track: e.target.value })}
+                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 text-slate-100 focus:outline-none focus:border-blue-500 font-bold"
+                    >
+                      <option value="عربي">عربي (الدراسة باللغة العربية)</option>
+                      <option value="لغات">لغات (الدراسة باللغة الإنجليزية/الفرنسية)</option>
+                      <option value="أزهري">أزهري</option>
+                      <option value="دولي">دولي</option>
+                    </select>
+                  </div>
                 </div>
 
-                <div className="flex flex-wrap gap-1.5 pt-1">
-                  {daysList.map((day) => {
-                    const isSel = (formData.scheduleDays || []).includes(day);
-                    return (
+                {/* Branch + Course */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-slate-300 font-bold mb-1">الفرع *</label>
+                    <select
+                      value={formData.branchId ?? ''}
+                      onChange={(e) => setFormData({ ...formData, branchId: e.target.value })}
+                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 focus:outline-none focus:border-blue-500"
+                    >
+                      {branches.map((b) => (
+                        <option key={b.id} value={b.id}>
+                          {b.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-300 font-bold mb-1">الدورة التدريبية *</label>
+                    <select
+                      value={formData.courseId ?? ''}
+                      onChange={(e) => setFormData({ ...formData, courseId: e.target.value })}
+                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 focus:outline-none focus:border-blue-500"
+                    >
+                      {courses.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name} ({c.code})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                {/* Linked Curriculum & Google Drive Status and Manage Button */}
+                {formData.courseId && (
+                  <div className="bg-emerald-950/40 border border-emerald-500/30 rounded-2xl p-3 flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
+                        <BookOpen className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <p className="text-xs font-bold text-emerald-300">
+                          منهج مسار ({formData.track === 'لغات' ? 'اللغات' : 'العربي'}):
+                        </p>
+                        <p className="text-[11px] text-slate-300">
+                          {(() => {
+                            const crs = courses.find(c => c.id === formData.courseId);
+                            const isLang = formData.track === 'لغات';
+                            const grpMat = isLang ? activeGroup?.languagesMaterial : activeGroup?.arabicMaterial;
+                            const crsMat = isLang ? crs?.languagesMaterial : crs?.arabicMaterial;
+                            if (grpMat) {
+                              return `مربوط مخصص لهذه المجموعة: ${grpMat.title} (${grpMat.isGoogleDrive ? 'Google Drive' : 'ملف'})`;
+                            }
+                            if (crsMat) {
+                              return `مربوط تلقائياً من الدورة: ${crsMat.title} (${crsMat.isGoogleDrive ? 'Google Drive' : 'ملف'})`;
+                            }
+                            return 'لا يوجد منهج مربوط بعد. يمكنك رفعه أو ربط رابط Google Drive الآن.';
+                          })()}
+                        </p>
+                      </div>
+                    </div>
+                    {activeGroup && (
                       <button
                         type="button"
-                        key={day}
-                        onClick={() => toggleDay(day)}
-                        className={`px-3 py-1.5 rounded-xl border font-bold text-xs transition-all ${
-                          isSel
-                            ? 'bg-blue-600 text-white border-blue-500 shadow-md font-black'
-                            : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-white'
-                        }`}
+                        onClick={() => {
+                          setSelectedGroupForMaterials(activeGroup);
+                          setIsMaterialsModalOpen(true);
+                        }}
+                        className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold shrink-0 flex items-center gap-1.5 shadow cursor-pointer"
                       >
-                        {day}
+                        <BookOpen className="w-3.5 h-3.5" />
+                        <span>إدارة المنهج و Drive</span>
                       </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Timing Selection */}
-              <div className="bg-slate-950/60 p-3.5 rounded-2xl border border-slate-800 space-y-2">
-                <div className="flex items-center justify-between">
-                  <label className="text-slate-300 font-bold">التوقيت</label>
-                  <div className="text-[10px] text-slate-400">أوقات شائعة:</div>
-                </div>
-
-                <div className="flex flex-wrap gap-1.5 pb-1">
-                  {timePresets.map((preset, idx) => (
-                    <button
-                      type="button"
-                      key={idx}
-                      onClick={() => applyTimePreset(preset.start, preset.end)}
-                      className="px-2 py-0.5 rounded-lg bg-slate-850 hover:bg-slate-800 border border-slate-700 text-slate-300 text-[10px] font-mono"
-                    >
-                      {preset.label} ({preset.start}-{preset.end})
-                    </button>
-                  ))}
-                </div>
-
-                <div className="grid grid-cols-2 gap-3 pt-1">
-                  <div>
-                    <label className="block text-slate-400 mb-1">وقت البدء</label>
-                    <input
-                      type="time"
-                      value={formData.startTime ?? ''}
-                      onChange={(e) => setFormData({ ...formData, startTime: e.target.value })}
-                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 font-mono text-center font-bold"
-                    />
+                    )}
                   </div>
-                  <div>
-                    <label className="block text-slate-400 mb-1">وقت الانتهاء</label>
-                    <input
-                      type="time"
-                      value={formData.endTime ?? ''}
-                      onChange={(e) => setFormData({ ...formData, endTime: e.target.value })}
-                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 font-mono text-center font-bold"
-                    />
-                  </div>
-                </div>
-              </div>
+                )}
 
-              {/* Dates + Capacity + Status */}
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                {/* Fee Amount Override per Group */}
                 <div>
-                  <label className="block text-slate-300 font-bold mb-1">تاريخ البدء</label>
-                  <input
-                    type="date"
-                    value={formData.startDate ?? ''}
-                    onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 font-mono"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-slate-300 font-bold mb-1">تاريخ الانتهاء</label>
-                  <input
-                    type="date"
-                    value={formData.endDate ?? ''}
-                    onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 font-mono"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-slate-300 font-bold mb-1">سعة المقاعد</label>
+                  <label className="block text-blue-300 font-bold mb-1">رسوم الدورة لهذه المجموعة (اختياري)</label>
                   <input
                     type="number"
-                    value={formData.maxCapacity ?? ''}
-                    onChange={(e) => setFormData({ ...formData, maxCapacity: Number(e.target.value) })}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 font-mono text-center font-bold"
+                    value={formData.feeAmount ?? ''}
+                    onChange={(e) => setFormData({ ...formData, feeAmount: e.target.value !== '' ? Number(e.target.value) : '' })}
+                    placeholder="يترك فارغاً لاستخدام السعر الافتراضي للدورة"
+                    className="w-full bg-slate-800 border border-blue-500/50 rounded-xl px-3 py-2 text-blue-300 font-mono font-bold"
                   />
+                  <p className="text-[10px] text-slate-400 mt-1">مثال: فرع بدر 250، فرع النجاح 200</p>
                 </div>
 
-                <div>
-                  <label className="block text-slate-300 font-bold mb-1">الحالة</label>
-                  <select
-                    value={formData.status ?? ''}
-                    onChange={(e) => setFormData({ ...formData, status: e.target.value })}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100"
-                  >
-                    <option value="active">جارية (نشطة)</option>
-                    <option value="upcoming">قادمة (مجدولة)</option>
-                    <option value="completed">مكتملة</option>
-                    <option value="cancelled">ملغاة</option>
-                  </select>
+                {/* Trainer + Room / Lab */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-slate-300 font-bold mb-1">المدرب المشرف</label>
+                    <select
+                      value={formData.trainerId ?? ''}
+                      onChange={(e) => setFormData({ ...formData, trainerId: e.target.value })}
+                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 focus:outline-none focus:border-blue-500"
+                    >
+                      <option value="">-- بدون تحديد مدرب --</option>
+                      {trainers.map((tr) => (
+                        <option key={tr.id} value={tr.id}>
+                          {tr.name} - {tr.specialty || 'مدرب معتمد'}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-300 font-bold mb-1">المعمل / القاعة</label>
+                    <input
+                      type="text"
+                      list="room-name-suggestions"
+                      value={formData.roomName ?? ''}
+                      onChange={(e) => setFormData({ ...formData, roomName: e.target.value })}
+                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 focus:outline-none focus:border-blue-500"
+                    />
+                  </div>
+                </div>
+
+                {/* Days Selection */}
+                <div className="bg-slate-950/60 p-3.5 rounded-2xl border border-slate-800 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-slate-300 font-bold">أيام المحاضرات</label>
+                    <div className="text-[10px] text-slate-400">نماذج سريعة:</div>
+                  </div>
+
+                  <div className="flex flex-wrap gap-1.5 pb-1">
+                    {dayPresets.map((preset, idx) => (
+                      <button
+                        type="button"
+                        key={idx}
+                        onClick={() => applyDayPreset(preset.days)}
+                        className="px-2.5 py-1 rounded-lg bg-slate-850 hover:bg-slate-800 border border-slate-700 text-slate-300 text-[10px] font-bold"
+                      >
+                        {preset.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="flex flex-wrap gap-1.5 pt-1">
+                    {daysList.map((day) => {
+                      const isSel = (formData.scheduleDays || []).includes(day);
+                      return (
+                        <button
+                          type="button"
+                          key={day}
+                          onClick={() => toggleDay(day)}
+                          className={`px-3 py-1.5 rounded-xl border font-bold text-xs transition-all ${
+                            isSel
+                              ? 'bg-blue-600 text-white border-blue-500 shadow-md font-black'
+                              : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-white'
+                          }`}
+                        >
+                          {day}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Timing Selection */}
+                <div className="bg-slate-950/60 p-3.5 rounded-2xl border border-slate-800 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-slate-300 font-bold">التوقيت</label>
+                    <div className="text-[10px] text-slate-400">أوقات شائعة:</div>
+                  </div>
+
+                  <div className="flex flex-wrap gap-1.5 pb-1">
+                    {timePresets.map((preset, idx) => (
+                      <button
+                        type="button"
+                        key={idx}
+                        onClick={() => applyTimePreset(preset.start, preset.end)}
+                        className="px-2 py-0.5 rounded-lg bg-slate-850 hover:bg-slate-800 border border-slate-700 text-slate-300 text-[10px] font-mono"
+                      >
+                        {preset.label} ({preset.start}-{preset.end})
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3 pt-1">
+                    <div>
+                      <label className="block text-slate-400 mb-1">وقت البدء</label>
+                      <input
+                        type="time"
+                        value={formData.startTime ?? ''}
+                        onChange={(e) => setFormData({ ...formData, startTime: e.target.value })}
+                        className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 font-mono text-center font-bold"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-slate-400 mb-1">وقت الانتهاء</label>
+                      <input
+                        type="time"
+                        value={formData.endTime ?? ''}
+                        onChange={(e) => setFormData({ ...formData, endTime: e.target.value })}
+                        className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 font-mono text-center font-bold"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Dates + Capacity + Status */}
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                  <div>
+                    <label className="block text-slate-300 font-bold mb-1">تاريخ البدء</label>
+                    <input
+                      type="date"
+                      value={formData.startDate ?? ''}
+                      onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
+                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 font-mono"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-300 font-bold mb-1">تاريخ الانتهاء</label>
+                    <input
+                      type="date"
+                      value={formData.endDate ?? ''}
+                      onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
+                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 font-mono"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-300 font-bold mb-1">سعة المقاعد</label>
+                    <input
+                      type="number"
+                      value={formData.maxCapacity ?? ''}
+                      onChange={(e) => setFormData({ ...formData, maxCapacity: Number(e.target.value) })}
+                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 font-mono text-center font-bold"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-300 font-bold mb-1">الحالة</label>
+                    <select
+                      value={formData.status ?? ''}
+                      onChange={(e) => setFormData({ ...formData, status: e.target.value })}
+                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100"
+                    >
+                      <option value="active">جارية (نشطة)</option>
+                      <option value="upcoming">قادمة (مجدولة)</option>
+                      <option value="completed">مكتملة</option>
+                      <option value="cancelled">ملغاة</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* WhatsApp Link + Notes */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-slate-300 font-bold mb-1">رابط قروب WhatsApp</label>
+                    <input
+                      type="url"
+                      value={formData.whatsappGroupLink ?? ''}
+                      onChange={(e) => setFormData({ ...formData, whatsappGroupLink: e.target.value })}
+                      placeholder="https://chat.whatsapp.com/..."
+                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 font-mono text-xs focus:outline-none focus:border-blue-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-300 font-bold mb-1">ملاحظات وتعليمات</label>
+                    <input
+                      type="text"
+                      value={formData.notes ?? ''}
+                      onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 focus:outline-none focus:border-blue-500"
+                    />
+                  </div>
                 </div>
               </div>
 
-              {/* WhatsApp Link + Notes */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-slate-300 font-bold mb-1">رابط قروب WhatsApp</label>
-                  <input
-                    type="url"
-                    value={formData.whatsappGroupLink ?? ''}
-                    onChange={(e) => setFormData({ ...formData, whatsappGroupLink: e.target.value })}
-                    placeholder="https://chat.whatsapp.com/..."
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 font-mono text-xs focus:outline-none focus:border-blue-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-slate-300 font-bold mb-1">ملاحظات وتعليمات</label>
-                  <input
-                    type="text"
-                    value={formData.notes ?? ''}
-                    onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 focus:outline-none focus:border-blue-500"
-                  />
-                </div>
-              </div>
-
-              <div className="pt-4 border-t border-slate-800 flex items-center justify-between">
+              {/* Fixed Footer */}
+              <div className="shrink-0 p-4 border-t border-slate-800 flex items-center justify-between bg-slate-900/95">
                 <button
                   type="button"
                   onClick={() => {
                     setGroupToDelete(activeGroup);
                   }}
-                  className="px-3 py-2 bg-rose-950/80 hover:bg-rose-900 text-rose-300 border border-rose-800 rounded-xl inline-flex items-center gap-1.5 font-bold"
+                  className="px-3.5 py-2 bg-gradient-to-r from-rose-500 to-red-600 hover:from-rose-600 hover:to-red-700 text-white border border-rose-400/40 rounded-xl inline-flex items-center gap-2 font-black shadow-lg shadow-rose-500/20 active:scale-95 cursor-pointer"
                 >
                   <Trash2 className="w-4 h-4" />
                   <span>حذف المجموعة</span>
@@ -2095,14 +2122,14 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ onNavigate }) => {
                   <button
                     type="button"
                     onClick={() => setIsEditModalOpen(false)}
-                    className="px-4 py-2 bg-slate-800 text-slate-300 rounded-xl hover:bg-slate-700 font-bold"
+                    className="px-4 py-2 bg-slate-800 text-slate-300 rounded-xl hover:bg-slate-700 font-bold cursor-pointer"
                   >
                     إلغاء
                   </button>
                   <button
                     type="submit"
                     disabled={isSubmitting}
-                    className="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl shadow-lg shadow-blue-600/25 flex items-center gap-2"
+                    className="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-black rounded-xl shadow-lg shadow-blue-600/25 flex items-center gap-2 cursor-pointer"
                   >
                     {isSubmitting ? 'جاري الحفظ...' : 'حفظ التعديلات'}
                   </button>

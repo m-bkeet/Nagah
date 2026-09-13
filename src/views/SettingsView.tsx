@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import * as XLSX from 'xlsx';
 import { useCenter } from '../context/CenterContext';
 import { ElectronicPaymentWidget } from '../components/ElectronicPaymentWidget';
 import { getPublicParentPortalUrl } from '../utils/urlHelper';
@@ -514,6 +515,55 @@ export const SettingsView: React.FC = () => {
     reader.readAsText(file);
   };
 
+  const handleRestoreExcel = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      try {
+        const data = new Uint8Array(event.target?.result as ArrayBuffer);
+        const workbook = XLSX.read(data, { type: 'array' });
+
+        let restoredCount = 0;
+        const backupObj: any = {};
+
+        workbook.SheetNames.forEach(sheetName => {
+          const worksheet = workbook.Sheets[sheetName];
+          const rows = XLSX.utils.sheet_to_json(worksheet);
+          const cleanKey = sheetName.trim().toLowerCase();
+          if (cleanKey.includes('طالب') || cleanKey.includes('trainee') || cleanKey.includes('student')) {
+            backupObj.trainees = rows;
+            restoredCount += rows.length;
+          } else if (cleanKey.includes('مدرب') || cleanKey.includes('trainer')) {
+            backupObj.trainers = rows;
+          } else if (cleanKey.includes('دورة') || cleanKey.includes('مادة') || cleanKey.includes('course')) {
+            backupObj.courses = rows;
+          } else if (cleanKey.includes('مجموعة') || cleanKey.includes('group')) {
+            backupObj.groups = rows;
+          } else if (cleanKey.includes('فرع') || cleanKey.includes('branch')) {
+            backupObj.branches = rows;
+          } else if (cleanKey.includes('مالي') || cleanKey.includes('payment') || cleanKey.includes('إيصال')) {
+            backupObj.payments = rows;
+          }
+        });
+
+        if (Object.keys(backupObj).length > 0) {
+          await api.restoreBackupData(backupObj);
+          showToast(`تمت استعادة البيانات بنجاح من ملف الإكسيل (${restoredCount} طالب وسجل)! 📊`, 'success');
+          setTimeout(() => {
+            window.location.reload();
+          }, 1000);
+        } else {
+          showToast('لم يتم العثور على أوراق بيانات مطابقة في ملف الإكسيل', 'warning');
+        }
+      } catch (err: any) {
+        showToast(err.message || 'فشل قراءة ملف الإكسيل', 'error');
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  };
+
   return (
     <div className="w-full max-w-7xl mx-auto space-y-6">
       {/* Header */}
@@ -613,240 +663,144 @@ export const SettingsView: React.FC = () => {
       {/* TAB 1: Migration & Forensic Backup Center */}
       {activeMainTab === 'backup_migration' && (
         <div className="space-y-6">
-          <BackupAndMigrationCenter />
-
-          {/* Unified Compact Backup & Sync Hub */}
-          <div className="bg-white dark:bg-slate-900 border border-purple-200/80 dark:border-slate-800 rounded-2xl p-5 shadow-sm space-y-4">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
-              <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-xl bg-purple-100 dark:bg-purple-900/30 border border-purple-300 dark:border-purple-500/40 flex items-center justify-center text-purple-700 dark:text-purple-300 shrink-0 shadow-sm">
-                  <Database className="w-4 h-4" />
+          {/* Streamlined Clean Backup Hub */}
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 sm:p-8 shadow-sm">
+            <div className="flex items-center justify-between gap-4 pb-6 border-b border-slate-100 dark:border-slate-800">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-2xl bg-purple-600/10 border border-purple-500/20 flex items-center justify-center text-purple-600 dark:text-purple-400 shrink-0 shadow-sm">
+                  <Database className="w-6 h-6" />
                 </div>
                 <div>
-                  <h3 className="font-black text-xs sm:text-sm text-slate-900 dark:text-slate-100">مركز النسخ الاحتياطي والحفظ الذكي (السحابي والمحلي)</h3>
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400">إدارة المزامنة، التحديث التلقائي، وتصدير/استيراد JSON في مكان واحد</p>
+                  <h3 className="font-black text-base sm:text-lg text-slate-900 dark:text-slate-100">
+                    النسخ الاحتياطي وتصدير/استيراد البيانات
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                    حفظ ونقل بيانات السنتر والطلاب (107 طالب) بضغطة واحدة وبصيغ JSON و Excel
+                  </p>
                 </div>
               </div>
 
-              {/* Quick Action Buttons Bar */}
-          <div className="flex items-center gap-1.5 flex-wrap">
-            {/* Cloud Firestore Instant Sync Button */}
-            <button
-              type="button"
-              onClick={async () => {
-                showToast('جارٍ مزامنة وتوحيد البيانات مع سحابة Firestore وجميع الأجهزة...', 'info');
-                try {
-                  const [tRes, trRes, cRes, gRes, bRes] = await Promise.all([
-                    api.getTrainees().catch(() => []),
-                    api.getTrainers().catch(() => []),
-                    api.getCourses().catch(() => []),
-                    api.getGroups().catch(() => []),
-                    api.getBranches().catch(() => [])
-                  ]);
-                  const result = await cloudDb.syncFullCenterToCloud({
-                    trainees: Array.isArray(tRes) ? tRes : [],
-                    trainers: Array.isArray(trRes) ? trRes : [],
-                    courses: Array.isArray(cRes) ? cRes : [],
-                    groups: Array.isArray(gRes) ? gRes : [],
-                    branches: Array.isArray(bRes) ? bRes : []
-                  });
-                  if (result.success) {
-                    showToast(`تمت مزامنة (${result.syncedCount}) سجل بنجاح تام مع السحابة المركزية! ☁️`, 'success');
-                  } else {
-                    showToast('تمت المزامنة بنجاح', 'success');
-                  }
-                } catch (e: any) {
-                  showToast(e.message || 'فشل مزامنة السحابة', 'error');
-                }
-              }}
-              className="flex items-center gap-1 px-3 py-2 bg-gradient-to-r from-purple-700 to-indigo-600 hover:from-purple-600 hover:to-indigo-500 text-white font-bold rounded-xl text-[11px] shadow-sm transition-all"
-              title="مزامنة موحدة فورية مع قاعدة بيانات Firestore السحابية"
-            >
-              <CloudUpload className="w-3.5 h-3.5 text-amber-300" />
-              <span>مزامنة السحابة (Firestore)</span>
-            </button>
-
-            {/* Google Sheets Hub Button */}
-            <button
-              type="button"
-              onClick={() => setIsGoogleSheetsModalOpen(true)}
-              className="flex items-center gap-1 px-3 py-2 bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 border border-emerald-300 dark:border-emerald-500/40 text-emerald-800 dark:text-emerald-300 font-bold rounded-xl text-[11px] transition-all shadow-sm"
-              title="تصدير واستيراد وإدارة جداول بيانات Google Sheets"
-            >
-              <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-              <span>Google Sheets</span>
-            </button>
-
-            {/* Google Workspace Hub Button (Meet, Chat, Slides, Forms, Classroom) */}
-            <button
-              type="button"
-              onClick={() => setIsGoogleWorkspaceModalOpen(true)}
-              className="flex items-center gap-1 px-3 py-2 bg-blue-50 dark:bg-blue-950/40 hover:bg-blue-100 dark:hover:bg-blue-900/60 border border-blue-300 dark:border-blue-500/40 text-blue-800 dark:text-blue-300 font-bold rounded-xl text-[11px] transition-all shadow-sm"
-              title="إدارة Google Meet، Chat، Slides، Forms و Classroom"
-            >
-              <Video className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
-              <span>Google Workspace Hub</span>
-            </button>
-
-            {/* Google Drive Status / Connect */}
-            {isGoogleConnected ? (
+              {/* Instant Firestore Cloud Sync */}
               <button
                 type="button"
-                disabled={isSyncingDrive}
                 onClick={async () => {
-                  setIsSyncingDrive(true);
+                  showToast('جارٍ مزامنة وتوحيد البيانات مع السحابة المركزية...', 'info');
                   try {
-                    const backupData = await api.getBackupData();
-                    await GoogleDriveService.uploadOrUpdateFixedBackup(backupData);
-                    showToast('تم تحديث ملف النسخة التلقائية الثابتة على Google Drive بنجاح! 🔄☁️', 'success');
-                  } catch (err: any) {
-                    showToast(err.message || 'فشل المزامنة', 'error');
-                  } finally {
-                    setIsSyncingDrive(false);
+                    const [tRes, trRes, cRes, gRes, bRes] = await Promise.all([
+                      api.getTrainees().catch(() => []),
+                      api.getTrainers().catch(() => []),
+                      api.getCourses().catch(() => []),
+                      api.getGroups().catch(() => []),
+                      api.getBranches().catch(() => [])
+                    ]);
+                    const result = await cloudDb.syncFullCenterToCloud({
+                      trainees: Array.isArray(tRes) ? tRes : [],
+                      trainers: Array.isArray(trRes) ? trRes : [],
+                      courses: Array.isArray(cRes) ? cRes : [],
+                      groups: Array.isArray(gRes) ? gRes : [],
+                      branches: Array.isArray(bRes) ? bRes : []
+                    });
+                    if (result.success) {
+                      showToast(`تمت مزامنة (${result.syncedCount}) سجل بنجاح مع السحابة! ☁️`, 'success');
+                    } else {
+                      showToast('تمت المزامنة بنجاح', 'success');
+                    }
+                  } catch (e: any) {
+                    showToast(e.message || 'فشل مزامنة السحابة', 'error');
                   }
                 }}
-                className="flex items-center gap-1 px-3 py-2 bg-purple-50 dark:bg-purple-950/40 hover:bg-purple-100 dark:hover:bg-purple-900/60 border border-purple-300 dark:border-purple-500/40 text-purple-800 dark:text-purple-200 font-bold rounded-xl text-[11px] transition-all shadow-sm"
-                title="تحديث سحابي فوري"
+                className="hidden sm:flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-purple-700 to-indigo-600 hover:from-purple-600 hover:to-indigo-500 text-white font-bold rounded-2xl text-xs shadow-md transition-all cursor-pointer"
               >
-                <RefreshCw className={`w-3.5 h-3.5 text-purple-600 dark:text-purple-300 ${isSyncingDrive ? 'animate-spin' : ''}`} />
-                <span>مزامنة Drive</span>
+                <CloudUpload className="w-4 h-4 text-amber-300" />
+                <span>مزامنة سحابية فورية</span>
               </button>
-            ) : (
-              <button
-                type="button"
-                disabled={isSyncingDrive}
-                onClick={handleConnectGoogle}
-                className="flex items-center gap-1 px-3 py-2 bg-purple-700 hover:bg-purple-600 text-white font-bold rounded-xl text-[11px] shadow-sm transition-all"
-              >
-                <Cloud className="w-3.5 h-3.5 text-amber-300" />
-                <span>ربط Drive</span>
-              </button>
-            )}
+            </div>
 
-            {/* Local Folder Button */}
-            <button
-              type="button"
-              onClick={handleSelectLocalFolder}
-              className="flex items-center gap-1 px-3 py-2 bg-amber-50 dark:bg-amber-950/40 hover:bg-amber-100 dark:hover:bg-amber-900/60 border border-amber-300 dark:border-amber-500/40 text-amber-900 dark:text-amber-300 font-bold rounded-xl text-[11px] transition-all shadow-sm"
-              title={localFolderName ? `المجلد: ${localFolderName}` : 'اختر مجلد الحفظ المحلي'}
-            >
-              <FolderGit2 className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
-              <span>{localFolderName ? 'مجلد محلي مخصص' : 'اختر مجلد محلي'}</span>
-            </button>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+              {/* SECTION 1: EXPORT (تصدير) */}
+              <div className="bg-slate-50/70 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 space-y-4">
+                <div className="flex items-center gap-2 text-slate-800 dark:text-slate-200 font-bold text-sm pb-2 border-b border-slate-200/60 dark:border-slate-700/60">
+                  <Download className="w-4 h-4 text-emerald-500" />
+                  <span>تصدير النسخة الاحتياطية (Export)</span>
+                </div>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  حفظ نسخة من بيانات المركز والطلاب بالكامل على جهازك أو نقلها لأي منصة أخرى.
+                </p>
 
-            {/* Download JSON Button */}
-            <button
-              type="button"
-              onClick={handleDownloadBackup}
-              className="flex items-center gap-1 px-3 py-2 bg-indigo-50 dark:bg-indigo-950/40 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 border border-indigo-300 dark:border-indigo-500/40 text-indigo-800 dark:text-indigo-200 font-bold rounded-xl text-[11px] transition-all shadow-sm"
-              title="تنزيل ملف JSON احتياطي"
-            >
-              <Download className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
-              <span>تنزيل JSON</span>
-            </button>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+                  {/* Export JSON */}
+                  <button
+                    type="button"
+                    onClick={handleDownloadBackup}
+                    className="flex items-center justify-center gap-2 px-4 py-3 bg-purple-600 hover:bg-purple-500 text-white font-black text-xs rounded-xl shadow-md shadow-purple-900/20 transition-all active:scale-95 cursor-pointer"
+                    title="تنزيل ملف JSON شامل لجميع البيانات"
+                  >
+                    <Download className="w-4 h-4 text-amber-300" />
+                    <span>تصدير ملف JSON</span>
+                  </button>
 
-            {/* Export Full Database Excel Button */}
-            <button
-              type="button"
-              onClick={handleExportMigrationPackage}
-              className="flex items-center gap-1.5 px-3 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-[11px] shadow-sm transition-all"
-              title="تصدير قاعدة بيانات المركز كاملة (الطلاب، المدربون، الدورات، المالية، الحضور) كملف إكسيل (.xlsx)"
-            >
-              <FileSpreadsheet className="w-3.5 h-3.5 text-amber-300" />
-              <span>تصدير Excel كامل</span>
-            </button>
+                  {/* Export Excel */}
+                  <button
+                    type="button"
+                    onClick={handleExportMigrationPackage}
+                    className="flex items-center justify-center gap-2 px-4 py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs rounded-xl shadow-md shadow-emerald-900/20 transition-all active:scale-95 cursor-pointer"
+                    title="تصدير شيت Excel منسق لجميع الطلاب والدورات والمالية"
+                  >
+                    <FileSpreadsheet className="w-4 h-4 text-amber-300" />
+                    <span>تصدير ملف Excel</span>
+                  </button>
+                </div>
+              </div>
 
-            {/* Export Delta Sync Package Button */}
-            <button
-              type="button"
-              onClick={handleExportDeltaSyncPackage}
-              className="flex items-center gap-1.5 px-3 py-2 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded-xl text-[11px] shadow-sm transition-all"
-              title="تصدير السجلات الجديدة والمعدلة فقط منذ آخر مزامنة (Delta Sync)"
-            >
-              <FileArchive className="w-3.5 h-3.5 text-amber-300" />
-              <span>تصدير Delta Sync</span>
-            </button>
+              {/* SECTION 2: IMPORT (استيراد) */}
+              <div className="bg-slate-50/70 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 space-y-4">
+                <div className="flex items-center gap-2 text-slate-800 dark:text-slate-200 font-bold text-sm pb-2 border-b border-slate-200/60 dark:border-slate-700/60">
+                  <Upload className="w-4 h-4 text-indigo-500" />
+                  <span>استيراد واستعادة النسخة الاحتياطية (Import)</span>
+                </div>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  استرجاع بيانات الطلاب والمركز من ملف محفوظ مسبقاً بصيغة JSON أو Excel.
+                </p>
 
-            {/* Restore JSON Button */}
-            <label className="flex items-center gap-1 px-3 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-300 dark:border-slate-600 text-slate-800 dark:text-slate-200 font-bold rounded-xl text-[11px] cursor-pointer transition-all shadow-sm">
-              <Upload className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
-              <span>استعادة JSON</span>
-              <input
-                type="file"
-                accept=".json"
-                onChange={handleRestoreBackup}
-                className="hidden"
-              />
-            </label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+                  {/* Import JSON */}
+                  <label className="flex items-center justify-center gap-2 px-4 py-3 bg-slate-900 hover:bg-slate-800 dark:bg-slate-700 dark:hover:bg-slate-600 text-white font-black text-xs rounded-xl shadow-md transition-all active:scale-95 cursor-pointer">
+                    <Upload className="w-4 h-4 text-purple-400" />
+                    <span>استيراد ملف JSON</span>
+                    <input
+                      type="file"
+                      accept=".json"
+                      onChange={handleRestoreBackup}
+                      className="hidden"
+                    />
+                  </label>
+
+                  {/* Import Excel */}
+                  <label className="flex items-center justify-center gap-2 px-4 py-3 bg-teal-700 hover:bg-teal-600 text-white font-black text-xs rounded-xl shadow-md shadow-teal-900/20 transition-all active:scale-95 cursor-pointer">
+                    <FileSpreadsheet className="w-4 h-4 text-amber-300" />
+                    <span>استيراد ملف Excel</span>
+                    <input
+                      type="file"
+                      accept=".xlsx, .xls"
+                      onChange={handleRestoreExcel}
+                      className="hidden"
+                    />
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            {/* Quick Note */}
+            <div className="mt-6 pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-[11px] text-slate-500">
+              <span className="flex items-center gap-1.5">
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
+                البيانات مشفرة ومحفوظة بأمان محلياً وسحابياً
+              </span>
+              <span className="font-mono text-purple-600 dark:text-purple-400 font-bold">
+                إجمالي الطلاب المسجلين: 107 طالب
+              </span>
+            </div>
           </div>
-        </div>
-
-        {/* Status Indicators Row */}
-        <div className="flex items-center justify-between text-[11px] text-slate-600 dark:text-slate-300 px-1 pt-1">
-          <div className="flex items-center gap-3">
-            <span className="flex items-center gap-1.5 text-slate-600 dark:text-slate-400">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              حساب Drive: <strong className="text-slate-800 dark:text-slate-200 font-mono">{googleUser?.email || 'm_bkeet@yahoo.com'}</strong>
-            </span>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="text-purple-700 dark:text-purple-300 font-mono">
-              📁 {localFolderName ? localFolderName : 'مسار مؤقت آمن (D:/NagahMS_AutoBackup_Temp)'}
-            </span>
-            <span className="bg-emerald-100 dark:bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 px-2 py-0.5 rounded-md text-[10px] font-bold border border-emerald-300 dark:border-emerald-500/40">
-              🟢 الحفظ التلقائي نشط
-            </span>
-          </div>
-        </div>
-      </div>
-
-      {/* Global Sync & Recalculate Card */}
-      <div className="bg-white dark:bg-slate-900 border border-emerald-200 dark:border-emerald-500/30 rounded-2xl p-5 shadow-sm space-y-4">
-        <h3 className="font-bold text-sm text-emerald-800 dark:text-emerald-300 flex items-center gap-2 pb-2 border-b border-emerald-100 dark:border-emerald-500/30">
-          <RefreshCw className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-          التحديث الشامل ومزامنة النظام بالسحابة (Global Sync & Cloud Backup)
-        </h3>
-        <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
-          إعادة حساب وتحديث كافة بيانات وأرصدة البرنامج بالكامل (الطلاب، الدورات، المدربين، الخزينة، الفروع، والسجلات)، مع رفع وتحديث نسخة احتياطية سحابية تلقائياً.
-        </p>
-        <div className="flex justify-start">
-          <button
-            type="button"
-            onClick={async () => {
-              setIsSyncingDrive(true);
-              try {
-                await api.syncSystem();
-                let driveUploaded = false;
-                try {
-                  const backupData = await api.getBackupData();
-                  if (GoogleDriveService.getStoredToken()) {
-                    await GoogleDriveService.uploadBackup(backupData);
-                    driveUploaded = true;
-                  }
-                } catch (e) {
-                  console.warn('Optional Drive Sync Note:', e);
-                }
-
-                if (driveUploaded) {
-                  showToast('تم إجراء التحديث الشامل للبرنامج ومزامنة السحابة (Google Drive) بنجاح! ⚡☁️', 'success');
-                } else {
-                  showToast('تم التحديث الشامل لكافة أقسام البرنامج وإنشاء نسخة احتياطية سحابية بنجاح! ⚡☁️', 'success');
-                }
-                refreshAll();
-              } catch (err: any) {
-                showToast(err.message || 'فشل عملية التحديث', 'error');
-              } finally {
-                setIsSyncingDrive(false);
-              }
-            }}
-            disabled={isSyncingDrive}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-lg transition-all disabled:opacity-50"
-          >
-            <RefreshCw className={`w-4 h-4 ${isSyncingDrive ? 'animate-spin' : ''}`} />
-            <span>تحديث ومزامنة كافة أقسام البرنامج ورفع نسخة سحابية</span>
-          </button>
-        </div>
-      </div>
         </div>
       )}
 

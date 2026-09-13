@@ -73,11 +73,11 @@ export const TrainerAttestationModal: React.FC<TrainerAttestationModalProps> = (
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md overflow-y-auto print:p-0 print:bg-white print:static">
-      <div className="relative w-full max-w-3xl bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl overflow-hidden print:border-none print:shadow-none print:bg-white print:text-black print:w-full">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/85 backdrop-blur-md overflow-hidden print:p-0 print:bg-white print:static">
+      <div className="relative w-full max-w-3xl max-h-[90vh] flex flex-col bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl overflow-hidden print:border-none print:shadow-none print:bg-white print:text-black print:w-full">
         
         {/* Modal Header Actions */}
-        <div className="p-4 bg-slate-950 border-b border-slate-800 flex items-center justify-between print:hidden">
+        <div className="shrink-0 p-4 bg-slate-950 border-b border-slate-800 flex items-center justify-between print:hidden">
           <div className="flex items-center gap-2">
             <Award className="w-5 h-5 text-amber-400 animate-pulse" />
             <span className="text-amber-400 font-black text-sm">إفادة رسمية بتنفيذ محاضرة / دورة للمدربين</span>
@@ -117,7 +117,7 @@ export const TrainerAttestationModal: React.FC<TrainerAttestationModalProps> = (
         {/* PRINTABLE DIPLOMA FRAME CARD */}
         <div
           ref={certificateRef}
-          className="p-8 md:p-12 bg-slate-950 text-slate-100 relative overflow-hidden print:bg-white print:text-slate-950 select-none"
+          className="flex-1 overflow-y-auto custom-scrollbar p-8 md:p-12 bg-slate-950 text-slate-100 relative print:bg-white print:text-slate-950 select-none"
         >
           {/* Luxury Gold Border Overlay */}
           <div className="absolute inset-3 border-2 border-amber-500/40 rounded-2xl pointer-events-none print:border-amber-700"></div>

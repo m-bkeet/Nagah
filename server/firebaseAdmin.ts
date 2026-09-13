@@ -1,36 +1,6 @@
 import * as crypto from 'crypto';
 import { db } from './db';
 
-function cleanSupabaseUrl(raw?: string): string {
-  if (!raw) return 'https://zdbrwwkyxjujrokzjang.supabase.co';
-  let url = raw.trim().replace(/\/+$/, '');
-  while (/\/rest\/v1$/i.test(url)) {
-    url = url.replace(/\/rest\/v1$/i, '').replace(/\/+$/, '');
-  }
-  return url.trim() || 'https://zdbrwwkyxjujrokzjang.supabase.co';
-}
-
-const SUPABASE_URL = cleanSupabaseUrl(process.env.SUPABASE_URL);
-const SUPABASE_KEY = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpkYnJ3d2t5eGp1anJva3pqYW5nIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4ODA0ODY0MiwiZXhwIjoyMTAzNjI0NjQyfQ._JEu3kjLDPWS1uCabeVMyTRIeDS0NpnjTPUjyuL6_Ec').trim();
-const hasValidSupabase = Boolean(
-  SUPABASE_URL &&
-  !SUPABASE_URL.includes('placeholder') &&
-  SUPABASE_KEY &&
-  !SUPABASE_KEY.includes('placeholder')
-);
-
-let supabaseClient: any = null;
-if (hasValidSupabase) {
-  try {
-    const { createClient } = require('@supabase/supabase-js');
-    supabaseClient = createClient(SUPABASE_URL, SUPABASE_KEY, {
-      auth: { persistSession: false }
-    });
-  } catch (e) {
-    supabaseClient = null;
-  }
-}
-
 function generateId() {
   return crypto.randomUUID().replace(/-/g, '').substring(0, 20);
 }
@@ -200,20 +170,6 @@ class DocumentReference {
       items.push(finalData);
     }
     saveCollectionStore(this.collectionName, items);
-
-    // Optional background sync if Supabase is active
-    if (supabaseClient) {
-      try {
-        await supabaseClient.from('collections').upsert({
-          collection_name: this.collectionName,
-          id: this.id,
-          data: finalData,
-          updated_at: new Date().toISOString()
-        }, { onConflict: 'collection_name,id' });
-      } catch (e) {
-        // Silently ignore background sync error
-      }
-    }
   }
 
   async update(data: any): Promise<void> {
@@ -232,12 +188,6 @@ class DocumentReference {
     const items = getCollectionStore(this.collectionName);
     const filtered = items.filter(i => String(i.id) !== String(this.id));
     saveCollectionStore(this.collectionName, filtered);
-
-    if (supabaseClient) {
-      try {
-        await supabaseClient.from('collections').delete().eq('collection_name', this.collectionName).eq('id', this.id);
-      } catch (e) {}
-    }
   }
 }
 

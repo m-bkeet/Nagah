@@ -38,26 +38,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     try {
-      const saved = localStorage.getItem(STORAGE_KEY_ALWAYS_ASK_LOGIN);
-      const askLoginEveryTime = saved === null ? true : saved === 'true';
-      
-      // Check sessionStorage first, then localStorage (only if not forced to ask every time)
+      // Check sessionStorage first, then fallback to localStorage so multiple browser tabs stay logged in
       const sessionUser = sessionStorage.getItem(STORAGE_KEY_USER);
       const sessionToken = sessionStorage.getItem(STORAGE_KEY_TOKEN);
+      const storedUser = localStorage.getItem(STORAGE_KEY_USER);
+      const storedToken = localStorage.getItem(STORAGE_KEY_TOKEN);
+
+      const targetUser = sessionUser || storedUser;
+      const targetToken = sessionToken || storedToken;
       
-      if (sessionUser && sessionToken) {
-        let parsed = JSON.parse(sessionUser);
+      if (targetUser && targetToken) {
+        let parsed = JSON.parse(targetUser);
         if (parsed.role === 'admin') parsed.role = 'super_admin';
         setUser(parsed);
-        setToken(sessionToken);
-      } else if (!askLoginEveryTime) {
-        const storedUser = localStorage.getItem(STORAGE_KEY_USER);
-        const storedToken = localStorage.getItem(STORAGE_KEY_TOKEN);
-        if (storedUser && storedToken) {
-          let parsed = JSON.parse(storedUser);
-          if (parsed.role === 'admin') parsed.role = 'super_admin';
-          setUser(parsed);
-          setToken(storedToken);
+        setToken(targetToken);
+        // Sync to sessionStorage for this tab
+        if (!sessionUser) {
+          try {
+            sessionStorage.setItem(STORAGE_KEY_USER, targetUser);
+            sessionStorage.setItem(STORAGE_KEY_TOKEN, targetToken);
+          } catch {}
         }
       }
     } catch {

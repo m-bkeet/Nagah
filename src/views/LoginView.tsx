@@ -11,19 +11,17 @@ export const LoginView: React.FC = () => {
   const { login, alwaysRequireLogin, setAlwaysRequireLogin } = useAuth();
   const { themeConfig } = useTheme();
   
-  const [isPasscodeUnlocked, setIsPasscodeUnlocked] = useState(() => {
-    return sessionStorage.getItem('nagah_admin_passcode_unlocked') === 'true';
-  });
-  const [showPasscodeModal, setShowPasscodeModal] = useState(!isPasscodeUnlocked);
+  const [isPasscodeUnlocked, setIsPasscodeUnlocked] = useState(true);
+  const [showPasscodeModal, setShowPasscodeModal] = useState(false);
   const [username, setUsername] = useState(() => {
-    return localStorage.getItem('nagah_saved_username') || '';
+    return localStorage.getItem('nagah_saved_username') || 'admin';
   });
-  const [password, setPassword] = useState('');
+  const [password, setPassword] = useState('1234');
   const [rememberMe, setRememberMe] = useState(true);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [devClicks, setDevClicks] = useState(0);
-  const [showDevPanel, setShowDevPanel] = useState(false);
+  const [showDevPanel, setShowDevPanel] = useState(true);
 
   const handleDevClick = () => {
     setDevClicks(prev => {

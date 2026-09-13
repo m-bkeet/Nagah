@@ -213,11 +213,11 @@ export const StudentPromotionModal: React.FC<StudentPromotionModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto" dir="rtl">
-      <div className="bg-slate-900 border border-slate-700/80 rounded-3xl max-w-4xl w-full p-6 space-y-6 shadow-2xl relative animate-in fade-in zoom-in-95 duration-200">
+    <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 overflow-hidden" dir="rtl">
+      <div className="bg-slate-900 border border-slate-700/80 rounded-3xl max-w-4xl w-full text-slate-100 max-h-[90vh] flex flex-col shadow-2xl relative animate-in fade-in zoom-in-95 duration-200 overflow-hidden">
         
         {/* Top Header */}
-        <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+        <div className="shrink-0 p-4 sm:p-5 flex items-center justify-between border-b border-slate-800 bg-slate-900/90">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-2xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400">
               <GraduationCap className="w-5 h-5" />
@@ -247,12 +247,15 @@ export const StudentPromotionModal: React.FC<StudentPromotionModalProps> = ({
 
             <button
               onClick={onClose}
-              className="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition-colors"
+              className="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition-colors cursor-pointer"
             >
               <X className="w-4 h-4" />
             </button>
           </div>
         </div>
+
+        {/* Modal Scrollable Body */}
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6 custom-scrollbar">
 
         {/* MODE 1: BATCH PROMOTION */}
         {mode === 'batch' && (
@@ -487,6 +490,7 @@ export const StudentPromotionModal: React.FC<StudentPromotionModalProps> = ({
           </div>
         )}
 
+        </div>
       </div>
     </div>
   );

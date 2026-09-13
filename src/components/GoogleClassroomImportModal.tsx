@@ -76,8 +76,8 @@ export const GoogleClassroomImportModal: React.FC<GoogleClassroomImportModalProp
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
-      <div className="bg-slate-900 border border-slate-700 rounded-2xl shadow-xl w-full max-w-2xl overflow-hidden flex flex-col">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/80 backdrop-blur-md overflow-hidden">
+      <div className="bg-slate-900 border border-slate-700 rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
         <div className="flex items-center justify-between p-4 border-b border-slate-800 bg-slate-950/50">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-indigo-500/20 flex items-center justify-center text-indigo-400">
@@ -93,7 +93,7 @@ export const GoogleClassroomImportModal: React.FC<GoogleClassroomImportModalProp
           </button>
         </div>
 
-        <div className="p-4 flex-1 overflow-y-auto max-h-[60vh]">
+        <div className="p-4 flex-1 overflow-y-auto custom-scrollbar">
           {error ? (
             <div className="p-4 bg-red-950/30 border border-red-500/30 rounded-xl flex items-center gap-3 text-red-400 text-sm">
               <AlertCircle className="w-5 h-5 shrink-0" />

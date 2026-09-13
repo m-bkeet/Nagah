@@ -206,11 +206,11 @@ export const WhatsAppShareModal: React.FC<ShareModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/85 flex items-center justify-center z-[100] backdrop-blur-xl p-4 md:p-6 overflow-y-auto" onClick={onClose} dir="rtl">
-      <div className="bg-slate-900 border border-slate-700/60 rounded-[2rem] w-full max-w-5xl shadow-2xl overflow-hidden flex flex-col relative" onClick={e => e.stopPropagation()}>
+    <div className="fixed inset-0 bg-black/85 flex items-center justify-center z-[100] backdrop-blur-xl p-2 sm:p-4 overflow-hidden" onClick={onClose} dir="rtl">
+      <div className="bg-slate-900 border border-slate-700/60 rounded-[2rem] w-full max-w-5xl max-h-[90vh] shadow-2xl overflow-hidden flex flex-col relative" onClick={e => e.stopPropagation()}>
         
         {/* Top Header & Tab Switcher */}
-        <div className="px-6 pt-5 pb-3 border-b border-slate-800 flex flex-wrap items-center justify-between gap-3">
+        <div className="shrink-0 px-6 pt-5 pb-3 border-b border-slate-800 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-2xl bg-indigo-600/20 border border-indigo-500/40 flex items-center justify-center text-indigo-400">
               <Share2 className="w-5 h-5" />
@@ -239,13 +239,14 @@ export const WhatsAppShareModal: React.FC<ShareModalProps> = ({
               </div>
             )}
 
-            <button onClick={onClose} className="p-2 bg-slate-800 text-slate-400 rounded-full hover:bg-rose-500/20 hover:text-rose-400 transition-colors">
+            <button onClick={onClose} className="p-2 bg-slate-800 text-slate-400 rounded-full hover:bg-rose-500/20 hover:text-rose-400 transition-colors cursor-pointer">
               <X className="w-5 h-5" />
             </button>
           </div>
         </div>
 
-        {/* Tab 1: Student Card (If activeTrainee) */}
+        <div className="flex-1 overflow-y-auto custom-scrollbar">
+          {/* Tab 1: Student Card (If activeTrainee) */}
         {tab === 'student_card' && activeTrainee && (
           <div className="flex flex-col md:flex-row w-full">
             {/* Left Side: Controls & Sharing Options */}
@@ -516,6 +517,7 @@ export const WhatsAppShareModal: React.FC<ShareModalProps> = ({
             </div>
           </div>
         )}
+        </div>
 
       </div>
     </div>

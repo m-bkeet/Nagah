@@ -152,9 +152,86 @@ console.log("نتيجة الطالب:", calculateGrade(48, 50));`);
 
   // Live Leaderboard & Responses
   const [responses, setResponses] = useState<any[]>([]);
+  const [labLiveQuestion, setLabLiveQuestion] = useState<any>(null);
 
   // Advanced Question Logic
   const [newQuestionType, setNewQuestionType] = useState<ExamQuestion['questionType']>('mcq');
+
+  useEffect(() => {
+    const fetchLabQuick = async () => {
+      try {
+        const res = await fetch('/api/lab/quick-question');
+        const json = await res.json();
+        setLabLiveQuestion(json?.data || null);
+      } catch (e) {}
+    };
+    fetchLabQuick();
+    const interval = setInterval(fetchLabQuick, 2500);
+    return () => clearInterval(interval);
+  }, []);
+
+  const handleBroadcastVerbalMCQ = async (correctChoice: 'A' | 'B' | 'C' | 'D') => {
+    try {
+      await fetch('/api/lab/quick-question/broadcast', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'choices',
+          questionText: '🎧 استمع لسؤال المعلم شفوياً في القاعة واختر إجابتك الآن!',
+          correctAnswer: correctChoice,
+          options: [
+            { key: 'A', label: 'أ / A (أحمر)', color: 'bg-rose-600 hover:bg-rose-500' },
+            { key: 'B', label: 'ب / B (أزرق)', color: 'bg-blue-600 hover:bg-blue-500' },
+            { key: 'C', label: 'ج / C (أصفر)', color: 'bg-amber-500 hover:bg-amber-400' },
+            { key: 'D', label: 'د / D (أخضر)', color: 'bg-emerald-600 hover:bg-emerald-500' }
+          ]
+        })
+      });
+      showToast(`تم بث سؤال الخيارات الشفهي للأجهزة فوراً (الإجابة النموذجية: ${correctChoice}) 🚀`, 'success');
+    } catch (e: any) {
+      showToast('فشل بث السؤال', 'error');
+    }
+  };
+
+  const handleBroadcastVerbalTrueFalse = async (correctChoice: 'true' | 'false') => {
+    try {
+      await fetch('/api/lab/quick-question/broadcast', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'true_false',
+          questionText: '🎧 استمع لسؤال المعلم شفوياً في القاعة (صح أم خطأ؟)',
+          correctAnswer: correctChoice,
+          options: [
+            { key: 'true', label: 'صح ✔️', color: 'bg-emerald-600 hover:bg-emerald-500' },
+            { key: 'false', label: 'خطأ ❌', color: 'bg-rose-600 hover:bg-rose-500' }
+          ]
+        })
+      });
+      showToast(`تم بث سؤال صح أو خطأ للأجهزة فوراً (الإجابة النموذجية: ${correctChoice === 'true' ? 'صح' : 'خطأ'}) 🚀`, 'success');
+    } catch (e: any) {
+      showToast('فشل بث السؤال', 'error');
+    }
+  };
+
+  const handleAwardStarsToCorrect = async () => {
+    if (!labLiveQuestion || !labLiveQuestion.answers) return;
+    const correctStudents = Object.values(labLiveQuestion.answers).filter((a: any) => a.isCorrect);
+    if (correctStudents.length === 0) {
+      showToast('لا يوجد طلاب أجابوا إجابة صحيحة حتى الآن', 'info');
+      return;
+    }
+    try {
+      for (const s of correctStudents as any[]) {
+        try {
+          await api.awardPoints(s.studentCode, 5, 'إجابة صحيحة في التحدي اللحظي بالمعمل');
+        } catch (e) {}
+      }
+      showToast(`تم منح 5 نجوم بنجاح لـ ${correctStudents.length} طالب فائز! 🌟`, 'success');
+    } catch (e) {
+      showToast('تم منح النقاط بنجاح للمجيبين', 'success');
+    }
+  };
 
   useEffect(() => {
     loadSessions();
@@ -451,6 +528,22 @@ console.log("نتيجة الطالب:", calculateGrade(48, 50));`);
         question: questionPayload
       });
 
+      // Also broadcast to Lab Kiosk screens
+      fetch('/api/lab/quick-question/broadcast', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: qData.options?.length === 2 ? 'true_false' : 'choices',
+          questionText: qData.text,
+          correctAnswer: qData.options?.[qData.correctOptionIndex] || 'A',
+          options: qData.options.map((opt, i) => ({
+            key: ['A', 'B', 'C', 'D'][i] || String(i),
+            label: opt,
+            color: ['bg-rose-600 hover:bg-rose-500', 'bg-blue-600 hover:bg-blue-500', 'bg-amber-500 hover:bg-amber-400', 'bg-emerald-600 hover:bg-emerald-500'][i % 4]
+          }))
+        })
+      }).catch(() => {});
+
       showToast('تم بث السؤال التفاعلي على شاشات أجهزة الطلاب فورياً! 🚀', 'success');
       loadSessions(false);
       setActiveTab('leaderboard');
@@ -478,6 +571,7 @@ console.log("نتيجة الطالب:", calculateGrade(48, 50));`);
   const handleClearQuestionBroadcast = async () => {
     try {
       await api.clearInteractiveQuestion();
+      fetch('/api/lab/quick-question/clear', { method: 'POST' }).catch(() => {});
       showToast('تم إنهاء وإغلاق عرض الأسئلة على جميع شاشات الطلاب بنجاح 🛑', 'success');
     } catch (err: any) {
       showToast('فشل إنهاء بث الأسئلة', 'error');
@@ -2158,16 +2252,170 @@ console.log("نتيجة الطالب:", calculateGrade(48, 50));`);
       {/* TAB 3: QUICK ON-THE-FLY QUESTION COMPOSER */}
       {/* ========================================================================= */}
       {activeTab === 'quick' && (
-        <div className="max-w-3xl mx-auto bg-slate-900 border border-emerald-500/40 rounded-3xl p-6 shadow-2xl space-y-5">
-          <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-            <h3 className="font-bold text-sm text-emerald-300 flex items-center gap-2">
-              <Zap className="w-4 h-4 text-emerald-400" />
-              كتابة سؤال لحظي سريع وبثه فوراً
-            </h3>
-            <span className="text-xs bg-emerald-500/20 text-emerald-300 px-3 py-1 rounded-full font-bold">
-              تفاعل فوري
-            </span>
+        <div className="max-w-4xl mx-auto space-y-6">
+          
+          {/* Quick Verbal Challenge Bar (المنكش السريع بدون كتابة) */}
+          <div className="bg-gradient-to-r from-purple-950/80 via-slate-900 to-emerald-950/80 border border-purple-500/40 rounded-3xl p-6 shadow-2xl space-y-5">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-2xl bg-amber-500/20 text-amber-400 flex items-center justify-center font-black text-xl">
+                  ⚡
+                </div>
+                <div>
+                  <h3 className="font-black text-base text-white">أداة المنكش السريع (بث شفهي فوري بضغطة واحدة)</h3>
+                  <p className="text-xs text-slate-400">اطرح السؤال شفوياً بصوتك في القاعة للطلاب واضغط فقط الخيار الصحيح لبثه لأجهزتهم فوراً!</p>
+                </div>
+              </div>
+              <span className="text-xs bg-amber-500/20 text-amber-300 border border-amber-500/30 px-3 py-1 rounded-full font-bold">
+                بدون كتابة 🚀
+              </span>
+            </div>
+
+            {/* MCQ Verbal Buttons */}
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-slate-300 block">
+                1. سؤال 4 خيارات (أحمر، أزرق، أصفر، أخضر) - اضغط الإجابة الصحيحة للبث الفوري:
+              </label>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <button
+                  type="button"
+                  onClick={() => handleBroadcastVerbalMCQ('A')}
+                  className="p-4 rounded-2xl bg-rose-600 hover:bg-rose-500 text-white font-black text-sm shadow-lg shadow-rose-600/25 transition-all active:scale-95 flex flex-col items-center justify-center gap-1 cursor-pointer"
+                >
+                  <span className="text-base">🟥 خيار أ / A</span>
+                  <span className="text-[11px] opacity-80">(بث وتحديد أ هو الصحيح)</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleBroadcastVerbalMCQ('B')}
+                  className="p-4 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white font-black text-sm shadow-lg shadow-blue-600/25 transition-all active:scale-95 flex flex-col items-center justify-center gap-1 cursor-pointer"
+                >
+                  <span className="text-base">🟦 خيار ب / B</span>
+                  <span className="text-[11px] opacity-80">(بث وتحديد ب هو الصحيح)</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleBroadcastVerbalMCQ('C')}
+                  className="p-4 rounded-2xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-sm shadow-lg shadow-amber-500/25 transition-all active:scale-95 flex flex-col items-center justify-center gap-1 cursor-pointer"
+                >
+                  <span className="text-base">🟨 خيار ج / C</span>
+                  <span className="text-[11px] opacity-80">(بث وتحديد ج هو الصحيح)</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleBroadcastVerbalMCQ('D')}
+                  className="p-4 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-sm shadow-lg shadow-emerald-600/25 transition-all active:scale-95 flex flex-col items-center justify-center gap-1 cursor-pointer"
+                >
+                  <span className="text-base">🟩 خيار د / D</span>
+                  <span className="text-[11px] opacity-80">(بث وتحديد د هو الصحيح)</span>
+                </button>
+              </div>
+            </div>
+
+            {/* True / False Verbal Buttons */}
+            <div className="space-y-2 pt-2 border-t border-slate-800">
+              <label className="text-xs font-bold text-slate-300 block">
+                2. سؤال صح أو خطأ (صح ✔️ / خطأ ❌) - اضغط الإجابة الصحيحة للبث الفوري:
+              </label>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => handleBroadcastVerbalTrueFalse('true')}
+                  className="p-4 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-sm shadow-lg shadow-emerald-600/25 transition-all active:scale-95 flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <CheckCircle2 className="w-5 h-5" />
+                  <span>بث سؤال: الإجابة الصحيحة هي (صح ✔️)</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleBroadcastVerbalTrueFalse('false')}
+                  className="p-4 rounded-2xl bg-rose-600 hover:bg-rose-500 text-white font-black text-sm shadow-lg shadow-rose-600/25 transition-all active:scale-95 flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                  <span>بث سؤال: الإجابة الصحيحة هي (خطأ ❌)</span>
+                </button>
+              </div>
+            </div>
           </div>
+
+          {/* Live Responses & Active Question Monitor */}
+          {labLiveQuestion && (
+            <div className="bg-slate-900 border-2 border-emerald-500/50 rounded-3xl p-6 shadow-2xl space-y-4 animate-fadeIn">
+              <div className="flex items-center justify-between flex-wrap gap-3">
+                <div className="flex items-center gap-2">
+                  <span className="w-3 h-3 rounded-full bg-emerald-400 animate-ping"></span>
+                  <h4 className="font-black text-white text-base">
+                    إجابات الطلاب اللحظية على السؤال الحالي 🎯
+                  </h4>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleAwardStarsToCorrect}
+                    className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs rounded-xl flex items-center gap-1.5 shadow-lg shadow-amber-500/20 transition-all cursor-pointer"
+                  >
+                    <Star className="w-4 h-4 fill-current" />
+                    <span>منح 5 نجوم للمجيبين صح ⭐</span>
+                  </button>
+
+                  <button
+                    onClick={handleClearQuestionBroadcast}
+                    className="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white font-black text-xs rounded-xl flex items-center gap-1.5 shadow-lg shadow-rose-600/20 transition-all cursor-pointer"
+                  >
+                    <X className="w-4 h-4" />
+                    <span>إنهاء السؤال اللحظي 🛑</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Answers Grid */}
+              <div className="bg-slate-950 rounded-2xl p-4 border border-slate-800">
+                {Object.keys(labLiveQuestion.answers || {}).length === 0 ? (
+                  <p className="text-center text-slate-500 text-xs py-4">
+                    في انتظار إجابات الطلاب من شاشات المعمل...
+                  </p>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
+                    {Object.values(labLiveQuestion.answers || {}).map((ans: any, idx) => (
+                      <div
+                        key={idx}
+                        className={`p-3 rounded-xl border flex items-center justify-between text-xs ${
+                          ans.isCorrect
+                            ? 'bg-emerald-950/40 border-emerald-500/50 text-emerald-200'
+                            : 'bg-rose-950/40 border-rose-500/50 text-rose-200'
+                        }`}
+                      >
+                        <div>
+                          <div className="font-bold text-white">{ans.studentName}</div>
+                          <div className="text-[10px] text-slate-400">{ans.studentCode}</div>
+                        </div>
+                        <div className="flex items-center gap-1.5 font-black text-sm">
+                          <span>{ans.answer}</span>
+                          {ans.isCorrect ? <Check className="w-4 h-4 text-emerald-400" /> : <X className="w-4 h-4 text-rose-400" />}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Custom Written Question Composer */}
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl space-y-5">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <h3 className="font-bold text-sm text-emerald-300 flex items-center gap-2">
+                <Zap className="w-4 h-4 text-emerald-400" />
+                كتابة سؤال مخصص وبثه فوراً
+              </h3>
+              <span className="text-xs bg-emerald-500/20 text-emerald-300 px-3 py-1 rounded-full font-bold">
+                تخصيص كامل
+              </span>
+            </div>
 
           <form onSubmit={handleQuickQuestionSubmit} className="space-y-4 text-xs">
             <div>
@@ -2246,7 +2494,8 @@ console.log("نتيجة الطالب:", calculateGrade(48, 50));`);
             </button>
           </form>
         </div>
-      )}
+      </div>
+    )}
 
       {/* ========================================================================= */}
       {/* TAB 4: LIVE LEADERBOARD & REAL-TIME RESPONSES */}

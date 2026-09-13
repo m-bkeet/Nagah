@@ -3,6 +3,7 @@ import { ElectronicPaymentWidget } from "../components/ElectronicPaymentWidget";
 import { DuplicatesAuditModal } from "../components/DuplicatesAuditModal";
 import { getVodafoneCashUssdCode, executeVodafoneCashPayment, executeInstaPayPayment } from "../utils/paymentUtils";
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import * as XLSX from 'xlsx';
 import html2canvas from 'html2canvas';
 import { useCenter } from '../context/CenterContext';
@@ -2579,23 +2580,23 @@ export const TraineesView: React.FC = () => {
       )}
 
       {/* ----------------- MODAL: Add Trainee ----------------- */}
-      {isAddModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md overflow-y-auto">
-          <div className="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] flex flex-col overflow-hidden text-slate-100 animate-in fade-in zoom-in-95">
-            <div className="p-4 border-b border-slate-800 flex items-center justify-between bg-slate-900/90">
+      {isAddModalOpen && typeof document !== 'undefined' && createPortal(
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center p-2 sm:p-4 bg-slate-950/85 backdrop-blur-md overflow-y-auto">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl max-w-3xl w-full my-auto max-h-[85vh] flex flex-col overflow-hidden text-slate-100 animate-in fade-in zoom-in-95">
+            <div className="shrink-0 p-4 border-b border-slate-800 flex items-center justify-between bg-slate-900/90">
               <div className="flex items-center gap-2">
                 <UserPlus className="w-5 h-5 text-amber-400" />
                 <h3 className="font-bold text-sm text-slate-100">تسجيل متدرب جديد في النظام</h3>
               </div>
               <button
                 onClick={() => setIsAddModalOpen(false)}
-                className="p-1 text-slate-400 hover:text-white"
+                className="p-1 text-slate-400 hover:text-white cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleSaveAddTrainee} className="p-6 overflow-y-auto space-y-4 text-xs">
+            <form onSubmit={handleSaveAddTrainee} className="flex-1 overflow-y-auto custom-scrollbar p-4 sm:p-6 space-y-4 text-xs">
               {/* Photo Upload Section */}
               <div className="flex items-center gap-4 bg-slate-950/40 p-3 rounded-2xl border border-slate-800">
                 <input
@@ -3147,14 +3148,15 @@ export const TraineesView: React.FC = () => {
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* ----------------- MODAL: Edit Trainee ----------------- */}
-      {isEditModalOpen && activeTrainee && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md overflow-y-auto">
-          <div className="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] flex flex-col overflow-hidden text-slate-100">
-            <div className="p-4 border-b border-slate-800 flex items-center justify-between bg-slate-900/90">
+      {isEditModalOpen && activeTrainee && typeof document !== 'undefined' && createPortal(
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center p-2 sm:p-4 bg-slate-950/85 backdrop-blur-md overflow-y-auto">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl max-w-3xl w-full my-auto max-h-[85vh] flex flex-col overflow-hidden text-slate-100">
+            <div className="shrink-0 p-4 border-b border-slate-800 flex items-center justify-between bg-slate-900/90">
               <div className="flex items-center gap-2">
                 <Edit className="w-5 h-5 text-blue-400" />
                 <h3 className="font-bold text-sm text-slate-100">
@@ -3163,13 +3165,13 @@ export const TraineesView: React.FC = () => {
               </div>
               <button
                 onClick={() => setIsEditModalOpen(false)}
-                className="p-1 text-slate-400 hover:text-white"
+                className="p-1 text-slate-400 hover:text-white cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleSaveEditTrainee} className="p-6 overflow-y-auto space-y-4 text-xs">
+            <form onSubmit={handleSaveEditTrainee} className="flex-1 overflow-y-auto custom-scrollbar p-4 sm:p-6 space-y-4 text-xs">
               {/* Edit Photo Section */}
               <div className="flex items-center gap-4 bg-slate-950/40 p-3 rounded-2xl border border-slate-800">
                 <input
@@ -3602,13 +3604,14 @@ export const TraineesView: React.FC = () => {
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* ----------------- MODAL: Payment Voucher ----------------- */}
-      {isPaymentModalOpen && activeTrainee && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
-          <div className="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl max-w-lg w-full p-6 text-slate-100 animate-in fade-in zoom-in-95">
+      {isPaymentModalOpen && activeTrainee && typeof document !== 'undefined' && createPortal(
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md overflow-y-auto">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl max-w-lg w-full my-auto max-h-[85vh] p-6 text-slate-100 animate-in fade-in zoom-in-95 overflow-y-auto">
             <div className="flex items-center justify-between pb-3 border-b border-slate-800 mb-4">
               <div className="flex items-center gap-2">
                 <CreditCard className="w-5 h-5 text-emerald-400" />
@@ -3727,27 +3730,28 @@ export const TraineesView: React.FC = () => {
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* ----------------- MODAL: Trainee Full Profile ----------------- */}
-      {isProfileModalOpen && activeTrainee && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md overflow-y-auto">
-          <div className="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] flex flex-col overflow-hidden text-slate-100">
-            <div className="p-4 border-b border-slate-800 flex items-center justify-between bg-slate-900/90">
+      {isProfileModalOpen && activeTrainee && typeof document !== 'undefined' && createPortal(
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center p-2 sm:p-4 bg-slate-950/85 backdrop-blur-md overflow-y-auto">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl max-w-4xl w-full my-auto max-h-[85vh] flex flex-col overflow-hidden text-slate-100">
+            <div className="shrink-0 p-4 border-b border-slate-800 flex items-center justify-between bg-slate-900/90">
               <div className="flex items-center gap-2">
                 <Eye className="w-5 h-5 text-amber-400" />
                 <h3 className="font-bold text-sm">الملف الشامل وبطاقة المتدرب: {activeTrainee.fullName}</h3>
               </div>
               <button
                 onClick={() => setIsProfileModalOpen(false)}
-                className="p-1 text-slate-400 hover:text-white"
+                className="p-1 text-slate-400 hover:text-white cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="p-6 overflow-y-auto space-y-5 text-xs">
+            <div className="flex-1 overflow-y-auto custom-scrollbar p-4 sm:p-6 space-y-5 text-xs">
               {/* Profile Card Header */}
               <div className="p-4 rounded-2xl bg-gradient-to-r from-slate-800 via-slate-850 to-slate-900 border border-slate-700 flex flex-col md:flex-row items-center justify-between gap-4">
                 <div className="flex items-center gap-4 text-right">
@@ -4145,14 +4149,15 @@ export const TraineesView: React.FC = () => {
               </div>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* ----------------- MODAL: Star & Reward Award Dialog ----------------- */}
-      {isStarModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md overflow-y-auto">
-          <div className="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl max-w-lg w-full p-6 text-slate-100 animate-in fade-in zoom-in-95">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-800 mb-4">
+      {isStarModalOpen && typeof document !== 'undefined' && createPortal(
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center p-2 sm:p-4 bg-slate-950/85 backdrop-blur-md overflow-y-auto">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl max-w-lg w-full my-auto max-h-[85vh] flex flex-col overflow-hidden text-slate-100 animate-in fade-in zoom-in-95">
+            <div className="shrink-0 p-4 flex items-center justify-between border-b border-slate-800 bg-slate-900/90">
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400">
                   <Star className="w-4 h-4 fill-amber-400" />
@@ -4168,13 +4173,13 @@ export const TraineesView: React.FC = () => {
               </div>
               <button
                 onClick={() => setIsStarModalOpen(false)}
-                className="p-1 text-slate-400 hover:text-white"
+                className="p-1 text-slate-400 hover:text-white cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleSaveStarModal} className="space-y-4 text-xs">
+            <form onSubmit={handleSaveStarModal} className="flex-1 overflow-y-auto custom-scrollbar p-4 sm:p-6 space-y-4 text-xs">
               {/* Quick Preset Star Packages */}
               <div>
                 <label className="block text-slate-300 font-bold mb-2">باقات التكريم السريعة:</label>
@@ -4386,7 +4391,8 @@ export const TraineesView: React.FC = () => {
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* ----------------- MODAL: Excel Import Details ----------------- */}
@@ -4921,10 +4927,10 @@ export const TraineesView: React.FC = () => {
 
       {/* Student Code Audit & Bulk Grade Alignment Modal */}
       {isCodeAuditModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md overflow-y-auto">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/80 backdrop-blur-md overflow-hidden">
           <div className="bg-slate-900 border border-slate-700 rounded-3xl shadow-2xl max-w-3xl w-full max-h-[90vh] flex flex-col overflow-hidden text-slate-100">
             {/* Header */}
-            <div className="p-4 border-b border-slate-800 flex items-center justify-between bg-slate-900/90">
+            <div className="shrink-0 p-4 border-b border-slate-800 flex items-center justify-between bg-slate-900/90">
               <div className="flex items-center gap-2">
                 <div className="w-9 h-9 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 font-bold">
                   🏷️

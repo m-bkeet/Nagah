@@ -1,20 +1,17 @@
 {
-  "name": "nagah-windows-lab-agent",
+  "name": "nagah-training-center",
   "version": "1.0.0",
-  "description": "Nagah Training Center - Real Windows Lab Agent Service for Laboratory PC Management",
+  "description": "Nagah Training Center Management Platform",
   "main": "dist/server.cjs",
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",
-    "build": "vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs && esbuild server/api-entry.ts --bundle --platform=node --format=esm --packages=external --outfile=api/index.js && node -e \"import('node:fs').then(f => { f.cpSync('dist', 'build', {recursive: true}); })\"",
+    "build": "vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs && esbuild server/api-entry.ts --bundle --platform=node --format=esm --packages=external --outfile=api/index.js",
     "start": "node dist/server.cjs",
-    "build:agent": "tsc index.ts --target es2022 --module commonjs",
-    "start:agent": "node index.js"
+    "lint": "vite build --mode development"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
-    "@neondatabase/serverless": "^1.1.0",
-    "@supabase/supabase-js": "^2.112.4",
     "@tailwindcss/vite": "^4.1.14",
     "@types/adm-zip": "^0.5.8",
     "@types/cors": "^2.8.19",
@@ -34,6 +31,7 @@
     "dotenv": "^17.2.3",
     "esbuild": "^0.25.0",
     "express": "^4.21.2",
+    "firebase": "^12.19.0",
     "html2canvas": "^1.4.1",
     "jszip": "^3.10.1",
     "lucide-react": "^0.546.0",

@@ -734,9 +734,9 @@ export const ProgramsView: React.FC = () => {
 
       {/* CREATE PROGRAM MODAL */}
       {isAddModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md overflow-y-auto">
-          <div className="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl max-w-xl w-full p-6 text-slate-100 my-8">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-800 mb-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/80 backdrop-blur-md overflow-hidden">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl max-w-xl w-full max-h-[90vh] flex flex-col overflow-hidden text-slate-100">
+            <div className="shrink-0 p-4 border-b border-slate-800 flex items-center justify-between bg-slate-900/90">
               <div className="flex items-center gap-2">
                 <div className="p-2 bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-400">
                   <Plus className="w-5 h-5" />
@@ -746,12 +746,12 @@ export const ProgramsView: React.FC = () => {
                   <p className="text-[11px] text-slate-400">إضافة قسم تدريبي رئيسي وتوليد دوراته تلقائياً</p>
                 </div>
               </div>
-              <button onClick={() => setIsAddModalOpen(false)} className="text-slate-400 hover:text-white">
+              <button onClick={() => setIsAddModalOpen(false)} className="text-slate-400 hover:text-white cursor-pointer">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleSaveProgram} className="space-y-4 text-xs">
+            <form onSubmit={handleSaveProgram} className="flex-1 overflow-y-auto custom-scrollbar p-4 sm:p-6 space-y-4 text-xs">
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-slate-300 font-bold mb-1">اسم البرنامج *</label>
@@ -985,9 +985,9 @@ export const ProgramsView: React.FC = () => {
 
       {/* EDIT PROGRAM MODAL */}
       {isEditModalOpen && activeProgram && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md overflow-y-auto">
-          <div className="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl max-w-xl w-full p-6 text-slate-100 my-8">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-800 mb-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/80 backdrop-blur-md overflow-hidden">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl max-w-xl w-full max-h-[90vh] flex flex-col overflow-hidden text-slate-100">
+            <div className="shrink-0 p-4 border-b border-slate-800 flex items-center justify-between bg-slate-900/90">
               <div className="flex items-center gap-2">
                 <div className="p-2 bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-400">
                   <Edit className="w-5 h-5" />
@@ -997,12 +997,12 @@ export const ProgramsView: React.FC = () => {
                   <p className="text-[11px] text-slate-400">تحديث الكود، الاسم، المجال والدورات المدمجة</p>
                 </div>
               </div>
-              <button onClick={() => setIsEditModalOpen(false)} className="text-slate-400 hover:text-white">
+              <button onClick={() => setIsEditModalOpen(false)} className="text-slate-400 hover:text-white cursor-pointer">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleUpdateProgram} className="space-y-4 text-xs">
+            <form onSubmit={handleUpdateProgram} className="flex-1 overflow-y-auto custom-scrollbar p-4 sm:p-6 space-y-4 text-xs">
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-slate-300 font-bold mb-1">اسم البرنامج *</label>
@@ -1144,9 +1144,9 @@ export const ProgramsView: React.FC = () => {
 
       {/* ADD COURSES TO PROGRAM MODAL */}
       {isAddCoursesModalOpen && activeProgram && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md overflow-y-auto">
-          <div className="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl max-w-lg w-full p-6 text-slate-100 my-8">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-800 mb-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/80 backdrop-blur-md overflow-hidden">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl max-w-lg w-full max-h-[90vh] flex flex-col overflow-hidden text-slate-100">
+            <div className="shrink-0 p-4 border-b border-slate-800 flex items-center justify-between bg-slate-900/90">
               <div className="flex items-center gap-2">
                 <div className="p-2 bg-indigo-500/10 border border-indigo-500/20 rounded-xl text-indigo-400">
                   <FolderPlus className="w-5 h-5" />
@@ -1156,12 +1156,12 @@ export const ProgramsView: React.FC = () => {
                   <p className="text-[11px] text-slate-400">توليد مستويات أو صفوف إضافية ودمجها تلقائياً</p>
                 </div>
               </div>
-              <button onClick={() => setIsAddCoursesModalOpen(false)} className="text-slate-400 hover:text-white">
+              <button onClick={() => setIsAddCoursesModalOpen(false)} className="text-slate-400 hover:text-white cursor-pointer">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleAppendCourses} className="space-y-4 text-xs">
+            <form onSubmit={handleAppendCourses} className="flex-1 overflow-y-auto custom-scrollbar p-4 sm:p-6 space-y-4 text-xs">
               <div className="flex items-center justify-between gap-2 bg-slate-800/60 p-2 rounded-xl border border-slate-700/60">
                 <label className="flex items-center gap-1.5 cursor-pointer text-[11px] font-bold">
                   <input
@@ -1262,9 +1262,9 @@ export const ProgramsView: React.FC = () => {
         const stats = getProgramStats(activeProgram);
 
         return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md overflow-y-auto">
-            <div className="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl max-w-2xl w-full p-6 text-slate-100 my-8">
-              <div className="flex items-center justify-between pb-4 border-b border-slate-800 mb-4">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/80 backdrop-blur-md overflow-hidden">
+            <div className="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] flex flex-col overflow-hidden text-slate-100">
+              <div className="shrink-0 p-4 flex items-center justify-between border-b border-slate-800 bg-slate-900/90">
                 <div className="flex items-center gap-3">
                   <div className={`p-3 rounded-xl border ${catMeta.color}`}>
                     <CatIcon className="w-6 h-6" />
