@@ -6242,7 +6242,6 @@ apiRouter.post('/agent/leave', (req: Request, res: Response) => {
       (dev as any).currentTraineeCode = undefined;
       dev.assignedUser = 'جهاز معمل (متاح)';
       dev.lastHeartbeat = new Date(0).toISOString();
-      db.save();
     }
   }
   res.json({ success: true, message: 'Device disconnected successfully' });
@@ -6402,7 +6401,6 @@ apiRouter.post('/agent/broadcast/start', (req: Request, res: Response) => {
       createdAt: new Date().toISOString()
     });
   });
-  db.save();
 
   res.json({ success: true, broadcast: masterBroadcast });
 });
@@ -6461,15 +6459,6 @@ apiRouter.post('/agent/push-file', (req: Request, res: Response) => {
       createdAt: new Date().toISOString()
     });
   });
-  db.save();
-
-  db.logAudit({
-    userId: 'trainer',
-    userName: 'مدرب المعمل',
-    action: 'إرسال ملف لأجهزة الطلاب',
-    entity: 'المعمل',
-    details: `تم إرسال الملف (${fileName}) إلى ${devices.length} جهاز في المعمل`
-  });
 
   res.json({ success: true, deliveredToCount: devices.length });
 });
@@ -6497,7 +6486,6 @@ apiRouter.post('/agent/open-url', (req: Request, res: Response) => {
       createdAt: new Date().toISOString()
     });
   });
-  db.save();
 
   res.json({ success: true, deliveredToCount: devices.length });
 });
@@ -7340,16 +7328,6 @@ apiRouter.post('/agent/reset-device', (req: Request, res: Response) => {
       status: 'pending',
       issuedByUserId: 'admin',
       createdAt: new Date().toISOString()
-    });
-
-    db.save();
-
-    db.logAudit({
-      userId: 'admin',
-      userName: 'مشرف المعمل',
-      action: 'إعادة ضبط وتنظيف جهاز المعمل (Clean Reset)',
-      entity: 'الأجهزة',
-      details: `تم تنظيف وإعادة ضبط الجهاز ${device.name} بعد انتهاء جلسة المتدرب (${prevTrainee || 'عام'})`
     });
 
     return res.json({ success: true, message: `تمت استعادة الحالة الافتراضية للجهاز ${device.name} بنجاح` });

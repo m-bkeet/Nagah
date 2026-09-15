@@ -3565,6 +3565,7 @@ class DatabaseManager {
   private data: DatabaseSchema;
   private saveTimeout: NodeJS.Timeout | null = null;
   private isFirestoreHydrated = false;
+  private lastHydrationTime = 0;
   private hydrationPromise: Promise<void> | null = null;
 
   constructor() {
@@ -3574,12 +3575,15 @@ class DatabaseManager {
     this.hydrationPromise = this.ensureHydrated();
   }
 
-  public async ensureHydrated(): Promise<void> {
-    if (this.isFirestoreHydrated) return;
+  public async ensureHydrated(force = false): Promise<void> {
+    const now = Date.now();
+    // Re-check Firestore every 60s in serverless environments, or when forced
+    if (!force && this.isFirestoreHydrated && (now - this.lastHydrationTime < 60 * 1000)) return;
+    this.lastHydrationTime = now;
     try {
       const remoteData = await loadFullDbFromFirestore();
-      if (remoteData && Array.isArray(remoteData.trainees) && remoteData.trainees.length > 0) {
-        console.log('[DB] Hydrated from Firestore! Trainees count:', remoteData.trainees.length);
+      if (remoteData && Object.keys(remoteData).length > 0) {
+        console.log('[DB] Hydrated from Firestore! Collections loaded:', Object.keys(remoteData));
         this.data = {
           ...this.data,
           ...remoteData,

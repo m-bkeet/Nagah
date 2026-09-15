@@ -14,6 +14,19 @@ try {
   console.warn('[FirestoreStorage] Config load error:', e);
 }
 
+// Built-in fallback config for Vercel Serverless / external environments where local JSON is unbundled
+if (!firebaseConfig) {
+  firebaseConfig = {
+    projectId: "booming-list-379600",
+    appId: "1:303545128372:web:78e42daefeec4d43df0ee1",
+    apiKey: "AIzaSyBHYfOMGYzfI0YVOgjWc9O-qdgxENy0oD4",
+    authDomain: "booming-list-379600.firebaseapp.com",
+    firestoreDatabaseId: "ai-studio-nagahms-44b6deb5-5b09-4e62-a58f-790b1ca94573",
+    storageBucket: "booming-list-379600.firebasestorage.app",
+    messagingSenderId: "303545128372"
+  };
+}
+
 const dbId = firebaseConfig?.firestoreDatabaseId || 'ai-studio-nagahms-44b6deb5-5b09-4e62-a58f-790b1ca94573';
 
 let firestoreInstance: Firestore | null = null;

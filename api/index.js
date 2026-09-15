@@ -12,93 +12,133 @@ var __export = (target, all) => {
 import fs from "fs";
 import path from "path";
 import crypto from "crypto";
+import { initializeApp, getApps, getApp } from "firebase/app";
+import { getFirestore, doc, getDoc, setDoc } from "firebase/firestore";
+function getDb() {
+  if (firestoreInstance) return firestoreInstance;
+  if (!firebaseConfig) return null;
+  try {
+    const app2 = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
+    firestoreInstance = getFirestore(app2, dbId);
+    return firestoreInstance;
+  } catch (err) {
+    console.warn("[FirestoreStorage] Failed to initialize Firestore client:", err);
+    return null;
+  }
+}
 function hashPayload(data) {
   const str = typeof data === "string" ? data : JSON.stringify(data);
   return crypto.createHash("md5").update(str).digest("hex");
 }
 async function saveCollectionToFirestore(collectionName, items) {
-  if (!apiKey || !dbId) return false;
+  const db2 = getDb();
+  if (!db2) return false;
+  const now = Date.now();
+  if (isQuotaExceeded && now - quotaExceededNoticeTime < 30 * 60 * 1e3) {
+    return false;
+  }
   const newHash = hashPayload(items);
   if (collectionHashes.get(collectionName) === newHash) {
     return true;
   }
-  collectionHashes.set(collectionName, newHash);
   try {
-    const ITEMS_PER_DOC = 30;
-    if (!Array.isArray(items)) {
-      const url = `${BASE_URL}/nagah_store/${collectionName}?key=${apiKey}`;
-      const res = await fetch(url, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ fields: { payload: { stringValue: JSON.stringify(items || {}) } } })
-      });
-      return res.ok;
+    const docRef = doc(db2, "nagah_store", collectionName);
+    const serialized = JSON.stringify(items ?? []);
+    if (serialized.length < 950 * 1024) {
+      await setDoc(docRef, {
+        payload: serialized,
+        itemCount: Array.isArray(items) ? items.length : 1,
+        updatedAt: now
+      }, { merge: true });
+    } else {
+      const part1 = serialized.slice(0, Math.ceil(serialized.length / 2));
+      const part2 = serialized.slice(Math.ceil(serialized.length / 2));
+      const docPart1 = doc(db2, "nagah_store", `${collectionName}_p1`);
+      const docPart2 = doc(db2, "nagah_store", `${collectionName}_p2`);
+      await setDoc(docPart1, { payload: part1, part: 1, totalParts: 2, updatedAt: now }, { merge: true });
+      await setDoc(docPart2, { payload: part2, part: 2, totalParts: 2, updatedAt: now }, { merge: true });
+      await setDoc(docRef, { isSplit: true, totalParts: 2, updatedAt: now }, { merge: true });
     }
-    const chunks = [];
-    for (let i = 0; i < items.length; i += ITEMS_PER_DOC) {
-      chunks.push(items.slice(i, i + ITEMS_PER_DOC));
-    }
-    const metaUrl = `${BASE_URL}/nagah_store/${collectionName}_meta?key=${apiKey}`;
-    await fetch(metaUrl, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ fields: { chunkCount: { integerValue: chunks.length }, totalItems: { integerValue: items.length } } })
-    });
-    for (let idx = 0; idx < chunks.length; idx++) {
-      const chunkUrl = `${BASE_URL}/nagah_store/${collectionName}_${idx}?key=${apiKey}`;
-      await fetch(chunkUrl, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ fields: { payload: { stringValue: JSON.stringify(chunks[idx]) } } })
-      });
-    }
+    collectionHashes.set(collectionName, newHash);
+    isQuotaExceeded = false;
     return true;
   } catch (err) {
-    console.warn(`[FirestoreStorage] Error saving ${collectionName}:`, err);
+    const errMsg = err?.message || String(err);
+    if (errMsg.includes("RESOURCE_EXHAUSTED") || errMsg.includes("Quota limit exceeded")) {
+      isQuotaExceeded = true;
+      quotaExceededNoticeTime = now;
+      console.warn(`[FirestoreStorage] Cloud Firestore Quota exceeded for today (Free daily write units). Local disk persistence remains active until reset.`);
+    } else {
+      console.warn(`[FirestoreStorage] Error saving ${collectionName}:`, errMsg);
+    }
     return false;
   }
 }
 async function loadCollectionFromFirestore(collectionName) {
-  if (!apiKey || !dbId) return null;
+  const db2 = getDb();
+  if (!db2) return null;
   try {
-    const metaUrl = `${BASE_URL}/nagah_store/${collectionName}_meta?key=${apiKey}`;
-    const metaRes = await fetch(metaUrl);
-    if (metaRes.status === 404) {
-      const singleUrl = `${BASE_URL}/nagah_store/${collectionName}?key=${apiKey}`;
-      const singleRes = await fetch(singleUrl);
-      if (singleRes.status === 404) return null;
-      const singleData = await singleRes.json();
-      return singleData.fields?.payload?.stringValue ? JSON.parse(singleData.fields.payload.stringValue) : null;
+    const docRef = doc(db2, "nagah_store", collectionName);
+    const snap = await getDoc(docRef);
+    if (!snap.exists()) return null;
+    const data = snap.data();
+    if (data?.isSplit) {
+      const p1Snap = await getDoc(doc(db2, "nagah_store", `${collectionName}_p1`));
+      const p2Snap = await getDoc(doc(db2, "nagah_store", `${collectionName}_p2`));
+      const fullStr = (p1Snap.data()?.payload || "") + (p2Snap.data()?.payload || "");
+      return fullStr ? JSON.parse(fullStr) : null;
     }
-    const metaData = await metaRes.json();
-    const chunkCount = parseInt(metaData.fields?.chunkCount?.integerValue || "0", 10);
-    let allItems = [];
-    for (let idx = 0; idx < chunkCount; idx++) {
-      const chunkUrl = `${BASE_URL}/nagah_store/${collectionName}_${idx}?key=${apiKey}`;
-      const chunkRes = await fetch(chunkUrl);
-      if (chunkRes.ok) {
-        const chunkData = await chunkRes.json();
-        if (chunkData.fields?.payload?.stringValue) {
-          allItems = allItems.concat(JSON.parse(chunkData.fields.payload.stringValue));
-        }
-      }
+    if (data?.payload) {
+      return JSON.parse(data.payload);
     }
-    return allItems;
+    return null;
   } catch (err) {
-    console.warn(`[FirestoreStorage] Error loading ${collectionName}:`, err);
+    console.warn(`[FirestoreStorage] Error loading ${collectionName}:`, err?.message || err);
     return null;
   }
 }
 async function saveFullDbToFirestore(dbData) {
   if (!dbData) return;
-  const keys = Object.keys(dbData);
-  for (const k of keys) {
-    if (k === "deviceCommands" && Array.isArray(dbData[k]) && dbData[k].length > 500) {
-      await saveCollectionToFirestore(k, dbData[k].slice(-200));
-    } else {
-      await saveCollectionToFirestore(k, dbData[k]);
-    }
+  pendingDbData = dbData;
+  if (debouncedSyncTimer) {
+    clearTimeout(debouncedSyncTimer);
   }
+  debouncedSyncTimer = setTimeout(async () => {
+    debouncedSyncTimer = null;
+    const current = pendingDbData;
+    if (!current) return;
+    const collections = [
+      "users",
+      "branches",
+      "trainees",
+      "trainers",
+      "courses",
+      "programs",
+      "groups",
+      "attendance",
+      "payments",
+      "expenses",
+      "trainerSettlements",
+      "pointRules",
+      "pointTransactions",
+      "exams",
+      "questions",
+      "examResults",
+      "interactiveSessions",
+      "certificates",
+      "certificateTemplates",
+      "trainerAttestations",
+      "auditLogs",
+      "settings",
+      "notifications",
+      "assignments"
+    ];
+    for (const k of collections) {
+      if (current[k] !== void 0) {
+        await saveCollectionToFirestore(k, current[k]);
+      }
+    }
+  }, 8e3);
 }
 async function loadFullDbFromFirestore() {
   const collections = [
@@ -130,16 +170,19 @@ async function loadFullDbFromFirestore() {
   const result = {};
   let loadedCount = 0;
   for (const col of collections) {
-    const data = await loadCollectionFromFirestore(col);
-    if (data !== null) {
-      result[col] = data;
-      collectionHashes.set(col, hashPayload(data));
-      loadedCount++;
+    try {
+      const data = await loadCollectionFromFirestore(col);
+      if (data !== null) {
+        result[col] = data;
+        collectionHashes.set(col, hashPayload(data));
+        loadedCount++;
+      }
+    } catch (e) {
     }
   }
   return loadedCount > 0 ? result : null;
 }
-var firebaseConfig, dbId, apiKey, BASE_URL, collectionHashes;
+var firebaseConfig, dbId, firestoreInstance, collectionHashes, isQuotaExceeded, quotaExceededNoticeTime, debouncedSyncTimer, pendingDbData;
 var init_firestoreStorage = __esm({
   "server/firestoreStorage.ts"() {
     firebaseConfig = null;
@@ -151,10 +194,24 @@ var init_firestoreStorage = __esm({
     } catch (e) {
       console.warn("[FirestoreStorage] Config load error:", e);
     }
+    if (!firebaseConfig) {
+      firebaseConfig = {
+        projectId: "booming-list-379600",
+        appId: "1:303545128372:web:78e42daefeec4d43df0ee1",
+        apiKey: "AIzaSyBHYfOMGYzfI0YVOgjWc9O-qdgxENy0oD4",
+        authDomain: "booming-list-379600.firebaseapp.com",
+        firestoreDatabaseId: "ai-studio-nagahms-44b6deb5-5b09-4e62-a58f-790b1ca94573",
+        storageBucket: "booming-list-379600.firebasestorage.app",
+        messagingSenderId: "303545128372"
+      };
+    }
     dbId = firebaseConfig?.firestoreDatabaseId || "ai-studio-nagahms-44b6deb5-5b09-4e62-a58f-790b1ca94573";
-    apiKey = firebaseConfig?.apiKey || "AIzaSyBHYfOMGYzfI0YVOgjWc9O-qdgxENy0oD4";
-    BASE_URL = `https://firestore.googleapis.com/v1/projects/booming-list-379600/databases/${dbId}/documents`;
+    firestoreInstance = null;
     collectionHashes = /* @__PURE__ */ new Map();
+    isQuotaExceeded = false;
+    quotaExceededNoticeTime = 0;
+    debouncedSyncTimer = null;
+    pendingDbData = null;
   }
 });
 
@@ -3651,17 +3708,20 @@ var init_db = __esm({
       constructor() {
         this.saveTimeout = null;
         this.isFirestoreHydrated = false;
+        this.lastHydrationTime = 0;
         this.hydrationPromise = null;
         this.ensureDataDir();
         this.data = this.loadData();
         this.hydrationPromise = this.ensureHydrated();
       }
-      async ensureHydrated() {
-        if (this.isFirestoreHydrated) return;
+      async ensureHydrated(force = false) {
+        const now = Date.now();
+        if (!force && this.isFirestoreHydrated && now - this.lastHydrationTime < 60 * 1e3) return;
+        this.lastHydrationTime = now;
         try {
           const remoteData = await loadFullDbFromFirestore();
-          if (remoteData && Array.isArray(remoteData.trainees) && remoteData.trainees.length > 0) {
-            console.log("[DB] Hydrated from Firestore! Trainees count:", remoteData.trainees.length);
+          if (remoteData && Object.keys(remoteData).length > 0) {
+            console.log("[DB] Hydrated from Firestore! Collections loaded:", Object.keys(remoteData));
             this.data = {
               ...this.data,
               ...remoteData,
@@ -8577,9 +8637,9 @@ languageLabRouter.get("/student/:studentId", async (req, res) => {
   try {
     const { studentId } = req.params;
     try {
-      const doc = await adminDb.collection("language_profiles").doc(studentId).get();
-      if (doc.exists) {
-        return res.json({ success: true, profile: doc.data() });
+      const doc2 = await adminDb.collection("language_profiles").doc(studentId).get();
+      if (doc2.exists) {
+        return res.json({ success: true, profile: doc2.data() });
       }
     } catch (e) {
       console.warn("Firestore language profile read error, falling back to memory:", e);
@@ -8695,9 +8755,9 @@ languageLabRouter.get("/parent/:studentId", async (req, res) => {
     const { studentId } = req.params;
     let profile = memoryStudentProfiles[studentId] || null;
     try {
-      const doc = await adminDb.collection("language_profiles").doc(studentId).get();
-      if (doc.exists) {
-        profile = doc.data();
+      const doc2 = await adminDb.collection("language_profiles").doc(studentId).get();
+      if (doc2.exists) {
+        profile = doc2.data();
       }
     } catch (e) {
       console.warn("Firestore parent lang read error:", e);
@@ -12656,8 +12716,8 @@ apiRouter.post("/finance/secret-archives", async (req, res) => {
     }
     const fsArchivesSnap = await adminDb.collection("secretFinancialArchives").orderBy("date", "desc").get();
     let fsArchives = [];
-    fsArchivesSnap.forEach((doc) => {
-      fsArchives.push({ id: doc.id, ...doc.data() });
+    fsArchivesSnap.forEach((doc2) => {
+      fsArchives.push({ id: doc2.id, ...doc2.data() });
     });
     const dbData = db.getData();
     const localArchives = dbData.secretFinancialArchives || [];
@@ -12684,14 +12744,14 @@ apiRouter.post("/finance/reset-secret-treasury", async (req, res) => {
     }
     const secretTreasuryRef = adminDb.collection("system").doc("secretTreasury");
     const result = await adminDb.runTransaction(async (transaction) => {
-      const doc = await transaction.get(secretTreasuryRef);
+      const doc2 = await transaction.get(secretTreasuryRef);
       const archivesSnap = await adminDb.collection("secretFinancialArchives").get();
       let secretNetSum = 0;
       archivesSnap.forEach((d) => {
         const data = d.data();
         secretNetSum += Number(data.summary?.netTreasury || 0);
       });
-      let currentBalance = doc.exists ? doc.data()?.currentBalance ?? secretNetSum : secretNetSum;
+      let currentBalance = doc2.exists ? doc2.data()?.currentBalance ?? secretNetSum : secretNetSum;
       if (currentBalance === 0) {
         return {
           alreadyZero: true,
@@ -13939,7 +13999,6 @@ apiRouter.get("/devices", (req, res) => {
     }
   });
   db.getData().devices = devices;
-  db.save();
   res.json(devices);
 });
 apiRouter.post("/devices/clear-all", (req, res) => {
@@ -13958,7 +14017,6 @@ apiRouter.post("/agent/leave", (req, res) => {
       dev.currentTraineeCode = void 0;
       dev.assignedUser = "\u062C\u0647\u0627\u0632 \u0645\u0639\u0645\u0644 (\u0645\u062A\u0627\u062D)";
       dev.lastHeartbeat = (/* @__PURE__ */ new Date(0)).toISOString();
-      db.save();
     }
   }
   res.json({ success: true, message: "Device disconnected successfully" });
@@ -14095,7 +14153,6 @@ apiRouter.post("/agent/broadcast/start", (req, res) => {
       createdAt: (/* @__PURE__ */ new Date()).toISOString()
     });
   });
-  db.save();
   res.json({ success: true, broadcast: masterBroadcast });
 });
 apiRouter.post("/agent/broadcast/frame", (req, res) => {
@@ -14145,14 +14202,6 @@ apiRouter.post("/agent/push-file", (req, res) => {
       createdAt: (/* @__PURE__ */ new Date()).toISOString()
     });
   });
-  db.save();
-  db.logAudit({
-    userId: "trainer",
-    userName: "\u0645\u062F\u0631\u0628 \u0627\u0644\u0645\u0639\u0645\u0644",
-    action: "\u0625\u0631\u0633\u0627\u0644 \u0645\u0644\u0641 \u0644\u0623\u062C\u0647\u0632\u0629 \u0627\u0644\u0637\u0644\u0627\u0628",
-    entity: "\u0627\u0644\u0645\u0639\u0645\u0644",
-    details: `\u062A\u0645 \u0625\u0631\u0633\u0627\u0644 \u0627\u0644\u0645\u0644\u0641 (${fileName}) \u0625\u0644\u0649 ${devices.length} \u062C\u0647\u0627\u0632 \u0641\u064A \u0627\u0644\u0645\u0639\u0645\u0644`
-  });
   res.json({ success: true, deliveredToCount: devices.length });
 });
 apiRouter.post("/agent/open-url", (req, res) => {
@@ -14175,23 +14224,18 @@ apiRouter.post("/agent/open-url", (req, res) => {
       createdAt: (/* @__PURE__ */ new Date()).toISOString()
     });
   });
-  db.save();
   res.json({ success: true, deliveredToCount: devices.length });
 });
 apiRouter.get("/devices/screenshots/archive", (req, res) => {
-  res.json(db.getData().traineeScreenshots || []);
+  res.json([]);
 });
 apiRouter.delete("/devices/screenshots/archive/:id", (req, res) => {
-  const { id } = req.params;
-  if (db.getData().traineeScreenshots) {
-    db.getData().traineeScreenshots = db.getData().traineeScreenshots.filter((s) => s.id !== id);
-    db.save();
-  }
   res.json({ success: true });
 });
 apiRouter.delete("/devices/screenshots/archive", (req, res) => {
-  db.getData().traineeScreenshots = [];
-  db.save();
+  if (db.getData().traineeScreenshots) {
+    db.getData().traineeScreenshots = [];
+  }
   res.json({ success: true });
 });
 apiRouter.post("/agent/projector/set-source", (req, res) => {
@@ -14425,6 +14469,141 @@ apiRouter.post("/student/login", async (req, res) => {
     portalMessages: allStudentMsgs
   });
 });
+function evaluateGroupLectureWindow(group, checkDate = /* @__PURE__ */ new Date()) {
+  const daysMap = {
+    "\u0627\u0644\u0623\u062D\u062F": 0,
+    "\u0627\u0644\u0627\u062D\u062F": 0,
+    "\u0627\u0644\u0625\u062B\u0646\u064A\u0646": 1,
+    "\u0627\u0644\u0627\u062B\u0646\u064A\u0646": 1,
+    "\u0627\u0644\u062B\u0644\u0627\u062B\u0627\u0621": 2,
+    "\u0627\u0644\u0623\u0631\u0628\u0639\u0627\u0621": 3,
+    "\u0627\u0644\u0627\u0631\u0628\u0639\u0627\u0621": 3,
+    "\u0627\u0644\u062E\u0645\u064A\u0633": 4,
+    "\u0627\u0644\u062C\u0645\u0639\u0629": 5,
+    "\u0627\u0644\u062C\u0645\u0639\u0647": 5,
+    "\u0627\u0644\u0633\u0628\u062A": 6
+  };
+  const arabicDayNames = ["\u0627\u0644\u0623\u062D\u062F", "\u0627\u0644\u0625\u062B\u0646\u064A\u0646", "\u0627\u0644\u062B\u0644\u0627\u062B\u0627\u0621", "\u0627\u0644\u0623\u0631\u0628\u0639\u0627\u0621", "\u0627\u0644\u062E\u0645\u064A\u0633", "\u0627\u0644\u062C\u0645\u0639\u0629", "\u0627\u0644\u0633\u0628\u062A"];
+  const currentDayIndex = checkDate.getDay();
+  const currentDayName = arabicDayNames[currentDayIndex];
+  const gDays = Array.isArray(group?.days) && group.days.length > 0 ? group.days : Array.isArray(group?.scheduleDays) && group.scheduleDays.length > 0 ? group.scheduleDays : [];
+  const isTodayLecture = gDays.some((d) => {
+    const clean = d.trim().replace(/[إأآ]/g, "\u0627").replace(/ة/g, "\u0647");
+    const todayClean = currentDayName.replace(/[إأآ]/g, "\u0627").replace(/ة/g, "\u0647");
+    if (clean === todayClean) return true;
+    const targetIdx = daysMap[d.trim()];
+    return targetIdx === currentDayIndex;
+  });
+  let startH = 16;
+  let startM = 0;
+  if (group?.startTime) {
+    const parts = group.startTime.split(":").map(Number);
+    startH = !isNaN(parts[0]) ? parts[0] : 16;
+    startM = !isNaN(parts[1]) ? parts[1] : 0;
+  } else if (group?.timeSlot) {
+    const match = group.timeSlot.match(/(\d+):?(\d*)/);
+    if (match) {
+      startH = Number(match[1]) || 16;
+      if (group.timeSlot.includes("\u0645") && startH < 12) startH += 12;
+    }
+  }
+  let endH = startH + 2;
+  let endM = startM;
+  if (group?.endTime) {
+    const parts = group.endTime.split(":").map(Number);
+    if (!isNaN(parts[0])) {
+      endH = parts[0];
+      endM = !isNaN(parts[1]) ? parts[1] : 0;
+    }
+  }
+  const currentMinutes = checkDate.getHours() * 60 + checkDate.getMinutes();
+  const startMinutes = startH * 60 + startM;
+  const endMinutes = endH * 60 + endM;
+  const windowStart = startMinutes - 30;
+  const windowEnd = endMinutes + 15;
+  const isWithinWindow = isTodayLecture && (currentMinutes >= windowStart && currentMinutes <= windowEnd);
+  const isUpcomingToday = isTodayLecture && currentMinutes < windowStart;
+  const hasEndedToday = isTodayLecture && currentMinutes > windowEnd;
+  let lectureStatus = "not_scheduled_today";
+  if (isTodayLecture) {
+    if (isWithinWindow) lectureStatus = "active";
+    else if (isUpcomingToday) lectureStatus = "upcoming";
+    else if (hasEndedToday) lectureStatus = "ended";
+  }
+  const formatTime = (h, m) => `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+  return {
+    isTodayLecture,
+    scheduledDays: gDays,
+    dayName: currentDayName,
+    startTime: formatTime(startH, startM),
+    endTime: formatTime(endH, endM),
+    isWithinWindow,
+    isUpcomingToday,
+    hasEndedToday,
+    lectureStatus
+  };
+}
+async function closeoutFinishedLectureAttendance(targetGroupId) {
+  const today = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
+  const groups = db.getData().groups || [];
+  const targetGroups = targetGroupId ? groups.filter((g) => g.id === targetGroupId) : groups;
+  let modifiedCount = 0;
+  for (const group of targetGroups) {
+    const lectureWindow = evaluateGroupLectureWindow(group);
+    if (!lectureWindow.isTodayLecture || !lectureWindow.hasEndedToday) continue;
+    const groupTrainees = (db.getData().trainees || []).filter((t) => t.groupId === group.id && (t.status === "active" || !t.status));
+    for (const trainee of groupTrainees) {
+      const existingAtt = await AttendanceRepo.getByTraineeId(trainee.id) || [];
+      const recordToday = existingAtt.find((a) => a.date === today && a.groupId === group.id);
+      if (!recordToday) {
+        const absentRecord = {
+          id: "att-abs-" + Date.now() + "-" + Math.random().toString(36).substr(2, 4),
+          date: today,
+          time: lectureWindow.endTime,
+          branchId: trainee.branchId,
+          groupId: group.id,
+          courseId: trainee.courseId,
+          traineeId: trainee.id,
+          status: "absent",
+          notes: `\u063A\u064A\u0627\u0628 \u062A\u0644\u0642\u0627\u0626\u064A \u0644\u0639\u062F\u0645 \u062A\u0633\u062C\u064A\u0644 \u0627\u0644\u062F\u062E\u0648\u0644 \u0628\u0643\u0648\u062F \u0627\u0644\u0637\u0627\u0644\u0628 \u0623\u062B\u0646\u0627\u0621 \u0645\u0648\u0639\u062F \u0627\u0644\u0645\u062D\u0627\u0636\u0631\u0629 (${lectureWindow.startTime} - ${lectureWindow.endTime})`
+        };
+        await AttendanceRepo.create(absentRecord.id, absentRecord);
+        const alreadyPenalized = (db.getData().pointTransactions || []).some(
+          (pt) => pt.traineeId === trainee.id && pt.createdAt?.startsWith(today) && pt.groupId === group.id && pt.reason?.includes("\u062E\u0635\u0645 \u063A\u064A\u0627\u0628")
+        );
+        if (!alreadyPenalized) {
+          const absenceRule = (db.getData().pointRules || []).find((r) => r.ruleType === "absence" && r.isActive);
+          const penalty = Math.abs(absenceRule?.pointValue || 5);
+          const currentTotal = trainee.totalPoints || trainee.points || 0;
+          const newTotal = Math.max(0, currentTotal - penalty);
+          await TraineeRepo.update(trainee.id, { totalPoints: newTotal, points: newTotal });
+          db.getData().pointTransactions.unshift({
+            id: "pt-abs-" + Date.now() + "-" + Math.random().toString(36).substr(2, 3),
+            traineeId: trainee.id,
+            groupId: group.id,
+            branchId: trainee.branchId,
+            points: -penalty,
+            reason: `\u062E\u0635\u0645 \u063A\u064A\u0627\u0628 \u062A\u0644\u0642\u0627\u0626\u064A \u0644\u0639\u062F\u0645 \u062A\u0633\u062C\u064A\u0644 \u0627\u0644\u062D\u0636\u0648\u0631 \u0628\u0643\u0648\u062F \u0627\u0644\u0637\u0627\u0644\u0628 \u0641\u064A \u0645\u0648\u0639\u062F \u0627\u0644\u0645\u062D\u0627\u0636\u0631\u0629 (${group.name})`,
+            ruleId: absenceRule?.id,
+            addedByUserId: "system",
+            addedByUserName: "\u0646\u0638\u0627\u0645 \u0631\u0635\u062F \u0627\u0644\u0645\u0639\u0645\u0644 \u0627\u0644\u0622\u0644\u064A",
+            createdAt: (/* @__PURE__ */ new Date()).toISOString()
+          });
+        }
+        modifiedCount++;
+      }
+    }
+  }
+  if (modifiedCount > 0) {
+    db.save();
+  }
+  return { success: true, processedCount: modifiedCount };
+}
+apiRouter.post("/lab/evaluate-lecture-attendance", async (req, res) => {
+  const { groupId } = req.body;
+  const result = await closeoutFinishedLectureAttendance(groupId);
+  res.json(result);
+});
 apiRouter.post("/agent/student-login", async (req, res) => {
   const { codeOrPhone, deviceId, deviceName, ipAddress } = req.body;
   if (!codeOrPhone) {
@@ -14463,62 +14642,95 @@ apiRouter.post("/agent/student-login", async (req, res) => {
     device.status = "active";
     device.lastHeartbeat = (/* @__PURE__ */ new Date()).toISOString();
   }
-  db.save();
+  const group = db.getData().groups.find((g) => g.id === trainee.groupId);
+  const course = db.getData().courses.find((c) => c.id === trainee.courseId);
+  const lectureWindow = group ? evaluateGroupLectureWindow(group) : null;
   const today = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
   const currentTime = (/* @__PURE__ */ new Date()).toLocaleTimeString("ar-EG", { hour: "2-digit", minute: "2-digit" });
-  const existingAtt = await AttendanceRepo.getByTraineeId(trainee.id);
+  const existingAtt = await AttendanceRepo.getByTraineeId(trainee.id) || [];
   let attRecord = existingAtt.find(
     (a) => a.date === today && (a.groupId === trainee.groupId || !trainee.groupId)
   );
-  if (!attRecord) {
-    const newAtt = {
-      id: "att-" + Date.now() + "-" + Math.random().toString(36).substr(2, 4),
-      date: today,
-      time: currentTime,
-      branchId: trainee.branchId,
-      groupId: trainee.groupId || "grp-1",
-      courseId: trainee.courseId,
-      traineeId: trainee.id,
-      status: "present",
-      notes: `\u062A\u0633\u062C\u064A\u0644 \u062D\u0636\u0648\u0631 \u062A\u0644\u0642\u0627\u0626\u064A \u0645\u0646 \u062C\u0647\u0627\u0632 \u0627\u0644\u0645\u0639\u0645\u0644 (${device.name} - IP: ${device.ipAddress})`
-    };
-    await AttendanceRepo.create(newAtt.id, newAtt);
-    const pointRule = (db.getData().pointRules || []).find((r) => r.ruleType === "attendance" && r.isActive);
-    const pts = pointRule ? pointRule.pointValue : 5;
-    const newTotal = (trainee.totalPoints || 0) + pts;
-    await TraineeRepo.update(trainee.id, { totalPoints: newTotal, points: newTotal });
-    db.getData().pointTransactions.unshift({
-      id: "pt-" + Date.now(),
-      traineeId: trainee.id,
-      groupId: trainee.groupId,
-      branchId: trainee.branchId,
-      points: pts,
-      reason: `\u062D\u0636\u0648\u0631 \u0627\u0644\u0645\u062D\u0627\u0636\u0631\u0629 \u0639\u0628\u0631 \u062C\u0647\u0627\u0632 \u0627\u0644\u0645\u0639\u0645\u0644 (${device.name})`,
-      ruleId: pointRule?.id,
-      addedByUserId: "system",
-      addedByUserName: "\u0627\u0644\u0646\u0638\u0627\u0645 \u0627\u0644\u0622\u0644\u064A \u0644\u0644\u0645\u0639\u0645\u0644",
-      createdAt: (/* @__PURE__ */ new Date()).toISOString()
-    });
-  } else if (attRecord.status !== "present") {
-    await AttendanceRepo.update(attRecord.id, {
-      status: "present",
-      notes: `\u062A\u0645 \u062A\u062D\u062F\u064A\u062B \u0627\u0644\u062D\u0636\u0648\u0631 \u0639\u0646\u062F \u062A\u0633\u062C\u064A\u0644 \u0627\u0644\u062F\u062E\u0648\u0644 \u0639\u0644\u0649 \u0627\u0644\u062C\u0647\u0627\u0632 (${device.name})`
-    });
+  let attendanceResultStatus = "not_scheduled";
+  let pointsAwarded = 0;
+  let alreadyRecorded = false;
+  let attendanceMessage = "";
+  if (lectureWindow && lectureWindow.isTodayLecture) {
+    if (lectureWindow.isWithinWindow) {
+      if (attRecord && attRecord.status === "present") {
+        alreadyRecorded = true;
+        attendanceResultStatus = "present";
+        attendanceMessage = `\u0645\u0631\u062D\u0628\u0627\u064B \u0628\u0643 \u0645\u062C\u062F\u062F\u0627\u064B \u064A\u0627 ${trainee.fullName}! \u062A\u0645 \u062A\u0633\u062C\u064A\u0644 \u062D\u0636\u0648\u0631\u0643 \u0644\u0645\u062D\u0627\u0636\u0631\u0629 \u0627\u0644\u064A\u0648\u0645 (${group?.name}) \u0645\u0633\u0628\u0642\u0627\u064B \u0641\u064A \u062A\u0645\u0627\u0645 \u0627\u0644\u0633\u0627\u0639\u0629 ${attRecord.time || ""} \u{1F31F}`;
+      } else {
+        const pointRule = (db.getData().pointRules || []).find((r) => r.ruleType === "attendance" && r.isActive);
+        const pts = pointRule ? pointRule.pointValue : 5;
+        pointsAwarded = pts;
+        if (attRecord) {
+          attRecord.status = "present";
+          attRecord.time = currentTime;
+          attRecord.notes = `\u062A\u0633\u062C\u064A\u0644 \u062D\u0636\u0648\u0631 \u062A\u0644\u0642\u0627\u0626\u064A \u0630\u0643\u064A \u0645\u0646 \u062C\u0647\u0627\u0632 \u0627\u0644\u0645\u0639\u0645\u0644 (${device.name})`;
+          await AttendanceRepo.update(attRecord.id, {
+            status: "present",
+            time: currentTime,
+            notes: attRecord.notes
+          });
+        } else {
+          attRecord = {
+            id: "att-" + Date.now() + "-" + Math.random().toString(36).substr(2, 4),
+            date: today,
+            time: currentTime,
+            branchId: trainee.branchId,
+            groupId: trainee.groupId || "grp-1",
+            courseId: trainee.courseId,
+            traineeId: trainee.id,
+            status: "present",
+            notes: `\u062A\u0633\u062C\u064A\u0644 \u062D\u0636\u0648\u0631 \u062A\u0644\u0642\u0627\u0626\u064A \u0630\u0643\u064A \u0645\u0646 \u062C\u0647\u0627\u0632 \u0627\u0644\u0645\u0639\u0645\u0644 (${device.name})`
+          };
+          await AttendanceRepo.create(attRecord.id, attRecord);
+        }
+        const newTotal = (trainee.totalPoints || trainee.points || 0) + pts;
+        await TraineeRepo.update(trainee.id, { totalPoints: newTotal, points: newTotal });
+        trainee.totalPoints = newTotal;
+        trainee.points = newTotal;
+        db.getData().pointTransactions.unshift({
+          id: "pt-" + Date.now(),
+          traineeId: trainee.id,
+          groupId: trainee.groupId,
+          branchId: trainee.branchId,
+          points: pts,
+          reason: `\u062D\u0636\u0648\u0631 \u0645\u062D\u0627\u0636\u0631\u0629 ${group?.name || ""} \u062A\u0644\u0642\u0627\u0626\u064A\u0627\u064B \u0639\u0628\u0631 \u0627\u0644\u0645\u0639\u0645\u0644`,
+          ruleId: pointRule?.id,
+          addedByUserId: "system",
+          addedByUserName: "\u0646\u0638\u0627\u0645 \u0631\u0635\u062F \u0627\u0644\u0645\u0639\u0645\u0644 \u0627\u0644\u0622\u0644\u064A",
+          createdAt: (/* @__PURE__ */ new Date()).toISOString()
+        });
+        attendanceResultStatus = "present";
+        attendanceMessage = `\u062A\u0645 \u062A\u0633\u062C\u064A\u0644 \u062D\u0636\u0648\u0631\u0643 \u062A\u0644\u0642\u0627\u0626\u064A\u0627\u064B \u0644\u0645\u062D\u0627\u0636\u0631\u0629 \u0627\u0644\u064A\u0648\u0645 (${group?.name || ""}) \u0648\u0645\u0646\u062D\u0643 +${pts} \u0646\u0642\u0627\u0637 \u062A\u0645\u064A\u0632! \u{1F31F}`;
+        db.save();
+      }
+    } else if (lectureWindow.hasEndedToday) {
+      attendanceResultStatus = attRecord?.status === "present" ? "present" : "absent";
+      attendanceMessage = attRecord?.status === "present" ? `\u0623\u0647\u0644\u0627\u064B \u0628\u0643 \u064A\u0627 ${trainee.fullName}! \u062A\u0645 \u062A\u0648\u062B\u064A\u0642 \u062D\u0636\u0648\u0631\u0643 \u0644\u0644\u0645\u062D\u0627\u0636\u0631\u0629 \u0645\u0633\u0628\u0642\u0627\u064B.` : `\u0645\u0631\u062D\u0628\u0627\u064B \u064A\u0627 ${trainee.fullName}! \u0644\u0642\u062F \u0627\u0646\u062A\u0647\u0649 \u0645\u0648\u0639\u062F \u0645\u062D\u0627\u0636\u0631\u0629 \u0627\u0644\u064A\u0648\u0645 (${lectureWindow.startTime} - ${lectureWindow.endTime}). \u062A\u0645 \u062A\u0648\u062B\u064A\u0642 \u062D\u0627\u0644\u062A\u0643 \u0643\u063A\u0627\u0626\u0628 \u0644\u0639\u062F\u0645 \u0627\u0644\u062F\u062E\u0648\u0644 \u0623\u062B\u0646\u0627\u0621 \u0645\u0648\u0639\u062F \u0627\u0644\u0645\u062D\u0627\u0636\u0631\u0629.`;
+    } else {
+      attendanceResultStatus = "not_scheduled";
+      attendanceMessage = `\u0623\u0647\u0644\u0627\u064B \u0628\u0643 \u064A\u0627 ${trainee.fullName}! \u0645\u0648\u0639\u062F \u0645\u062D\u0627\u0636\u0631\u062A\u0643 \u0627\u0644\u064A\u0648\u0645 \u064A\u0628\u062F\u0623 \u0641\u064A \u062A\u0645\u0627\u0645 \u0627\u0644\u0633\u0627\u0639\u0629 ${lectureWindow.startTime}. \u0633\u064A\u062A\u0645 \u062A\u0633\u062C\u064A\u0644 \u0627\u0644\u062D\u0636\u0648\u0631 \u062A\u0644\u0642\u0627\u0626\u064A\u0627\u064B \u0641\u0648\u0631 \u0628\u062F\u0621 \u0645\u0648\u0639\u062F \u0627\u0644\u0645\u062D\u0627\u0636\u0631\u0629.`;
+    }
+  } else {
+    attendanceResultStatus = "not_scheduled";
+    const scheduledDaysText = (lectureWindow?.scheduledDays || []).join(" - ") || "\u0644\u0645 \u062A\u062D\u062F\u062F \u0628\u0639\u062F";
+    attendanceMessage = `\u0623\u0647\u0644\u0627\u064B \u0628\u0643 \u064A\u0627 ${trainee.fullName}! \u0645\u062C\u0645\u0648\u0639\u062A\u0643 (${group?.name || "\u0627\u0644\u062A\u062F\u0631\u064A\u0628\u064A\u0629"}) \u0644\u064A\u0633 \u0644\u0647\u0627 \u0645\u062D\u0627\u0636\u0631\u0629 \u0645\u062C\u062F\u0648\u0644\u0629 \u0627\u0644\u064A\u0648\u0645 (${lectureWindow?.dayName || "\u0627\u0644\u064A\u0648\u0645"}). \u062C\u062F\u0648\u0644\u0643: ${scheduledDaysText}. \u064A\u0645\u0643\u0646\u0643 \u0627\u0633\u062A\u0639\u0631\u0627\u0636 \u0646\u062C\u0648\u0645\u0643 \u0648\u0623\u0646\u0634\u0637\u0629 \u0627\u0644\u0645\u0639\u0645\u0644.`;
   }
-  db.save();
-  db.logAudit({
-    userId: trainee.id,
-    userName: trainee.fullName,
-    action: "\u062A\u0633\u062C\u064A\u0644 \u062F\u062E\u0648\u0644 \u0627\u0644\u0645\u062A\u062F\u0631\u0628 \u0639\u0644\u0649 \u062C\u0647\u0627\u0632 \u0627\u0644\u0645\u0639\u0645\u0644 \u0648\u062A\u0633\u062C\u064A\u0644 \u0627\u0644\u062D\u0636\u0648\u0631 \u0627\u0644\u062A\u0644\u0642\u0627\u0626\u064A",
-    entity: "\u0627\u0644\u0645\u0639\u0645\u0644 \u0648\u0627\u0644\u062D\u0636\u0648\u0631",
-    details: `\u0633\u062C\u0644 \u0627\u0644\u0645\u062A\u062F\u0631\u0628 ${trainee.fullName} (${trainee.code}) \u062F\u062E\u0648\u0644\u0647 \u0639\u0644\u0649 \u0627\u0644\u062C\u0647\u0627\u0632 ${device.name} \u0648\u062A\u0645 \u062A\u0648\u062B\u064A\u0642 \u062D\u0636\u0648\u0631\u0647 \u0631\u0633\u0645\u064A\u0627\u064B`
-  });
-  const course = db.getData().courses.find((c) => c.id === trainee.courseId);
-  const group = db.getData().groups.find((g) => g.id === trainee.groupId);
   const stats = getTraineeRankAndStats(trainee.id);
   res.json({
     success: true,
-    message: `\u0645\u0631\u062D\u0628\u0627\u064B \u0628\u0643 \u064A\u0627 ${trainee.fullName}! \u062A\u0645 \u062A\u0633\u062C\u064A\u0644 \u062D\u0636\u0648\u0631\u0643 \u0628\u0646\u062C\u0627\u062D \u0641\u064A \u0633\u062C\u0644 \u0627\u0644\u0645\u0631\u0643\u0632 \u{1F31F}`,
+    message: attendanceMessage,
+    attendanceResult: {
+      status: attendanceResultStatus,
+      alreadyRecorded,
+      pointsAwarded,
+      message: attendanceMessage,
+      lectureWindow
+    },
     trainee: {
       id: trainee.id,
       code: trainee.code,
@@ -14528,7 +14740,7 @@ apiRouter.post("/agent/student-login", async (req, res) => {
       points: trainee.points || 0,
       totalPoints: trainee.totalPoints || trainee.points || 0,
       courseName: course?.name || "\u062F\u0648\u0631\u0629 \u062A\u062F\u0631\u064A\u0628\u064A\u0629",
-      groupName: group?.name || "\u0627\u0644\u0645\u062C\u0645\u0648\u0639\u0629 \u0627\u0644\u062D\u0627\u0644\u064A\u0629",
+      groupName: group?.name || "\u0627\u0644\u0645\u062C\u0645\u0648\u0639\u0629 \u0627\u0644\u062A\u062F\u0631\u064A\u0628\u064A\u0629",
       remainingAmount: trainee.remainingAmount || 0,
       stats
     },
@@ -14537,7 +14749,8 @@ apiRouter.post("/agent/student-login", async (req, res) => {
       deviceId: device.deviceId,
       name: device.name
     },
-    attendance: attRecord
+    attendance: attRecord,
+    lectureWindow
   });
 });
 apiRouter.post("/agent/send-reinforcement", (req, res) => {
@@ -14667,293 +14880,65 @@ apiRouter.post("/agent/reset-device", (req, res) => {
       issuedByUserId: "admin",
       createdAt: (/* @__PURE__ */ new Date()).toISOString()
     });
-    db.save();
-    db.logAudit({
-      userId: "admin",
-      userName: "\u0645\u0634\u0631\u0641 \u0627\u0644\u0645\u0639\u0645\u0644",
-      action: "\u0625\u0639\u0627\u062F\u0629 \u0636\u0628\u0637 \u0648\u062A\u0646\u0638\u064A\u0641 \u062C\u0647\u0627\u0632 \u0627\u0644\u0645\u0639\u0645\u0644 (Clean Reset)",
-      entity: "\u0627\u0644\u0623\u062C\u0647\u0632\u0629",
-      details: `\u062A\u0645 \u062A\u0646\u0638\u064A\u0641 \u0648\u0625\u0639\u0627\u062F\u0629 \u0636\u0628\u0637 \u0627\u0644\u062C\u0647\u0627\u0632 ${device.name} \u0628\u0639\u062F \u0627\u0646\u062A\u0647\u0627\u0621 \u062C\u0644\u0633\u0629 \u0627\u0644\u0645\u062A\u062F\u0631\u0628 (${prevTrainee || "\u0639\u0627\u0645"})`
-    });
     return res.json({ success: true, message: `\u062A\u0645\u062A \u0627\u0633\u062A\u0639\u0627\u062F\u0629 \u0627\u0644\u062D\u0627\u0644\u0629 \u0627\u0644\u0627\u0641\u062A\u0631\u0627\u0636\u064A\u0629 \u0644\u0644\u062C\u0647\u0627\u0632 ${device.name} \u0628\u0646\u062C\u0627\u062D` });
   }
   res.status(404).json({ error: "\u0627\u0644\u062C\u0647\u0627\u0632 \u063A\u064A\u0631 \u0645\u0633\u062C\u0644" });
 });
-var activeAssistanceSessions = [];
-var activeAudioBroadcastSession = null;
-apiRouter.post("/agent/heartbeat", (req, res) => {
-  const {
-    deviceId,
-    name,
-    ip,
-    lanIp,
-    macAddress,
-    os: os5,
-    agentVersion,
-    status,
-    screenshot,
-    streamingQuality,
-    currentTraineeCode,
-    currentTraineeName
-  } = req.body;
-  if (!deviceId) {
-    return res.status(400).json({ error: "deviceId required" });
-  }
-  let device = db.getData().devices.find((d) => d.deviceId === deviceId || d.id === deviceId);
-  const now = (/* @__PURE__ */ new Date()).toISOString();
-  if (!device) {
-    device = {
-      id: deviceId,
-      deviceId,
-      name: name || `LAB-DEV-${deviceId.substring(0, 4)}`,
-      branchId: "branch-1",
-      roomName: "\u0627\u0644\u0645\u0639\u0645\u0644 \u0627\u0644\u0631\u0626\u064A\u0633\u064A",
-      ipAddress: ip || lanIp || "192.168.1.100",
-      lanIp: lanIp || ip || "192.168.1.100",
-      macAddress: macAddress || "00:1A:2B:3C:4D:5E",
-      os: os5 || "Windows 11 Pro",
-      agentVersion: agentVersion || "v3.5.0-NativeService",
-      lastHeartbeat: now,
-      isOnline: true,
-      status: status || "ONLINE",
-      isMonitoring: false,
-      isAssisting: false,
-      streamingQuality: streamingQuality || "OFF"
-    };
-    db.getData().devices.push(device);
-  } else {
-    device.lastHeartbeat = now;
-    device.isOnline = true;
-    if (name) device.name = name;
-    if (ip || lanIp) device.ipAddress = ip || lanIp || device.ipAddress;
-    if (lanIp) device.lanIp = lanIp;
-    if (macAddress) device.macAddress = macAddress;
-    if (os5) device.os = os5;
-    if (agentVersion) device.agentVersion = agentVersion;
-    if (status) device.status = status;
-    if (currentTraineeCode) device.currentTraineeCode = currentTraineeCode;
-    if (currentTraineeName) device.currentTraineeName = currentTraineeName;
-  }
-  delete device.lastScreenshotUrl;
-  const activeSessionIndex = activeAssistanceSessions.findIndex((s) => s.deviceId === device.deviceId && s.status === "active");
-  let activeSession = null;
-  if (activeSessionIndex >= 0) {
-    const s = activeAssistanceSessions[activeSessionIndex];
-    if (Date.now() > new Date(s.expiresAt).getTime()) {
-      s.status = "expired";
-      device.isAssisting = false;
-      device.streamingQuality = device.isMonitoring ? "MEDIUM" : "OFF";
-    } else {
-      activeSession = s;
-      device.isAssisting = true;
-    }
-  } else {
-    device.isAssisting = false;
-  }
-  let traineeStats = null;
-  const currentTraineeId = device.currentTraineeId;
-  if (currentTraineeId) {
-    const t = db.getData().trainees.find((tr) => tr.id === currentTraineeId || tr.code === currentTraineeCode);
-    if (t) {
-      const stats = getTraineeRankAndStats(t.id);
-      traineeStats = {
-        id: t.id,
-        fullName: t.fullName,
-        code: t.code,
-        points: t.points || 0,
-        totalPoints: t.totalPoints || t.points || 0,
-        ...stats
-      };
-    }
-  } else if (currentTraineeCode) {
-    const t = db.getData().trainees.find((tr) => tr.code?.toLowerCase() === currentTraineeCode.toLowerCase());
-    if (t) {
-      device.currentTraineeId = t.id;
-      const stats = getTraineeRankAndStats(t.id);
-      traineeStats = {
-        id: t.id,
-        fullName: t.fullName,
-        code: t.code,
-        points: t.points || 0,
-        totalPoints: t.totalPoints || t.points || 0,
-        ...stats
-      };
-    }
-  }
-  const pendingCommands = db.getData().deviceCommands.filter((c) => c.deviceId === device.deviceId && c.status === "pending");
-  pendingCommands.forEach((c) => {
-    c.status = "executed";
-    c.executedAt = now;
-  });
-  db.save();
+var activeLabQuickQuestion = null;
+var activeLabExternalActivity = null;
+apiRouter.get("/lab/quick-question", (req, res) => {
+  const external = activeLabExternalActivity || masterBroadcast.activeExternalSession;
   res.json({
     success: true,
-    deviceStatus: device.status,
-    commands: pendingCommands.map((c) => ({
-      id: c.id,
-      commandType: c.commandType,
-      payload: c.payload,
-      issuedAt: c.createdAt
-    })),
-    isMonitoring: !!device.isMonitoring,
-    isAssisting: !!device.isAssisting,
-    assistanceSession: activeSession,
-    audioSession: activeAudioBroadcastSession,
-    masterBroadcast,
-    traineeStats,
-    streamingQuality: device.streamingQuality || "OFF"
+    data: activeLabQuickQuestion,
+    externalActivity: external
   });
 });
-apiRouter.post("/agent/remote-assist/start", (req, res) => {
-  const { deviceId, teacherUserId, teacherName } = req.body;
-  if (!deviceId) return res.status(400).json({ error: "deviceId required" });
-  const device = db.getData().devices.find((d) => d.deviceId === deviceId || d.id === deviceId);
-  if (!device) return res.status(404).json({ error: "\u0627\u0644\u062C\u0647\u0627\u0632 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F" });
-  activeAssistanceSessions.forEach((s) => {
-    if (s.deviceId === device.deviceId) s.status = "ended";
-  });
-  const now = Date.now();
-  const session = {
-    sessionId: "sess-assist-" + now + "-" + Math.random().toString(36).substring(2, 6),
-    deviceId: device.deviceId,
-    teacherUserId: teacherUserId || req.user?.id || "teacher-1",
-    teacherName: teacherName || req.user?.name || "\u0627\u0644\u0645\u062F\u0631\u0628 \u0627\u0644\u0645\u0634\u0631\u0641",
-    status: "active",
-    startedAt: new Date(now).toISOString(),
-    expiresAt: new Date(now + 15 * 60 * 1e3).toISOString(),
-    // 15 mins session limit
-    allowMouse: true,
-    allowKeyboard: true,
-    lanIp: device.lanIp || device.ipAddress,
-    nonce: "nonce-" + Math.random().toString(36).substring(2, 8)
+apiRouter.post("/lab/quick-question/broadcast", (req, res) => {
+  const { type, questionText, correctAnswer, options } = req.body;
+  activeLabQuickQuestion = {
+    id: "q-" + Date.now(),
+    type: type || "choices",
+    questionText: questionText || "",
+    correctAnswer: correctAnswer || "",
+    options: options || [],
+    answers: {},
+    createdAt: Date.now()
   };
-  activeAssistanceSessions.push(session);
-  device.isAssisting = true;
-  device.status = "IN_SESSION";
-  device.streamingQuality = "INTERACTIVE";
-  db.getData().deviceCommands.push({
-    id: "cmd-" + now + "-" + Math.random().toString(36).substring(2, 4),
-    deviceId: device.deviceId,
-    commandType: "START_ASSISTANCE",
-    payload: JSON.stringify(session),
-    status: "pending",
-    issuedByUserId: session.teacherUserId,
-    createdAt: (/* @__PURE__ */ new Date()).toISOString()
-  });
-  db.save();
-  db.logAudit({
-    userId: session.teacherUserId,
-    userName: session.teacherName,
-    action: "\u0628\u062F\u0621 \u062C\u0644\u0633\u0629 \u0627\u0644\u0645\u0633\u0627\u0639\u062F\u0629 \u0648\u0627\u0644\u062A\u062D\u0643\u0645 \u0639\u0646 \u0628\u0639\u062F (Remote Assistance Started)",
-    entity: "\u0627\u0644\u0623\u062C\u0647\u0632\u0629",
-    entityId: device.id,
-    branchId: device.branchId,
-    details: `\u0628\u062F\u0621 \u062C\u0644\u0633\u0629 \u0645\u0633\u0627\u0639\u062F\u0629 \u062A\u0641\u0627\u0639\u0644\u064A\u0629 \u0645\u0639 \u0627\u0644\u062C\u0647\u0627\u0632 ${device.name} (${device.deviceId})`
-  });
-  res.json({ success: true, session });
+  res.json({ success: true, question: activeLabQuickQuestion });
 });
-apiRouter.post("/agent/remote-assist/stop", (req, res) => {
-  const { deviceId, sessionId } = req.body;
-  if (!deviceId) return res.status(400).json({ error: "deviceId required" });
-  const device = db.getData().devices.find((d) => d.deviceId === deviceId || d.id === deviceId);
-  activeAssistanceSessions.forEach((s) => {
-    if (s.deviceId === deviceId || deviceId && s.deviceId === device?.deviceId) {
-      s.status = "ended";
-    }
-  });
-  if (device) {
-    device.isAssisting = false;
-    device.isMonitoring = false;
-    device.status = "ONLINE";
-    device.streamingQuality = "OFF";
-    db.getData().deviceCommands.push({
-      id: "cmd-" + Date.now() + "-" + Math.random().toString(36).substring(2, 4),
-      deviceId: device.deviceId,
-      commandType: "STOP_ASSISTANCE",
-      payload: JSON.stringify({ reason: "Emergency Stop / Fail-Closed" }),
-      status: "pending",
-      issuedByUserId: req.user?.id || "admin",
-      createdAt: (/* @__PURE__ */ new Date()).toISOString()
-    });
-  }
-  db.save();
-  db.logAudit({
-    userId: req.user?.id || "admin",
-    userName: req.user?.name || "\u0627\u0644\u0645\u062F\u0631\u0628 \u0627\u0644\u0645\u0634\u0631\u0641",
-    action: "\u0625\u064A\u0642\u0627\u0641 \u0641\u0648\u0631\u064A \u0644\u0644\u062A\u062D\u0643\u0645 \u0648\u0627\u0644\u0645\u0633\u0627\u0639\u062F\u0629 (Emergency Stop Assistance)",
-    entity: "\u0627\u0644\u0623\u062C\u0647\u0632\u0629",
-    details: `\u062A\u0645 \u0625\u0644\u063A\u0627\u0621 \u0648\u0625\u064A\u0642\u0627\u0641 \u0627\u0644\u062A\u062D\u0643\u0645 \u0639\u0646 \u0628\u0639\u062F \u0641\u0648\u0631\u064A\u0627\u064B \u0644\u0644\u062C\u0647\u0627\u0632 ${deviceId} (Fail-Closed Policy)`
-  });
-  res.json({ success: true, message: "\u062A\u0645 \u0625\u064A\u0642\u0627\u0641 \u0627\u0644\u062A\u062D\u0643\u0645 \u0627\u0644\u0645\u0628\u0627\u0634\u0631 \u0641\u0648\u0631\u064A\u0627\u064B \u0648\u0625\u063A\u0644\u0627\u0642 \u0627\u0644\u062C\u0644\u0633\u0629 \u0628\u0646\u062C\u0627\u062D (Fail Closed)" });
-});
-apiRouter.post("/agent/remote-assist/input", (req, res) => {
-  const { deviceId, sessionId, action, x, y, button, key, text } = req.body;
-  if (!deviceId || !sessionId) {
-    return res.status(400).json({ error: "deviceId and sessionId required" });
-  }
-  const session = activeAssistanceSessions.find(
-    (s) => s.deviceId === deviceId && s.sessionId === sessionId && s.status === "active"
-  );
-  if (!session || Date.now() > new Date(session.expiresAt).getTime()) {
-    if (session) session.status = "expired";
-    return res.status(403).json({
-      error: "\u062C\u0644\u0633\u0629 \u0627\u0644\u0645\u0633\u0627\u0639\u062F\u0629 \u063A\u064A\u0631 \u0635\u0627\u0644\u062D\u0629 \u0623\u0648 \u0645\u0646\u062A\u0647\u064A\u0629. \u062A\u0645 \u062A\u0639\u0637\u064A\u0644 \u0627\u0644\u062A\u062D\u0643\u0645 \u062A\u0644\u0642\u0627\u0626\u064A\u0627\u064B (Fail Closed)",
-      failClosed: true
-    });
-  }
-  db.getData().deviceCommands.push({
-    id: "cmd-input-" + Date.now() + "-" + Math.random().toString(36).substring(2, 4),
-    deviceId,
-    commandType: "INPUT_EVENT",
-    payload: JSON.stringify({ action, x, y, button, key, text, nonce: Date.now() }),
-    status: "pending",
-    issuedByUserId: session.teacherUserId,
-    createdAt: (/* @__PURE__ */ new Date()).toISOString()
-  });
+apiRouter.post("/lab/quick-question/clear", (req, res) => {
+  activeLabQuickQuestion = null;
   res.json({ success: true });
 });
-apiRouter.post("/devices/monitoring", (req, res) => {
-  const { deviceIds, isMonitoring, quality } = req.body;
-  if (!Array.isArray(deviceIds)) return res.status(400).json({ error: "deviceIds array required" });
-  const devices = db.getData().devices.filter((d) => deviceIds.includes(d.id) || deviceIds.includes(d.deviceId));
-  devices.forEach((d) => {
-    d.isMonitoring = !!isMonitoring;
-    d.streamingQuality = quality || (isMonitoring ? "MEDIUM" : "OFF");
-    db.getData().deviceCommands.push({
-      id: "cmd-mon-" + Date.now() + "-" + Math.random().toString(36).substring(2, 4),
-      deviceId: d.deviceId,
-      commandType: isMonitoring ? "START_MONITORING" : "STOP_MONITORING",
-      payload: JSON.stringify({ quality: d.streamingQuality }),
-      status: "pending",
-      issuedByUserId: req.user?.id || "admin",
-      createdAt: (/* @__PURE__ */ new Date()).toISOString()
-    });
-  });
-  db.save();
-  res.json({ success: true, count: devices.length });
-});
-apiRouter.post("/agent/audio/start", (req, res) => {
-  const { targetDeviceIds } = req.body;
-  activeAudioBroadcastSession = {
-    sessionId: "audio-" + Date.now(),
-    teacherUserId: req.user?.id || "teacher-1",
-    teacherName: req.user?.name || "\u0627\u0644\u0645\u062F\u0631\u0628",
-    targetDeviceIds: targetDeviceIds || "all",
-    status: "active",
-    startedAt: (/* @__PURE__ */ new Date()).toISOString()
+apiRouter.post("/lab/quick-question/answer", (req, res) => {
+  const { studentCode, studentName, answer } = req.body;
+  if (!activeLabQuickQuestion) {
+    return res.status(400).json({ error: "\u0644\u0627 \u064A\u0648\u062C\u062F \u0633\u0624\u0627\u0644 \u0646\u0634\u0637 \u062D\u0627\u0644\u064A\u0627\u064B" });
+  }
+  const isCorrect = activeLabQuickQuestion.correctAnswer ? String(answer).trim().toLowerCase() === String(activeLabQuickQuestion.correctAnswer).trim().toLowerCase() : true;
+  activeLabQuickQuestion.answers[String(studentCode).trim()] = {
+    studentCode: String(studentCode).trim(),
+    studentName: studentName || "\u0645\u062A\u062F\u0631\u0628 \u0627\u0644\u0645\u0639\u0645\u0644",
+    answer: String(answer).trim(),
+    isCorrect,
+    timestamp: (/* @__PURE__ */ new Date()).toISOString()
   };
-  res.json({ success: true, audioSession: activeAudioBroadcastSession });
+  res.json({ success: true, isCorrect });
 });
-apiRouter.post("/agent/audio/stop", (req, res) => {
-  activeAudioBroadcastSession = null;
-  res.json({ success: true });
+apiRouter.get("/lab/active-activity", (req, res) => {
+  res.json({ success: true, activity: activeLabExternalActivity });
 });
-apiRouter.post("/agent/audio/chunk", (req, res) => {
-  const { audioChunk } = req.body;
-  if (activeAudioBroadcastSession) {
-    activeAudioBroadcastSession.lastAudioChunk = audioChunk;
-  }
-  res.json({ success: true });
+apiRouter.post("/lab/active-activity/broadcast", (req, res) => {
+  const { title, platform, url, gamePin } = req.body;
+  activeLabExternalActivity = {
+    title: title || "\u0645\u0633\u0627\u0628\u0642\u0629 \u0627\u0644\u0645\u0639\u0645\u0644 \u0627\u0644\u062D\u064A\u0629",
+    platform: platform || "Kahoot",
+    url: url || "https://kahoot.it",
+    gamePin: gamePin ? String(gamePin).trim() : "",
+    updatedAt: Date.now()
+  };
+  res.json({ success: true, activity: activeLabExternalActivity });
 });
 apiRouter.post("/devices/diagnostics", (req, res) => {
   const devices = db.getData().devices || [];
@@ -15316,63 +15301,6 @@ apiRouter.delete("/notifications/:id", (req, res) => {
 function ensureDefaultPortalMessages(data) {
   if (!Array.isArray(data.portalMessages)) {
     data.portalMessages = [];
-  }
-  if (data.portalMessages.length === 0 && Array.isArray(data.trainees) && data.trainees.length > 0) {
-    const sampleTrainees = data.trainees.slice(0, 10);
-    const defaultMsgs = [];
-    const now = /* @__PURE__ */ new Date();
-    sampleTrainees.forEach((t, idx) => {
-      const time1 = new Date(now.getTime() - (idx + 1) * 36e5 * 5).toISOString();
-      const time2 = new Date(now.getTime() - (idx + 1) * 36e5 * 3).toISOString();
-      const time3 = new Date(now.getTime() - (idx + 1) * 36e5 * 1).toISOString();
-      defaultMsgs.push({
-        id: "msg-seed-1-" + t.id,
-        traineeId: t.id,
-        traineeName: t.fullName,
-        traineeCode: t.code,
-        parentName: t.parentName || "\u0648\u0644\u064A \u0627\u0644\u0623\u0645\u0631",
-        portalSource: "admin",
-        senderRole: "admin",
-        senderName: "\u0625\u062F\u0627\u0631\u0629 \u0645\u0631\u0643\u0632 \u0627\u0644\u0646\u062C\u0627\u062D \u0644\u0644\u062A\u062F\u0631\u064A\u0628 \u{1F31F}",
-        recipientType: "student",
-        message: `\u0623\u0647\u0644\u0627\u064B \u0628\u0643 \u064A\u0627 ${t.fullName} \u0641\u064A \u0645\u0631\u0643\u0632 \u0627\u0644\u0646\u062C\u0627\u062D! \u0643\u0648\u062F \u0627\u0644\u0645\u062A\u062F\u0631\u0628 \u0627\u0644\u062E\u0627\u0635 \u0628\u0643 \u0647\u0648 (${t.code}). \u064A\u0633\u0639\u062F\u0646\u0627 \u062A\u0648\u0627\u0635\u0644\u0643 \u0627\u0644\u062F\u0627\u0626\u0645 \u0648\u0646\u0631\u062D\u0628 \u0628\u0623\u064A \u0627\u0633\u062A\u0641\u0633\u0627\u0631.`,
-        messageType: "announcement",
-        read: true,
-        createdAt: time1
-      });
-      defaultMsgs.push({
-        id: "msg-seed-2-" + t.id,
-        traineeId: t.id,
-        traineeName: t.fullName,
-        traineeCode: t.code,
-        parentName: t.parentName || "\u0648\u0644\u064A \u0627\u0644\u0623\u0645\u0631",
-        portalSource: "student",
-        senderRole: "student",
-        senderName: t.fullName,
-        recipientType: "trainer",
-        message: `\u0645\u0631\u062D\u0628\u0627\u064B\u060C \u0623\u0648\u062F \u0627\u0644\u0627\u0633\u062A\u0641\u0633\u0627\u0631 \u0639\u0646 \u062A\u0641\u0627\u0635\u064A\u0644 \u0645\u0634\u0631\u0648\u0639 \u0627\u0644\u062A\u0637\u0628\u064A\u0642 \u0627\u0644\u0628\u0631\u0645\u062C\u064A \u0648\u0627\u0644\u0645\u0648\u0639\u062F \u0627\u0644\u0646\u0647\u0627\u0626\u064A \u0644\u0644\u062A\u0633\u0644\u064A\u0645\u061F`,
-        messageType: "question",
-        read: false,
-        createdAt: time2
-      });
-      defaultMsgs.push({
-        id: "msg-seed-3-" + t.id,
-        traineeId: t.id,
-        traineeName: t.fullName,
-        traineeCode: t.code,
-        parentName: "\u0627\u0644\u0645\u0633\u0627\u0639\u062F \u0627\u0644\u0630\u0643\u064A",
-        portalSource: "system",
-        senderRole: "admin",
-        senderName: "\u0627\u0644\u0645\u0633\u0627\u0639\u062F \u0627\u0644\u0630\u0643\u064A \u0644\u0645\u0631\u0643\u0632 \u0627\u0644\u0646\u062C\u0627\u062D \u{1F916}",
-        recipientType: "student",
-        message: `\u0623\u0647\u0644\u0627\u064B \u0628\u0643 \u064A\u0627 \u0628\u0637\u0644! \u062A\u0645 \u0627\u0633\u062A\u0644\u0627\u0645 \u0633\u0624\u0627\u0644\u0643 \u0648\u062A\u0648\u062C\u064A\u0647\u0647 \u0625\u0644\u0649 \u0627\u0644\u0645\u0639\u0644\u0645\u060C \u0648\u064A\u0645\u0643\u0646\u0643 \u0631\u0641\u0639 \u0627\u0644\u062A\u0637\u0628\u064A\u0642 \u0623\u0648 \u0627\u0644\u0648\u0627\u062C\u0628 \u0645\u0628\u0627\u0634\u0631\u0629 \u0639\u0628\u0631 \u062A\u0628\u0648\u064A\u0628 (\u062A\u0635\u062D\u064A\u062D \u0627\u0644\u0648\u0627\u062C\u0628\u0627\u062A) \u0644\u064A\u0642\u0648\u0645 \u0627\u0644\u0630\u0643\u0627\u0621 \u0627\u0644\u0627\u0635\u0637\u0646\u0627\u0639\u064A \u0628\u062A\u0635\u062D\u064A\u062D\u0647 \u0648\u0645\u0631\u0627\u062C\u0639\u062A\u0647 \u0641\u0648\u0631\u0627\u064B!`,
-        messageType: "reply",
-        read: true,
-        createdAt: time3
-      });
-    });
-    data.portalMessages = defaultMsgs;
-    db.saveImmediate();
   }
 }
 apiRouter.get(["/messages/all-portal", "/messages/all-portal/"], async (req, res) => {
@@ -15829,198 +15757,6 @@ apiRouter.get(["/search", "/search/"], async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: "\u0641\u0634\u0644 \u0627\u0644\u0628\u062D\u062B: " + err.message });
   }
-});
-apiRouter.post("/agent/upload-recording", (req, res) => {
-  const { deviceId, traineeId, traineeName, stepsLog, durationSeconds } = req.body;
-  db.logAudit({
-    userId: traineeId || "student",
-    userName: traineeName || "\u0645\u062A\u062F\u0631\u0628 \u0627\u0644\u0645\u0639\u0645\u0644",
-    action: "\u0631\u0641\u0639 \u0648\u062A\u0648\u062B\u064A\u0642 \u062A\u0633\u062C\u064A\u0644 \u062E\u0637\u0648\u0627\u062A \u0627\u0644\u0634\u0627\u0634\u0629 \u0648\u0627\u0644\u062A\u062F\u0631\u064A\u0628 \u0627\u0644\u0639\u0645\u0644\u064A",
-    entity: "\u0627\u0644\u0645\u0639\u0645\u0644",
-    details: `\u062A\u0645 \u062D\u0641\u0638 \u062A\u0633\u062C\u064A\u0644 \u062A\u062F\u0631\u064A\u0628 \u0627\u0644\u0645\u062A\u062F\u0631\u0628 (${traineeName || deviceId}) \u0628\u0645\u062F\u0629 (${durationSeconds || 0} \u062B\u0627\u0646\u064A\u0629) \u0645\u0639 ${Array.isArray(stepsLog) ? stepsLog.length : 0} \u062E\u0637\u0648\u0629 \u062A\u0641\u0627\u0639\u0644\u064A\u0629`
-  });
-  res.json({
-    success: true,
-    message: "\u062A\u0645 \u062D\u0641\u0638 \u062A\u0633\u062C\u064A\u0644 \u0627\u0644\u0634\u0627\u0634\u0629 \u0648\u062A\u0648\u062B\u064A\u0642 \u062E\u0637\u0648\u0627\u062A \u0627\u0644\u0645\u062A\u062F\u0631\u0628 \u0628\u0646\u062C\u0627\u062D \u0648\u0625\u0631\u0633\u0627\u0644\u0647\u0627 \u0644\u0644\u0645\u062F\u0631\u0628"
-  });
-});
-apiRouter.get("/download/lab-agent-bat", (req, res) => {
-  const branchId = req.query.branchId || "branch-1";
-  const labName = req.query.labName || "\u0635\u0627\u0644\u0629 \u0627\u0644\u0645\u0639\u0645\u0644";
-  const host = req.get("x-forwarded-host") || req.get("host") || "localhost:3000";
-  const protoHeader = req.get("x-forwarded-proto");
-  const protocol = protoHeader ? protoHeader.split(",")[0].trim() : req.protocol === "https" ? "https" : "http";
-  const appUrl = `${protocol}://${host}`;
-  const bat = `@echo off
-chcp 65001 >nul
-title Nagah M-S - Classroom Lab Native Windows Service Agent Setup
-echo ======================================================================
-echo              Nagah M-S - \u0645\u0631\u0643\u0632 \u0627\u0644\u0646\u062C\u0627\u062D \u0644\u0644\u062A\u062F\u0631\u064A\u0628 \u0648\u0627\u0644\u0627\u0633\u062A\u0634\u0627\u0631\u0627\u062A
-echo              \u062A\u062B\u0628\u064A\u062A \u0639\u0645\u064A\u0644 \u0627\u0644\u0645\u0639\u0645\u0644 \u0648\u0627\u0644\u062A\u062D\u0643\u0645 \u0627\u0644\u0630\u0643\u064A (Native Windows Service)
-echo ======================================================================
-echo.
-echo [1/3] \u062C\u0627\u0631\u064A \u0627\u0644\u0627\u062A\u0635\u0627\u0644 \u0628\u062E\u0648\u0627\u062F\u0645 \u0645\u0631\u0643\u0632 \u0627\u0644\u0646\u062C\u0627\u062D \u0627\u0644\u0633\u062D\u0627\u0628\u064A\u0629...
-echo [2/3] \u062C\u0627\u0631\u064A \u062A\u062C\u0645\u064A\u0639 \u0648\u062A\u062B\u0628\u064A\u062A \u0627\u0644\u062E\u062F\u0645\u0629 \u0627\u0644\u0631\u0633\u0645\u064A\u0629 (Windows Service)...
-echo [3/3] \u0636\u0628\u0637 \u062E\u064A\u0627\u0631\u0627\u062A \u0627\u0644\u062A\u0639\u0627\u0641\u064A \u0627\u0644\u062A\u0644\u0642\u0627\u0626\u064A \u0648\u062A\u0633\u062C\u064A\u0644 \u0627\u0644\u062E\u062F\u0645\u0629 \u0641\u064A \u0627\u0644\u0646\u0638\u0627\u0645...
-echo.
-powershell -NoProfile -ExecutionPolicy Bypass -Command "[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12; $raw = (Invoke-WebRequest -Uri '${appUrl}/api/download/lab-agent-ps1?branchId=${branchId}&labName=${labName}' -UseBasicParsing).Content; if ($raw -and $raw.Trim().StartsWith('#')) { Invoke-Expression $raw } else { Write-Host '[!] Cloud connection error. Retrying in 5s...' -ForegroundColor Red }"
-echo.
-echo ======================================================================
-echo    \u062A\u0645 \u062A\u062B\u0628\u064A\u062A \u062E\u062F\u0645\u0629 Nagah Windows Service \u0628\u0646\u062C\u0627\u062D \u0648\u062A\u0631\u062E\u064A\u0635 \u0627\u0644\u062C\u0647\u0627\u0632!
-echo    \u062A\u0639\u0645\u0644 \u0627\u0644\u0622\u0646 \u0643\u062E\u062F\u0645\u0629 \u0646\u0638\u0627\u0645 \u0623\u0635\u0644\u064A\u0629 (Auto Start) \u0645\u0639 \u0645\u0631\u0627\u0642\u0628\u0629 \u0623\u062F\u0627\u0621 \u0627\u0644\u0645\u0639\u0627\u0644\u062C\u0629.
-echo ======================================================================
-timeout /t 5
-`;
-  res.setHeader("Content-Type", "application/x-bat; charset=utf-8");
-  res.setHeader("Content-Disposition", 'attachment; filename="Install-Nagah-Lab-Agent.bat"');
-  res.send(bat);
-});
-apiRouter.get("/download/lab-agent-ps1", (req, res) => {
-  const branchId = req.query.branchId || "branch-1";
-  const labName = req.query.labName || "\u0635\u0627\u0644\u0629 \u0627\u0644\u0645\u0639\u0645\u0644";
-  const host = req.get("x-forwarded-host") || req.get("host") || "localhost:3000";
-  const protoHeader = req.get("x-forwarded-proto");
-  const protocol = protoHeader ? protoHeader.split(",")[0].trim() : req.protocol === "https" ? "https" : "http";
-  const appUrl = `${protocol}://${host}`;
-  const ps1 = `# ==============================================================================
-# Nagah M-S Windows Native C# Worker Service Installer (Windows Service Daemon)
-# ==============================================================================
-[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12 -bor [System.Net.SecurityProtocolType]::Tls11 -bor [System.Net.SecurityProtocolType]::Tls
-
-$ServerUrl = "${appUrl}"
-$BranchId = "${branchId}"
-$LabName = "${labName}"
-$EnrollmentKey = "NAGAH-CERT-2026-SECURE"
-
-Write-Host "[+] Initializing Nagah Native Windows Worker Service Installation..." -ForegroundColor Cyan
-
-$PCName = $env:COMPUTERNAME
-$MAC = $null
-try { $MAC = (Get-NetAdapter -ErrorAction SilentlyContinue | Where-Object Status -eq 'Up' | Select-Object -First 1).MacAddress } catch {}
-if (!$MAC) { try { $MAC = (Get-CimInstance Win32_NetworkAdapterConfiguration -ErrorAction SilentlyContinue | Where-Object IPEnabled -eq $true | Select-Object -First 1).MACAddress } catch {} }
-if (!$MAC) { $MAC = "00:1A:2B:3C:4D:5E" }
-
-$OSCaption = "Windows 11 Pro"
-try { $OSCaption = (Get-CimInstance Win32_OperatingSystem -ErrorAction SilentlyContinue).Caption } catch {}
-
-$LocalIP = "192.168.1.100"
-try { $LocalIP = (Get-NetIPAddress -AddressFamily IPv4 -InterfaceAlias 'Ethernet*','Wi-Fi*' -ErrorAction SilentlyContinue | Select-Object -ExpandProperty IPAddress -First 1) } catch {}
-
-$Body = @{
-    enrollmentKey = $EnrollmentKey
-    pcName        = $PCName
-    branchId      = $BranchId
-    labName       = $LabName
-    macAddress    = $MAC
-    os            = $OSCaption
-    lanIp         = $LocalIP
-    agentVersion  = "v3.5.0-NativeService"
-} | ConvertTo-Json
-
-Write-Host "[-] Registering device with Nagah Cloud Platform..." -ForegroundColor Yellow
-
-try {
-    $Response = Invoke-RestMethod -Uri "$ServerUrl/api/devices/enroll" -Method Post -Body $Body -ContentType "application/json; charset=utf-8" -ErrorAction Stop
-    
-    if ($Response.success) {
-        $DeviceID = $Response.device.deviceId
-        Write-Host "[\u2713] Device Registered Successfully! Device ID: $DeviceID" -ForegroundColor Green
-        
-        $InstallDir = "C:\\ProgramData\\NagahAgent"
-        if (!(Test-Path $InstallDir)) { New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null }
-        
-        $DaemonScriptPath = "$InstallDir\\NagahNativeWorker.ps1"
-        $ServiceExePath = "$InstallDir\\NagahLabAgentService.exe"
-        
-        # 1. Write the Native C# Background Service Script
-        $ScriptCode = @"
-Add-Type -AssemblyName System.Windows.Forms
-Add-Type -AssemblyName System.Drawing
-[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12
-
-$Server = '$ServerUrl'
-$DeviceID = '$DeviceID'
-$PCName = '$PCName'
-
-Write-Host "Nagah Native Windows Worker Service Started for $DeviceID..."
-
-while ($true) {
-    try {
-        $lanIP = "192.168.1.100"
-        try { $lanIP = (Get-NetIPAddress -AddressFamily IPv4 -InterfaceAlias 'Ethernet*','Wi-Fi*' -ErrorAction SilentlyContinue | Select-Object -ExpandProperty IPAddress -First 1) } catch {}
-
-        # Default Heartbeat Payload
-        $hbPayload = @{
-            deviceId     = $DeviceID
-            name         = $PCName
-            lanIp        = $lanIP
-            agentVersion = "v3.5.0-NativeService"
-            status       = "ONLINE"
-        }
-
-        # Send Initial Pulse to check server demands
-        $hbJson = $hbPayload | ConvertTo-Json -Depth 4
-        $res = Invoke-RestMethod -Uri "$Server/api/agent/heartbeat" -Method Post -Body $hbJson -ContentType "application/json" -ErrorAction SilentlyContinue
-
-        if ($res -and $res.success) {
-            # Check if On-Demand Capture is requested (Monitoring or Assistance)
-            if ($res.isMonitoring -or $res.isAssisting) {
-                # Screenshots disabled
-                $hbPayload["screenshot"] = $null
-                $hbPayload["streamingQuality"] = $res.streamingQuality
-                $hbJson = $hbPayload | ConvertTo-Json -Depth 4
-                $res = Invoke-RestMethod -Uri "$Server/api/agent/heartbeat" -Method Post -Body $hbJson -ContentType "application/json" -ErrorAction SilentlyContinue
-            }
-
-            # Execute Pending Native Commands
-            if ($res.commands -and $res.commands.Count -gt 0) {
-                foreach ($cmd in $res.commands) {
-                    $type = $cmd.commandType
-                    if ($type -eq 'LOCK' -or $type -eq 'lock') {
-                        rundll32.exe user32.dll,LockWorkStation
-                    }
-                    elseif ($type -eq 'RESTART' -or $type -eq 'restart') {
-                        shutdown.exe /r /t 0 /f
-                    }
-                    elseif ($type -eq 'SHUTDOWN' -or $type -eq 'shutdown') {
-                        shutdown.exe /s /t 0 /f
-                    }
-                }
-            }
-        }
-    } catch {
-        Write-Host "Worker Exception: $($_.Exception.Message)"
-    }
-    
-    Start-Sleep -Seconds 2
-}
-"@
-        Set-Content -Path $DaemonScriptPath -Value $ScriptCode -Encoding UTF8
-        
-        # 2. Setup Startup Persistence & Windows Task Scheduler Native Service Task
-        $TaskName = "NagahLabAgentServiceTask"
-        Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false -ErrorAction SilentlyContinue
-        
-        $Action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument ('-ExecutionPolicy Bypass -WindowStyle Hidden -NoProfile -File "' + $DaemonScriptPath + '"')
-        $Trigger = New-ScheduledTaskTrigger -AtStartup
-        $Principal = New-ScheduledTaskPrincipal -UserId "NT AUTHORITY\\SYSTEM" -LogonType ServiceAccount -RunLevel Highest
-        $Settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -RestartCount 5 -RestartInterval (New-TimeSpan -Minutes 1)
-        
-        Register-ScheduledTask -TaskName $TaskName -Action $Action -Trigger $Trigger -Principal $Principal -Settings $Settings -Force | Out-Null
-        Start-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
-        
-        Write-Host "[\u2713] Native Windows Worker Service installed and registered!" -ForegroundColor Green
-        Write-Host "[\u2713] Auto-Start & Recovery policy enabled. Service running as SYSTEM." -ForegroundColor Cyan
-    } else {
-        Write-Host "[!] Enrollment error: $($Response.error)" -ForegroundColor Red
-    }
-} catch {
-    Write-Host "[!] Connection Error: $($_.Exception.Message)" -ForegroundColor Red
-}
-`;
-  res.setHeader("Content-Type", "text/plain; charset=utf-8");
-  res.setHeader("Content-Disposition", 'attachment; filename="NagahLabAgentSetup.ps1"');
-  res.send(ps1);
 });
 apiRouter.post("/trainer/generate-advanced-exam", async (req, res) => {
   try {
