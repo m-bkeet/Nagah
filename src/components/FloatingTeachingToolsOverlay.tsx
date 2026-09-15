@@ -469,23 +469,16 @@ export const FloatingTeachingToolsOverlay: React.FC<FloatingTeachingToolsOverlay
     return () => window.removeEventListener('keydown', handleKeyDownShortcuts);
   }, [activeTool, isOpen, isPinned, showToast]);
 
-  // Live Screen Snapshot capture for Magnifier Lens
+  // Live Screen Snapshot capture for Magnifier Lens (capture once on tool activation)
   useEffect(() => {
     if (activeTool === 'lens') {
-      const captureLiveDom = () => {
-        const rootEl = document.getElementById('root') || document.body;
-        if (rootEl) {
-          const clone = rootEl.cloneNode(true) as HTMLElement;
-          // Strip overlay tools and modals to prevent recursion inside lens
-          const overlays = clone.querySelectorAll('.nagah-overlay-ignore, [class*="z-[99"]');
-          overlays.forEach(el => el.remove());
-          setLensDomHtml(clone.innerHTML);
-        }
-      };
-
-      captureLiveDom();
-      const interval = setInterval(captureLiveDom, 1000);
-      return () => clearInterval(interval);
+      const rootEl = document.getElementById('root') || document.body;
+      if (rootEl) {
+        const clone = rootEl.cloneNode(true) as HTMLElement;
+        const overlays = clone.querySelectorAll('.nagah-overlay-ignore, [class*="z-[99"]');
+        overlays.forEach(el => el.remove());
+        setLensDomHtml(clone.innerHTML);
+      }
     }
   }, [activeTool]);
 

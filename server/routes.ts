@@ -6222,7 +6222,6 @@ apiRouter.get('/devices', (req: Request, res: Response) => {
   });
 
   db.getData().devices = devices;
-  db.save();
   res.json(devices);
 });
 
@@ -6503,25 +6502,21 @@ apiRouter.post('/agent/open-url', (req: Request, res: Response) => {
   res.json({ success: true, deliveredToCount: devices.length });
 });
 
-// Get Trainee Screenshots Archive
+// Get Trainee Screenshots Archive (Disabled to save resources)
 apiRouter.get('/devices/screenshots/archive', (req: Request, res: Response) => {
-  res.json(db.getData().traineeScreenshots || []);
+  res.json([]);
 });
 
 // Delete single screenshot from archive
 apiRouter.delete('/devices/screenshots/archive/:id', (req: Request, res: Response) => {
-  const { id } = req.params;
-  if (db.getData().traineeScreenshots) {
-    db.getData().traineeScreenshots = db.getData().traineeScreenshots.filter((s: any) => s.id !== id);
-    db.save();
-  }
   res.json({ success: true });
 });
 
 // Clear entire screenshot archive
 apiRouter.delete('/devices/screenshots/archive', (req: Request, res: Response) => {
-  db.getData().traineeScreenshots = [];
-  db.save();
+  if (db.getData().traineeScreenshots) {
+    db.getData().traineeScreenshots = [];
+  }
   res.json({ success: true });
 });
 
@@ -6839,6 +6834,182 @@ apiRouter.post('/student/login', async (req: Request, res: Response) => {
   });
 });
 
+// ----------------------------------------------------
+// Smart Lecture Schedule & Automatic Attendance Engine
+// ----------------------------------------------------
+
+interface GroupLectureWindow {
+  isTodayLecture: boolean;
+  scheduledDays: string[];
+  dayName: string;
+  startTime: string;
+  endTime: string;
+  isWithinWindow: boolean;
+  isUpcomingToday: boolean;
+  hasEndedToday: boolean;
+  lectureStatus: 'active' | 'upcoming' | 'ended' | 'not_scheduled_today';
+}
+
+function evaluateGroupLectureWindow(group: any, checkDate = new Date()): GroupLectureWindow {
+  const daysMap: Record<string, number> = {
+    'الأحد': 0, 'الاحد': 0,
+    'الإثنين': 1, 'الاثنين': 1,
+    'الثلاثاء': 2,
+    'الأربعاء': 3, 'الاربعاء': 3,
+    'الخميس': 4,
+    'الجمعة': 5, 'الجمعه': 5,
+    'السبت': 6
+  };
+  const arabicDayNames = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
+  const currentDayIndex = checkDate.getDay();
+  const currentDayName = arabicDayNames[currentDayIndex];
+
+  const gDays: string[] = Array.isArray(group?.days) && group.days.length > 0
+    ? group.days
+    : (Array.isArray(group?.scheduleDays) && group.scheduleDays.length > 0 ? group.scheduleDays : []);
+
+  // Match today against scheduled group days
+  const isTodayLecture = gDays.some(d => {
+    const clean = d.trim().replace(/[إأآ]/g, 'ا').replace(/ة/g, 'ه');
+    const todayClean = currentDayName.replace(/[إأآ]/g, 'ا').replace(/ة/g, 'ه');
+    if (clean === todayClean) return true;
+    const targetIdx = daysMap[d.trim()];
+    return targetIdx === currentDayIndex;
+  });
+
+  // Calculate start and end time in minutes
+  let startH = 16;
+  let startM = 0;
+  if (group?.startTime) {
+    const parts = group.startTime.split(':').map(Number);
+    startH = !isNaN(parts[0]) ? parts[0] : 16;
+    startM = !isNaN(parts[1]) ? parts[1] : 0;
+  } else if (group?.timeSlot) {
+    const match = group.timeSlot.match(/(\d+):?(\d*)/);
+    if (match) {
+      startH = Number(match[1]) || 16;
+      if (group.timeSlot.includes('م') && startH < 12) startH += 12;
+    }
+  }
+
+  let endH = startH + 2;
+  let endM = startM;
+  if (group?.endTime) {
+    const parts = group.endTime.split(':').map(Number);
+    if (!isNaN(parts[0])) {
+      endH = parts[0];
+      endM = !isNaN(parts[1]) ? parts[1] : 0;
+    }
+  }
+
+  const currentMinutes = checkDate.getHours() * 60 + checkDate.getMinutes();
+  const startMinutes = startH * 60 + startM;
+  const endMinutes = endH * 60 + endM;
+
+  const windowStart = startMinutes - 30; // 30 minutes arrival buffer before lecture starts
+  const windowEnd = endMinutes + 15;     // 15 minutes departure buffer after lecture ends
+
+  const isWithinWindow = isTodayLecture && (currentMinutes >= windowStart && currentMinutes <= windowEnd);
+  const isUpcomingToday = isTodayLecture && (currentMinutes < windowStart);
+  const hasEndedToday = isTodayLecture && (currentMinutes > windowEnd);
+
+  let lectureStatus: 'active' | 'upcoming' | 'ended' | 'not_scheduled_today' = 'not_scheduled_today';
+  if (isTodayLecture) {
+    if (isWithinWindow) lectureStatus = 'active';
+    else if (isUpcomingToday) lectureStatus = 'upcoming';
+    else if (hasEndedToday) lectureStatus = 'ended';
+  }
+
+  const formatTime = (h: number, m: number) => `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+
+  return {
+    isTodayLecture,
+    scheduledDays: gDays,
+    dayName: currentDayName,
+    startTime: formatTime(startH, startM),
+    endTime: formatTime(endH, endM),
+    isWithinWindow,
+    isUpcomingToday,
+    hasEndedToday,
+    lectureStatus
+  };
+}
+
+// Automated Absence Engine: Evaluates lecture closeout and applies absence penalty once per finished lecture
+async function closeoutFinishedLectureAttendance(targetGroupId?: string) {
+  const today = new Date().toISOString().split('T')[0];
+  const groups = db.getData().groups || [];
+  const targetGroups = targetGroupId ? groups.filter(g => g.id === targetGroupId) : groups;
+  let modifiedCount = 0;
+
+  for (const group of targetGroups) {
+    const lectureWindow = evaluateGroupLectureWindow(group);
+    if (!lectureWindow.isTodayLecture || !lectureWindow.hasEndedToday) continue;
+
+    const groupTrainees = (db.getData().trainees || []).filter(t => t.groupId === group.id && (t.status === 'active' || !t.status));
+    for (const trainee of groupTrainees) {
+      const existingAtt = (await AttendanceRepo.getByTraineeId(trainee.id)) || [];
+      const recordToday = existingAtt.find(a => a.date === today && a.groupId === group.id);
+
+      if (!recordToday) {
+        const absentRecord: AttendanceRecord = {
+          id: 'att-abs-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
+          date: today,
+          time: lectureWindow.endTime,
+          branchId: trainee.branchId,
+          groupId: group.id,
+          courseId: trainee.courseId,
+          traineeId: trainee.id,
+          status: 'absent',
+          notes: `غياب تلقائي لعدم تسجيل الدخول بكود الطالب أثناء موعد المحاضرة (${lectureWindow.startTime} - ${lectureWindow.endTime})`
+        };
+        await AttendanceRepo.create(absentRecord.id, absentRecord);
+
+        const alreadyPenalized = (db.getData().pointTransactions || []).some(
+          pt => pt.traineeId === trainee.id &&
+                pt.createdAt?.startsWith(today) &&
+                pt.groupId === group.id &&
+                pt.reason?.includes('خصم غياب')
+        );
+
+        if (!alreadyPenalized) {
+          const absenceRule = (db.getData().pointRules || []).find(r => r.ruleType === 'absence' && r.isActive);
+          const penalty = Math.abs(absenceRule?.pointValue || 5);
+          const currentTotal = trainee.totalPoints || trainee.points || 0;
+          const newTotal = Math.max(0, currentTotal - penalty);
+
+          await TraineeRepo.update(trainee.id, { totalPoints: newTotal, points: newTotal });
+          db.getData().pointTransactions.unshift({
+            id: 'pt-abs-' + Date.now() + '-' + Math.random().toString(36).substr(2, 3),
+            traineeId: trainee.id,
+            groupId: group.id,
+            branchId: trainee.branchId,
+            points: -penalty,
+            reason: `خصم غياب تلقائي لعدم تسجيل الحضور بكود الطالب في موعد المحاضرة (${group.name})`,
+            ruleId: absenceRule?.id,
+            addedByUserId: 'system',
+            addedByUserName: 'نظام رصد المعمل الآلي',
+            createdAt: new Date().toISOString()
+          });
+        }
+        modifiedCount++;
+      }
+    }
+  }
+
+  if (modifiedCount > 0) {
+    db.save();
+  }
+  return { success: true, processedCount: modifiedCount };
+}
+
+// Route to evaluate and closeout finished lecture attendance
+apiRouter.post('/lab/evaluate-lecture-attendance', async (req: Request, res: Response) => {
+  const { groupId } = req.body;
+  const result = await closeoutFinishedLectureAttendance(groupId);
+  res.json(result);
+});
+
 // Student Code Login & Automatic Attendance Logging
 // ----------------------------------------------------
 apiRouter.post('/agent/student-login', async (req: Request, res: Response) => {
@@ -6854,7 +7025,7 @@ apiRouter.post('/agent/student-login', async (req: Request, res: Response) => {
     return res.status(404).json({ error: 'لم يتم العثور على متدرب مسجل بهذا الكود أو الهاتف' });
   }
 
-  // Update or register Device
+  // Update or register Device in memory
   const devId = (deviceId && String(deviceId).trim()) ? String(deviceId).trim() : `PC-${Math.floor(100 + Math.random() * 900)}`;
   let device = db.getData().devices.find(d => d.deviceId === devId || d.id === devId);
   if (!device) {
@@ -6883,73 +7054,115 @@ apiRouter.post('/agent/student-login', async (req: Request, res: Response) => {
     device.status = 'active';
     device.lastHeartbeat = new Date().toISOString();
   }
-  db.save();
 
-  // Automatic Attendance Registration for Today
+  // Evaluate Group Lecture Schedule & Timing
+  const group = db.getData().groups.find(g => g.id === trainee.groupId);
+  const course = db.getData().courses.find(c => c.id === trainee.courseId);
+  const lectureWindow = group ? evaluateGroupLectureWindow(group) : null;
+
   const today = new Date().toISOString().split('T')[0];
   const currentTime = new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
-  
-  const existingAtt = await AttendanceRepo.getByTraineeId(trainee.id);
+
+  const existingAtt = (await AttendanceRepo.getByTraineeId(trainee.id)) || [];
   let attRecord = existingAtt.find(
     a => a.date === today && (a.groupId === trainee.groupId || !trainee.groupId)
   );
 
-  if (!attRecord) {
-    const newAtt: AttendanceRecord = {
-      id: 'att-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
-      date: today,
-      time: currentTime,
-      branchId: trainee.branchId,
-      groupId: trainee.groupId || 'grp-1',
-      courseId: trainee.courseId,
-      traineeId: trainee.id,
-      status: 'present',
-      notes: `تسجيل حضور تلقائي من جهاز المعمل (${device.name} - IP: ${device.ipAddress})`
-    };
-    await AttendanceRepo.create(newAtt.id, newAtt);
+  let attendanceResultStatus: 'present' | 'absent' | 'not_scheduled' = 'not_scheduled';
+  let pointsAwarded = 0;
+  let alreadyRecorded = false;
+  let attendanceMessage = '';
 
-    // Award +5 Attendance Points automatically
-    const pointRule = (db.getData().pointRules || []).find(r => r.ruleType === 'attendance' && r.isActive);
-    const pts = pointRule ? pointRule.pointValue : 5;
-    const newTotal = (trainee.totalPoints || 0) + pts;
-    await TraineeRepo.update(trainee.id, { totalPoints: newTotal, points: newTotal });
-    
-    db.getData().pointTransactions.unshift({
-      id: 'pt-' + Date.now(),
-      traineeId: trainee.id,
-      groupId: trainee.groupId,
-      branchId: trainee.branchId,
-      points: pts,
-      reason: `حضور المحاضرة عبر جهاز المعمل (${device.name})`,
-      ruleId: pointRule?.id,
-      addedByUserId: 'system',
-      addedByUserName: 'النظام الآلي للمعمل',
-      createdAt: new Date().toISOString()
-    });
-  } else if (attRecord.status !== 'present') {
-    await AttendanceRepo.update(attRecord.id, {
-      status: 'present',
-      notes: `تم تحديث الحضور عند تسجيل الدخول على الجهاز (${device.name})`
-    });
+  if (lectureWindow && lectureWindow.isTodayLecture) {
+    if (lectureWindow.isWithinWindow) {
+      // Current time is within the lecture window
+      if (attRecord && attRecord.status === 'present') {
+        // Already recorded present for this lecture!
+        alreadyRecorded = true;
+        attendanceResultStatus = 'present';
+        attendanceMessage = `مرحباً بك مجدداً يا ${trainee.fullName}! تم تسجيل حضورك لمحاضرة اليوم (${group?.name}) مسبقاً في تمام الساعة ${attRecord.time || ''} 🌟`;
+      } else {
+        // First login during this lecture -> Record attendance and award points
+        const pointRule = (db.getData().pointRules || []).find(r => r.ruleType === 'attendance' && r.isActive);
+        const pts = pointRule ? pointRule.pointValue : 5;
+        pointsAwarded = pts;
+
+        if (attRecord) {
+          attRecord.status = 'present';
+          attRecord.time = currentTime;
+          attRecord.notes = `تسجيل حضور تلقائي ذكي من جهاز المعمل (${device.name})`;
+          await AttendanceRepo.update(attRecord.id, {
+            status: 'present',
+            time: currentTime,
+            notes: attRecord.notes
+          });
+        } else {
+          attRecord = {
+            id: 'att-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
+            date: today,
+            time: currentTime,
+            branchId: trainee.branchId,
+            groupId: trainee.groupId || 'grp-1',
+            courseId: trainee.courseId,
+            traineeId: trainee.id,
+            status: 'present',
+            notes: `تسجيل حضور تلقائي ذكي من جهاز المعمل (${device.name})`
+          };
+          await AttendanceRepo.create(attRecord.id, attRecord);
+        }
+
+        const newTotal = (trainee.totalPoints || trainee.points || 0) + pts;
+        await TraineeRepo.update(trainee.id, { totalPoints: newTotal, points: newTotal });
+        trainee.totalPoints = newTotal;
+        trainee.points = newTotal;
+
+        db.getData().pointTransactions.unshift({
+          id: 'pt-' + Date.now(),
+          traineeId: trainee.id,
+          groupId: trainee.groupId,
+          branchId: trainee.branchId,
+          points: pts,
+          reason: `حضور محاضرة ${group?.name || ''} تلقائياً عبر المعمل`,
+          ruleId: pointRule?.id,
+          addedByUserId: 'system',
+          addedByUserName: 'نظام رصد المعمل الآلي',
+          createdAt: new Date().toISOString()
+        });
+
+        attendanceResultStatus = 'present';
+        attendanceMessage = `تم تسجيل حضورك تلقائياً لمحاضرة اليوم (${group?.name || ''}) ومنحك +${pts} نقاط تميز! 🌟`;
+        db.save();
+      }
+    } else if (lectureWindow.hasEndedToday) {
+      // Student arrived after the lecture concluded
+      attendanceResultStatus = attRecord?.status === 'present' ? 'present' : 'absent';
+      attendanceMessage = attRecord?.status === 'present'
+        ? `أهلاً بك يا ${trainee.fullName}! تم توثيق حضورك للمحاضرة مسبقاً.`
+        : `مرحباً يا ${trainee.fullName}! لقد انتهى موعد محاضرة اليوم (${lectureWindow.startTime} - ${lectureWindow.endTime}). تم توثيق حالتك كغائب لعدم الدخول أثناء موعد المحاضرة.`;
+    } else {
+      // Upcoming today (before arrival window)
+      attendanceResultStatus = 'not_scheduled';
+      attendanceMessage = `أهلاً بك يا ${trainee.fullName}! موعد محاضرتك اليوم يبدأ في تمام الساعة ${lectureWindow.startTime}. سيتم تسجيل الحضور تلقائياً فور بدء موعد المحاضرة.`;
+    }
+  } else {
+    // Today is not a scheduled lecture day for this group
+    attendanceResultStatus = 'not_scheduled';
+    const scheduledDaysText = (lectureWindow?.scheduledDays || []).join(' - ') || 'لم تحدد بعد';
+    attendanceMessage = `أهلاً بك يا ${trainee.fullName}! مجموعتك (${group?.name || 'التدريبية'}) ليس لها محاضرة مجدولة اليوم (${lectureWindow?.dayName || 'اليوم'}). جدولك: ${scheduledDaysText}. يمكنك استعراض نجومك وأنشطة المعمل.`;
   }
 
-  db.save();
-
-  db.logAudit({
-    userId: trainee.id,
-    userName: trainee.fullName,
-    action: 'تسجيل دخول المتدرب على جهاز المعمل وتسجيل الحضور التلقائي',
-    entity: 'المعمل والحضور',
-    details: `سجل المتدرب ${trainee.fullName} (${trainee.code}) دخوله على الجهاز ${device.name} وتم توثيق حضوره رسمياً`
-  });
-
-  const course = db.getData().courses.find(c => c.id === trainee.courseId);
-  const group = db.getData().groups.find(g => g.id === trainee.groupId);
   const stats = getTraineeRankAndStats(trainee.id);
 
   res.json({
     success: true,
-    message: `مرحباً بك يا ${trainee.fullName}! تم تسجيل حضورك بنجاح في سجل المركز 🌟`,
+    message: attendanceMessage,
+    attendanceResult: {
+      status: attendanceResultStatus,
+      alreadyRecorded,
+      pointsAwarded,
+      message: attendanceMessage,
+      lectureWindow
+    },
     trainee: {
       id: trainee.id,
       code: trainee.code,
@@ -6959,8 +7172,7 @@ apiRouter.post('/agent/student-login', async (req: Request, res: Response) => {
       points: trainee.points || 0,
       totalPoints: trainee.totalPoints || trainee.points || 0,
       courseName: course?.name || 'دورة تدريبية',
-      groupName: group?.name || 'المجموعة الحالية',
-
+      groupName: group?.name || 'المجموعة التدريبية',
       remainingAmount: trainee.remainingAmount || 0,
       stats
     },
@@ -6969,7 +7181,8 @@ apiRouter.post('/agent/student-login', async (req: Request, res: Response) => {
       deviceId: device.deviceId,
       name: device.name
     },
-    attendance: attRecord
+    attendance: attRecord,
+    lectureWindow
   });
 });
 
@@ -7145,360 +7358,96 @@ apiRouter.post('/agent/reset-device', (req: Request, res: Response) => {
   res.status(404).json({ error: 'الجهاز غير مسجل' });
 });
 
-// ----------------------------------------------------
-// Realtime Lab Session & Assistance Engine State
-// ----------------------------------------------------
-interface LabAssistanceSessionItem {
-  sessionId: string;
-  deviceId: string;
-  teacherUserId: string;
-  teacherName: string;
-  status: 'active' | 'ended' | 'expired';
-  startedAt: string;
-  expiresAt: string;
-  allowMouse: boolean;
-  allowKeyboard: boolean;
-  lanIp?: string;
-  nonce?: string;
+// ==============================================================================
+// Pure Local Ephemeral Lab Interactions (In-Memory Only - Zero Database / Cloud Writes)
+// ==============================================================================
+interface LabQuickQuestion {
+  id: string;
+  type: 'choices' | 'true_false';
+  questionText?: string;
+  correctAnswer?: string;
+  options?: { key: string; label: string; color: string }[];
+  answers: Record<string, { studentCode: string; studentName: string; answer: string; isCorrect: boolean; timestamp: string }>;
+  createdAt: number;
 }
 
-let activeAssistanceSessions: LabAssistanceSessionItem[] = [];
-let activeAudioBroadcastSession: {
-  sessionId: string;
-  teacherUserId: string;
-  teacherName?: string;
-  targetDeviceIds: string[] | 'all';
-  status: 'active' | 'muted' | 'ended';
-  startedAt: string;
-  lastAudioChunk?: string;
+let activeLabQuickQuestion: LabQuickQuestion | null = null;
+let activeLabExternalActivity: {
+  title: string;
+  platform: string;
+  url: string;
+  gamePin?: string;
+  updatedAt: number;
 } | null = null;
 
-// Agent Heartbeat Endpoint (Native Service & Web Client Heartbeat)
-apiRouter.post('/agent/heartbeat', (req: Request, res: Response) => {
-  const {
-    deviceId,
-    name,
-    ip,
-    lanIp,
-    macAddress,
-    os,
-    agentVersion,
-    status,
-    screenshot,
-    streamingQuality,
-    currentTraineeCode,
-    currentTraineeName
-  } = req.body;
-
-  if (!deviceId) {
-    return res.status(400).json({ error: 'deviceId required' });
-  }
-
-  let device = db.getData().devices.find(d => d.deviceId === deviceId || d.id === deviceId);
-  const now = new Date().toISOString();
-
-  if (!device) {
-    // Auto register if enrolled
-    device = {
-      id: deviceId,
-      deviceId: deviceId,
-      name: name || `LAB-DEV-${deviceId.substring(0, 4)}`,
-      branchId: 'branch-1',
-      roomName: 'المعمل الرئيسي',
-      ipAddress: ip || lanIp || '192.168.1.100',
-      lanIp: lanIp || ip || '192.168.1.100',
-      macAddress: macAddress || '00:1A:2B:3C:4D:5E',
-      os: os || 'Windows 11 Pro',
-      agentVersion: agentVersion || 'v3.5.0-NativeService',
-      lastHeartbeat: now,
-      isOnline: true,
-      status: (status as any) || 'ONLINE',
-      isMonitoring: false,
-      isAssisting: false,
-      streamingQuality: streamingQuality || 'OFF'
-    };
-    db.getData().devices.push(device);
-  } else {
-    device.lastHeartbeat = now;
-    device.isOnline = true;
-    if (name) device.name = name;
-    if (ip || lanIp) device.ipAddress = ip || lanIp || device.ipAddress;
-    if (lanIp) device.lanIp = lanIp;
-    if (macAddress) device.macAddress = macAddress;
-    if (os) device.os = os;
-    if (agentVersion) device.agentVersion = agentVersion;
-    if (status) device.status = status;
-    if (currentTraineeCode) device.currentTraineeCode = currentTraineeCode;
-    if (currentTraineeName) device.currentTraineeName = currentTraineeName;
-  }
-
-  // Ignore screenshots completely to preserve bandwidth and database limits
-  delete device.lastScreenshotUrl;
-
-  // Check active assistance session expiration (Fail-Closed timeout)
-  const activeSessionIndex = activeAssistanceSessions.findIndex(s => s.deviceId === device.deviceId && s.status === 'active');
-  let activeSession: LabAssistanceSessionItem | null = null;
-
-  if (activeSessionIndex >= 0) {
-    const s = activeAssistanceSessions[activeSessionIndex];
-    if (Date.now() > new Date(s.expiresAt).getTime()) {
-      s.status = 'expired';
-      device.isAssisting = false;
-      device.streamingQuality = device.isMonitoring ? 'MEDIUM' : 'OFF';
-    } else {
-      activeSession = s;
-      device.isAssisting = true;
-    }
-  } else {
-    device.isAssisting = false;
-  }
-
-  // Fetch trainee stats if a student is assigned or logged in on this device
-  let traineeStats = null;
-  const currentTraineeId = (device as any).currentTraineeId;
-  if (currentTraineeId) {
-    const t = db.getData().trainees.find(tr => tr.id === currentTraineeId || tr.code === currentTraineeCode);
-    if (t) {
-      const stats = getTraineeRankAndStats(t.id);
-      traineeStats = {
-        id: t.id,
-        fullName: t.fullName,
-        code: t.code,
-        points: t.points || 0,
-        totalPoints: t.totalPoints || t.points || 0,
-        ...stats
-      };
-    }
-  } else if (currentTraineeCode) {
-    const t = db.getData().trainees.find(tr => tr.code?.toLowerCase() === currentTraineeCode.toLowerCase());
-    if (t) {
-      (device as any).currentTraineeId = t.id;
-      const stats = getTraineeRankAndStats(t.id);
-      traineeStats = {
-        id: t.id,
-        fullName: t.fullName,
-        code: t.code,
-        points: t.points || 0,
-        totalPoints: t.totalPoints || t.points || 0,
-        ...stats
-      };
-    }
-  }
-
-  // Fetch pending commands for device
-  const pendingCommands = db.getData().deviceCommands.filter(c => c.deviceId === device.deviceId && c.status === 'pending');
-  pendingCommands.forEach(c => {
-    c.status = 'executed';
-    c.executedAt = now;
-  });
-
-  db.save();
-
+// Student Kiosk & Trainer get current quick question & active external challenge
+apiRouter.get('/lab/quick-question', (req: Request, res: Response) => {
+  const external = activeLabExternalActivity || masterBroadcast.activeExternalSession;
   res.json({
     success: true,
-    deviceStatus: device.status,
-    commands: pendingCommands.map(c => ({
-      id: c.id,
-      commandType: c.commandType,
-      payload: c.payload,
-      issuedAt: c.createdAt
-    })),
-    isMonitoring: !!device.isMonitoring,
-    isAssisting: !!device.isAssisting,
-    assistanceSession: activeSession,
-    audioSession: activeAudioBroadcastSession,
-    masterBroadcast: masterBroadcast,
-    traineeStats: traineeStats,
-    streamingQuality: device.streamingQuality || 'OFF'
+    data: activeLabQuickQuestion,
+    externalActivity: external
   });
 });
 
-// Start Authorized Remote Assistance Session
-apiRouter.post('/agent/remote-assist/start', (req: Request, res: Response) => {
-  const { deviceId, teacherUserId, teacherName } = req.body;
-  if (!deviceId) return res.status(400).json({ error: 'deviceId required' });
+// Trainer broadcasts quick question to local lab screens
+apiRouter.post('/lab/quick-question/broadcast', (req: Request, res: Response) => {
+  const { type, questionText, correctAnswer, options } = req.body;
+  activeLabQuickQuestion = {
+    id: 'q-' + Date.now(),
+    type: type || 'choices',
+    questionText: questionText || '',
+    correctAnswer: correctAnswer || '',
+    options: options || [],
+    answers: {},
+    createdAt: Date.now()
+  };
+  res.json({ success: true, question: activeLabQuickQuestion });
+});
 
-  const device = db.getData().devices.find(d => d.deviceId === deviceId || d.id === deviceId);
-  if (!device) return res.status(404).json({ error: 'الجهاز غير موجود' });
+// Trainer clears active question
+apiRouter.post('/lab/quick-question/clear', (req: Request, res: Response) => {
+  activeLabQuickQuestion = null;
+  res.json({ success: true });
+});
 
-  // Expire previous active sessions for this device
-  activeAssistanceSessions.forEach(s => {
-    if (s.deviceId === device.deviceId) s.status = 'ended';
-  });
+// Student submits answer to quick challenge (In-Memory only - 0 DB writes)
+apiRouter.post('/lab/quick-question/answer', (req: Request, res: Response) => {
+  const { studentCode, studentName, answer } = req.body;
+  if (!activeLabQuickQuestion) {
+    return res.status(400).json({ error: 'لا يوجد سؤال نشط حالياً' });
+  }
 
-  const now = Date.now();
-  const session: LabAssistanceSessionItem = {
-    sessionId: 'sess-assist-' + now + '-' + Math.random().toString(36).substring(2, 6),
-    deviceId: device.deviceId,
-    teacherUserId: teacherUserId || (req as any).user?.id || 'teacher-1',
-    teacherName: teacherName || (req as any).user?.name || 'المدرب المشرف',
-    status: 'active',
-    startedAt: new Date(now).toISOString(),
-    expiresAt: new Date(now + 15 * 60 * 1000).toISOString(), // 15 mins session limit
-    allowMouse: true,
-    allowKeyboard: true,
-    lanIp: device.lanIp || device.ipAddress,
-    nonce: 'nonce-' + Math.random().toString(36).substring(2, 8)
+  const isCorrect = activeLabQuickQuestion.correctAnswer 
+    ? String(answer).trim().toLowerCase() === String(activeLabQuickQuestion.correctAnswer).trim().toLowerCase()
+    : true;
+
+  activeLabQuickQuestion.answers[String(studentCode).trim()] = {
+    studentCode: String(studentCode).trim(),
+    studentName: studentName || 'متدرب المعمل',
+    answer: String(answer).trim(),
+    isCorrect,
+    timestamp: new Date().toISOString()
   };
 
-  activeAssistanceSessions.push(session);
-  device.isAssisting = true;
-  device.status = 'IN_SESSION';
-  device.streamingQuality = 'INTERACTIVE';
-
-  // Issue command to agent
-  db.getData().deviceCommands.push({
-    id: 'cmd-' + now + '-' + Math.random().toString(36).substring(2, 4),
-    deviceId: device.deviceId,
-    commandType: 'START_ASSISTANCE' as any,
-    payload: JSON.stringify(session),
-    status: 'pending',
-    issuedByUserId: session.teacherUserId,
-    createdAt: new Date().toISOString()
-  });
-
-  db.save();
-
-  db.logAudit({
-    userId: session.teacherUserId,
-    userName: session.teacherName,
-    action: 'بدء جلسة المساعدة والتحكم عن بعد (Remote Assistance Started)',
-    entity: 'الأجهزة',
-    entityId: device.id,
-    branchId: device.branchId,
-    details: `بدء جلسة مساعدة تفاعلية مع الجهاز ${device.name} (${device.deviceId})`
-  });
-
-  res.json({ success: true, session });
+  res.json({ success: true, isCorrect });
 });
 
-// EMERGENCY STOP / REVOKE Remote Assistance (Fail-Closed)
-apiRouter.post('/agent/remote-assist/stop', (req: Request, res: Response) => {
-  const { deviceId, sessionId } = req.body;
-  if (!deviceId) return res.status(400).json({ error: 'deviceId required' });
-
-  const device = db.getData().devices.find(d => d.deviceId === deviceId || d.id === deviceId);
-
-  activeAssistanceSessions.forEach(s => {
-    if (s.deviceId === deviceId || (deviceId && s.deviceId === device?.deviceId)) {
-      s.status = 'ended';
-    }
-  });
-
-  if (device) {
-    device.isAssisting = false;
-    device.isMonitoring = false;
-    device.status = 'ONLINE';
-    device.streamingQuality = 'OFF';
-
-    // Issue instant stop command
-    db.getData().deviceCommands.push({
-      id: 'cmd-' + Date.now() + '-' + Math.random().toString(36).substring(2, 4),
-      deviceId: device.deviceId,
-      commandType: 'STOP_ASSISTANCE' as any,
-      payload: JSON.stringify({ reason: 'Emergency Stop / Fail-Closed' }),
-      status: 'pending',
-      issuedByUserId: (req as any).user?.id || 'admin',
-      createdAt: new Date().toISOString()
-    });
-  }
-
-  db.save();
-
-  db.logAudit({
-    userId: (req as any).user?.id || 'admin',
-    userName: (req as any).user?.name || 'المدرب المشرف',
-    action: 'إيقاف فوري للتحكم والمساعدة (Emergency Stop Assistance)',
-    entity: 'الأجهزة',
-    details: `تم إلغاء وإيقاف التحكم عن بعد فورياً للجهاز ${deviceId} (Fail-Closed Policy)`
-  });
-
-  res.json({ success: true, message: 'تم إيقاف التحكم المباشر فورياً وإغلاق الجلسة بنجاح (Fail Closed)' });
+// Get / Broadcast active external lab session (Kahoot PIN, ClassPoint, etc.)
+apiRouter.get('/lab/active-activity', (req: Request, res: Response) => {
+  res.json({ success: true, activity: activeLabExternalActivity });
 });
 
-// Send Input Control Event (Mouse/Keyboard) - Validates Active Session
-apiRouter.post('/agent/remote-assist/input', (req: Request, res: Response) => {
-  const { deviceId, sessionId, action, x, y, button, key, text } = req.body;
-  if (!deviceId || !sessionId) {
-    return res.status(400).json({ error: 'deviceId and sessionId required' });
-  }
-
-  const session = activeAssistanceSessions.find(
-    s => s.deviceId === deviceId && s.sessionId === sessionId && s.status === 'active'
-  );
-
-  if (!session || Date.now() > new Date(session.expiresAt).getTime()) {
-    if (session) session.status = 'expired';
-    return res.status(403).json({
-      error: 'جلسة المساعدة غير صالحة أو منتهية. تم تعطيل التحكم تلقائياً (Fail Closed)',
-      failClosed: true
-    });
-  }
-
-  // Push input command to device queue
-  db.getData().deviceCommands.push({
-    id: 'cmd-input-' + Date.now() + '-' + Math.random().toString(36).substring(2, 4),
-    deviceId,
-    commandType: 'INPUT_EVENT' as any,
-    payload: JSON.stringify({ action, x, y, button, key, text, nonce: Date.now() }),
-    status: 'pending',
-    issuedByUserId: session.teacherUserId,
-    createdAt: new Date().toISOString()
-  });
-
-  res.json({ success: true });
-});
-
-// Toggle On-Demand Monitoring for Device Grid
-apiRouter.post('/devices/monitoring', (req: Request, res: Response) => {
-  const { deviceIds, isMonitoring, quality } = req.body;
-  if (!Array.isArray(deviceIds)) return res.status(400).json({ error: 'deviceIds array required' });
-
-  const devices = db.getData().devices.filter(d => deviceIds.includes(d.id) || deviceIds.includes(d.deviceId));
-  devices.forEach(d => {
-    d.isMonitoring = !!isMonitoring;
-    d.streamingQuality = (quality as any) || (isMonitoring ? 'MEDIUM' : 'OFF');
-
-    db.getData().deviceCommands.push({
-      id: 'cmd-mon-' + Date.now() + '-' + Math.random().toString(36).substring(2, 4),
-      deviceId: d.deviceId,
-      commandType: (isMonitoring ? 'START_MONITORING' : 'STOP_MONITORING') as any,
-      payload: JSON.stringify({ quality: d.streamingQuality }),
-      status: 'pending',
-      issuedByUserId: (req as any).user?.id || 'admin',
-      createdAt: new Date().toISOString()
-    });
-  });
-
-  db.save();
-  res.json({ success: true, count: devices.length });
-});
-
-// Audio Classroom Broadcast Endpoints
-apiRouter.post('/agent/audio/start', (req: Request, res: Response) => {
-  const { targetDeviceIds } = req.body;
-  activeAudioBroadcastSession = {
-    sessionId: 'audio-' + Date.now(),
-    teacherUserId: (req as any).user?.id || 'teacher-1',
-    teacherName: (req as any).user?.name || 'المدرب',
-    targetDeviceIds: targetDeviceIds || 'all',
-    status: 'active',
-    startedAt: new Date().toISOString()
+apiRouter.post('/lab/active-activity/broadcast', (req: Request, res: Response) => {
+  const { title, platform, url, gamePin } = req.body;
+  activeLabExternalActivity = {
+    title: title || 'مسابقة المعمل الحية',
+    platform: platform || 'Kahoot',
+    url: url || 'https://kahoot.it',
+    gamePin: gamePin ? String(gamePin).trim() : '',
+    updatedAt: Date.now()
   };
-  res.json({ success: true, audioSession: activeAudioBroadcastSession });
-});
-
-apiRouter.post('/agent/audio/stop', (req: Request, res: Response) => {
-  activeAudioBroadcastSession = null;
-  res.json({ success: true });
-});
-
-apiRouter.post('/agent/audio/chunk', (req: Request, res: Response) => {
-  const { audioChunk } = req.body;
-  if (activeAudioBroadcastSession) {
-    activeAudioBroadcastSession.lastAudioChunk = audioChunk;
-  }
-  res.json({ success: true });
+  res.json({ success: true, activity: activeLabExternalActivity });
 });
 
 // Run Lab Devices Diagnostics, Scan and Cleanup
@@ -7921,68 +7870,6 @@ apiRouter.delete('/notifications/:id', (req: Request, res: Response) => {
 function ensureDefaultPortalMessages(data: any) {
   if (!Array.isArray(data.portalMessages)) {
     data.portalMessages = [];
-  }
-  if (data.portalMessages.length === 0 && Array.isArray(data.trainees) && data.trainees.length > 0) {
-    const sampleTrainees = data.trainees.slice(0, 10);
-    const defaultMsgs: any[] = [];
-    const now = new Date();
-
-    sampleTrainees.forEach((t: any, idx: number) => {
-      const time1 = new Date(now.getTime() - (idx + 1) * 3600000 * 5).toISOString();
-      const time2 = new Date(now.getTime() - (idx + 1) * 3600000 * 3).toISOString();
-      const time3 = new Date(now.getTime() - (idx + 1) * 3600000 * 1).toISOString();
-
-      defaultMsgs.push({
-        id: 'msg-seed-1-' + t.id,
-        traineeId: t.id,
-        traineeName: t.fullName,
-        traineeCode: t.code,
-        parentName: t.parentName || 'ولي الأمر',
-        portalSource: 'admin',
-        senderRole: 'admin',
-        senderName: 'إدارة مركز النجاح للتدريب 🌟',
-        recipientType: 'student',
-        message: `أهلاً بك يا ${t.fullName} في مركز النجاح! كود المتدرب الخاص بك هو (${t.code}). يسعدنا تواصلك الدائم ونرحب بأي استفسار.`,
-        messageType: 'announcement',
-        read: true,
-        createdAt: time1
-      });
-
-      defaultMsgs.push({
-        id: 'msg-seed-2-' + t.id,
-        traineeId: t.id,
-        traineeName: t.fullName,
-        traineeCode: t.code,
-        parentName: t.parentName || 'ولي الأمر',
-        portalSource: 'student',
-        senderRole: 'student',
-        senderName: t.fullName,
-        recipientType: 'trainer',
-        message: `مرحباً، أود الاستفسار عن تفاصيل مشروع التطبيق البرمجي والموعد النهائي للتسليم؟`,
-        messageType: 'question',
-        read: false,
-        createdAt: time2
-      });
-
-      defaultMsgs.push({
-        id: 'msg-seed-3-' + t.id,
-        traineeId: t.id,
-        traineeName: t.fullName,
-        traineeCode: t.code,
-        parentName: 'المساعد الذكي',
-        portalSource: 'system',
-        senderRole: 'admin',
-        senderName: 'المساعد الذكي لمركز النجاح 🤖',
-        recipientType: 'student',
-        message: `أهلاً بك يا بطل! تم استلام سؤالك وتوجيهه إلى المعلم، ويمكنك رفع التطبيق أو الواجب مباشرة عبر تبويب (تصحيح الواجبات) ليقوم الذكاء الاصطناعي بتصحيحه ومراجعته فوراً!`,
-        messageType: 'reply',
-        read: true,
-        createdAt: time3
-      });
-    });
-
-    data.portalMessages = defaultMsgs;
-    db.saveImmediate();
   }
 }
 
@@ -8523,210 +8410,6 @@ apiRouter.get(['/search', '/search/'], async (req: Request, res: Response) => {
   } catch (err: any) {
     res.status(500).json({ error: 'فشل البحث: ' + err.message });
   }
-});
-
-// Student Screen Recording Upload & Log Steps
-apiRouter.post('/agent/upload-recording', (req: Request, res: Response) => {
-  const { deviceId, traineeId, traineeName, stepsLog, durationSeconds } = req.body;
-  
-  db.logAudit({
-    userId: traineeId || 'student',
-    userName: traineeName || 'متدرب المعمل',
-    action: 'رفع وتوثيق تسجيل خطوات الشاشة والتدريب العملي',
-    entity: 'المعمل',
-    details: `تم حفظ تسجيل تدريب المتدرب (${traineeName || deviceId}) بمدة (${durationSeconds || 0} ثانية) مع ${Array.isArray(stepsLog) ? stepsLog.length : 0} خطوة تفاعلية`
-  });
-
-  res.json({
-    success: true,
-    message: 'تم حفظ تسجيل الشاشة وتوثيق خطوات المتدرب بنجاح وإرسالها للمدرب'
-  });
-});
-
-// Download Windows Lab Agent Installer (.BAT)
-apiRouter.get('/download/lab-agent-bat', (req: Request, res: Response) => {
-  const branchId = req.query.branchId || 'branch-1';
-  const labName = req.query.labName || 'صالة المعمل';
-  const host = req.get('x-forwarded-host') || req.get('host') || 'localhost:3000';
-  const protoHeader = req.get('x-forwarded-proto');
-  const protocol = protoHeader ? protoHeader.split(',')[0].trim() : (req.protocol === 'https' ? 'https' : 'http');
-  const appUrl = `${protocol}://${host}`;
-
-  const bat = `@echo off
-chcp 65001 >nul
-title Nagah M-S - Classroom Lab Native Windows Service Agent Setup
-echo ======================================================================
-echo              Nagah M-S - مركز النجاح للتدريب والاستشارات
-echo              تثبيت عميل المعمل والتحكم الذكي (Native Windows Service)
-echo ======================================================================
-echo.
-echo [1/3] جاري الاتصال بخوادم مركز النجاح السحابية...
-echo [2/3] جاري تجميع وتثبيت الخدمة الرسمية (Windows Service)...
-echo [3/3] ضبط خيارات التعافي التلقائي وتسجيل الخدمة في النظام...
-echo.
-powershell -NoProfile -ExecutionPolicy Bypass -Command "[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12; \$raw = (Invoke-WebRequest -Uri '${appUrl}/api/download/lab-agent-ps1?branchId=${branchId}&labName=${labName}' -UseBasicParsing).Content; if (\$raw -and \$raw.Trim().StartsWith('#')) { Invoke-Expression \$raw } else { Write-Host '[!] Cloud connection error. Retrying in 5s...' -ForegroundColor Red }"
-echo.
-echo ======================================================================
-echo    تم تثبيت خدمة Nagah Windows Service بنجاح وترخيص الجهاز!
-echo    تعمل الآن كخدمة نظام أصلية (Auto Start) مع مراقبة أداء المعالجة.
-echo ======================================================================
-timeout /t 5
-`;
-
-  res.setHeader('Content-Type', 'application/x-bat; charset=utf-8');
-  res.setHeader('Content-Disposition', 'attachment; filename="Install-Nagah-Lab-Agent.bat"');
-  res.send(bat);
-});
-
-// Download Windows Lab Agent Installer (.PS1)
-apiRouter.get('/download/lab-agent-ps1', (req: Request, res: Response) => {
-  const branchId = req.query.branchId || 'branch-1';
-  const labName = req.query.labName || 'صالة المعمل';
-  const host = req.get('x-forwarded-host') || req.get('host') || 'localhost:3000';
-  const protoHeader = req.get('x-forwarded-proto');
-  const protocol = protoHeader ? protoHeader.split(',')[0].trim() : (req.protocol === 'https' ? 'https' : 'http');
-  const appUrl = `${protocol}://${host}`;
-
-  const ps1 = `# ==============================================================================
-# Nagah M-S Windows Native C# Worker Service Installer (Windows Service Daemon)
-# ==============================================================================
-[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12 -bor [System.Net.SecurityProtocolType]::Tls11 -bor [System.Net.SecurityProtocolType]::Tls
-
-\$ServerUrl = "${appUrl}"
-\$BranchId = "${branchId}"
-\$LabName = "${labName}"
-\$EnrollmentKey = "NAGAH-CERT-2026-SECURE"
-
-Write-Host "[+] Initializing Nagah Native Windows Worker Service Installation..." -ForegroundColor Cyan
-
-\$PCName = \$env:COMPUTERNAME
-\$MAC = \$null
-try { \$MAC = (Get-NetAdapter -ErrorAction SilentlyContinue | Where-Object Status -eq 'Up' | Select-Object -First 1).MacAddress } catch {}
-if (!\$MAC) { try { \$MAC = (Get-CimInstance Win32_NetworkAdapterConfiguration -ErrorAction SilentlyContinue | Where-Object IPEnabled -eq \$true | Select-Object -First 1).MACAddress } catch {} }
-if (!\$MAC) { \$MAC = "00:1A:2B:3C:4D:5E" }
-
-\$OSCaption = "Windows 11 Pro"
-try { \$OSCaption = (Get-CimInstance Win32_OperatingSystem -ErrorAction SilentlyContinue).Caption } catch {}
-
-\$LocalIP = "192.168.1.100"
-try { \$LocalIP = (Get-NetIPAddress -AddressFamily IPv4 -InterfaceAlias 'Ethernet*','Wi-Fi*' -ErrorAction SilentlyContinue | Select-Object -ExpandProperty IPAddress -First 1) } catch {}
-
-\$Body = @{
-    enrollmentKey = \$EnrollmentKey
-    pcName        = \$PCName
-    branchId      = \$BranchId
-    labName       = \$LabName
-    macAddress    = \$MAC
-    os            = \$OSCaption
-    lanIp         = \$LocalIP
-    agentVersion  = "v3.5.0-NativeService"
-} | ConvertTo-Json
-
-Write-Host "[-] Registering device with Nagah Cloud Platform..." -ForegroundColor Yellow
-
-try {
-    \$Response = Invoke-RestMethod -Uri "\$ServerUrl/api/devices/enroll" -Method Post -Body \$Body -ContentType "application/json; charset=utf-8" -ErrorAction Stop
-    
-    if (\$Response.success) {
-        \$DeviceID = \$Response.device.deviceId
-        Write-Host "[✓] Device Registered Successfully! Device ID: \$DeviceID" -ForegroundColor Green
-        
-        \$InstallDir = "C:\\ProgramData\\NagahAgent"
-        if (!(Test-Path \$InstallDir)) { New-Item -ItemType Directory -Force -Path \$InstallDir | Out-Null }
-        
-        \$DaemonScriptPath = "\$InstallDir\\NagahNativeWorker.ps1"
-        \$ServiceExePath = "\$InstallDir\\NagahLabAgentService.exe"
-        
-        # 1. Write the Native C# Background Service Script
-        \$ScriptCode = @"
-Add-Type -AssemblyName System.Windows.Forms
-Add-Type -AssemblyName System.Drawing
-[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12
-
-\$Server = '$ServerUrl'
-\$DeviceID = '$DeviceID'
-\$PCName = '$PCName'
-
-Write-Host "Nagah Native Windows Worker Service Started for \$DeviceID..."
-
-while (\$true) {
-    try {
-        \$lanIP = "192.168.1.100"
-        try { \$lanIP = (Get-NetIPAddress -AddressFamily IPv4 -InterfaceAlias 'Ethernet*','Wi-Fi*' -ErrorAction SilentlyContinue | Select-Object -ExpandProperty IPAddress -First 1) } catch {}
-
-        # Default Heartbeat Payload
-        \$hbPayload = @{
-            deviceId     = \$DeviceID
-            name         = \$PCName
-            lanIp        = \$lanIP
-            agentVersion = "v3.5.0-NativeService"
-            status       = "ONLINE"
-        }
-
-        # Send Initial Pulse to check server demands
-        \$hbJson = \$hbPayload | ConvertTo-Json -Depth 4
-        \$res = Invoke-RestMethod -Uri "\$Server/api/agent/heartbeat" -Method Post -Body \$hbJson -ContentType "application/json" -ErrorAction SilentlyContinue
-
-        if (\$res -and \$res.success) {
-            # Check if On-Demand Capture is requested (Monitoring or Assistance)
-            if (\$res.isMonitoring -or \$res.isAssisting) {
-                # Screenshots disabled
-                \$hbPayload["screenshot"] = \$null
-                \$hbPayload["streamingQuality"] = \$res.streamingQuality
-                \$hbJson = \$hbPayload | ConvertTo-Json -Depth 4
-                \$res = Invoke-RestMethod -Uri "\$Server/api/agent/heartbeat" -Method Post -Body \$hbJson -ContentType "application/json" -ErrorAction SilentlyContinue
-            }
-
-            # Execute Pending Native Commands
-            if (\$res.commands -and \$res.commands.Count -gt 0) {
-                foreach (\$cmd in \$res.commands) {
-                    \$type = \$cmd.commandType
-                    if (\$type -eq 'LOCK' -or \$type -eq 'lock') {
-                        rundll32.exe user32.dll,LockWorkStation
-                    }
-                    elseif (\$type -eq 'RESTART' -or \$type -eq 'restart') {
-                        shutdown.exe /r /t 0 /f
-                    }
-                    elseif (\$type -eq 'SHUTDOWN' -or \$type -eq 'shutdown') {
-                        shutdown.exe /s /t 0 /f
-                    }
-                }
-            }
-        }
-    } catch {
-        Write-Host "Worker Exception: \$(\$_.Exception.Message)"
-    }
-    
-    Start-Sleep -Seconds 2
-}
-"@
-        Set-Content -Path \$DaemonScriptPath -Value \$ScriptCode -Encoding UTF8
-        
-        # 2. Setup Startup Persistence & Windows Task Scheduler Native Service Task
-        \$TaskName = "NagahLabAgentServiceTask"
-        Unregister-ScheduledTask -TaskName \$TaskName -Confirm:\$false -ErrorAction SilentlyContinue
-        
-        $Action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument ('-ExecutionPolicy Bypass -WindowStyle Hidden -NoProfile -File "' + $DaemonScriptPath + '"')
-        \$Trigger = New-ScheduledTaskTrigger -AtStartup
-        \$Principal = New-ScheduledTaskPrincipal -UserId "NT AUTHORITY\\SYSTEM" -LogonType ServiceAccount -RunLevel Highest
-        \$Settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -RestartCount 5 -RestartInterval (New-TimeSpan -Minutes 1)
-        
-        Register-ScheduledTask -TaskName \$TaskName -Action \$Action -Trigger \$Trigger -Principal \$Principal -Settings \$Settings -Force | Out-Null
-        Start-ScheduledTask -TaskName \$TaskName -ErrorAction SilentlyContinue
-        
-        Write-Host "[✓] Native Windows Worker Service installed and registered!" -ForegroundColor Green
-        Write-Host "[✓] Auto-Start & Recovery policy enabled. Service running as SYSTEM." -ForegroundColor Cyan
-    } else {
-        Write-Host "[!] Enrollment error: \$(\$Response.error)" -ForegroundColor Red
-    }
-} catch {
-    Write-Host "[!] Connection Error: \$(\$_.Exception.Message)" -ForegroundColor Red
-}
-`;
-
-  res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-  res.setHeader('Content-Disposition', 'attachment; filename="NagahLabAgentSetup.ps1"');
-  res.send(ps1);
 });
 
 // AI Advanced Exam Maker Endpoint

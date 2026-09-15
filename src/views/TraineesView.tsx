@@ -3869,21 +3869,27 @@ export const TraineesView: React.FC = () => {
 
               {/* Financial Balance Summary */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                <div className="p-3 rounded-xl bg-slate-800 border border-slate-700">
-                  <span className="text-slate-400 block mb-1">رسوم الدورة</span>
-                  <span className="text-lg font-black font-mono">{activeTrainee.feeAmount} ج.م</span>
+                <div className="p-3 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+                  <span className="text-slate-500 dark:text-slate-400 block mb-1">رسوم الدورة</span>
+                  <span className="text-lg font-black font-mono text-slate-900 dark:text-slate-100">
+                    {activeTrainee.feeAmount && activeTrainee.feeAmount > 0 
+                      ? activeTrainee.feeAmount 
+                      : (courses.find(c => c.id === activeTrainee.courseId)?.feeAmount || 2500)} ج.م
+                  </span>
                 </div>
-                <div className="p-3 rounded-xl bg-slate-800 border border-slate-700">
-                  <span className="text-slate-400 block mb-1">الخصم الممنوح</span>
-                  <span className="text-lg font-black font-mono text-amber-400">{activeTrainee.discountAmount} ج.م</span>
+                <div className="p-3 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+                  <span className="text-slate-500 dark:text-slate-400 block mb-1">الخصم الممنوح</span>
+                  <span className="text-lg font-black font-mono text-amber-600 dark:text-amber-400">{activeTrainee.discountAmount || 0} ج.م</span>
                 </div>
-                <div className="p-3 rounded-xl bg-emerald-950/40 border border-emerald-800">
-                  <span className="text-emerald-300 block mb-1">إجمالي المدفوع</span>
-                  <span className="text-lg font-black font-mono text-emerald-400">{activeTrainee.paidAmount} ج.م</span>
+                <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800">
+                  <span className="text-emerald-700 dark:text-emerald-300 block mb-1">إجمالي المدفوع</span>
+                  <span className="text-lg font-black font-mono text-emerald-600 dark:text-emerald-400">{activeTrainee.paidAmount || 0} ج.م</span>
                 </div>
-                <div className="p-3 rounded-xl bg-rose-950/40 border border-rose-800">
-                  <span className="text-rose-300 block mb-1">المتبقي المطلوب</span>
-                  <span className="text-lg font-black font-mono text-rose-400">{activeTrainee.remainingAmount} ج.م</span>
+                <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800">
+                  <span className="text-rose-700 dark:text-rose-300 block mb-1">المتبقي المطلوب</span>
+                  <span className="text-lg font-black font-mono text-rose-600 dark:text-rose-400">
+                    {Math.max(0, (activeTrainee.feeAmount && activeTrainee.feeAmount > 0 ? activeTrainee.feeAmount : (courses.find(c => c.id === activeTrainee.courseId)?.feeAmount || 2500)) - (activeTrainee.discountAmount || 0) - (activeTrainee.paidAmount || 0))} ج.م
+                  </span>
                 </div>
               </div>
 

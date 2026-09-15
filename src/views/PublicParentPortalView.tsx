@@ -521,6 +521,7 @@ export const PublicParentPortalView: React.FC<PublicParentPortalViewProps> = ({ 
     if (!selectedChild?.id && !selectedChild?.code) return;
 
     const pollParentMessages = async () => {
+      if (typeof document !== 'undefined' && document.hidden) return;
       try {
         const queryId = selectedChild.id || selectedChild.code;
         const res = await fetch(`/api/parent/messages/${queryId}`);
@@ -542,7 +543,7 @@ export const PublicParentPortalView: React.FC<PublicParentPortalViewProps> = ({ 
     };
 
     pollParentMessages();
-    const interval = setInterval(pollParentMessages, 4000);
+    const interval = setInterval(pollParentMessages, 15000);
     return () => clearInterval(interval);
   }, [selectedChild?.id, selectedChild?.code]);
 

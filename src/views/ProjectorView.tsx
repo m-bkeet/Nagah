@@ -24,6 +24,7 @@ export const ProjectorView: React.FC<{ onExit?: () => void }> = ({ onExit }) => 
 
   useEffect(() => {
     const fetchState = async () => {
+      if (typeof document !== 'undefined' && document.hidden) return;
       try {
         const [projRes, bcastRes] = await Promise.all([
           api.getProjectorState(),
@@ -37,7 +38,7 @@ export const ProjectorView: React.FC<{ onExit?: () => void }> = ({ onExit }) => 
     };
 
     fetchState();
-    const interval = setInterval(fetchState, 300); // 300ms for fast responsive projector display
+    const interval = setInterval(fetchState, 2000);
     return () => clearInterval(interval);
   }, []);
 

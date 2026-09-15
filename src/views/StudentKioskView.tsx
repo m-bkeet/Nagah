@@ -44,6 +44,12 @@ export const StudentKioskView: React.FC = () => {
 
   // Kahoot PIN input
   const [kahootPin, setKahootPin] = useState('');
+  const [activeExternalActivity, setActiveExternalActivity] = useState<{
+    title?: string;
+    platform?: string;
+    url?: string;
+    gamePin?: string;
+  } | null>(null);
 
   // Mini-Game Modal / Section
   const [isMiniGameActive, setIsMiniGameActive] = useState(false);
@@ -54,6 +60,7 @@ export const StudentKioskView: React.FC = () => {
   useEffect(() => {
     let isMounted = true;
     const checkQuickQuestion = async () => {
+      if (typeof document !== 'undefined' && document.hidden) return;
       try {
         const res = await fetch('/api/lab/quick-question');
         const json = await res.json();
@@ -68,6 +75,15 @@ export const StudentKioskView: React.FC = () => {
             setActiveQuestion(null);
             setSubmittedAnswer(null);
           }
+
+          if (json && json.externalActivity) {
+            setActiveExternalActivity(json.externalActivity);
+            if (json.externalActivity.gamePin) {
+              setKahootPin(json.externalActivity.gamePin);
+            }
+          } else {
+            setActiveExternalActivity(null);
+          }
         }
       } catch (err) {
         // silent fail in polling
@@ -75,67 +91,50 @@ export const StudentKioskView: React.FC = () => {
     };
 
     checkQuickQuestion();
-    const interval = setInterval(checkQuickQuestion, 2000);
+    const interval = setInterval(checkQuickQuestion, 5000);
     return () => {
       isMounted = false;
       clearInterval(interval);
     };
   }, [currentTrainee]);
 
-  // Handle Login & Auto Check-in
+  const [attendanceFeedback, setAttendanceFeedback] = useState<any>(null);
+
+  // Handle Login & Auto Check-in synchronized with Lecture Schedule
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    const code = studentCodeInput.trim().toUpperCase();
+    const code = studentCodeInput.trim();
     if (!code) return;
     setIsLoggingIn(true);
     setLoginError('');
 
     try {
-      // 1. Fetch trainee info
-      const traineesRes = await fetch('/api/trainees').catch(() => null);
-      let foundTrainee: any = null;
-
-      if (traineesRes && traineesRes.ok) {
-        const allTrainees = await traineesRes.json();
-        if (Array.isArray(allTrainees)) {
-          foundTrainee = allTrainees.find((t: any) => 
-            String(t.studentCode || t.code || t.id).trim().toUpperCase() === code
-          );
-        }
+      let devId = localStorage.getItem('nagah_lab_device_id');
+      if (!devId) {
+        devId = 'LAB-PC-' + Math.floor(100 + Math.random() * 900);
+        localStorage.setItem('nagah_lab_device_id', devId);
       }
 
-      if (!foundTrainee) {
-        // Fallback to login API
-        const res = await api.login({ role: 'STUDENT', studentCode: code });
-        if (res && res.success && res.data) {
-          foundTrainee = res.data;
-        }
+      const res = await fetch('/api/agent/student-login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          codeOrPhone: code,
+          deviceId: devId,
+          deviceName: devId
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        setLoginError(data.error || 'كود الطالب غير صحيح. يرجى التأكد من الكود المكتوب في الكارنيه.');
+        return;
       }
 
-      if (foundTrainee) {
-        setCurrentTrainee(foundTrainee);
-        // Record instant attendance
-        try {
-          await api.recordAttendance({ 
-            studentCode: code, 
-            status: 'present',
-            traineeId: foundTrainee.id || code,
-            traineeName: foundTrainee.name || foundTrainee.fullName
-          });
-        } catch (e) {}
-
-        // Fetch group details if available
-        if (foundTrainee.groupId) {
-          try {
-            const grpRes = await fetch(`/api/groups/${foundTrainee.groupId}`).catch(() => null);
-            if (grpRes && grpRes.ok) {
-              const grpData = await grpRes.json();
-              setTraineeGroup(grpData);
-            }
-          } catch (e) {}
-        }
-      } else {
-        setLoginError('كود الطالب غير صحيح. يرجى التأكد من الكود المكتوب في الكارنيه.');
+      setCurrentTrainee(data.trainee);
+      setAttendanceFeedback(data.attendanceResult || { status: 'present', message: data.message });
+      if (data.trainee?.groupName) {
+        setTraineeGroup({ name: data.trainee.groupName });
       }
     } catch (err) {
       setLoginError('تعذر الاتصال بالنظام، يرجى المحاولة مرة أخرى.');
@@ -293,9 +292,22 @@ export const StudentKioskView: React.FC = () => {
                 <span className="text-xs bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2.5 py-0.5 rounded-lg font-black tracking-wider">
                   {studentCode}
                 </span>
-                <span className="text-xs bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-2.5 py-0.5 rounded-lg font-bold flex items-center gap-1">
-                  <CheckCircle2 className="w-3.5 h-3.5" /> مسجل حاضر بالمعمل
-                </span>
+
+                {attendanceFeedback?.status === 'present' ? (
+                  <span className="text-xs bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-2.5 py-0.5 rounded-lg font-bold flex items-center gap-1">
+                    <CheckCircle2 className="w-3.5 h-3.5" /> 
+                    {attendanceFeedback?.alreadyRecorded ? 'مسجل حاضر مسبقاً' : 'تم تسجيل الحضور (+5 نقاط)'}
+                  </span>
+                ) : attendanceFeedback?.status === 'not_scheduled' ? (
+                  <span className="text-xs bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 px-2.5 py-0.5 rounded-lg font-bold flex items-center gap-1">
+                    <Clock className="w-3.5 h-3.5" /> تدريب حر (خارج موعد المحاضرة)
+                  </span>
+                ) : (
+                  <span className="text-xs bg-rose-500/20 text-rose-300 border border-rose-500/30 px-2.5 py-0.5 rounded-lg font-bold flex items-center gap-1">
+                    انتهى موعد المحاضرة
+                  </span>
+                )}
+
                 {traineeGroup?.name && (
                   <span className="text-xs bg-purple-500/20 text-purple-300 px-2.5 py-0.5 rounded-lg font-bold">
                     {traineeGroup.name}
@@ -309,6 +321,21 @@ export const StudentKioskView: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
+            {/* Group Ranking */}
+            {currentTrainee.stats?.rankInGroup && (
+              <div className="bg-slate-950 border border-purple-500/30 px-4 py-2 rounded-2xl flex items-center gap-2 shadow-inner">
+                <Trophy className="w-5 h-5 text-purple-400" />
+                <div className="text-right">
+                  <div className="text-lg font-black text-purple-400 leading-none">
+                    #{currentTrainee.stats.rankInGroup}
+                  </div>
+                  <div className="text-[10px] text-slate-400 font-bold">
+                    من {currentTrainee.stats.totalInGroup || 1} بمجموعتك
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Stars Counter */}
             <div className="bg-slate-950 border border-amber-500/30 px-4 py-2 rounded-2xl flex items-center gap-2 shadow-inner">
               <Star className="w-5 h-5 text-amber-400 fill-amber-400 animate-bounce" />
@@ -324,6 +351,7 @@ export const StudentKioskView: React.FC = () => {
                 setCurrentTrainee(null);
                 setActiveQuestion(null);
                 setSubmittedAnswer(null);
+                setAttendanceFeedback(null);
               }}
               title="خروج لتبديل الطالب"
               className="p-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-2xl border border-slate-700 transition-all cursor-pointer"
@@ -332,6 +360,60 @@ export const StudentKioskView: React.FC = () => {
             </button>
           </div>
         </header>
+
+        {/* Schedule & Attendance Message Banner if applicable */}
+        {attendanceFeedback?.message && (
+          <div className={`p-4 rounded-2xl border text-sm font-bold flex items-center gap-3 ${
+            attendanceFeedback.status === 'present'
+              ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
+              : attendanceFeedback.status === 'not_scheduled'
+              ? 'bg-cyan-500/10 border-cyan-500/30 text-cyan-300'
+              : 'bg-rose-500/10 border-rose-500/30 text-rose-300'
+          }`}>
+            <Sparkles className="w-5 h-5 shrink-0" />
+            <p className="flex-1 leading-relaxed">{attendanceFeedback.message}</p>
+          </div>
+        )}
+
+        {/* ACTIVE LIVE EXTERNAL CHALLENGE (كاهوت / كلاس بوينت) */}
+        {activeExternalActivity && (
+          <div className="bg-gradient-to-r from-purple-900/50 via-indigo-900/40 to-blue-900/50 border-2 border-purple-400/60 rounded-3xl p-6 shadow-2xl relative overflow-hidden animate-fadeIn space-y-4">
+            <div className="flex items-center justify-between flex-wrap gap-3">
+              <div className="flex items-center gap-3">
+                <span className="w-3.5 h-3.5 rounded-full bg-emerald-400 animate-ping"></span>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs bg-purple-500 text-white font-black px-2.5 py-0.5 rounded-full uppercase">
+                      {activeExternalActivity.platform || 'Kahoot'}
+                    </span>
+                    <h3 className="text-lg sm:text-xl font-black text-white">
+                      {activeExternalActivity.title || 'مسابقة تفاعلية أطلقها المعلم الآن!'}
+                    </h3>
+                  </div>
+                  {activeExternalActivity.gamePin && (
+                    <p className="text-xs text-purple-200 mt-1">
+                      كود اللعبة (PIN): <span className="font-mono text-base font-black text-amber-300 tracking-wider mr-1">{activeExternalActivity.gamePin}</span>
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              <a
+                href={
+                  activeExternalActivity.platform?.toLowerCase().includes('kahoot') && activeExternalActivity.gamePin
+                    ? `https://kahoot.it/?pin=${activeExternalActivity.gamePin}`
+                    : activeExternalActivity.url || (activeExternalActivity.platform?.toLowerCase().includes('classpoint') ? 'https://www.classpoint.app' : 'https://kahoot.it')
+                }
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-6 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-black text-sm rounded-2xl flex items-center gap-2 shadow-xl shadow-purple-600/40 hover:scale-105 active:scale-95 transition-all"
+              >
+                <span>الانضمام للمسابقة الآن 🚀</span>
+                <ExternalLink className="w-4 h-4" />
+              </a>
+            </div>
+          </div>
+        )}
 
         {/* ACTIVE LIVE QUESTION / QUICK TOOL (أداة المنكش السريع) */}
         {activeQuestion ? (

@@ -332,6 +332,7 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
     if (!student?.id && !student?.code) return;
 
     const pollMessages = async () => {
+      if (typeof document !== 'undefined' && document.hidden) return;
       try {
         const queryId = student.id || student.code;
         const res = await fetch(`/api/student/messages/${queryId}`);
@@ -347,7 +348,7 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
     };
 
     pollMessages();
-    const interval = setInterval(pollMessages, 4000);
+    const interval = setInterval(pollMessages, 15000);
     return () => clearInterval(interval);
   }, [student?.id, student?.code]);
 

@@ -8,30 +8,181 @@ var __export = (target, all) => {
     __defProp(target, name, { get: all[name], enumerable: true });
 };
 
+// server/firestoreStorage.ts
+import fs from "fs";
+import path from "path";
+import crypto from "crypto";
+function hashPayload(data) {
+  const str = typeof data === "string" ? data : JSON.stringify(data);
+  return crypto.createHash("md5").update(str).digest("hex");
+}
+async function saveCollectionToFirestore(collectionName, items) {
+  if (!apiKey || !dbId) return false;
+  const newHash = hashPayload(items);
+  if (collectionHashes.get(collectionName) === newHash) {
+    return true;
+  }
+  collectionHashes.set(collectionName, newHash);
+  try {
+    const ITEMS_PER_DOC = 30;
+    if (!Array.isArray(items)) {
+      const url = `${BASE_URL}/nagah_store/${collectionName}?key=${apiKey}`;
+      const res = await fetch(url, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fields: { payload: { stringValue: JSON.stringify(items || {}) } } })
+      });
+      return res.ok;
+    }
+    const chunks = [];
+    for (let i = 0; i < items.length; i += ITEMS_PER_DOC) {
+      chunks.push(items.slice(i, i + ITEMS_PER_DOC));
+    }
+    const metaUrl = `${BASE_URL}/nagah_store/${collectionName}_meta?key=${apiKey}`;
+    await fetch(metaUrl, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ fields: { chunkCount: { integerValue: chunks.length }, totalItems: { integerValue: items.length } } })
+    });
+    for (let idx = 0; idx < chunks.length; idx++) {
+      const chunkUrl = `${BASE_URL}/nagah_store/${collectionName}_${idx}?key=${apiKey}`;
+      await fetch(chunkUrl, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fields: { payload: { stringValue: JSON.stringify(chunks[idx]) } } })
+      });
+    }
+    return true;
+  } catch (err) {
+    console.warn(`[FirestoreStorage] Error saving ${collectionName}:`, err);
+    return false;
+  }
+}
+async function loadCollectionFromFirestore(collectionName) {
+  if (!apiKey || !dbId) return null;
+  try {
+    const metaUrl = `${BASE_URL}/nagah_store/${collectionName}_meta?key=${apiKey}`;
+    const metaRes = await fetch(metaUrl);
+    if (metaRes.status === 404) {
+      const singleUrl = `${BASE_URL}/nagah_store/${collectionName}?key=${apiKey}`;
+      const singleRes = await fetch(singleUrl);
+      if (singleRes.status === 404) return null;
+      const singleData = await singleRes.json();
+      return singleData.fields?.payload?.stringValue ? JSON.parse(singleData.fields.payload.stringValue) : null;
+    }
+    const metaData = await metaRes.json();
+    const chunkCount = parseInt(metaData.fields?.chunkCount?.integerValue || "0", 10);
+    let allItems = [];
+    for (let idx = 0; idx < chunkCount; idx++) {
+      const chunkUrl = `${BASE_URL}/nagah_store/${collectionName}_${idx}?key=${apiKey}`;
+      const chunkRes = await fetch(chunkUrl);
+      if (chunkRes.ok) {
+        const chunkData = await chunkRes.json();
+        if (chunkData.fields?.payload?.stringValue) {
+          allItems = allItems.concat(JSON.parse(chunkData.fields.payload.stringValue));
+        }
+      }
+    }
+    return allItems;
+  } catch (err) {
+    console.warn(`[FirestoreStorage] Error loading ${collectionName}:`, err);
+    return null;
+  }
+}
+async function saveFullDbToFirestore(dbData) {
+  if (!dbData) return;
+  const keys = Object.keys(dbData);
+  for (const k of keys) {
+    if (k === "deviceCommands" && Array.isArray(dbData[k]) && dbData[k].length > 500) {
+      await saveCollectionToFirestore(k, dbData[k].slice(-200));
+    } else {
+      await saveCollectionToFirestore(k, dbData[k]);
+    }
+  }
+}
+async function loadFullDbFromFirestore() {
+  const collections = [
+    "users",
+    "branches",
+    "trainees",
+    "trainers",
+    "courses",
+    "programs",
+    "groups",
+    "attendance",
+    "payments",
+    "expenses",
+    "trainerSettlements",
+    "pointRules",
+    "pointTransactions",
+    "exams",
+    "questions",
+    "examResults",
+    "interactiveSessions",
+    "certificates",
+    "certificateTemplates",
+    "trainerAttestations",
+    "auditLogs",
+    "settings",
+    "notifications",
+    "assignments"
+  ];
+  const result = {};
+  let loadedCount = 0;
+  for (const col of collections) {
+    const data = await loadCollectionFromFirestore(col);
+    if (data !== null) {
+      result[col] = data;
+      collectionHashes.set(col, hashPayload(data));
+      loadedCount++;
+    }
+  }
+  return loadedCount > 0 ? result : null;
+}
+var firebaseConfig, dbId, apiKey, BASE_URL, collectionHashes;
+var init_firestoreStorage = __esm({
+  "server/firestoreStorage.ts"() {
+    firebaseConfig = null;
+    try {
+      const cfgPath = path.join(process.cwd(), "firebase-applet-config.json");
+      if (fs.existsSync(cfgPath)) {
+        firebaseConfig = JSON.parse(fs.readFileSync(cfgPath, "utf-8"));
+      }
+    } catch (e) {
+      console.warn("[FirestoreStorage] Config load error:", e);
+    }
+    dbId = firebaseConfig?.firestoreDatabaseId || "ai-studio-nagahms-44b6deb5-5b09-4e62-a58f-790b1ca94573";
+    apiKey = firebaseConfig?.apiKey || "AIzaSyBHYfOMGYzfI0YVOgjWc9O-qdgxENy0oD4";
+    BASE_URL = `https://firestore.googleapis.com/v1/projects/booming-list-379600/databases/${dbId}/documents`;
+    collectionHashes = /* @__PURE__ */ new Map();
+  }
+});
+
 // server/db.ts
 var db_exports = {};
 __export(db_exports, {
   db: () => db,
   hashPassword: () => hashPassword
 });
-import fs from "fs";
-import path from "path";
-import crypto from "crypto";
+import fs2 from "fs";
+import path2 from "path";
+import crypto2 from "crypto";
 import os from "os";
 function hashPassword(password) {
-  return crypto.createHash("sha256").update(password + "_success_v7_salt").digest("hex");
+  return crypto2.createHash("sha256").update(password + "_success_v7_salt").digest("hex");
 }
 var isServerless, ACTUAL_DATA_DIR, BACKUPS_DIR, DB_FILE, BACKUP_FILE, BUNDLED_DB_PATHS, defaultPointRules, initialData, userPasswordMap, DatabaseManager, db;
 var init_db = __esm({
   "server/db.ts"() {
+    init_firestoreStorage();
     isServerless = Boolean(
       process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.VERCEL_ENV || process.cwd().startsWith("/var/task") || process.cwd() === "/"
     );
-    ACTUAL_DATA_DIR = isServerless ? path.join(os.tmpdir(), "nagah_data") : path.join(process.cwd(), "data");
-    BACKUPS_DIR = path.join(ACTUAL_DATA_DIR, "backups");
-    DB_FILE = path.join(ACTUAL_DATA_DIR, "database.json");
-    BACKUP_FILE = path.join(ACTUAL_DATA_DIR, "database.backup.json");
-    BUNDLED_DB_PATHS = [path.join(process.cwd(), "data", "database.json"), path.join(process.cwd(), "database.json"), "/var/task/data/database.json", "/vercel/path0/data/database.json"];
+    ACTUAL_DATA_DIR = isServerless ? path2.join(os.tmpdir(), "nagah_data") : path2.join(process.cwd(), "data");
+    BACKUPS_DIR = path2.join(ACTUAL_DATA_DIR, "backups");
+    DB_FILE = path2.join(ACTUAL_DATA_DIR, "database.json");
+    BACKUP_FILE = path2.join(ACTUAL_DATA_DIR, "database.backup.json");
+    BUNDLED_DB_PATHS = [path2.join(process.cwd(), "data", "database.json"), path2.join(process.cwd(), "database.json"), "/var/task/data/database.json", "/vercel/path0/data/database.json"];
     defaultPointRules = [
       { id: "rule-1", title: "\u062A\u0633\u062C\u064A\u0644 \u0627\u0644\u062D\u0636\u0648\u0631", pointValue: 10, ruleType: "attendance", description: "\u0646\u0642\u0627\u0637 \u0627\u0644\u062D\u0636\u0648\u0631 \u0641\u064A \u0627\u0644\u0645\u0648\u0639\u062F \u0627\u0644\u0645\u062D\u062F\u062F", isActive: true },
       { id: "rule-2", title: "\u0627\u0644\u0645\u0634\u0627\u0631\u0643\u0629 \u0648\u0627\u0644\u062A\u0641\u0627\u0639\u0644", pointValue: 20, ruleType: "participation", description: "\u0627\u0644\u062A\u0641\u0627\u0639\u0644 \u0627\u0644\u0625\u064A\u062C\u0627\u0628\u064A \u0623\u062B\u0646\u0627\u0621 \u0627\u0644\u0645\u062D\u0627\u0636\u0631\u0629", isActive: true },
@@ -40,28 +191,9 @@ var init_db = __esm({
       { id: "rule-5", title: "\u0645\u062E\u0627\u0644\u0641\u0629 \u0623\u0648 \u062A\u0623\u062E\u064A\u0631", pointValue: -10, ruleType: "violation", description: "\u0627\u0644\u062A\u0623\u062E\u064A\u0631 \u0623\u0648 \u0639\u062F\u0645 \u0627\u0644\u0627\u0644\u062A\u0632\u0627\u0645 \u0628\u0642\u0648\u0627\u0639\u062F \u0627\u0644\u0642\u0627\u0639\u0629", isActive: true }
     ];
     initialData = {
-      computerLabs: [
-        {
-          id: "lab-1",
-          name: "\u0645\u0639\u0645\u0644 \u0627\u0644\u0646\u062C\u0627\u062D",
-          branchId: "branch-1",
-          branchName: "\u0641\u0631\u0639 \u0627\u0644\u0646\u062C\u0627\u062D",
-          capacity: 25,
-          devicesCount: 20,
-          status: "active",
-          notes: "\u0645\u0639\u0645\u0644 \u0627\u0644\u062D\u0627\u0633\u0628 \u0648\u0627\u0644\u0628\u0631\u0645\u062C\u0629 \u0627\u0644\u0631\u0626\u064A\u0633\u064A - \u0641\u0631\u0639 \u0627\u0644\u0646\u062C\u0627\u062D"
-        },
-        {
-          id: "lab-2",
-          name: "\u0645\u0639\u0645\u0644 \u0628\u062F\u0631",
-          branchId: "branch-2",
-          branchName: "\u0641\u0631\u0639 \u0628\u062F\u0631",
-          capacity: 25,
-          devicesCount: 20,
-          status: "active",
-          notes: "\u0645\u0639\u0645\u0644 \u0627\u0644\u062D\u0627\u0633\u0628 \u0648\u0627\u0644\u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u0627\u0644\u0631\u0626\u064A\u0633\u064A - \u0641\u0631\u0639 \u0628\u062F\u0631"
-        }
-      ],
+      devices: [],
+      traineeScreenshots: [],
+      computerLabs: [],
       branches: [
         {
           id: "branch-1",
@@ -2712,7 +2844,6 @@ var init_db = __esm({
           "currentQuestionIndex": 1
         }
       ],
-      devices: [],
       deviceCommands: [
         {
           "id": "cmd-1787353097554-p0hu",
@@ -3470,7 +3601,6 @@ var init_db = __esm({
           read: false
         }
       ],
-      traineeScreenshots: [],
       secretFinancialArchives: [],
       deletedDeviceIds: [],
       labSchedules: [
@@ -3520,16 +3650,40 @@ var init_db = __esm({
     DatabaseManager = class {
       constructor() {
         this.saveTimeout = null;
+        this.isFirestoreHydrated = false;
+        this.hydrationPromise = null;
         this.ensureDataDir();
         this.data = this.loadData();
+        this.hydrationPromise = this.ensureHydrated();
+      }
+      async ensureHydrated() {
+        if (this.isFirestoreHydrated) return;
+        try {
+          const remoteData = await loadFullDbFromFirestore();
+          if (remoteData && Array.isArray(remoteData.trainees) && remoteData.trainees.length > 0) {
+            console.log("[DB] Hydrated from Firestore! Trainees count:", remoteData.trainees.length);
+            this.data = {
+              ...this.data,
+              ...remoteData,
+              settings: {
+                ...this.data.settings,
+                ...remoteData.settings || {}
+              }
+            };
+          }
+        } catch (err) {
+          console.warn("[DB] Firestore hydration notice:", err);
+        } finally {
+          this.isFirestoreHydrated = true;
+        }
       }
       ensureDataDir() {
         try {
-          if (!fs.existsSync(ACTUAL_DATA_DIR)) {
-            fs.mkdirSync(ACTUAL_DATA_DIR, { recursive: true });
+          if (!fs2.existsSync(ACTUAL_DATA_DIR)) {
+            fs2.mkdirSync(ACTUAL_DATA_DIR, { recursive: true });
           }
-          if (!fs.existsSync(BACKUPS_DIR)) {
-            fs.mkdirSync(BACKUPS_DIR, { recursive: true });
+          if (!fs2.existsSync(BACKUPS_DIR)) {
+            fs2.mkdirSync(BACKUPS_DIR, { recursive: true });
           }
         } catch (e) {
           console.warn("[DB] Non-critical ensureDataDir notice:", e);
@@ -3538,9 +3692,9 @@ var init_db = __esm({
       loadData() {
         try {
           let rawData = null;
-          if (fs.existsSync(DB_FILE)) {
+          if (fs2.existsSync(DB_FILE)) {
             try {
-              const content = fs.readFileSync(DB_FILE, "utf-8");
+              const content = fs2.readFileSync(DB_FILE, "utf-8");
               if (content && content.trim().length > 10) {
                 rawData = content;
               }
@@ -3550,9 +3704,9 @@ var init_db = __esm({
           }
           if (!rawData) {
             for (const p of BUNDLED_DB_PATHS) {
-              if (fs.existsSync(p)) {
+              if (fs2.existsSync(p)) {
                 try {
-                  const content = fs.readFileSync(p, "utf-8");
+                  const content = fs2.readFileSync(p, "utf-8");
                   if (content && content.trim().length > 10) {
                     console.log("[DB] Loading from bundled database file:", p);
                     rawData = content;
@@ -3564,9 +3718,9 @@ var init_db = __esm({
               }
             }
           }
-          if (!rawData && fs.existsSync(BACKUP_FILE)) {
+          if (!rawData && fs2.existsSync(BACKUP_FILE)) {
             try {
-              const content = fs.readFileSync(BACKUP_FILE, "utf-8");
+              const content = fs2.readFileSync(BACKUP_FILE, "utf-8");
               if (content && content.trim().length > 10) {
                 console.log("[DB] Restoring data from BACKUP_FILE");
                 rawData = content;
@@ -3575,13 +3729,13 @@ var init_db = __esm({
               console.warn("[DB] Error reading BACKUP_FILE:", e);
             }
           }
-          if (!rawData && fs.existsSync(BACKUPS_DIR)) {
+          if (!rawData && fs2.existsSync(BACKUPS_DIR)) {
             try {
-              const backupFiles = fs.readdirSync(BACKUPS_DIR).filter((f) => f.endsWith(".json")).sort().reverse();
+              const backupFiles = fs2.readdirSync(BACKUPS_DIR).filter((f) => f.endsWith(".json")).sort().reverse();
               if (backupFiles.length > 0) {
-                const latestBackup = path.join(BACKUPS_DIR, backupFiles[0]);
+                const latestBackup = path2.join(BACKUPS_DIR, backupFiles[0]);
                 console.log("[DB] Restoring data from latest backup file:", latestBackup);
-                rawData = fs.readFileSync(latestBackup, "utf-8");
+                rawData = fs2.readFileSync(latestBackup, "utf-8");
               }
             } catch (e) {
               console.warn("[DB] Error reading rotating backups:", e);
@@ -3621,6 +3775,10 @@ var init_db = __esm({
               badges: Array.isArray(parsed.badges) ? parsed.badges : [],
               schedules: Array.isArray(parsed.schedules) ? parsed.schedules : [],
               session_attendance_records: Array.isArray(parsed.session_attendance_records) ? parsed.session_attendance_records : [],
+              devices: [],
+              deviceCommands: [],
+              traineeScreenshots: [],
+              computerLabs: [],
               users: existingUsers,
               settings: {
                 ...initialData.settings,
@@ -3670,26 +3828,29 @@ var init_db = __esm({
           this.ensureDataDir();
           const jsonStr = JSON.stringify(data, null, 2);
           const tempFile = `${DB_FILE}.tmp`;
-          fs.writeFileSync(tempFile, jsonStr, "utf-8");
-          fs.renameSync(tempFile, DB_FILE);
+          fs2.writeFileSync(tempFile, jsonStr, "utf-8");
+          fs2.renameSync(tempFile, DB_FILE);
           try {
             const tempBackup = `${BACKUP_FILE}.tmp`;
-            fs.writeFileSync(tempBackup, jsonStr, "utf-8");
-            fs.renameSync(tempBackup, BACKUP_FILE);
+            fs2.writeFileSync(tempBackup, jsonStr, "utf-8");
+            fs2.renameSync(tempBackup, BACKUP_FILE);
           } catch (err) {
             console.warn("[DB] Non-critical BACKUP_FILE write notice:", err);
           }
           try {
             const now = /* @__PURE__ */ new Date();
             const dateStr = now.toISOString().slice(0, 13).replace("T", "_");
-            const rotateFile = path.join(BACKUPS_DIR, `backup_${dateStr}.json`);
-            fs.writeFileSync(rotateFile, jsonStr, "utf-8");
+            const rotateFile = path2.join(BACKUPS_DIR, `backup_${dateStr}.json`);
+            fs2.writeFileSync(rotateFile, jsonStr, "utf-8");
           } catch (err) {
             console.warn("[DB] Non-critical rotating backup write notice:", err);
           }
         } catch (err) {
           console.warn("[DB] Note: saveDataDirect could not persist to local disk (stateless/read-only environment):", err);
         }
+        saveFullDbToFirestore(data).catch((err) => {
+          console.warn("[DB] Non-critical async Firestore sync notice:", err);
+        });
       }
       logAudit(log) {
         const newLog = {
@@ -3891,10 +4052,7 @@ var init_db = __esm({
             questions: [],
             examResults: [],
             interactiveSessions: [],
-            devices: [],
-            deviceCommands: [],
             certificates: [],
-            traineeScreenshots: [],
             notifications: initialData.notifications || []
           };
         } else {
@@ -3959,9 +4117,9 @@ import { Router as Router2 } from "express";
 
 // server/firebaseAdmin.ts
 init_db();
-import * as crypto2 from "crypto";
+import * as crypto3 from "crypto";
 function generateId() {
-  return crypto2.randomUUID().replace(/-/g, "").substring(0, 20);
+  return crypto3.randomUUID().replace(/-/g, "").substring(0, 20);
 }
 function getCollectionStore(collectionName) {
   const data = db.getData();
@@ -4828,16 +4986,16 @@ async function handlePublicTrainerRegister(req, res) {
 // server/routes.ts
 import express2 from "express";
 import os3 from "os";
-import fs3 from "fs";
-import path3 from "path";
+import fs4 from "fs";
+import path4 from "path";
 
 // server/migrationRoutes.ts
 import { Router } from "express";
 
 // server/migrationService.ts
-import fs2 from "fs";
-import path2 from "path";
-import crypto3 from "crypto";
+import fs3 from "fs";
+import path3 from "path";
+import crypto4 from "crypto";
 import os2 from "os";
 import JSZip from "jszip";
 import * as XLSX from "xlsx";
@@ -4953,12 +5111,12 @@ function classifyStudents(sourceStudents, existingDbTrainees) {
     if (idKey) seenSourceIds.add(idKey);
     const matchedDbRecord = existingDbTrainees.find((dbItem) => {
       const dbCode = String(dbItem.code || dbItem.studentCode || "").trim().toUpperCase();
-      const dbId = String(dbItem.id || dbItem.legacy_student_id || "").trim();
+      const dbId2 = String(dbItem.id || dbItem.legacy_student_id || "").trim();
       const dbNationalId = String(dbItem.nationalId || "").trim();
       const dbName = String(dbItem.fullName || dbItem.name || "").trim();
       const dbPhone = String(dbItem.phone || "").trim();
       if (codeKey && dbCode && codeKey === dbCode) return true;
-      if (idKey && dbId && idKey === dbId) return true;
+      if (idKey && dbId2 && idKey === dbId2) return true;
       if (rawNationalId && dbNationalId && rawNationalId === dbNationalId) return true;
       if (rawName && dbName && rawName.toLowerCase() === dbName.toLowerCase() && (rawPhone === dbPhone || rawPhone === dbItem.parentPhone)) return true;
       return false;
@@ -5178,14 +5336,14 @@ async function executeDatabaseImport(data, mode = "merge", options) {
 var isServerless2 = Boolean(
   process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.VERCEL_ENV || process.cwd().startsWith("/var/task") || process.cwd() === "/"
 );
-var DATA_BASE_DIR = isServerless2 ? path2.join(os2.tmpdir(), "nagah_data") : path2.join(process.cwd(), "data");
-var MIGRATION_DIR = isServerless2 ? path2.join(os2.tmpdir(), "nagah_migration") : path2.join(process.cwd(), "migration-package");
-var BACKUPS_DIR2 = path2.join(DATA_BASE_DIR, "backups");
-var HISTORY_FILE = path2.join(BACKUPS_DIR2, "backup_history.json");
+var DATA_BASE_DIR = isServerless2 ? path3.join(os2.tmpdir(), "nagah_data") : path3.join(process.cwd(), "data");
+var MIGRATION_DIR = isServerless2 ? path3.join(os2.tmpdir(), "nagah_migration") : path3.join(process.cwd(), "migration-package");
+var BACKUPS_DIR2 = path3.join(DATA_BASE_DIR, "backups");
+var HISTORY_FILE = path3.join(BACKUPS_DIR2, "backup_history.json");
 function ensureDirectory(dir) {
   try {
-    if (!fs2.existsSync(dir)) {
-      fs2.mkdirSync(dir, { recursive: true });
+    if (!fs3.existsSync(dir)) {
+      fs3.mkdirSync(dir, { recursive: true });
     }
   } catch (err) {
     console.warn(`[MigrationService] Notice: Could not create directory ${dir}:`, err);
@@ -5197,10 +5355,10 @@ var MigrationService = class {
     ensureDirectory(BACKUPS_DIR2);
   }
   static getDeltaSyncHistory() {
-    const filePath = path2.join(process.cwd(), "server", "data", "delta_sync_history.json");
-    if (fs2.existsSync(filePath)) {
+    const filePath = path3.join(process.cwd(), "server", "data", "delta_sync_history.json");
+    if (fs3.existsSync(filePath)) {
       try {
-        return JSON.parse(fs2.readFileSync(filePath, "utf8"));
+        return JSON.parse(fs3.readFileSync(filePath, "utf8"));
       } catch (e) {
       }
     }
@@ -5212,8 +5370,8 @@ var MigrationService = class {
   }
   static saveDeltaSyncHistory(historyData) {
     try {
-      const filePath = path2.join(process.cwd(), "server", "data", "delta_sync_history.json");
-      fs2.writeFileSync(filePath, JSON.stringify(historyData, null, 2), "utf8");
+      const filePath = path3.join(process.cwd(), "server", "data", "delta_sync_history.json");
+      fs3.writeFileSync(filePath, JSON.stringify(historyData, null, 2), "utf8");
     } catch (err) {
       console.warn("[MigrationService] saveDeltaSyncHistory notice (read-only filesystem):", err);
     }
@@ -5221,24 +5379,24 @@ var MigrationService = class {
   static getHistory() {
     this.ensureDirs();
     let history = [];
-    if (fs2.existsSync(HISTORY_FILE)) {
+    if (fs3.existsSync(HISTORY_FILE)) {
       try {
-        history = JSON.parse(fs2.readFileSync(HISTORY_FILE, "utf8"));
+        history = JSON.parse(fs3.readFileSync(HISTORY_FILE, "utf8"));
       } catch {
         history = [];
       }
     }
-    if (fs2.existsSync(BACKUPS_DIR2)) {
-      const files = fs2.readdirSync(BACKUPS_DIR2).filter((f) => f.endsWith(".json") && f !== "backup_history.json");
+    if (fs3.existsSync(BACKUPS_DIR2)) {
+      const files = fs3.readdirSync(BACKUPS_DIR2).filter((f) => f.endsWith(".json") && f !== "backup_history.json");
       const existingFilenames = new Set(history.map((h) => h.filename));
       for (const file of files) {
         if (!existingFilenames.has(file)) {
-          const fullPath = path2.join(BACKUPS_DIR2, file);
-          const stat = fs2.statSync(fullPath);
+          const fullPath = path3.join(BACKUPS_DIR2, file);
+          const stat = fs3.statSync(fullPath);
           try {
-            const content = fs2.readFileSync(fullPath, "utf8");
+            const content = fs3.readFileSync(fullPath, "utf8");
             const parsed = JSON.parse(content);
-            const sha256 = crypto3.createHash("sha256").update(content).digest("hex").substring(0, 16);
+            const sha256 = crypto4.createHash("sha256").update(content).digest("hex").substring(0, 16);
             const traineesCount = Array.isArray(parsed.trainees) ? parsed.trainees.length : Array.isArray(parsed.students) ? parsed.students.length : 0;
             history.push({
               id: `bk-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 6)}`,
@@ -5274,7 +5432,7 @@ var MigrationService = class {
       const history = this.getHistory();
       const filtered = history.filter((h) => h.id !== entry.id && h.filename !== entry.filename);
       filtered.unshift(entry);
-      fs2.writeFileSync(HISTORY_FILE, JSON.stringify(filtered.slice(0, 50), null, 2), "utf8");
+      fs3.writeFileSync(HISTORY_FILE, JSON.stringify(filtered.slice(0, 50), null, 2), "utf8");
     } catch (err) {
       console.warn("[MigrationService] recordHistoryEntry notice (read-only filesystem):", err);
     }
@@ -5969,7 +6127,7 @@ var MigrationService = class {
     };
     pkgFolder.file("manifest.json", JSON.stringify(manifest, null, 2));
     const zipBuffer = await zip.generateAsync({ type: "nodebuffer", compression: "DEFLATE", compressionOptions: { level: 9 } });
-    const checksum = `sha256:${crypto3.createHash("sha256").update(zipBuffer).digest("hex").substring(0, 16)}`;
+    const checksum = `sha256:${crypto4.createHash("sha256").update(zipBuffer).digest("hex").substring(0, 16)}`;
     this.recordHistoryEntry({
       id: `mig-${Date.now().toString(36)}`,
       filename,
@@ -6199,7 +6357,7 @@ var MigrationService = class {
     };
     pkgFolder.file("manifest.json", JSON.stringify(manifest, null, 2));
     const zipBuffer = await zip.generateAsync({ type: "nodebuffer", compression: "DEFLATE", compressionOptions: { level: 9 } });
-    const checksum = `sha256:${crypto3.createHash("sha256").update(zipBuffer).digest("hex")}`;
+    const checksum = `sha256:${crypto4.createHash("sha256").update(zipBuffer).digest("hex")}`;
     historyObj.lastSyncId = batchId;
     historyObj.lastSyncTimestamp = now.getTime();
     historyObj.history.push({
@@ -6225,11 +6383,11 @@ var MigrationService = class {
     const dateFormatted = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}_${pad(now.getHours())}-${pad(now.getMinutes())}`;
     const filename = `nagah_full_backup_${dateFormatted}.json`;
     const jsonStr = JSON.stringify(rawData, null, 2);
-    const checksum = `sha256:${crypto3.createHash("sha256").update(jsonStr).digest("hex").substring(0, 16)}`;
+    const checksum = `sha256:${crypto4.createHash("sha256").update(jsonStr).digest("hex").substring(0, 16)}`;
     this.ensureDirs();
-    const filePath = path2.join(BACKUPS_DIR2, filename);
+    const filePath = path3.join(BACKUPS_DIR2, filename);
     try {
-      fs2.writeFileSync(filePath, jsonStr, "utf8");
+      fs3.writeFileSync(filePath, jsonStr, "utf8");
     } catch (err) {
       console.warn("[MigrationService] buildFullBackup file write notice (read-only filesystem):", err);
     }
@@ -6379,7 +6537,7 @@ var MigrationService = class {
       });
     }
     const jsonStr = JSON.stringify(data);
-    const checksum = `sha256:${crypto3.createHash("sha256").update(jsonStr).digest("hex").substring(0, 16)}`;
+    const checksum = `sha256:${crypto4.createHash("sha256").update(jsonStr).digest("hex").substring(0, 16)}`;
     return {
       isValid: score >= 70,
       score: Math.max(0, score),
@@ -6442,22 +6600,22 @@ var MigrationService = class {
     let groups = [];
     let trainers = [];
     try {
-      const sRaw = fs2.readFileSync(path2.join(pkgDir, "01-students", "students.json"), "utf8");
+      const sRaw = fs3.readFileSync(path3.join(pkgDir, "01-students", "students.json"), "utf8");
       students = JSON.parse(sRaw);
     } catch {
     }
     try {
-      const cRaw = fs2.readFileSync(path2.join(pkgDir, "07-courses", "courses-raw.json"), "utf8");
+      const cRaw = fs3.readFileSync(path3.join(pkgDir, "07-courses", "courses-raw.json"), "utf8");
       courses = JSON.parse(cRaw);
     } catch {
     }
     try {
-      const gRaw = fs2.readFileSync(path2.join(pkgDir, "08-groups", "groups-raw.json"), "utf8");
+      const gRaw = fs3.readFileSync(path3.join(pkgDir, "08-groups", "groups-raw.json"), "utf8");
       groups = JSON.parse(gRaw);
     } catch {
     }
     try {
-      const tRaw = fs2.readFileSync(path2.join(pkgDir, "02-trainers", "trainers.json"), "utf8");
+      const tRaw = fs3.readFileSync(path3.join(pkgDir, "02-trainers", "trainers.json"), "utf8");
       trainers = JSON.parse(tRaw);
     } catch {
     }
@@ -8957,15 +9115,15 @@ apiRouter.post("/settings/reset", (req, res) => {
 });
 apiRouter.post("/system/restore-clean-database", async (req, res) => {
   try {
-    const fullBackupPath = path3.join(process.cwd(), "data", "database.backup_before_cleanup_1789259428.json");
-    const targetPath = fs3.existsSync(fullBackupPath) ? fullBackupPath : path3.join(process.cwd(), "data", "database.json");
-    if (!fs3.existsSync(targetPath)) {
+    const fullBackupPath = path4.join(process.cwd(), "data", "database.backup_before_cleanup_1789259428.json");
+    const targetPath = fs4.existsSync(fullBackupPath) ? fullBackupPath : path4.join(process.cwd(), "data", "database.json");
+    if (!fs4.existsSync(targetPath)) {
       return res.status(404).json({ error: "Database backup file not found" });
     }
-    const raw = fs3.readFileSync(targetPath, "utf-8");
+    const raw = fs4.readFileSync(targetPath, "utf-8");
     const fullData = JSON.parse(raw);
     db.restore(fullData);
-    const backupsDir = path3.join(process.cwd(), "data", "backups");
+    const backupsDir = path4.join(process.cwd(), "data", "backups");
     const corruptedBackups = [
       "backup_2026-09-12_21.json",
       "backup_2026-09-12_22.json",
@@ -8973,10 +9131,10 @@ apiRouter.post("/system/restore-clean-database", async (req, res) => {
       "backup_2026-09-13_00.json"
     ];
     for (const file of corruptedBackups) {
-      const p = path3.join(backupsDir, file);
-      if (fs3.existsSync(p)) {
+      const p = path4.join(backupsDir, file);
+      if (fs4.existsSync(p)) {
         try {
-          fs3.unlinkSync(p);
+          fs4.unlinkSync(p);
         } catch {
         }
       }
@@ -16297,12 +16455,12 @@ versionRouter.use("/", apiRouter);
 
 // server/secureDbConnection.ts
 init_db();
-import path4 from "path";
+import path5 from "path";
 var SecureDbConnector = class {
   constructor() {
     const env = process.env.NODE_ENV || "development";
     const isStaging = env === "development" || env === "staging";
-    const dbPath = process.env.STAGING_DB_PATH || process.env.PRODUCTION_DB_PATH || path4.join(process.cwd(), "data", "database.json");
+    const dbPath = process.env.STAGING_DB_PATH || process.env.PRODUCTION_DB_PATH || path5.join(process.cwd(), "data", "database.json");
     this.config = {
       env,
       dbPath,
@@ -16334,26 +16492,26 @@ var SecureDbConnector = class {
 var secureDb = new SecureDbConnector();
 
 // server/migrationManager.ts
-import fs4 from "fs";
-import path5 from "path";
+import fs5 from "fs";
+import path6 from "path";
 import os4 from "os";
 var MigrationManager = class {
   constructor(historyFilePath) {
     const isServerless4 = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.VERCEL_ENV);
-    const dataDir = isServerless4 ? path5.join(os4.tmpdir(), "nagah_data") : path5.join(process.cwd(), "data");
+    const dataDir = isServerless4 ? path6.join(os4.tmpdir(), "nagah_data") : path6.join(process.cwd(), "data");
     try {
-      if (!fs4.existsSync(dataDir)) {
-        fs4.mkdirSync(dataDir, { recursive: true });
+      if (!fs5.existsSync(dataDir)) {
+        fs5.mkdirSync(dataDir, { recursive: true });
       }
     } catch (e) {
       console.warn("[MigrationManager] Non-critical dataDir creation notice:", e);
     }
-    this.historyFilePath = historyFilePath || path5.join(dataDir, "migrations_history.json");
+    this.historyFilePath = historyFilePath || path6.join(dataDir, "migrations_history.json");
   }
   getHistory() {
     try {
-      if (fs4.existsSync(this.historyFilePath)) {
-        const raw = fs4.readFileSync(this.historyFilePath, "utf-8");
+      if (fs5.existsSync(this.historyFilePath)) {
+        const raw = fs5.readFileSync(this.historyFilePath, "utf-8");
         return JSON.parse(raw);
       }
     } catch (err) {
@@ -16363,7 +16521,7 @@ var MigrationManager = class {
   }
   saveHistory(records) {
     try {
-      fs4.writeFileSync(this.historyFilePath, JSON.stringify(records, null, 2), "utf-8");
+      fs5.writeFileSync(this.historyFilePath, JSON.stringify(records, null, 2), "utf-8");
     } catch (err) {
       console.warn("[MigrationManager] Non-critical error writing migration history:", err);
     }
@@ -16390,7 +16548,7 @@ var MigrationManager = class {
         newAppliedCount++;
       }
     }
-    if (newAppliedCount > 0 || !fs4.existsSync(this.historyFilePath)) {
+    if (newAppliedCount > 0 || !fs5.existsSync(this.historyFilePath)) {
       this.saveHistory(history);
       console.log(`[MigrationManager] Successfully recorded ${newAppliedCount} new migration(s). Total applied: ${history.length}`);
     } else {
@@ -16435,17 +16593,17 @@ app.get(["/health", "/api/health"], async (req, res) => {
   let bundledDataSize = 0;
   let memDataKeys = [];
   try {
-    const fs5 = await import("fs");
-    const path6 = await import("path");
-    const bPath = path6.join(process.cwd(), "data", "database.json");
-    const tPath = path6.join(await import("os").then((os5) => os5.tmpdir()), "nagah_data", "database.json");
-    if (fs5.existsSync(bPath)) {
+    const fs6 = await import("fs");
+    const path7 = await import("path");
+    const bPath = path7.join(process.cwd(), "data", "database.json");
+    const tPath = path7.join(await import("os").then((os5) => os5.tmpdir()), "nagah_data", "database.json");
+    if (fs6.existsSync(bPath)) {
       hasBundledData = true;
-      bundledDataSize = fs5.statSync(bPath).size;
+      bundledDataSize = fs6.statSync(bPath).size;
     }
-    if (fs5.existsSync(tPath)) {
+    if (fs6.existsSync(tPath)) {
       hasTmpData = true;
-      tmpDataSize = fs5.statSync(tPath).size;
+      tmpDataSize = fs6.statSync(tPath).size;
     }
     const { db: db2 } = await Promise.resolve().then(() => (init_db(), db_exports));
     if (db2) {
@@ -16488,6 +16646,15 @@ app.use((req, res, next) => {
   next();
 });
 app.use(express3.urlencoded({ extended: true, limit: "50mb" }));
+app.use(async (req, res, next) => {
+  try {
+    const { db: db2 } = await Promise.resolve().then(() => (init_db(), db_exports));
+    await db2.ensureHydrated();
+  } catch (e) {
+    console.warn("[Hydration Middleware Notice]", e);
+  }
+  next();
+});
 app.use("/api", versionRouter);
 app.use("/", versionRouter);
 app.use((err, req, res, next) => {

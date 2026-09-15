@@ -1067,49 +1067,6 @@ export const api = {
       body: JSON.stringify(data)
     }),
 
-  // Client Agent Heartbeat & Remote Assistance
-  startRemoteAssistance: (deviceId: string) =>
-    request<{ success: boolean; session: any }>('/agent/remote-assist/start', {
-      method: 'POST',
-      body: JSON.stringify({ deviceId })
-    }),
-  stopRemoteAssistance: (deviceId: string, sessionId?: string) =>
-    request<{ success: boolean; message: string }>('/agent/remote-assist/stop', {
-      method: 'POST',
-      body: JSON.stringify({ deviceId, sessionId })
-    }),
-  sendRemoteInput: (data: { deviceId: string; sessionId: string; action: string; x?: number; y?: number; button?: string; key?: string; text?: string }) =>
-    request<{ success: boolean }>('/agent/remote-assist/input', {
-      method: 'POST',
-      body: JSON.stringify(data)
-    }),
-  setMonitoringState: (data: { deviceIds: string[]; isMonitoring: boolean; quality?: string }) =>
-    request<{ success: boolean }>('/devices/monitoring', {
-      method: 'POST',
-      body: JSON.stringify(data)
-    }),
-  startAudioBroadcast: (data: { targetDeviceIds: string[] | 'all' }) =>
-    request<{ success: boolean; audioSession: any }>('/agent/audio/start', {
-      method: 'POST',
-      body: JSON.stringify(data)
-    }),
-  stopAudioBroadcast: () =>
-    request<{ success: boolean }>('/agent/audio/stop', {
-      method: 'POST'
-    }),
-  sendAudioChunk: (audioChunkBase64: string) =>
-    request<{ success: boolean }>('/agent/audio/chunk', {
-      method: 'POST',
-      body: JSON.stringify({ audioChunk: audioChunkBase64 })
-    }),
-  sendRemoteAssistEvent: (deviceId: string, event: any) =>
-    request<{ success: boolean }>('/agent/remote-assist/event', {
-      method: 'POST',
-      body: JSON.stringify({ deviceId, event })
-    }),
-  getRemoteAssistState: (deviceId: string) =>
-    request<{ success: boolean; assistState: any }>(`/agent/remote-assist/state/${deviceId}`),
-
   getScreenshotArchive: () => request<any[]>('/devices/screenshots/archive'),
   deleteScreenshot: (id: string) => request<{ success: boolean }>(`/devices/screenshots/archive/${id}`, { method: 'DELETE' }),
   clearScreenshotArchive: () => request<{ success: boolean }>('/devices/screenshots/archive', { method: 'DELETE' }),
@@ -1167,36 +1124,6 @@ export const api = {
     }),
 
   getDeviceAuditLogs: () => request<DeviceAuditEntry[]>('/devices/audit-logs'),
-
-  sendAgentHeartbeat: (data: { deviceId: string; name?: string; ip?: string; screenshot?: string; currentScreen?: string }) =>
-    request<{
-      success: boolean;
-      commands: any[];
-      deviceStatus: string;
-      isMonitoring?: boolean;
-      traineeStats?: {
-        id: string;
-        fullName: string;
-        code: string;
-        points: number;
-        totalPoints: number;
-        starsCount: number;
-        overallRank: number;
-        totalTrainees: number;
-        groupRank: number;
-        groupTotal: number;
-        tierName: string;
-        badgeColor: string;
-        rankBadge: string;
-        courseName: string;
-        groupName: string;
-      };
-      remoteAssist?: any;
-      masterBroadcast: any;
-    }>('/agent/heartbeat', {
-      method: 'POST',
-      body: JSON.stringify(data)
-    }),
 
   // Certificates & Templates
   getCertificateTemplates: () => request<CertificateTemplate[]>('/certificates/templates'),

@@ -266,7 +266,8 @@ export const CenterProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   useEffect(() => {
     refreshAll();
     refreshCoreData(false); // background populate core entities on load
-    const livePoll = setInterval(async () => {
+    const runLiveCheck = async () => {
+      if (typeof document !== 'undefined' && document.hidden) return;
       try {
         const [devRes, notifsRes] = await Promise.all([
           api.getDevices().catch(() => []),
@@ -283,8 +284,21 @@ export const CenterProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           setNotifications(notifsRes.notifications);
         }
       } catch (e) {}
-    }, 4000);
-    return () => clearInterval(livePoll);
+    };
+
+    const livePoll = setInterval(runLiveCheck, 12000);
+
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        runLiveCheck();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      clearInterval(livePoll);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, [refreshAll, refreshCoreData]);
 
   // Keyboard shortcut Ctrl+K for search

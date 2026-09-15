@@ -102,6 +102,17 @@ app.use((req: any, res: any, next: any) => {
 
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
+// Ensure database state is hydrated from cloud Firestore on request
+app.use(async (req, res, next) => {
+  try {
+    const { db } = await import('./db.js');
+    await db.ensureHydrated();
+  } catch (e) {
+    console.warn('[Hydration Middleware Notice]', e);
+  }
+  next();
+});
+
 app.use('/api', versionRouter);
 app.use('/', versionRouter);
 

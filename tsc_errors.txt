@@ -1,0 +1,135 @@
+node_modules/@google/genai/dist/genai.d.ts(1,29): error TS2307: Cannot find module '@modelcontextprotocol/sdk/client/index.js' or its corresponding type declarations.
+node_modules/gaxios/build/cjs/src/gaxios.d.ts(16,5): error TS18028: Private identifiers are only available when targeting ECMAScript 2015 and higher.
+node_modules/google-auth-library/build/src/auth/awsclient.d.ts(83,5): error TS18028: Private identifiers are only available when targeting ECMAScript 2015 and higher.
+node_modules/google-auth-library/build/src/auth/baseexternalclient.d.ts(173,5): error TS18028: Private identifiers are only available when targeting ECMAScript 2015 and higher.
+node_modules/google-auth-library/build/src/auth/googleauth.d.ts(160,5): error TS18028: Private identifiers are only available when targeting ECMAScript 2015 and higher.
+node_modules/google-auth-library/build/src/auth/oauth2common.d.ts(50,5): error TS18028: Private identifiers are only available when targeting ECMAScript 2015 and higher.
+node_modules/google-auth-library/build/src/auth/stscredentials.d.ts(99,5): error TS18028: Private identifiers are only available when targeting ECMAScript 2015 and higher.
+node_modules/google-auth-library/build/src/util.d.ts(125,5): error TS18028: Private identifiers are only available when targeting ECMAScript 2015 and higher.
+server/data/index.ts(167,54): error TS2367: This comparison appears to be unintentional because the types '"rejected" | "approved"' and '"pending_approval"' have no overlap.
+server/db.ts(1,8): error TS1192: Module '"fs"' has no default export.
+server/db.ts(2,8): error TS1259: Module '"path"' can only be default-imported using the 'esModuleInterop' flag
+server/db.ts(3,8): error TS1192: Module '"crypto"' has no default export.
+server/db.ts(4,8): error TS1192: Module '"os"' has no default export.
+server/db.ts(35,8): error TS5097: An import path can only end with a '.ts' extension when 'allowImportingTsExtensions' is enabled.
+server/db.ts(2751,3): error TS2353: Object literal may only specify known properties, and 'deviceCommands' does not exist in type 'DatabaseSchema'.
+server/db.ts(4074,19): error TS2339: Property 'traineeScreenshots' does not exist on type 'DatabaseSchema'.
+server/db.ts(4108,19): error TS2339: Property 'traineeScreenshots' does not exist on type 'DatabaseSchema'.
+server/firestoreStorage.ts(1,8): error TS1192: Module '"fs"' has no default export.
+server/firestoreStorage.ts(2,8): error TS1259: Module '"path"' can only be default-imported using the 'esModuleInterop' flag
+server/firestoreStorage.ts(3,8): error TS1192: Module '"crypto"' has no default export.
+server/languageLabRoutes.ts(1,8): error TS1259: Module '"/app/applet/node_modules/@types/express/index"' can only be default-imported using the 'esModuleInterop' flag
+server/migrationRoutes.ts(2,8): error TS1259: Module '"path"' can only be default-imported using the 'esModuleInterop' flag
+server/migrationRoutes.ts(3,8): error TS1192: Module '"fs"' has no default export.
+server/migrationRoutes.ts(5,62): error TS5097: An import path can only end with a '.ts' extension when 'allowImportingTsExtensions' is enabled.
+server/migrationRoutes.ts(6,30): error TS5097: An import path can only end with a '.ts' extension when 'allowImportingTsExtensions' is enabled.
+server/migrationRoutes.ts(226,82): error TS2339: Property 'backupFile' does not exist on type '{ success: boolean; importedCount: number; message: string; classificationSummary?: StudentClassificationSummary; }'.
+server/migrationRoutes.ts(226,123): error TS2339: Property 'backupFile' does not exist on type '{ success: boolean; importedCount: number; message: string; classificationSummary?: StudentClassificationSummary; }'.
+server/migrationRoutes.ts(235,26): error TS2339: Property 'backupFile' does not exist on type '{ success: boolean; importedCount: number; message: string; classificationSummary?: StudentClassificationSummary; }'.
+server/migrationService.ts(1,8): error TS1192: Module '"fs"' has no default export.
+server/migrationService.ts(2,8): error TS1259: Module '"path"' can only be default-imported using the 'esModuleInterop' flag
+server/migrationService.ts(3,8): error TS1192: Module '"crypto"' has no default export.
+server/migrationService.ts(4,8): error TS1192: Module '"os"' has no default export.
+server/migrationService.ts(5,8): error TS1259: Module '"/app/applet/node_modules/jszip/index"' can only be default-imported using the 'esModuleInterop' flag
+server/migrationService.ts(14,8): error TS5097: An import path can only end with a '.ts' extension when 'allowImportingTsExtensions' is enabled.
+server/migrationService.ts(15,86): error TS5097: An import path can only end with a '.ts' extension when 'allowImportingTsExtensions' is enabled.
+server/registerLogic.ts(168,18): error TS2339: Property 'allowOnlineRegistration' does not exist on type 'CenterSettings'.
+server/registerLogic.ts(362,18): error TS2339: Property 'allowOnlineRegistration' does not exist on type 'CenterSettings'.
+server/registerLogic.ts(397,7): error TS2353: Object literal may only specify known properties, and 'percentage' does not exist in type 'Trainer'.
+server/routes.ts(8,8): error TS5097: An import path can only end with a '.ts' extension when 'allowImportingTsExtensions' is enabled.
+server/routes.ts(9,86): error TS5097: An import path can only end with a '.ts' extension when 'allowImportingTsExtensions' is enabled.
+server/routes.ts(11,8): error TS1259: Module '"/app/applet/node_modules/@types/express/index"' can only be default-imported using the 'esModuleInterop' flag
+server/routes.ts(12,8): error TS1192: Module '"os"' has no default export.
+server/routes.ts(13,8): error TS1192: Module '"fs"' has no default export.
+server/routes.ts(14,8): error TS1259: Module '"path"' can only be default-imported using the 'esModuleInterop' flag
+server/routes.ts(15,8): error TS1192: Module '"crypto"' has no default export.
+server/routes.ts(470,41): error TS2339: Property 'devices' does not exist on type 'DatabaseSchema'.
+server/routes.ts(1038,90): error TS2339: Property 'studentCode' does not exist on type 'Trainee'.
+server/routes.ts(1040,56): error TS2339: Property 'phone' does not exist on type '{ id: string; username: string; role: "parent" | "super_admin" | "branch_manager" | "trainer" | "admin" | "student"; branchId?: string; trainerId?: string; traineeId?: string; fullName?: string; }'.
+server/routes.ts(1354,11): error TS2353: Object literal may only specify known properties, and 'photo' does not exist in type 'Trainee'.
+server/routes.ts(1361,42): error TS2339: Property 'devices' does not exist on type 'DatabaseSchema'.
+server/routes.ts(1362,15): error TS2339: Property 'devices' does not exist on type 'DatabaseSchema'.
+server/routes.ts(1424,62): error TS2339: Property 'name' does not exist on type 'Trainee'.
+server/routes.ts(4438,34): error TS2339: Property 'devices' does not exist on type 'DatabaseSchema'.
+server/routes.ts(4476,29): error TS2339: Property 'allowOnlineRegistration' does not exist on type 'CenterSettings'.
+server/routes.ts(4486,30): error TS2339: Property 'allowOnlineRegistration' does not exist on type 'CenterSettings'.
+server/routes.ts(4488,32): error TS2353: Object literal may only specify known properties, and 'allowOnlineRegistration' does not exist in type 'Partial<CenterSettings>'.
+server/routes.ts(4869,29): error TS2339: Property 'deviceCommands' does not exist on type 'DatabaseSchema'.
+server/routes.ts(4869,53): error TS2339: Property 'deviceCommands' does not exist on type 'DatabaseSchema'.
+server/routes.ts(4916,37): error TS2339: Property 'devices' does not exist on type 'DatabaseSchema'.
+server/routes.ts(4934,18): error TS2339: Property 'deviceCommands' does not exist on type 'DatabaseSchema'.
+server/routes.ts(4948,19): error TS2339: Property 'lastPointsAwarded' does not exist on type '{ isBroadcasting: boolean; trainerName: string; streamFrame: string; streamAudioChunk: string; activeUrl: string; activeMessage: string; isLocked: boolean; pushedFile: { fileName: string; fileUrl?: string; fileBase64?: string; fileType?: string; openImmediately?: boolean; }; ... 4 more ...; updatedAt: string; }'.
+server/routes.ts(5901,32): error TS2339: Property 'devices' does not exist on type 'DatabaseSchema'.
+server/routes.ts(5924,23): error TS2339: Property 'deviceCommands' does not exist on type 'DatabaseSchema'.
+server/routes.ts(5924,52): error TS2339: Property 'deviceCommands' does not exist on type 'DatabaseSchema'.
+server/routes.ts(5925,18): error TS2339: Property 'deviceCommands' does not exist on type 'DatabaseSchema'.
+server/routes.ts(5929,20): error TS2339: Property 'deviceCommands' does not exist on type 'DatabaseSchema'.
+server/routes.ts(5960,32): error TS2339: Property 'devices' does not exist on type 'DatabaseSchema'.
+server/routes.ts(5983,23): error TS2339: Property 'deviceCommands' does not exist on type 'DatabaseSchema'.
+server/routes.ts(5983,52): error TS2339: Property 'deviceCommands' does not exist on type 'DatabaseSchema'.
+server/routes.ts(5984,18): error TS2339: Property 'deviceCommands' does not exist on type 'DatabaseSchema'.
+server/routes.ts(5987,20): error TS2339: Property 'deviceCommands' does not exist on type 'DatabaseSchema'.
+server/routes.ts(6006,32): error TS2339: Property 'devices' does not exist on type 'DatabaseSchema'.
+server/routes.ts(6025,23): error TS2339: Property 'deviceCommands' does not exist on type 'DatabaseSchema'.
+server/routes.ts(6025,52): error TS2339: Property 'deviceCommands' does not exist on type 'DatabaseSchema'.
+server/routes.ts(6026,18): error TS2339: Property 'deviceCommands' does not exist on type 'DatabaseSchema'.
+server/routes.ts(6050,32): error TS2339: Property 'devices' does not exist on type 'DatabaseSchema'.
+server/routes.ts(6068,23): error TS2339: Property 'deviceCommands' does not exist on type 'DatabaseSchema'.
+server/routes.ts(6068,52): error TS2339: Property 'deviceCommands' does not exist on type 'DatabaseSchema'.
+server/routes.ts(6069,18): error TS2339: Property 'deviceCommands' does not exist on type 'DatabaseSchema'.
+server/routes.ts(6072,20): error TS2339: Property 'deviceCommands' does not exist on type 'DatabaseSchema'.
+server/routes.ts(6201,30): error TS2339: Property 'devices' does not exist on type 'DatabaseSchema'.
+server/routes.ts(6224,16): error TS2339: Property 'devices' does not exist on type 'DatabaseSchema'.
+server/routes.ts(6230,16): error TS2339: Property 'devices' does not exist on type 'DatabaseSchema'.
+server/routes.ts(6238,30): error TS2339: Property 'devices' does not exist on type 'DatabaseSchema'.
+server/routes.ts(6253,32): error TS2339: Property 'devices' does not exist on type 'DatabaseSchema'.
+server/routes.ts(6279,33): error TS2339: Property 'devices' does not exist on type 'DatabaseSchema'.
+server/routes.ts(6303,16): error TS2339: Property 'devices' does not exist on type 'DatabaseSchema'.
+server/routes.ts(6322,31): error TS2339: Property 'devices' does not exist on type 'DatabaseSchema'.
+server/routes.ts(6335,16): error TS2339: Property 'deviceCommands' does not exist on type 'DatabaseSchema'.
+server/routes.ts(6394,32): error TS2339: Property 'devices' does not exist on type 'DatabaseSchema'.
+server/routes.ts(6396,18): error TS2339: Property 'deviceCommands' does not exist on type 'DatabaseSchema'.
+server/routes.ts(6450,32): error TS2339: Property 'devices' does not exist on type 'DatabaseSchema'.
+server/routes.ts(6452,18): error TS2339: Property 'deviceCommands' does not exist on type 'DatabaseSchema'.
+server/routes.ts(6486,32): error TS2339: Property 'devices' does not exist on type 'DatabaseSchema'.
+server/routes.ts(6488,18): error TS2339: Property 'deviceCommands' does not exist on type 'DatabaseSchema'.
+server/routes.ts(6508,25): error TS2339: Property 'traineeScreenshots' does not exist on type 'DatabaseSchema'.
+server/routes.ts(6514,20): error TS2339: Property 'traineeScreenshots' does not exist on type 'DatabaseSchema'.
+server/routes.ts(6515,18): error TS2339: Property 'traineeScreenshots' does not exist on type 'DatabaseSchema'.
+server/routes.ts(6515,52): error TS2339: Property 'traineeScreenshots' does not exist on type 'DatabaseSchema'.
+server/routes.ts(6523,16): error TS2339: Property 'traineeScreenshots' does not exist on type 'DatabaseSchema'.
+server/routes.ts(6859,29): error TS2339: Property 'devices' does not exist on type 'DatabaseSchema'.
+server/routes.ts(6876,18): error TS2339: Property 'devices' does not exist on type 'DatabaseSchema'.
+server/routes.ts(7001,32): error TS2339: Property 'devices' does not exist on type 'DatabaseSchema'.
+server/routes.ts(7063,18): error TS2339: Property 'deviceCommands' does not exist on type 'DatabaseSchema'.
+server/routes.ts(7109,31): error TS2339: Property 'devices' does not exist on type 'DatabaseSchema'.
+server/routes.ts(7122,18): error TS2339: Property 'deviceCommands' does not exist on type 'DatabaseSchema'.
+server/routes.ts(7197,29): error TS2339: Property 'devices' does not exist on type 'DatabaseSchema'.
+server/routes.ts(7220,18): error TS2339: Property 'devices' does not exist on type 'DatabaseSchema'.
+server/routes.ts(7289,40): error TS2339: Property 'deviceCommands' does not exist on type 'DatabaseSchema'.
+server/routes.ts(7321,31): error TS2339: Property 'devices' does not exist on type 'DatabaseSchema'.
+server/routes.ts(7350,16): error TS2339: Property 'deviceCommands' does not exist on type 'DatabaseSchema'.
+server/routes.ts(7380,31): error TS2339: Property 'devices' does not exist on type 'DatabaseSchema'.
+server/routes.ts(7395,18): error TS2339: Property 'deviceCommands' does not exist on type 'DatabaseSchema'.
+server/routes.ts(7439,16): error TS2339: Property 'deviceCommands' does not exist on type 'DatabaseSchema'.
+server/routes.ts(7457,32): error TS2339: Property 'devices' does not exist on type 'DatabaseSchema'.
+server/routes.ts(7462,18): error TS2339: Property 'deviceCommands' does not exist on type 'DatabaseSchema'.
+server/routes.ts(7506,32): error TS2339: Property 'devices' does not exist on type 'DatabaseSchema'.
+server/routes.ts(7548,26): error TS2339: Property 'devices' does not exist on type 'DatabaseSchema'.
+server/routes.ts(7581,26): error TS2339: Property 'devices' does not exist on type 'DatabaseSchema'.
+server/routes.ts(7609,32): error TS2339: Property 'devices' does not exist on type 'DatabaseSchema'.
+server/routes.ts(7629,32): error TS2339: Property 'devices' does not exist on type 'DatabaseSchema'.
+server/routes.ts(7649,23): error TS2339: Property 'deviceCommands' does not exist on type 'DatabaseSchema'.
+server/routes.ts(7649,52): error TS2339: Property 'deviceCommands' does not exist on type 'DatabaseSchema'.
+server/routes.ts(7650,18): error TS2339: Property 'deviceCommands' does not exist on type 'DatabaseSchema'.
+server/routes.ts(7677,32): error TS2339: Property 'devices' does not exist on type 'DatabaseSchema'.
+server/routes.ts(7727,32): error TS2339: Property 'devices' does not exist on type 'DatabaseSchema'.
+server/routes.ts(7749,32): error TS2339: Property 'devices' does not exist on type 'DatabaseSchema'.
+server/routes.ts(7830,26): error TS2339: Property 'devices' does not exist on type 'DatabaseSchema'.
+server/routes.ts(8484,26): error TS2339: Property 'devices' does not exist on type 'DatabaseSchema'.
+server/routes.ts(8837,32): error TS2304: Cannot find name 'ScheduleRepo'.
+server/routes.ts(8856,33): error TS2339: Property 'badges' does not exist on type 'DatabaseSchema'.
+server/routes.ts(8999,10): error TS2551: Property 'groupIds' does not exist on type 'Trainee'. Did you mean 'groupId'?
+server/routes.ts(8999,24): error TS2551: Property 'groupIds' does not exist on type 'Trainee'. Did you mean 'groupId'?
+server/securityMiddleware.ts(2,56): error TS5097: An import path can only end with a '.ts' extension when 'allowImportingTsExtensions' is enabled.
+server/securityMiddleware.ts(107,36): error TS2339: Property 'studentCode' does not exist on type 'Trainee'.

@@ -30,7 +30,7 @@ export const MobileAppNavigation: React.FC<MobileAppNavigationProps> = ({
     { id: 'trainees', label: 'الطلاب', icon: Users },
     { id: 'courses', label: 'الدورات', icon: BookOpen },
     { id: 'homeworks', label: 'الواجبات', icon: CheckSquare },
-    { id: 'messages', label: 'المحادثات', icon: MessageSquare, hasDot: true },
+    { id: 'messages', label: 'المحادثات', icon: MessageSquare },
     { id: 'student_portal', label: 'بوابة الطالب', icon: GraduationCap },
     { id: 'parent_portal', label: 'ولي الأمر', icon: UserCheck },
     { id: 'more_menu', label: 'القائمة', icon: Menu },
@@ -41,7 +41,7 @@ export const MobileAppNavigation: React.FC<MobileAppNavigationProps> = ({
     { id: 'dashboard', label: 'الرئيسية', icon: Home },
     { id: 'trainees', label: 'الطلاب', icon: Users },
     { id: 'student_portal', label: 'الطالب', icon: GraduationCap },
-    { id: 'messages', label: 'المحادثات', icon: MessageSquare, badge: 2 },
+    { id: 'messages', label: 'المحادثات', icon: MessageSquare },
     { id: 'more_menu', label: 'القائمة', icon: Menu },
   ];
 

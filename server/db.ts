@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 import os from 'os';
+import { saveFullDbToFirestore, loadFullDbFromFirestore } from './firestoreStorage.js';
 import {
   User,
   Branch,
@@ -52,8 +53,8 @@ export interface DatabaseSchema {
   questions: ExamQuestion[];
   examResults: ExamResult[];
   interactiveSessions: InteractiveSession[];
-  devices: Device[];
-  deviceCommands: DeviceCommand[];
+  devices?: Device[];
+  deviceCommands?: DeviceCommand[];
   certificates: Certificate[];
   certificateTemplates?: CertificateTemplate[];
   trainerAttestations?: TrainerAttestation[];
@@ -101,28 +102,9 @@ const defaultPointRules: PointRule[] = [
 ];
 
 const initialData: DatabaseSchema = {
-  computerLabs: [
-    {
-      id: 'lab-1',
-      name: 'معمل النجاح',
-      branchId: 'branch-1',
-      branchName: 'فرع النجاح',
-      capacity: 25,
-      devicesCount: 20,
-      status: 'active',
-      notes: 'معمل الحاسب والبرمجة الرئيسي - فرع النجاح'
-    },
-    {
-      id: 'lab-2',
-      name: 'معمل بدر',
-      branchId: 'branch-2',
-      branchName: 'فرع بدر',
-      capacity: 25,
-      devicesCount: 20,
-      status: 'active',
-      notes: 'معمل الحاسب والتكنولوجيا الرئيسي - فرع بدر'
-    }
-  ],
+  devices: [],
+  traineeScreenshots: [],
+  computerLabs: [],
   branches: [
     {
       id: 'branch-1',
@@ -2773,7 +2755,6 @@ const initialData: DatabaseSchema = {
         "currentQuestionIndex": 1
     }
 ],
-  devices: [],
   deviceCommands: [
     {
         "id": "cmd-1787353097554-p0hu",
@@ -3531,7 +3512,6 @@ const initialData: DatabaseSchema = {
       read: false
     }
   ],
-  traineeScreenshots: [],
   secretFinancialArchives: [],
   deletedDeviceIds: [],
   labSchedules: [
@@ -3584,10 +3564,36 @@ const userPasswordMap: Record<string, string> = {
 class DatabaseManager {
   private data: DatabaseSchema;
   private saveTimeout: NodeJS.Timeout | null = null;
+  private isFirestoreHydrated = false;
+  private hydrationPromise: Promise<void> | null = null;
 
   constructor() {
     this.ensureDataDir();
     this.data = this.loadData();
+    // Fire background hydration on initialization
+    this.hydrationPromise = this.ensureHydrated();
+  }
+
+  public async ensureHydrated(): Promise<void> {
+    if (this.isFirestoreHydrated) return;
+    try {
+      const remoteData = await loadFullDbFromFirestore();
+      if (remoteData && Array.isArray(remoteData.trainees) && remoteData.trainees.length > 0) {
+        console.log('[DB] Hydrated from Firestore! Trainees count:', remoteData.trainees.length);
+        this.data = {
+          ...this.data,
+          ...remoteData,
+          settings: {
+            ...this.data.settings,
+            ...(remoteData.settings || {})
+          }
+        };
+      }
+    } catch (err) {
+      console.warn('[DB] Firestore hydration notice:', err);
+    } finally {
+      this.isFirestoreHydrated = true;
+    }
   }
 
   private ensureDataDir() {
@@ -3708,6 +3714,10 @@ class DatabaseManager {
           badges: Array.isArray(parsed.badges) ? parsed.badges : [],
           schedules: Array.isArray(parsed.schedules) ? parsed.schedules : [],
           session_attendance_records: Array.isArray(parsed.session_attendance_records) ? parsed.session_attendance_records : [],
+          devices: [],
+          deviceCommands: [],
+          traineeScreenshots: [],
+          computerLabs: [],
           users: existingUsers,
           settings: {
             ...initialData.settings,
@@ -3793,6 +3803,11 @@ class DatabaseManager {
     } catch (err) {
       console.warn('[DB] Note: saveDataDirect could not persist to local disk (stateless/read-only environment):', err);
     }
+
+    // Always sync state changes to cloud Firestore asynchronously
+    saveFullDbToFirestore(data).catch(err => {
+      console.warn('[DB] Non-critical async Firestore sync notice:', err);
+    });
   }
 
   public logAudit(log: Omit<AuditLog, 'id' | 'timestamp'>) {
@@ -4057,10 +4072,7 @@ class DatabaseManager {
         questions: [],
         examResults: [],
         interactiveSessions: [],
-        devices: [],
-        deviceCommands: [],
         certificates: [],
-        traineeScreenshots: [],
         notifications: initialData.notifications || []
       };
     } else {

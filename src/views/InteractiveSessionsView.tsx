@@ -159,6 +159,7 @@ console.log("نتيجة الطالب:", calculateGrade(48, 50));`);
 
   useEffect(() => {
     const fetchLabQuick = async () => {
+      if (typeof document !== 'undefined' && document.hidden) return;
       try {
         const res = await fetch('/api/lab/quick-question');
         const json = await res.json();
@@ -166,7 +167,7 @@ console.log("نتيجة الطالب:", calculateGrade(48, 50));`);
       } catch (e) {}
     };
     fetchLabQuick();
-    const interval = setInterval(fetchLabQuick, 2500);
+    const interval = setInterval(fetchLabQuick, 5000);
     return () => clearInterval(interval);
   }, []);
 
