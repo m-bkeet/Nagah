@@ -3076,7 +3076,7 @@
       "createdByUserName": "مدير عام النظام",
       "initialPaymentMethod": "cash",
       "parentPortalPassword": "",
-      "ranking": 106
+      "ranking": 107
     },
     {
       "id": "trainee-1788446099678-14gq",
@@ -3472,7 +3472,7 @@
       "phone": "0100",
       "track": "",
       "gender": "male",
-      "points": 0,
+      "points": 10,
       "prefix": "A",
       "status": "active",
       "address": "",
@@ -3488,13 +3488,13 @@
       "groupName": "ICT4 - 3",
       "netAmount": 0,
       "trainerId": "trainer-1787349806643",
-      "updatedAt": "2026-09-11T21:11:04.135Z",
+      "updatedAt": "2026-09-15T14:06:19.160Z",
       "nationalId": "",
       "paidAmount": 0,
       "parentName": "محمد حسين",
       "parentPhone": "",
       "studentCode": "A037",
-      "totalPoints": 0,
+      "totalPoints": 10,
       "traineeCode": "A037",
       "exemptReason": "",
       "discountAmount": 0,
@@ -3506,7 +3506,7 @@
       "updatedByUserName": "مدير عام النظام",
       "initialPaymentMethod": "cash",
       "parentPortalPassword": "",
-      "ranking": 107
+      "ranking": 102
     },
     {
       "id": "trainee-1788449704942-pqx8",
@@ -3829,7 +3829,7 @@
       "status": "active",
       "address": "",
       "groupId": "grp-1787350488774",
-      "ranking": 102,
+      "ranking": 103,
       "branchId": "branch-1",
       "courseId": "course-1787347401956",
       "fullName": "سما سراج الدين محمد لطفي علي",
@@ -5066,7 +5066,7 @@
       "createdByUserName": "مدير عام النظام",
       "initialPaymentMethod": "cash",
       "parentPortalPassword": "",
-      "ranking": 103
+      "ranking": 104
     },
     {
       "id": "trainee-1788445962647-bskx",
@@ -5111,7 +5111,7 @@
       "createdByUserName": "مدير عام النظام",
       "initialPaymentMethod": "cash",
       "parentPortalPassword": "",
-      "ranking": 104
+      "ranking": 105
     },
     {
       "id": "trainee-1788446345093-kr2y",
@@ -5156,7 +5156,7 @@
       "createdByUserName": "مدير عام النظام",
       "initialPaymentMethod": "cash",
       "parentPortalPassword": "",
-      "ranking": 105
+      "ranking": 106
     },
     {
       "id": "trainee-1788449807037-ogbg",
@@ -7000,6 +7000,17 @@
     }
   ],
   "pointTransactions": [
+    {
+      "id": "pt-1789481179185-7win",
+      "traineeId": "trainee-1789160240943-wwfv",
+      "groupId": "grp-1787351870532",
+      "branchId": "branch-1",
+      "points": 10,
+      "reason": "مشاركة وتفاعل إيجابي ⭐",
+      "addedByUserId": "user-admin",
+      "addedByUserName": "مدير عام النظام",
+      "createdAt": "2026-09-15T14:06:19.185Z"
+    },
     {
       "id": "pt-1789424628400-1rf7",
       "traineeId": "trainee-1787875324594",
@@ -9680,83 +9691,6 @@
       "points": 10,
       "badge": "نجم الأسبوع",
       "reason": "مشاركة وتفاعل إيجابي في المحاضرة"
-    },
-    {
-      "id": "pt-1789323289320-kfxp",
-      "traineeId": "trainee-1788359371618-3rgv",
-      "groupId": "grp-1787431825818",
-      "branchId": "branch-1",
-      "points": 20,
-      "reason": "إتمام الواجب والتطبيق العملي بنجاح",
-      "addedByUserId": "user-admin",
-      "addedByUserName": "مدير عام النظام",
-      "createdAt": "2026-09-13T18:14:49.320Z"
-    },
-    {
-      "id": "pt-1789424445378-jj6e",
-      "traineeId": "trainee-1787875324594",
-      "groupId": "grp-1787431825818",
-      "branchId": "branch-1",
-      "points": 10,
-      "reason": "مشاركة ممتازة بالجلسة",
-      "addedByUserId": "admin",
-      "addedByUserName": "المحاضر المشرف",
-      "createdAt": "2026-09-14T22:20:45.378Z"
-    },
-    {
-      "id": "pt-1789424536840-irkc",
-      "traineeId": "trainee-1787875324594",
-      "groupId": "grp-1787431825818",
-      "branchId": "branch-1",
-      "points": 10,
-      "reason": "مشاركة ممتازة بالجلسة",
-      "addedByUserId": "admin",
-      "addedByUserName": "المحاضر المشرف",
-      "createdAt": "2026-09-14T22:22:16.840Z"
-    },
-    {
-      "id": "pt-1789424547381-ygk1",
-      "traineeId": "trainee-1787875324594",
-      "groupId": "grp-1787431825818",
-      "branchId": "branch-1",
-      "points": 10,
-      "reason": "مشاركة ممتازة بالجلسة",
-      "addedByUserId": "admin",
-      "addedByUserName": "المحاضر المشرف",
-      "createdAt": "2026-09-14T22:22:27.381Z"
-    },
-    {
-      "id": "pt-1789424621342-a6a1",
-      "traineeId": "trainee-1787875324594",
-      "groupId": "grp-1787431825818",
-      "branchId": "branch-1",
-      "points": 20,
-      "reason": "إتمام الواجب والتطبيق العملي ⭐⭐",
-      "addedByUserId": "user-admin",
-      "addedByUserName": "مدير عام النظام",
-      "createdAt": "2026-09-14T22:23:41.342Z"
-    },
-    {
-      "id": "pt-1789424625865-5u26",
-      "traineeId": "trainee-1787875324594",
-      "groupId": "grp-1787431825818",
-      "branchId": "branch-1",
-      "points": 20,
-      "reason": "إتمام الواجب والتطبيق العملي ⭐⭐",
-      "addedByUserId": "user-admin",
-      "addedByUserName": "مدير عام النظام",
-      "createdAt": "2026-09-14T22:23:45.865Z"
-    },
-    {
-      "id": "pt-1789424628400-1rf7",
-      "traineeId": "trainee-1787875324594",
-      "groupId": "grp-1787431825818",
-      "branchId": "branch-1",
-      "points": 20,
-      "reason": "إتمام الواجب والتطبيق العملي ⭐⭐",
-      "addedByUserId": "user-admin",
-      "addedByUserName": "مدير عام النظام",
-      "createdAt": "2026-09-14T22:23:48.400Z"
     }
   ],
   "exams": [
@@ -10235,6 +10169,15 @@
     }
   ],
   "auditLogs": [
+    {
+      "userId": "user-admin",
+      "userName": "مدير عام النظام",
+      "action": "إضافة/خصم نقاط",
+      "entity": "نظام النقاط",
+      "details": "تم منح/تعديل 10 نقطة لعدد 1 متدرب - السبب: مشاركة وتفاعل إيجابي ⭐",
+      "id": "log-1789481179278-56m7",
+      "timestamp": "2026-09-15T14:06:19.278Z"
+    },
     {
       "userId": "user-admin",
       "userName": "مدير عام النظام",

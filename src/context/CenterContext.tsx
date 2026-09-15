@@ -182,8 +182,27 @@ export const CenterProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       ]);
 
       if (Array.isArray(traineesRes)) {
-        setTrainees(traineesRes);
-        try { localStorage.setItem('nagah_trainees', JSON.stringify(traineesRes)); } catch {}
+        setTrainees(prev => {
+          const serverList = traineesRes;
+          const prevList = Array.isArray(prev) ? prev : [];
+          const serverMap = new Map(serverList.map(t => [t.id, t]));
+          const merged = [...serverList];
+          const nowMs = Date.now();
+
+          // Protect recently added trainees from being wiped out by an eventual-consistency read
+          for (const localT of prevList) {
+            if (localT && localT.id && !serverMap.has(localT.id)) {
+              const createdAtMs = localT.createdAt ? new Date(localT.createdAt).getTime() : 0;
+              if (nowMs - createdAtMs < 180000) {
+                merged.unshift(localT);
+                serverMap.set(localT.id, localT);
+              }
+            }
+          }
+
+          try { localStorage.setItem('nagah_trainees', JSON.stringify(merged)); } catch {}
+          return merged;
+        });
       }
       if (Array.isArray(coursesRes)) {
         setCourses(coursesRes);

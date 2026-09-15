@@ -52,6 +52,8 @@ function hashPayload(data: any): string {
   return crypto.createHash('md5').update(str).digest('hex');
 }
 
+const isServerless = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.VERCEL_ENV);
+
 export async function saveCollectionToFirestore(collectionName: string, items: any): Promise<boolean> {
   const db = getDb();
   if (!db) return false;
@@ -70,23 +72,26 @@ export async function saveCollectionToFirestore(collectionName: string, items: a
   try {
     const docRef = doc(db, 'nagah_store', collectionName);
     const serialized = JSON.stringify(items ?? []);
+    const CHUNK_SIZE = 700 * 1024; // 700KB safe chunk size well below Firestore's 1MB limit
     
-    // If under 950KB, save directly in a single document to minimize write operations
-    if (serialized.length < 950 * 1024) {
+    if (serialized.length < CHUNK_SIZE) {
       await setDoc(docRef, {
         payload: serialized,
         itemCount: Array.isArray(items) ? items.length : 1,
+        isSplit: false,
+        totalParts: 1,
         updatedAt: now
       }, { merge: true });
     } else {
-      // Chunk into 2 parts if larger than 950KB
-      const part1 = serialized.slice(0, Math.ceil(serialized.length / 2));
-      const part2 = serialized.slice(Math.ceil(serialized.length / 2));
-      const docPart1 = doc(db, 'nagah_store', `${collectionName}_p1`);
-      const docPart2 = doc(db, 'nagah_store', `${collectionName}_p2`);
-      await setDoc(docPart1, { payload: part1, part: 1, totalParts: 2, updatedAt: now }, { merge: true });
-      await setDoc(docPart2, { payload: part2, part: 2, totalParts: 2, updatedAt: now }, { merge: true });
-      await setDoc(docRef, { isSplit: true, totalParts: 2, updatedAt: now }, { merge: true });
+      const totalParts = Math.ceil(serialized.length / CHUNK_SIZE);
+      const partPromises: Promise<any>[] = [];
+      for (let i = 0; i < totalParts; i++) {
+        const chunk = serialized.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE);
+        const partRef = doc(db, 'nagah_store', `${collectionName}_p${i + 1}`);
+        partPromises.push(setDoc(partRef, { payload: chunk, part: i + 1, totalParts, updatedAt: now }, { merge: true }));
+      }
+      await Promise.all(partPromises);
+      await setDoc(docRef, { isSplit: true, totalParts, updatedAt: now }, { merge: true });
     }
 
     collectionHashes.set(collectionName, newHash);
@@ -115,9 +120,11 @@ export async function loadCollectionFromFirestore(collectionName: string): Promi
 
     const data = snap.data();
     if (data?.isSplit) {
-      const p1Snap = await getDoc(doc(db, 'nagah_store', `${collectionName}_p1`));
-      const p2Snap = await getDoc(doc(db, 'nagah_store', `${collectionName}_p2`));
-      const fullStr = (p1Snap.data()?.payload || '') + (p2Snap.data()?.payload || '');
+      const totalParts = data.totalParts || 2;
+      const partSnaps = await Promise.all(
+        Array.from({ length: totalParts }, (_, i) => getDoc(doc(db, 'nagah_store', `${collectionName}_p${i + 1}`)))
+      );
+      const fullStr = partSnaps.map(s => s.data()?.payload || '').join('');
       return fullStr ? JSON.parse(fullStr) : null;
     }
 
@@ -134,17 +141,11 @@ export async function loadCollectionFromFirestore(collectionName: string): Promi
 let debouncedSyncTimer: NodeJS.Timeout | null = null;
 let pendingDbData: any = null;
 
-export async function saveFullDbToFirestore(dbData: any): Promise<void> {
+export async function saveFullDbToFirestore(dbData: any, immediate = false): Promise<void> {
   if (!dbData) return;
   pendingDbData = dbData;
 
-  // Debounce syncing to cloud by 8 seconds to bundle rapid state changes into a single write batch
-  if (debouncedSyncTimer) {
-    clearTimeout(debouncedSyncTimer);
-  }
-
-  debouncedSyncTimer = setTimeout(async () => {
-    debouncedSyncTimer = null;
+  const executeSync = async () => {
     const current = pendingDbData;
     if (!current) return;
 
@@ -157,11 +158,31 @@ export async function saveFullDbToFirestore(dbData: any): Promise<void> {
       'assignments'
     ];
 
-    for (const k of collections) {
-      if (current[k] !== undefined) {
-        await saveCollectionToFirestore(k, current[k]);
-      }
+    const tasks = collections
+      .filter(k => current[k] !== undefined)
+      .map(k => saveCollectionToFirestore(k, current[k]));
+
+    await Promise.all(tasks);
+  };
+
+  // On serverless environments (Vercel/Lambda), ALWAYS execute immediately and await to avoid process freeze drops
+  if (immediate || isServerless) {
+    if (debouncedSyncTimer) {
+      clearTimeout(debouncedSyncTimer);
+      debouncedSyncTimer = null;
     }
+    await executeSync();
+    return;
+  }
+
+  // Debounce syncing to cloud by 8 seconds in long-running standalone Node server mode
+  if (debouncedSyncTimer) {
+    clearTimeout(debouncedSyncTimer);
+  }
+
+  debouncedSyncTimer = setTimeout(async () => {
+    debouncedSyncTimer = null;
+    await executeSync();
   }, 8000);
 }
 
@@ -178,16 +199,22 @@ export async function loadFullDbFromFirestore(): Promise<any> {
   const result: any = {};
   let loadedCount = 0;
 
-  for (const col of collections) {
-    try {
-      const data = await loadCollectionFromFirestore(col);
-      if (data !== null) {
-        result[col] = data;
-        collectionHashes.set(col, hashPayload(data));
-        loadedCount++;
+  const loadTasks = await Promise.all(
+    collections.map(async (col) => {
+      try {
+        const data = await loadCollectionFromFirestore(col);
+        return { col, data };
+      } catch (e) {
+        return { col, data: null };
       }
-    } catch (e) {
-      // Continue loading other collections
+    })
+  );
+
+  for (const { col, data } of loadTasks) {
+    if (data !== null) {
+      result[col] = data;
+      collectionHashes.set(col, hashPayload(data));
+      loadedCount++;
     }
   }
 

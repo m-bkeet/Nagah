@@ -3571,33 +3571,62 @@ class DatabaseManager {
   constructor() {
     this.ensureDataDir();
     this.data = this.loadData();
-    // Fire background hydration on initialization
+    // Trigger background hydration on initialization
     this.hydrationPromise = this.ensureHydrated();
   }
 
   public async ensureHydrated(force = false): Promise<void> {
     const now = Date.now();
-    // Re-check Firestore every 60s in serverless environments, or when forced
+    // In serverless, recheck if expired; otherwise wait for existing promise
     if (!force && this.isFirestoreHydrated && (now - this.lastHydrationTime < 60 * 1000)) return;
-    this.lastHydrationTime = now;
-    try {
-      const remoteData = await loadFullDbFromFirestore();
-      if (remoteData && Object.keys(remoteData).length > 0) {
-        console.log('[DB] Hydrated from Firestore! Collections loaded:', Object.keys(remoteData));
-        this.data = {
-          ...this.data,
-          ...remoteData,
-          settings: {
-            ...this.data.settings,
-            ...(remoteData.settings || {})
-          }
-        };
-      }
-    } catch (err) {
-      console.warn('[DB] Firestore hydration notice:', err);
-    } finally {
-      this.isFirestoreHydrated = true;
+    if (this.hydrationPromise && !force) {
+      return this.hydrationPromise;
     }
+
+    this.hydrationPromise = (async () => {
+      this.lastHydrationTime = Date.now();
+      try {
+        const remoteData = await loadFullDbFromFirestore();
+        if (remoteData && Object.keys(remoteData).length > 0) {
+          console.log('[DB] Hydrated from Firestore! Collections loaded:', Object.keys(remoteData));
+          // Smart merge: preserve any locally created/updated items that may not yet be in remote snapshot
+          const current = this.data || {} as any;
+          const merged: any = { ...current };
+
+          for (const [key, val] of Object.entries(remoteData)) {
+            if (Array.isArray(val)) {
+              if (Array.isArray(merged[key]) && merged[key].length > 0) {
+                const remoteMap = new Map((val as any[]).map(item => [item.id, item]));
+                // Retain recently added local items
+                for (const localItem of merged[key]) {
+                  if (localItem && localItem.id && !remoteMap.has(localItem.id)) {
+                    remoteMap.set(localItem.id, localItem);
+                  }
+                }
+                merged[key] = Array.from(remoteMap.values());
+              } else {
+                merged[key] = val;
+              }
+            } else {
+              merged[key] = val;
+            }
+          }
+
+          if (remoteData.settings) {
+            merged.settings = { ...(current.settings || {}), ...remoteData.settings };
+          }
+
+          this.data = merged;
+        }
+      } catch (err) {
+        console.warn('[DB] Firestore hydration notice:', err);
+      } finally {
+        this.isFirestoreHydrated = true;
+        this.hydrationPromise = null;
+      }
+    })();
+
+    return this.hydrationPromise;
   }
 
   private ensureDataDir() {
@@ -3741,11 +3770,7 @@ class DatabaseManager {
       console.warn('[DB] Error loading database, falling back to initialData:', err);
     }
     
-    // Attempt saving initial data to writable storage if possible
-    try {
-      this.saveDataDirect(initialData);
-    } catch {}
-
+    // Note: Do NOT persist fallback initialData to cloud Firestore to protect real data
     return JSON.parse(JSON.stringify(initialData));
   }
 
@@ -3764,15 +3789,15 @@ class DatabaseManager {
     this.saveDataDirect(this.data);
   }
 
-  public save() {
-    this.saveDataDirect(this.data);
+  public async save() {
+    return await this.saveDataDirect(this.data, false);
   }
 
-  public saveImmediate() {
-    this.saveDataDirect(this.data);
+  public async saveImmediate() {
+    return await this.saveDataDirect(this.data, true);
   }
 
-  private saveDataDirect(data: DatabaseSchema) {
+  private async saveDataDirect(data: DatabaseSchema, immediate = false) {
     if (this.saveTimeout) {
       clearTimeout(this.saveTimeout);
       this.saveTimeout = null;
@@ -3808,10 +3833,15 @@ class DatabaseManager {
       console.warn('[DB] Note: saveDataDirect could not persist to local disk (stateless/read-only environment):', err);
     }
 
-    // Always sync state changes to cloud Firestore asynchronously
-    saveFullDbToFirestore(data).catch(err => {
-      console.warn('[DB] Non-critical async Firestore sync notice:', err);
-    });
+    // Always sync state changes to cloud Firestore (immediately if requested, otherwise async debounced)
+    try {
+      await saveFullDbToFirestore(data, immediate);
+    } catch (err) {
+      console.warn('[DB] Firestore sync error:', err);
+      if (immediate) {
+        throw err;
+      }
+    }
   }
 
   public logAudit(log: Omit<AuditLog, 'id' | 'timestamp'>) {
@@ -4023,8 +4053,31 @@ class DatabaseManager {
       const traineePayments = this.data.payments.filter(p => p.traineeId === trainee.id);
       const totalPaid = traineePayments.reduce((sum, p) => sum + (p.amount || 0), 0);
       trainee.paidAmount = totalPaid;
-      trainee.netAmount = Math.max(0, (trainee.feeAmount || 0) - (trainee.discountAmount || 0));
+
+      // Smart fee auto-resolution if feeAmount is 0 or missing
+      let fee = Number(trainee.feeAmount) || 0;
+      if (fee === 0) {
+        if (trainee.groupId) {
+          const grp = this.data.groups.find(g => g.id === trainee.groupId);
+          if (grp && grp.feeAmount !== undefined && grp.feeAmount !== null && Number(grp.feeAmount) > 0) {
+            fee = Number(grp.feeAmount);
+          }
+        }
+        if (fee === 0 && trainee.courseId) {
+          const crs = this.data.courses.find(c => c.id === trainee.courseId);
+          if (crs && (crs.feeAmount || crs.price)) {
+            fee = Number(crs.feeAmount || crs.price);
+          }
+        }
+        if (fee === 0) {
+          fee = 500; // default standard course fee fallback
+        }
+        trainee.feeAmount = fee;
+      }
+
+      trainee.netAmount = Math.max(0, fee - (trainee.discountAmount || 0));
       trainee.remainingAmount = Math.max(0, trainee.netAmount - trainee.paidAmount);
+
       if (!trainee.courseIds) {
         trainee.courseIds = trainee.courseId ? [trainee.courseId] : [];
       } else if (trainee.courseIds.length > 0 && !trainee.courseId) {

@@ -1,4 +1,5 @@
 import { db } from '../db';
+import { saveCollectionToFirestore } from '../firestoreStorage';
 import {
   Trainee,
   Branch,
@@ -29,6 +30,7 @@ import {
 function createRepo<T extends { id: string }>(key: string) {
   return {
     async getAll(): Promise<T[]> {
+      await db.ensureHydrated();
       const memData = db.getData() as any;
       if (!memData || !Array.isArray(memData[key])) {
         return [];
@@ -101,6 +103,7 @@ function createRepo<T extends { id: string }>(key: string) {
     },
 
     async create(id: string, itemData: any): Promise<T> {
+      await db.ensureHydrated();
       const docId = id || itemData.id || ('doc-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6));
       const fullItem = { ...itemData, id: docId };
 
@@ -111,13 +114,16 @@ function createRepo<T extends { id: string }>(key: string) {
         const idx = list.findIndex(i => i.id === docId);
         if (idx >= 0) list[idx] = fullItem;
         else list.push(fullItem);
-        db.saveImmediate();
+        // Direct write to target collection in Firestore and trigger immediate sync
+        await saveCollectionToFirestore(key, memData[key]);
+        await db.saveImmediate();
       }
 
       return fullItem as T;
     },
 
     async update(id: string, updates: any): Promise<T | null> {
+      await db.ensureHydrated();
       const existing = await this.getById(id);
       const docId = existing ? existing.id : id;
       const updatedItem = { ...(existing || {}), ...updates, id: docId, updatedAt: new Date().toISOString() };
@@ -129,19 +135,24 @@ function createRepo<T extends { id: string }>(key: string) {
         const idx = list.findIndex(i => i.id === docId);
         if (idx >= 0) list[idx] = updatedItem;
         else list.push(updatedItem);
-        db.saveImmediate();
+        // Direct write to target collection in Firestore and trigger immediate sync
+        await saveCollectionToFirestore(key, memData[key]);
+        await db.saveImmediate();
       }
 
       return updatedItem as T;
     },
 
     async delete(id: string): Promise<boolean> {
+      await db.ensureHydrated();
       const memData = db.getData() as any;
       if (memData && Array.isArray(memData[key])) {
         const list = memData[key] as any[];
         const idx = list.findIndex(i => i.id === id);
         if (idx >= 0) list.splice(idx, 1);
-        db.saveImmediate();
+        // Direct write to target collection in Firestore and trigger immediate sync
+        await saveCollectionToFirestore(key, memData[key]);
+        await db.saveImmediate();
       }
 
       return true;

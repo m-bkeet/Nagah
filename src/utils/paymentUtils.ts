@@ -21,15 +21,47 @@ export function isPaymentReminderWindow(date = new Date()): boolean {
   return day >= 25 || day <= 5;
 }
 
+export function getEffectiveFee(trainee: any, courses: any[] = [], groups: any[] = []): number {
+  if (!trainee) return 500;
+  if (trainee.feeAmount && Number(trainee.feeAmount) > 0) {
+    return Number(trainee.feeAmount);
+  }
+  if (trainee.groupId && groups.length > 0) {
+    const grp = groups.find(g => g.id === trainee.groupId);
+    if (grp && grp.feeAmount !== undefined && grp.feeAmount !== null && Number(grp.feeAmount) > 0) {
+      return Number(grp.feeAmount);
+    }
+  }
+  if (trainee.courseId && courses.length > 0) {
+    const crs = courses.find(c => c.id === trainee.courseId);
+    if (crs && (crs.feeAmount || crs.price)) {
+      return Number(crs.feeAmount || crs.price);
+    }
+  }
+  return Number(trainee.feeAmount) || 500;
+}
+
+export function getEffectiveNetAmount(trainee: any, courses: any[] = [], groups: any[] = []): number {
+  const fee = getEffectiveFee(trainee, courses, groups);
+  const discount = Number(trainee.discountAmount) || 0;
+  return Math.max(0, fee - discount);
+}
+
+export function getEffectiveRemaining(trainee: any, courses: any[] = [], groups: any[] = []): number {
+  const net = getEffectiveNetAmount(trainee, courses, groups);
+  const paid = Number(trainee.paidAmount) || 0;
+  return Math.max(0, net - paid);
+}
+
 /**
  * Checks if a trainee has an unpaid remaining amount for their subscription.
  */
-export function isTraineeUnpaid(trainee: any): boolean {
+export function isTraineeUnpaid(trainee: any, courses: any[] = [], groups: any[] = []): boolean {
   if (!trainee) return false;
   if (trainee.isExempt) return false;
-  const remaining =
-    trainee.remainingAmount ??
-    Math.max(0, (trainee.feeAmount || 0) - (trainee.discountAmount || 0) - (trainee.paidAmount || 0));
+  const remaining = trainee.remainingAmount !== undefined && trainee.remainingAmount !== null
+    ? Number(trainee.remainingAmount)
+    : getEffectiveRemaining(trainee, courses, groups);
   return remaining > 0;
 }
 
