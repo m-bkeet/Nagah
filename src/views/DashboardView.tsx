@@ -6,7 +6,7 @@ import {
   Users, BookOpen, Monitor, Shield, Globe, Wifi, 
   Sparkles, DollarSign, Activity, AlertTriangle, RefreshCw,
   TrendingUp, Calendar, Layers, MapPin, Building, CalendarCheck, Flame, 
-  Receipt, PiggyBank, Download, Plus, Trophy, Award, Star, Medal, ArrowUpRight, CheckCircle2, Crown, X, Sparkle, Upload
+  Receipt, PiggyBank, Download, Plus, Trophy, Award, Star, Medal, ArrowUpRight, CheckCircle2, Crown, X, Sparkle, Upload, Zap, Gamepad2
 } from 'lucide-react';
 import { Trainee, Course, Group } from '../types';
 import { SessionCelebrationOverlay } from '../components/SessionCelebrationOverlay';
@@ -474,59 +474,60 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
               </div>
             </label>
 
-            {/* 6 ORBIT NODE PLANETS WITH ROYAL GLOWING HIGHLIGHTS */}
+            {/* 6 ORBIT NODE PLANETS WITH UNIFIED DIMENSIONS & ROYAL GLOWING HIGHLIGHTS */}
             <button
               type="button"
               onClick={() => onNavigate('trainees')}
-              className="absolute -top-1 sm:top-1 left-1/2 -translate-x-1/2 z-30 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-2 border-purple-500 text-purple-900 dark:text-purple-200 px-3.5 py-1.5 rounded-full text-xs font-black shadow-[0_0_20px_rgba(168,85,247,0.35)] ring-2 ring-purple-400/50 flex items-center gap-1.5 transition-all hover:scale-110 hover:shadow-[0_0_30px_rgba(168,85,247,0.6)] cursor-pointer"
+              className="absolute -top-1 sm:top-1 left-1/2 -translate-x-1/2 z-30 w-28 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-2 border-purple-500 text-purple-900 dark:text-purple-200 py-1.5 rounded-full text-xs font-black shadow-[0_0_20px_rgba(168,85,247,0.35)] ring-2 ring-purple-400/50 flex items-center justify-center gap-1.5 transition-all hover:scale-110 hover:shadow-[0_0_30px_rgba(168,85,247,0.6)] cursor-pointer"
             >
-              <Users className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400 animate-pulse" />
+              <Users className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400 animate-pulse shrink-0" />
               <span>المتدربون</span>
             </button>
 
             <button
               type="button"
-              onClick={() => onNavigate('branches')}
-              className="absolute top-12 sm:top-14 right-2 sm:right-6 z-30 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-2 border-amber-500 text-amber-900 dark:text-amber-200 px-3.5 py-1.5 rounded-full text-xs font-black shadow-[0_0_20px_rgba(245,158,11,0.35)] ring-2 ring-amber-400/50 flex items-center gap-1.5 transition-all hover:scale-110 hover:shadow-[0_0_30px_rgba(245,158,11,0.6)] cursor-pointer"
+              onClick={() => onNavigate('settings')}
+              className="absolute top-12 sm:top-14 right-2 sm:right-6 z-30 w-28 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-2 border-amber-500 text-amber-900 dark:text-amber-200 py-1.5 rounded-full text-xs font-black shadow-[0_0_20px_rgba(245,158,11,0.35)] ring-2 ring-amber-400/50 flex items-center justify-center gap-1.5 transition-all hover:scale-110 hover:shadow-[0_0_30px_rgba(245,158,11,0.6)] cursor-pointer"
             >
-              <Building className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 animate-pulse" />
-              <span>الفروع</span>
+              <Shield className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 animate-pulse shrink-0" />
+              <span>الإعدادات</span>
             </button>
 
             <button
               type="button"
               onClick={() => onNavigate('reports')}
-              className="absolute bottom-12 sm:bottom-14 right-2 sm:right-6 z-30 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-2 border-purple-500 text-purple-900 dark:text-purple-200 px-3.5 py-1.5 rounded-full text-xs font-black shadow-[0_0_20px_rgba(168,85,247,0.35)] ring-2 ring-purple-400/50 flex items-center gap-1.5 transition-all hover:scale-110 hover:shadow-[0_0_30px_rgba(168,85,247,0.6)] cursor-pointer"
+              className="absolute bottom-12 sm:bottom-14 right-2 sm:right-6 z-30 w-28 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-2 border-purple-500 text-purple-900 dark:text-purple-200 py-1.5 rounded-full text-xs font-black shadow-[0_0_20px_rgba(168,85,247,0.35)] ring-2 ring-purple-400/50 flex items-center justify-center gap-1.5 transition-all hover:scale-110 hover:shadow-[0_0_30px_rgba(168,85,247,0.6)] cursor-pointer"
             >
-              <Sparkles className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400 animate-pulse" />
-              <span>ذكاء الأعمال</span>
+              <Sparkles className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400 animate-pulse shrink-0" />
+              <span>التقارير</span>
             </button>
 
             <button
               type="button"
               onClick={() => onNavigate('finance')}
-              className="absolute -bottom-1 sm:bottom-1 left-1/2 -translate-x-1/2 z-30 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-2 border-emerald-500 text-emerald-900 dark:text-emerald-200 px-3.5 py-1.5 rounded-full text-xs font-black shadow-[0_0_20px_rgba(16,185,129,0.35)] ring-2 ring-emerald-400/50 flex items-center gap-1.5 transition-all hover:scale-110 hover:shadow-[0_0_30px_rgba(16,185,129,0.6)] cursor-pointer"
+              className="absolute -bottom-1 sm:bottom-1 left-1/2 -translate-x-1/2 z-30 w-28 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-2 border-emerald-500 text-emerald-900 dark:text-emerald-200 py-1.5 rounded-full text-xs font-black shadow-[0_0_20px_rgba(160,185,129,0.35)] ring-2 ring-emerald-400/50 flex items-center justify-center gap-1.5 transition-all hover:scale-110 hover:shadow-[0_0_30px_rgba(16,185,129,0.6)] cursor-pointer"
             >
-              <DollarSign className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 animate-pulse" />
+              <DollarSign className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 animate-pulse shrink-0" />
               <span>الماليّة</span>
             </button>
 
             <button
               type="button"
               onClick={() => onNavigate('certificates')}
-              className="absolute bottom-12 sm:bottom-14 left-2 sm:left-6 z-30 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-2 border-rose-500 text-rose-900 dark:text-rose-200 px-3.5 py-1.5 rounded-full text-xs font-black shadow-[0_0_20px_rgba(244,63,94,0.35)] ring-2 ring-rose-400/50 flex items-center gap-1.5 transition-all hover:scale-110 hover:shadow-[0_0_30px_rgba(244,63,94,0.6)] cursor-pointer"
+              className="absolute bottom-12 sm:bottom-14 left-2 sm:left-6 z-30 w-28 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-2 border-rose-500 text-rose-900 dark:text-rose-200 py-1.5 rounded-full text-xs font-black shadow-[0_0_20px_rgba(244,63,94,0.35)] ring-2 ring-rose-400/50 flex items-center justify-center gap-1.5 transition-all hover:scale-110 hover:shadow-[0_0_30px_rgba(244,63,94,0.6)] cursor-pointer"
             >
-              <Award className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400 animate-pulse" />
+              <Award className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400 animate-pulse shrink-0" />
               <span>الشهادات</span>
             </button>
 
             <button
               type="button"
-              onClick={() => onNavigate('settings')}
-              className="absolute top-12 sm:top-14 left-2 sm:left-6 z-30 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-2 border-amber-500 text-amber-900 dark:text-amber-200 px-3.5 py-1.5 rounded-full text-xs font-black shadow-[0_0_20px_rgba(245,158,11,0.35)] ring-2 ring-amber-400/50 flex items-center gap-1.5 transition-all hover:scale-110 hover:shadow-[0_0_30px_rgba(245,158,11,0.6)] cursor-pointer"
+              onClick={() => onNavigate('interactive')}
+              className="absolute top-12 sm:top-14 left-2 sm:left-6 z-30 w-28 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-2 border-cyan-500 text-cyan-900 dark:text-cyan-200 py-1.5 rounded-full text-xs font-black shadow-[0_0_20px_rgba(6,182,212,0.35)] ring-2 ring-cyan-400/50 flex items-center justify-center gap-1.5 transition-all hover:scale-110 hover:shadow-[0_0_30px_rgba(6,182,212,0.6)] cursor-pointer"
+              title="الجلسات التفاعلية وتحديات المعمل"
             >
-              <Shield className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 animate-pulse" />
-              <span>الإعدادات</span>
+              <Zap className="w-3.5 h-3.5 text-cyan-600 dark:text-cyan-400 animate-pulse shrink-0" />
+              <span>الجلسات</span>
             </button>
 
           </div>

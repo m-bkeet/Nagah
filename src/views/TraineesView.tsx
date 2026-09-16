@@ -427,9 +427,12 @@ export const TraineesView: React.FC = () => {
     try {
       const g = targetGrade || formData.grade;
       const cId = courseId || formData.courseId;
-      let matchedCourse = courses.find(c => c.id === cId);
+      let matchedCourse = (courses || []).find(c => c.id === cId);
       if (g && !matchedCourse) {
-        matchedCourse = courses.find(c => c.name.includes(g) || g.includes(c.name) || c.grade === g);
+        matchedCourse = (courses || []).find(c => 
+          (c.name && g && (c.name.includes(g) || g.includes(c.name))) || 
+          c.grade === g
+        );
       }
       const res = await api.getNextTraineeCode({ courseId: matchedCourse?.id || cId, grade: g });
       if (res && res.code) {
@@ -466,7 +469,10 @@ export const TraineesView: React.FC = () => {
   };
 
   const handleGradeChangeInEdit = async (selGrade: string) => {
-    const matchedCourse = courses.find(c => c.name.includes(selGrade) || selGrade.includes(c.name) || c.grade === selGrade);
+    const matchedCourse = (courses || []).find(c => 
+      (c.name && selGrade && (c.name.includes(selGrade) || selGrade.includes(c.name))) || 
+      c.grade === selGrade
+    );
     setFormData((prev: any) => ({
       ...prev,
       grade: selGrade,
@@ -522,9 +528,17 @@ export const TraineesView: React.FC = () => {
 
   const handleOpenEditModal = (t: Trainee) => {
     setActiveTrainee(t);
+    const note = t.notes || '';
+    const isExempt = Boolean(
+      t.isExempt === true || 
+      String(t.isExempt) === 'true' || 
+      Boolean(t.exemptReason) || 
+      /إعفاء|معفى|أبناء|منحة|مالك|إداري/i.test(note)
+    );
     setFormData({
       fullName: t.fullName || '',
       code: t.code || '',
+      grade: t.grade || '',
       phone: t.phone || '',
       parentPhone: t.parentPhone || '',
       parentName: t.parentName || '',
@@ -537,7 +551,9 @@ export const TraineesView: React.FC = () => {
       groupId: t.groupId || '',
       trainerId: t.trainerId || '',
       feeAmount: t.feeAmount || 0,
-      discountAmount: t.discountAmount || 0,
+      discountAmount: t.discountAmount || (isExempt ? (t.feeAmount || 0) : 0),
+      isExempt: isExempt,
+      exemptReason: t.exemptReason || (isExempt ? 'management_children' : undefined),
       initialPayment: 0,
       initialPaymentMethod: 'cash',
       photoUrl: t.photoUrl || '',
@@ -655,12 +671,19 @@ export const TraineesView: React.FC = () => {
 
     setIsEditingTrainee(true);
     try {
+      const isExempt = Boolean(formData.isExempt);
+      const feeAmt = Number(formData.feeAmount) || 0;
+      const discountAmt = isExempt ? feeAmt : (Number(formData.discountAmount) || 0);
       const currentPaid = activeTrainee.paidAmount || 0;
-      const netAmt = (formData.feeAmount || 0) - (formData.discountAmount || 0);
-      const remainingAmt = netAmt - currentPaid;
+      const netAmt = isExempt ? 0 : Math.max(0, feeAmt - discountAmt);
+      const remainingAmt = isExempt ? 0 : Math.max(0, netAmt - currentPaid);
 
       const res = await api.updateTrainee(activeTrainee.id, {
         ...formData,
+        isExempt,
+        exemptReason: isExempt ? (formData.exemptReason || 'management_children') : undefined,
+        feeAmount: feeAmt,
+        discountAmount: discountAmt,
         netAmount: netAmt,
         remainingAmount: remainingAmt,
         updatedByUserId: user?.id,
@@ -672,6 +695,10 @@ export const TraineesView: React.FC = () => {
         const updatedTraineeObj = res.trainee || {
           ...activeTrainee,
           ...formData,
+          isExempt,
+          exemptReason: isExempt ? (formData.exemptReason || 'management_children') : undefined,
+          feeAmount: feeAmt,
+          discountAmount: discountAmt,
           netAmount: netAmt,
           remainingAmount: remainingAmt
         };
@@ -2859,10 +2886,10 @@ export const TraineesView: React.FC = () => {
                     value={formData.grade ?? ''}
                     onChange={(e) => {
                       const selGrade = e.target.value;
-                      let matchedCourse = courses.find(c => c.name.includes(selGrade) || selGrade.includes(c.name) || c.grade === selGrade);
-                      if (selGrade.includes('رابع')) matchedCourse = courses.find(c => c.name.includes('ICT4') || c.code?.includes('ICT4') || c.grade === selGrade);
-                      if (selGrade.includes('خامس')) matchedCourse = courses.find(c => c.name.includes('ICT5') || c.code?.includes('ICT5') || c.grade === selGrade);
-                      if (selGrade.includes('سادس')) matchedCourse = courses.find(c => c.name.includes('ICT6') || c.code?.includes('ICT6') || c.grade === selGrade);
+                      let matchedCourse = (courses || []).find(c => (c.name && selGrade && (c.name.includes(selGrade) || selGrade.includes(c.name))) || c.grade === selGrade);
+                      if (selGrade.includes('رابع')) matchedCourse = (courses || []).find(c => (c.name && c.name.includes('ICT4')) || c.code?.includes('ICT4') || c.grade === selGrade);
+                      if (selGrade.includes('خامس')) matchedCourse = (courses || []).find(c => (c.name && c.name.includes('ICT5')) || c.code?.includes('ICT5') || c.grade === selGrade);
+                      if (selGrade.includes('سادس')) matchedCourse = (courses || []).find(c => (c.name && c.name.includes('ICT6')) || c.code?.includes('ICT6') || c.grade === selGrade);
 
                       setFormData({
                         ...formData,
@@ -2916,17 +2943,17 @@ export const TraineesView: React.FC = () => {
                   >
                     <option value="">-- اختر الدورة --</option>
                     {courses
-                      .filter(c => !formData.grade || c.grade === formData.grade || c.name.includes(formData.grade) || formData.grade.includes(c.name))
+                      .filter(c => !formData.grade || c.grade === formData.grade || (c.name && formData.grade && (c.name.includes(formData.grade) || formData.grade.includes(c.name))))
                       .map((c) => (
                         <option key={c.id} value={c.id}>
                           {c.name} ({c.feeAmount} ج.م)
                         </option>
                       ))}
-                    {courses.filter(c => !formData.grade || c.grade === formData.grade || c.name.includes(formData.grade) || formData.grade.includes(c.name)).length === 0 && courses.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name} ({c.feeAmount} ج.م)
-                      </option>
-                    ))}
+                    {courses.filter(c => !formData.grade || c.grade === formData.grade || (c.name && formData.grade && (c.name.includes(formData.grade) || formData.grade.includes(c.name)))).length === 0 && courses.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name} ({c.feeAmount} ج.م)
+                        </option>
+                      ))}
                   </select>
                 </div>
                 <div>

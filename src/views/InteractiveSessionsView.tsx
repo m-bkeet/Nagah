@@ -166,9 +166,16 @@ console.log("نتيجة الطالب:", calculateGrade(48, 50));`);
         setLabLiveQuestion(json?.data || null);
       } catch (e) {}
     };
+
     fetchLabQuick();
-    const interval = setInterval(fetchLabQuick, 5000);
-    return () => clearInterval(interval);
+    const handleFocus = () => fetchLabQuick();
+    window.addEventListener('focus', handleFocus);
+    // Relaxed fallback interval (30s) only when active
+    const interval = setInterval(fetchLabQuick, 30000);
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      clearInterval(interval);
+    };
   }, []);
 
   const handleBroadcastVerbalMCQ = async (correctChoice: 'A' | 'B' | 'C' | 'D') => {
@@ -263,8 +270,17 @@ console.log("نتيجة الطالب:", calculateGrade(48, 50));`);
   };
 
   const handleAwardBonus = async (traineeId: string, points: number, reason: string) => {
+    // 1. Instant optimistic state update for 0ms visual feedback
+    setTrainees(prev => prev.map(t => {
+      if (t.id === traineeId || t.code === traineeId) {
+        const cur = Number(t.totalPoints || t.points || 0);
+        const next = Math.max(0, cur + points);
+        return { ...t, points: next, totalPoints: next };
+      }
+      return t;
+    }));
+
     try {
-      await api.awardPoints(traineeId, points, reason);
       if (points > 0) {
         audioService.playCoinSound();
         if (points >= 10) {
@@ -276,14 +292,17 @@ console.log("نتيجة الطالب:", calculateGrade(48, 50));`);
             subtitle: reason || 'تفاعل وتميز بالحصة'
           });
         }
-        showToast(`تم إسناد +${points} نقطة بنجاح! ⭐`, 'success');
+        showToast(`تم إسناد +${points} نجمة بنجاح! ⭐`, 'success');
       } else {
         audioService.playBuzzerSound();
         showToast(`تم تطبيق خصم ${points} نقطة: ${reason} ⚠️`, 'info');
       }
+
+      await api.awardPoints(traineeId, points, reason);
       loadCenterData();
     } catch (e: any) {
       showToast(e.message || 'فشل منح النقاط', 'error');
+      loadCenterData();
     }
   };
 
@@ -355,13 +374,23 @@ console.log("نتيجة الطالب:", calculateGrade(48, 50));`);
     }
   };
 
-  // Periodic poll for responses & devices
+  // Event-driven & focus-based load for responses & devices
   useEffect(() => {
-    const interval = setInterval(() => {
+    const handleFocus = () => {
       loadSessions(false);
       loadDevices();
-    }, 3000);
-    return () => clearInterval(interval);
+    };
+    window.addEventListener('focus', handleFocus);
+    // Relaxed periodic check (30s) only if active session exists
+    const interval = setInterval(() => {
+      if (typeof document !== 'undefined' && !document.hidden && activeSession?.id) {
+        loadSessions(false);
+      }
+    }, 30000);
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      clearInterval(interval);
+    };
   }, [activeSession?.id]);
 
   const loadDevices = async () => {
@@ -652,7 +681,7 @@ console.log("نتيجة الطالب:", calculateGrade(48, 50));`);
       </div>
 
       {/* Main Mode Navigation Tabs */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2 bg-slate-900/80 p-1.5 rounded-2xl border border-slate-800 backdrop-blur-md">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 bg-slate-900/80 p-1.5 rounded-2xl border border-slate-800 backdrop-blur-md">
         <button
           onClick={() => setActiveTab('cockpit')}
           className={`py-3 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all ${
@@ -662,31 +691,7 @@ console.log("نتيجة الطالب:", calculateGrade(48, 50));`);
           }`}
         >
           <LayoutDashboard className="w-4 h-4 shrink-0 text-slate-950" />
-          <span className="truncate">غرفة إدارة الحصة الموحدة 🎛️</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('lesson_workspace')}
-          className={`py-3 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all ${
-            activeTab === 'lesson_workspace'
-              ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 shadow-lg font-black scale-[1.02]'
-              : 'text-slate-300 hover:bg-slate-800 hover:text-white'
-          }`}
-        >
-          <BookOpen className="w-4 h-4 shrink-0" />
-          <span className="truncate">شرح الحصة الذكي</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('nagah_pro')}
-          className={`py-3 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all ${
-            activeTab === 'nagah_pro'
-              ? 'bg-amber-500 text-slate-950 shadow-lg font-black scale-[1.02]'
-              : 'text-slate-300 hover:bg-slate-800 hover:text-white'
-          }`}
-        >
-          <Crown className="w-4 h-4 shrink-0" />
-          <span className="truncate">النجاح Pro (Kahoot)</span>
+          <span className="truncate">غرفة إدارة الحصة 🎛️</span>
         </button>
 
         <button
@@ -698,19 +703,7 @@ console.log("نتيجة الطالب:", calculateGrade(48, 50));`);
           }`}
         >
           <Globe className="w-4 h-4 shrink-0" />
-          <span className="truncate">كاهوت / كويزيز</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('bank')}
-          className={`py-3 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all ${
-            activeTab === 'bank'
-              ? 'bg-cyan-500 text-slate-950 shadow-lg font-black scale-[1.02]'
-              : 'text-slate-300 hover:bg-slate-800 hover:text-white'
-          }`}
-        >
-          <Database className="w-4 h-4 shrink-0" />
-          <span className="truncate">بنك الأسئلة ({questionBank.length})</span>
+          <span className="truncate">كاهوت / كلاس بوينت</span>
         </button>
 
         <button
@@ -722,7 +715,7 @@ console.log("نتيجة الطالب:", calculateGrade(48, 50));`);
           }`}
         >
           <Zap className="w-4 h-4 shrink-0" />
-          <span className="truncate">السؤال اللحظي</span>
+          <span className="truncate">السؤال الشفهي اللحظي</span>
         </button>
 
         <button
@@ -734,7 +727,7 @@ console.log("نتيجة الطالب:", calculateGrade(48, 50));`);
           }`}
         >
           <Trophy className="w-4 h-4 shrink-0" />
-          <span className="truncate">المتصدرين</span>
+          <span className="truncate">المتصدرين والنجوم</span>
         </button>
 
         <button
@@ -747,6 +740,18 @@ console.log("نتيجة الطالب:", calculateGrade(48, 50));`);
         >
           <Languages className="w-4 h-4 shrink-0" />
           <span className="truncate">معمل اللغات 🗣️</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('lesson_workspace')}
+          className={`py-3 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all ${
+            activeTab === 'lesson_workspace'
+              ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 shadow-lg font-black scale-[1.02]'
+              : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+          }`}
+        >
+          <BookOpen className="w-4 h-4 shrink-0" />
+          <span className="truncate">شرح وتحضير الحصة</span>
         </button>
       </div>
 

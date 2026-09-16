@@ -36,16 +36,17 @@ import { Payment, TrainerSettlement, Trainee, Course } from '../types';
 import { OfficialReceiptModal } from '../components/OfficialReceiptModal';
 import { GoogleSheetsHubModal } from '../components/GoogleSheetsHubModal';
 import { ExpensesView } from './ExpensesView';
+import { GroupCashCollectionCockpit } from '../components/GroupCashCollectionCockpit';
 
 interface FinanceViewProps {
-  initialTab?: 'payments' | 'expenses' | 'pendingProofs' | 'settlements' | 'exemptions';
+  initialTab?: 'groupCollection' | 'payments' | 'expenses' | 'pendingProofs' | 'settlements' | 'exemptions';
 }
 
 export const FinanceView: React.FC<FinanceViewProps> = ({ initialTab }) => {
   const { branches, activeBranchId, showToast, setPrintData, refreshKey, openAiModal } = useCenter();
   const { user, canAccess } = useAuth();
-  const [activeTab, setActiveTab] = useState<'payments' | 'expenses' | 'pendingProofs' | 'settlements' | 'exemptions'>(
-    initialTab || 'payments'
+  const [activeTab, setActiveTab] = useState<'groupCollection' | 'payments' | 'expenses' | 'pendingProofs' | 'settlements' | 'exemptions'>(
+    initialTab || 'groupCollection'
   );
   const [isGoogleSheetsModalOpen, setIsGoogleSheetsModalOpen] = useState(false);
   const [payments, setPayments] = useState<Payment[]>([]);
@@ -592,6 +593,18 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ initialTab }) => {
       {/* Tabs Switcher */}
       <div className="flex flex-wrap items-center gap-2 border-b border-slate-700 pb-2">
         <button
+          onClick={() => setActiveTab('groupCollection')}
+          className={`px-4 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 shadow-md ${
+            activeTab === 'groupCollection'
+              ? 'bg-gradient-to-r from-emerald-500 to-emerald-600 text-slate-950 font-black shadow-emerald-500/20 ring-2 ring-emerald-400'
+              : 'text-emerald-300 hover:text-white bg-emerald-950/40 border border-emerald-500/40'
+          }`}
+        >
+          <Zap className="w-3.5 h-3.5 text-emerald-400" />
+          <span>⚡ تحصيل المجموعات الفوري والإيصالات</span>
+        </button>
+
+        <button
           onClick={() => setActiveTab('payments')}
           className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
             activeTab === 'payments'
@@ -599,7 +612,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ initialTab }) => {
               : 'text-slate-400 hover:text-white bg-slate-800/60'
           }`}
         >
-          سندات القبض وإيصالات التحصيل ({payments.length})
+          سندات القبض والأرشيف ({payments.length})
         </button>
 
         <button
@@ -656,6 +669,11 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ initialTab }) => {
           </button>
         )}
       </div>
+
+      {/* Group Cash Collection Cockpit View */}
+      {activeTab === 'groupCollection' && (
+        <GroupCashCollectionCockpit />
+      )}
 
       {/* Expenses Management View */}
       {activeTab === 'expenses' && (

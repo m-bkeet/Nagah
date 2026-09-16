@@ -47,7 +47,7 @@ const collectionHashes = new Map<string, string>();
 let isQuotaExceeded = false;
 let quotaExceededNoticeTime = 0;
 
-function withTimeout<T>(promise: Promise<T>, ms: number = 2000): Promise<T> {
+function withTimeout<T>(promise: Promise<T>, ms: number = 12000): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error('FIRESTORE_TIMEOUT')), ms);
     promise.then(
@@ -100,9 +100,9 @@ export async function saveCollectionToFirestore(collectionName: string, rawItems
   const db = getDb();
   if (!db) return false;
 
-  // If quota was exceeded recently (within the last 15 minutes), skip remote write immediately to prevent hanging
+  // If genuine quota was exceeded recently (within 60 seconds), skip remote write temporarily
   const now = Date.now();
-  if (isQuotaExceeded && (now - quotaExceededNoticeTime < 15 * 60 * 1000)) {
+  if (isQuotaExceeded && (now - quotaExceededNoticeTime < 60 * 1000)) {
     return false;
   }
 
@@ -124,17 +124,17 @@ export async function saveCollectionToFirestore(collectionName: string, rawItems
         isSplit: false,
         totalParts: 1,
         updatedAt: now
-      }, { merge: true }), 2500);
+      }, { merge: true }), 10000);
     } else {
       const totalParts = Math.ceil(serialized.length / CHUNK_SIZE);
       const partPromises: Promise<any>[] = [];
       for (let i = 0; i < totalParts; i++) {
         const chunk = serialized.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE);
         const partRef = doc(db, 'nagah_store', `${collectionName}_p${i + 1}`);
-        partPromises.push(withTimeout(setDoc(partRef, { payload: chunk, part: i + 1, totalParts, updatedAt: now }, { merge: true }), 2500));
+        partPromises.push(withTimeout(setDoc(partRef, { payload: chunk, part: i + 1, totalParts, updatedAt: now }, { merge: true }), 10000));
       }
       await Promise.all(partPromises);
-      await withTimeout(setDoc(docRef, { isSplit: true, totalParts, updatedAt: now }, { merge: true }), 2500);
+      await withTimeout(setDoc(docRef, { isSplit: true, totalParts, updatedAt: now }, { merge: true }), 10000);
     }
 
     collectionHashes.set(collectionName, newHash);
@@ -142,10 +142,10 @@ export async function saveCollectionToFirestore(collectionName: string, rawItems
     return true;
   } catch (err: any) {
     const errMsg = err?.message || String(err);
-    if (errMsg.includes('RESOURCE_EXHAUSTED') || errMsg.includes('Quota limit exceeded') || errMsg.includes('FIRESTORE_TIMEOUT')) {
+    if (errMsg.includes('RESOURCE_EXHAUSTED') || errMsg.includes('Quota limit exceeded')) {
       isQuotaExceeded = true;
       quotaExceededNoticeTime = now;
-      console.warn(`[FirestoreStorage] Cloud Firestore Quota exceeded or timed out. Immediate failover to local memory/disk active.`);
+      console.warn(`[FirestoreStorage] Cloud Firestore Quota exceeded. Immediate failover to local memory/disk active.`);
     } else {
       console.warn(`[FirestoreStorage] Error saving ${collectionName}:`, errMsg);
     }
@@ -159,20 +159,20 @@ export async function loadCollectionFromFirestore(collectionName: string): Promi
 
   // Fail fast if quota is currently exceeded
   const now = Date.now();
-  if (isQuotaExceeded && (now - quotaExceededNoticeTime < 15 * 60 * 1000)) {
+  if (isQuotaExceeded && (now - quotaExceededNoticeTime < 60 * 1000)) {
     return null;
   }
 
   try {
     const docRef = doc(db, 'nagah_store', collectionName);
-    const snap = await withTimeout(getDoc(docRef), 2000);
+    const snap = await withTimeout(getDoc(docRef), 8000);
     if (!snap.exists()) return null;
 
     const data = snap.data();
     if (data?.isSplit) {
       const totalParts = data.totalParts || 2;
       const partSnaps = await Promise.all(
-        Array.from({ length: totalParts }, (_, i) => withTimeout(getDoc(doc(db, 'nagah_store', `${collectionName}_p${i + 1}`)), 2000))
+        Array.from({ length: totalParts }, (_, i) => withTimeout(getDoc(doc(db, 'nagah_store', `${collectionName}_p${i + 1}`)), 8000))
       );
       const fullStr = partSnaps.map(s => s.data()?.payload || '').join('');
       return fullStr ? JSON.parse(fullStr) : null;
@@ -184,10 +184,10 @@ export async function loadCollectionFromFirestore(collectionName: string): Promi
     return null;
   } catch (err: any) {
     const errMsg = err?.message || String(err);
-    if (errMsg.includes('RESOURCE_EXHAUSTED') || errMsg.includes('Quota limit exceeded') || errMsg.includes('FIRESTORE_TIMEOUT')) {
+    if (errMsg.includes('RESOURCE_EXHAUSTED') || errMsg.includes('Quota limit exceeded')) {
       isQuotaExceeded = true;
       quotaExceededNoticeTime = now;
-      console.warn(`[FirestoreStorage] Cloud Firestore read quota reached or timed out. Using local memory/disk data.`);
+      console.warn(`[FirestoreStorage] Cloud Firestore read quota reached.`);
     } else {
       console.warn(`[FirestoreStorage] Error loading ${collectionName}:`, errMsg);
     }
@@ -212,7 +212,8 @@ export async function saveFullDbToFirestore(dbData: any, immediate = false): Pro
       'pointTransactions', 'exams', 'questions', 'examResults', 'interactiveSessions',
       'certificates', 'certificateTemplates',
       'trainerAttestations', 'auditLogs', 'settings', 'notifications',
-      'assignments'
+      'assignments', 'homeworkSubmissions', 'badges', 'traineeBadges', 'portalMessages',
+      'devices', 'deviceCommands'
     ];
 
     const tasks = collections
@@ -250,7 +251,8 @@ export async function loadFullDbFromFirestore(): Promise<any> {
     'pointTransactions', 'exams', 'questions', 'examResults', 'interactiveSessions',
     'certificates', 'certificateTemplates',
     'trainerAttestations', 'auditLogs', 'settings', 'notifications',
-    'assignments'
+    'assignments', 'homeworkSubmissions', 'badges', 'traineeBadges', 'portalMessages',
+    'devices', 'deviceCommands'
   ];
 
   const result: any = {};

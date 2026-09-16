@@ -42,12 +42,28 @@ export function getEffectiveFee(trainee: any, courses: any[] = [], groups: any[]
 }
 
 export function getEffectiveNetAmount(trainee: any, courses: any[] = [], groups: any[] = []): number {
+  if (!trainee) return 0;
+  const isExempt = Boolean(
+    trainee.isExempt === true || 
+    String(trainee.isExempt) === 'true' || 
+    Boolean(trainee.exemptReason) || 
+    /إعفاء|معفى|معفي|أبناء|منحة|مالك|إداري|مجاني/i.test(trainee.notes || '')
+  );
+  if (isExempt) return 0;
   const fee = getEffectiveFee(trainee, courses, groups);
   const discount = Number(trainee.discountAmount) || 0;
   return Math.max(0, fee - discount);
 }
 
 export function getEffectiveRemaining(trainee: any, courses: any[] = [], groups: any[] = []): number {
+  if (!trainee) return 0;
+  const isExempt = Boolean(
+    trainee.isExempt === true || 
+    String(trainee.isExempt) === 'true' || 
+    Boolean(trainee.exemptReason) || 
+    /إعفاء|معفى|معفي|أبناء|منحة|مالك|إداري|مجاني/i.test(trainee.notes || '')
+  );
+  if (isExempt) return 0;
   const net = getEffectiveNetAmount(trainee, courses, groups);
   const paid = Number(trainee.paidAmount) || 0;
   return Math.max(0, net - paid);
@@ -58,7 +74,13 @@ export function getEffectiveRemaining(trainee: any, courses: any[] = [], groups:
  */
 export function isTraineeUnpaid(trainee: any, courses: any[] = [], groups: any[] = []): boolean {
   if (!trainee) return false;
-  if (trainee.isExempt) return false;
+  const isExempt = Boolean(
+    trainee.isExempt === true || 
+    String(trainee.isExempt) === 'true' || 
+    Boolean(trainee.exemptReason) || 
+    /إعفاء|معفى|معفي|أبناء|منحة|مالك|إداري|مجاني/i.test(trainee.notes || '')
+  );
+  if (isExempt) return false;
   const remaining = trainee.remainingAmount !== undefined && trainee.remainingAmount !== null
     ? Number(trainee.remainingAmount)
     : getEffectiveRemaining(trainee, courses, groups);
@@ -83,15 +105,22 @@ export function getTraineePaymentStatusInfo(trainee: any, isStudentView = false,
     };
   }
 
-  if (trainee.isExempt) {
+  const isExempt = Boolean(
+    trainee.isExempt === true || 
+    String(trainee.isExempt) === 'true' || 
+    Boolean(trainee.exemptReason) || 
+    /إعفاء|معفى|معفي|أبناء|منحة|مالك|إداري|مجاني/i.test(trainee.notes || '')
+  );
+
+  if (isExempt) {
     return {
       isUnpaid: false,
       isExempt: true,
       remainingAmount: 0,
       isReminderWindow: inWindow,
-      statusLabel: 'معفي من الاشتراك 🎓',
-      shortLabel: 'معفي 🎓',
-      statusBadgeClass: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40'
+      statusLabel: 'معفى من المصروفات 🎓',
+      shortLabel: 'معفى 🎓',
+      statusBadgeClass: 'bg-purple-500/20 text-purple-300 border-purple-500/40'
     };
   }
 

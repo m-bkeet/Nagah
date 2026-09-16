@@ -86,14 +86,25 @@ export const StudentKioskView: React.FC = () => {
           }
         }
       } catch (err) {
-        // silent fail in polling
+        // silent fail
       }
     };
 
+    // Check immediately on mount or trainee login
     checkQuickQuestion();
-    const interval = setInterval(checkQuickQuestion, 5000);
+
+    // Check on window focus (instant event-driven trigger when student clicks or returns to tab)
+    const handleWindowFocus = () => {
+      checkQuickQuestion();
+    };
+    window.addEventListener('focus', handleWindowFocus);
+
+    // Lightweight fallback interval (25 seconds, only runs if window is active)
+    const interval = setInterval(checkQuickQuestion, 25000);
+
     return () => {
       isMounted = false;
+      window.removeEventListener('focus', handleWindowFocus);
       clearInterval(interval);
     };
   }, [currentTrainee]);
