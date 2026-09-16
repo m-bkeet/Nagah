@@ -189,14 +189,13 @@ export const CenterProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           const merged = [...serverList];
           const nowMs = Date.now();
 
-          // Protect recently added trainees from being wiped out by an eventual-consistency read
+          // Protect locally added trainees from being wiped out by server refresh
           for (const localT of prevList) {
             if (localT && localT.id && !serverMap.has(localT.id)) {
-              const createdAtMs = localT.createdAt ? new Date(localT.createdAt).getTime() : 0;
-              if (nowMs - createdAtMs < 180000) {
-                merged.unshift(localT);
-                serverMap.set(localT.id, localT);
-              }
+              merged.unshift(localT);
+              serverMap.set(localT.id, localT);
+              // Auto-sync missing trainee to server in background
+              api.createTrainee(localT).catch(() => {});
             }
           }
 
@@ -305,20 +304,9 @@ export const CenterProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       } catch (e) {}
     };
 
-    const livePoll = setInterval(runLiveCheck, 12000);
-
-    const handleVisibilityChange = () => {
-      if (!document.hidden) {
-        runLiveCheck();
-      }
-    };
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-
-    return () => {
-      clearInterval(livePoll);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
-  }, [refreshAll, refreshCoreData]);
+    // Run initial check once on load, with no repeating background intervals
+    runLiveCheck();
+  }, []);
 
   // Keyboard shortcut Ctrl+K for search
   useEffect(() => {

@@ -1338,9 +1338,10 @@ apiRouter.post(['/student/update-photo', '/trainees/update-photo'], async (req: 
       }
     }
 
-    // Update in Local Repo
+    // Update in Local Repo - replace old photo cleanly
     if (trainee) {
-      await TraineeRepo.update(targetId, { photoUrl: finalPhoto, photo: finalPhoto });
+      delete (trainee as any).photo;
+      await TraineeRepo.update(targetId, { photoUrl: finalPhoto });
     }
 
     // Sync in-memory DB & persistent store
@@ -1348,10 +1349,10 @@ apiRouter.post(['/student/update-photo', '/trainees/update-photo'], async (req: 
     if (memData && Array.isArray(memData.trainees)) {
       const idx = memData.trainees.findIndex((t: any) => t.id === targetId || t.code === traineeId || t.id === traineeId);
       if (idx >= 0) {
+        delete memData.trainees[idx].photo;
         memData.trainees[idx] = {
           ...memData.trainees[idx],
           photoUrl: finalPhoto,
-          photo: finalPhoto,
           updatedAt: new Date().toISOString()
         };
       }
@@ -5589,6 +5590,14 @@ apiRouter.put('/homeworks/:id', (req: Request, res: Response) => {
     if (audioFeedbackUrl !== undefined) sub.audioFeedbackUrl = audioFeedbackUrl;
     sub.status = status || 'reviewed';
 
+    // Auto-purge heavy base64 image data after review to keep database ultra-lightweight
+    delete sub.imageBase64;
+    delete sub.fileData;
+    if (sub.attachmentUrl && sub.attachmentUrl.startsWith('data:image')) {
+      sub.attachmentUrl = '';
+      sub.isImageArchived = true;
+    }
+
     // Award Bonus Points
     if (bonusPoints && Number(bonusPoints) > 0) {
       const pts = Number(bonusPoints);
@@ -8786,6 +8795,14 @@ apiRouter.post('/trainer-portal/review-homework', async (req: Request, res: Resp
     sub.status = 'reviewed';
     sub.reviewedAt = new Date().toISOString();
     sub.reviewedByTrainerId = trainerId;
+
+    // Auto-purge heavy base64 image data after review to keep database ultra-lightweight
+    delete sub.imageBase64;
+    delete sub.fileData;
+    if (sub.attachmentUrl && sub.attachmentUrl.startsWith('data:image')) {
+      sub.attachmentUrl = '';
+      sub.isImageArchived = true;
+    }
 
     if (pointsToAward && Number(pointsToAward) > 0) {
       const pts = Number(pointsToAward);

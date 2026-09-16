@@ -75,12 +75,6 @@ export const MessagesView: React.FC = () => {
   useEffect(() => {
     loadData();
     loadInboxMessages();
-
-    const interval = setInterval(() => {
-      loadInboxMessagesSilently();
-    }, 4000);
-
-    return () => clearInterval(interval);
   }, [activeBranchId, refreshKey]);
 
   const loadInboxMessagesSilently = async () => {

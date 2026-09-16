@@ -3561,11 +3561,62 @@ const userPasswordMap: Record<string, string> = {
   'user-branch-2': hashPassword('1234')
 };
 
+export function calculateTraineeFeeAndFinancials(t: any, coursesList: any[] = []): {
+  feeAmount: number;
+  discountAmount: number;
+  netAmount: number;
+  paidAmount: number;
+  remainingAmount: number;
+  isExempt: boolean;
+} {
+  const isBadr = t.branchId === 'branch-2' || String(t.branchName || '').includes('بدر');
+  const gradeStr = String(t.grade || '');
+  const isSecondary = gradeStr.includes('الثانوي') || String(t.courseName || '').includes('ICT-S');
+  
+  // Base fee calculation:
+  // فرع النجاح: ابتدائي وإعدادي 200 ج.م | ثانوي 250 ج.م
+  // فرع بدر: ابتدائي وإعدادي 250 ج.م (+50) | ثانوي 300 ج.م (+50)
+  const defaultFeeForBranch = isBadr ? (isSecondary ? 300 : 250) : (isSecondary ? 250 : 200);
+
+  // Check matched course fee
+  let baseFee = Number(t.feeAmount) || 0;
+  const course = coursesList.find((c: any) => c.id === t.courseId || (gradeStr && (c.grade === gradeStr || c.name?.includes(gradeStr))));
+  
+  if (baseFee === 0 || (isBadr && baseFee === 200)) {
+    if (course && Number(course.feeAmount) > 0) {
+      baseFee = isBadr ? Number(course.feeAmount) + 50 : Number(course.feeAmount);
+    } else {
+      baseFee = defaultFeeForBranch;
+    }
+  }
+
+  // Handle Exemptions & Discounts
+  const isExempt = Boolean(t.isExempt || t.exempt);
+  let discount = Number(t.discountAmount) || 0;
+  if (isExempt) {
+    discount = baseFee;
+  }
+
+  const net = Math.max(0, baseFee - discount);
+  const paid = Number(t.paidAmount) || 0;
+  const remaining = Math.max(0, net - paid);
+
+  return {
+    feeAmount: baseFee,
+    discountAmount: discount,
+    netAmount: net,
+    paidAmount: paid,
+    remainingAmount: remaining,
+    isExempt
+  };
+}
+
 class DatabaseManager {
   private data: DatabaseSchema;
   private saveTimeout: NodeJS.Timeout | null = null;
   private isFirestoreHydrated = false;
   private lastHydrationTime = 0;
+  private lastHydrationAttemptTime = 0;
   private hydrationPromise: Promise<void> | null = null;
 
   constructor() {
@@ -3577,12 +3628,19 @@ class DatabaseManager {
 
   public async ensureHydrated(force = false): Promise<void> {
     const now = Date.now();
-    // In serverless, recheck if expired; otherwise wait for existing promise
-    if (!force && this.isFirestoreHydrated && (now - this.lastHydrationTime < 60 * 1000)) return;
+    // Anti-hammering guard: If an attempt was made in the last 15 minutes, do not re-request Firestore
+    if (!force && (now - this.lastHydrationAttemptTime < 15 * 60 * 1000)) {
+      return;
+    }
+    // If successfully hydrated, cache for 1 hour
+    if (!force && this.isFirestoreHydrated && (now - this.lastHydrationTime < 60 * 60 * 1000)) {
+      return;
+    }
     if (this.hydrationPromise && !force) {
       return this.hydrationPromise;
     }
 
+    this.lastHydrationAttemptTime = now;
     this.hydrationPromise = (async () => {
       this.lastHydrationTime = Date.now();
       try {
@@ -3614,6 +3672,18 @@ class DatabaseManager {
 
           if (remoteData.settings) {
             merged.settings = { ...(current.settings || {}), ...remoteData.settings };
+          }
+
+          // Guarantee fee integrity across all trainees after remote hydration
+          if (Array.isArray(merged.trainees)) {
+            const coursesList = Array.isArray(merged.courses) ? merged.courses : [];
+            merged.trainees = merged.trainees.map((t: any) => {
+              const fin = calculateTraineeFeeAndFinancials(t, coursesList);
+              return {
+                ...t,
+                ...fin
+              };
+            });
           }
 
           this.data = merged;
@@ -3722,15 +3792,25 @@ class DatabaseManager {
           }
         }
 
-        // Preserve full original database data
+        // Preserve full original database data & guarantee fee integrity
         const rawTrainees = Array.isArray(parsed.trainees) ? parsed.trainees : [];
+        const coursesList = Array.isArray(parsed.courses) && parsed.courses.length > 0 ? parsed.courses : initialData.courses;
+
+        // Auto-heal trainees missing feeAmount or with branch/exemption discrepancies
+        const normalizedTrainees = rawTrainees.map((t: any) => {
+          const fin = calculateTraineeFeeAndFinancials(t, coursesList);
+          return {
+            ...t,
+            ...fin
+          };
+        });
 
         // Merge with defaults in case of missing or empty keys
         return {
           ...initialData,
           ...parsed,
           branches: (parsed.branches && parsed.branches.length > 0) ? parsed.branches : initialData.branches,
-          trainees: rawTrainees.length > 0 ? rawTrainees : initialData.trainees,
+          trainees: normalizedTrainees.length > 0 ? normalizedTrainees : initialData.trainees,
           trainers: (parsed.trainers && parsed.trainers.length > 0) ? parsed.trainers : initialData.trainers,
           courses: (parsed.courses && parsed.courses.length > 0) ? parsed.courses : initialData.courses,
           groups: (parsed.groups && parsed.groups.length > 0) ? parsed.groups : initialData.groups,

@@ -543,8 +543,6 @@ export const PublicParentPortalView: React.FC<PublicParentPortalViewProps> = ({ 
     };
 
     pollParentMessages();
-    const interval = setInterval(pollParentMessages, 15000);
-    return () => clearInterval(interval);
   }, [selectedChild?.id, selectedChild?.code]);
 
   // Session Celebration & Real-Time Event State for Parent

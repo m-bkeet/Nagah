@@ -348,8 +348,6 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
     };
 
     pollMessages();
-    const interval = setInterval(pollMessages, 15000);
-    return () => clearInterval(interval);
   }, [student?.id, student?.code]);
 
   // Offline-First & Resilient State Hooks
@@ -596,14 +594,11 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
     }
   }, [student]);
 
-  // Real-time student live synchronization (Points, Badges, Homeworks, Messages)
+  // Student live synchronization on mount or explicit action only
   useEffect(() => {
     if (!isLoggedIn || !student?.code) return;
 
-    const syncInterval = setInterval(async () => {
-      // Optimiziation: Pause background polling to save quota if page is hidden
-      if (document.hidden) return;
-
+    const syncOnce = async () => {
       try {
         const savedPassword = localStorage.getItem('student_session_password') || '';
         const res = await fetch('/api/student/login', {
@@ -617,16 +612,6 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
         if (!res.ok) return;
         const data = await res.json();
         if (data.success && data.student) {
-          const newPoints = data.student.points ?? data.student.totalPoints ?? 0;
-          const oldPoints = student.points ?? student.totalPoints ?? 0;
-
-          if (newPoints > oldPoints) {
-            audioService.playCoinSound();
-            if (newPoints - oldPoints >= 10) {
-              audioService.playCelebrationCheer();
-            }
-          }
-
           setStudent(prev => {
             if (!prev) return data.student;
             const cachedPhoto = localStorage.getItem('student_session_photo_' + prev.id) || localStorage.getItem('student_session_photo_' + prev.code);
@@ -644,10 +629,10 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
       } catch (e) {
         // Silent sync catch
       }
-    }, 20000); // Increased interval to 20 seconds to save server bandwidth and quota
+    };
 
-    return () => clearInterval(syncInterval);
-  }, [isLoggedIn, student?.code, student?.points, student?.totalPoints]);
+    syncOnce();
+  }, [isLoggedIn, student?.code]);
 
   // Helper for normalizing Arabic numerals and phone numbers
   const normalizeDigits = (str: string): string => {
@@ -3014,7 +2999,7 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
           if (!student) return;
           let optimizedPhoto = finalPhoto;
           try {
-            optimizedPhoto = await compressImage(finalPhoto, 800, 800, 0.85);
+            optimizedPhoto = await compressImage(finalPhoto, 400, 400, 0.7);
           } catch (e) {
             console.warn('Photo compression fallback:', e);
           }
