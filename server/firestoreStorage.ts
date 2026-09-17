@@ -229,7 +229,11 @@ export async function saveFullDbToFirestore(dbData: any, immediate = false): Pro
       clearTimeout(debouncedSyncTimer);
       debouncedSyncTimer = null;
     }
-    await executeSync();
+    try {
+      await withTimeout(executeSync(), 6000);
+    } catch (err) {
+      console.warn('[FirestoreStorage] Serverless sync completed with timeout/notice:', err);
+    }
     return;
   }
 
@@ -240,8 +244,106 @@ export async function saveFullDbToFirestore(dbData: any, immediate = false): Pro
 
   debouncedSyncTimer = setTimeout(async () => {
     debouncedSyncTimer = null;
-    await executeSync();
+    try {
+      await executeSync();
+    } catch (e) {
+      console.warn('[FirestoreStorage] Debounced background sync notice:', e);
+    }
   }, 8000);
+}
+
+export async function allocateNextTraineeCode(
+  prefix: string = 'A',
+  localTrainees: any[] = []
+): Promise<string> {
+  const pfx = (prefix || 'A').toUpperCase().trim().slice(0, 3);
+  const regex = new RegExp(`^${pfx}-?(\\d+)$`, 'i');
+  let maxNum = 0;
+  const usedCodes = new Set<string>();
+
+  // 1. Scan in-memory trainees
+  if (Array.isArray(localTrainees)) {
+    for (const t of localTrainees) {
+      if (t && t.code) {
+        const c = String(t.code).trim().toUpperCase();
+        usedCodes.add(c);
+        const m = c.match(regex);
+        if (m) {
+          const num = parseInt(m[1], 10);
+          if (!isNaN(num) && num > maxNum) maxNum = num;
+        }
+      }
+    }
+  }
+
+  // 2. Scan remote Firestore trainees (nagah_store/trainees) if available
+  const db = getDb();
+  if (db) {
+    try {
+      const traineesDocRef = doc(db, 'nagah_store', 'trainees');
+      const snap = await withTimeout(getDoc(traineesDocRef), 4000);
+      if (snap.exists()) {
+        const raw = snap.data();
+        let remoteList: any[] = [];
+        if (raw?.payload) {
+          try { remoteList = JSON.parse(raw.payload); } catch {}
+        }
+        if (Array.isArray(remoteList)) {
+          for (const t of remoteList) {
+            if (t && t.code) {
+              const c = String(t.code).trim().toUpperCase();
+              usedCodes.add(c);
+              const m = c.match(regex);
+              if (m) {
+                const num = parseInt(m[1], 10);
+                if (!isNaN(num) && num > maxNum) maxNum = num;
+              }
+            }
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('[allocateNextTraineeCode] remote trainees scan notice:', e);
+    }
+
+    // 3. Consult persistent atomic counter in nagah_store/code_counters
+    try {
+      const counterRef = doc(db, 'nagah_store', 'code_counters');
+      const counterSnap = await withTimeout(getDoc(counterRef), 4000);
+      let countersMap: Record<string, number> = {};
+      if (counterSnap.exists()) {
+        countersMap = counterSnap.data()?.counters || {};
+      }
+      const existingVal = Number(countersMap[pfx]) || 0;
+      if (existingVal > maxNum) {
+        maxNum = existingVal;
+      }
+
+      let nextNum = maxNum + 1;
+      let candidate = `${pfx}${String(nextNum).padStart(3, '0')}`;
+      while (usedCodes.has(candidate.toUpperCase())) {
+        nextNum++;
+        candidate = `${pfx}${String(nextNum).padStart(3, '0')}`;
+      }
+
+      countersMap[pfx] = nextNum;
+      await withTimeout(setDoc(counterRef, { counters: countersMap, updatedAt: new Date().toISOString() }, { merge: true }), 4000);
+
+      console.log(`[allocateNextTraineeCode] Allocated persistent unique code ${candidate} (prefix: ${pfx}, nextNum: ${nextNum})`);
+      return candidate;
+    } catch (e) {
+      console.warn('[allocateNextTraineeCode] Firestore code_counters update notice:', e);
+    }
+  }
+
+  // Fallback if Firestore counter doc could not be reached
+  let nextNum = maxNum + 1;
+  let candidate = `${pfx}${String(nextNum).padStart(3, '0')}`;
+  while (usedCodes.has(candidate.toUpperCase())) {
+    nextNum++;
+    candidate = `${pfx}${String(nextNum).padStart(3, '0')}`;
+  }
+  return candidate;
 }
 
 export async function loadFullDbFromFirestore(): Promise<any> {

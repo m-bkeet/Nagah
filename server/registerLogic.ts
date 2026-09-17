@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { CourseRepo, GroupRepo, TraineeRepo, BranchRepo, SettingRepo, TrainerRepo } from './data';
 import { adminDb } from './firebaseAdmin';
+import { allocateNextTraineeCode } from './firestoreStorage';
 import { Trainee, Course, Group, Trainer } from '../src/types';
 
 export function resolveGradePrefix(gradeOrCourse?: string): string {
@@ -292,22 +293,10 @@ export async function handlePublicRegister(req: Request, res: Response) {
       targetGroup = newGroup;
     }
 
-    // Generate accurate, grade-matching code
+    // Generate accurate, persistent, cloud-synchronized code (preventing any duplicate across Vercel serverless containers)
     const expectedPrefix = resolveGradePrefix(grade || targetCourse.name);
     const pfx = expectedPrefix.toUpperCase();
-    const regex = new RegExp(`^${pfx}-?(\\d+)$`, 'i');
-    let maxNum = 0;
-    allTrainees.forEach(t => {
-      if (t.code) {
-        const m = String(t.code).trim().match(regex);
-        if (m) {
-          const num = parseInt(m[1], 10);
-          if (!isNaN(num) && num > maxNum) maxNum = num;
-        }
-      }
-    });
-    const nextNum = maxNum + 1;
-    const newCode = `${pfx}${nextNum.toString().padStart(3, '0')}`;
+    const newCode = await allocateNextTraineeCode(pfx, allTrainees);
 
     const branchObj = allBranches.find(b => b.id === branchId);
     const branchName = branchObj ? branchObj.name : branchId;

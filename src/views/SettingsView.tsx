@@ -56,7 +56,8 @@ import {
 import { SystemSettings, GoogleDriveBackupFile, RolePermissionConfig } from '../types';
 
 export const SettingsView: React.FC = () => {
-  const { showToast, refreshAll, openAiModal } = useCenter();
+  const { showToast, refreshAll, openAiModal, trainees } = useCenter();
+  const traineesCount = Array.isArray(trainees) ? trainees.length : 0;
   const { user } = useAuth();
   const { themeConfig, currentThemeId, setThemeId, toggleDarkMode } = useTheme();
   
@@ -675,7 +676,7 @@ export const SettingsView: React.FC = () => {
                     النسخ الاحتياطي وتصدير/استيراد البيانات
                   </h3>
                   <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                    حفظ ونقل بيانات السنتر والطلاب (107 طالب) بضغطة واحدة وبصيغ JSON و Excel
+                    حفظ ونقل بيانات السنتر والطلاب ({traineesCount} طالب) بضغطة واحدة وبصيغ JSON و Excel
                   </p>
                 </div>
               </div>
@@ -797,7 +798,7 @@ export const SettingsView: React.FC = () => {
                 البيانات مشفرة ومحفوظة بأمان محلياً وسحابياً
               </span>
               <span className="font-mono text-purple-600 dark:text-purple-400 font-bold">
-                إجمالي الطلاب المسجلين: 107 طالب
+                إجمالي الطلاب المسجلين: {traineesCount} طالب
               </span>
             </div>
           </div>

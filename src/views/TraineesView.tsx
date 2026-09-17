@@ -6,7 +6,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import * as XLSX from 'xlsx';
 import html2canvas from 'html2canvas';
-import { useCenter } from '../context/CenterContext';
+import { useCenter, deduplicateTraineeList } from '../context/CenterContext';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../services/api';
 import { cloudDb } from '../services/cloudDatabase';
@@ -597,8 +597,7 @@ export const TraineesView: React.FC = () => {
         if (newTrainee && newTrainee.id) {
           setTrainees(prev => {
             const list = Array.isArray(prev) ? prev : [];
-            const filtered = list.filter(t => t.id !== newTrainee.id);
-            const newList = [newTrainee, ...filtered];
+            const newList = deduplicateTraineeList([newTrainee, ...list]);
             try { localStorage.setItem('nagah_trainees', JSON.stringify(newList)); } catch {}
             return newList;
           });
@@ -2608,16 +2607,18 @@ export const TraineesView: React.FC = () => {
 
       {/* ----------------- MODAL: Add Trainee ----------------- */}
       {isAddModalOpen && typeof document !== 'undefined' && createPortal(
-        <div className="fixed inset-0 z-[99999] flex items-center justify-center p-2 sm:p-4 bg-slate-950/85 backdrop-blur-md overflow-y-auto">
-          <div className="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl max-w-3xl w-full my-auto max-h-[85vh] flex flex-col overflow-hidden text-slate-100 animate-in fade-in zoom-in-95">
-            <div className="shrink-0 p-4 border-b border-slate-800 flex items-center justify-between bg-slate-900/90">
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center p-3 sm:p-4 bg-slate-950/75 backdrop-blur-sm overflow-y-auto">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-3xl shadow-2xl max-w-3xl w-full my-auto max-h-[88vh] flex flex-col overflow-hidden text-slate-900 dark:text-slate-100 modal-dialog-box animate-in fade-in zoom-in-95">
+            <div className="shrink-0 p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-900/90">
               <div className="flex items-center gap-2">
-                <UserPlus className="w-5 h-5 text-amber-400" />
-                <h3 className="font-bold text-sm text-slate-100">تسجيل متدرب جديد في النظام</h3>
+                <div className="w-8 h-8 rounded-xl bg-amber-500/10 dark:bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-500">
+                  <UserPlus className="w-4 h-4 text-amber-500" />
+                </div>
+                <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100">تسجيل متدرب جديد في النظام</h3>
               </div>
               <button
                 onClick={() => setIsAddModalOpen(false)}
-                className="p-1 text-slate-400 hover:text-white cursor-pointer"
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -2625,7 +2626,7 @@ export const TraineesView: React.FC = () => {
 
             <form onSubmit={handleSaveAddTrainee} className="flex-1 overflow-y-auto custom-scrollbar p-4 sm:p-6 space-y-4 text-xs">
               {/* Photo Upload Section */}
-              <div className="flex items-center gap-4 bg-slate-950/40 p-3 rounded-2xl border border-slate-800">
+              <div className="flex items-center gap-4 bg-slate-50 dark:bg-slate-950/40 p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800">
                 <input
                   type="file"
                   ref={photoInputRef}
@@ -3149,12 +3150,12 @@ export const TraineesView: React.FC = () => {
               </div>
 
               {/* Submit Buttons */}
-              <div className="pt-4 border-t border-slate-800 flex items-center justify-end gap-3">
+              <div className="pt-4 border-t border-slate-200 dark:border-slate-800 flex items-center justify-end gap-3">
                 <button
                   type="button"
                   disabled={isAddingTrainee}
                   onClick={() => setIsAddModalOpen(false)}
-                  className="px-4 py-2 bg-slate-800 text-slate-300 hover:text-white rounded-xl disabled:opacity-50"
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl font-bold transition-colors disabled:opacity-50"
                 >
                   إلغاء
                 </button>
@@ -3181,18 +3182,20 @@ export const TraineesView: React.FC = () => {
 
       {/* ----------------- MODAL: Edit Trainee ----------------- */}
       {isEditModalOpen && activeTrainee && typeof document !== 'undefined' && createPortal(
-        <div className="fixed inset-0 z-[99999] flex items-center justify-center p-2 sm:p-4 bg-slate-950/85 backdrop-blur-md overflow-y-auto">
-          <div className="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl max-w-3xl w-full my-auto max-h-[85vh] flex flex-col overflow-hidden text-slate-100">
-            <div className="shrink-0 p-4 border-b border-slate-800 flex items-center justify-between bg-slate-900/90">
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center p-3 sm:p-4 bg-slate-950/75 backdrop-blur-sm overflow-y-auto">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-3xl shadow-2xl max-w-3xl w-full my-auto max-h-[88vh] flex flex-col overflow-hidden text-slate-900 dark:text-slate-100 modal-dialog-box animate-in fade-in zoom-in-95">
+            <div className="shrink-0 p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-900/90">
               <div className="flex items-center gap-2">
-                <Edit className="w-5 h-5 text-blue-400" />
-                <h3 className="font-bold text-sm text-slate-100">
+                <div className="w-8 h-8 rounded-xl bg-blue-500/10 dark:bg-blue-500/20 border border-blue-500/30 flex items-center justify-center text-blue-600 dark:text-blue-400">
+                  <Edit className="w-4 h-4" />
+                </div>
+                <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100">
                   تعديل بيانات المتدرب: {activeTrainee.fullName} ({activeTrainee.code})
                 </h3>
               </div>
               <button
                 onClick={() => setIsEditModalOpen(false)}
-                className="p-1 text-slate-400 hover:text-white cursor-pointer"
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -3200,7 +3203,7 @@ export const TraineesView: React.FC = () => {
 
             <form onSubmit={handleSaveEditTrainee} className="flex-1 overflow-y-auto custom-scrollbar p-4 sm:p-6 space-y-4 text-xs">
               {/* Edit Photo Section */}
-              <div className="flex items-center gap-4 bg-slate-950/40 p-3 rounded-2xl border border-slate-800">
+              <div className="flex items-center gap-4 bg-slate-50 dark:bg-slate-950/40 p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800">
                 <input
                   type="file"
                   ref={editPhotoInputRef}
@@ -3605,12 +3608,12 @@ export const TraineesView: React.FC = () => {
                 </div>
               </div>
 
-              <div className="pt-4 border-t border-slate-800 flex items-center justify-end gap-3">
+              <div className="pt-4 border-t border-slate-200 dark:border-slate-800 flex items-center justify-end gap-3">
                 <button
                   type="button"
                   disabled={isEditingTrainee}
                   onClick={() => setIsEditModalOpen(false)}
-                  className="px-4 py-2 bg-slate-800 text-slate-300 hover:text-white rounded-xl disabled:opacity-50"
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl font-bold transition-colors disabled:opacity-50"
                 >
                   إلغاء
                 </button>
@@ -3637,45 +3640,47 @@ export const TraineesView: React.FC = () => {
 
       {/* ----------------- MODAL: Payment Voucher ----------------- */}
       {isPaymentModalOpen && activeTrainee && typeof document !== 'undefined' && createPortal(
-        <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md overflow-y-auto">
-          <div className="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl max-w-lg w-full my-auto max-h-[85vh] p-6 text-slate-100 animate-in fade-in zoom-in-95 overflow-y-auto">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-800 mb-4">
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center p-3 sm:p-4 bg-slate-950/75 backdrop-blur-sm overflow-y-auto">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-3xl shadow-2xl max-w-lg w-full my-auto max-h-[88vh] p-6 text-slate-900 dark:text-slate-100 modal-dialog-box animate-in fade-in zoom-in-95 overflow-y-auto custom-scrollbar">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800 mb-4">
               <div className="flex items-center gap-2">
-                <CreditCard className="w-5 h-5 text-emerald-400" />
-                <h3 className="font-bold text-sm">تسجيل سند قبض واستلام دفعة</h3>
+                <div className="w-8 h-8 rounded-xl bg-emerald-500/10 dark:bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
+                  <CreditCard className="w-4 h-4" />
+                </div>
+                <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100">تسجيل سند قبض واستلام دفعة</h3>
               </div>
               <button
                 onClick={() => setIsPaymentModalOpen(false)}
-                className="p-1 text-slate-400 hover:text-white"
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             <form onSubmit={handleSavePayment} className="space-y-4 text-xs">
-              <div className="bg-slate-800/80 p-3 rounded-xl border border-slate-700">
-                <p className="text-slate-400">المتدرب: <span className="font-bold text-slate-100">{activeTrainee.fullName}</span></p>
-                <p className="text-slate-400 mt-1">كود: <span className="font-mono font-bold text-amber-400">{activeTrainee.code}</span> | المتبقي الحالي: <span className="font-mono font-bold text-rose-400">{activeTrainee.remainingAmount} ج.م</span></p>
+              <div className="bg-slate-50 dark:bg-slate-800/80 p-3.5 rounded-2xl border border-slate-200 dark:border-slate-700">
+                <p className="text-slate-600 dark:text-slate-400">المتدرب: <span className="font-bold text-slate-900 dark:text-slate-100">{activeTrainee.fullName}</span></p>
+                <p className="text-slate-600 dark:text-slate-400 mt-1">كود: <span className="font-mono font-bold text-amber-600 dark:text-amber-400">{activeTrainee.code}</span> | المتبقي الحالي: <span className="font-mono font-bold text-rose-600 dark:text-rose-400">{activeTrainee.remainingAmount} ج.م</span></p>
               </div>
 
               <div>
-                <label className="block text-emerald-400 font-bold mb-1">المبلغ المستلم (ج.م) *</label>
+                <label className="block text-emerald-600 dark:text-emerald-400 font-bold mb-1">المبلغ المستلم (ج.م) *</label>
                 <input
                   type="number"
                   required
                   min={1}
                   value={paymentAmount}
                   onChange={(e) => setPaymentAmount(Number(e.target.value))}
-                  className="w-full bg-slate-800 border border-emerald-500 rounded-xl px-3 py-2 text-emerald-300 font-mono font-bold text-base focus:outline-none"
+                  className="w-full bg-white dark:bg-slate-800 border-2 border-emerald-500 rounded-xl px-3 py-2 text-emerald-700 dark:text-emerald-300 font-mono font-bold text-base focus:outline-none"
                 />
               </div>
 
               <div>
-                <label className="block text-slate-300 font-bold mb-1">طريقة الاستلام *</label>
+                <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">طريقة الاستلام *</label>
                 <select
                   value={paymentMethod}
                   onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod)}
-                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100"
+                  className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 font-semibold"
                 >
                   <option value="cash">نقداً (خزينة المركز)</option>
                   <option value="vodafone_cash">فودافون كاش (محفظة المركز)</option>
@@ -3685,18 +3690,18 @@ export const TraineesView: React.FC = () => {
                 </select>
 
                 {paymentMethod === 'vodafone_cash' && (
-                  <div className="mt-2.5 p-3 rounded-xl bg-rose-950/40 border border-rose-500/30 space-y-1.5 text-xs">
-                    <div className="flex items-center justify-between text-rose-300 font-bold">
+                  <div className="mt-2.5 p-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-500/30 space-y-1.5 text-xs">
+                    <div className="flex items-center justify-between text-rose-700 dark:text-rose-300 font-bold">
                       <span>دفع مباشر عبر فودافون كاش</span>
                       <span className="font-mono text-[11px]">{settings?.vodafoneCash || '01001500686'}</span>
                     </div>
-                    <p className="text-[10px] text-slate-400">
-                      كود الدفع: <code className="font-mono font-bold text-amber-400 dir-ltr inline-block">{getVodafoneCashUssdCode(settings?.vodafoneCash || '01001500686', paymentAmount)}</code>
+                    <p className="text-[10px] text-slate-600 dark:text-slate-400">
+                      كود الدفع: <code className="font-mono font-bold text-amber-600 dark:text-amber-400 dir-ltr inline-block">{getVodafoneCashUssdCode(settings?.vodafoneCash || '01001500686', paymentAmount)}</code>
                     </p>
                     <button
                       type="button"
                       onClick={() => executeVodafoneCashPayment(settings?.vodafoneCash || '01001500686', paymentAmount)}
-                      className="w-full py-1.5 px-3 rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs flex items-center justify-center gap-1 transition-all"
+                      className="w-full py-1.5 px-3 rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs flex items-center justify-center gap-1 transition-all shadow-sm"
                     >
                       📞 فتح كود الدفع على الهاتف فوراً
                     </button>
@@ -3704,15 +3709,15 @@ export const TraineesView: React.FC = () => {
                 )}
 
                 {paymentMethod === 'instapay' && (
-                  <div className="mt-2.5 p-3 rounded-xl bg-indigo-950/40 border border-indigo-500/30 space-y-1.5 text-xs">
-                    <div className="flex items-center justify-between text-indigo-300 font-bold">
+                  <div className="mt-2.5 p-3 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-500/30 space-y-1.5 text-xs">
+                    <div className="flex items-center justify-between text-indigo-700 dark:text-indigo-300 font-bold">
                       <span>دفع مباشر عبر InstaPay</span>
                       <span className="font-mono text-[11px]">{settings?.instapay || 'm_bkeet@instapay'}</span>
                     </div>
                     <button
                       type="button"
                       onClick={() => executeInstaPayPayment(settings?.instapay || 'm_bkeet@instapay', paymentAmount, activeTrainee?.fullName)}
-                      className="w-full py-1.5 px-3 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center justify-center gap-1 transition-all"
+                      className="w-full py-1.5 px-3 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center justify-center gap-1 transition-all shadow-sm"
                     >
                       ⚡ نسخ العنوان وفتح تطبيق InstaPay فوراً
                     </button>
@@ -3721,22 +3726,22 @@ export const TraineesView: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-slate-400 font-semibold mb-1">ملاحظات السند</label>
+                <label className="block text-slate-600 dark:text-slate-400 font-semibold mb-1">ملاحظات السند</label>
                 <input
                   type="text"
                   placeholder="مثال: دفعة ثانية من الرسوم"
                   value={paymentNotes}
                   onChange={(e) => setPaymentNotes(e.target.value)}
-                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100"
+                  className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100"
                 />
               </div>
 
-              <div className="pt-3 border-t border-slate-800 flex justify-end gap-2">
+              <div className="pt-3 border-t border-slate-200 dark:border-slate-800 flex justify-end gap-2">
                 <button
                   type="button"
                   disabled={isSubmittingPayment}
                   onClick={() => setIsPaymentModalOpen(false)}
-                  className="px-4 py-2 bg-slate-800 text-slate-300 rounded-xl disabled:opacity-50"
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl font-semibold disabled:opacity-50 transition-colors"
                 >
                   إلغاء
                 </button>
@@ -3763,16 +3768,16 @@ export const TraineesView: React.FC = () => {
 
       {/* ----------------- MODAL: Trainee Full Profile ----------------- */}
       {isProfileModalOpen && activeTrainee && typeof document !== 'undefined' && createPortal(
-        <div className="fixed inset-0 z-[99999] flex items-center justify-center p-2 sm:p-4 bg-slate-950/85 backdrop-blur-md overflow-y-auto">
-          <div className="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl max-w-4xl w-full my-auto max-h-[85vh] flex flex-col overflow-hidden text-slate-100">
-            <div className="shrink-0 p-4 border-b border-slate-800 flex items-center justify-between bg-slate-900/90">
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center p-2 sm:p-4 bg-slate-950/75 backdrop-blur-sm overflow-y-auto">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-3xl shadow-2xl max-w-4xl w-full my-auto max-h-[88vh] flex flex-col overflow-hidden text-slate-900 dark:text-slate-100 modal-dialog-box">
+            <div className="shrink-0 p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-900/90">
               <div className="flex items-center gap-2">
-                <Eye className="w-5 h-5 text-amber-400" />
-                <h3 className="font-bold text-sm">الملف الشامل وبطاقة المتدرب: {activeTrainee.fullName}</h3>
+                <Eye className="w-5 h-5 text-amber-500" />
+                <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100">الملف الشامل وبطاقة المتدرب: {activeTrainee.fullName}</h3>
               </div>
               <button
                 onClick={() => setIsProfileModalOpen(false)}
-                className="p-1 text-slate-400 hover:text-white cursor-pointer"
+                className="p-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-white rounded-lg hover:bg-slate-200/60 dark:hover:bg-slate-800 transition-colors cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -3780,31 +3785,31 @@ export const TraineesView: React.FC = () => {
 
             <div className="flex-1 overflow-y-auto custom-scrollbar p-4 sm:p-6 space-y-5 text-xs">
               {/* Profile Card Header */}
-              <div className="p-4 rounded-2xl bg-gradient-to-r from-slate-800 via-slate-850 to-slate-900 border border-slate-700 flex flex-col md:flex-row items-center justify-between gap-4">
+              <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-500/10 via-amber-50/50 to-slate-50 dark:from-slate-800 dark:via-slate-850 dark:to-slate-900 border border-amber-500/30 dark:border-slate-700 flex flex-col md:flex-row items-center justify-between gap-4 shadow-xs">
                 <div className="flex items-center gap-4 text-right">
                   {activeTrainee.photoUrl ? (
                     <img
                       src={activeTrainee.photoUrl}
                       alt={activeTrainee.fullName}
-                      className="w-16 h-16 rounded-2xl object-cover border-2 border-amber-500 shadow-lg"
+                      className="w-16 h-16 rounded-2xl object-cover border-2 border-amber-500 shadow-md"
                     />
                   ) : (
-                    <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-amber-600 to-amber-400 text-slate-950 flex items-center justify-center font-black text-2xl shadow-lg">
+                    <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-amber-500 to-amber-400 text-slate-950 flex items-center justify-center font-black text-2xl shadow-md">
                       {activeTrainee.fullName?.charAt(0) || '?'}
                     </div>
                   )}
                   <div>
-                    <h3 className="text-base font-black text-slate-100 flex items-center gap-2">
+                    <h3 className="text-base font-black text-slate-900 dark:text-slate-100 flex items-center gap-2">
                       {activeTrainee.fullName}
-                      <span className="text-xs font-mono bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded border border-amber-500/30">
+                      <span className="text-xs font-mono font-bold bg-amber-500/20 text-amber-800 dark:text-amber-300 px-2 py-0.5 rounded border border-amber-500/40">
                         {activeTrainee.code}
                       </span>
                     </h3>
-                    <p className="text-slate-400 mt-1">
-                      هاتف: <span className="font-mono text-slate-200">{activeTrainee.phone}</span> | ولي الأمر: {activeTrainee.parentName || 'غير مسجل'} ({activeTrainee.parentPhone || '-'})
+                    <p className="text-slate-600 dark:text-slate-300 mt-1 font-medium">
+                      هاتف: <span className="font-mono font-bold text-slate-900 dark:text-slate-100">{activeTrainee.phone}</span> | ولي الأمر: <span className="text-slate-800 dark:text-slate-200">{activeTrainee.parentName || 'غير مسجل'}</span> ({activeTrainee.parentPhone || '-'})
                     </p>
-                    <p className="text-slate-400 mt-0.5">
-                      الفرع: {branches.find(b => b.id === activeTrainee.branchId)?.name} | تاريخ التسجيل: {activeTrainee.registrationDate}
+                    <p className="text-slate-500 dark:text-slate-400 mt-0.5 text-[11px]">
+                      الفرع: <span className="font-semibold text-slate-700 dark:text-slate-300">{branches.find(b => b.id === activeTrainee.branchId)?.name || 'الفرع الرئيسي'}</span> | تاريخ التسجيل: <span className="font-mono text-slate-700 dark:text-slate-300">{activeTrainee.registrationDate}</span>
                     </p>
                   </div>
                 </div>
@@ -3813,21 +3818,21 @@ export const TraineesView: React.FC = () => {
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => setSelectedDigitalCardTrainee(activeTrainee)}
-                    className="flex items-center gap-1.5 px-3 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 rounded-xl font-black shadow-lg shadow-amber-500/20"
+                    className="flex items-center gap-1.5 px-3 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 rounded-xl font-black shadow-md shadow-amber-500/20 active:scale-95 transition-all text-xs"
                   >
                     <Sparkles className="w-4 h-4 text-slate-950" />
                     <span>كارت المتدرب الرقمي 💳</span>
                   </button>
                   <button
                     onClick={() => handlePrintBadge(activeTrainee)}
-                    className="flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl border border-slate-700 font-bold"
+                    className="flex items-center gap-1.5 px-3 py-2 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-200 dark:border-slate-700 rounded-xl font-bold text-xs shadow-2xs active:scale-95 transition-all"
                   >
                     <Printer className="w-4 h-4" />
                     <span>طباعة</span>
                   </button>
                   <button
                     onClick={() => handleOpenWhatsApp(activeTrainee)}
-                    className="flex items-center gap-1.5 px-3 py-2 bg-emerald-950 hover:bg-emerald-900 text-emerald-300 rounded-xl border border-emerald-700 font-bold"
+                    className="flex items-center gap-1.5 px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs shadow-2xs active:scale-95 transition-all"
                   >
                     <MessageSquare className="w-4 h-4" />
                     <span>WhatsApp</span>
@@ -3839,22 +3844,22 @@ export const TraineesView: React.FC = () => {
               {(() => {
                 const tier = getTraineeStarTier(activeTrainee.totalPoints || activeTrainee.points || 0);
                 return (
-                  <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-500/10 via-slate-900 to-indigo-500/10 border border-amber-500/30 flex flex-col md:flex-row items-center justify-between gap-4">
+                  <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-500/10 via-amber-50/50 to-indigo-50/40 dark:from-amber-500/10 dark:via-slate-900 dark:to-indigo-500/10 border border-amber-500/30 flex flex-col md:flex-row items-center justify-between gap-4 shadow-xs">
                     <div className="flex items-center gap-3">
                       <div className="w-12 h-12 rounded-2xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-2xl shadow-inner">
                         ⭐
                       </div>
                       <div>
                         <div className="flex items-center gap-2">
-                          <span className="font-bold text-sm text-slate-100">رصيد النجوم والتميز التحفيزي</span>
+                          <span className="font-bold text-sm text-slate-900 dark:text-slate-100">رصيد النجوم والتميز التحفيزي</span>
                           <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${tier.badgeColor}`}>
                             {tier.name}
                           </span>
                         </div>
-                        <p className="text-slate-400 text-[11px] mt-0.5">
-                          الرصيد الإجمالي: <span className="font-mono font-black text-amber-300 text-sm">{activeTrainee.totalPoints || activeTrainee.points || 0} نقطة</span>
-                          <span className="text-slate-500 mx-2">•</span>
-                          يعادل تقريباً <span className="font-bold text-amber-400">{tier.stars} نجوم تميز 🌟</span>
+                        <p className="text-slate-600 dark:text-slate-400 text-[11px] mt-0.5">
+                          الرصيد الإجمالي: <span className="font-mono font-black text-amber-700 dark:text-amber-300 text-sm">{activeTrainee.totalPoints || activeTrainee.points || 0} نقطة</span>
+                          <span className="text-slate-400 dark:text-slate-500 mx-2">•</span>
+                          يعادل تقريباً <span className="font-bold text-amber-600 dark:text-amber-400">{tier.stars} نجوم تميز 🌟</span>
                         </p>
                       </div>
                     </div>
@@ -3863,21 +3868,21 @@ export const TraineesView: React.FC = () => {
                     <div className="flex flex-wrap items-center gap-1.5">
                       <button
                         onClick={() => handleQuickAward(activeTrainee, 1, 'مشاركة ممتازة في الحصة ⭐')}
-                        className="px-2.5 py-1.5 bg-amber-500/20 hover:bg-amber-500 text-amber-300 hover:text-slate-950 rounded-xl text-xs font-bold border border-amber-500/40 transition-all"
+                        className="px-2.5 py-1.5 bg-amber-100/90 hover:bg-amber-500 text-amber-900 hover:text-white dark:bg-amber-500/20 dark:hover:bg-amber-500 dark:text-amber-300 dark:hover:text-slate-950 rounded-xl text-xs font-bold border border-amber-400/50 dark:border-amber-500/40 transition-all shadow-2xs"
                         title="إضافة 1 نجمة (+10 نقاط)"
                       >
                         +1 ⭐ (+10)
                       </button>
                       <button
                         onClick={() => handleQuickAward(activeTrainee, 2, 'إتمام الواجب والتطبيق العملي ⭐⭐')}
-                        className="px-2.5 py-1.5 bg-amber-500/20 hover:bg-amber-500 text-amber-300 hover:text-slate-950 rounded-xl text-xs font-bold border border-amber-500/40 transition-all"
+                        className="px-2.5 py-1.5 bg-amber-100/90 hover:bg-amber-500 text-amber-900 hover:text-white dark:bg-amber-500/20 dark:hover:bg-amber-500 dark:text-amber-300 dark:hover:text-slate-950 rounded-xl text-xs font-bold border border-amber-400/50 dark:border-amber-500/40 transition-all shadow-2xs"
                         title="إضافة 2 نجوم (+20 نقطة)"
                       >
                         +2 ⭐ (+20)
                       </button>
                       <button
                         onClick={() => handleQuickAward(activeTrainee, 5, 'تفوق واختبار متميز 🌟')}
-                        className="px-2.5 py-1.5 bg-amber-500/20 hover:bg-amber-500 text-amber-300 hover:text-slate-950 rounded-xl text-xs font-bold border border-amber-500/40 transition-all"
+                        className="px-2.5 py-1.5 bg-amber-100/90 hover:bg-amber-500 text-amber-900 hover:text-white dark:bg-amber-500/20 dark:hover:bg-amber-500 dark:text-amber-300 dark:hover:text-slate-950 rounded-xl text-xs font-bold border border-amber-400/50 dark:border-amber-500/40 transition-all shadow-2xs"
                         title="إضافة 5 نجوم (+50 نقطة)"
                       >
                         +5 🌟 (+50)
@@ -3896,49 +3901,49 @@ export const TraineesView: React.FC = () => {
 
               {/* Financial Balance Summary */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                <div className="p-3 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
-                  <span className="text-slate-500 dark:text-slate-400 block mb-1">رسوم الدورة</span>
+                <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+                  <span className="text-slate-600 dark:text-slate-400 text-xs font-bold block mb-1">رسوم الدورة</span>
                   <span className="text-lg font-black font-mono text-slate-900 dark:text-slate-100">
                     {activeTrainee.feeAmount && activeTrainee.feeAmount > 0 
                       ? activeTrainee.feeAmount 
                       : (courses.find(c => c.id === activeTrainee.courseId)?.feeAmount || 2500)} ج.م
                   </span>
                 </div>
-                <div className="p-3 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
-                  <span className="text-slate-500 dark:text-slate-400 block mb-1">الخصم الممنوح</span>
-                  <span className="text-lg font-black font-mono text-amber-600 dark:text-amber-400">{activeTrainee.discountAmount || 0} ج.م</span>
+                <div className="p-3 rounded-xl bg-amber-50/60 dark:bg-slate-800 border border-amber-200 dark:border-slate-700">
+                  <span className="text-amber-800 dark:text-slate-400 text-xs font-bold block mb-1">الخصم الممنوح</span>
+                  <span className="text-lg font-black font-mono text-amber-700 dark:text-amber-400">{activeTrainee.discountAmount || 0} ج.م</span>
                 </div>
                 <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800">
-                  <span className="text-emerald-700 dark:text-emerald-300 block mb-1">إجمالي المدفوع</span>
-                  <span className="text-lg font-black font-mono text-emerald-600 dark:text-emerald-400">{activeTrainee.paidAmount || 0} ج.م</span>
+                  <span className="text-emerald-700 dark:text-emerald-300 text-xs font-bold block mb-1">إجمالي المدفوع</span>
+                  <span className="text-lg font-black font-mono text-emerald-700 dark:text-emerald-400">{activeTrainee.paidAmount || 0} ج.م</span>
                 </div>
                 <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800">
-                  <span className="text-rose-700 dark:text-rose-300 block mb-1">المتبقي المطلوب</span>
-                  <span className="text-lg font-black font-mono text-rose-600 dark:text-rose-400">
+                  <span className="text-rose-700 dark:text-rose-300 text-xs font-bold block mb-1">المتبقي المطلوب</span>
+                  <span className="text-lg font-black font-mono text-rose-700 dark:text-rose-400">
                     {Math.max(0, (activeTrainee.feeAmount && activeTrainee.feeAmount > 0 ? activeTrainee.feeAmount : (courses.find(c => c.id === activeTrainee.courseId)?.feeAmount || 2500)) - (activeTrainee.discountAmount || 0) - (activeTrainee.paidAmount || 0))} ج.م
                   </span>
                 </div>
               </div>
 
               {/* Payment Receipts History */}
-              <div className="bg-slate-800/60 p-4 rounded-xl border border-slate-700/80">
-                <h4 className="font-bold text-slate-200 mb-3 flex items-center gap-2">
-                  <CreditCard className="w-4 h-4 text-emerald-400" />
+              <div className="bg-slate-50 dark:bg-slate-800/60 p-4 rounded-xl border border-slate-200 dark:border-slate-700/80">
+                <h4 className="font-bold text-slate-900 dark:text-slate-200 mb-3 flex items-center gap-2">
+                  <CreditCard className="w-4 h-4 text-emerald-500" />
                   سجل سندات القبض والدفعات المسجلة ({traineeProfileData?.payments?.length || 0})
                 </h4>
                 {traineeProfileData?.payments?.length === 0 ? (
-                  <p className="text-slate-400">لا توجد سندات قبض مسجلة حتى الآن.</p>
+                  <p className="text-slate-500 dark:text-slate-400">لا توجد سندات قبض مسجلة حتى الآن.</p>
                 ) : (
                   <div className="space-y-2">
                     {traineeProfileData?.payments?.map((p: any) => (
-                      <div key={p.id} className="p-2.5 rounded-lg bg-slate-900/60 border border-slate-700/60 flex items-center justify-between">
+                      <div key={p.id} className="p-2.5 rounded-lg bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700/60 flex items-center justify-between shadow-2xs">
                         <div>
-                          <span className="font-mono font-bold text-amber-400">{p.receiptNumber}</span>
-                          <span className="text-slate-400 mr-3">تاريخ: {p.date}</span>
-                          <span className="text-slate-400 mr-3">طريقة: {p.paymentMethod}</span>
+                          <span className="font-mono font-bold text-amber-700 dark:text-amber-400">{p.receiptNumber}</span>
+                          <span className="text-slate-600 dark:text-slate-400 mr-3">تاريخ: {p.date}</span>
+                          <span className="text-slate-600 dark:text-slate-400 mr-3">طريقة: {p.paymentMethod}</span>
                           {p.notes && <span className="text-slate-500 mr-3">({p.notes})</span>}
                         </div>
-                        <div className="font-mono font-black text-emerald-400 text-sm">
+                        <div className="font-mono font-black text-emerald-700 dark:text-emerald-400 text-sm">
                           {p.amount} ج.م
                         </div>
                       </div>
@@ -3949,19 +3954,19 @@ export const TraineesView: React.FC = () => {
 
               {/* Attendance & Points History */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="bg-slate-800/60 p-4 rounded-xl border border-slate-700/80">
-                  <h4 className="font-bold text-slate-200 mb-3 flex items-center gap-2">
-                    <Clock className="w-4 h-4 text-purple-400" />
+                <div className="bg-slate-50 dark:bg-slate-800/60 p-4 rounded-xl border border-slate-200 dark:border-slate-700/80">
+                  <h4 className="font-bold text-slate-900 dark:text-slate-200 mb-3 flex items-center gap-2">
+                    <Clock className="w-4 h-4 text-purple-500" />
                     سجل الحضور والغياب ({traineeProfileData?.attendance?.length || 0})
                   </h4>
                   <div className="max-h-40 overflow-y-auto space-y-1.5">
                     {traineeProfileData?.attendance?.length === 0 ? (
-                      <p className="text-slate-400">لا توجد سجلات حضور بعد.</p>
+                      <p className="text-slate-500 dark:text-slate-400">لا توجد سجلات حضور بعد.</p>
                     ) : (
                       traineeProfileData?.attendance?.map((a: any) => (
-                        <div key={a.id} className="p-2 rounded bg-slate-900/40 flex justify-between">
+                        <div key={a.id} className="p-2 rounded-lg bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 flex justify-between text-slate-800 dark:text-slate-200">
                           <span>{a.date}</span>
-                          <span className={a.status === 'present' ? 'text-emerald-400' : 'text-rose-400'}>
+                          <span className={a.status === 'present' ? 'text-emerald-600 dark:text-emerald-400 font-bold' : 'text-rose-600 dark:text-rose-400 font-bold'}>
                             {a.status === 'present' ? 'حاضر ✓' : a.status === 'absent' ? 'غائب ✗' : a.status}
                           </span>
                         </div>
@@ -3970,34 +3975,34 @@ export const TraineesView: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="bg-slate-800/60 p-4 rounded-xl border border-slate-700/80">
+                <div className="bg-slate-50 dark:bg-slate-800/60 p-4 rounded-xl border border-slate-200 dark:border-slate-700/80">
                   <div className="flex items-center justify-between mb-3">
-                    <h4 className="font-bold text-slate-200 flex items-center gap-2">
-                      <Star className="w-4 h-4 text-amber-400" />
+                    <h4 className="font-bold text-slate-900 dark:text-slate-200 flex items-center gap-2">
+                      <Star className="w-4 h-4 text-amber-500" />
                       سجل النقاط والنجوم ({activeTrainee.totalPoints || activeTrainee.points || 0} نقطة)
                     </h4>
                     <button
                       onClick={() => handleOpenStarModal(activeTrainee)}
-                      className="text-[11px] px-2 py-0.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 rounded border border-amber-500/40 font-bold"
+                      className="text-[11px] px-2.5 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-800 dark:text-amber-300 rounded-lg border border-amber-500/40 font-bold"
                     >
                       + منح نجوم
                     </button>
                   </div>
                   <div className="max-h-40 overflow-y-auto space-y-1.5">
                     {traineeProfileData?.points?.length === 0 ? (
-                      <p className="text-slate-400">لا توجد نقاط مسجلة بعد.</p>
+                      <p className="text-slate-500 dark:text-slate-400">لا توجد نقاط مسجلة بعد.</p>
                     ) : (
                       traineeProfileData?.points?.map((pt: any) => (
-                        <div key={pt.id} className="p-2 rounded bg-slate-900/40 flex justify-between items-center">
+                        <div key={pt.id} className="p-2 rounded-lg bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 flex justify-between items-center text-slate-800 dark:text-slate-200">
                           <div>
-                            <span className="text-slate-200">{pt.reason}</span>
+                            <span className="text-slate-800 dark:text-slate-200 font-medium">{pt.reason}</span>
                             {pt.createdAt && (
                               <span className="text-[10px] text-slate-500 mr-2">
                                 ({new Date(pt.createdAt).toLocaleDateString('ar-EG')})
                               </span>
                             )}
                           </div>
-                          <span className="font-mono font-bold text-amber-400">+{pt.points}</span>
+                          <span className="font-mono font-bold text-amber-600 dark:text-amber-400">+{pt.points}</span>
                         </div>
                       ))
                     )}
@@ -4028,30 +4033,30 @@ export const TraineesView: React.FC = () => {
 
                 return (
                   <div className={`p-4 rounded-2xl border ${
-                    warningStatus === 'red' ? 'bg-rose-950/30 border-rose-500/40' :
-                    warningStatus === 'yellow' ? 'bg-amber-950/30 border-amber-500/40' :
-                    'bg-slate-800/80 border-slate-700'
+                    warningStatus === 'red' ? 'bg-rose-50/70 border-rose-200 dark:bg-rose-950/30 dark:border-rose-500/40' :
+                    warningStatus === 'yellow' ? 'bg-amber-50/70 border-amber-200 dark:bg-amber-950/30 dark:border-amber-500/40' :
+                    'bg-slate-50 border-slate-200 dark:bg-slate-800/80 dark:border-slate-700'
                   }`}>
                     <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-2">
                       <div className="flex items-center gap-2">
-                        <Sparkles className="w-5 h-5 text-amber-400" />
-                        <h4 className="font-bold text-sm text-slate-100">المرشد الطلابي الذكي ومؤشر الإنذار المبكر (Student 360 Plan)</h4>
+                        <Sparkles className="w-5 h-5 text-amber-500" />
+                        <h4 className="font-bold text-sm text-slate-900 dark:text-slate-100">المرشد الطلابي الذكي ومؤشر الإنذار المبكر (Student 360 Plan)</h4>
                       </div>
                       <span className={`px-2.5 py-1 rounded-xl font-bold text-xs ${
-                        warningStatus === 'red' ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30' :
-                        warningStatus === 'yellow' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' :
-                        'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                        warningStatus === 'red' ? 'bg-rose-500/20 text-rose-700 dark:text-rose-300 border border-rose-500/30' :
+                        warningStatus === 'yellow' ? 'bg-amber-500/20 text-amber-800 dark:text-amber-300 border border-amber-500/30' :
+                        'bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 border border-emerald-500/30'
                       }`}>
                         {warningLabel}
                       </span>
                     </div>
-                    <div className="text-slate-300 text-xs leading-relaxed mt-2 bg-slate-900/60 p-3 rounded-xl border border-slate-700/60">
-                      <span className="font-bold text-amber-300 block mb-1">💡 التوصيات والخطة العلاجية الموصى بها:</span>
+                    <div className="text-slate-700 dark:text-slate-300 text-xs leading-relaxed mt-2 bg-white dark:bg-slate-900/60 p-3 rounded-xl border border-slate-200 dark:border-slate-700/60 shadow-2xs">
+                      <span className="font-bold text-amber-800 dark:text-amber-300 block mb-1">💡 التوصيات والخطة العلاجية الموصى بها:</span>
                       <p>{recommendation}</p>
-                      <div className="mt-2 pt-2 border-t border-slate-800 flex items-center justify-between text-[11px] text-slate-400">
-                        <span>نسبة الحضور الفعلية: <strong className="font-mono text-slate-200">{attendanceRate}%</strong></span>
-                        <span>رصيد النقاط: <strong className="font-mono text-amber-400">{activeTrainee.totalPoints || 0} نقطة</strong></span>
-                        <span>المتبقي المالي: <strong className="font-mono text-rose-400">{activeTrainee.remainingAmount || 0} ج.م</strong></span>
+                      <div className="mt-2 pt-2 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between text-[11px] text-slate-600 dark:text-slate-400">
+                        <span>نسبة الحضور الفعلية: <strong className="font-mono text-slate-900 dark:text-slate-200">{attendanceRate}%</strong></span>
+                        <span>رصيد النقاط: <strong className="font-mono text-amber-700 dark:text-amber-400">{activeTrainee.totalPoints || 0} نقطة</strong></span>
+                        <span>المتبقي المالي: <strong className="font-mono text-rose-700 dark:text-rose-400">{activeTrainee.remainingAmount || 0} ج.م</strong></span>
                       </div>
                     </div>
                   </div>
@@ -4059,13 +4064,13 @@ export const TraineesView: React.FC = () => {
               })()}
 
               {/* 🔐 Confidential Student Care Vault (الخزنة السرية للرعاية والتقرير التربوي/النفسي) */}
-              <div className="bg-slate-900 border border-amber-500/30 rounded-2xl p-4 space-y-3">
-                <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="bg-slate-50 dark:bg-slate-900 border border-amber-500/30 rounded-2xl p-4 space-y-3">
+                <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
                   <div className="flex items-center gap-2">
-                    <Shield className="w-5 h-5 text-amber-400" />
+                    <Shield className="w-5 h-5 text-amber-500" />
                     <div>
-                      <h4 className="font-bold text-xs text-amber-300">الخزنة السرية للرعاية والتوجيه (Student Care Vault 🔐)</h4>
-                      <p className="text-[10px] text-slate-400">ملاحظات نفسية، اجتماعية، تربوية وخطط دعم سرية خاصة بإدارة المركز والمرشد الطلابي</p>
+                      <h4 className="font-bold text-xs text-amber-800 dark:text-amber-300">الخزنة السرية للرعاية والتوجيه (Student Care Vault 🔐)</h4>
+                      <p className="text-[10px] text-slate-500 dark:text-slate-400">ملاحظات نفسية، اجتماعية، تربوية وخطط دعم سرية خاصة بإدارة المركز والمرشد الطلابي</p>
                     </div>
                   </div>
                   <button
@@ -4073,7 +4078,7 @@ export const TraineesView: React.FC = () => {
                     onClick={() => setIsVaultUnlocked(!isVaultUnlocked)}
                     className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
                       isVaultUnlocked
-                        ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                        ? 'bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 border border-emerald-500/40'
                         : 'bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-md'
                     }`}
                   >
@@ -4082,15 +4087,15 @@ export const TraineesView: React.FC = () => {
                 </div>
 
                 {!isVaultUnlocked ? (
-                  <div className="py-6 text-center text-slate-400 text-xs space-y-2">
-                    <p className="font-bold text-slate-300">هذه المنطقة مشفرة ومحمية بكلمة مرور الخزنة السرية.</p>
+                  <div className="py-6 text-center text-slate-500 dark:text-slate-400 text-xs space-y-2">
+                    <p className="font-bold text-slate-700 dark:text-slate-300">هذه المنطقة مشفرة وم محمية بكلمة مرور الخزنة السرية.</p>
                     <div className="flex items-center justify-center gap-2 max-w-xs mx-auto">
                       <input
                         type="password"
                         placeholder="أدخل رمز الخزنة (1234)"
                         value={vaultPinInput}
                         onChange={(e) => setVaultPinInput(e.target.value)}
-                        className="bg-slate-800 border border-slate-700 px-3 py-1.5 rounded-xl text-center text-xs text-slate-100 focus:outline-none focus:border-amber-400"
+                        className="bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 px-3 py-1.5 rounded-xl text-center text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:border-amber-400"
                       />
                       <button
                         type="button"
@@ -4111,13 +4116,13 @@ export const TraineesView: React.FC = () => {
                 ) : (
                   <div className="space-y-3 text-xs animate-in fade-in">
                     {/* Add new care note */}
-                    <div className="bg-slate-850 p-3 rounded-xl border border-slate-750 space-y-2">
+                    <div className="bg-white dark:bg-slate-850 p-3 rounded-xl border border-slate-200 dark:border-slate-750 space-y-2 shadow-2xs">
                       <div className="flex items-center justify-between">
-                        <label className="font-bold text-slate-200">إضافة تقرير رعاية/ملاحظة سرية جديدة:</label>
+                        <label className="font-bold text-slate-800 dark:text-slate-200">إضافة تقرير رعاية/ملاحظة سرية جديدة:</label>
                         <select
                           value={careCategory}
                           onChange={(e: any) => setCareCategory(e.target.value)}
-                          className="bg-slate-800 border border-slate-700 px-2 py-1 rounded-lg text-slate-200 font-bold"
+                          className="bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 px-2 py-1 rounded-lg text-slate-800 dark:text-slate-200 font-bold"
                         >
                           <option value="psychological">🧠 تقرير نفسي وسلوكي</option>
                           <option value="social">👨‍👩‍👧‍👦 حالة اجتماعية/ولي الأمر</option>
@@ -4130,7 +4135,7 @@ export const TraineesView: React.FC = () => {
                         placeholder="اكتب تفاصيل التقرير السري، الاستجابة السلوكية، أو ملاحظات المرشد النفسي والاجتماعي..."
                         value={newCareNote}
                         onChange={(e) => setNewCareNote(e.target.value)}
-                        className="w-full bg-slate-900 border border-slate-700 p-2.5 rounded-xl text-slate-100 placeholder-slate-500 focus:outline-none focus:border-amber-400"
+                        className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 p-2.5 rounded-xl text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:border-amber-400"
                       />
                       <div className="flex justify-end">
                         <button
@@ -4148,7 +4153,7 @@ export const TraineesView: React.FC = () => {
                             setNewCareNote('');
                             showToast('تم حفظ التقرير السري بالخزنة بنجاح 🔒', 'success');
                           }}
-                          className="px-4 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-xl"
+                          className="px-4 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-xl shadow-xs"
                         >
                           + حفظ التقرير بالخزنة
                         </button>
@@ -4161,17 +4166,17 @@ export const TraineesView: React.FC = () => {
                         <p className="text-slate-500 text-center py-3">لا توجد تقارير سرية مسجلة سابقاً لهذا الطالب.</p>
                       ) : (
                         careNotes.map((cn) => (
-                          <div key={cn.id} className="p-3 bg-slate-800/80 rounded-xl border border-slate-700/80 flex items-start justify-between">
+                          <div key={cn.id} className="p-3 bg-white dark:bg-slate-800/80 rounded-xl border border-slate-200 dark:border-slate-700/80 flex items-start justify-between shadow-2xs">
                             <div>
                               <div className="flex items-center gap-2 mb-1">
-                                <span className="text-[10px] bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded font-bold">
+                                <span className="text-[10px] bg-amber-500/20 text-amber-800 dark:text-amber-300 px-2 py-0.5 rounded font-bold">
                                   {cn.category === 'psychological' ? '🧠 نفسي وسلوكي' :
                                    cn.category === 'social' ? '👨‍👩‍👧‍👦 اجتماعي' :
                                    cn.category === 'academic_support' ? '📚 دعم تعليمي' : '📝 مرشد طلابي'}
                                 </span>
-                                <span className="text-[10px] text-slate-400">({new Date(cn.createdAt).toLocaleDateString('ar-EG')})</span>
+                                <span className="text-[10px] text-slate-500 dark:text-slate-400">({new Date(cn.createdAt).toLocaleDateString('ar-EG')})</span>
                               </div>
-                              <p className="text-slate-200">{cn.text}</p>
+                              <p className="text-slate-800 dark:text-slate-200">{cn.text}</p>
                             </div>
                           </div>
                         ))
@@ -4188,16 +4193,16 @@ export const TraineesView: React.FC = () => {
 
       {/* ----------------- MODAL: Star & Reward Award Dialog ----------------- */}
       {isStarModalOpen && typeof document !== 'undefined' && createPortal(
-        <div className="fixed inset-0 z-[99999] flex items-center justify-center p-2 sm:p-4 bg-slate-950/85 backdrop-blur-md overflow-y-auto">
-          <div className="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl max-w-lg w-full my-auto max-h-[85vh] flex flex-col overflow-hidden text-slate-100 animate-in fade-in zoom-in-95">
-            <div className="shrink-0 p-4 flex items-center justify-between border-b border-slate-800 bg-slate-900/90">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400">
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center p-3 sm:p-4 bg-slate-950/75 backdrop-blur-sm overflow-y-auto">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-3xl shadow-2xl max-w-lg w-full my-auto max-h-[88vh] flex flex-col overflow-hidden text-slate-900 dark:text-slate-100 modal-dialog-box animate-in fade-in zoom-in-95">
+            <div className="shrink-0 p-4 flex items-center justify-between border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/90">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-amber-500/10 dark:bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-500">
                   <Star className="w-4 h-4 fill-amber-400" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-sm">منح نجوم التميز والتحفيز 🌟</h3>
-                  <p className="text-[11px] text-slate-400">
+                  <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100">منح نجوم التميز والتحفيز 🌟</h3>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
                     {starTargetTrainees && starTargetTrainees.length === 1
                       ? `للمتدرب: ${starTargetTrainees[0]?.fullName || ''}`
                       : `لعدد ${starTargetTrainees?.length || 0} متدرب محددين`}
@@ -4206,7 +4211,7 @@ export const TraineesView: React.FC = () => {
               </div>
               <button
                 onClick={() => setIsStarModalOpen(false)}
-                className="p-1 text-slate-400 hover:text-white cursor-pointer"
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -4215,7 +4220,7 @@ export const TraineesView: React.FC = () => {
             <form onSubmit={handleSaveStarModal} className="flex-1 overflow-y-auto custom-scrollbar p-4 sm:p-6 space-y-4 text-xs">
               {/* Quick Preset Star Packages */}
               <div>
-                <label className="block text-slate-300 font-bold mb-2">باقات التكريم السريعة:</label>
+                <label className="block text-slate-700 dark:text-slate-300 font-bold mb-2">باقات التكريم السريعة:</label>
                 <div className="grid grid-cols-3 gap-2">
                   <button
                     type="button"
@@ -4226,13 +4231,13 @@ export const TraineesView: React.FC = () => {
                     }}
                     className={`p-2.5 rounded-xl border text-center transition-all ${
                       starCount === 1 && starPoints === 10
-                        ? 'bg-amber-500/20 border-amber-500 text-amber-300 ring-1 ring-amber-500/50 font-bold'
-                        : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-750'
+                        ? 'bg-amber-500/15 border-amber-500 text-amber-700 dark:text-amber-300 ring-1 ring-amber-500/50 font-bold'
+                        : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-750'
                     }`}
                   >
                     <div className="text-base mb-0.5">⭐</div>
                     <div className="font-bold text-[11px]">1 نجمة</div>
-                    <div className="text-[10px] text-slate-400 font-mono">+10 نقاط</div>
+                    <div className="text-[10px] text-slate-500 dark:text-slate-400 font-mono">+10 نقاط</div>
                   </button>
 
                   <button
@@ -4244,13 +4249,13 @@ export const TraineesView: React.FC = () => {
                     }}
                     className={`p-2.5 rounded-xl border text-center transition-all ${
                       starCount === 2 && starPoints === 20
-                        ? 'bg-amber-500/20 border-amber-500 text-amber-300 ring-1 ring-amber-500/50 font-bold'
-                        : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-750'
+                        ? 'bg-amber-500/15 border-amber-500 text-amber-700 dark:text-amber-300 ring-1 ring-amber-500/50 font-bold'
+                        : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-750'
                     }`}
                   >
                     <div className="text-base mb-0.5">⭐⭐</div>
                     <div className="font-bold text-[11px]">2 نجوم</div>
-                    <div className="text-[10px] text-slate-400 font-mono">+20 نقطة</div>
+                    <div className="text-[10px] text-slate-500 dark:text-slate-400 font-mono">+20 نقطة</div>
                   </button>
 
                   <button
@@ -4262,13 +4267,13 @@ export const TraineesView: React.FC = () => {
                     }}
                     className={`p-2.5 rounded-xl border text-center transition-all ${
                       starCount === 3 && starPoints === 30
-                        ? 'bg-amber-500/20 border-amber-500 text-amber-300 ring-1 ring-amber-500/50 font-bold'
-                        : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-750'
+                        ? 'bg-amber-500/15 border-amber-500 text-amber-700 dark:text-amber-300 ring-1 ring-amber-500/50 font-bold'
+                        : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-750'
                     }`}
                   >
                     <div className="text-base mb-0.5">⭐⭐⭐</div>
                     <div className="font-bold text-[11px]">3 نجوم</div>
-                    <div className="text-[10px] text-slate-400 font-mono">+30 نقطة</div>
+                    <div className="text-[10px] text-slate-500 dark:text-slate-400 font-mono">+30 نقطة</div>
                   </button>
 
                   <button
@@ -4280,13 +4285,13 @@ export const TraineesView: React.FC = () => {
                     }}
                     className={`p-2.5 rounded-xl border text-center transition-all ${
                       starCount === 5 && starPoints === 50
-                        ? 'bg-amber-500/20 border-amber-500 text-amber-300 ring-1 ring-amber-500/50 font-bold'
-                        : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-750'
+                        ? 'bg-amber-500/15 border-amber-500 text-amber-700 dark:text-amber-300 ring-1 ring-amber-500/50 font-bold'
+                        : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-750'
                     }`}
                   >
                     <div className="text-base mb-0.5">🌟</div>
                     <div className="font-bold text-[11px]">5 نجوم</div>
-                    <div className="text-[10px] text-slate-400 font-mono">+50 نقطة</div>
+                    <div className="text-[10px] text-slate-500 dark:text-slate-400 font-mono">+50 نقطة</div>
                   </button>
 
                   <button
@@ -4298,13 +4303,13 @@ export const TraineesView: React.FC = () => {
                     }}
                     className={`p-2.5 rounded-xl border text-center transition-all ${
                       starCount === 10 && starPoints === 100
-                        ? 'bg-amber-500/20 border-amber-500 text-amber-300 ring-1 ring-amber-500/50 font-bold'
-                        : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-750'
+                        ? 'bg-amber-500/15 border-amber-500 text-amber-700 dark:text-amber-300 ring-1 ring-amber-500/50 font-bold'
+                        : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-750'
                     }`}
                   >
                     <div className="text-base mb-0.5">🚀</div>
                     <div className="font-bold text-[11px]">10 نجوم</div>
-                    <div className="text-[10px] text-slate-400 font-mono">+100 نقطة</div>
+                    <div className="text-[10px] text-slate-500 dark:text-slate-400 font-mono">+100 نقطة</div>
                   </button>
 
                   <button
@@ -4316,26 +4321,26 @@ export const TraineesView: React.FC = () => {
                     }}
                     className={`p-2.5 rounded-xl border text-center transition-all ${
                       starReason === 'custom'
-                        ? 'bg-amber-500/20 border-amber-500 text-amber-300 ring-1 ring-amber-500/50 font-bold'
-                        : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-750'
+                        ? 'bg-amber-500/15 border-amber-500 text-amber-700 dark:text-amber-300 ring-1 ring-amber-500/50 font-bold'
+                        : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-750'
                     }`}
                   >
                     <div className="text-base mb-0.5">⚙️</div>
                     <div className="font-bold text-[11px]">مخصص</div>
-                    <div className="text-[10px] text-slate-400 font-mono">نقاط حرة</div>
+                    <div className="text-[10px] text-slate-500 dark:text-slate-400 font-mono">نقاط حرة</div>
                   </button>
                 </div>
               </div>
 
               {/* Star Counter & Points Modifier */}
-              <div className="bg-slate-800/80 p-3.5 rounded-xl border border-slate-700 space-y-3">
+              <div className="bg-slate-50 dark:bg-slate-800/80 p-3.5 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-3">
                 <div className="flex items-center justify-between">
-                  <span className="text-slate-300 font-bold">النقاط الممنوحة:</span>
+                  <span className="text-slate-700 dark:text-slate-300 font-bold">النقاط الممنوحة:</span>
                   <div className="flex items-center gap-2">
                     <button
                       type="button"
                       onClick={() => setStarPoints(prev => Math.max(1, prev - 5))}
-                      className="w-7 h-7 rounded-lg bg-slate-700 hover:bg-slate-600 flex items-center justify-center font-bold text-slate-200"
+                      className="w-7 h-7 rounded-lg bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 flex items-center justify-center font-bold text-slate-800 dark:text-slate-200 transition-colors"
                     >
                       -
                     </button>
@@ -4343,12 +4348,12 @@ export const TraineesView: React.FC = () => {
                       type="number"
                       value={starPoints}
                       onChange={(e) => setStarPoints(Number(e.target.value))}
-                      className="w-20 bg-slate-900 border border-amber-500/50 rounded-lg py-1 text-center font-mono font-bold text-amber-400 text-sm focus:outline-none"
+                      className="w-20 bg-white dark:bg-slate-900 border border-amber-500/50 rounded-lg py-1 text-center font-mono font-bold text-amber-600 dark:text-amber-400 text-sm focus:outline-none"
                     />
                     <button
                       type="button"
                       onClick={() => setStarPoints(prev => prev + 5)}
-                      className="w-7 h-7 rounded-lg bg-slate-700 hover:bg-slate-600 flex items-center justify-center font-bold text-slate-200"
+                      className="w-7 h-7 rounded-lg bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 flex items-center justify-center font-bold text-slate-800 dark:text-slate-200 transition-colors"
                     >
                       +
                     </button>
@@ -4358,11 +4363,11 @@ export const TraineesView: React.FC = () => {
 
               {/* Reason Selector */}
               <div>
-                <label className="block text-slate-300 font-bold mb-1">سبب التكريم والنجوم *</label>
+                <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">سبب التكريم والنجوم *</label>
                 <select
                   value={starReason}
                   onChange={(e) => setStarReason(e.target.value)}
-                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 text-xs mb-2"
+                  className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 text-xs mb-2 font-medium"
                 >
                   <option value="مشاركة وتفاعل إيجابي في المحاضرة">مشاركة وتفاعل إيجابي في المحاضرة 🌟</option>
                   <option value="إتمام الواجب والتطبيق العملي بنجاح">إتمام الواجب والتطبيق العملي بنجاح 📝</option>
@@ -4380,19 +4385,19 @@ export const TraineesView: React.FC = () => {
                     placeholder="اكتب سبب منح النجوم..."
                     value={starCustomReason}
                     onChange={(e) => setStarCustomReason(e.target.value)}
-                    className="w-full bg-slate-800 border border-amber-500 rounded-xl px-3 py-2 text-slate-100 text-xs"
+                    className="w-full bg-white dark:bg-slate-800 border border-amber-500 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 text-xs"
                   />
                 )}
               </div>
 
               {/* WhatsApp Notification Option */}
               {starTargetTrainees.length === 1 && (
-                <div className="bg-emerald-950/30 border border-emerald-800/60 p-3 rounded-xl flex items-center justify-between">
+                <div className="bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/60 p-3 rounded-2xl flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <MessageSquare className="w-4 h-4 text-emerald-400" />
+                    <MessageSquare className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
                     <div>
-                      <span className="font-bold text-emerald-300 block">إرسال تهنئة عبر WhatsApp</span>
-                      <span className="text-[10px] text-slate-400">إرسال رسالة شكر وتقدير فخرية لولي الأمر فور الحفظ</span>
+                      <span className="font-bold text-emerald-800 dark:text-emerald-300 block">إرسال تهنئة عبر WhatsApp</span>
+                      <span className="text-[10px] text-slate-600 dark:text-slate-400">إرسال رسالة شكر وتقدير فخرية لولي الأمر فور الحفظ</span>
                     </div>
                   </div>
                   <input
@@ -4405,11 +4410,11 @@ export const TraineesView: React.FC = () => {
               )}
 
               {/* Submit Buttons */}
-              <div className="pt-3 border-t border-slate-800 flex justify-end gap-2">
+              <div className="pt-3 border-t border-slate-200 dark:border-slate-800 flex justify-end gap-2">
                 <button
                   type="button"
                   onClick={() => setIsStarModalOpen(false)}
-                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold"
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl font-bold transition-colors"
                 >
                   إلغاء
                 </button>

@@ -13,6 +13,7 @@ interface AuthContextType {
   logout: () => void;
   canAccess: (allowedRoles: UserRole[]) => boolean;
   switchDemoUser: (role: UserRole) => Promise<void>;
+  updateUserOptimistic: (updates: Partial<User>) => Promise<boolean>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -66,6 +67,56 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setIsLoading(false);
     }
   }, []);
+
+  // Multi-tab real-time sync for auth state
+  useEffect(() => {
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === STORAGE_KEY_USER) {
+        if (e.newValue) {
+          try {
+            const parsed = JSON.parse(e.newValue);
+            setUser(parsed);
+          } catch {}
+        } else {
+          setUser(null);
+          setToken(null);
+        }
+      }
+    };
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, []);
+
+  // Optimistic User Update with Background Sync and Rollback
+  const updateUserOptimistic = async (updates: Partial<User>): Promise<boolean> => {
+    if (!user) return false;
+    const previousUser = { ...user };
+    const optimisticUser = { ...user, ...updates };
+
+    // 1. Instant local UI update
+    setUser(optimisticUser);
+    try {
+      const userStr = JSON.stringify(optimisticUser);
+      localStorage.setItem(STORAGE_KEY_USER, userStr);
+      sessionStorage.setItem(STORAGE_KEY_USER, userStr);
+    } catch {}
+
+    // 2. Background sync to Server & Firebase
+    try {
+      await api.updateUser(user.id, updates);
+      return true;
+    } catch (err) {
+      console.warn('[AuthContext] Background sync failed, rolling back:', err);
+      // Rollback to previous state on failure
+      setUser(previousUser);
+      try {
+        const prevStr = JSON.stringify(previousUser);
+        localStorage.setItem(STORAGE_KEY_USER, prevStr);
+        sessionStorage.setItem(STORAGE_KEY_USER, prevStr);
+      } catch {}
+      return false;
+    }
+  };
 
   const login = async (
     username: string,
@@ -250,7 +301,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, isAuthenticated: !!user, isLoading, alwaysRequireLogin, setAlwaysRequireLogin, login, logout, canAccess, switchDemoUser }}>
+    <AuthContext.Provider value={{ user, token, isAuthenticated: !!user, isLoading, alwaysRequireLogin, setAlwaysRequireLogin, login, logout, canAccess, switchDemoUser, updateUserOptimistic }}>
       {children}
     </AuthContext.Provider>
   );

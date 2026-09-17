@@ -3619,6 +3619,91 @@ class DatabaseManager {
   private lastHydrationAttemptTime = 0;
   private hydrationPromise: Promise<void> | null = null;
 
+  public deduplicateTrainees(list: any[]): any[] {
+    if (!Array.isArray(list) || list.length === 0) return [];
+    
+    const byId = new Map<string, any>();
+    const byCode = new Map<string, any>();
+    const byNormName = new Map<string, any>();
+    const result: any[] = [];
+
+    const normArabic = (s: string) => {
+      if (!s) return '';
+      return String(s).trim().toLowerCase()
+        .replace(/[\u064B-\u065F\u0670\u0640]/g, '')
+        .replace(/[أإآٱ]/g, 'ا')
+        .replace(/ة/g, 'ه')
+        .replace(/ى/g, 'ي')
+        .replace(/[ؤئ]/g, 'ء')
+        .replace(/عبد\s+/g, 'عبد')
+        .replace(/ابو\s+/g, 'ابو')
+        .replace(/[\s\-_.]+/g, ' ')
+        .trim();
+    };
+
+    const cleanPhone = (p: string) => String(p || '').replace(/\D/g, '').slice(-10);
+
+    for (const t of list) {
+      if (!t) continue;
+      const id = t.id ? String(t.id).trim() : '';
+      const code = t.code ? String(t.code).trim().toUpperCase() : '';
+      const normName = normArabic(t.fullName || t.name);
+      const phone = cleanPhone(t.phone);
+      const parentPhone = cleanPhone(t.parentPhone);
+
+      // Check if this trainee matches any existing record
+      let existing: any = null;
+      if (id && byId.has(id)) {
+        existing = byId.get(id);
+      } else if (code && byCode.has(code)) {
+        existing = byCode.get(code);
+      } else if (normName && byNormName.has(normName)) {
+        const candidate = byNormName.get(normName);
+        const cPhone = cleanPhone(candidate.phone);
+        const cParentPhone = cleanPhone(candidate.parentPhone);
+        const samePhone = (phone && (phone === cPhone || phone === cParentPhone)) ||
+                          (parentPhone && (parentPhone === cPhone || parentPhone === cParentPhone));
+        const sameGroupOrCourse = (t.groupId && candidate.groupId && t.groupId === candidate.groupId) ||
+                                  (t.courseId && candidate.courseId && t.courseId === candidate.courseId);
+        if (samePhone || sameGroupOrCourse || (!phone && !parentPhone && !cPhone && !cParentPhone)) {
+          existing = candidate;
+        }
+      }
+
+      if (existing) {
+        // Merge into existing record: keep whichever ID is non-empty, prefer existing canonical ID & code
+        const mergedTotalPoints = Math.max(
+          Number(existing.totalPoints !== undefined ? existing.totalPoints : (existing.points || 0)),
+          Number(t.totalPoints !== undefined ? t.totalPoints : (t.points || 0))
+        );
+        const mergedPaidAmount = Math.max(Number(existing.paidAmount || 0), Number(t.paidAmount || 0));
+        
+        Object.assign(existing, {
+          ...t,
+          ...existing,
+          id: existing.id || t.id,
+          code: existing.code || t.code,
+          fullName: existing.fullName || t.fullName,
+          phone: existing.phone || t.phone,
+          parentPhone: existing.parentPhone || t.parentPhone,
+          nationalId: existing.nationalId || t.nationalId,
+          totalPoints: mergedTotalPoints,
+          points: mergedTotalPoints,
+          paidAmount: mergedPaidAmount,
+          notes: existing.notes ? (t.notes && !existing.notes.includes(t.notes) ? `${existing.notes} | ${t.notes}` : existing.notes) : (t.notes || '')
+        });
+      } else {
+        const record = { ...t };
+        result.push(record);
+        if (id) byId.set(id, record);
+        if (code) byCode.set(code, record);
+        if (normName) byNormName.set(normName, record);
+      }
+    }
+
+    return result;
+  }
+
   constructor() {
     this.ensureDataDir();
     this.data = this.loadData();
@@ -3653,7 +3738,11 @@ class DatabaseManager {
 
           for (const [key, val] of Object.entries(remoteData)) {
             if (Array.isArray(val)) {
-              if (Array.isArray(merged[key]) && merged[key].length > 0) {
+              if (key === 'trainees') {
+                // Strict deduplication when merging remote and local trainees
+                const combined = [...val, ...(Array.isArray(merged[key]) ? merged[key] : [])];
+                merged[key] = this.deduplicateTrainees(combined);
+              } else if (Array.isArray(merged[key]) && merged[key].length > 0) {
                 const remoteMap = new Map((val as any[]).map(item => [item.id, item]));
                 // Retain recently added local items
                 for (const localItem of merged[key]) {
@@ -3674,10 +3763,11 @@ class DatabaseManager {
             merged.settings = { ...(current.settings || {}), ...remoteData.settings };
           }
 
-          // Guarantee fee integrity across all trainees after remote hydration
+          // Guarantee fee integrity and strict deduplication across all trainees after remote hydration
           if (Array.isArray(merged.trainees)) {
             const coursesList = Array.isArray(merged.courses) ? merged.courses : [];
-            merged.trainees = merged.trainees.map((t: any) => {
+            const deduplicated = this.deduplicateTrainees(merged.trainees);
+            merged.trainees = deduplicated.map((t: any) => {
               const fin = calculateTraineeFeeAndFinancials(t, coursesList);
               return {
                 ...t,
@@ -3810,7 +3900,7 @@ class DatabaseManager {
           ...initialData,
           ...parsed,
           branches: (parsed.branches && parsed.branches.length > 0) ? parsed.branches : initialData.branches,
-          trainees: normalizedTrainees.length > 0 ? normalizedTrainees : initialData.trainees,
+          trainees: this.deduplicateTrainees(normalizedTrainees.length > 0 ? normalizedTrainees : initialData.trainees),
           trainers: (parsed.trainers && parsed.trainers.length > 0) ? parsed.trainers : initialData.trainers,
           courses: (parsed.courses && parsed.courses.length > 0) ? parsed.courses : initialData.courses,
           groups: (parsed.groups && parsed.groups.length > 0) ? parsed.groups : initialData.groups,

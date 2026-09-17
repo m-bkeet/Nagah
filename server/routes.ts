@@ -7,7 +7,7 @@ import {
   CertificateRepo, CertificateTemplateRepo, UserRepo, AuditLogRepo,
   HomeworkSubmissionRepo, BadgeRepo, AssignmentRepo, PortalMessageRepo
 } from './data/index.ts';
-import { saveCollectionToFirestore } from './firestoreStorage.js';
+import { saveCollectionToFirestore, allocateNextTraineeCode, loadCollectionFromFirestore } from './firestoreStorage.js';
 import { exportAllFirestoreData, previewDatabaseImport, executeDatabaseImport } from './data/phase2b.ts';
 import { handlePublicRegister, handlePublicTrainerRegister, matchCourseForRegistration, resolveGradePrefix } from './registerLogic';
 import express, { Request, Response } from 'express';
@@ -1032,6 +1032,7 @@ apiRouter.get('/trainees/next-code', async (req: Request, res: Response) => {
 apiRouter.get('/trainees', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
   try {
     let list = await TraineeRepo.getAll();
+    list = db.deduplicateTrainees(list);
     const user = req.user;
 
     // RBAC filtering
@@ -1110,20 +1111,37 @@ apiRouter.post('/trainees', async (req: Request, res: Response) => {
     if (!data.fullName || !data.branchId) return res.status(400).json({ success: false, error: 'الاسم والفرع مطلوبان' });
 
     const list = await TraineeRepo.getAll();
-    const normName = String(data.fullName || '').trim().toLowerCase();
-    const normPhone = String(data.phone || '').trim();
-    const normParentPhone = String(data.parentPhone || '').trim();
+    const normalizeArabic = (str: string) => {
+      if (!str) return '';
+      return String(str).trim().toLowerCase()
+        .replace(/[\u064B-\u065F\u0670\u0640]/g, '')
+        .replace(/[أإآٱ]/g, 'ا')
+        .replace(/ة/g, 'ه')
+        .replace(/ى/g, 'ي')
+        .replace(/[ؤئ]/g, 'ء')
+        .replace(/عبد\s+/g, 'عبد')
+        .replace(/ابو\s+/g, 'ابو')
+        .replace(/[\s\-_.]+/g, ' ')
+        .trim();
+    };
 
-    // Prevent accidental rapid double-click submissions or exact duplicates by (Name + Student Phone) or rapid submit (<4s)
+    const normName = normalizeArabic(data.fullName);
+    const normPhone = String(data.phone || '').replace(/[^0-9]/g, '').slice(-10);
+    const normParentPhone = String(data.parentPhone || '').replace(/[^0-9]/g, '').slice(-10);
+
+    // Prevent accidental rapid double-click submissions or exact duplicates by (Normalized Name + Phone or rapid submit)
     const recentDuplicate = list.find(t => {
-      const sameName = String(t.fullName || '').trim().toLowerCase() === normName;
-      const sameBranch = String(t.branchId) === String(data.branchId);
-      const sameStudentPhone = normPhone && t.phone && String(t.phone).trim() === normPhone;
+      const tNormName = normalizeArabic(t.fullName);
+      const sameName = tNormName === normName;
+      const tPhone = String(t.phone || '').replace(/[^0-9]/g, '').slice(-10);
+      const tParentPhone = String(t.parentPhone || '').replace(/[^0-9]/g, '').slice(-10);
+      const sameStudentPhone = normPhone && tPhone && tPhone === normPhone;
+      const sameParentPhone = normParentPhone && tParentPhone && tParentPhone === normParentPhone;
       
-      const createdInDoubleTapWindow = t.createdAt && (Date.now() - new Date(t.createdAt).getTime() < 4000);
+      const createdInDoubleTapWindow = t.createdAt && (Date.now() - new Date(t.createdAt).getTime() < 8000);
 
-      // Same name & branch AND (same student phone OR double-clicked within last 4s)
-      if (sameName && sameBranch && (sameStudentPhone || createdInDoubleTapWindow)) {
+      // Same normalized name AND (same phone OR same parent phone OR double-clicked within last 8s)
+      if (sameName && (sameStudentPhone || sameParentPhone || createdInDoubleTapWindow)) {
         return true;
       }
       return false;
@@ -1163,27 +1181,7 @@ apiRouter.post('/trainees', async (req: Request, res: Response) => {
       }
       prefix = (prefix || 'A').toUpperCase();
 
-      let maxNum = 0;
-      const regex = new RegExp(`^${prefix}-?(\\d+)$`, 'i');
-      list.forEach(t => {
-        if (t.code) {
-          const m = String(t.code).trim().match(regex);
-          if (m) {
-            const num = parseInt(m[1], 10);
-            if (!isNaN(num) && num > maxNum) maxNum = num;
-          }
-        }
-      });
-      let nextNum = maxNum + 1;
-      let candidateCode = `${prefix}${nextNum.toString().padStart(3, '0')}`;
-      
-      // Ensure candidateCode is 100% unique
-      const existingCodes = new Set(list.map(t => String(t.code || '').trim().toUpperCase()));
-      while (existingCodes.has(candidateCode)) {
-        nextNum++;
-        candidateCode = `${prefix}${nextNum.toString().padStart(3, '0')}`;
-      }
-      code = candidateCode;
+      code = await allocateNextTraineeCode(prefix, list);
     }
 
     const traineeId = 'trainee-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4);
@@ -2483,23 +2481,7 @@ apiRouter.post('/trainees/bulk-import', async (req: Request, res: Response) => {
       }
       prefix = (prefix || 'A').toUpperCase();
 
-      let maxNum = 0;
-      const regex = new RegExp(`^${prefix}-?(\\d+)$`, 'i');
-      usedCodesSet.forEach(c => {
-        const match = c.match(regex);
-        if (match) {
-          const num = parseInt(match[1], 10);
-          if (!isNaN(num) && num > maxNum) maxNum = num;
-        }
-      });
-
-      let nextNum = maxNum + 1;
-      let candidate = `${prefix}${String(nextNum).padStart(3, '0')}`;
-      while (usedCodesSet.has(candidate)) {
-        nextNum++;
-        candidate = `${prefix}${String(nextNum).padStart(3, '0')}`;
-      }
-      code = candidate;
+      code = await allocateNextTraineeCode(prefix, Array.from(usedCodesSet).map(c => ({ code: c })));
     }
     usedCodesSet.add(code);
     const netAmount = Math.max(0, feeAmount - discountAmount);
@@ -5128,6 +5110,33 @@ export async function awardTraineePoints(
       (t.code && studentIdentifier && String(t.code).trim().toLowerCase() === String(studentIdentifier).trim().toLowerCase())
     );
   }
+  // Fallback remote lookup if student was created in another serverless container
+  if (!student) {
+    try {
+      const remoteTrainees = await loadCollectionFromFirestore('trainees');
+      if (Array.isArray(remoteTrainees)) {
+        student = remoteTrainees.find((t: any) =>
+          t.id === studentIdentifier ||
+          t.code === studentIdentifier ||
+          (t.code && studentIdentifier && String(t.code).trim().toLowerCase() === String(studentIdentifier).trim().toLowerCase())
+        );
+        if (student) {
+          if (!Array.isArray(dbData.trainees)) dbData.trainees = [];
+          const existingMemIdx = dbData.trainees.findIndex((t: any) =>
+            t.id === student.id ||
+            (t.code && student.code && String(t.code).trim().toUpperCase() === String(student.code).trim().toUpperCase())
+          );
+          if (existingMemIdx >= 0) {
+            dbData.trainees[existingMemIdx] = { ...dbData.trainees[existingMemIdx], ...student };
+          } else {
+            dbData.trainees.push(student);
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('[Points] Remote trainee lookup notice:', e);
+    }
+  }
   if (!student) return null;
 
   const currentPts = Number(student.totalPoints !== undefined ? student.totalPoints : (student.points || 0));
@@ -5135,21 +5144,24 @@ export async function awardTraineePoints(
   student.totalPoints = newTotal;
   student.points = newTotal;
 
-  // 1. Direct TraineeRepo update & persistent cache
-  await TraineeRepo.update(student.id, { totalPoints: newTotal, points: newTotal });
-
-  // 2. Direct memory DB sync
+  // 1. Memory DB sync with deduplication guarantee
   if (Array.isArray(dbData.trainees)) {
-    const memIdx = dbData.trainees.findIndex(t => t.id === student.id || t.code === student.code || t.id === studentIdentifier);
+    const memIdx = dbData.trainees.findIndex((t: any) => 
+      t.id === student.id || 
+      (t.code && student.code && String(t.code).trim().toUpperCase() === String(student.code).trim().toUpperCase()) || 
+      t.id === studentIdentifier ||
+      (t.code && studentIdentifier && String(t.code).trim().toUpperCase() === String(studentIdentifier).trim().toUpperCase())
+    );
     if (memIdx >= 0) {
       dbData.trainees[memIdx].totalPoints = newTotal;
       dbData.trainees[memIdx].points = newTotal;
     } else {
       dbData.trainees.push({ ...student, totalPoints: newTotal, points: newTotal });
     }
+    dbData.trainees = db.deduplicateTrainees(dbData.trainees);
   }
 
-  // 3. Create & Persist Point Transaction
+  // 2. Create & Store Point Transaction
   const pt: PointTransaction = {
     id: 'pt-' + Date.now() + '-' + Math.random().toString(36).substr(2, 5),
     traineeId: student.id,
@@ -5163,35 +5175,10 @@ export async function awardTraineePoints(
     createdAt: new Date().toISOString()
   };
 
-  try {
-    await PointTransactionRepo.create(pt.id, pt);
-  } catch (e) {
-    console.warn('[Points] PointTransactionRepo create notice:', e);
-  }
-
   if (!Array.isArray(dbData.pointTransactions)) dbData.pointTransactions = [];
   dbData.pointTransactions.unshift(pt);
 
-  // 4. Save to Firestore immediately
-  try {
-    const batch = adminDb.batch();
-    batch.set(adminDb.collection('trainees').doc(student.id), { totalPoints: newTotal, points: newTotal, updatedAt: new Date().toISOString() }, { merge: true });
-    batch.set(adminDb.collection('pointTransactions').doc(pt.id), pt);
-    await batch.commit();
-  } catch (e) {
-    console.warn('[Points] Direct adminDb batch sync notice:', e);
-  }
-
-  try {
-    await Promise.all([
-      saveCollectionToFirestore('trainees', dbData.trainees),
-      saveCollectionToFirestore('pointTransactions', dbData.pointTransactions)
-    ]);
-  } catch (e) {
-    console.warn('[Points] Firestore sync notice:', e);
-  }
-
-  // 5. Send real-time device celebration command
+  // 3. Send real-time device celebration command
   if (!Array.isArray(dbData.deviceCommands)) dbData.deviceCommands = [];
   const targetDevices = (dbData.devices || []).filter((d: any) =>
     d.currentTraineeId === student.id ||
@@ -5226,52 +5213,72 @@ export async function awardTraineePoints(
 }
 
 apiRouter.post('/points/add', async (req: Request, res: Response) => {
-  let { traineeIds, traineeId, points, reason, ruleId, branchId, addedByUserId, addedByUserName } = req.body;
-  if (!Array.isArray(traineeIds)) {
-    if (traineeId) traineeIds = [traineeId];
-    else traineeIds = [];
-  }
-
-  if (traineeIds.length === 0 || points === undefined || points === null || isNaN(Number(points))) {
-    return res.status(400).json({ error: 'المتدربون وقيمة النقاط مطلوبة' });
-  }
-
-  const pVal = Number(points);
-  const createdList: PointTransaction[] = [];
-
-  for (const tid of traineeIds) {
-    const resAward = await awardTraineePoints(tid, pVal, reason || 'نشاط تدريبي وتفاعل بالمعمل', {
-      addedByUserId: addedByUserId || 'admin',
-      addedByUserName: addedByUserName || 'المحاضر المشرف',
-      ruleId
-    });
-    if (resAward && resAward.pt) {
-      createdList.push(resAward.pt);
+  try {
+    let { traineeIds, traineeId, points, reason, ruleId, branchId, addedByUserId, addedByUserName } = req.body;
+    if (!Array.isArray(traineeIds)) {
+      if (traineeId) traineeIds = [traineeId];
+      else traineeIds = [];
     }
+
+    if (traineeIds.length === 0 || points === undefined || points === null || isNaN(Number(points))) {
+      return res.status(400).json({ error: 'المتدربون وقيمة النقاط مطلوبة' });
+    }
+
+    const pVal = Number(points);
+    const createdList: PointTransaction[] = [];
+
+    for (const tid of traineeIds) {
+      const resAward = await awardTraineePoints(tid, pVal, reason || 'نشاط تدريبي وتفاعل بالمعمل', {
+        addedByUserId: addedByUserId || 'admin',
+        addedByUserName: addedByUserName || 'المحاضر المشرف',
+        ruleId
+      });
+      if (resAward && resAward.pt) {
+        createdList.push(resAward.pt);
+      }
+    }
+
+    const dbData = db.getData();
+    if (Array.isArray(dbData.trainees)) {
+      dbData.trainees = db.deduplicateTrainees(dbData.trainees);
+    }
+
+    // Fast targeted cloud save (only changed collections: trainees & pointTransactions)
+    try {
+      await Promise.all([
+        saveCollectionToFirestore('trainees', dbData.trainees),
+        saveCollectionToFirestore('pointTransactions', dbData.pointTransactions)
+      ]);
+    } catch (e) {
+      console.warn('[Points] Targeted Firestore sync notice:', e);
+    }
+
+    // Update master broadcast state for instant sync
+    masterBroadcast.lastPointsAwarded = {
+      traineeIds,
+      points: pVal,
+      reason: reason || 'نشاط تدريبي وتفاعل متميز',
+      timestamp: Date.now()
+    };
+    masterBroadcast.updatedAt = new Date().toISOString();
+
+    db.recalculateTraineeRankings();
+    db.save();
+    TraineeRepo.invalidateCache();
+
+    db.logAudit({
+      userId: addedByUserId || 'admin',
+      userName: addedByUserName || 'مسؤول النقاط',
+      action: 'إضافة/خصم نقاط',
+      entity: 'نظام النقاط',
+      details: `تم منح/تعديل ${pVal} نقطة لعدد ${traineeIds.length} متدرب - السبب: ${reason}`
+    });
+
+    res.json({ success: true, modifiedCount: createdList.length });
+  } catch (err: any) {
+    console.error('[Points] Error in /points/add:', err);
+    res.status(500).json({ success: false, error: err?.message || 'فشل منح النقاط' });
   }
-
-  // Update master broadcast state for instant sync
-  masterBroadcast.lastPointsAwarded = {
-    traineeIds,
-    points: pVal,
-    reason: reason || 'نشاط تدريبي وتفاعل متميز',
-    timestamp: Date.now()
-  };
-  masterBroadcast.updatedAt = new Date().toISOString();
-
-  db.recalculateTraineeRankings();
-  db.saveImmediate();
-  TraineeRepo.invalidateCache();
-
-  db.logAudit({
-    userId: addedByUserId || 'admin',
-    userName: addedByUserName || 'مسؤول النقاط',
-    action: 'إضافة/خصم نقاط',
-    entity: 'نظام النقاط',
-    details: `تم منح/تعديل ${pVal} نقطة لعدد ${traineeIds.length} متدرب - السبب: ${reason}`
-  });
-
-  res.json({ success: true, modifiedCount: createdList.length });
 });
 
 apiRouter.get('/points/leaderboard', async (req: Request, res: Response) => {

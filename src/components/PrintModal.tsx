@@ -606,13 +606,15 @@ export const PrintModal: React.FC = () => {
   };
 
   const modalContent = (
-    <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md overflow-y-auto print-modal-overlay">
-      <div className="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl max-w-5xl w-full my-auto max-h-[85vh] flex flex-col overflow-hidden text-slate-100 print-modal-box">
+    <div className="fixed inset-0 z-[99999] flex items-center justify-center p-3 sm:p-6 bg-slate-950/75 backdrop-blur-sm overflow-y-auto print-modal-overlay">
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-3xl shadow-2xl max-w-5xl w-full my-auto max-h-[88vh] flex flex-col overflow-hidden text-slate-900 dark:text-slate-100 modal-dialog-box animate-in fade-in zoom-in-95">
         {/* Modal Topbar (hidden during print) */}
-        <div className="p-4 border-b border-slate-800 flex items-center justify-between no-print bg-slate-900 modal-topbar">
-          <div className="flex items-center gap-2">
-            <Printer className="w-5 h-5 text-amber-400" />
-            <h3 className="font-bold text-sm text-slate-100">{printData.title}</h3>
+        <div className="px-5 py-3.5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between no-print bg-slate-50 dark:bg-slate-900 modal-topbar">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-amber-500/10 dark:bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-600 dark:text-amber-400">
+              <Printer className="w-4 h-4" />
+            </div>
+            <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100">{printData.title}</h3>
           </div>
           <div className="flex items-center gap-2">
             <button
@@ -624,7 +626,7 @@ export const PrintModal: React.FC = () => {
             </button>
             <button
               onClick={() => setPrintData(null)}
-              className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors"
+              className="p-2 rounded-xl bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 transition-colors"
               title="إغلاق"
             >
               <X className="w-4 h-4" />
@@ -633,7 +635,7 @@ export const PrintModal: React.FC = () => {
         </div>
 
         {/* Printable View Container */}
-        <div ref={printContainerRef} className="flex-1 overflow-y-auto p-6 bg-slate-950/60 print:p-0 print:bg-white print-container">
+        <div ref={printContainerRef} className="flex-1 overflow-y-auto p-4 sm:p-6 bg-slate-100 dark:bg-slate-950/60 print:p-0 print:bg-white print-container">
           {renderContent()}
         </div>
       </div>

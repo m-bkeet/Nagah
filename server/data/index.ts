@@ -35,6 +35,9 @@ function createRepo<T extends { id: string }>(key: string) {
       if (!memData || !Array.isArray(memData[key])) {
         return [];
       }
+      if (key === 'trainees' && Array.isArray(memData.trainees)) {
+        memData.trainees = db.deduplicateTrainees(memData.trainees);
+      }
       return memData[key] as T[];
     },
 
@@ -114,9 +117,12 @@ function createRepo<T extends { id: string }>(key: string) {
         const idx = list.findIndex(i => i.id === docId);
         if (idx >= 0) list[idx] = fullItem;
         else list.push(fullItem);
-        // Direct write to target collection in Firestore and trigger immediate sync
+        if (key === 'trainees' && Array.isArray(memData.trainees)) {
+          memData.trainees = db.deduplicateTrainees(memData.trainees);
+        }
+        // Direct write to target collection in Firestore and persist locally
         await saveCollectionToFirestore(key, memData[key]);
-        await db.saveImmediate();
+        db.save();
       }
 
       return fullItem as T;
@@ -135,9 +141,9 @@ function createRepo<T extends { id: string }>(key: string) {
         const idx = list.findIndex(i => i.id === docId);
         if (idx >= 0) list[idx] = updatedItem;
         else list.push(updatedItem);
-        // Direct write to target collection in Firestore and trigger immediate sync
+        // Direct write to target collection in Firestore and persist locally
         await saveCollectionToFirestore(key, memData[key]);
-        await db.saveImmediate();
+        db.save();
       }
 
       return updatedItem as T;
@@ -150,9 +156,9 @@ function createRepo<T extends { id: string }>(key: string) {
         const list = memData[key] as any[];
         const idx = list.findIndex(i => i.id === id);
         if (idx >= 0) list.splice(idx, 1);
-        // Direct write to target collection in Firestore and trigger immediate sync
+        // Direct write to target collection in Firestore and persist locally
         await saveCollectionToFirestore(key, memData[key]);
-        await db.saveImmediate();
+        db.save();
       }
 
       return true;
