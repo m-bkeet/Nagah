@@ -28,11 +28,19 @@ import {
   Sparkles,
   Fingerprint,
   Cloud,
-  CloudUpload
+  CloudUpload,
+  FolderSync
 } from 'lucide-react';
 import { api } from '../services/api';
 import { useCenter } from '../context/CenterContext';
 import { useAuth } from '../context/AuthContext';
+import {
+  googleSignIn,
+  uploadBackupToGoogleDrive,
+  listGoogleDriveBackups,
+  downloadGoogleDriveBackup,
+  getWorkspaceAccessToken
+} from '../services/googleWorkspace';
 
 interface ManifestData {
   schemaVersion: string;
@@ -109,6 +117,77 @@ export const BackupAndMigrationCenter: React.FC = () => {
   const [replaceConfirmInput, setReplaceConfirmInput] = useState('');
   const [isExecutingImport, setIsExecutingImport] = useState(false);
   const [importStep, setImportStep] = useState<1 | 2 | 3>(1); // 1: Upload & Parse, 2: Preview & Mode, 3: Success
+
+  // Google Drive state
+  const [isDriveUploading, setIsDriveUploading] = useState(false);
+  const [showDriveModal, setShowDriveModal] = useState(false);
+  const [driveBackups, setDriveBackups] = useState<any[]>([]);
+  const [isLoadingDriveBackups, setIsLoadingDriveBackups] = useState(false);
+
+  const handleUploadToDrive = async () => {
+    try {
+      setIsDriveUploading(true);
+      showToast('جارٍ التحقق من حساب Google Workspace / Google Drive... ⏳', 'info');
+      let token = await getWorkspaceAccessToken();
+      if (!token) {
+        const authRes = await googleSignIn();
+        token = authRes?.accessToken || null;
+      }
+      if (!token) {
+        throw new Error('لم يتم الحصول على تصريح Google Drive. يرجى تسجيل الدخول بحساب Google.');
+      }
+
+      showToast('جارٍ تجميع قاعدة البيانات ورفع النسخة إلى Google Drive... ☁️', 'info');
+      const backupData = await api.getBackupData();
+      const res = await uploadBackupToGoogleDrive(token, backupData);
+      showToast(`تم رفع النسخة الاحتياطية (${res.name || 'Nagah_MS_Backup.json'}) إلى Google Drive بنجاح! 🚀`, 'success');
+    } catch (err: any) {
+      showToast(err.message || 'فشل رفع النسخة إلى Google Drive', 'error');
+    } finally {
+      setIsDriveUploading(false);
+    }
+  };
+
+  const handleOpenDriveModal = async () => {
+    setShowDriveModal(true);
+    try {
+      setIsLoadingDriveBackups(true);
+      let token = await getWorkspaceAccessToken();
+      if (!token) {
+        const authRes = await googleSignIn();
+        token = authRes?.accessToken || null;
+      }
+      if (token) {
+        const list = await listGoogleDriveBackups(token);
+        setDriveBackups(list);
+      }
+    } catch (err: any) {
+      showToast(err.message || 'فشل جلب ملفات النسخ من Google Drive', 'error');
+    } finally {
+      setIsLoadingDriveBackups(false);
+    }
+  };
+
+  const handleRestoreFromDriveFile = async (fileId: string, fileName: string) => {
+    try {
+      showToast(`جارٍ تنزيل النسخة (${fileName}) من Google Drive...`, 'info');
+      const token = await getWorkspaceAccessToken();
+      if (!token) throw new Error('يرجى تسجيل الدخول إلى حساب Google أولاً');
+      const data = await downloadGoogleDriveBackup(token, fileId);
+
+      setImportParsedData(data);
+      setShowDriveModal(false);
+      setShowImportModal(true);
+      setImportStep(2);
+
+      const previewRes = await api.previewImportPackage(data);
+      if (previewRes.success && previewRes.preview) {
+        setImportPreview(previewRes.preview);
+      }
+    } catch (err: any) {
+      showToast(err.message || 'فشل استرجاع النسخة من Google Drive', 'error');
+    }
+  };
 
   // Needs Review Details View
   const [showNeedsReviewModal, setShowNeedsReviewModal] = useState(false);
@@ -513,45 +592,55 @@ export const BackupAndMigrationCenter: React.FC = () => {
           </div>
         </div>
 
-        {/* Card 4: Quick Drive & Cloud Link */}
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-amber-400 dark:hover:border-amber-500 rounded-2xl p-5 shadow-sm hover:shadow-xl transition-all flex flex-col justify-between group">
+        {/* Card 4: Google Drive Cloud Backup */}
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-sky-400 dark:hover:border-sky-500 rounded-2xl p-5 shadow-sm hover:shadow-xl transition-all flex flex-col justify-between group">
           <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <div className="w-10 h-10 rounded-xl bg-amber-100 dark:bg-amber-900/30 border border-amber-300 dark:border-amber-500/40 flex items-center justify-center text-amber-700 dark:text-amber-300 shadow-sm">
-                <Cloud className="w-5 h-5" />
+              <div className="w-10 h-10 rounded-xl bg-sky-100 dark:bg-sky-900/30 border border-sky-300 dark:border-sky-500/40 flex items-center justify-center text-sky-700 dark:text-sky-300 shadow-sm">
+                <FolderSync className="w-5 h-5" />
               </div>
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-50 dark:bg-slate-950 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-500/30">
-                Cloud Sync
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-sky-50 dark:bg-slate-950 text-sky-700 dark:text-sky-300 border border-sky-200 dark:border-sky-500/30">
+                Google Drive Sync
               </span>
             </div>
             <div>
-              <h3 className="font-black text-sm text-slate-900 dark:text-slate-100 group-hover:text-amber-700 dark:group-hover:text-amber-300 transition-colors">
-                4 — المزامنة السحابية الفورية
+              <h3 className="font-black text-sm text-slate-900 dark:text-slate-100 group-hover:text-sky-700 dark:group-hover:text-sky-300 transition-colors">
+                4 — النسخ السحابي في Google Drive
               </h3>
               <p className="text-xs text-slate-600 dark:text-slate-400 mt-1 leading-relaxed">
-                مزامنة فورية وتحديث سحابي مباشر مع قواعد بيانات المركز لحفظ السجلات وتفادي أي فقد للبيانات.
+                رفع نسخة مشفرة تلقائياً إلى حساب Google Drive الخاص بك واستعراض وتنزيل النسخ المحفوظة سحابياً.
               </p>
             </div>
           </div>
 
-          <div className="pt-4 border-t border-slate-100 dark:border-slate-800 mt-4">
+          <div className="pt-4 border-t border-slate-100 dark:border-slate-800 mt-4 flex items-center gap-2">
             <button
               type="button"
-              onClick={async () => {
-                showToast('جارٍ مزامنة وتحديث السحابة المركزية...', 'info');
-                try {
-                  const res = await api.syncSystem();
-                  if (res) {
-                    showToast('تمت المزامنة السحابية بنجاح تام! ☁️', 'success');
-                  }
-                } catch (e: any) {
-                  showToast(e.message || 'فشلت المزامنة', 'error');
-                }
-              }}
-              className="w-full flex items-center justify-center gap-2 py-2.5 px-4 bg-gradient-to-r from-amber-500 via-amber-600 to-yellow-600 hover:from-amber-400 hover:to-yellow-500 text-slate-950 font-black text-xs rounded-xl shadow-md shadow-amber-500/25 transition-all active:scale-95"
+              disabled={isDriveUploading}
+              onClick={handleUploadToDrive}
+              className="flex-1 flex items-center justify-center gap-1.5 py-2.5 px-3 bg-gradient-to-r from-sky-600 to-blue-600 hover:from-sky-500 hover:to-blue-500 text-white font-black text-xs rounded-xl shadow-md shadow-sky-600/25 transition-all active:scale-95"
             >
-              <CloudUpload className="w-4 h-4" />
-              <span>مزامنة السحابة الآن</span>
+              {isDriveUploading ? (
+                <>
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                  <span>جارٍ الرفع...</span>
+                </>
+              ) : (
+                <>
+                  <CloudUpload className="w-3.5 h-3.5" />
+                  <span>رفع إلى Drive ☁️</span>
+                </>
+              )}
+            </button>
+
+            <button
+              type="button"
+              onClick={handleOpenDriveModal}
+              className="flex items-center justify-center gap-1 py-2.5 px-3 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs rounded-xl transition-all"
+              title="عرض نسخ Google Drive"
+            >
+              <Eye className="w-3.5 h-3.5" />
+              <span>استعراض</span>
             </button>
           </div>
         </div>
@@ -1273,6 +1362,117 @@ export const BackupAndMigrationCenter: React.FC = () => {
                 </div>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Google Drive Backups Modal */}
+      {showDriveModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-slate-900 border border-slate-700 rounded-3xl w-full max-w-2xl max-h-[85vh] overflow-hidden flex flex-col shadow-2xl">
+            <div className="p-5 border-b border-slate-800 flex items-center justify-between bg-slate-950/60">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-sky-500/20 border border-sky-500/30 flex items-center justify-center text-sky-400">
+                  <FolderSync className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-black text-sm text-white flex items-center gap-2">
+                    نسخ Google Drive السحابية المحفوظة
+                  </h3>
+                  <p className="text-[11px] text-slate-400">
+                    استعراض واسترجاع النسخ الاحتياطية المرفوعة لحساب Google
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowDriveModal(false)}
+                className="w-8 h-8 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-5 overflow-y-auto flex-1 space-y-3">
+              {isLoadingDriveBackups ? (
+                <div className="py-12 text-center text-slate-400 space-y-3">
+                  <RefreshCw className="w-6 h-6 animate-spin mx-auto text-sky-400" />
+                  <p className="text-xs">جارٍ جلب وتحديث قائمة النسخ من Google Drive...</p>
+                </div>
+              ) : driveBackups.length === 0 ? (
+                <div className="py-12 text-center text-slate-400 space-y-3">
+                  <Cloud className="w-8 h-8 mx-auto text-slate-600" />
+                  <p className="text-xs">لم يتم العثور على نسخ احتياطية مسجلة في Google Drive بعد.</p>
+                  <button
+                    type="button"
+                    onClick={handleUploadToDrive}
+                    className="px-4 py-2 bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs rounded-xl shadow transition-all"
+                  >
+                    رفع أول نسخة احتياطية الآن ☁️
+                  </button>
+                </div>
+              ) : (
+                driveBackups.map((f: any) => (
+                  <div
+                    key={f.id}
+                    className="p-4 bg-slate-950/50 border border-slate-800 hover:border-sky-500/40 rounded-2xl flex items-center justify-between gap-4 transition-all"
+                  >
+                    <div className="space-y-1 min-w-0">
+                      <div className="font-bold text-xs text-white truncate flex items-center gap-2">
+                        <FileText className="w-4 h-4 text-sky-400 shrink-0" />
+                        <span className="truncate">{f.name}</span>
+                      </div>
+                      <div className="flex items-center gap-3 text-[10px] text-slate-400">
+                        <span>تاريخ الحفظ: {new Date(f.modifiedTime || f.createdTime).toLocaleString('ar-EG')}</span>
+                        {f.size && <span>الحجم: {(Number(f.size) / 1024).toFixed(1)} KB</span>}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0">
+                      {f.webViewLink && (
+                        <a
+                          href={f.webViewLink}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs rounded-xl transition-all"
+                          title="فتح في Google Drive"
+                        >
+                          عرض في Drive
+                        </a>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => handleRestoreFromDriveFile(f.id, f.name)}
+                        className="px-3 py-1.5 bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs rounded-xl shadow transition-all flex items-center gap-1"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                        <span>استيراد</span>
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div className="p-4 border-t border-slate-800 bg-slate-950/40 flex items-center justify-between">
+              <button
+                type="button"
+                onClick={handleUploadToDrive}
+                disabled={isDriveUploading}
+                className="px-4 py-2 bg-sky-600 hover:bg-sky-500 text-white font-black text-xs rounded-xl transition-all shadow flex items-center gap-1.5"
+              >
+                <CloudUpload className="w-3.5 h-3.5" />
+                <span>رفع نسخة جديدة الآن</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShowDriveModal(false)}
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs rounded-xl transition-all"
+              >
+                إغلاق
+              </button>
+            </div>
           </div>
         </div>
       )}

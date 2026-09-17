@@ -5174,6 +5174,15 @@ export async function awardTraineePoints(
 
   // 4. Save to Firestore immediately
   try {
+    const batch = adminDb.batch();
+    batch.set(adminDb.collection('trainees').doc(student.id), { totalPoints: newTotal, points: newTotal, updatedAt: new Date().toISOString() }, { merge: true });
+    batch.set(adminDb.collection('pointTransactions').doc(pt.id), pt);
+    await batch.commit();
+  } catch (e) {
+    console.warn('[Points] Direct adminDb batch sync notice:', e);
+  }
+
+  try {
     await Promise.all([
       saveCollectionToFirestore('trainees', dbData.trainees),
       saveCollectionToFirestore('pointTransactions', dbData.pointTransactions)
