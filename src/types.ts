@@ -1058,9 +1058,12 @@ export interface HomeworkSubmission {
   courseId?: string;
   courseName?: string;
   taskTitle: string;
+  lessonName?: string;
   submittedAt: string;
   mediaUrl?: string;
-  mediaType: 'image' | 'video' | 'text' | 'code' | 'audio' | 'voice';
+  mediaType: 'image' | 'video' | 'text' | 'code' | 'audio' | 'voice' | 'multi_image';
+  pagesUrls?: string[];
+  pagesCount?: number;
   audioDurationSeconds?: number;
   voiceTranscription?: string;
   conceptsCovered?: string[];
@@ -1093,6 +1096,58 @@ export interface HomeworkSubmission {
   trainerFeedback?: string;
   testCaseResults?: { input: string; expected: string; actual: string; passed: boolean }[];
   isLate?: boolean;
+  lessonSummaryEvaluation?: {
+    completeness: string;
+    coveredCoreConcepts: string[];
+    missingConcepts?: string[];
+    dataCycleUnderstood?: boolean;
+    hardwarePartsIdentified?: boolean;
+    overallVerdict: string;
+  };
+}
+
+export interface LectureRecap {
+  id: string;
+  title: string;
+  courseId?: string;
+  courseName?: string;
+  groupId?: string;
+  groupName?: string;
+  branchId?: string;
+  trainerId?: string;
+  trainerName?: string;
+  lectureDate: string;
+  gradeLevel: string; // e.g. "الصف الرابع الابتدائي (Grade 4 Languages)"
+  subject?: string; // e.g. "ICT & Computer"
+
+  // Section 1: Previous Lecture Recap
+  recapSummary: {
+    points: string[];
+    detailedNotes?: string;
+    audioUrl?: string;
+  };
+
+  // Section 2: Required Tasks & Homework
+  homeworkTasks: {
+    tasks: string[];
+    bonusChallenge?: string;
+    dueDateTime?: string;
+    allowMultiPageUpload?: boolean;
+  };
+
+  // Section 3: Next Lecture Preparation & Teaser
+  nextLecturePrep: {
+    prepPoints: string[];
+    teaserNotes?: string;
+  };
+
+  // Section 4: Trainer Voice / Closing Message
+  closingMessage?: string;
+  audioVoiceUrl?: string;
+
+  isPublished: boolean;
+  createdAt: string;
+  updatedAt?: string;
 }
 
 export interface PortalMessage {

@@ -1,194 +1,348 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useCenter } from '../context/CenterContext';
-import { api, request } from '../services/api';
-import { GoogleMeetService } from '../services/googleMeet';
+import { api } from '../services/api';
 import {
   Sparkles,
-  Play,
   CheckCircle2,
-  Send,
   Trophy,
-  Award,
   Globe,
-  Database,
   Zap,
   RefreshCw,
   Search,
   ExternalLink,
   Plus,
-  Trash2,
-  Clock,
-  Radio,
   Users,
-  X,
-  FileText,
-  Image as ImageIcon,
-  Languages,
-  Layers,
-  ArrowRightLeft,
-  ListOrdered,
-  Type as TypeIcon,
-  Target,
-  Crown,
-  Video,
   Star,
   UserCheck,
-  LayoutDashboard,
-  Share2,
   Laptop,
-  Cast,
-  ShieldCheck,
-  Activity
+  Check,
+  XCircle,
+  AlertTriangle,
+  Play,
+  RotateCcw,
+  Volume2,
+  Lock,
+  Eye,
+  Award,
+  Tv,
+  Radio,
+  Gamepad2,
+  HelpCircle,
+  BarChart2,
+  BookOpen,
+  FileCheck2
 } from 'lucide-react';
-import { InteractiveSession, Question, ExamQuestion, Trainer, Group, Course, Trainee } from '../types';
-import { AIPresentationGenerator } from '../components/trainer/AIPresentationGenerator';
-import { LiveLectureStudio } from '../components/trainer/LiveLectureStudio';
-import { KahootStudio } from '../components/kahoot/KahootStudio';
-import { SessionCeremonyModal } from '../components/SessionCeremonyModal';
+import { Trainer, Group, Course, Trainee } from '../types';
 import { SmartWhiteboardModal } from '../components/SmartWhiteboardModal';
 import { CelebrationBalloonsOverlay } from '../components/CelebrationBalloonsOverlay';
 import { AllInOneLessonPlanModal } from '../components/trainer/AllInOneLessonPlanModal';
+import { LectureRecapManager } from '../components/homeworks/LectureRecapManager';
+import { ProjectorAudioControlBar } from '../components/trainer/ProjectorAudioControlBar';
 import { audioService } from '../services/audioService';
-import {
-  Presentation,
-  BookOpen,
-  Monitor,
-  Code,
-  PartyPopper,
-  Flame,
-  Sliders,
-  Check,
-  Terminal,
-  Volume2,
-  Filter,
-  CheckCircle,
-  XCircle,
-  AlertTriangle,
-  HelpCircle,
-  Sparkle
-} from 'lucide-react';
 
 export const InteractiveSessionsView: React.FC = () => {
-  const { activeBranchId, branches, showToast, refreshKey, isTrainerLabActive, toggleTrainerLabSession } = useCenter();
-  const [activeTab, setActiveTab] = useState<'cockpit' | 'lesson_workspace' | 'nagah_pro' | 'external' | 'bank' | 'quick' | 'leaderboard' | 'language_lab'>('cockpit');
-  const [lessonSubMode, setLessonSubMode] = useState<'slides' | 'live_studio' | 'practical' | 'ceremony'>('slides');
+  const { activeBranchId, branches, showToast, refreshKey } = useCenter();
   const [isWhiteboardOpen, setIsWhiteboardOpen] = useState(false);
+  const [isAllInOneModalOpen, setIsAllInOneModalOpen] = useState(false);
 
-  // Center Domain Entities
+  // Main Active Tab
+  const [activeTab, setActiveTab] = useState<'activities' | 'roster' | 'recap'>('activities');
+
+  // Center Data
   const [trainers, setTrainers] = useState<Trainer[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
   const [courses, setCourses] = useState<Course[]>([]);
   const [trainees, setTrainees] = useState<Trainee[]>([]);
-  const [selectedTrainer, setSelectedTrainer] = useState<Trainer | null>(null);
-  const [selectedGroup, setSelectedGroup] = useState<Group | null>(null);
-  const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
-  const [isCeremonyOpen, setIsCeremonyOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Cockpit Group & Attendance Filtering States
-  const [selectedCockpitGroupId, setSelectedCockpitGroupId] = useState<string>('auto');
-  const [cockpitFilterMode, setCockpitFilterMode] = useState<'present' | 'all_group' | 'all_branch'>('present');
-  const [cockpitBonusAmount, setCockpitBonusAmount] = useState<number>(10);
-  const [cockpitBonusReason, setCockpitBonusReason] = useState<string>('تفاعل وتميز بالحصة');
+  // Selected Group for the session
+  const [selectedGroupId, setSelectedGroupId] = useState<string>('auto');
+  const [filterMode, setFilterMode] = useState<'present' | 'all'>('present');
+  const [searchQuery, setSearchQuery] = useState<string>('');
+
+  // Attendance Map: traineeId -> status
   const [attendanceMap, setAttendanceMap] = useState<Record<string, 'present' | 'absent' | 'late' | 'excused'>>({});
   const [celebrationOverlay, setCelebrationOverlay] = useState<{ active: boolean; title?: string; pointsBadge?: string; subtitle?: string }>({ active: false });
 
-  // Practical Teaching Mode States
-  const [practicalCode, setPracticalCode] = useState(`// كود التدريب العملي والتجربة الحية بالمعمل
-function calculateGrade(score, maxScore) {
-  const percentage = (score / maxScore) * 100;
-  if (percentage >= 90) return 'ممتاز 🌟';
-  if (percentage >= 80) return 'جيد جداً 👍';
-  if (percentage >= 70) return 'جيد 👏';
-  return 'يحتاج لمزيد من التدريب 💪';
-}
+  // ClassPoint & Kahoot Broadcast State
+  const [externalPlatform, setExternalPlatform] = useState<'ClassPoint' | 'Kahoot' | 'Quizizz' | 'Other'>('ClassPoint');
+  const [externalPin, setExternalPin] = useState<string>('');
+  const [externalUrl, setExternalUrl] = useState<string>('https://www.classpoint.app');
+  const [activeBroadcast, setActiveBroadcast] = useState<any>(null);
+  const [isBroadcastingExternal, setIsBroadcastingExternal] = useState(false);
 
-console.log("نتيجة الطالب:", calculateGrade(48, 50));`);
-  const [practicalOutput, setPracticalOutput] = useState<string>('');
-  const [isExecutingCode, setIsExecutingCode] = useState(false);
+  // Quick Question State
+  const [activeQuickQuestion, setActiveQuickQuestion] = useState<any>(null);
+  const [customQuestionInput, setCustomQuestionInput] = useState<string>('');
+  const [selectedCorrectOption, setSelectedCorrectOption] = useState<string>('A');
+  const [pointsReward, setPointsReward] = useState<number>(5);
 
-  // Language Lab States (معمل اللغات الذكي)
-  const [langPersona, setLangPersona] = useState<'interview' | 'airport' | 'tech_support' | 'daily'>('interview');
-  const [langCefrLevel, setLangCefrLevel] = useState<'A1' | 'A2' | 'B1' | 'B2' | 'C1'>('B1');
-  const [langPracticePrompt, setLangPracticePrompt] = useState('Tell me about your greatest strengths and how you handle pressure in a team.');
-  const [langAudioRecording, setLangAudioRecording] = useState(false);
-  const [langFeedback, setLangFeedback] = useState<any>(null);
-  
-  // Sessions & Active state
-  const [sessions, setSessions] = useState<InteractiveSession[]>([]);
-  const [activeSession, setActiveSession] = useState<InteractiveSession | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [onlineDevicesCount, setOnlineDevicesCount] = useState<number>(12);
-
-  // Nagah Pro Quiz Builder State
-  const [quizzes, setQuizzes] = useState<any[]>([]);
-  const [isEditingQuiz, setIsEditingQuiz] = useState(false);
-  const [editingQuiz, setEditingQuiz] = useState<any>(null);
-  const [isGeneratingAI, setIsGeneratingAI] = useState(false);
-  const [aiPrompt, setAiPrompt] = useState('');
-  const [aiLanguage, setAiLanguage] = useState<'ar' | 'en'>('ar');
-  const [quizMode, setQuizMode] = useState<'individual' | 'team_vs_team' | 'class_vs_class'>('individual');
-
-  // External Platform State (Kahoot, Quizizz, Forms)
-  const [isAllInOneModalOpen, setIsAllInOneModalOpen] = useState(false);
-  const [externalPlatform, setExternalPlatform] = useState<'Kahoot' | 'Quizizz' | 'Google Forms' | 'Microsoft Forms' | 'Other'>('Kahoot');
-  const [externalTitle, setExternalTitle] = useState('مسابقة تحدي المعمل الحية - كاهوت (Kahoot Live)');
-  const [externalUrl, setExternalUrl] = useState('https://kahoot.it');
-  const [externalGamePin, setExternalGamePin] = useState('849201');
-
-  // Question Bank State
-  const [questionBank, setQuestionBank] = useState<any[]>([]);
-  const [selectedSubject, setSelectedSubject] = useState<string>('all');
-  const [searchBankQuery, setSearchBankQuery] = useState<string>('');
-
-  // Quick Question Composer State
-  const [quickQuestionText, setQuickQuestionText] = useState('ما هي الدالة المسؤولة عن تشغيل كود عند تحميل المكون في React؟');
-  const [quickOptions, setQuickOptions] = useState<string[]>([
-    'useState()',
-    'useEffect()',
-    'useRef()',
-    'useMemo()'
-  ]);
-  const [quickCorrectIndex, setQuickCorrectIndex] = useState<number>(1);
-  const [quickPoints, setQuickPoints] = useState<number>(15);
-  const [quickTimeLimit, setQuickTimeLimit] = useState<number>(30);
-
-  // Live Leaderboard & Responses
-  const [responses, setResponses] = useState<any[]>([]);
-  const [labLiveQuestion, setLabLiveQuestion] = useState<any>(null);
-
-  // Advanced Question Logic
-  const [newQuestionType, setNewQuestionType] = useState<ExamQuestion['questionType']>('mcq');
-
-  useEffect(() => {
-    const fetchLabQuick = async () => {
-      if (typeof document !== 'undefined' && document.hidden) return;
-      try {
-        const res = await fetch('/api/lab/quick-question');
-        const json = await res.json();
-        setLabLiveQuestion(json?.data || null);
-      } catch (e) {}
-    };
-
-    fetchLabQuick();
-    const handleFocus = () => fetchLabQuick();
-    window.addEventListener('focus', handleFocus);
-    // Relaxed fallback interval (30s) only when active
-    const interval = setInterval(fetchLabQuick, 30000);
-    return () => {
-      window.removeEventListener('focus', handleFocus);
-      clearInterval(interval);
-    };
+  // Load Initial Data
+  const loadData = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      const [trainersData, groupsData, coursesData, traineesData] = await Promise.all([
+        api.getTrainers().catch(() => []),
+        api.getGroups().catch(() => []),
+        api.getCourses().catch(() => []),
+        api.getTrainees().catch(() => [])
+      ]);
+      setTrainers(Array.isArray(trainersData) ? trainersData : []);
+      setGroups(Array.isArray(groupsData) ? groupsData : []);
+      setCourses(Array.isArray(coursesData) ? coursesData : []);
+      setTrainees(Array.isArray(traineesData) ? traineesData : []);
+    } catch (e) {
+      console.error('Error loading lab data:', e);
+    } finally {
+      setIsLoading(false);
+    }
   }, []);
 
-  const handleBroadcastVerbalMCQ = async (correctChoice: 'A' | 'B' | 'C' | 'D') => {
+  // Poll current active Question & External Activity from Server
+  const fetchActiveLabState = useCallback(async () => {
     try {
-      await fetch('/api/lab/quick-question/broadcast', {
+      const res = await fetch('/api/lab/quick-question?isTeacher=true');
+      const json = await res.json();
+      if (json) {
+        setActiveQuickQuestion(json.data || null);
+        if (json.externalActivity) {
+          setActiveBroadcast(json.externalActivity);
+          if (json.externalActivity.gamePin) {
+            setExternalPin(json.externalActivity.gamePin);
+          }
+          if (json.externalActivity.platform) {
+            setExternalPlatform(json.externalActivity.platform);
+          }
+        }
+      }
+    } catch (e) {
+      // silent
+    }
+  }, []);
+
+  useEffect(() => {
+    loadData();
+    fetchActiveLabState();
+    const timer = setInterval(fetchActiveLabState, 3000);
+    return () => clearInterval(timer);
+  }, [loadData, fetchActiveLabState, refreshKey]);
+
+  // Available groups for active branch
+  const branchGroups = useMemo(() => {
+    if (!activeBranchId || activeBranchId === 'all') return groups;
+    return groups.filter(g => g.branchId === activeBranchId);
+  }, [groups, activeBranchId]);
+
+  // Current active group
+  const effectiveGroup = useMemo(() => {
+    if (selectedGroupId === 'all_branch') return null;
+    if (selectedGroupId !== 'auto') {
+      return groups.find(g => g.id === selectedGroupId) || null;
+    }
+    return branchGroups?.[0] || groups?.[0] || null;
+  }, [groups, branchGroups, selectedGroupId]);
+
+  // Trainees of active group strictly filtered by actual registered enrollment
+  const currentGroupTrainees = useMemo(() => {
+    if (selectedGroupId === 'all_branch') {
+      return trainees.filter(t => !activeBranchId || activeBranchId === 'all' || t.branchId === activeBranchId);
+    }
+    if (!effectiveGroup) {
+      return trainees.filter(t => !activeBranchId || activeBranchId === 'all' || t.branchId === activeBranchId);
+    }
+    return trainees.filter(t => {
+      const gId = t.groupId || (t as any).currentGroupId;
+      return gId === effectiveGroup.id || (Array.isArray(effectiveGroup.traineeIds) && effectiveGroup.traineeIds.includes(t.id));
+    });
+  }, [trainees, effectiveGroup, selectedGroupId, activeBranchId]);
+
+  // Attendance map initialization
+  useEffect(() => {
+    if (currentGroupTrainees.length > 0) {
+      const savedKey = `nagah_lab_attendance_${effectiveGroup?.id || 'default'}`;
+      try {
+        const saved = localStorage.getItem(savedKey);
+        if (saved) {
+          setAttendanceMap(JSON.parse(saved));
+          return;
+        }
+      } catch {}
+
+      setAttendanceMap(prev => {
+        const next = { ...prev };
+        currentGroupTrainees.forEach(t => {
+          if (!next[t.id]) {
+            next[t.id] = 'present';
+          }
+        });
+        return next;
+      });
+    }
+  }, [currentGroupTrainees, effectiveGroup?.id]);
+
+  const updateAttendance = (traineeId: string, status: 'present' | 'absent' | 'late' | 'excused') => {
+    setAttendanceMap(prev => {
+      const next = { ...prev, [traineeId]: status };
+      const savedKey = `nagah_lab_attendance_${effectiveGroup?.id || 'default'}`;
+      try { localStorage.setItem(savedKey, JSON.stringify(next)); } catch {}
+      return next;
+    });
+  };
+
+  const displayedTrainees = useMemo(() => {
+    return currentGroupTrainees.filter(t => {
+      const status = attendanceMap[t.id] || 'present';
+      if (filterMode === 'present' && status !== 'present' && status !== 'late') {
+        return false;
+      }
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase().trim();
+        const nameMatch = (t.fullName || t.name || '').toLowerCase().includes(q);
+        const codeMatch = (t.code || t.studentCode || '').toLowerCase().includes(q);
+        return nameMatch || codeMatch;
+      }
+      return true;
+    });
+  }, [currentGroupTrainees, attendanceMap, filterMode, searchQuery]);
+
+  const presentCount = useMemo(() => {
+    return currentGroupTrainees.filter(t => attendanceMap[t.id] === 'present' || attendanceMap[t.id] === 'late').length;
+  }, [currentGroupTrainees, attendanceMap]);
+
+  // 1-Click Instant Points Award
+  const handleAwardPoints = async (trainee: Trainee, pointsToAdd: number, reason: string) => {
+    const pVal = Number(pointsToAdd);
+    if (isNaN(pVal) || pVal === 0) return;
+
+    setTrainees(prev =>
+      prev.map(t => {
+        if (t.id === trainee.id || (t.code && t.code === trainee.code)) {
+          const current = Number(t.totalPoints !== undefined ? t.totalPoints : (t.points || 0));
+          const next = Math.max(0, current + pVal);
+          return { ...t, totalPoints: next, points: next };
+        }
+        return t;
+      })
+    );
+
+    if (pVal > 0) {
+      audioService.playStarSuccess();
+      showToast(`⭐ تم منح +${pVal} نقطة للطالب ${trainee.fullName} فوراً!`, 'success');
+    } else {
+      showToast(`⚠️ تم خصم ${Math.abs(pVal)} نقطة من الطالب ${trainee.fullName}`, 'warning');
+    }
+
+    try {
+      await api.addPoints({
+        traineeIds: [trainee.id],
+        points: pVal,
+        reason: reason || 'تفاعل وتميز بالحصة التدريبية'
+      });
+    } catch (err: any) {
+      console.warn('Point award sync error:', err);
+    }
+  };
+
+  // Mass Points to All Present
+  const handleMassAwardPresent = async (pointsToAdd: number) => {
+    const presentTrainees = currentGroupTrainees.filter(t => attendanceMap[t.id] === 'present' || attendanceMap[t.id] === 'late');
+    if (presentTrainees.length === 0) {
+      showToast('لا يوجد طلاب مسجلين كحاضرين حالياً لمنحهم النقاط', 'warning');
+      return;
+    }
+
+    const ids = presentTrainees.map(t => t.id);
+    const idSet = new Set(ids);
+
+    setTrainees(prev =>
+      prev.map(t => {
+        if (idSet.has(t.id)) {
+          const current = Number(t.totalPoints !== undefined ? t.totalPoints : (t.points || 0));
+          const next = Math.max(0, current + pointsToAdd);
+          return { ...t, totalPoints: next, points: next };
+        }
+        return t;
+      })
+    );
+
+    audioService.playFanfare();
+    setCelebrationOverlay({
+      active: true,
+      title: `🎉 تم منح +${pointsToAdd} نجوم لجميع الحاضرين (${presentTrainees.length} طالب)!`,
+      pointsBadge: `+${pointsToAdd} ⭐`,
+      subtitle: `مجموعة ${effectiveGroup?.name || 'الحصة التدريبية'}`
+    });
+
+    try {
+      await api.addPoints({
+        traineeIds: ids,
+        points: pointsToAdd,
+        reason: 'مكافأة جماعية لتفاعل وتميز الحصة'
+      });
+    } catch (e) {}
+  };
+
+  // Broadcast ClassPoint / Kahoot / Quizizz
+  const handleBroadcastExternal = async () => {
+    const pin = externalPin.trim();
+    if (!pin) {
+      showToast(`يرجى إدخال كود مسابقة ${externalPlatform}`, 'warning');
+      return;
+    }
+
+    let defaultUrl = externalUrl;
+    if (externalPlatform === 'ClassPoint') defaultUrl = 'https://www.classpoint.app';
+    else if (externalPlatform === 'Kahoot') defaultUrl = 'https://kahoot.it';
+    else if (externalPlatform === 'Quizizz') defaultUrl = 'https://quizizz.com/join';
+
+    setIsBroadcastingExternal(true);
+    try {
+      const res = await fetch('/api/lab/active-activity/broadcast', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: `مسابقة ${externalPlatform} الحية`,
+          platform: externalPlatform,
+          url: defaultUrl,
+          gamePin: pin
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setActiveBroadcast(data.activity);
+        audioService.playFanfare();
+        showToast(`🚀 تم بث كود ${externalPlatform} (${pin}) لجميع أجهزة وبوابات الطلاب بنجاح!`, 'success');
+      }
+    } catch (e) {
+      showToast('فشل بث الكود للطلاب', 'error');
+    } finally {
+      setIsBroadcastingExternal(false);
+    }
+  };
+
+  const handleClearExternalBroadcast = async () => {
+    try {
+      await fetch('/api/lab/active-activity/broadcast', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: '', platform: '', url: '', gamePin: '' })
+      });
+      setActiveBroadcast(null);
+      showToast('تم إنهاء وإغلاق بث المسابقة الحالية', 'info');
+    } catch (e) {}
+  };
+
+  // 1. Launch 4-Choice MCQ (Secret hidden answer for projector)
+  const handleLaunchMCQ = async () => {
+    const qText = customQuestionInput.trim() || '🎧 استمع لسؤال المعلم شفوياً في القاعة أو انظر لشاشة العرض';
+    try {
+      const res = await fetch('/api/lab/quick-question/broadcast', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           type: 'choices',
-          questionText: '🎧 استمع لسؤال المعلم شفوياً في القاعة واختر إجابتك الآن!',
-          correctAnswer: correctChoice,
+          questionText: qText,
+          correctAnswer: '', // Intentionally empty initially so answer is hidden
           options: [
             { key: 'A', label: 'أ / A (أحمر)', color: 'bg-rose-600 hover:bg-rose-500' },
             { key: 'B', label: 'ب / B (أزرق)', color: 'bg-blue-600 hover:bg-blue-500' },
@@ -197,2549 +351,849 @@ console.log("نتيجة الطالب:", calculateGrade(48, 50));`);
           ]
         })
       });
-      showToast(`تم بث سؤال الخيارات الشفهي للأجهزة فوراً (الإجابة النموذجية: ${correctChoice}) 🚀`, 'success');
-    } catch (e: any) {
+      const data = await res.json();
+      if (data.success) {
+        setActiveQuickQuestion(data.question);
+        audioService.playChime();
+        showToast('🚀 تم بث السؤال للشاشات! الطلاب يصوتون الآن والإجابة مخفية عنهم تماماً', 'success');
+      }
+    } catch (e) {
       showToast('فشل بث السؤال', 'error');
     }
   };
 
-  const handleBroadcastVerbalTrueFalse = async (correctChoice: 'true' | 'false') => {
+  // 2. Launch True / False Question
+  const handleLaunchTrueFalse = async () => {
+    const qText = customQuestionInput.trim() || '🎧 هل العبارة التي ذكرها المعلم صحيحة أم خاطئة؟';
     try {
-      await fetch('/api/lab/quick-question/broadcast', {
+      const res = await fetch('/api/lab/quick-question/broadcast', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           type: 'true_false',
-          questionText: '🎧 استمع لسؤال المعلم شفوياً في القاعة (صح أم خطأ؟)',
-          correctAnswer: correctChoice,
+          questionText: qText,
+          correctAnswer: '',
           options: [
-            { key: 'true', label: 'صح ✔️', color: 'bg-emerald-600 hover:bg-emerald-500' },
-            { key: 'false', label: 'خطأ ❌', color: 'bg-rose-600 hover:bg-rose-500' }
+            { key: 'true', label: 'صحيحة ✅ (أخضر)', color: 'bg-emerald-600 hover:bg-emerald-500' },
+            { key: 'false', label: 'خاطئة ❌ (أحمر)', color: 'bg-rose-600 hover:bg-rose-500' }
           ]
         })
       });
-      showToast(`تم بث سؤال صح أو خطأ للأجهزة فوراً (الإجابة النموذجية: ${correctChoice === 'true' ? 'صح' : 'خطأ'}) 🚀`, 'success');
-    } catch (e: any) {
+      const data = await res.json();
+      if (data.success) {
+        setActiveQuickQuestion(data.question);
+        audioService.playChime();
+        showToast('🚀 تم بث سؤال صح أو خطأ للشاشات! التصويت مفتوح والإجابة مخفية', 'success');
+      }
+    } catch (e) {
       showToast('فشل بث السؤال', 'error');
     }
   };
 
-  const handleAwardStarsToCorrect = async () => {
-    if (!labLiveQuestion || !labLiveQuestion.answers) return;
-    const correctStudents = Object.values(labLiveQuestion.answers).filter((a: any) => a.isCorrect);
-    if (correctStudents.length === 0) {
-      showToast('لا يوجد طلاب أجابوا إجابة صحيحة حتى الآن', 'info');
-      return;
-    }
+  // 3. Close Voting
+  const handleCloseVoting = async () => {
     try {
-      for (const s of correctStudents as any[]) {
-        try {
-          await api.awardPoints(s.studentCode, 5, 'إجابة صحيحة في التحدي اللحظي بالمعمل');
-        } catch (e) {}
+      const res = await fetch('/api/lab/quick-question/close', { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        setActiveQuickQuestion(data.question);
+        audioService.playChime();
+        showToast('🔒 تم قفل استقبال الإجابات! يمكنك الآن مناقشة الإجابات وكشف الفائزين', 'info');
       }
-      showToast(`تم منح 5 نجوم بنجاح لـ ${correctStudents.length} طالب فائز! 🌟`, 'success');
-    } catch (e) {
-      showToast('تم منح النقاط بنجاح للمجيبين', 'success');
-    }
+    } catch (e) {}
   };
 
-  useEffect(() => {
-    loadSessions();
-    loadQuestionBank();
-    loadDevices();
-    loadQuizzes();
-    loadCenterData();
-  }, [refreshKey]);
-
-  const loadCenterData = async () => {
+  // 4. Reveal Correct Answer and Crown Winners
+  const handleRevealAnswer = async (choiceKey: string) => {
     try {
-      const [tRes, gRes, cRes, trRes] = await Promise.all([
-        api.getTrainers().catch(() => []),
-        api.getGroups().catch(() => []),
-        api.getCourses().catch(() => []),
-        api.getTrainees().catch(() => [])
-      ]);
-      setTrainers(tRes);
-      setGroups(gRes);
-      setCourses(cRes);
-      setTrainees(trRes);
-      if (tRes.length > 0) setSelectedTrainer(tRes[0]);
-      if (gRes.length > 0) setSelectedGroup(gRes[0]);
-      if (cRes.length > 0) setSelectedCourse(cRes[0]);
-    } catch (e) {
-      console.error('Failed to load center data for interactive sessions', e);
-    }
-  };
-
-  const handleAwardBonus = async (traineeId: string, points: number, reason: string) => {
-    // 1. Instant optimistic state update for 0ms visual feedback
-    setTrainees(prev => prev.map(t => {
-      if (t.id === traineeId || t.code === traineeId) {
-        const cur = Number(t.totalPoints || t.points || 0);
-        const next = Math.max(0, cur + points);
-        return { ...t, points: next, totalPoints: next };
-      }
-      return t;
-    }));
-
-    try {
-      if (points > 0) {
-        audioService.playCoinSound();
-        if (points >= 10) {
-          audioService.playCelebrationCheer();
-          setCelebrationOverlay({
-            active: true,
-            title: `🎉 إسناد +${points} ⭐ بنجاح!`,
-            pointsBadge: `+${points} نقطة تميز`,
-            subtitle: reason || 'تفاعل وتميز بالحصة'
-          });
-        }
-        showToast(`تم إسناد +${points} نجمة بنجاح! ⭐`, 'success');
-      } else {
-        audioService.playBuzzerSound();
-        showToast(`تم تطبيق خصم ${points} نقطة: ${reason} ⚠️`, 'info');
-      }
-
-      await api.awardPoints(traineeId, points, reason);
-      loadCenterData();
-    } catch (e: any) {
-      showToast(e.message || 'فشل منح النقاط', 'error');
-      loadCenterData();
-    }
-  };
-
-  const handleStudentAttendanceChange = async (traineeId: string, status: 'present' | 'absent' | 'late' | 'excused', groupId?: string) => {
-    setAttendanceMap(prev => ({ ...prev, [traineeId]: status }));
-    try {
-      const today = new Date().toISOString().split('T')[0];
-      await api.saveAttendanceBatch({
-        records: [{ traineeId, status }],
-        date: today,
-        groupId: groupId || selectedGroup?.id || '',
-        branchId: activeBranchId !== 'all' ? activeBranchId : undefined
-      });
-      audioService.playChime([523, 659]);
-      const labels: Record<string, string> = {
-        present: 'حاضر 🟢',
-        absent: 'غائب 🔴',
-        late: 'متأخر 🟡',
-        excused: 'معذور 🔵'
-      };
-      showToast(`تم تسجيل المتدرب: ${labels[status]}`, 'success');
-    } catch (e) {
-      showToast('تعذر حفظ الحضور بالخادم', 'error');
-    }
-  };
-
-  const handleRunPracticalCode = () => {
-    setIsExecutingCode(true);
-    setPracticalOutput('');
-    try {
-      const logs: string[] = [];
-      const customConsole = {
-        log: (...args: any[]) => logs.push(args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ')),
-        error: (...args: any[]) => logs.push('❌ Error: ' + args.join(' ')),
-        warn: (...args: any[]) => logs.push('⚠️ Warn: ' + args.join(' '))
-      };
-      const runFn = new Function('console', practicalCode);
-      runFn(customConsole);
-      setPracticalOutput(logs.join('\n') || 'تم تنفيذ الكود بنجاح دون أخطاء.');
-      showToast('تم تشغيل واختبار الكود بنجاح!', 'success');
-    } catch (err: any) {
-      setPracticalOutput(`❌ خطأ في التنفيذ:\n${err.message}`);
-      showToast('يوجد خطأ في الكود', 'error');
-    } finally {
-      setIsExecutingCode(false);
-    }
-  };
-
-  const handleBroadcastPracticalCode = async () => {
-    try {
-      await api.createInteractiveSession({
-        title: 'تطبيق عملي مباشر: محرر الأكواد والتمارين',
-        platform: 'Other',
-        url: window.location.origin,
-        status: 'active'
-      });
-      showToast('تم بث مسألة الكود التفاعلي لجميع أجهزة الطلاب في المعمل! 💻🚀', 'success');
-    } catch (err: any) {
-      showToast(err.message || 'فشل بث الكود', 'error');
-    }
-  };
-
-  const loadQuizzes = async () => {
-    try {
-      const res = await api.getNagahQuizzes();
-      setQuizzes(Array.isArray(res) ? res : []);
-    } catch (e) {
-      setQuizzes([]);
-    }
-  };
-
-  // Event-driven & focus-based load for active sessions (without device polling)
-  useEffect(() => {
-    const handleFocus = () => {
-      loadSessions(false);
-    };
-    window.addEventListener('focus', handleFocus);
-    return () => {
-      window.removeEventListener('focus', handleFocus);
-    };
-  }, [activeSession?.id]);
-
-  const loadSessions = async (showLoading = true) => {
-    if (showLoading) setIsLoading(true);
-    try {
-      const res = await api.getInteractiveSessions();
-      setSessions(res);
-      if (Array.isArray(res) && res.length > 0) {
-        // Set active session
-        const current = activeSession ? (res.find(s => s.id === activeSession.id) || res?.[0]) : res?.[0];
-        setActiveSession(current);
-        if (current && current.responses) {
-          setResponses(current.responses);
-        }
-      } else {
-        setActiveSession(null);
-        setResponses([]);
-      }
-    } catch (err: any) {
-      if (showLoading) showToast(err.message || 'فشل جلب الجلسات التفاعلية', 'error');
-    } finally {
-      if (showLoading) setIsLoading(false);
-    }
-  };
-
-  const loadQuestionBank = async () => {
-    try {
-      const bank = await api.getQuestionBank();
-      setQuestionBank(bank);
-    } catch (e) {
-      console.error('Failed to load question bank', e);
-    }
-  };
-
-  // 🚀 Action 1: Broadcast External Session (Kahoot / Quizizz / ClassPoint / Google Forms / Live Link)
-  const handleBroadcastExternal = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    if (!externalUrl.trim()) {
-      showToast('يرجى كتابة رابط المنصة الخارجية', 'warning');
-      return;
-    }
-
-    try {
-      if (externalPlatform === 'ClassPoint' || externalGamePin) {
-        try {
-          await api.setClassPointCode(externalGamePin);
-        } catch (e) {}
-      }
-
-      // 1. Create or update session in backend
-      const newSessionRes = await api.createInteractiveSession({
-        title: externalTitle,
-        platform: externalPlatform,
-        url: externalUrl,
-        gamePin: externalGamePin,
-        quizMode,
-        status: 'active'
-      });
-
-      // 2. Broadcast external link + PIN to all active student devices in lab
-      const broadcastRes = await api.broadcastInteractiveExternal({
-        title: externalTitle,
-        platform: externalPlatform,
-        url: externalUrl,
-        gamePin: externalGamePin
-      });
-
-      showToast(`تم إطلاق وبث الجلسة الخارجية (${externalPlatform}) بنمط ${quizMode === 'individual' ? 'فردي' : 'مجموعات'} على جميع شاشات الطلاب بنجاح 🚀`, 'success');
-      loadSessions();
-      setActiveTab('leaderboard');
-    } catch (err: any) {
-      showToast(err.message || 'فشل بث الجلسة الخارجية', 'error');
-    }
-  };
-
-  // 🚀 Action 4: AI Generate Quiz
-  const handleGenerateAIQuiz = async () => {
-    if (!aiPrompt.trim()) {
-      showToast('يرجى كتابة موضوع الاختبار أو رفع ملف', 'warning');
-      return;
-    }
-
-    setIsGeneratingAI(true);
-    try {
-      const res: any = await request('/ai/extract-exam-questions', {
-        method: 'POST',
-        body: JSON.stringify({
-          textPrompt: aiPrompt,
-          targetLanguage: aiLanguage,
-          courseName: 'دورة تفاعلية متقدمة'
-        })
-      });
-
-      if (res.success && res.data) {
-        const newQuiz = {
-          id: 'quiz-' + Date.now(),
-          title: res.data.title || 'اختبار مولد آلياً',
-          subject: res.data.subject || 'عام',
-          questions: res.data.questions.map((q: any) => ({
-            ...q,
-            id: 'q-' + Math.random().toString(36).substr(2, 9)
-          }))
-        };
-        setQuizzes([newQuiz, ...quizzes]);
-        setEditingQuiz(newQuiz);
-        setIsEditingQuiz(true);
-        showToast('تم توليد الاختبار التفاعلي بنجاح بواسطة Gemini 1.5 Pro! 💎', 'success');
-      }
-    } catch (err: any) {
-      showToast(err.message || 'فشل توليد الاختبار آلياً', 'error');
-    } finally {
-      setIsGeneratingAI(false);
-    }
-  };
-
-  const handleStartNagahQuiz = async (quiz: any) => {
-    try {
-      await api.broadcastNagahQuiz(quiz);
-      showToast(`تم إطلاق تحدي النجاح الحقيقي بنمط ${quizMode === 'individual' ? 'فردي' : 'مجموعات'}! 🚀`, 'success');
-      setActiveTab('leaderboard');
-    } catch (err: any) {
-      showToast(err.message || 'فشل إطلاق الاختبار', 'error');
-    }
-  };
-
-  // 🚀 Action 2: Broadcast Question Bank Question or Quick Question
-  const handleBroadcastQuestion = async (qData: {
-    text: string;
-    options: string[];
-    correctOptionIndex: number;
-    points: number;
-    timeLimitSeconds?: number;
-  }) => {
-    try {
-      const questionPayload: Question = {
-        id: 'q-' + Date.now(),
-        text: qData.text,
-        options: qData.options,
-        correctOptionIndex: qData.correctOptionIndex,
-        points: qData.points,
-        timeLimitSeconds: qData.timeLimitSeconds || 30
-      };
-
-      let sessionId = activeSession?.id;
-      if (!sessionId) {
-        const createRes = await api.createInteractiveSession({
-          title: 'مسابقة التحدي التفاعلي بالمعمل',
-          platform: 'Question Bank',
-          status: 'active'
-        });
-        sessionId = createRes.session?.id;
-      }
-
-      await api.broadcastInteractiveQuestion({
-        sessionId,
-        question: questionPayload
-      });
-
-      // Also broadcast to Lab Kiosk screens
-      fetch('/api/lab/quick-question/broadcast', {
+      const res = await fetch('/api/lab/quick-question/reveal', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          type: qData.options?.length === 2 ? 'true_false' : 'choices',
-          questionText: qData.text,
-          correctAnswer: qData.options?.[qData.correctOptionIndex] || 'A',
-          options: qData.options.map((opt, i) => ({
-            key: ['A', 'B', 'C', 'D'][i] || String(i),
-            label: opt,
-            color: ['bg-rose-600 hover:bg-rose-500', 'bg-blue-600 hover:bg-blue-500', 'bg-amber-500 hover:bg-amber-400', 'bg-emerald-600 hover:bg-emerald-500'][i % 4]
-          }))
+          correctAnswer: choiceKey,
+          pointsToAward: pointsReward
         })
-      }).catch(() => {});
+      });
+      const data = await res.json();
+      if (data.success) {
+        setActiveQuickQuestion(data.question);
+        audioService.playFanfare();
 
-      showToast('تم بث السؤال التفاعلي على شاشات أجهزة الطلاب فورياً! 🚀', 'success');
-      loadSessions(false);
-      setActiveTab('leaderboard');
-    } catch (err: any) {
-      showToast(err.message || 'فشل بث السؤال', 'error');
+        setCelebrationOverlay({
+          active: true,
+          title: `🎉 الإجابة الصحيحة هي (${choiceKey})! تم تتويج ${data.correctCount} فائزين!`,
+          pointsBadge: `+${pointsReward} ⭐`,
+          subtitle: `تم إضافة النجوم فورياً في حسابات الطلاب المتفوقين`
+        });
+
+        showToast(`✨ تم كشف الإجابة (${choiceKey}) ومنح +${pointsReward} نجوم لـ ${data.correctCount} طالب! 🏆`, 'success');
+        loadData(); // reload points
+      }
+    } catch (e) {
+      showToast('فشل كشف الإجابة', 'error');
     }
   };
 
-  // Handle Quick Question Broadcast Form
-  const handleQuickQuestionSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!quickQuestionText.trim()) {
-      showToast('يرجى كتابة نص السؤال', 'warning');
-      return;
-    }
-    handleBroadcastQuestion({
-      text: quickQuestionText,
-      options: quickOptions,
-      correctOptionIndex: quickCorrectIndex,
-      points: quickPoints,
-      timeLimitSeconds: quickTimeLimit
-    });
-  };
-
-  const handleClearQuestionBroadcast = async () => {
+  // 5. Clear Question
+  const handleClearQuestion = async () => {
     try {
-      await api.clearInteractiveQuestion();
-      fetch('/api/lab/quick-question/clear', { method: 'POST' }).catch(() => {});
-      showToast('تم إنهاء وإغلاق عرض الأسئلة على جميع شاشات الطلاب بنجاح 🛑', 'success');
-    } catch (err: any) {
-      showToast('فشل إنهاء بث الأسئلة', 'error');
+      await fetch('/api/lab/quick-question/clear', { method: 'POST' });
+      setActiveQuickQuestion(null);
+      setCustomQuestionInput('');
+      showToast('تم إنهاء السؤال وتجهيز المعمل للسؤال التالي', 'info');
+    } catch (e) {}
+  };
+
+  // Reset Lab Session
+  const handleResetLab = async () => {
+    try {
+      localStorage.removeItem(`nagah_lab_attendance_${effectiveGroup?.id || 'default'}`);
+      setAttendanceMap({});
+      await handleClearExternalBroadcast();
+      await handleClearQuestion();
+      showToast('تم تفريغ المعمل وإعادة الضبط بنجاح لبدء الجروب الجديد 🔄✨', 'success');
+    } catch (e) {
+      showToast('فشل إعادة ضبط المعمل', 'error');
     }
   };
 
-  // Filtered Question Bank items
-  const subjectsList = Array.from(new Set(questionBank.map(q => q.subject || 'عام')));
-  const filteredBank = questionBank.filter(q => {
-    const matchesSubject = selectedSubject === 'all' || q.subject === selectedSubject;
-    const matchesQuery = !searchBankQuery || q.text?.toLowerCase().includes(searchBankQuery.toLowerCase()) || q.subject?.toLowerCase().includes(searchBankQuery.toLowerCase());
-    return matchesSubject && matchesQuery;
-  });
+  // Answer tallies calculation for projector bar charts
+  const answersList = useMemo(() => {
+    return Object.values(activeQuickQuestion?.answers || {}) as any[];
+  }, [activeQuickQuestion]);
 
-  // Calculate live leaderboard ranking
-  const sortedResponses = [...responses].sort((a, b) => {
-    if (a.isCorrect && !b.isCorrect) return -1;
-    if (!a.isCorrect && b.isCorrect) return 1;
-    if (a.isCorrect && b.isCorrect) {
-      return a.responseTimeSeconds - b.responseTimeSeconds;
+  const tallyCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    if (activeQuickQuestion?.options) {
+      activeQuickQuestion.options.forEach((opt: any) => {
+        counts[opt.key] = 0;
+      });
     }
-    return 0;
-  });
+    answersList.forEach((ans: any) => {
+      const k = ans.answer;
+      counts[k] = (counts[k] || 0) + 1;
+    });
+    return counts;
+  }, [activeQuickQuestion, answersList]);
+
+  const branchName = useMemo(() => {
+    if (!activeBranchId || activeBranchId === 'all') return 'جميع الفروع';
+    return branches.find(b => b.id === activeBranchId)?.name || 'الفرع المحدد';
+  }, [branches, activeBranchId]);
 
   return (
-    <div className="space-y-6">
-      {/* Top Header Banner */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-slate-900 border border-slate-800 p-5 rounded-3xl shadow-2xl relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-64 h-64 bg-amber-500/10 blur-3xl rounded-full pointer-events-none" />
-        <div className="absolute bottom-0 left-0 w-64 h-64 bg-cyan-500/10 blur-3xl rounded-full pointer-events-none" />
-
-        <div className="relative z-10">
-          <div className="flex items-center gap-3 mb-1">
-            <span className="p-2.5 rounded-2xl bg-amber-500/20 text-amber-400 border border-amber-500/40">
-              <Sparkles className="w-6 h-6" />
-            </span>
-            <div>
-              <h2 className="text-xl font-black text-slate-100">
-                الجلسات التفاعلية والمسابقات الحية (Live Interactive Lab)
-              </h2>
-              <p className="text-xs text-slate-400 mt-0.5">
-                منصة التحكم الحية ببث مسابقات Kahoot و Quizizz وبنك أسئلة المركز إلى شاشات معامل الطلاب مباشرة
-              </p>
+    <div className="space-y-6 animate-fadeIn pb-16 font-sans dir-rtl text-right" dir="rtl">
+      
+      {/* 1. TOP HEADER & MAIN COCKPIT CONTROLS */}
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-5 sm:p-6 rounded-3xl shadow-sm dark:shadow-2xl relative overflow-hidden flex flex-col lg:flex-row lg:items-center justify-between gap-5">
+        
+        {/* Title & Group Details */}
+        <div className="flex items-center gap-4">
+          <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center font-black text-2xl shadow-lg shadow-blue-500/20 shrink-0">
+            💻
+          </div>
+          <div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="px-3 py-1 bg-emerald-50 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 text-xs font-black rounded-full border border-emerald-200 dark:border-emerald-500/30 flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                المعمل التفاعلي جاهز
+              </span>
+              <span className="px-3 py-1 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-bold rounded-full border border-slate-200 dark:border-slate-700">
+                {branchName} 📍
+              </span>
             </div>
+            <h1 className="text-2xl font-black text-slate-900 dark:text-white mt-1">
+              غرفة إدارة الحصة والمعمل التفاعلي
+            </h1>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 font-medium">
+              عرض البروجكتور التفاعلي، بث كلاس بوينت وكاهوت، كشف الإجابات الذكي، ورصد حضور ونقاط الطلاب
+            </p>
           </div>
         </div>
 
-        {/* Live System Status Actions */}
-        <div className="flex items-center gap-3 relative z-10 flex-wrap">
+        {/* Top Actions & Tools */}
+        <div className="flex items-center gap-2.5 flex-wrap">
+          
+          {/* Smart Whiteboard Button */}
+          <button
+            onClick={() => setIsWhiteboardOpen(true)}
+            className="px-4 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-black text-xs sm:text-sm rounded-2xl flex items-center gap-2 shadow-lg shadow-indigo-600/25 transition-all active:scale-95 cursor-pointer border border-indigo-400/50"
+            title="فتح السبورة الذكية للشرح التفاعلي بالرسم والأشكال"
+          >
+            <Sparkles className="w-4 h-4 text-white" />
+            <span className="text-white font-black">السبورة الذكية 🎨</span>
+          </button>
+
+          {/* AI All-In-One Lesson Pack Button */}
           <button
             onClick={() => setIsAllInOneModalOpen(true)}
-            className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-2xl bg-gradient-to-r from-purple-600 via-indigo-600 to-purple-700 hover:from-purple-500 hover:to-indigo-600 text-white transition-all text-xs font-black shadow-lg shadow-purple-600/30 border border-purple-400/40"
-            title="توليد خطة الدرس والعرض التقديمي ومسابقة الكاهوت والواجب الصوتي بنقرة واحدة"
+            className="px-4 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-700 hover:from-purple-700 hover:to-indigo-800 text-white font-black text-xs sm:text-sm rounded-2xl flex items-center gap-2 shadow-lg shadow-purple-600/25 transition-all active:scale-95 cursor-pointer border border-purple-400/50"
+            title="توليد خطة الدرس ومسابقة الكاهوت بنقرة واحدة بالذكاء الاصطناعي"
           >
-            <Sparkles className="w-4 h-4 text-amber-300" />
-            <span>حزمة الدرس بنقرة واحدة (AI) 🪄</span>
+            <Sparkles className="w-4 h-4 text-purple-200" />
+            <span className="text-white font-black">حزمة الدرس (AI) 🪄</span>
           </button>
 
+          {/* Hall Clapping Sound */}
           <button
-            onClick={handleClearQuestionBroadcast}
-            className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-2xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 transition-colors border border-rose-500/40 text-xs font-bold shadow-lg"
-            title="إغلاق وإنهاء الأسئلة التفاعلية النشطة على الأجهزة"
+            onClick={() => {
+              audioService.playClapping(3.5);
+              showToast('👏 تم تشغيل تصفيق حار وتشجيع جماعي بالقاعة!', 'success');
+            }}
+            className="px-4 py-2.5 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/60 dark:hover:bg-emerald-900/60 text-emerald-900 dark:text-emerald-200 border-2 border-emerald-400 dark:border-emerald-600 rounded-2xl font-black text-xs sm:text-sm flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer shadow-sm"
+            title="تشغيل تصفيق حار وتشجيع للطلاب"
           >
-            <XCircle className="w-4 h-4" />
-            <span>إنهاء بث السؤال</span>
+            <span>👏 تصفيق وحماس</span>
           </button>
 
+          {/* Reset Session Button */}
           <button
-            onClick={() => loadSessions()}
-            className="p-2.5 rounded-2xl bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors border border-slate-700"
+            onClick={handleResetLab}
+            className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-900 dark:text-slate-100 border border-slate-300 dark:border-slate-600 rounded-2xl font-bold text-xs sm:text-sm flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer shadow-sm"
+            title="تفريغ المعمل وتجهيزه لاستقبال الجروب القادم"
+          >
+            <RotateCcw className="w-4 h-4 text-slate-700 dark:text-slate-300" />
+            <span>تبديل الجروب 🔄</span>
+          </button>
+
+          {/* Refresh Data */}
+          <button
+            onClick={loadData}
+            className="p-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-900 dark:text-slate-100 border border-slate-300 dark:border-slate-600 rounded-2xl transition-all cursor-pointer shadow-sm"
             title="تحديث البيانات"
           >
-            <RefreshCw className="w-4 h-4" />
+            <RefreshCw className="w-4 h-4 text-slate-700 dark:text-slate-300" />
           </button>
         </div>
       </div>
 
-      {/* Main Mode Navigation Tabs */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 bg-slate-900/80 p-1.5 rounded-2xl border border-slate-800 backdrop-blur-md">
-        <button
-          onClick={() => setActiveTab('cockpit')}
-          className={`py-3 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all ${
-            activeTab === 'cockpit'
-              ? 'bg-gradient-to-r from-emerald-400 via-teal-500 to-cyan-500 text-slate-950 shadow-lg shadow-emerald-500/20 font-black scale-[1.03] ring-2 ring-emerald-400/50'
-              : 'text-slate-300 hover:bg-slate-800 hover:text-white'
-          }`}
-        >
-          <LayoutDashboard className="w-4 h-4 shrink-0 text-slate-950" />
-          <span className="truncate">غرفة إدارة الحصة 🎛️</span>
-        </button>
+      {/* 2. AUDIO ROUTING & PROJECTOR SOUND ENGINE (توجيه صوت المايك للشاشة والبروجيكتور) */}
+      <ProjectorAudioControlBar />
 
-        <button
-          onClick={() => setActiveTab('external')}
-          className={`py-3 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all ${
-            activeTab === 'external'
-              ? 'bg-purple-500 text-white shadow-lg font-black scale-[1.02]'
-              : 'text-slate-300 hover:bg-slate-800 hover:text-white'
-          }`}
-        >
-          <Globe className="w-4 h-4 shrink-0" />
-          <span className="truncate">كاهوت / كلاس بوينت</span>
-        </button>
+      {/* 3. GROUP SELECTOR & MAIN TABS BAR */}
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3.5 sm:p-4 rounded-2xl shadow-sm flex flex-col xl:flex-row items-center justify-between gap-4">
+        
+        {/* Main Tabs Navigation */}
+        <div className="flex items-center gap-2 w-full xl:w-auto flex-wrap">
+          <button
+            onClick={() => setActiveTab('activities')}
+            className={`flex-1 sm:flex-initial px-4 sm:px-5 py-2.5 rounded-xl font-black text-xs sm:text-sm flex items-center justify-center gap-2 transition-all cursor-pointer ${
+              activeTab === 'activities'
+                ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-500/25 border border-blue-500'
+                : 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700'
+            }`}
+          >
+            <Tv className={`w-4 h-4 ${activeTab === 'activities' ? 'text-white' : 'text-blue-600 dark:text-blue-400'}`} />
+            <span className={activeTab === 'activities' ? 'text-white font-black' : ''}>🎮 مسابقات الحصة والبروجكتور</span>
+          </button>
 
-        <button
-          onClick={() => setActiveTab('quick')}
-          className={`py-3 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all ${
-            activeTab === 'quick'
-              ? 'bg-emerald-500 text-slate-950 shadow-lg font-black scale-[1.02]'
-              : 'text-slate-300 hover:bg-slate-800 hover:text-white'
-          }`}
-        >
-          <Zap className="w-4 h-4 shrink-0" />
-          <span className="truncate">السؤال الشفهي اللحظي</span>
-        </button>
+          <button
+            onClick={() => setActiveTab('roster')}
+            className={`flex-1 sm:flex-initial px-4 sm:px-5 py-2.5 rounded-xl font-black text-xs sm:text-sm flex items-center justify-center gap-2 transition-all cursor-pointer ${
+              activeTab === 'roster'
+                ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-lg shadow-indigo-500/25 border border-indigo-500'
+                : 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700'
+            }`}
+          >
+            <Users className={`w-4 h-4 ${activeTab === 'roster' ? 'text-white' : 'text-indigo-600 dark:text-indigo-400'}`} />
+            <span className={activeTab === 'roster' ? 'text-white font-black' : ''}>👥 كشف الحضور ورصد النجوم ({presentCount})</span>
+          </button>
 
-        <button
-          onClick={() => setActiveTab('leaderboard')}
-          className={`py-3 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all ${
-            activeTab === 'leaderboard'
-              ? 'bg-blue-500 text-white shadow-lg font-black scale-[1.02]'
-              : 'text-slate-300 hover:bg-slate-800 hover:text-white'
-          }`}
-        >
-          <Trophy className="w-4 h-4 shrink-0" />
-          <span className="truncate">المتصدرين والنجوم</span>
-        </button>
+          <button
+            onClick={() => setActiveTab('recap')}
+            className={`flex-1 sm:flex-initial px-4 sm:px-5 py-2.5 rounded-xl font-black text-xs sm:text-sm flex items-center justify-center gap-2 transition-all cursor-pointer ${
+              activeTab === 'recap'
+                ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950 shadow-lg shadow-amber-500/25 border border-amber-400 font-black'
+                : 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700'
+            }`}
+          >
+            <BookOpen className={`w-4 h-4 ${activeTab === 'recap' ? 'text-slate-950 font-bold' : 'text-amber-500'}`} />
+            <span className={activeTab === 'recap' ? 'text-slate-950 font-black' : ''}>📚 ملخص المحاضرة وتكليفات الواجب</span>
+          </button>
+        </div>
 
-        <button
-          onClick={() => setActiveTab('language_lab')}
-          className={`py-3 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all ${
-            activeTab === 'language_lab'
-              ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-slate-950 shadow-lg font-black scale-[1.02]'
-              : 'text-slate-300 hover:bg-slate-800 hover:text-white'
-          }`}
-        >
-          <Languages className="w-4 h-4 shrink-0" />
-          <span className="truncate">معمل اللغات 🗣️</span>
-        </button>
+        {/* Group Selector & Quick Mass Points */}
+        <div className="flex items-center gap-3 w-full xl:w-auto justify-end flex-wrap">
+          <div className="flex items-center gap-2">
+            <label className="text-xs font-bold text-slate-700 dark:text-slate-300 shrink-0">
+              المجموعة:
+            </label>
+            <select
+              value={selectedGroupId}
+              onChange={(e) => setSelectedGroupId(e.target.value)}
+              className="bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white text-xs font-black rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm"
+            >
+              <option value="auto">تلقائي (أول مجموعة بالفرع)</option>
+              <option value="all_branch">جميع طلاب الفرع ({trainees.filter(t => !activeBranchId || activeBranchId === 'all' || t.branchId === activeBranchId).length} طالب مسجل)</option>
+              {branchGroups.map(g => {
+                const count = trainees.filter(t => t.groupId === g.id || (t as any).currentGroupId === g.id || (Array.isArray(g.traineeIds) && g.traineeIds.includes(t.id))).length;
+                const crsName = courses.find(c => c.id === g.courseId)?.title || courses.find(c => c.id === g.courseId)?.name || '';
+                return (
+                  <option key={g.id} value={g.id}>
+                    {g.name} {crsName ? `(${crsName})` : ''} - [{count} طلاب]
+                  </option>
+                );
+              })}
+            </select>
+          </div>
 
-        <button
-          onClick={() => setActiveTab('lesson_workspace')}
-          className={`py-3 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all ${
-            activeTab === 'lesson_workspace'
-              ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 shadow-lg font-black scale-[1.02]'
-              : 'text-slate-300 hover:bg-slate-800 hover:text-white'
-          }`}
-        >
-          <BookOpen className="w-4 h-4 shrink-0" />
-          <span className="truncate">شرح وتحضير الحصة</span>
-        </button>
+          <button
+            onClick={() => handleMassAwardPresent(5)}
+            className="px-3.5 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-black text-xs rounded-xl flex items-center gap-1.5 shadow-md shadow-emerald-600/20 active:scale-95 transition-all cursor-pointer border border-emerald-400"
+            title="منح 5 نجوم لجميع الطلاب الحاضرين حالياً بالقاعة بنقرة واحدة"
+          >
+            <Star className="w-3.5 h-3.5 fill-white text-white" />
+            <span className="text-white font-black">+5 نجوم للحاضرين ⭐</span>
+          </button>
+        </div>
       </div>
 
-      {/* ========================================================================= */}
-      {/* TAB 0: UNIFIED CLASSROOM COMMAND CENTER (غرفة إدارة الحصة الموحدة) */}
-      {/* ========================================================================= */}
-      {activeTab === 'cockpit' && (() => {
-        const activeBranchObj = branches.find(b => b.id === activeBranchId);
-        const branchName = activeBranchObj ? activeBranchObj.name : (activeBranchId === 'all' ? 'جميع الفروع' : 'فرع المعمل الرئيسي');
-        const branchTrainees = (activeBranchId && activeBranchId !== 'all')
-          ? trainees.filter(t => t.branchId === activeBranchId)
-          : trainees;
-
-        const branchGroups = (activeBranchId && activeBranchId !== 'all')
-          ? groups.filter(g => !g.branchId || g.branchId === activeBranchId)
-          : groups;
-
-        // Auto-detect active group based on current day and time schedule
-        const now = new Date();
-        const daysMap = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
-        const todayName = daysMap[now.getDay()];
-        const currentMinutes = now.getHours() * 60 + now.getMinutes();
-
-        const autoDetectedGroup = branchGroups.find(g => {
-          const gDays = Array.isArray(g.days) ? g.days : (g.days ? String(g.days).split(/[,،]/) : []);
-          const isDay = gDays.some((d: string) => d.includes(todayName) || todayName.includes(d.trim()));
-          if (isDay && g.startTime && g.endTime) {
-            const [sh, sm] = g.startTime.split(':').map(Number);
-            const [eh, em] = g.endTime.split(':').map(Number);
-            const sNum = (sh || 0) * 60 + (sm || 0);
-            const eNum = (eh || 0) * 60 + (em || 0);
-            return currentMinutes >= sNum - 30 && currentMinutes <= eNum + 30;
-          }
-          return false;
-        }) || branchGroups[0] || groups[0] || null;
-
-        const effectiveGroup = (selectedCockpitGroupId === 'auto' || !selectedCockpitGroupId)
-          ? autoDetectedGroup
-          : (groups.find(g => g.id === selectedCockpitGroupId) || autoDetectedGroup);
-
-        // Group students
-        const currentGroupTrainees = effectiveGroup
-          ? branchTrainees.filter(t => t.groupId === effectiveGroup.id)
-          : branchTrainees;
-
-        // Determine displayed students based on filter mode
-        let displayedTrainees: Trainee[] = [];
-        if (cockpitFilterMode === 'all_branch') {
-          displayedTrainees = branchTrainees;
-        } else if (cockpitFilterMode === 'all_group') {
-          displayedTrainees = currentGroupTrainees;
-        } else {
-          // 'present': filter for students marked present/late, or all group students if no attendance marked yet
-          const presentOnly = currentGroupTrainees.filter(t => {
-            const st = attendanceMap[t.id];
-            return st === 'present' || st === 'late';
-          });
-          displayedTrainees = presentOnly.length > 0 ? presentOnly : currentGroupTrainees;
-        }
-
-        // Leaderboard for current active group
-        const sortedGroupTrainees = [...currentGroupTrainees].sort((a, b) => (b.totalPoints || b.points || 0) - (a.totalPoints || a.points || 0));
-        const topStars = sortedGroupTrainees.slice(0, 3);
-
-        const presentCount = currentGroupTrainees.filter(t => attendanceMap[t.id] === 'present' || attendanceMap[t.id] === 'late').length;
-
-        return (
-          <div className="space-y-6 animate-fadeIn dir-rtl">
-            {/* Top Branch & Trainer Sync Banner */}
-            <div className="bg-gradient-to-br from-slate-900 via-slate-900 to-emerald-950/60 border border-emerald-500/30 p-5 rounded-3xl shadow-2xl relative overflow-hidden">
-              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 relative z-10">
-                <div className="flex items-center gap-3">
-                  <div className="p-3 bg-emerald-500/20 text-emerald-400 rounded-2xl border border-emerald-500/40">
-                    <Laptop className="w-8 h-8 animate-pulse" />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="px-3 py-1 bg-emerald-500/20 text-emerald-300 text-xs font-black rounded-full border border-emerald-500/40 flex items-center gap-1">
-                        <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-                        حصة نشطة ومباشرة بالمعمل
-                      </span>
-                      <span className="px-3 py-1 bg-slate-800 text-slate-300 text-xs font-bold rounded-full border border-slate-700">
-                        {branchName} 📍
-                      </span>
-                    </div>
-                    <h2 className="text-2xl font-black text-white mt-1">
-                      غرفة إدارة الحصة الموحدة (Live Session Cockpit)
-                    </h2>
-                    <p className="text-xs text-slate-300 mt-0.5">
-                      لوحة تحكم حية مرتبطة بالمجموعة الحالية فقط لتسجيل الحضور، منح النجوم، وبث التفاعل اللحظي
-                    </p>
-                  </div>
+      {/* 3. TAB 1: ACTIVITIES & PROJECTOR PRESENTATION */}
+      {activeTab === 'activities' && (
+        <div className="space-y-6 animate-fadeIn">
+          
+          {/* SECTION A: CLASSPOINT, KAHOOT & QUIZIZZ BROADCAST BAR */}
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 sm:p-6 shadow-sm dark:shadow-xl space-y-4">
+            <div className="flex items-center justify-between flex-wrap gap-2 border-b border-slate-200 dark:border-slate-800 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 bg-purple-50 dark:bg-purple-500/20 text-purple-700 dark:text-purple-400 rounded-xl border border-purple-200 dark:border-purple-500/30">
+                  <Gamepad2 className="w-5 h-5" />
                 </div>
+                <div>
+                  <h3 className="text-base font-black text-slate-900 dark:text-white flex items-center gap-2">
+                    بث مسابقات كلاس بوينت / كاهوت / كويزيز (ClassPoint & Kahoot)
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
+                    أدخل كود الفصل أو اللعبة واضغط بث، وسيفتح عند الطلاب بلمسة واحدة مع نسخ أسمائهم تلقائياً
+                  </p>
+                </div>
+              </div>
 
-                {/* Quick Action Toolbar */}
-                <div className="flex items-center gap-2 flex-wrap">
+              {activeBroadcast?.gamePin && (
+                <div className="flex items-center gap-2">
+                  <span className="px-3 py-1 bg-emerald-50 dark:bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-500/30 rounded-full text-xs font-black flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
+                    البث نشط للطلاب ({activeBroadcast.platform}: {activeBroadcast.gamePin})
+                  </span>
+                  <button
+                    onClick={handleClearExternalBroadcast}
+                    className="px-3 py-1 bg-rose-50 hover:bg-rose-100 dark:bg-rose-500/20 dark:hover:bg-rose-500/30 text-rose-700 dark:text-rose-300 border border-rose-300 dark:border-rose-500/30 rounded-xl text-xs font-bold"
+                  >
+                    إنهاء البث
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Platform & PIN Controls */}
+            <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
+              
+              {/* Select Platform */}
+              <div className="sm:col-span-4">
+                <label className="text-xs font-bold text-slate-600 dark:text-slate-400 block mb-1.5">
+                  المنصة المستخدمة:
+                </label>
+                <div className="grid grid-cols-3 gap-1.5">
                   <button
                     type="button"
-                    onClick={() => toggleTrainerLabSession(activeBranchId, 'المحاضر المشرف')}
-                    className={`px-4 py-2.5 rounded-2xl font-black text-xs flex items-center gap-2 shadow-lg transition-all active:scale-95 ${
-                      isTrainerLabActive
-                        ? 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 border border-emerald-300'
-                        : 'bg-rose-600 hover:bg-rose-500 text-white border border-rose-400'
+                    onClick={() => {
+                      setExternalPlatform('ClassPoint');
+                      setExternalUrl('https://www.classpoint.app');
+                    }}
+                    className={`py-2 px-2 text-xs font-black rounded-xl border transition-all cursor-pointer flex items-center justify-center gap-1 shadow-sm ${
+                      externalPlatform === 'ClassPoint'
+                        ? '!bg-purple-600 !text-white !border-purple-500 shadow-md ring-2 ring-purple-400/40'
+                        : '!bg-slate-100 hover:!bg-slate-200 dark:!bg-slate-800 dark:hover:!bg-slate-700 !text-slate-800 dark:!text-slate-100 !border-slate-300 dark:!border-slate-700'
                     }`}
-                    title="التحكم في فتح المعمل والسماح بدخول الطلاب وتسجيل الحضور بالفرع"
                   >
-                    <span>{isTrainerLabActive ? '🟢 المعمل مفتوح (انقر للقفل)' : '🔒 المعمل مغلق (انقر للفتح)'}</span>
+                    <span>كلاس بوينت</span>
+                    <span>✨</span>
                   </button>
 
                   <button
                     type="button"
                     onClick={() => {
-                      audioService.playClapping(3.5);
-                      showToast('👏 تم بث تصفيق حار لجميع شاشات وأجهزة الطلاب الحاضرين!', 'success');
+                      setExternalPlatform('Kahoot');
+                      setExternalUrl('https://kahoot.it');
                     }}
-                    className="px-3.5 py-2.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 rounded-2xl font-black text-xs flex items-center gap-1.5 shadow transition-all active:scale-95"
-                    title="تشغيل تصفيق حار وتشجيع جماعي للطلاب"
+                    className={`py-2 px-2 text-xs font-black rounded-xl border transition-all cursor-pointer flex items-center justify-center gap-1 shadow-sm ${
+                      externalPlatform === 'Kahoot'
+                        ? '!bg-purple-600 !text-white !border-purple-500 shadow-md ring-2 ring-purple-400/40'
+                        : '!bg-slate-100 hover:!bg-slate-200 dark:!bg-slate-800 dark:hover:!bg-slate-700 !text-slate-800 dark:!text-slate-100 !border-slate-300 dark:!border-slate-700'
+                    }`}
                   >
-                    <span>👏 تصفيق وتشجيع</span>
+                    <span>كاهوت</span>
+                    <span>🎮</span>
                   </button>
 
                   <button
                     type="button"
                     onClick={() => {
-                      audioService.playFanfare();
-                      setCelebrationOverlay({
-                        active: true,
-                        title: `🎉 تحية وتتويج مجموعة ${effectiveGroup?.name || ''}!`,
-                        pointsBadge: '🌟 تميز وإبداع',
-                        subtitle: 'أداء استثنائي بالحصة التدريبية'
-                      });
+                      setExternalPlatform('Quizizz');
+                      setExternalUrl('https://quizizz.com/join');
                     }}
-                    className="px-3.5 py-2.5 bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 border border-purple-500/40 rounded-2xl font-black text-xs flex items-center gap-1.5 shadow transition-all active:scale-95"
-                    title="إطلاق احتفال بالونات وبوق الفرحة"
+                    className={`py-2 px-2 text-xs font-black rounded-xl border transition-all cursor-pointer flex items-center justify-center gap-1 shadow-sm ${
+                      externalPlatform === 'Quizizz'
+                        ? '!bg-purple-600 !text-white !border-purple-500 shadow-md ring-2 ring-purple-400/40'
+                        : '!bg-slate-100 hover:!bg-slate-200 dark:!bg-slate-800 dark:hover:!bg-slate-700 !text-slate-800 dark:!text-slate-100 !border-slate-300 dark:!border-slate-700'
+                    }`}
                   >
-                    <span>🎈 بالونات وفرحة</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      try {
-                        await api.sessionCleanup();
-                        localStorage.removeItem(`nagah_locked_attendees_${activeBranchId}`);
-                        localStorage.removeItem('nagah_active_trainer_lab_sessions');
-                        showToast('تم تفريغ المعمل بنجاح وتخريج جميع أجهزة الطلاب للجروب الجديد 🔄✨', 'success');
-                        window.dispatchEvent(new Event('storage'));
-                        setRefreshKey(k => k + 1);
-                      } catch (e) {
-                        showToast('فشل تفريغ المعمل', 'error');
-                      }
-                    }}
-                    className="px-3.5 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-2xl font-bold text-xs flex items-center gap-1.5 shadow transition-all active:scale-95 border border-slate-700"
-                    title="تفريغ أجهزة المعمل وخروج الطلاب الحاليين لدخول جروب جديد"
-                  >
-                    <span>تفريغ المعمل 🔄</span>
-                  </button>
-
-                  <button
-                    onClick={() => setIsWhiteboardOpen(true)}
-                    className="px-3.5 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 rounded-2xl font-black text-xs flex items-center gap-1.5 shadow-lg transition-all active:scale-95"
-                  >
-                    <Sparkles className="w-4 h-4" />
-                    <span>السبورة الذكية 🎨</span>
-                  </button>
-
-                  <button
-                    onClick={() => setIsCeremonyOpen(true)}
-                    className="px-4 py-2.5 bg-gradient-to-r from-rose-500 to-pink-600 hover:from-rose-600 hover:to-pink-700 text-white rounded-2xl font-black text-xs flex items-center gap-1.5 shadow-lg shadow-rose-500/20 transition-all active:scale-95"
-                  >
-                    <PartyPopper className="w-4 h-4 animate-bounce" />
-                    <span>حفل ختام الحصة 🎉</span>
+                    <span>كويزيز</span>
+                    <span>⚡</span>
                   </button>
                 </div>
               </div>
 
-              {/* Group & Active Session Meta Controls Bar */}
-              <div className="mt-4 pt-4 border-t border-slate-800 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
-                {/* Active Group Selector */}
-                <div className="bg-slate-950/80 p-2.5 rounded-2xl border border-amber-500/30 flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-1.5 text-amber-400 font-bold shrink-0">
-                    <Users className="w-4 h-4" />
-                    <span>المجموعة النشطة:</span>
+              {/* Game / Class PIN */}
+              <div className="sm:col-span-4">
+                <label className="text-xs font-black text-slate-700 dark:text-slate-300 block mb-1.5 flex items-center justify-between">
+                  <span>كود الفصل أو اللعبة (PIN / Code):</span>
+                  <span className="text-[10px] text-slate-500">يظهر فوراً للطالب</span>
+                </label>
+                <input
+                  type="text"
+                  placeholder="أدخل كود المسابقة هنا..."
+                  value={externalPin}
+                  onChange={(e) => setExternalPin(e.target.value)}
+                  className="w-full bg-white dark:bg-slate-950 border-2 border-purple-300 dark:border-purple-500/40 hover:border-purple-400 focus:border-purple-600 text-purple-700 dark:text-purple-300 font-mono text-base font-black text-center rounded-xl px-3 py-1.5 focus:outline-none tracking-widest shadow-inner"
+                />
+              </div>
+
+              {/* Action Button */}
+              <div className="sm:col-span-4">
+                <button
+                  onClick={handleBroadcastExternal}
+                  disabled={isBroadcastingExternal || !externalPin.trim()}
+                  className="w-full bg-purple-600 hover:bg-purple-700 text-white font-black py-2.5 px-4 rounded-xl shadow-md shadow-purple-600/20 flex items-center justify-center gap-2 text-xs transition-all active:scale-95 disabled:opacity-50 cursor-pointer border border-purple-500"
+                >
+                  <Play className="w-4 h-4 fill-white" />
+                  <span>{isBroadcastingExternal ? 'جاري البث...' : `🚀 بث كود ${externalPlatform} للطلاب الآن`}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* SECTION B: LIVE PROJECTOR QUESTION COCKPIT (عرض البروجكتور التفاعلي الكامل) */}
+          <div className="bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-700 rounded-3xl p-6 sm:p-8 shadow-sm dark:shadow-2xl space-y-6 relative overflow-hidden">
+            
+            {/* Projector Header Badge */}
+            <div className="flex items-center justify-between flex-wrap gap-3 border-b border-slate-200 dark:border-slate-800 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="p-3 bg-blue-50 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 rounded-2xl border border-blue-200 dark:border-blue-500/30">
+                  <Tv className="w-7 h-7" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="px-2.5 py-0.5 bg-blue-50 dark:bg-blue-500/20 text-blue-700 dark:text-blue-300 text-[11px] font-black rounded-lg border border-blue-200 dark:border-blue-500/30">
+                      شاشة العرض المباشرة (البروجكتور) 📽️
+                    </span>
+                    {activeQuickQuestion && (
+                      <span className="px-2.5 py-0.5 bg-emerald-50 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 text-[11px] font-black rounded-lg border border-emerald-200 dark:border-emerald-500/30 flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
+                        {activeQuickQuestion.closed ? '🔒 التصويت مغلق' : '🟢 التصويت مفتوح'}
+                      </span>
+                    )}
                   </div>
+                  <h2 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white mt-1">
+                    تحدي الحصة وسؤال التصويت اللحظي
+                  </h2>
+                </div>
+              </div>
+
+              {/* Question Rewards & Quick Launchers */}
+              <div className="flex items-center gap-2 flex-wrap">
+                <div className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-950 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-800">
+                  <span className="text-xs text-slate-600 dark:text-slate-400 font-bold">جائزة الإجابة:</span>
                   <select
-                    value={selectedCockpitGroupId}
-                    onChange={(e) => setSelectedCockpitGroupId(e.target.value)}
-                    className="bg-slate-900 border border-slate-700 rounded-xl px-2 py-1 text-white font-extrabold text-xs focus:outline-none focus:border-amber-400 max-w-[150px] truncate"
+                    value={pointsReward}
+                    onChange={(e) => setPointsReward(Number(e.target.value))}
+                    className="bg-transparent text-blue-600 dark:text-blue-400 text-xs font-black focus:outline-none cursor-pointer"
                   >
-                    <option value="auto">⚡ {autoDetectedGroup ? `تلقائي (${autoDetectedGroup.name})` : 'تلقائي حسب الجدول'}</option>
-                    {branchGroups.map(g => (
-                      <option key={g.id} value={g.id}>{g.name}</option>
-                    ))}
+                    <option value={3}>+3 نجوم ⭐</option>
+                    <option value={5}>+5 نجوم 🌟</option>
+                    <option value={10}>+10 نجوم 🏆</option>
                   </select>
                 </div>
 
-                <div className="bg-slate-950/70 p-2.5 rounded-2xl border border-slate-800 flex items-center justify-between">
-                  <span className="text-slate-400 font-bold">المدرب المشرف:</span>
-                  <span className="font-extrabold text-white truncate">{selectedTrainer?.fullName || 'المدرب الحالي'}</span>
-                </div>
-
-                <div className="bg-slate-950/70 p-2.5 rounded-2xl border border-slate-800 flex items-center justify-between">
-                  <span className="text-slate-400 font-bold">حالة المزامنة والربط:</span>
-                  <span className="font-extrabold text-emerald-400 flex items-center gap-1">
-                    <ShieldCheck className="w-3.5 h-3.5" />
-                    لحظي مباشر (0ms)
-                  </span>
-                </div>
-
-                <div className="bg-slate-950/70 p-2.5 rounded-2xl border border-slate-800 flex items-center justify-between">
-                  <span className="text-slate-400 font-bold">طلاب الحصة الحالية:</span>
-                  <span className="font-extrabold text-cyan-400 text-sm">
-                    {presentCount > 0 ? `${presentCount} حاضر من ${currentGroupTrainees.length}` : `${currentGroupTrainees.length} طالب`}
-                  </span>
-                </div>
+                {activeQuickQuestion && (
+                  <button
+                    onClick={handleClearQuestion}
+                    className="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 border border-slate-300 dark:border-slate-700 rounded-xl text-xs font-bold flex items-center gap-1 transition-all cursor-pointer"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    <span>سؤال جديد</span>
+                  </button>
+                )}
               </div>
             </div>
 
-            {/* Top Stars Header & Mass Star Launcher */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* Top 3 Stars Leaderboard Card for Current Group */}
-              <div className="lg:col-span-1 bg-slate-900 border border-slate-800 p-5 rounded-3xl space-y-4 shadow-xl">
-                <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-                  <div className="flex items-center gap-2 text-amber-400 font-black">
-                    <Crown className="w-5 h-5 text-amber-400 animate-bounce" />
-                    <span>متميزو المجموعة الحالية 👑</span>
-                  </div>
-                  <span className="text-[11px] text-amber-300 bg-amber-500/10 border border-amber-500/30 px-2.5 py-0.5 rounded-full font-bold">
-                    {effectiveGroup?.name || 'المجموعة الحالية'}
-                  </span>
-                </div>
-
-                <div className="space-y-2.5">
-                  {topStars.length === 0 ? (
-                    <div className="text-center py-6 text-slate-500 text-xs">لا يوجد طلاب مسجلون في هذه المجموعة حالياً</div>
-                  ) : (
-                    topStars.map((st, idx) => (
-                      <div key={st.id} className="flex items-center justify-between bg-slate-950/80 p-3 rounded-2xl border border-slate-800">
-                        <div className="flex items-center gap-3">
-                          <div className={`w-8 h-8 rounded-full flex items-center justify-center font-black text-xs ${
-                            idx === 0 ? 'bg-amber-400 text-slate-950 shadow-lg shadow-amber-400/30' :
-                            idx === 1 ? 'bg-slate-300 text-slate-950' : 'bg-amber-700 text-white'
-                          }`}>
-                            {idx === 0 ? '🥇' : idx === 1 ? '🥈' : '🥉'}
-                          </div>
-                          <div>
-                            <span className="font-black text-xs text-white block">{st.fullName}</span>
-                            <span className="text-[10px] text-slate-400">{st.code || st.id}</span>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-1.5 bg-amber-500/10 border border-amber-500/30 px-3 py-1 rounded-xl">
-                          <Star className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
-                          <span className="font-black text-amber-300 text-xs">{st.totalPoints || st.points || 0}</span>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-
-                <button
-                  onClick={async () => {
-                    try {
-                      if (displayedTrainees.length === 0) {
-                        showToast('لا يوجد طلاب محددون بالمجموعة حالياً', 'warning');
-                        return;
-                      }
-                      await Promise.all(displayedTrainees.map(t => api.awardPoints(t.id, cockpitBonusAmount, cockpitBonusReason || 'تشجيع الحصة الجماعي بالمعمل').catch(() => {})));
-                      audioService.playCelebrationCheer();
-                      setCelebrationOverlay({
-                        active: true,
-                        title: `🌟 منح +${cockpitBonusAmount} ⭐ لجميع طلاب المجموعة الحاضرين!`,
-                        pointsBadge: `+${cockpitBonusAmount} نقطة لكل طالب`,
-                        subtitle: `${displayedTrainees.length} طالب حاضر بالحصة`
-                      });
-                      showToast(`تم منح +${cockpitBonusAmount} نجوم تشجيعية لجميع الحاضرين بالمجموعة (${displayedTrainees.length} طالب) بنجاح! ⭐🏆`, 'success');
-                      loadCenterData();
-                    } catch (e) {
-                      showToast('تعذر منح النقاط الجماعية', 'error');
-                    }
-                  }}
-                  className="w-full py-2.5 bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-300 font-extrabold text-xs rounded-2xl flex items-center justify-center gap-2 transition-all cursor-pointer"
-                >
-                  <Award className="w-4 h-4 text-emerald-400" />
-                  <span>منح +{cockpitBonusAmount} نجوم لجميع الحاضرين بالمجموعة 🌟</span>
-                </button>
-              </div>
-
-              {/* Instant Interactive Question Launcher */}
-              <div className="lg:col-span-2 bg-slate-900 border border-slate-800 p-5 rounded-3xl space-y-4 shadow-xl">
-                <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-                  <div className="flex items-center gap-2 text-cyan-400 font-black">
-                    <Zap className="w-5 h-5 text-cyan-400 animate-pulse" />
-                    <span>بث سؤال تفاعلي فوري لشاشات أجهزة الطلاب بالمعمل 🚀</span>
-                  </div>
-                  <span className="text-xs text-slate-400 font-mono">بث شاشة بشاشة</span>
-                </div>
-
-                <form onSubmit={handleQuickQuestionSubmit} className="space-y-3">
-                  <div>
-                    <label className="text-xs text-slate-300 font-bold block mb-1">السؤال التفاعلي اللحظي:</label>
-                    <input
-                      type="text"
-                      value={quickQuestionText}
-                      onChange={(e) => setQuickQuestionText(e.target.value)}
-                      placeholder="مثال: ما هو الناتج المباشر لكود حساب النسبة المئوية المكتوب بالسبورة؟"
-                      className="w-full bg-slate-950 border border-slate-800 rounded-2xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-cyan-500"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2">
-                    {quickOptions.map((opt, idx) => (
-                      <div key={idx} className="flex items-center gap-2 bg-slate-950 p-2 rounded-xl border border-slate-800">
-                        <input
-                          type="radio"
-                          name="cockpit_correct"
-                          checked={quickCorrectIndex === idx}
-                          onChange={() => setQuickCorrectIndex(idx)}
-                          className="accent-cyan-500 w-4 h-4"
-                        />
-                        <input
-                          type="text"
-                          value={opt}
-                          onChange={(e) => {
-                            const newOpts = [...quickOptions];
-                            newOpts[idx] = e.target.value;
-                            setQuickOptions(newOpts);
-                          }}
-                          className="w-full bg-transparent text-xs text-white focus:outline-none"
-                          placeholder={`الخيار ${idx + 1}`}
-                        />
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="flex items-center justify-between pt-1">
-                    <div className="flex items-center gap-3 text-xs text-slate-400 font-bold">
-                      <span>نقاط الإجابة: <strong className="text-amber-400">15 نقطة</strong></span>
-                      <span>الزمن: <strong className="text-cyan-400">30 ثانية</strong></span>
-                    </div>
-
-                    <button
-                      type="submit"
-                      className="px-6 py-2.5 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-slate-950 font-black text-xs rounded-2xl shadow-lg shadow-cyan-500/20 flex items-center gap-2 transition-all active:scale-95"
-                    >
-                      <Send className="w-4 h-4" />
-                      <span>إطلاق السؤال الآن 🚀</span>
-                    </button>
-                  </div>
-                </form>
-              </div>
-            </div>
-
-            {/* CLASSROOM LIVE HALL WALL: PRESENT STUDENTS & STAR AWARDING */}
-            <div className="bg-slate-900 border border-slate-800 p-5 rounded-3xl space-y-4 shadow-xl">
-              <div className="flex items-center justify-between border-b border-slate-800 pb-3 flex-wrap gap-3">
-                <div className="flex items-center gap-2 text-emerald-400 font-black">
-                  <UserCheck className="w-6 h-6 text-emerald-400" />
-                  <div>
-                    <h3 className="text-lg font-black text-white">
-                      حائط القاعة والطلاب الحاضرين بالمعمل ({displayedTrainees.length} طالب)
-                    </h3>
-                    <p className="text-[11px] text-slate-400">
-                      مرتبط بمجموعة: <strong className="text-amber-300">{effectiveGroup?.name || 'مجموعة الحصة الحالية'}</strong>
-                    </p>
-                  </div>
-                </div>
-
-                {/* Filter Switcher Buttons */}
-                <div className="flex items-center gap-1.5 bg-slate-950 p-1 rounded-2xl border border-slate-800">
-                  <button
-                    type="button"
-                    onClick={() => setCockpitFilterMode('present')}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
-                      cockpitFilterMode === 'present'
-                        ? 'bg-emerald-500 text-slate-950 font-black shadow'
-                        : 'text-slate-400 hover:text-white'
-                    }`}
-                  >
-                    <span>🟢 الحاضرون بالحصة</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setCockpitFilterMode('all_group')}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
-                      cockpitFilterMode === 'all_group'
-                        ? 'bg-amber-500 text-slate-950 font-black shadow'
-                        : 'text-slate-400 hover:text-white'
-                    }`}
-                  >
-                    <span>👥 كل طلاب المجموعة</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setCockpitFilterMode('all_branch')}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
-                      cockpitFilterMode === 'all_branch'
-                        ? 'bg-purple-600 text-white font-black shadow'
-                        : 'text-slate-400 hover:text-white'
-                    }`}
-                  >
-                    <span>🌐 كل الفرع ({branchTrainees.length})</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* Points Configuration Bar */}
-              <div className="bg-slate-950/70 p-3.5 rounded-2xl border border-slate-800 flex flex-wrap items-center justify-between gap-3 text-xs">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-slate-400 font-bold">قيمة النجوم المحددة:</span>
-                  <div className="flex items-center gap-1 flex-wrap">
-                    {[2, 5, 10, 25, 50].map(pt => (
-                      <button
-                        key={pt}
-                        type="button"
-                        onClick={() => setCockpitBonusAmount(pt)}
-                        className={`px-2.5 py-1 rounded-xl font-black transition-all ${
-                          cockpitBonusAmount === pt
-                            ? 'bg-amber-500 text-slate-950 shadow scale-105'
-                            : 'bg-slate-900 text-slate-300 hover:bg-slate-800 border border-slate-800'
-                        }`}
-                      >
-                        +{pt} ⭐
-                      </button>
-                    ))}
-                    {[-5, -10].map(pt => (
-                      <button
-                        key={pt}
-                        type="button"
-                        onClick={() => setCockpitBonusAmount(pt)}
-                        className={`px-2 py-1 rounded-xl font-bold transition-all ${
-                          cockpitBonusAmount === pt
-                            ? 'bg-rose-500 text-white shadow scale-105'
-                            : 'bg-rose-950/60 text-rose-300 hover:bg-rose-900 border border-rose-900/50'
-                        }`}
-                      >
-                        {pt} ⚠️
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2 flex-1 min-w-[240px]">
-                  <span className="text-slate-400 font-bold shrink-0">السبب:</span>
+            {/* IF NO ACTIVE QUESTION: LAUNCH CONTROLS */}
+            {!activeQuickQuestion ? (
+              <div className="space-y-5 py-4">
+                
+                {/* Optional Custom Question Input */}
+                <div>
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-2">
+                    نص السؤال (اختياري - يمكنك طرحه شفوياً بالقاعة أو كتابته هنا ليظهر على البروجكتور):
+                  </label>
                   <input
                     type="text"
-                    value={cockpitBonusReason}
-                    onChange={(e) => setCockpitBonusReason(e.target.value)}
-                    placeholder="مثال: إجابة نموذجية، حل عملي متقن، مشاركة فعالة"
-                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-400"
+                    placeholder="اكتب نص السؤال هنا (أو اتركه فارغاً للسؤال الشفهي)..."
+                    value={customQuestionInput}
+                    onChange={(e) => setCustomQuestionInput(e.target.value)}
+                    className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 focus:border-blue-500 text-slate-900 dark:text-white rounded-2xl p-4 text-sm font-bold focus:outline-none placeholder:text-slate-400 shadow-inner"
                   />
                 </div>
-              </div>
 
-              {displayedTrainees.length === 0 ? (
-                <div className="text-center py-12 bg-slate-950/60 rounded-3xl border border-slate-800 text-slate-400 text-sm space-y-2">
-                  <p>لا يوجد طلاب مسجلون في هذه المجموعة ({effectiveGroup?.name || ''}) حالياً.</p>
-                  <p className="text-xs text-slate-500">اختر مجموعة أخرى من القائمة بالأعلى أو غيّر وضع الفلتر.</p>
+                {/* Launch Buttons Grid */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+                  
+                  {/* Launch 4 Choices MCQ */}
+                  <button
+                    onClick={handleLaunchMCQ}
+                    className="p-6 bg-indigo-600 hover:bg-indigo-700 text-white rounded-3xl shadow-lg flex flex-col items-center justify-center gap-2 group transition-all active:scale-95 cursor-pointer border border-indigo-500 text-center"
+                  >
+                    <div className="w-12 h-12 rounded-2xl bg-white/20 flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">
+                      🎯
+                    </div>
+                    <span className="text-lg font-black text-white">إطلاق سؤال 4 خيارات (A / B / C / D)</span>
+                    <span className="text-xs text-indigo-100 opacity-90">
+                      يظهر التصويت فوراً على الشاشات مع إخفاء الإجابة الصحيحة
+                    </span>
+                  </button>
+
+                  {/* Launch True / False */}
+                  <button
+                    onClick={handleLaunchTrueFalse}
+                    className="p-6 bg-emerald-600 hover:bg-emerald-700 text-white rounded-3xl shadow-lg flex flex-col items-center justify-center gap-2 group transition-all active:scale-95 cursor-pointer border border-emerald-500 text-center"
+                  >
+                    <div className="w-12 h-12 rounded-2xl bg-white/20 flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">
+                      ⚖️
+                    </div>
+                    <span className="text-lg font-black text-white">إطلاق سؤال صح أو خطأ (True / False)</span>
+                    <span className="text-xs text-emerald-100 opacity-90">
+                      زرين ملونين عند الطلاب مع إخفاء النتيجة حتى تقرر كشفها
+                    </span>
+                  </button>
                 </div>
-              ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                  {displayedTrainees.map((trainee, idx) => {
-                    const currentPoints = trainee.totalPoints || trainee.points || 0;
-                    const att = attendanceMap[trainee.id];
-                    const isPresent = att === 'present';
-                    const isAbsent = att === 'absent';
-                    const isLate = att === 'late';
-                    const isExcused = att === 'excused';
+              </div>
+            ) : (
+              /* ACTIVE QUESTION DISPLAY ON PROJECTOR */
+              <div className="space-y-6">
+                
+                {/* Question Banner on Projector */}
+                <div className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 sm:p-8 text-center space-y-2 shadow-inner">
+                  <span className="text-xs font-bold text-blue-600 dark:text-blue-400 tracking-wider">
+                    {activeQuickQuestion.type === 'choices' ? 'سؤال اختيار من متعدد' : 'سؤال صح أو خطأ'}
+                  </span>
+                  <h3 className="text-xl sm:text-3xl font-black text-slate-900 dark:text-white leading-relaxed">
+                    {activeQuickQuestion.questionText || '🎧 استمع لسؤال المعلم شفوياً في القاعة واختر إجابتك الآن!'}
+                  </h3>
+                </div>
+
+                {/* 4 Interactive Option Cards with Live Tallies */}
+                <div className={`grid gap-4 ${activeQuickQuestion.type === 'true_false' ? 'grid-cols-2' : 'grid-cols-1 sm:grid-cols-2'}`}>
+                  {(activeQuickQuestion.options || []).map((opt: any) => {
+                    const count = tallyCounts[opt.key] || 0;
+                    const isRevealed = !!activeQuickQuestion.revealed;
+                    const isCorrect = isRevealed && String(activeQuickQuestion.correctAnswer).toLowerCase() === String(opt.key).toLowerCase();
 
                     return (
-                      <div key={trainee.id} className="bg-slate-950 border border-slate-800 hover:border-slate-700 p-4 rounded-3xl transition-all space-y-3 relative group shadow-md">
-                        {/* Student Header */}
-                        <div className="flex items-start justify-between gap-2">
+                      <div
+                        key={opt.key}
+                        className={`p-5 sm:p-6 rounded-3xl border-2 transition-all flex flex-col justify-between gap-4 ${
+                          isRevealed
+                            ? isCorrect
+                              ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-500 ring-4 ring-emerald-500/30 shadow-lg'
+                              : 'bg-slate-50 dark:bg-slate-950/60 border-slate-200 dark:border-slate-800 opacity-50'
+                            : 'bg-white dark:bg-slate-950/80 border-slate-200 dark:border-slate-800 shadow-sm'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
                           <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-amber-500/20 to-emerald-500/20 border border-amber-500/30 flex items-center justify-center font-black text-lg text-amber-300">
-                              {['👨‍🎓', '👩‍🎓', '👨‍💻', '👩‍💻', '🧑‍🎓', '👩‍🔬'][idx % 6]}
-                            </div>
-                            <div>
-                              <h4 className="font-black text-sm text-white line-clamp-1">{trainee.fullName}</h4>
-                              <span className="text-[10px] text-slate-400 font-mono block">{trainee.code || trainee.id}</span>
-                            </div>
+                            <span className={`w-10 h-10 rounded-2xl flex items-center justify-center font-black text-white text-lg ${opt.color}`}>
+                              {opt.key}
+                            </span>
+                            <span className="text-base sm:text-lg font-black text-slate-900 dark:text-white">
+                              {opt.label}
+                            </span>
                           </div>
 
-                          <div className="flex items-center gap-1 bg-amber-500/10 border border-amber-500/30 px-2.5 py-1 rounded-xl">
-                            <Star className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
-                            <span className="font-black text-amber-300 text-xs">{currentPoints}</span>
+                          {/* Live Votes Counter (Hidden who voted, only shows tally) */}
+                          <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 px-3 py-1.5 rounded-xl">
+                            <Users className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
+                            <span className="text-xs font-black text-blue-600 dark:text-blue-400 font-mono">
+                              {count} {count === 1 ? 'صوت' : 'أصوات'}
+                            </span>
                           </div>
                         </div>
 
-                        {/* 1-Tap Attendance Buttons */}
-                        <div className="grid grid-cols-4 gap-1 bg-slate-900/80 p-1.5 rounded-2xl border border-slate-800">
+                        {/* If NOT REVEALED: Teacher Direct Reveal Button For This Option */}
+                        {!isRevealed ? (
                           <button
                             type="button"
-                            onClick={() => handleStudentAttendanceChange(trainee.id, 'present', effectiveGroup?.id)}
-                            className={`py-1 rounded-xl text-[10px] font-bold transition-all ${
-                              isPresent ? 'bg-emerald-500 text-slate-950 font-black shadow scale-105' : 'bg-slate-800 text-emerald-400 hover:bg-emerald-500/20'
-                            }`}
-                            title="تسجيل حاضر"
+                            onClick={() => handleRevealAnswer(opt.key)}
+                            className="w-full py-2.5 px-3 !bg-slate-100 hover:!bg-emerald-600 hover:!text-white !text-slate-900 dark:!bg-slate-800 dark:hover:!bg-emerald-600 dark:!text-slate-100 !border !border-slate-300 dark:!border-slate-700 hover:!border-emerald-500 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 shadow-sm group"
+                            title={`انقر هنا لتعيين (${opt.key}) كإجابة صحيحة وتوزيع النجوم فوراً`}
                           >
-                            حاضر 🟢
+                            <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 group-hover:text-white" />
+                            <span>تعيين هذا الخيار ({opt.key}) كإجابة صحيحة وكشف النتيجة ✨</span>
                           </button>
-                          <button
-                            type="button"
-                            onClick={() => handleStudentAttendanceChange(trainee.id, 'late', effectiveGroup?.id)}
-                            className={`py-1 rounded-xl text-[10px] font-bold transition-all ${
-                              isLate ? 'bg-amber-500 text-slate-950 font-black shadow scale-105' : 'bg-slate-800 text-amber-400 hover:bg-amber-500/20'
-                            }`}
-                            title="تسجيل متأخر"
-                          >
-                            متأخر 🟡
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleStudentAttendanceChange(trainee.id, 'absent', effectiveGroup?.id)}
-                            className={`py-1 rounded-xl text-[10px] font-bold transition-all ${
-                              isAbsent ? 'bg-rose-500 text-white font-black shadow scale-105' : 'bg-slate-800 text-rose-400 hover:bg-rose-500/20'
-                            }`}
-                            title="تسجيل غائب"
-                          >
-                            غائب 🔴
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleStudentAttendanceChange(trainee.id, 'excused', effectiveGroup?.id)}
-                            className={`py-1 rounded-xl text-[10px] font-bold transition-all ${
-                              isExcused ? 'bg-sky-500 text-white font-black shadow scale-105' : 'bg-slate-800 text-sky-400 hover:bg-sky-500/20'
-                            }`}
-                            title="تسجيل معذور"
-                          >
-                            معذور 🔵
-                          </button>
-                        </div>
-
-                        {/* Fast 1-Tap Star Awarding Buttons */}
-                        <div className="space-y-1.5 pt-1">
-                          <div className="grid grid-cols-4 gap-1">
-                            {[2, 5, 10, 25].map(pt => (
-                              <button
-                                key={pt}
-                                onClick={() => handleAwardBonus(trainee.id, pt, cockpitBonusReason || 'إجابة وتطبيق متميز')}
-                                className="py-1.5 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 rounded-xl font-black text-[10px] transition-all active:scale-95 flex items-center justify-center gap-0.5"
-                                title={`منح +${pt} نجوم`}
-                              >
-                                <span>+{pt}</span>
-                                <Star className="w-2.5 h-2.5 text-amber-400 fill-amber-400" />
-                              </button>
-                            ))}
+                        ) : isCorrect ? (
+                          <div className="py-2 bg-emerald-100 dark:bg-emerald-500/20 border border-emerald-400 dark:border-emerald-500/40 rounded-xl text-center text-xs font-black text-emerald-800 dark:text-emerald-300 flex items-center justify-center gap-1.5 animate-bounce">
+                            <Trophy className="w-4 h-4 text-amber-500" />
+                            <span>الإجابة النموذجية الصحيحة ✅</span>
                           </div>
-
-                          <button
-                            onClick={() => handleAwardBonus(trainee.id, cockpitBonusAmount, cockpitBonusReason || 'تميز وتفوق بالحصة')}
-                            className={`w-full py-1.5 rounded-xl font-black text-[11px] transition-all active:scale-95 flex items-center justify-center gap-1.5 ${
-                              cockpitBonusAmount >= 0
-                                ? 'bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-300'
-                                : 'bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/40 text-rose-300'
-                            }`}
-                          >
-                            <span>{cockpitBonusAmount >= 0 ? `منح +${cockpitBonusAmount} ⭐` : `تطبيق ${cockpitBonusAmount} ⚠️`}</span>
-                            <span className="text-[9px] text-slate-400">({cockpitBonusReason})</span>
-                          </button>
-                        </div>
+                        ) : null}
                       </div>
                     );
                   })}
                 </div>
-              )}
-            </div>
-          </div>
-        );
-      })()}
 
-      {/* ========================================================================= */}
-      {/* TAB: LESSON WORKSPACE (شرح الحصة والمحتوى التفاعلي) */}
-      {/* ========================================================================= */}
-      {activeTab === 'lesson_workspace' && (
-        <div className="space-y-6 animate-fadeIn">
-          {/* Sub-mode Navigation Header */}
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-slate-900 border border-slate-800 p-3 rounded-2xl">
-            <div className="flex items-center gap-2 overflow-x-auto w-full sm:w-auto custom-scrollbar p-1">
-              <button
-                onClick={() => setLessonSubMode('slides')}
-                className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all shrink-0 ${
-                  lessonSubMode === 'slides'
-                    ? 'bg-amber-500 text-slate-950 shadow-md font-black'
-                    : 'bg-slate-950 text-slate-300 hover:text-white border border-slate-800'
-                }`}
-              >
-                <Presentation className="w-4 h-4" />
-                <span>عرض الدرس والشرائح الذكية</span>
-              </button>
-
-              <button
-                onClick={() => setLessonSubMode('live_studio')}
-                className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all shrink-0 ${
-                  lessonSubMode === 'live_studio'
-                    ? 'bg-amber-500 text-slate-950 shadow-md font-black'
-                    : 'bg-slate-950 text-slate-300 hover:text-white border border-slate-800'
-                }`}
-              >
-                <Video className="w-4 h-4" />
-                <span>ستوديو الشرح والبث المباشر</span>
-              </button>
-
-              <button
-                onClick={() => setLessonSubMode('practical')}
-                className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all shrink-0 ${
-                  lessonSubMode === 'practical'
-                    ? 'bg-amber-500 text-slate-950 shadow-md font-black'
-                    : 'bg-slate-950 text-slate-300 hover:text-white border border-slate-800'
-                }`}
-              >
-                <Code className="w-4 h-4" />
-                <span>وضع التدريب العملي والتجربة</span>
-              </button>
-            </div>
-
-            {/* Quick Session Ending & Award Ceremony Trigger */}
-            <button
-              onClick={() => setIsCeremonyOpen(true)}
-              className="bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 px-4 py-2 rounded-xl text-xs font-black flex items-center gap-2 shadow-lg hover:scale-105 transition-all shrink-0 w-full sm:w-auto justify-center"
-            >
-              <PartyPopper className="w-4 h-4" />
-              <span>نهاية الحصة وتكريم الأبطال 🏆</span>
-            </button>
-          </div>
-
-          {/* Submode 1: AI Presentation Deck */}
-          {lessonSubMode === 'slides' && (
-            <div>
-              {trainers.length > 0 ? (
-                <AIPresentationGenerator
-                  trainer={selectedTrainer || trainers[0]}
-                  groups={groups}
-                  courses={courses}
-                  onShowToast={showToast}
-                />
-              ) : (
-                <div className="bg-slate-900 border border-slate-800 rounded-3xl p-8 text-center text-slate-400">
-                  <BookOpen className="w-12 h-12 text-amber-400 mx-auto mb-3 opacity-50" />
-                  <h3 className="text-base font-bold text-slate-200">جاري تجهيز بيانات المحتوى...</h3>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Submode 2: Live Lecture Studio */}
-          {lessonSubMode === 'live_studio' && (
-            <div>
-              {trainers.length > 0 ? (
-                <LiveLectureStudio
-                  trainer={selectedTrainer || trainers[0]}
-                  activeGroup={selectedGroup || groups[0] || null}
-                  groups={groups}
-                  onShowToast={showToast}
-                />
-              ) : (
-                <div className="bg-slate-900 border border-slate-800 rounded-3xl p-8 text-center text-slate-400">
-                  <Video className="w-12 h-12 text-amber-400 mx-auto mb-3 opacity-50" />
-                  <h3 className="text-base font-bold text-slate-200">ستوديو البث جاهز، يرجى اختيار المدرب والمجموعة</h3>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Submode 3: Practical Lab Teaching Mode */}
-          {lessonSubMode === 'practical' && (
-            <div className="space-y-6">
-              <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl">
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4 pb-4 border-b border-slate-800">
-                  <div>
-                    <h3 className="text-base font-black text-slate-100 flex items-center gap-2">
-                      <Terminal className="w-5 h-5 text-amber-400" />
-                      <span>محرر الأكواد والتمارين العملية الحية بالمعمل</span>
-                    </h3>
-                    <p className="text-xs text-slate-400 mt-1">
-                      اكتب الكود أو التمرين العملي ثم قم بتشغيله وبثه مباشرة إلى شاشات أجهزة الطلاب
-                    </p>
+                {/* TEACHER MASTER CONTROL TOOLBAR */}
+                <div className="p-5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-3xl flex flex-col sm:flex-row items-center justify-between gap-4">
+                  
+                  {/* Status Indicator */}
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <span className="text-xs font-bold text-slate-600 dark:text-slate-400">
+                      إجمالي المشاركين: <strong className="text-slate-900 dark:text-white font-mono text-sm">{answersList.length}</strong> طالب
+                    </span>
+                    {activeQuickQuestion.revealed ? (
+                      <span className="px-3 py-1 bg-emerald-50 dark:bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 text-xs font-black rounded-full border border-emerald-300 dark:border-emerald-500/30">
+                        تم كشف الإجابة ({activeQuickQuestion.correctAnswer}) وتوزيع النجوم 🌟
+                      </span>
+                    ) : activeQuickQuestion.closed ? (
+                      <span className="px-3 py-1 bg-blue-50 dark:bg-blue-500/20 text-blue-700 dark:text-blue-300 text-xs font-black rounded-full border border-blue-200 dark:border-blue-500/30">
+                        🔒 التصويت مغلق - جاهز لكشف الإجابة
+                      </span>
+                    ) : (
+                      <span className="px-3 py-1 bg-emerald-50 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 text-xs font-black rounded-full border border-emerald-200 dark:border-emerald-500/30">
+                        🟢 التصويت جاري الآن
+                      </span>
+                    )}
                   </div>
-                  <div className="flex items-center gap-3">
+
+                  {/* Master Buttons */}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {!activeQuickQuestion.closed && !activeQuickQuestion.revealed && (
+                      <button
+                        onClick={handleCloseVoting}
+                        className="px-4 py-2.5 bg-blue-50 hover:bg-blue-100 dark:bg-blue-500/20 dark:hover:bg-blue-500/30 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-500/40 rounded-xl text-xs font-black flex items-center gap-1.5 transition-all cursor-pointer"
+                      >
+                        <Lock className="w-3.5 h-3.5" />
+                        <span>قفل التصويت</span>
+                      </button>
+                    )}
+
                     <button
-                      onClick={handleRunPracticalCode}
-                      disabled={isExecutingCode}
-                      className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 px-4 py-2 rounded-xl text-xs font-black flex items-center gap-2 shadow-lg transition-all"
+                      onClick={handleClearQuestion}
+                      className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-white border border-slate-300 dark:border-slate-700 rounded-xl text-xs font-black flex items-center gap-1.5 transition-all cursor-pointer"
                     >
-                      <Play className="w-4 h-4" />
-                      <span>{isExecutingCode ? 'جاري التشغيل...' : 'تشغيل الكود (Run)'}</span>
-                    </button>
-                    <button
-                      onClick={handleBroadcastPracticalCode}
-                      className="bg-amber-500 hover:bg-amber-400 text-slate-950 px-4 py-2 rounded-xl text-xs font-black flex items-center gap-2 shadow-lg transition-all"
-                    >
-                      <Send className="w-4 h-4" />
-                      <span>بث التمرين لأجهزة الطلاب 🚀</span>
+                      <RotateCcw className="w-3.5 h-3.5" />
+                      <span>سؤال جديد 🔄</span>
                     </button>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                  <div>
-                    <span className="text-xs font-bold text-slate-400 block mb-1">محرر الكود (JavaScript / Scratch Logic):</span>
-                    <textarea
-                      value={practicalCode}
-                      onChange={e => setPracticalCode(e.target.value)}
-                      rows={12}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-2xl p-4 font-mono text-xs text-amber-300 focus:border-amber-500 focus:outline-none custom-scrollbar leading-relaxed"
-                      dir="ltr"
-                    />
-                  </div>
-                  <div>
-                    <span className="text-xs font-bold text-slate-400 block mb-1">مخرجات التنفيذ (Console Output):</span>
-                    <div className="w-full h-64 bg-slate-950 border border-slate-800 rounded-2xl p-4 font-mono text-xs text-slate-300 overflow-y-auto custom-scrollbar" dir="ltr">
-                      {practicalOutput ? (
-                        <pre className="whitespace-pre-wrap">{practicalOutput}</pre>
-                      ) : (
-                        <span className="text-slate-600 italic">اضغط "تشغيل الكود" لمعاينة النتائج هنا...</span>
+                {/* WINNERS LIST (Only shown after reveal) */}
+                {activeQuickQuestion.revealed && (
+                  <div className="p-5 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-500/30 rounded-3xl space-y-3 animate-fadeIn">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-sm font-black text-emerald-800 dark:text-emerald-300 flex items-center gap-2">
+                        <Trophy className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                        <span>قائمة الفائزين أصحاب الإجابة الصحيحة ({answersList.filter(a => a.isCorrect).length} طالب):</span>
+                      </h4>
+                      <span className="text-xs text-emerald-700 dark:text-emerald-300 font-bold">
+                        حصل كل منهم على +{pointsReward} نجوم تميز ⭐
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                      {answersList.filter(a => a.isCorrect).map((winner, idx) => (
+                        <div
+                          key={idx}
+                          className="p-2.5 bg-white dark:bg-slate-900 border border-emerald-300 dark:border-emerald-500/40 rounded-xl text-xs font-bold text-slate-900 dark:text-white flex items-center justify-between shadow-sm"
+                        >
+                          <span className="truncate">{winner.studentName}</span>
+                          <span className="text-emerald-600 dark:text-emerald-400 font-black">✓ +{pointsReward}</span>
+                        </div>
+                      ))}
+                      {answersList.filter(a => a.isCorrect).length === 0 && (
+                        <p className="text-xs text-slate-500 dark:text-slate-400 col-span-full text-center py-2">
+                          لم يقم أحد باختيار الإجابة الصحيحة في هذه الجولة
+                        </p>
                       )}
                     </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Mode Selector (Individual / Teams / League) - Floating style */}
-      <div className="flex items-center justify-center gap-4 bg-slate-900/50 p-3 rounded-2xl border border-slate-800/50">
-        <span className="text-xs font-bold text-slate-400">نمط المنافسة الحالي:</span>
-        <div className="flex bg-slate-950 p-1 rounded-xl border border-slate-800">
-          {[
-            { id: 'individual', name: 'منافسة فردية', icon: Users },
-            { id: 'team_vs_team', name: 'مجموعات (داخل الفصل)', icon: Layers },
-            { id: 'class_vs_class', name: 'دوري الفصول (League)', icon: Crown }
-          ].map(m => (
-            <button
-              key={m.id}
-              onClick={() => setQuizMode(m.id as any)}
-              className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all ${
-                quizMode === m.id ? 'bg-amber-500 text-slate-950 shadow-md' : 'text-slate-500 hover:text-slate-300'
-              }`}
-            >
-              <m.icon className="w-3.5 h-3.5" />
-              <span>{m.name}</span>
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* ========================================================================= */}
-      {/* TAB 0: NAGAH PRO QUIZ BUILDER (KAHOOT STYLE) */}
-      {/* ========================================================================= */}
-      {activeTab === 'nagah_pro' && (
-        <div className="space-y-6 animate-fadeIn">
-          {/* AI Generation Section */}
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl relative overflow-hidden">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/5 blur-3xl rounded-full" />
-            <div className="flex flex-col md:flex-row items-center gap-6 relative z-10">
-              <div className="shrink-0 w-16 h-16 rounded-2xl bg-amber-500/20 flex items-center justify-center text-amber-400 border border-amber-500/30">
-                <Sparkles className="w-8 h-8" />
-              </div>
-              <div className="flex-1 space-y-4 w-full">
-                <div>
-                  <h3 className="text-lg font-black text-slate-100 flex items-center gap-2">
-                    توليد اختبار ذكي فوري (Gemini 1.5 Pro)
-                  </h3>
-                  <p className="text-xs text-slate-400 mt-1">
-                    اكتب موضوعاً أو ارفع ملفاً وسيقوم الذكاء الاصطناعي بصناعة اختبار Kahoot كامل بأنواع أسئلة مختلفة
-                  </p>
-                </div>
-
-                <div className="flex flex-col sm:flex-row gap-3">
-                  <div className="flex-1 bg-slate-950 border border-slate-700 rounded-2xl px-4 py-3 flex items-center gap-3">
-                    <FileText className="w-5 h-5 text-amber-400" />
-                    <input
-                      type="text"
-                      value={aiPrompt}
-                      onChange={e => setAiPrompt(e.target.value)}
-                      placeholder="عن ماذا سيكون الاختبار؟ (مثال: أجزاء الحاسوب، برمجة سكراتش، عواصم العالم...)"
-                      className="bg-transparent w-full text-slate-100 text-sm font-bold focus:outline-none"
-                    />
-                  </div>
-
-                  <div className="flex items-center gap-2 bg-slate-950 border border-slate-700 rounded-2xl p-1 shrink-0">
-                    <button
-                      onClick={() => setAiLanguage('ar')}
-                      className={`px-3 py-2 rounded-xl text-xs font-bold transition-all ${
-                        aiLanguage === 'ar' ? 'bg-amber-500 text-slate-950' : 'text-slate-500'
-                      }`}
-                    >
-                      عربي
-                    </button>
-                    <button
-                      onClick={() => setAiLanguage('en')}
-                      className={`px-3 py-2 rounded-xl text-xs font-bold transition-all ${
-                        aiLanguage === 'en' ? 'bg-amber-500 text-slate-950' : 'text-slate-500'
-                      }`}
-                    >
-                      EN
-                    </button>
-                  </div>
-
-                  <button
-                    onClick={handleGenerateAIQuiz}
-                    disabled={isGeneratingAI}
-                    className="bg-amber-500 hover:bg-amber-400 disabled:bg-slate-800 disabled:text-slate-500 text-slate-950 px-6 py-3 rounded-2xl font-black text-sm transition-all flex items-center gap-2 shadow-xl shrink-0"
-                  >
-                    {isGeneratingAI ? (
-                      <RefreshCw className="w-5 h-5 animate-spin" />
-                    ) : (
-                      <Zap className="w-5 h-5" />
-                    )}
-                    <span>{isGeneratingAI ? 'جاري التوليد...' : 'صناعة الاختبار الآن'}</span>
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Quiz Cards or Editor */}
-          {!isEditingQuiz ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {/* New Manual Quiz Card */}
-              <button
-                onClick={() => {
-                  setEditingQuiz({
-                    id: 'new-' + Date.now(),
-                    title: 'اختبار جديد غير معنون',
-                    questions: []
-                  });
-                  setIsEditingQuiz(true);
-                }}
-                className="bg-slate-900 border-2 border-dashed border-slate-800 hover:border-amber-500/50 rounded-3xl p-8 flex flex-col items-center justify-center gap-4 group transition-all"
-              >
-                <div className="w-16 h-16 rounded-full bg-slate-800 group-hover:bg-amber-500/20 flex items-center justify-center text-slate-500 group-hover:text-amber-400 transition-all">
-                  <Plus className="w-8 h-8" />
-                </div>
-                <div className="text-center">
-                  <h4 className="font-bold text-slate-100">إضافة اختبار يدوي جديد</h4>
-                  <p className="text-[10px] text-slate-500 mt-1">صمم أسئلتك الخاصة بكل احترافية</p>
-                </div>
-              </button>
-
-              {/* Saved Quizzes */}
-              {(Array.isArray(quizzes) ? quizzes : []).map(quiz => (
-                <div key={quiz.id} className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl space-y-4 hover:border-amber-500/30 transition-all group">
-                  <div className="flex justify-between items-start">
-                    <div className="w-12 h-12 rounded-2xl bg-amber-500/10 flex items-center justify-center text-amber-500 border border-amber-500/20">
-                      <FileText className="w-6 h-6" />
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => {
-                          setEditingQuiz(quiz);
-                          setIsEditingQuiz(true);
-                        }}
-                        className="p-2 rounded-xl bg-slate-800 text-slate-400 hover:text-cyan-400 transition-colors"
-                      >
-                        <RefreshCw className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => setQuizzes((Array.isArray(quizzes) ? quizzes : []).filter(q => q.id !== quiz.id))}
-                        className="p-2 rounded-xl bg-slate-800 text-slate-400 hover:text-rose-400 transition-colors"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-
-                  <div>
-                    <h4 className="font-black text-slate-100 text-lg group-hover:text-amber-400 transition-colors">{quiz.title}</h4>
-                    <div className="flex items-center gap-3 mt-2 text-[10px] font-bold text-slate-500">
-                      <span className="flex items-center gap-1">
-                        <Target className="w-3 h-3 text-cyan-400" />
-                        {quiz.questions?.length || 0} سؤال
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <Clock className="w-3 h-3 text-amber-400" />
-                        {quiz.questions?.length * 30 || 0} ثانية إجمالي
-                      </span>
-                    </div>
-                  </div>
-
-                  <button
-                    onClick={() => handleStartNagahQuiz(quiz)}
-                    className="w-full py-3 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-sm rounded-2xl shadow-lg transition-all flex items-center justify-center gap-2"
-                  >
-                    <Play className="w-4 h-4 fill-current" />
-                    <span>بدء التحدي الآن 🚀</span>
-                  </button>
-                </div>
-              ))}
-            </div>
-          ) : (
-            /* Advanced Quiz Editor UI */
-            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-8 shadow-2xl space-y-8 animate-slideUp">
-              <div className="flex items-center justify-between border-b border-slate-800 pb-6">
-                <div className="flex items-center gap-4">
-                  <button
-                    onClick={() => setIsEditingQuiz(false)}
-                    className="p-2.5 rounded-2xl bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white transition-all"
-                  >
-                    <X className="w-5 h-5" />
-                  </button>
-                  <div className="space-y-1">
-                    <input
-                      type="text"
-                      value={editingQuiz.title}
-                      onChange={e => setEditingQuiz({ ...editingQuiz, title: e.target.value })}
-                      className="bg-transparent text-xl font-black text-slate-100 focus:outline-none border-b border-transparent focus:border-amber-500"
-                    />
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-slate-500 font-bold">محرر اختبارات النجاح Pro</span>
-                      <span className="w-1 h-1 rounded-full bg-slate-700" />
-                      <span className="text-xs text-amber-500 font-bold">بث مباشر فوري</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-3">
-                  <button
-                    onClick={async () => {
-                      try {
-                        const res = await api.createNagahQuiz({
-                          title: editingQuiz.title,
-                          nagahQuestions: editingQuiz.questions,
-                          quizMode
-                        });
-                        if (res.success) {
-                          loadQuizzes();
-                          setIsEditingQuiz(false);
-                          showToast('تم حفظ الاختبار بنجاح ✅', 'success');
-                        }
-                      } catch (e: any) {
-                        showToast(e.message || 'فشل حفظ الاختبار', 'error');
-                      }
-                    }}
-                    className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-2xl shadow-lg transition-all"
-                  >
-                    حفظ الاختبار
-                  </button>
-                  <button
-                    onClick={() => handleStartNagahQuiz(editingQuiz)}
-                    className="px-6 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black rounded-2xl shadow-lg transition-all flex items-center gap-2"
-                  >
-                    <Play className="w-4 h-4 fill-current" />
-                    بدء البث فوراً
-                  </button>
-                </div>
-              </div>
-
-              {/* Questions List Editor */}
-              <div className="space-y-6">
-                {editingQuiz.questions.map((q: any, qIdx: number) => (
-                  <div key={q.id || qIdx} className="bg-slate-950/50 border border-slate-800 rounded-3xl p-6 relative group/q">
-                    <div className="absolute -right-3 top-6 w-10 h-10 rounded-2xl bg-slate-800 border border-slate-700 flex items-center justify-center font-black text-slate-400">
-                      {qIdx + 1}
-                    </div>
-
-                    <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-                      {/* Image Preview & Actions */}
-                      <div className="lg:col-span-1 space-y-4">
-                        <div className="aspect-square bg-slate-900 rounded-2xl border border-slate-800 flex flex-col items-center justify-center relative overflow-hidden group/img">
-                          {q.imageUrl ? (
-                            <img src={q.imageUrl} className="w-full h-full object-cover" />
-                          ) : (
-                            <div className="text-center p-4">
-                              <ImageIcon className="w-8 h-8 text-slate-700 mx-auto mb-2" />
-                              <span className="text-[10px] text-slate-600 font-bold block">لا توجد صورة للسؤال</span>
-                            </div>
-                          )}
-                          <div className="absolute inset-0 bg-slate-950/60 opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                            <button className="p-2 bg-amber-500 text-slate-950 rounded-xl hover:scale-110 transition-transform" title="توليد بالذكاء الاصطناعي">
-                              <Sparkles className="w-4 h-4" />
-                            </button>
-                            <button className="p-2 bg-slate-800 text-white rounded-xl hover:scale-110 transition-transform" title="رفع صورة">
-                              <Plus className="w-4 h-4" />
-                            </button>
-                          </div>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-2">
-                          <div className="p-2 bg-slate-900/50 border border-slate-800 rounded-xl text-center">
-                            <span className="text-[10px] text-slate-500 block">الوقت</span>
-                            <input
-                              type="number"
-                              value={q.timeLimitSeconds || 30}
-                              onChange={e => {
-                                const nextQs = [...editingQuiz.questions];
-                                nextQs[qIdx].timeLimitSeconds = Number(e.target.value);
-                                setEditingQuiz({ ...editingQuiz, questions: nextQs });
-                              }}
-                              className="bg-transparent text-cyan-400 font-mono font-bold w-full text-center focus:outline-none"
-                            />
-                          </div>
-                          <div className="p-2 bg-slate-900/50 border border-slate-800 rounded-xl text-center">
-                            <span className="text-[10px] text-slate-500 block">النقاط</span>
-                            <input
-                              type="number"
-                              value={q.marks || 10}
-                              onChange={e => {
-                                const nextQs = [...editingQuiz.questions];
-                                nextQs[qIdx].marks = Number(e.target.value);
-                                setEditingQuiz({ ...editingQuiz, questions: nextQs });
-                              }}
-                              className="bg-transparent text-amber-400 font-mono font-bold w-full text-center focus:outline-none"
-                            />
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Question Content Editor */}
-                      <div className="lg:col-span-3 space-y-4">
-                        <div className="flex items-center gap-4">
-                          <div className="flex-1">
-                            <textarea
-                              value={q.questionText}
-                              onChange={e => {
-                                const nextQs = [...editingQuiz.questions];
-                                nextQs[qIdx].questionText = e.target.value;
-                                setEditingQuiz({ ...editingQuiz, questions: nextQs });
-                              }}
-                              placeholder="اكتب نص السؤال هنا..."
-                              className="w-full bg-transparent text-lg font-bold text-slate-100 placeholder-slate-700 focus:outline-none resize-none"
-                              rows={2}
-                            />
-                          </div>
-                          <div className="flex flex-col gap-1">
-                            <select
-                              value={q.questionType}
-                              onChange={e => {
-                                const nextQs = [...editingQuiz.questions];
-                                nextQs[qIdx].questionType = e.target.value;
-                                setEditingQuiz({ ...editingQuiz, questions: nextQs });
-                              }}
-                              className="bg-slate-800 border border-slate-700 rounded-xl p-2 text-xs font-bold text-slate-200 focus:outline-none"
-                            >
-                              <option value="mcq">اختيار من متعدد</option>
-                              <option value="true_false">صح أو خطأ</option>
-                              <option value="fill_blanks">أكمل الفراغ</option>
-                              <option value="matching">توصيل</option>
-                              <option value="ordering">ترتيب</option>
-                            </select>
-                          </div>
-                        </div>
-
-                        {/* Options Editor based on type */}
-                        {q.questionType === 'mcq' && (
-                          <div className="grid grid-cols-2 gap-3">
-                            {(q.options || ['','','','']).map((opt: string, optIdx: number) => (
-                              <div
-                                key={optIdx}
-                                className={`flex items-center gap-3 p-3 rounded-2xl border transition-all ${
-                                  q.correctAnswer === opt && opt !== ''
-                                    ? 'bg-emerald-950/40 border-emerald-500/50'
-                                    : 'bg-slate-900/50 border-slate-800'
-                                }`}
-                              >
-                                <button
-                                  onClick={() => {
-                                    const nextQs = [...editingQuiz.questions];
-                                    nextQs[qIdx].correctAnswer = opt;
-                                    setEditingQuiz({ ...editingQuiz, questions: nextQs });
-                                  }}
-                                  className={`w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0 transition-all ${
-                                    q.correctAnswer === opt && opt !== ''
-                                      ? 'bg-emerald-500 border-emerald-500'
-                                      : 'border-slate-700'
-                                  }`}
-                                >
-                                  {q.correctAnswer === opt && opt !== '' && <CheckCircle2 className="w-4 h-4 text-slate-950" />}
-                                </button>
-                                <input
-                                  type="text"
-                                  value={opt}
-                                  onChange={e => {
-                                    const nextQs = [...editingQuiz.questions];
-                                    if (!nextQs[qIdx].options) nextQs[qIdx].options = ['','','',''];
-                                    nextQs[qIdx].options[optIdx] = e.target.value;
-                                    // if it was the correct answer, update it
-                                    if (q.correctAnswer === opt) nextQs[qIdx].correctAnswer = e.target.value;
-                                    setEditingQuiz({ ...editingQuiz, questions: nextQs });
-                                  }}
-                                  placeholder={`خيار ${optIdx + 1}...`}
-                                  className="bg-transparent text-sm font-bold text-slate-300 focus:outline-none w-full"
-                                />
-                              </div>
-                            ))}
-                          </div>
-                        )}
-
-                        {q.questionType === 'true_false' && (
-                          <div className="flex gap-4">
-                            {['صواب', 'خطأ'].map(val => (
-                              <button
-                                key={val}
-                                onClick={() => {
-                                  const nextQs = [...editingQuiz.questions];
-                                  nextQs[qIdx].correctAnswer = val;
-                                  setEditingQuiz({ ...editingQuiz, questions: nextQs });
-                                }}
-                                className={`flex-1 py-4 rounded-2xl border-2 font-black transition-all ${
-                                  q.correctAnswer === val
-                                    ? val === 'صواب' ? 'bg-emerald-500 text-slate-950 border-emerald-400' : 'bg-rose-500 text-white border-rose-400'
-                                    : 'bg-slate-900 border-slate-800 text-slate-500 hover:border-slate-700'
-                                }`}
-                              >
-                                {val}
-                              </button>
-                            ))}
-                          </div>
-                        )}
-
-                        {q.questionType === 'fill_blanks' && (
-                          <div className="bg-slate-900/50 p-4 rounded-2xl border border-slate-800 space-y-3">
-                            <label className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">الإجابة الصحيحة المطلوبة:</label>
-                            <input
-                              type="text"
-                              value={q.correctAnswer}
-                              onChange={e => {
-                                const nextQs = [...editingQuiz.questions];
-                                nextQs[qIdx].correctAnswer = e.target.value;
-                                setEditingQuiz({ ...editingQuiz, questions: nextQs });
-                              }}
-                              placeholder="اكتب الكلمة أو العبارة الصحيحة..."
-                              className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-emerald-400 font-bold focus:outline-none"
-                            />
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    <button
-                      onClick={() => {
-                        const nextQs = editingQuiz.questions.filter((_: any, i: number) => i !== qIdx);
-                        setEditingQuiz({ ...editingQuiz, questions: nextQs });
-                      }}
-                      className="absolute top-4 left-4 p-2 text-slate-700 hover:text-rose-500 transition-colors opacity-0 group-hover/q:opacity-100"
-                    >
-                      <Trash2 className="w-5 h-5" />
-                    </button>
-                  </div>
-                ))}
-
-                <button
-                  onClick={() => {
-                    const newQ: ExamQuestion = {
-                      id: 'q-' + Date.now(),
-                      examId: editingQuiz.id,
-                      questionType: 'mcq',
-                      questionText: '',
-                      options: ['', '', '', ''],
-                      correctAnswer: '',
-                      marks: 10,
-                      timeLimitSeconds: 20
-                    };
-                    setEditingQuiz({ ...editingQuiz, questions: [...editingQuiz.questions, newQ] });
-                  }}
-                  className="w-full py-6 border-2 border-dashed border-slate-800 hover:border-amber-500/40 rounded-3xl text-slate-500 hover:text-amber-400 font-black text-sm flex items-center justify-center gap-3 transition-all bg-slate-900/20"
-                >
-                  <Plus className="w-5 h-5" />
-                  إضافة سؤال جديد للسباق
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ========================================================================= */}
-      {/* TAB 1: EXTERNAL COMPETITIONS (KAHOOT / QUIZIZZ / GOOGLE FORMS) */}
-      {/* ========================================================================= */}
-      {activeTab === 'external' && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Left 2 Cols: External Session Setup */}
-          <div className="lg:col-span-2 bg-slate-900 border border-amber-500/40 rounded-3xl p-6 shadow-2xl space-y-5">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-              <div className="flex items-center gap-2">
-                <span className="w-3 h-3 rounded-full bg-amber-400 animate-pulse" />
-                <h3 className="font-bold text-sm text-amber-300 flex items-center gap-2">
-                  <Globe className="w-4 h-4" />
-                  إطلاق مسابقة حية عبر المنصات الخارجية (كاهوت / كويزيز / نماذج جوجل)
-                </h3>
-              </div>
-              <span className="text-xs bg-amber-500/20 text-amber-300 px-3 py-1 rounded-full border border-amber-500/40 font-bold">
-                بث فوري مباشر
-              </span>
-            </div>
-
-            <form onSubmit={handleBroadcastExternal} className="space-y-4 text-xs">
-              {/* Platform Selector Buttons */}
-              <div>
-                <label className="block text-slate-300 font-bold mb-2">اختر المنصة التفاعلية الخارجية:</label>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-                  {[
-                    { id: 'ClassPoint', name: 'ClassPoint (كلاس بوينت) 🚀', defaultUrl: 'https://classpoint.app/join', color: 'border-pink-500/60 bg-pink-950/40 text-pink-300' },
-                    { id: 'Kahoot', name: 'Kahoot! (كاهوت)', defaultUrl: 'https://kahoot.it', color: 'border-purple-500/60 bg-purple-950/40 text-purple-300' },
-                    { id: 'Quizizz', name: 'Quizizz (كويزيز)', defaultUrl: 'https://quizizz.com/join', color: 'border-cyan-500/60 bg-cyan-950/40 text-cyan-300' },
-                    { id: 'Google Meet', name: 'Google Meet (اجتماع حي)', defaultUrl: 'https://meet.google.com/new', color: 'border-teal-500/60 bg-teal-950/40 text-teal-300' },
-                    { id: 'Google Forms', name: 'Google Forms (نماذج جوجل)', defaultUrl: 'https://forms.google.com', color: 'border-emerald-500/60 bg-emerald-950/40 text-emerald-300' },
-                    { id: 'Microsoft Forms', name: 'MS Forms (نماذج مايكروسوفت)', defaultUrl: 'https://forms.office.com', color: 'border-indigo-500/60 bg-indigo-950/40 text-indigo-300' }
-                  ].map(p => (
-                    <button
-                      key={p.id}
-                      type="button"
-                      onClick={async () => {
-                        setExternalPlatform(p.id as any);
-                        if (p.id === 'Google Meet') {
-                          try {
-                            const meet = await GoogleMeetService.createMeetingSpace();
-                            setExternalUrl(meet.meetingUri);
-                            setExternalGamePin(meet.meetingCode);
-                            setExternalTitle('محاضرة تدريبية تفاعلية حية - Google Meet');
-                            showToast(`تم إنشاء قاعة Google Meet بنجاح (${meet.meetingCode})`, 'success');
-                          } catch {
-                            setExternalUrl('https://meet.google.com/new');
-                            setExternalTitle('محاضرة تدريبية تفاعلية حية - Google Meet');
-                          }
-                          return;
-                        }
-                        setExternalUrl(p.defaultUrl);
-                        if (p.id === 'ClassPoint') setExternalTitle('جلسة كلاس بوينت التفاعلية بالمعمل - ClassPoint Live');
-                        if (p.id === 'Kahoot') setExternalTitle('مسابقة التحدي التفاعلي - كاهوت (Kahoot Live)');
-                        if (p.id === 'Quizizz') setExternalTitle('اختبار السرعة الذكي - Quizizz Live');
-                        if (p.id === 'Google Forms') setExternalTitle('استبيان واختبار التقييم الحقيقي - Google Forms');
-                      }}
-                      className={`p-3 rounded-2xl border text-center font-bold transition-all ${
-                        externalPlatform === p.id
-                          ? `${p.color} border-2 shadow-lg scale-105`
-                          : 'bg-slate-950/80 border-slate-800 text-slate-400 hover:border-slate-700'
-                      }`}
-                    >
-                      {p.name}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Title Input */}
-              <div>
-                <label className="block text-slate-300 font-bold mb-1">عنوان المسابقة / الجلسة الحية *</label>
-                <input
-                  type="text"
-                  required
-                  value={externalTitle}
-                  onChange={e => setExternalTitle(e.target.value)}
-                  placeholder="مثال: تحدي بايثون الحقيقي - الجلسة الأولى..."
-                  className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-slate-100 focus:outline-none focus:border-amber-400 font-bold"
-                />
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {/* Game PIN Code */}
-                <div>
-                  <label className="block text-slate-300 font-bold mb-1">رمز المسابقة / Game PIN (اختياري)</label>
-                  <input
-                    type="text"
-                    value={externalGamePin}
-                    onChange={e => setExternalGamePin(e.target.value)}
-                    placeholder="مثال: 849201"
-                    className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-amber-300 font-mono font-bold focus:outline-none focus:border-amber-400 tracking-widest text-sm"
-                  />
-                  <span className="text-[10px] text-slate-500 mt-1 block">يتم عرضه بوضوح للطلاب لدخول المسابقة في كاهوت</span>
-                </div>
-
-                {/* Platform URL */}
-                <div>
-                  <label className="block text-slate-300 font-bold mb-1">رابط دخول اللعبة / المنصة *</label>
-                  <input
-                    type="url"
-                    required
-                    value={externalUrl}
-                    onChange={e => setExternalUrl(e.target.value)}
-                    placeholder="https://kahoot.it"
-                    className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-cyan-300 font-mono text-xs focus:outline-none focus:border-amber-400"
-                  />
-                  <span className="text-[10px] text-slate-500 mt-1 block">الرابط المباشر الذي سيفتح داخل أجهزة الطلاب</span>
-                </div>
-              </div>
-
-              {/* Submit Broadcast Button */}
-              <div className="pt-3">
-                <button
-                  type="submit"
-                  className="w-full py-4 rounded-2xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-sm shadow-2xl transition-all flex items-center justify-center gap-2"
-                >
-                  <Radio className="w-5 h-5 animate-pulse" />
-                  <span>بث مسابقة {externalPlatform} الآن على شاشات المعمل 🚀</span>
-                </button>
-              </div>
-            </form>
-          </div>
-
-          {/* Right 1 Col: Preset Quick Launch Cards */}
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl space-y-4 flex flex-col justify-between">
-            <div className="space-y-3">
-              <h4 className="font-bold text-sm text-slate-200 flex items-center gap-2 pb-2 border-b border-slate-800">
-                <Zap className="w-4 h-4 text-amber-400" />
-                روابط سريعة جاهزة للبث
-              </h4>
-
-              <div className="space-y-2.5 text-xs">
-                <div className="p-3 bg-slate-950 border border-slate-800 rounded-2xl flex items-center justify-between">
-                  <div>
-                    <h5 className="font-bold text-purple-400">Kahoot Official Student Join</h5>
-                    <span className="text-[10px] text-slate-500 font-mono">https://kahoot.it</span>
-                  </div>
-                  <button
-                    onClick={() => {
-                      setExternalPlatform('Kahoot');
-                      setExternalUrl('https://kahoot.it');
-                      setExternalGamePin('482910');
-                    }}
-                    className="px-2.5 py-1 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded-lg text-[11px]"
-                  >
-                    تعبئة
-                  </button>
-                </div>
-
-                <div className="p-3 bg-slate-950 border border-slate-800 rounded-2xl flex items-center justify-between">
-                  <div>
-                    <h5 className="font-bold text-cyan-400">Quizizz Live Enter Code</h5>
-                    <span className="text-[10px] text-slate-500 font-mono">https://quizizz.com/join</span>
-                  </div>
-                  <button
-                    onClick={() => {
-                      setExternalPlatform('Quizizz');
-                      setExternalUrl('https://quizizz.com/join');
-                      setExternalGamePin('992811');
-                    }}
-                    className="px-2.5 py-1 bg-cyan-600 hover:bg-cyan-500 text-white font-bold rounded-lg text-[11px]"
-                  >
-                    تعبئة
-                  </button>
-                </div>
-
-                <div className="p-3 bg-slate-950 border border-slate-800 rounded-2xl flex items-center justify-between">
-                  <div>
-                    <h5 className="font-bold text-teal-400">Google Meet Instant Lecture</h5>
-                    <span className="text-[10px] text-slate-500 font-mono">https://meet.google.com</span>
-                  </div>
-                  <button
-                    onClick={async () => {
-                      setExternalPlatform('Google Meet' as any);
-                      try {
-                        const meet = await GoogleMeetService.createMeetingSpace();
-                        setExternalUrl(meet.meetingUri);
-                        setExternalGamePin(meet.meetingCode);
-                        setExternalTitle('محاضرة تدريبية تفاعلية حية - Google Meet');
-                        showToast(`تم تجهيز قاعة Google Meet بنجاح (${meet.meetingCode})`, 'success');
-                      } catch {
-                        setExternalUrl('https://meet.google.com/new');
-                        setExternalTitle('محاضرة تدريبية تفاعلية حية - Google Meet');
-                      }
-                    }}
-                    className="px-2.5 py-1 bg-teal-600 hover:bg-teal-500 text-white font-bold rounded-lg text-[11px]"
-                  >
-                    تعبئة
-                  </button>
-                </div>
-
-                <div className="p-3 bg-slate-950 border border-slate-800 rounded-2xl flex items-center justify-between">
-                  <div>
-                    <h5 className="font-bold text-emerald-400">Google Forms Quiz</h5>
-                    <span className="text-[10px] text-slate-500 font-mono">https://forms.google.com</span>
-                  </div>
-                  <button
-                    onClick={() => {
-                      setExternalPlatform('Google Forms');
-                      setExternalUrl('https://forms.google.com');
-                      setExternalGamePin('');
-                    }}
-                    className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg text-[11px]"
-                  >
-                    تعبئة
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <div className="p-3.5 bg-slate-950/80 rounded-2xl border border-slate-800 text-[11px] text-slate-400 leading-relaxed">
-              💡 <span className="font-bold text-slate-200">طريقة عمل الميزة:</span> بمجرد الضغط على زر البث، ستظهر نافذة مسابقة كاهوت/كويزيز فورياً بملء الشاشة على كافة أجهزة المعمل النشطة مع إبراز كود PIN اللعبة.
-            </div>
-          </div>
-
-          {/* Kahoot Studio Interactive Simulator Panel */}
-          {externalPlatform === 'Kahoot' && (
-            <div className="pt-4 animate-fade-in">
-              <KahootStudio
-                trainerName={selectedTrainer?.name}
-                groups={groups}
-                courses={courses}
-                trainees={trainees}
-                onShowToast={showToast}
-                onAwardPoints={handleAwardBonus}
-                embeddedMode={true}
-              />
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ========================================================================= */}
-      {/* TAB 2: INTERNAL QUESTION BANK LIBRARY */}
-      {/* ========================================================================= */}
-      {activeTab === 'bank' && (
-        <div className="space-y-4">
-          {/* Controls Bar */}
-          <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="flex items-center gap-2 flex-1 max-w-md bg-slate-950 border border-slate-700 px-3 py-2 rounded-xl text-xs">
-              <Search className="w-4 h-4 text-cyan-400 shrink-0" />
-              <input
-                type="text"
-                value={searchBankQuery}
-                onChange={e => setSearchBankQuery(e.target.value)}
-                placeholder="ابحث في بنك الأسئلة بالكلمات المفتاحية أو المادة..."
-                className="w-full bg-transparent text-slate-100 placeholder-slate-500 focus:outline-none"
-              />
-            </div>
-
-            {/* Subject Filters */}
-            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 text-xs">
-              <button
-                onClick={() => setSelectedSubject('all')}
-                className={`px-3 py-1.5 rounded-xl font-bold transition-colors ${
-                  selectedSubject === 'all' ? 'bg-cyan-500 text-slate-950 font-black' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
-                }`}
-              >
-                الكل ({questionBank.length})
-              </button>
-              {subjectsList.map((s, i) => (
-                <button
-                  key={i}
-                  onClick={() => setSelectedSubject(s)}
-                  className={`px-3 py-1.5 rounded-xl font-bold transition-colors whitespace-nowrap ${
-                    selectedSubject === s ? 'bg-cyan-500 text-slate-950 font-black' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
-                  }`}
-                >
-                  {s}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Question Cards Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {filteredBank.map((q, idx) => (
-              <div
-                key={q.id || idx}
-                className="bg-slate-900 border border-slate-800 hover:border-cyan-500/50 rounded-2xl p-4 shadow-xl space-y-3 transition-all flex flex-col justify-between"
-              >
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-[10px] bg-cyan-500/20 text-cyan-300 px-2.5 py-0.5 rounded-full border border-cyan-500/30 font-bold">
-                      {q.subject || 'عام'}
-                    </span>
-                    <span className="text-[10px] text-amber-400 font-mono font-bold flex items-center gap-1">
-                      <Award className="w-3.5 h-3.5" />
-                      +{q.points || 15} نقطة | ⏱️ {q.timeLimitSeconds || 30}ث
-                    </span>
-                  </div>
-
-                  <h4 className="font-bold text-sm text-slate-100 leading-snug">
-                    {q.text}
-                  </h4>
-
-                  {/* Options */}
-                  <div className="grid grid-cols-2 gap-1.5 pt-1">
-                    {q.options?.map((opt: string, optIdx: number) => (
-                      <div
-                        key={optIdx}
-                        className={`p-2 rounded-xl text-[11px] border font-bold flex items-center justify-between ${
-                          optIdx === q.correctOptionIndex
-                            ? 'bg-emerald-950/80 border-emerald-500 text-emerald-300'
-                            : 'bg-slate-950/60 border-slate-800 text-slate-400'
-                        }`}
-                      >
-                        <span className="truncate">{opt}</span>
-                        {optIdx === q.correctOptionIndex && (
-                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0 mr-1" />
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Broadcast Question Button */}
-                <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between">
-                  <span className="text-[10px] text-slate-500 font-mono">سؤال معتمد بالمركز</span>
-                  <button
-                    onClick={() => handleBroadcastQuestion(q)}
-                    className="px-4 py-2 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-black text-xs rounded-xl shadow-lg transition-all flex items-center gap-1.5"
-                  >
-                    <Send className="w-3.5 h-3.5" />
-                    <span>بث هذا السؤال فوراً على الشاشات 🚀</span>
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* ========================================================================= */}
-      {/* TAB 3: QUICK ON-THE-FLY QUESTION COMPOSER */}
-      {/* ========================================================================= */}
-      {activeTab === 'quick' && (
-        <div className="max-w-4xl mx-auto space-y-6">
-          
-          {/* Quick Verbal Challenge Bar (المنكش السريع بدون كتابة) */}
-          <div className="bg-gradient-to-r from-purple-950/80 via-slate-900 to-emerald-950/80 border border-purple-500/40 rounded-3xl p-6 shadow-2xl space-y-5">
-            <div className="flex items-center justify-between flex-wrap gap-2">
-              <div className="flex items-center gap-2.5">
-                <div className="w-10 h-10 rounded-2xl bg-amber-500/20 text-amber-400 flex items-center justify-center font-black text-xl">
-                  ⚡
-                </div>
-                <div>
-                  <h3 className="font-black text-base text-white">أداة المنكش السريع (بث شفهي فوري بضغطة واحدة)</h3>
-                  <p className="text-xs text-slate-400">اطرح السؤال شفوياً بصوتك في القاعة للطلاب واضغط فقط الخيار الصحيح لبثه لأجهزتهم فوراً!</p>
-                </div>
-              </div>
-              <span className="text-xs bg-amber-500/20 text-amber-300 border border-amber-500/30 px-3 py-1 rounded-full font-bold">
-                بدون كتابة 🚀
-              </span>
-            </div>
-
-            {/* MCQ Verbal Buttons */}
-            <div className="space-y-2">
-              <label className="text-xs font-bold text-slate-300 block">
-                1. سؤال 4 خيارات (أحمر، أزرق، أصفر، أخضر) - اضغط الإجابة الصحيحة للبث الفوري:
-              </label>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                <button
-                  type="button"
-                  onClick={() => handleBroadcastVerbalMCQ('A')}
-                  className="p-4 rounded-2xl bg-rose-600 hover:bg-rose-500 text-white font-black text-sm shadow-lg shadow-rose-600/25 transition-all active:scale-95 flex flex-col items-center justify-center gap-1 cursor-pointer"
-                >
-                  <span className="text-base">🟥 خيار أ / A</span>
-                  <span className="text-[11px] opacity-80">(بث وتحديد أ هو الصحيح)</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => handleBroadcastVerbalMCQ('B')}
-                  className="p-4 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white font-black text-sm shadow-lg shadow-blue-600/25 transition-all active:scale-95 flex flex-col items-center justify-center gap-1 cursor-pointer"
-                >
-                  <span className="text-base">🟦 خيار ب / B</span>
-                  <span className="text-[11px] opacity-80">(بث وتحديد ب هو الصحيح)</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => handleBroadcastVerbalMCQ('C')}
-                  className="p-4 rounded-2xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-sm shadow-lg shadow-amber-500/25 transition-all active:scale-95 flex flex-col items-center justify-center gap-1 cursor-pointer"
-                >
-                  <span className="text-base">🟨 خيار ج / C</span>
-                  <span className="text-[11px] opacity-80">(بث وتحديد ج هو الصحيح)</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => handleBroadcastVerbalMCQ('D')}
-                  className="p-4 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-sm shadow-lg shadow-emerald-600/25 transition-all active:scale-95 flex flex-col items-center justify-center gap-1 cursor-pointer"
-                >
-                  <span className="text-base">🟩 خيار د / D</span>
-                  <span className="text-[11px] opacity-80">(بث وتحديد د هو الصحيح)</span>
-                </button>
-              </div>
-            </div>
-
-            {/* True / False Verbal Buttons */}
-            <div className="space-y-2 pt-2 border-t border-slate-800">
-              <label className="text-xs font-bold text-slate-300 block">
-                2. سؤال صح أو خطأ (صح ✔️ / خطأ ❌) - اضغط الإجابة الصحيحة للبث الفوري:
-              </label>
-              <div className="grid grid-cols-2 gap-3">
-                <button
-                  type="button"
-                  onClick={() => handleBroadcastVerbalTrueFalse('true')}
-                  className="p-4 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-sm shadow-lg shadow-emerald-600/25 transition-all active:scale-95 flex items-center justify-center gap-2 cursor-pointer"
-                >
-                  <CheckCircle2 className="w-5 h-5" />
-                  <span>بث سؤال: الإجابة الصحيحة هي (صح ✔️)</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => handleBroadcastVerbalTrueFalse('false')}
-                  className="p-4 rounded-2xl bg-rose-600 hover:bg-rose-500 text-white font-black text-sm shadow-lg shadow-rose-600/25 transition-all active:scale-95 flex items-center justify-center gap-2 cursor-pointer"
-                >
-                  <X className="w-5 h-5" />
-                  <span>بث سؤال: الإجابة الصحيحة هي (خطأ ❌)</span>
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* Live Responses & Active Question Monitor */}
-          {labLiveQuestion && (
-            <div className="bg-slate-900 border-2 border-emerald-500/50 rounded-3xl p-6 shadow-2xl space-y-4 animate-fadeIn">
-              <div className="flex items-center justify-between flex-wrap gap-3">
-                <div className="flex items-center gap-2">
-                  <span className="w-3 h-3 rounded-full bg-emerald-400 animate-ping"></span>
-                  <h4 className="font-black text-white text-base">
-                    إجابات الطلاب اللحظية على السؤال الحالي 🎯
-                  </h4>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={handleAwardStarsToCorrect}
-                    className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs rounded-xl flex items-center gap-1.5 shadow-lg shadow-amber-500/20 transition-all cursor-pointer"
-                  >
-                    <Star className="w-4 h-4 fill-current" />
-                    <span>منح 5 نجوم للمجيبين صح ⭐</span>
-                  </button>
-
-                  <button
-                    onClick={handleClearQuestionBroadcast}
-                    className="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white font-black text-xs rounded-xl flex items-center gap-1.5 shadow-lg shadow-rose-600/20 transition-all cursor-pointer"
-                  >
-                    <X className="w-4 h-4" />
-                    <span>إنهاء السؤال اللحظي 🛑</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* Answers Grid */}
-              <div className="bg-slate-950 rounded-2xl p-4 border border-slate-800">
-                {Object.keys(labLiveQuestion.answers || {}).length === 0 ? (
-                  <p className="text-center text-slate-500 text-xs py-4">
-                    في انتظار إجابات الطلاب من شاشات المعمل...
-                  </p>
-                ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
-                    {Object.values(labLiveQuestion.answers || {}).map((ans: any, idx) => (
-                      <div
-                        key={idx}
-                        className={`p-3 rounded-xl border flex items-center justify-between text-xs ${
-                          ans.isCorrect
-                            ? 'bg-emerald-950/40 border-emerald-500/50 text-emerald-200'
-                            : 'bg-rose-950/40 border-rose-500/50 text-rose-200'
-                        }`}
-                      >
-                        <div>
-                          <div className="font-bold text-white">{ans.studentName}</div>
-                          <div className="text-[10px] text-slate-400">{ans.studentCode}</div>
-                        </div>
-                        <div className="flex items-center gap-1.5 font-black text-sm">
-                          <span>{ans.answer}</span>
-                          {ans.isCorrect ? <Check className="w-4 h-4 text-emerald-400" /> : <X className="w-4 h-4 text-rose-400" />}
-                        </div>
-                      </div>
-                    ))}
                   </div>
                 )}
               </div>
-            </div>
-          )}
-
-          {/* Custom Written Question Composer */}
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl space-y-5">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-              <h3 className="font-bold text-sm text-emerald-300 flex items-center gap-2">
-                <Zap className="w-4 h-4 text-emerald-400" />
-                كتابة سؤال مخصص وبثه فوراً
-              </h3>
-              <span className="text-xs bg-emerald-500/20 text-emerald-300 px-3 py-1 rounded-full font-bold">
-                تخصيص كامل
-              </span>
-            </div>
-
-          <form onSubmit={handleQuickQuestionSubmit} className="space-y-4 text-xs">
-            <div>
-              <label className="block text-slate-300 font-bold mb-1">نص السؤال المراد بثه الآن:</label>
-              <textarea
-                rows={3}
-                required
-                value={quickQuestionText}
-                onChange={e => setQuickQuestionText(e.target.value)}
-                placeholder="اكتب السؤال هنا..."
-                className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-slate-100 text-sm font-bold focus:outline-none focus:border-emerald-400"
-              />
-            </div>
-
-            <div>
-              <label className="block text-slate-300 font-bold mb-1.5">
-                الخيارات (انقر على الخيار الصحيح لتحديده كإجابة نموذجية):
-              </label>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                {quickOptions.map((opt, idx) => (
-                  <div
-                    key={idx}
-                    onClick={() => setQuickCorrectIndex(idx)}
-                    className={`p-3 rounded-2xl border cursor-pointer flex items-center justify-between transition-all ${
-                      quickCorrectIndex === idx
-                        ? 'bg-emerald-950/90 border-emerald-500 text-emerald-200 shadow-lg'
-                        : 'bg-slate-950 border-slate-800 text-slate-300 hover:border-slate-700'
-                    }`}
-                  >
-                    <input
-                      type="text"
-                      value={opt}
-                      onChange={e => {
-                        const next = [...quickOptions];
-                        next[idx] = e.target.value;
-                        setQuickOptions(next);
-                      }}
-                      className="bg-transparent text-xs w-full focus:outline-none font-bold"
-                    />
-                    {quickCorrectIndex === idx && (
-                      <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mr-2" />
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3 pt-2">
-              <div>
-                <label className="block text-slate-300 font-bold mb-1">النقاط الممنوحة:</label>
-                <input
-                  type="number"
-                  value={quickPoints}
-                  onChange={e => setQuickPoints(Number(e.target.value))}
-                  className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-center text-amber-300 font-mono font-bold"
-                />
-              </div>
-
-              <div>
-                <label className="block text-slate-300 font-bold mb-1">العداد التنازلي (بالثواني):</label>
-                <input
-                  type="number"
-                  value={quickTimeLimit}
-                  onChange={e => setQuickTimeLimit(Number(e.target.value))}
-                  className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-center text-cyan-300 font-mono font-bold"
-                />
-              </div>
-            </div>
-
-            <button
-              type="submit"
-              className="w-full py-3.5 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-sm shadow-xl transition-all flex items-center justify-center gap-2"
-            >
-              <Send className="w-4 h-4" />
-              <span>بث السؤال اللحظي الآن على أجهزة الطلاب 🚀</span>
-            </button>
-          </form>
+            )}
+          </div>
         </div>
-      </div>
-    )}
+      )}
 
-      {/* ========================================================================= */}
-      {/* TAB 4: LIVE LEADERBOARD & REAL-TIME RESPONSES */}
-      {/* ========================================================================= */}
-      {activeTab === 'leaderboard' && (
-        <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl space-y-5">
-          <div className="flex items-center justify-between pb-3 border-b border-slate-800 flex-wrap gap-2">
-            <div className="flex items-center gap-2">
-              <Trophy className="w-5 h-5 text-amber-400" />
-              <h3 className="font-black text-base text-slate-100">
-                لوحة المتصدرين والإجابات المباشرة (Live Wall of Fame)
-              </h3>
+      {/* 4. TAB 2: LIVE ROSTER & TARGETED POINTS (كشف الحضور ورصد النجوم) */}
+      {activeTab === 'roster' && (
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 sm:p-6 shadow-sm dark:shadow-xl space-y-5 animate-fadeIn">
+          
+          {/* Header & Filter Controls */}
+          <div className="flex items-center justify-between flex-wrap gap-3 border-b border-slate-200 dark:border-slate-800 pb-4">
+            <div>
+              <h2 className="text-lg font-black text-slate-900 dark:text-white flex items-center gap-2">
+                <Users className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+                <span>كشف حضور طلاب المجموعة ومنح النجوم الفورية</span>
+              </h2>
+              <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
+                تسجيل الحضور الفعلي بنقرة واحدة، ومنح النقاط والنجوم المباشرة لكل متدرب
+              </p>
             </div>
-            <div className="flex items-center gap-3">
-              <span className="text-xs bg-slate-800 text-slate-300 px-3 py-1 rounded-full font-mono">
-                عدد الإجابات المسجلة: {responses.length}
-              </span>
-              <button
-                onClick={() => loadSessions(false)}
-                className="px-3 py-1 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs rounded-xl flex items-center gap-1 shadow"
-              >
-                <RefreshCw className="w-3.5 h-3.5" />
-                <span>تحديث النتائج</span>
-              </button>
+
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-950 p-1 rounded-xl border border-slate-200 dark:border-slate-800">
+                <button
+                  onClick={() => setFilterMode('present')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer ${
+                    filterMode === 'present'
+                      ? 'bg-emerald-600 text-white shadow'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                  }`}
+                >
+                  الحاضرين بالقاعة ({presentCount})
+                </button>
+                <button
+                  onClick={() => setFilterMode('all')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    filterMode === 'all'
+                      ? 'bg-slate-200 dark:bg-slate-800 text-slate-900 dark:text-white shadow'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                  }`}
+                >
+                  الكل ({currentGroupTrainees.length})
+                </button>
+              </div>
+
+              <div className="relative w-48 sm:w-64">
+                <Search className="w-4 h-4 text-slate-400 absolute right-3 top-2.5" />
+                <input
+                  type="text"
+                  placeholder="بحث بالطالب..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 text-slate-900 dark:text-white rounded-xl pr-9 pl-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 shadow-inner"
+                />
+              </div>
             </div>
           </div>
 
-          {responses.length === 0 ? (
-            <div className="text-center py-12 space-y-3">
-              <div className="w-16 h-16 rounded-3xl bg-slate-800/80 border border-slate-700 flex items-center justify-center text-amber-400 text-2xl mx-auto">
-                🏆
+          {/* Students Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+            {displayedTrainees.length === 0 ? (
+              <div className="text-center py-16 text-slate-500 text-xs col-span-full">
+                {currentGroupTrainees.length === 0
+                  ? 'لا يوجد طلاب مسجلين بهذه المجموعة'
+                  : 'لا يوجد طلاب مطابقين لفلتر البحث'}
               </div>
-              <h4 className="font-bold text-slate-300 text-sm">في انتظار إجابات المتدربين...</h4>
-              <p className="text-xs text-slate-500 max-w-md mx-auto">
-                عند إطلاق مسابقة أو سؤال تفاعلي، ستقوم الأجهزة بإرسال إجابات المتدربين واحتساب السرعة والدقة فورياً هنا.
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                {sortedResponses.map((r, idx) => (
-                  <div
-                    key={r.id || idx}
-                    className={`p-4 rounded-2xl border flex items-center justify-between transition-all ${
-                      idx === 0
-                        ? 'bg-amber-500/10 border-amber-500 text-amber-200 shadow-xl scale-105'
-                        : idx === 1
-                        ? 'bg-slate-800/90 border-slate-600 text-slate-200'
-                        : idx === 2
-                        ? 'bg-amber-900/20 border-amber-800 text-amber-300'
-                        : 'bg-slate-950 border-slate-800 text-slate-400'
-                    }`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <span className={`w-8 h-8 rounded-full flex items-center justify-center font-black text-xs font-mono ${
-                        idx === 0 ? 'bg-amber-500 text-slate-950 text-base' : 'bg-slate-800 text-slate-300'
-                      }`}>
-                        {idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `#${idx + 1}`}
-                      </span>
+            ) : (
+              displayedTrainees.map((trainee) => {
+                const isPresent = (attendanceMap[trainee.id] || 'present') === 'present';
+                const currentPts = trainee.totalPoints !== undefined ? trainee.totalPoints : (trainee.points || 0);
 
-                      <div>
-                        <h4 className="font-bold text-sm text-slate-100">{r.traineeName || 'متدرب المعمل'}</h4>
-                        <span className="text-[10px] text-slate-400 font-mono block">
-                          جهاز: {r.deviceId || 'PC-Kiosk'}
-                        </span>
+                return (
+                  <div
+                    key={trainee.id}
+                    className="p-4 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 rounded-2xl flex items-center justify-between gap-3 transition-all shadow-sm"
+                  >
+                    {/* Student Info */}
+                    <div className="flex items-center gap-3 min-w-0">
+                      <button
+                        onClick={() => updateAttendance(trainee.id, isPresent ? 'absent' : 'present')}
+                        className={`w-9 h-9 rounded-xl font-bold text-xs flex items-center justify-center shrink-0 transition-all cursor-pointer ${
+                          isPresent
+                            ? 'bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-500/40 hover:bg-emerald-200'
+                            : 'bg-rose-100 dark:bg-rose-500/20 text-rose-700 dark:text-rose-400 border border-rose-300 dark:border-rose-500/40 hover:bg-rose-200'
+                        }`}
+                        title={isPresent ? 'مسجل حاضر (انقر للتحويل لغائب)' : 'مسجل غائب (انقر للتحويل لحاضر)'}
+                      >
+                        {isPresent ? '✓' : '✗'}
+                      </button>
+
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <h4 className="text-xs font-black text-slate-900 dark:text-white truncate">
+                            {trainee.fullName || trainee.name}
+                          </h4>
+                          <span className="text-[10px] font-mono text-slate-500 font-bold shrink-0">
+                            {trainee.code || trainee.studentCode}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          <span className="text-[10px] text-blue-600 dark:text-blue-400 font-black flex items-center gap-0.5">
+                            <Star className="w-3 h-3 fill-blue-500" />
+                            {currentPts} نقطة
+                          </span>
+                          {!isPresent && (
+                            <span className="text-[9px] text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-500/10 px-1.5 rounded">
+                              غائب
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
 
-                    <div className="text-left">
-                      {r.isCorrect ? (
-                        <div>
-                          <span className="text-xs font-black text-emerald-400 font-mono block">
-                            +{r.pointsEarned || 15} نقطة
-                          </span>
-                          <span className="text-[10px] text-cyan-300 font-mono block">
-                            ⏱️ {r.responseTimeSeconds || 2.1}s
-                          </span>
-                        </div>
-                      ) : (
-                        <span className="text-xs font-bold text-rose-400 bg-rose-500/10 px-2 py-0.5 rounded-full border border-rose-500/30">
-                          إجابة خاطئة
-                        </span>
-                      )}
+                    {/* Instant Points Buttons */}
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        onClick={() => handleAwardPoints(trainee, 1, 'إجابة سريعة')}
+                        className="px-2 py-1.5 bg-blue-50 hover:bg-blue-100 dark:bg-blue-500/15 dark:hover:bg-blue-500/30 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-500/30 rounded-xl text-xs font-black transition-all active:scale-90 cursor-pointer"
+                        title="منح +1 نقطة"
+                      >
+                        +1 ⭐
+                      </button>
+
+                      <button
+                        onClick={() => handleAwardPoints(trainee, 5, 'تفاعل ومشاركة متميزة')}
+                        className="px-2.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black shadow-sm transition-all active:scale-90 cursor-pointer border border-indigo-500"
+                        title="منح +5 نقاط"
+                      >
+                        +5 🌟
+                      </button>
+
+                      <button
+                        onClick={() => handleAwardPoints(trainee, 10, 'إبداع وتفوق استثنائي')}
+                        className="px-2.5 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-black shadow-sm transition-all active:scale-90 cursor-pointer border border-purple-500"
+                        title="منح +10 نقاط"
+                      >
+                        +10 🏆
+                      </button>
+
+                      <button
+                        onClick={() => handleAwardPoints(trainee, -2, 'تنبيه انضباط')}
+                        className="p-1 bg-rose-50 hover:bg-rose-100 dark:bg-rose-500/10 dark:hover:bg-rose-500/25 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-500/20 rounded-xl text-[10px] font-bold transition-all active:scale-90 cursor-pointer"
+                        title="خصم 2 نقطة"
+                      >
+                        -2
+                      </button>
                     </div>
                   </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ========================================================================= */}
-      {/* TAB 5: SMART AI LANGUAGE LAB (معمل اللغات الذكي التفاعلي 🗣️) */}
-      {/* ========================================================================= */}
-      {activeTab === 'language_lab' && (
-        <div className="space-y-6 animate-fadeIn">
-          <div className="bg-gradient-to-r from-slate-900 via-teal-950/40 to-slate-900 border border-teal-500/30 rounded-3xl p-6 shadow-2xl relative overflow-hidden">
-            <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border-b border-slate-800 pb-5">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-2xl bg-teal-500/20 border border-teal-500/40 flex items-center justify-center text-teal-300 font-bold">
-                  🗣️
-                </div>
-                <div>
-                  <h3 className="text-base font-black text-slate-100 flex items-center gap-2">
-                    معمل اللغات والمحادثة التفاعلية الذكي (AI Language Lab 🗣️)
-                  </h3>
-                  <p className="text-xs text-slate-400 mt-0.5">
-                    محادثة حية، محاكاة سيناريوهات حقيقية، تقييم نطق ومفردات وفق الإطار الأوروبي المرجعي (CEFR)
-                  </p>
-                </div>
-              </div>
-
-              {/* CEFR Selector */}
-              <div className="flex items-center gap-2 bg-slate-950 p-1.5 rounded-2xl border border-slate-800">
-                <span className="text-xs font-bold text-slate-400 mr-2">مستوى التقييم:</span>
-                {(['A1', 'A2', 'B1', 'B2', 'C1'] as const).map((lvl) => (
-                  <button
-                    key={lvl}
-                    onClick={() => setLangCefrLevel(lvl)}
-                    className={`px-3 py-1 rounded-xl font-mono text-xs font-black transition-all ${
-                      langCefrLevel === lvl
-                        ? 'bg-teal-500 text-slate-950 shadow-md'
-                        : 'text-slate-400 hover:text-slate-200'
-                    }`}
-                  >
-                    {lvl}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Persona Selector */}
-            <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-              {[
-                { id: 'interview', name: 'مقابلة عمل (Job Interview)', desc: 'أسئلة التوظيف والمهارات بالإنجليزية', icon: Crown },
-                { id: 'airport', name: 'استقبال المطار والخدمات', desc: 'محادثات السفر والفنادق والمطار', icon: Globe },
-                { id: 'tech_support', name: 'الدعم الفني والبرمجة', desc: 'مصطلحات التقنية والاجتماعات البرمجية', icon: Layers },
-                { id: 'daily', name: 'حوار يومي تعبيري', desc: 'محادثة مفتوحة ومواضيع اجتماعية عامة', icon: Users }
-              ].map((p) => (
-                <button
-                  key={p.id}
-                  onClick={() => {
-                    setLangPersona(p.id as any);
-                    if (p.id === 'interview') setLangPracticePrompt('Tell me about your greatest strengths and how you handle pressure in a team.');
-                    else if (p.id === 'airport') setLangPracticePrompt('Good morning! May I see your passport and flight ticket, please?');
-                    else if (p.id === 'tech_support') setLangPracticePrompt('Could you describe the main architecture issue you are experiencing with the server?');
-                    else setLangPracticePrompt('How do you usually spend your weekend and what are your favorite hobbies?');
-                  }}
-                  className={`p-4 rounded-2xl border text-right transition-all ${
-                    langPersona === p.id
-                      ? 'bg-teal-500/20 border-teal-500 text-teal-200 shadow-lg ring-1 ring-teal-500/50'
-                      : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:border-slate-700'
-                  }`}
-                >
-                  <p.icon className="w-5 h-5 text-teal-400 mb-2" />
-                  <h4 className="font-bold text-xs text-slate-100">{p.name}</h4>
-                  <p className="text-[10px] text-slate-400 mt-1">{p.desc}</p>
-                </button>
-              ))}
-            </div>
-
-            {/* Conversation Arena */}
-            <div className="mt-6 bg-slate-950 border border-slate-800 rounded-2xl p-5 space-y-4">
-              <div className="p-4 rounded-2xl bg-slate-900 border border-teal-500/20 flex items-start gap-3">
-                <div className="w-8 h-8 rounded-full bg-teal-500/20 flex items-center justify-center text-teal-300 shrink-0 font-bold text-xs">
-                  AI
-                </div>
-                <div>
-                  <span className="text-[10px] text-teal-400 font-bold block mb-1">
-                    المدرب الصوتي لـ Nagah Language Lab ({langPersona.toUpperCase()} • Level {langCefrLevel}):
-                  </span>
-                  <p className="text-sm font-mono text-slate-100 font-bold leading-relaxed">
-                    "{langPracticePrompt}"
-                  </p>
-                </div>
-              </div>
-
-              {/* Response Controls */}
-              <div className="flex flex-col sm:flex-row items-center gap-3">
-                <button
-                  onClick={() => {
-                    setLangAudioRecording(!langAudioRecording);
-                    if (!langAudioRecording) {
-                      showToast('جاري تسجيل إجابتك الصوتية... تحدث بالإنجليزية الآن 🎙️', 'info');
-                      setTimeout(() => {
-                        setLangAudioRecording(false);
-                        setLangFeedback({
-                          score: 92,
-                          fluency: 'ممتاز وعالي الطلاقة (Fluency 92%)',
-                          grammar: 'استخدام سليم لزمن المضارع التام وقواعد الاتصال',
-                          cefrScore: `متوافق مع مستوى ${langCefrLevel}`,
-                          improvedVersion: 'Excellent response! Consider adding specific metrics like "increased efficiency by 25%" for higher C1 score.'
-                        });
-                        showToast('تم تحليل استجابتك بواسطة Gemini 1.5 Pro بنجاح ✨', 'success');
-                      }, 4000);
-                    }
-                  }}
-                  className={`w-full sm:w-auto px-6 py-3 rounded-2xl font-black text-xs flex items-center justify-center gap-2 transition-all shadow-lg ${
-                    langAudioRecording
-                      ? 'bg-rose-600 text-white animate-pulse'
-                      : 'bg-teal-500 hover:bg-teal-400 text-slate-950'
-                  }`}
-                >
-                  <Radio className="w-4 h-4" />
-                  <span>{langAudioRecording ? 'جاري الاستماع للتحليل... 🎙️' : 'تسجيل إجابتك الصوتية بالإنجليزية 🎙️'}</span>
-                </button>
-
-                <span className="text-xs text-slate-400">أو اكتب ردك النصي للاختبار السريع:</span>
-                <input
-                  type="text"
-                  placeholder="I believe my key strength is problem solving and clear communication..."
-                  className="flex-1 bg-slate-900 border border-slate-700 px-4 py-2.5 rounded-2xl text-xs text-slate-100 focus:outline-none focus:border-teal-400"
-                />
-              </div>
-
-              {/* AI Feedback Panel */}
-              {langFeedback && (
-                <div className="p-4 bg-teal-950/30 border border-teal-500/30 rounded-2xl space-y-2 text-xs text-teal-200 animate-in fade-in">
-                  <div className="flex items-center justify-between font-bold border-b border-teal-500/20 pb-2">
-                    <span className="flex items-center gap-2">
-                      <Sparkles className="w-4 h-4 text-amber-400" />
-                      تقرير التحليل الصوتي واللغوي الفوري:
-                    </span>
-                    <span className="font-mono text-amber-400 text-sm font-black">الدرجة: {langFeedback.score}/100</span>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
-                    <div>الطلاقة ومخارج الحروف: <strong className="text-slate-100">{langFeedback.fluency}</strong></div>
-                    <div>القواعد والتركيب: <strong className="text-slate-100">{langFeedback.grammar}</strong></div>
-                  </div>
-                  <div className="pt-2 border-t border-teal-500/20 text-[11px] text-slate-300">
-                    <span className="text-teal-400 font-bold block mb-0.5">التطوير الموصى به لرفع المستوى:</span>
-                    <p className="font-mono italic text-slate-200">{langFeedback.improvedVersion}</p>
-                  </div>
-                </div>
-              )}
-            </div>
+                );
+              })
+            )}
           </div>
         </div>
       )}
 
-      {/* Session Ending & Podium Ceremony Modal */}
-      {isCeremonyOpen && (
-        <SessionCeremonyModal
-          trainees={trainees}
-          groups={groups}
-          initialGroupId={effectiveCockpitGroupId || effectiveGroup?.id || selectedGroup?.id || groups[0]?.id}
-          initialAttendeesOnly={false}
-          onClose={() => setIsCeremonyOpen(false)}
-          onAwardBonus={handleAwardBonus}
-        />
+      {/* 5. TAB 3: LECTURE RECAP & HOMEWORK HUB (ملخص المحاضرة والواجبات) */}
+      {activeTab === 'recap' && (
+        <div className="animate-fadeIn">
+          <LectureRecapManager
+            mode="trainer_admin"
+            currentGradeLevel={branchGroups.find(g => g.id === selectedGroupId)?.name || 'الصف الرابع الابتدائي (Grade 4 Languages)'}
+          />
+        </div>
       )}
 
-      {/* Smart Whiteboard Modal */}
+      {/* MODALS */}
+      {/* 1. Smart Whiteboard */}
       {isWhiteboardOpen && (
         <SmartWhiteboardModal
           isOpen={isWhiteboardOpen}
@@ -2747,27 +1201,29 @@ console.log("نتيجة الطالب:", calculateGrade(48, 50));`);
         />
       )}
 
-      {/* Celebration Balloons & Fanfare Overlay */}
-      <CelebrationBalloonsOverlay
-        isActive={celebrationOverlay.active}
-        title={celebrationOverlay.title}
-        pointsBadge={celebrationOverlay.pointsBadge}
-        subtitle={celebrationOverlay.subtitle}
-        onComplete={() => setCelebrationOverlay(prev => ({ ...prev, active: false }))}
-      />
-
-      {/* All In One Master Lesson Plan Modal */}
+      {/* 2. All In One AI Lesson Plan Pack */}
       {isAllInOneModalOpen && (
         <AllInOneLessonPlanModal
           isOpen={isAllInOneModalOpen}
           onClose={() => setIsAllInOneModalOpen(false)}
-          onLaunchKahoot={(quiz) => {
-            setIsAllInOneModalOpen(false);
-            if (quiz) {
-              setQuizzes(prev => [quiz, ...prev]);
-              handleStartNagahQuiz(quiz);
-            }
+          activeBranchId={activeBranchId}
+          courses={courses}
+          groups={groups}
+          trainers={trainers}
+          onPlanGenerated={(plan) => {
+            showToast('تم توليد حزمة الدرس بنجاح! 🪄', 'success');
           }}
+        />
+      )}
+
+      {/* 3. Celebration Overlay */}
+      {celebrationOverlay.active && (
+        <CelebrationBalloonsOverlay
+          active={celebrationOverlay.active}
+          title={celebrationOverlay.title}
+          pointsBadge={celebrationOverlay.pointsBadge}
+          subtitle={celebrationOverlay.subtitle}
+          onComplete={() => setCelebrationOverlay({ active: false })}
         />
       )}
     </div>

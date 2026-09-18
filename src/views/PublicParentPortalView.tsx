@@ -19,6 +19,7 @@ import { Trainee, TraineeBadge, TraineeEvaluation, AttendanceRecord, LabSchedule
 import { sessionEventsService, SessionEvent } from '../services/sessionEventsService';
 import { SessionCelebrationOverlay } from '../components/SessionCelebrationOverlay';
 import { AudioAutoplayUnlockBanner } from '../components/AudioAutoplayUnlockBanner';
+import { LectureRecapManager } from '../components/homeworks/LectureRecapManager';
 import { audioService } from '../services/audioService';
 
 interface ChildRecord extends Trainee {
@@ -83,7 +84,7 @@ export const PublicParentPortalView: React.FC<PublicParentPortalViewProps> = ({ 
   const [isChildSelectorOpen, setIsChildSelectorOpen] = useState(false);
 
   // UI Navigation Tabs
-  const [activeTab, setActiveTab] = useState<'overview' | 'courses' | 'finance' | 'messages'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'courses' | 'recap' | 'finance' | 'messages'>('overview');
 
   // Loading & Errors
   const [isLoading, setIsLoading] = useState(false);
@@ -1039,6 +1040,18 @@ export const PublicParentPortalView: React.FC<PublicParentPortalViewProps> = ({ 
               </button>
 
               <button
+                onClick={() => setActiveTab('recap')}
+                className={`flex-1 py-2.5 px-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 shrink-0 cursor-pointer ${
+                  activeTab === 'recap'
+                    ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950 font-black shadow-lg shadow-amber-500/30'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-amber-500 dark:hover:text-amber-400 hover:bg-amber-50 dark:hover:bg-slate-800/60'
+                }`}
+              >
+                <BookOpen className="w-4 h-4" />
+                <span>ملخص المحاضرة والواجبات 📚</span>
+              </button>
+
+              <button
                 onClick={() => setActiveTab('courses')}
                 className={`flex-1 py-2.5 px-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 shrink-0 cursor-pointer ${
                   activeTab === 'courses'
@@ -1127,6 +1140,33 @@ export const PublicParentPortalView: React.FC<PublicParentPortalViewProps> = ({ 
                   <NextLectureWidget groupDetails={selectedChild.groupDetails} variant="parent" />
                 )}
 
+                {/* Direct Lecture Recap & Homework Alert for Parent */}
+                <div className="p-5 rounded-3xl bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-amber-500/10 border-2 border-amber-500/40 shadow-lg flex flex-col sm:flex-row items-center justify-between gap-4">
+                  <div className="space-y-1.5 text-center sm:text-right">
+                    <div className="flex items-center justify-center sm:justify-start gap-2">
+                      <span className="px-2.5 py-0.5 rounded-full bg-amber-500 text-slate-950 font-black text-[10px]">
+                        جديد اليوم 📢
+                      </span>
+                      <h3 className="font-black text-sm text-slate-900 dark:text-white flex items-center gap-1.5">
+                        <BookOpen className="w-4 h-4 text-amber-500" />
+                        <span>ملخص الحصة وتكليفات الواجب المطلوب من الطالب</span>
+                      </h3>
+                    </div>
+                    <p className="text-xs text-slate-600 dark:text-slate-300 max-w-xl leading-relaxed">
+                      تابع ما تعلمه ابنك اليوم في المحاضرة (فك الكيسة، مكونات الحاسوب الخمسة، دورة البيانات) وتأكد من كتابة التلخيص وحل الواجب في الكشكول قبل المحاضرة القادمة.
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('recap')}
+                    className="px-5 py-2.5 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-500 hover:brightness-110 text-slate-950 font-black text-xs shadow-md shadow-amber-500/20 active:scale-95 transition-all flex items-center gap-2 shrink-0 cursor-pointer"
+                  >
+                    <span>فتح ملخص وتكليفات الواجب 🚀</span>
+                    <ArrowRight className="w-4 h-4 rotate-180" />
+                  </button>
+                </div>
+
                 {/* Trainer Info Card */}
                 {selectedChild.trainer && (
                   <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-between gap-4">
@@ -1179,6 +1219,19 @@ export const PublicParentPortalView: React.FC<PublicParentPortalViewProps> = ({ 
                     </div>
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* TAB: LECTURE RECAP & TODAY'S HOMEWORK ASSIGNMENTS FOR PARENTS */}
+            {activeTab === 'recap' && selectedChild && (
+              <div className="space-y-4">
+                <LectureRecapManager
+                  mode="parent_view"
+                  currentGradeLevel={selectedChild.groupName || selectedChild.courseName || 'الصف الرابع الابتدائي (Grade 4 Languages)'}
+                  studentGradeLevel={selectedChild.groupName || selectedChild.courseName}
+                  studentName={selectedChild.fullName}
+                  studentCode={selectedChild.code}
+                />
               </div>
             )}
 
@@ -1903,6 +1956,13 @@ export const PublicParentPortalView: React.FC<PublicParentPortalViewProps> = ({ 
           >
             <TrendingUp className="w-4 h-4" />
             <span className="text-[9px] font-bold">الملف والمتابعة</span>
+          </button>
+          <button
+            onClick={() => setActiveTab('recap')}
+            className={`flex flex-col items-center gap-1 flex-1 py-1 transition-all ${activeTab === 'recap' ? 'text-amber-500 dark:text-amber-400 font-bold scale-105' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'}`}
+          >
+            <BookOpen className="w-4 h-4" />
+            <span className="text-[9px] font-bold">الواجب والملخص</span>
           </button>
           <button
             onClick={() => setActiveTab('courses')}

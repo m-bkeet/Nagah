@@ -21,6 +21,7 @@ import {
   Palette
 } from 'lucide-react';
 import { Group, Trainer } from '../../types';
+import { ProjectorAudioControlBar } from './ProjectorAudioControlBar';
 
 interface LiveLectureStudioProps {
   trainer: Trainer;
@@ -277,6 +278,9 @@ export const LiveLectureStudio: React.FC<LiveLectureStudioProps> = ({
           )}
         </div>
       </div>
+
+      {/* Direct HDMI & Screen Microphone Audio Projection */}
+      <ProjectorAudioControlBar />
 
       {/* Shareable Student Link Box */}
       <div className="bg-slate-950 border border-slate-800 p-4 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-3">

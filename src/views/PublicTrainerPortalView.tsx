@@ -52,6 +52,7 @@ import { AdvancedExamMaker } from '../components/trainer/AdvancedExamMaker';
 import { TrainerLanguageLabView } from '../components/languageLab/TrainerLanguageLabView';
 import { TrainerGroupsManager } from '../components/trainer/TrainerGroupsManager';
 import { TrainerContentPlanner } from '../components/trainer/TrainerContentPlanner';
+import { LectureRecapManager } from '../components/homeworks/LectureRecapManager';
 import { isTrainerSessionActive, setTrainerLabSessionState } from '../utils/labSecurity';
 
 interface PublicTrainerPortalViewProps {
@@ -83,6 +84,7 @@ export const PublicTrainerPortalView: React.FC<PublicTrainerPortalViewProps> = (
 
   // Active Tab & Navigation Ref
   const [activeTab, setActiveTab] = useState<'attendance' | 'homework' | 'grades' | 'finances' | 'schedule' | 'ai_presentation' | 'live_lecture' | 'ai_exam_maker' | 'ai_assistant' | 'ai_messaging' | 'credentials' | 'language_lab' | 'groups' | 'content_planner'>('attendance');
+  const [homeworkSubTab, setHomeworkSubTab] = useState<'recaps' | 'submissions'>('recaps');
   const [tabCategory, setTabCategory] = useState<'all' | 'teaching' | 'interactive' | 'eval' | 'ai' | 'account'>('all');
   const tabContainerRef = React.useRef<HTMLDivElement>(null);
 
@@ -1380,21 +1382,58 @@ export const PublicTrainerPortalView: React.FC<PublicTrainerPortalViewProps> = (
               </div>
             )}
 
-            {/* TAB 2: HOMEWORK CORRECTION & REVIEWS */}
+            {/* TAB 2: HOMEWORK CORRECTION & REVIEWS & LECTURE RECAPS */}
             {activeTab === 'homework' && (
-              <div className="space-y-4">
-                <div className="bg-slate-900/80 border border-slate-800 rounded-3xl p-5 shadow-xl">
-                  <h3 className="font-bold text-sm text-slate-100 flex items-center gap-2 mb-4">
-                    <BookOpen className="w-5 h-5 text-indigo-400" />
-                    <span>واجبات الطلاب المسلمة عبر البوابة</span>
-                  </h3>
+              <div className="space-y-5">
+                {/* Sub-Tabs Switcher for Trainer */}
+                <div className="flex items-center gap-2 p-1.5 bg-slate-900/90 border border-slate-800 rounded-2xl">
+                  <button
+                    onClick={() => setHomeworkSubTab('recaps')}
+                    className={`flex-1 py-2.5 px-4 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 ${
+                      homeworkSubTab === 'recaps'
+                        ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950 font-black shadow-lg shadow-amber-500/20'
+                        : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+                    }`}
+                  >
+                    <BookOpen className="w-4 h-4" />
+                    <span>ملخص وتكليفات المحاضرات (الهيكل الرباعي + الذكاء الاصطناعي) 📚</span>
+                  </button>
 
-                  {homeworkSubmissions.length === 0 ? (
-                    <div className="py-12 text-center text-slate-400">
-                      لم يقم أي طالب بتسليم واجبات جديدة حتى الآن.
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <button
+                    onClick={() => setHomeworkSubTab('submissions')}
+                    className={`flex-1 py-2.5 px-4 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 ${
+                      homeworkSubTab === 'submissions'
+                        ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20'
+                        : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+                    }`}
+                  >
+                    <Award className="w-4 h-4" />
+                    <span>واجبات الطلاب وتصحيحها ({homeworkSubmissions.length}) 📥</span>
+                  </button>
+                </div>
+
+                {/* VIEW 1: LECTURE RECAP MANAGER */}
+                {homeworkSubTab === 'recaps' && (
+                  <LectureRecapManager
+                    mode="trainer_admin"
+                    currentGradeLevel={groups[0]?.name || 'الصف الرابع الابتدائي (Grade 4 Languages)'}
+                  />
+                )}
+
+                {/* VIEW 2: SUBMISSIONS CORRECTION */}
+                {homeworkSubTab === 'submissions' && (
+                  <div className="bg-slate-900/80 border border-slate-800 rounded-3xl p-5 shadow-xl">
+                    <h3 className="font-bold text-sm text-slate-100 flex items-center gap-2 mb-4">
+                      <BookOpen className="w-5 h-5 text-indigo-400" />
+                      <span>واجبات الطلاب المسلمة عبر البوابة</span>
+                    </h3>
+
+                    {homeworkSubmissions.length === 0 ? (
+                      <div className="py-12 text-center text-slate-400">
+                        لم يقم أي طالب بتسليم واجبات جديدة حتى الآن.
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       {homeworkSubmissions.map((sub) => {
                         const student = trainees.find(t =>
                           t.id === sub.traineeId ||
@@ -1480,8 +1519,9 @@ export const PublicTrainerPortalView: React.FC<PublicTrainerPortalViewProps> = (
                     </div>
                   )}
                 </div>
-              </div>
-            )}
+              )}
+            </div>
+          )}
 
             {/* TAB 3: EXAM GRADES */}
             {activeTab === 'grades' && (

@@ -110,7 +110,7 @@ export const PublicHomeView: React.FC<PublicHomeViewProps> = ({ onNavigate }) =>
 
   return (
     <div 
-      className="min-h-screen font-sans pb-16 antialiased dir-rtl selection:bg-amber-500 selection:text-black transition-colors duration-300"
+      className="min-h-screen font-sans pb-16 antialiased dir-rtl selection:bg-blue-600 selection:text-white transition-colors duration-300"
       style={{
         backgroundColor: themeConfig.colors.bgMain,
         color: themeConfig.colors.textPrimary

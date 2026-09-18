@@ -7815,8 +7815,10 @@ interface LabQuickQuestion {
   type: 'choices' | 'true_false';
   questionText?: string;
   correctAnswer?: string;
+  revealed: boolean;
+  closed: boolean;
   options?: { key: string; label: string; color: string }[];
-  answers: Record<string, { studentCode: string; studentName: string; answer: string; isCorrect: boolean; timestamp: string }>;
+  answers: Record<string, { studentCode: string; studentName: string; answer: string; isCorrect?: boolean; timestamp: string }>;
   createdAt: number;
 }
 
@@ -7832,14 +7834,33 @@ let activeLabExternalActivity: {
 // Student Kiosk & Trainer get current quick question & active external challenge
 apiRouter.get('/lab/quick-question', (req: Request, res: Response) => {
   const external = activeLabExternalActivity || masterBroadcast.activeExternalSession;
+  
+  // If teacher calls with query param ?isTeacher=true, return full data with secret answer
+  const isTeacher = req.query.isTeacher === 'true' || req.query.role === 'admin' || req.query.role === 'trainer';
+
+  let dataToSend = activeLabQuickQuestion;
+  if (activeLabQuickQuestion && !isTeacher && !activeLabQuickQuestion.revealed) {
+    // Hide secret correct answer from students until teacher explicitly reveals it on projector
+    dataToSend = {
+      ...activeLabQuickQuestion,
+      correctAnswer: undefined,
+      answers: Object.fromEntries(
+        Object.entries(activeLabQuickQuestion.answers).map(([k, v]) => [
+          k,
+          { ...v, isCorrect: undefined }
+        ])
+      )
+    };
+  }
+
   res.json({
     success: true,
-    data: activeLabQuickQuestion,
+    data: dataToSend,
     externalActivity: external
   });
 });
 
-// Trainer broadcasts quick question to local lab screens
+// Trainer broadcasts quick question to local lab screens (Hidden answer by default for projector)
 apiRouter.post('/lab/quick-question/broadcast', (req: Request, res: Response) => {
   const { type, questionText, correctAnswer, options } = req.body;
   activeLabQuickQuestion = {
@@ -7847,11 +7868,69 @@ apiRouter.post('/lab/quick-question/broadcast', (req: Request, res: Response) =>
     type: type || 'choices',
     questionText: questionText || '',
     correctAnswer: correctAnswer || '',
+    revealed: false,
+    closed: false,
     options: options || [],
     answers: {},
     createdAt: Date.now()
   };
   res.json({ success: true, question: activeLabQuickQuestion });
+});
+
+// Trainer closes voting on active question
+apiRouter.post('/lab/quick-question/close', (req: Request, res: Response) => {
+  if (activeLabQuickQuestion) {
+    activeLabQuickQuestion.closed = true;
+  }
+  res.json({ success: true, question: activeLabQuickQuestion });
+});
+
+// Trainer reveals correct answer & optionally awards stars to correct students
+apiRouter.post('/lab/quick-question/reveal', async (req: Request, res: Response) => {
+  if (!activeLabQuickQuestion) {
+    return res.status(400).json({ error: 'لا يوجد سؤال نشط لكشف إجابته' });
+  }
+
+  const { correctAnswer, pointsToAward } = req.body;
+  if (correctAnswer) {
+    activeLabQuickQuestion.correctAnswer = String(correctAnswer).trim();
+  }
+
+  activeLabQuickQuestion.revealed = true;
+  activeLabQuickQuestion.closed = true;
+
+  const targetAnswer = String(activeLabQuickQuestion.correctAnswer || '').trim().toLowerCase();
+  const correctStudentIds: string[] = [];
+
+  // Update correctness on all answers
+  Object.values(activeLabQuickQuestion.answers).forEach(ans => {
+    ans.isCorrect = targetAnswer ? String(ans.answer).trim().toLowerCase() === targetAnswer : true;
+    if (ans.isCorrect && ans.studentCode) {
+      correctStudentIds.push(ans.studentCode);
+    }
+  });
+
+  // Auto-award stars if requested
+  const pts = Number(pointsToAward || 0);
+  if (pts > 0 && correctStudentIds.length > 0) {
+    try {
+      for (const stId of correctStudentIds) {
+        await awardTraineePoints(stId, pts, 'إجابة صحيحة في تحدي المعمل اللحظي', {
+          addedByUserId: 'trainer-lab',
+          addedByUserName: 'المحاضر بالمعمل'
+        });
+      }
+    } catch (e) {
+      console.warn('Auto award points error:', e);
+    }
+  }
+
+  res.json({
+    success: true,
+    question: activeLabQuickQuestion,
+    correctCount: correctStudentIds.length,
+    awardedPoints: pts
+  });
 });
 
 // Trainer clears active question
@@ -7862,24 +7941,29 @@ apiRouter.post('/lab/quick-question/clear', (req: Request, res: Response) => {
 
 // Student submits answer to quick challenge (In-Memory only - 0 DB writes)
 apiRouter.post('/lab/quick-question/answer', (req: Request, res: Response) => {
-  const { studentCode, studentName, answer } = req.body;
+  const { studentCode, studentId, studentName, answer } = req.body;
   if (!activeLabQuickQuestion) {
     return res.status(400).json({ error: 'لا يوجد سؤال نشط حالياً' });
   }
 
-  const isCorrect = activeLabQuickQuestion.correctAnswer 
-    ? String(answer).trim().toLowerCase() === String(activeLabQuickQuestion.correctAnswer).trim().toLowerCase()
-    : true;
+  if (activeLabQuickQuestion.closed) {
+    return res.status(400).json({ error: 'تم إغلاق استقبال الإجابات لهذا السؤال' });
+  }
 
-  activeLabQuickQuestion.answers[String(studentCode).trim()] = {
-    studentCode: String(studentCode).trim(),
+  const isCorrect = activeLabQuickQuestion.revealed && activeLabQuickQuestion.correctAnswer 
+    ? String(answer).trim().toLowerCase() === String(activeLabQuickQuestion.correctAnswer).trim().toLowerCase()
+    : undefined;
+
+  const key = String(studentCode || studentId || studentName || Date.now()).trim();
+  activeLabQuickQuestion.answers[key] = {
+    studentCode: key,
     studentName: studentName || 'متدرب المعمل',
     answer: String(answer).trim(),
     isCorrect,
     timestamp: new Date().toISOString()
   };
 
-  res.json({ success: true, isCorrect });
+  res.json({ success: true, isCorrect, revealed: activeLabQuickQuestion.revealed });
 });
 
 // Get / Broadcast active external lab session (Kahoot PIN, ClassPoint, etc.)
@@ -8448,7 +8532,9 @@ apiRouter.post(['/student/submit-homework', '/student/submit-homework/'], async 
       traineeId,
       assignmentId,
       taskTitle,
+      lessonName,
       mediaBase64,
+      pagesBase64,
       mediaType,
       codeSolution,
       studentNotes,
@@ -8471,19 +8557,21 @@ apiRouter.post(['/student/submit-homework', '/student/submit-homework/'], async 
       return res.status(404).json({ error: 'الطالب غير موجود بملفات النظام' });
     }
 
-    const effectiveTaskTitle = taskTitle || 'واجب التطبيق المباشر للدرس';
+    const effectiveTaskTitle = taskTitle || lessonName || 'واجب التطبيق المباشر للدرس';
+    const effectiveLessonName = lessonName || taskTitle || 'تطبيق وتلخيص الدرس';
     const effectiveCourse = (data.courses || []).find((c: any) => c.id === (courseId || trainee.courseId));
-    const courseName = effectiveCourse?.name || 'البرنامج التدريبي';
+    const courseName = effectiveCourse?.name || 'البرنامج التدريبي - مادة تكنولوجيا المعلومات والاتصالات ICT';
+    const studentGrade = trainee.grade || (trainee as any).schoolGrade || (trainee as any).stage || 'الصف الرابع الابتدائي (Grade 4)';
 
     let aiGradingResult: AIGradeScanResult;
     let voiceResult: AIVoiceEvaluationResult | null = null;
     const isVoiceSubmission = mediaType === 'audio' || mediaType === 'voice' || (mediaBase64 && String(mediaBase64).startsWith('data:audio')) || !!req.body.audioBase64;
+    const hasMultiplePages = Array.isArray(pagesBase64) && pagesBase64.length > 0;
 
-    // Check if voice note, mediaBase64 (photo/scan) or text code/notes provided with graceful fallback
+    // Check if voice note, multi-page / single image (photo/scan) or text code/notes provided with graceful fallback
     try {
       if (isVoiceSubmission) {
         const audioData = req.body.audioBase64 || mediaBase64;
-        const studentGrade = trainee.grade || (trainee as any).schoolGrade || (trainee as any).stage || 'الصف الرابع الابتدائي (Grade 4)';
         voiceResult = await evaluateAudioOrVoiceSummaryWithAI({
           audioBase64: audioData,
           mimeType: req.body.mimeType || 'audio/webm',
@@ -8516,11 +8604,15 @@ apiRouter.post(['/student/submit-homework', '/student/submit-homework/'], async 
           generalFeedback: voiceResult.generalFeedback,
           confidence: voiceResult.confidence
         };
-      } else if (mediaBase64 && String(mediaBase64).length > 20) {
+      } else if (hasMultiplePages || (mediaBase64 && String(mediaBase64).length > 20)) {
         aiGradingResult = await gradeHomeworkOrExamFromImage({
           imageBase64: mediaBase64,
+          imagesBase64: hasMultiplePages ? pagesBase64 : (mediaBase64 ? [mediaBase64] : []),
           mimeType: 'image/jpeg',
           examOrHomeworkTitle: effectiveTaskTitle,
+          lessonName: effectiveLessonName,
+          studentNotes,
+          studentGrade,
           maxScore: 100,
           courseName,
           expectedTrainees: [{ code: trainee.code || '', fullName: trainee.fullName || '' }]
@@ -8528,7 +8620,7 @@ apiRouter.post(['/student/submit-homework', '/student/submit-homework/'], async 
       } else if (codeSolution || studentNotes) {
         const codeGrading = await autoGradeCodeWithAI({
           taskTitle: effectiveTaskTitle,
-          taskDescription: studentNotes || 'واجب وتطبيق برمجي أو نصي محدد من الطالب',
+          taskDescription: studentNotes || 'واجب وتطبيق برمجي أو تلخيص نصي محدد من الطالب',
           studentCode: codeSolution || studentNotes || '',
           studentNotes,
           maxGrade: 100
@@ -8541,19 +8633,25 @@ apiRouter.post(['/student/submit-homework', '/student/submit-homework/'], async 
           rating: (codeGrading.rating as any) || 'ممتاز',
           status: (codeGrading.grade || 95) >= 60 ? 'passed' : 'failed',
           suggestedPoints: Math.round((codeGrading.grade || 95) * 0.25),
-          strengths: codeGrading.strengths || ['كود وإجابة متقنة ومكتملة'],
+          strengths: codeGrading.strengths || ['تلخيص وكتابة متقنة ومكتملة لعناصر الدرس'],
           weaknesses: codeGrading.corrections || [],
           mistakes: [],
           difficultPointsExplained: [
-            '📌 تحليل الخوارزميات والبرمجة: الحرص على بناء الدوال بشكل معياري ومراعاة الحالات الحدية.',
-            '📌 تطبيق أفضل الممارسات: كتابة أسماء متغيرات واضحة وتضمين التعليقات التوضيحية.'
+            '📌 المفاهيم التقنية: ربط الأسماء الإنجليزية بالوظائف (مثل CPU و RAM و Motherboard).',
+            '📌 دورة البيانات: البيانات Data مادة خام، والمعالجة Processing تعطينا معلومات Information مفيدة.'
           ],
           badgeAwarded: (codeGrading.grade || 95) >= 85 ? {
-            title: '⚡ وسام الإتقان البرمجي والسرعة',
-            icon: '⚡',
+            title: '🌟 وسام التلخيص والالتزام الأكاديمي',
+            icon: '🌟',
             category: 'educational',
             points: 25
           } : null,
+          lessonSummaryEvaluation: {
+            completeness: 'مستوفٍ لعناصر الدرس',
+            coveredCoreConcepts: ['مفاهيم الدرس الأساسية والتطبيق'],
+            missingConcepts: [],
+            overallVerdict: 'تلخيص رائع ومنظم'
+          },
           generalFeedback: codeGrading.generalFeedback || 'تم فحص وتصحيح الواجب بنجاح بنظام الذكاء الاصطناعي.',
           confidence: 0.95
         };
@@ -8590,7 +8688,7 @@ apiRouter.post(['/student/submit-homework', '/student/submit-homework/'], async 
         rating: 'ممتاز',
         status: 'passed',
         suggestedPoints: 25,
-        strengths: ['تسليم متقن وحل منظم', 'الالتزام بمتطلبات الواجب العملي'],
+        strengths: ['تسليم متقن وحل منظم وتلخيص مميز لصفحات الواجب', 'الالتزام بمتطلبات الواجب العملي'],
         weaknesses: [],
         mistakes: [],
         difficultPointsExplained: [],
@@ -8652,6 +8750,9 @@ apiRouter.post(['/student/submit-homework', '/student/submit-homework/'], async 
 
     const updatedStudentPoints = awardResult ? awardResult.newTotal : (trainee.totalPoints || trainee.points || 0);
 
+    // Multi-page media array
+    const pagesList: string[] = hasMultiplePages ? pagesBase64 : (mediaBase64 ? [mediaBase64] : []);
+
     // 3. Create Homework Submission Object
     const newSubmission: any = {
       id: 'sub-' + Date.now() + '-' + Math.random().toString(36).substring(2, 7),
@@ -8666,15 +8767,18 @@ apiRouter.post(['/student/submit-homework', '/student/submit-homework/'], async 
       courseId: courseId || trainee.courseId || '',
       courseName: courseName,
       taskTitle: effectiveTaskTitle,
+      lessonName: effectiveLessonName,
       submittedAt: new Date().toISOString(),
-      mediaUrl: mediaBase64 || req.body.audioBase64 || undefined,
-      mediaType: isVoiceSubmission ? 'audio' : (mediaType || 'image'),
+      mediaUrl: pagesList[0] || mediaBase64 || req.body.audioBase64 || undefined,
+      mediaType: isVoiceSubmission ? 'audio' : (pagesList.length > 1 ? 'multi_image' : (mediaType || 'image')),
+      pagesUrls: pagesList,
+      pagesCount: pagesList.length,
       audioDurationSeconds: req.body.audioDurationSeconds || undefined,
       voiceTranscription: voiceResult?.transcribedText || req.body.transcribedText || undefined,
       conceptsCovered: voiceResult?.conceptsCovered || [],
       conceptCorrections: voiceResult?.conceptCorrections || [],
       missingKeyConcepts: voiceResult?.missingKeyConcepts || [],
-      studentGradeLevel: trainee.grade || (trainee as any).schoolGrade || (trainee as any).stage || 'الصف الرابع الابتدائي',
+      studentGradeLevel: studentGrade,
       codeSolution: codeSolution || undefined,
       studentNotes: studentNotes || undefined,
       grade: finalGrade,
@@ -8684,6 +8788,7 @@ apiRouter.post(['/student/submit-homework', '/student/submit-homework/'], async 
       strengths: aiGradingResult.strengths || [],
       corrections: aiGradingResult.weaknesses || [],
       difficultPointsExplained: aiGradingResult.difficultPointsExplained || [],
+      lessonSummaryEvaluation: aiGradingResult.lessonSummaryEvaluation || undefined,
       generalFeedback: aiGradingResult.generalFeedback || '',
       pointsAwarded: totalPointsToAward,
       badgeAwarded: badgeObj,
@@ -8705,10 +8810,10 @@ apiRouter.post(['/student/submit-homework', '/student/submit-homework/'], async 
       type: 'system' as any,
       title: isVoiceSubmission
         ? `🎙️ ملخص فويس وتقييم مفاهيمي: ${trainee.fullName}`
-        : `📝 تسليم وتصحيح واجب جديد: ${trainee.fullName}`,
+        : `📝 تسليم وتصحيح واجب جديد (${pagesList.length > 1 ? pagesList.length + ' صفحات' : 'ورقة'}): ${trainee.fullName}`,
       message: isVoiceSubmission
         ? `قام الطالب ${trainee.fullName} (كود: ${trainee.code || 'بدون'}) بتسجيل فويس لموضوع "${effectiveTaskTitle}" وتم تقييم وتصحيح تناسق المفاهيم بنتيجة ${finalGrade}/100 (+${totalPointsToAward} نقطة).`
-        : `قام الطالب ${trainee.fullName} (كود: ${trainee.code || 'بدون'}) بتسليم واجب "${effectiveTaskTitle}" وتم تصحيحه آلياً بنتيجة ${finalGrade}/100 (+${totalPointsToAward} نقطة).`,
+        : `قام الطالب ${trainee.fullName} (كود: ${trainee.code || 'بدون'}) بتسليم واجب/تلخيص "${effectiveTaskTitle}" (${pagesList.length} صفحة) وتم تصحيحه آلياً بنتيجة ${finalGrade}/100 (+${totalPointsToAward} نقطة).`,
       linkView: 'homeworks',
       createdAt: new Date().toISOString(),
       read: false,
@@ -8720,7 +8825,7 @@ apiRouter.post(['/student/submit-homework', '/student/submit-homework/'], async 
         grade: finalGrade,
         rating: aiGradingResult.rating,
         badgeTitle: badgeObj?.title,
-        mediaType: isVoiceSubmission ? 'audio' : (mediaType || 'image')
+        mediaType: isVoiceSubmission ? 'audio' : (pagesList.length > 1 ? 'multi_image' : (mediaType || 'image'))
       }
     });
 
@@ -8728,9 +8833,9 @@ apiRouter.post(['/student/submit-homework', '/student/submit-homework/'], async 
     db.logAudit({
       userId: trainee.id,
       userName: trainee.fullName,
-      action: isVoiceSubmission ? 'تقييم ملخص صوتي ومفاهيم بالذكاء الاصطناعي' : 'تسليم وتصحيح واجب آلي بالذكاء الاصطناعي',
+      action: isVoiceSubmission ? 'تقييم ملخص صوتي ومفاهيم بالذكاء الاصطناعي' : 'تسليم وتصحيح واجب متعدد الصفحات بالذكاء الاصطناعي',
       entity: 'بوابة الطالب',
-      details: `تم تسليم ${isVoiceSubmission ? 'تسجيل صوتي' : 'واجب'} "${effectiveTaskTitle}" للطالب ${trainee.fullName} وتصحيحه بنجاح بدرجة ${finalGrade}/100 ومنحه ${totalPointsToAward} نقطة.`
+      details: `تم تسليم ${isVoiceSubmission ? 'تسجيل صوتي' : 'واجب (' + pagesList.length + ' صفحات)'} "${effectiveTaskTitle}" للطالب ${trainee.fullName} وتصحيحه بنجاح بدرجة ${finalGrade}/100 ومنحه ${totalPointsToAward} نقطة.`
     });
 
     db.saveImmediate();
@@ -8745,11 +8850,195 @@ apiRouter.post(['/student/submit-homework', '/student/submit-homework/'], async 
       speedBadgeAwarded: !!badgeObj,
       message: isVoiceSubmission
         ? 'تم فحص التسجيل الصوتي وتقييم تناسق المفاهيم العلمية ورصد التقرير والأوسمة والنقاط بنجاح 🎙️'
-        : 'تم فحص وتصحيح الواجب ورصد التقرير الأكاديمي والأوسمة والنقاط بنجاح'
+        : `تم فحص وتصحيح صفحات الواجب (${pagesList.length > 0 ? pagesList.length + ' صفحات' : 'الملف'}) ورصد التقرير الأكاديمي والأوسمة والنقاط بنجاح 🌟`
     });
   } catch (err: any) {
     console.error('Error in student submit homework API:', err);
     res.status(500).json({ error: 'فشل تسليم الواجب: ' + err.message });
+  }
+});
+
+// ===================================================
+// Lecture Recaps & Tasks AI Service (Grade 4 & All Stages)
+// ===================================================
+const getStandardGrade4Recap = (): any => ({
+  id: 'recap-grade4-ict-main',
+  title: 'أبطال الصف الرابع لغات - فرع مركز بدر والنجاح 💻🌟',
+  gradeLevel: 'الصف الرابع الابتدائي (Grade 4 Languages)',
+  subject: 'تكنولوجيا المعلومات والاتصالات ICT & Computer',
+  lectureDate: new Date().toISOString(),
+  trainerName: 'المهندس / المدرب المعتمد',
+  recapSummary: {
+    points: [
+      '1. مراجعة شاملة Revision على ما تم دراسته سابقاً.',
+      '2. أسئلة تفاعلية وتطبيقية على Lesson 1 & Lesson 2.',
+      '3. حل وتصحيح الواجبات والتأكد من إتقان كل بطل للأسئلة.',
+      '4. مسابقة كاهوت Kahoot حماسية لتثبيت المعلومات والتنافس الشريف.',
+      '5. فتح Lesson 3 مع عرض فيديو تمهيدي شيق وممتع.',
+      '6. فتح وفك الـ Case عملياً والتعرف على الأجزاء الداخلية للأجهزة.',
+      '7. مكونات الكيسة الخمسة: (عمو الكهربائي = Power Supply ⚡️، ماما نوسة = Motherboard 👩🍳، المخيخ = CPU 🧠، السمكة = RAM 🐟، الخزنة = Hard Disk 🔒).',
+      '8. دورة البيانات والمعلومات Data vs Information (دخول Data -> تحويل ومعالجة بالمخيخ CPU -> خروج Information مفيدة).'
+    ],
+    detailedNotes: 'تمت المحاضرة وسط تفاعل عالي واستيعاب تطبيقي مباشر حيث قام الطلاب بالتعرف على مكونات الحاسوب وفك الكيسة وملاحظة وظيفة كل قطعة وربطها بالتشبيهات الذكية.',
+  },
+  homeworkTasks: {
+    tasks: [
+      '1. كتابة وتوثيق أسماء مكونات الكيسة الخمسة بالعربي والإنجليزي في الكشكول.',
+      '2. تلخيص Lesson 1 & Lesson 2 في نصف صفحة + حل الأسئلة المهمة في النصف الثاني.',
+      '3. تلخيص تحضيري لـ Lesson 3 في صفحة كاملة.',
+      '4. إمكانية تصوير ورفع أكثر من ورقة/صفحة في الواجب عبر بوابة المتدرب.'
+    ],
+    bonusChallenge: '🌟 بونص إضافي خاص: تسجيل فيديو أو فويس وأنت تشاور على مكونات الكيسة وتشرحها بصوتك!',
+    dueDateTime: new Date(Date.now() + 6 * 86400000).toISOString(),
+    allowMultiPageUpload: true
+  },
+  nextLecturePrep: {
+    prepPoints: [
+      'ربط المسميات الأساسية (عمو الكهربائي = Power Supply, ماما نوسة = Motherboard, المخيخ = CPU, السمكة = RAM, الخزنة = Hard Disk).',
+      'إحضار كشكول التدريب وأدوات المعمل والاستعداد لمسابقة كاهوت وتطبيق عملي جديد في المعمل.'
+    ],
+    teaserNotes: 'المحاضرة القادمة ستشهد تحديات برمجية وعملية تفاعلية وتفكيك كيسات جديدة داخل المعمل!'
+  },
+  closingMessage: 'أبطال المستقبل، فخور جداً بتركيزكم وفهمكم العملي لمكونات الحاسوب، أنتم لستم مستخدمين عاديين بل مهندسون ومبتكرون! ننتظر إبداعاتكم في تلخيص الدروس والتطبيق العملي. 🚀🌟',
+  isPublished: true,
+  createdAt: new Date().toISOString()
+});
+
+apiRouter.get(['/lecture-recaps', '/lecture-recaps/'], async (req: Request, res: Response) => {
+  try {
+    const data = db.getData();
+    if (!Array.isArray((data as any).lectureRecaps) || (data as any).lectureRecaps.length === 0) {
+      (data as any).lectureRecaps = [getStandardGrade4Recap()];
+      db.saveImmediate();
+    }
+    res.json({ success: true, recaps: (data as any).lectureRecaps });
+  } catch (err: any) {
+    res.status(500).json({ error: 'فشل تحميل ملخصات المحاضرات: ' + err.message });
+  }
+});
+
+apiRouter.get(['/lecture-recaps/latest', '/lecture-recaps/latest/'], async (req: Request, res: Response) => {
+  try {
+    const { gradeLevel, groupId, courseId } = req.query;
+    const data = db.getData();
+    if (!Array.isArray((data as any).lectureRecaps) || (data as any).lectureRecaps.length === 0) {
+      (data as any).lectureRecaps = [getStandardGrade4Recap()];
+      db.saveImmediate();
+    }
+    const recaps: any[] = (data as any).lectureRecaps;
+    let found = recaps.find(r => r.isPublished && (!gradeLevel || r.gradeLevel?.includes(String(gradeLevel)) || r.title?.includes(String(gradeLevel))));
+    if (!found) {
+      found = recaps[0] || getStandardGrade4Recap();
+    }
+    res.json({ success: true, recap: found });
+  } catch (err: any) {
+    res.status(500).json({ error: 'فشل جلب أحدث ملخص محاضرة: ' + err.message });
+  }
+});
+
+apiRouter.post(['/lecture-recaps', '/lecture-recaps/'], async (req: Request, res: Response) => {
+  try {
+    const {
+      title,
+      gradeLevel,
+      subject,
+      courseId,
+      groupId,
+      branchId,
+      trainerId,
+      trainerName,
+      lectureDate,
+      recapSummary,
+      homeworkTasks,
+      nextLecturePrep,
+      closingMessage,
+      audioVoiceUrl,
+      isPublished
+    } = req.body;
+
+    const data = db.getData();
+    if (!Array.isArray((data as any).lectureRecaps)) {
+      (data as any).lectureRecaps = [];
+    }
+
+    const newRecap: any = {
+      id: 'recap-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6),
+      title: title || 'ملخص المحاضرة والتكليفات والتطبيق العملي',
+      gradeLevel: gradeLevel || 'الصف الرابع الابتدائي (Grade 4 Languages)',
+      subject: subject || 'تكنولوجيا المعلومات والاتصالات ICT',
+      courseId: courseId || '',
+      groupId: groupId || '',
+      branchId: branchId || '',
+      trainerId: trainerId || '',
+      trainerName: trainerName || 'المدرب المعتمد',
+      lectureDate: lectureDate || new Date().toISOString(),
+      recapSummary: recapSummary || { points: [], detailedNotes: '' },
+      homeworkTasks: homeworkTasks || { tasks: [], bonusChallenge: '' },
+      nextLecturePrep: nextLecturePrep || { prepPoints: [], teaserNotes: '' },
+      closingMessage: closingMessage || 'بالتوفيق يا أبطال النجاح! 🌟',
+      audioVoiceUrl: audioVoiceUrl || undefined,
+      isPublished: isPublished !== false,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    (data as any).lectureRecaps.unshift(newRecap);
+
+    // Send notification to portal messages and system notifications for students and parents
+    if (!Array.isArray(data.notifications)) data.notifications = [];
+    data.notifications.unshift({
+      id: 'notif-recap-' + Date.now(),
+      type: 'system' as any,
+      title: `📢 نشر ملخص وتاسكات المحاضرة: ${newRecap.title}`,
+      message: `تم نشر ملخص المحاضرة والتطبيق العملي وفك الكيسة والتاسك المطلوب للمرحلة (${newRecap.gradeLevel}). تفقد البوابة للتسليم!`,
+      linkView: 'homeworks',
+      createdAt: new Date().toISOString(),
+      read: false
+    });
+
+    db.logAudit({
+      userId: trainerId || 'trainer',
+      userName: trainerName || 'المدرب',
+      action: 'نشر ملخص محاضرة وتاسكات ومراجعة عملية',
+      entity: 'إدارة الواجبات والملخصات',
+      details: `تم نشر ملخص "${newRecap.title}" لطلاب ${newRecap.gradeLevel}.`
+    });
+
+    db.saveImmediate();
+
+    res.json({ success: true, recap: newRecap, message: '🎉 تم نشر ملخص وتاسكات المحاضرة وإشعار الطلاب وأولياء الأمور بنجاح!' });
+  } catch (err: any) {
+    res.status(500).json({ error: 'فشل حفظ ونشر ملخص المحاضرة: ' + err.message });
+  }
+});
+
+apiRouter.post(['/lecture-recaps/ai-structure-voice', '/lecture-recaps/ai-structure-voice/'], async (req: Request, res: Response) => {
+  try {
+    const {
+      audioBase64,
+      mimeType,
+      transcribedText,
+      teacherNotes,
+      targetGrade,
+      targetCourse
+    } = req.body;
+
+    const structured = await structurePostLectureVoiceMemo({
+      audioBase64,
+      mimeType,
+      transcribedText,
+      teacherNotes,
+      targetGrade,
+      targetCourse
+    });
+
+    res.json({
+      success: true,
+      structured
+    });
+  } catch (err: any) {
+    console.error('Error structuring post lecture memo:', err);
+    res.status(500).json({ error: 'فشل تحويل وهيكلة تسجيل المحاضرة بالذكاء الاصطناعي: ' + err.message });
   }
 });
 

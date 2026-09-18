@@ -258,7 +258,7 @@ const AppContent: React.FC = () => {
 
   return (
     <div 
-      className="min-h-screen flex flex-col text-slate-100 antialiased selection:bg-amber-500 selection:text-black font-sans"
+      className="min-h-screen flex flex-col text-slate-900 dark:text-slate-100 antialiased selection:bg-blue-600 selection:text-white font-sans"
       style={{
         backgroundColor: themeConfig.colors.bgMain,
         color: themeConfig.colors.textPrimary

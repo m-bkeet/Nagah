@@ -15,6 +15,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { AIExplainModal } from '../components/AIExplainModal';
 import { KahootGameModal } from '../components/homeworks/KahootGameModal';
 import { VoiceSummaryRecorderModal } from '../components/homeworks/VoiceSummaryRecorderModal';
+import { LectureRecapManager } from '../components/homeworks/LectureRecapManager';
 import { ThemeQuickSwitcher } from '../components/ThemeQuickSwitcher';
 import html2canvas from 'html2canvas';
 import {
@@ -544,14 +545,17 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
   // Homework Upload Form State
   const [selectedTaskTitle, setSelectedTaskTitle] = useState('واجب تطبيق الدرس العملي والمشروع الرئيسي');
   const [customTaskTitle, setCustomTaskTitle] = useState('');
+  const [selectedLessonName, setSelectedLessonName] = useState('Lesson 3: Computer Case & Components');
   const [studentNotes, setStudentNotes] = useState('');
   const [selectedImageBase64, setSelectedImageBase64] = useState<string | null>(null);
+  const [selectedPages, setSelectedPages] = useState<{ id: string; base64: string; name?: string }[]>([]);
   const [selectedVideoName, setSelectedVideoName] = useState<string | null>(null);
-  const [mediaType, setMediaType] = useState<'image' | 'video' | 'text'>('image');
+  const [mediaType, setMediaType] = useState<'image' | 'video' | 'text' | 'multi_image'>('image');
   const [isSubmittingHomework, setIsSubmittingHomework] = useState(false);
   const [submitSuccessMsg, setSubmitSuccessMsg] = useState('');
   const [lastSubmissionResult, setLastSubmissionResult] = useState<HomeworkSubmission | null>(null);
   const [speedBadgeWonAlert, setSpeedBadgeWonAlert] = useState(false);
+  const [previewZoomImage, setPreviewZoomImage] = useState<string | null>(null);
 
   // Camera capture modal state
   const [isCameraActive, setIsCameraActive] = useState(false);
@@ -559,7 +563,7 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   // Tabs inside Student Portal
-  const [activeTab, setActiveTab] = useState<'submit' | 'history' | 'badges' | 'schedule' | 'certificates' | 'profile' | 'language_lab' | 'finance'>('submit');
+  const [activeTab, setActiveTab] = useState<'submit' | 'history' | 'badges' | 'schedule' | 'certificates' | 'profile' | 'language_lab' | 'finance' | 'recap_tasks'>('submit');
   const [isTrainerLabSessionActive, setIsTrainerLabSessionActive] = useState<boolean>(() => isTrainerSessionActive(student?.branchId));
 
   useEffect(() => {
@@ -1022,34 +1026,67 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
     }
   };
 
-  // Image / File Input Change with auto-compression
+  // Image / Multi-page File Input Change with auto-compression
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
 
-    if (file.type.startsWith('video/')) {
+    const fileList = Array.from(files);
+    
+    // Check for video
+    const videoFile = fileList.find(f => f.type.startsWith('video/'));
+    if (videoFile) {
       setMediaType('video');
-      setSelectedVideoName(file.name);
+      setSelectedVideoName(videoFile.name);
       const reader = new FileReader();
       reader.onload = () => {
-        setSelectedImageBase64(reader.result as string);
+        const res = reader.result as string;
+        setSelectedImageBase64(res);
+        setSelectedPages([{ id: 'page-' + Date.now(), base64: res, name: videoFile.name }]);
       };
-      reader.readAsDataURL(file);
-    } else {
-      setMediaType('image');
-      setSelectedVideoName(null);
-      const reader = new FileReader();
-      reader.onload = async () => {
-        const rawBase64 = reader.result as string;
-        try {
-          const compressed = await compressImage(rawBase64, 1200, 1200, 0.82);
-          setSelectedImageBase64(compressed);
-        } catch {
-          setSelectedImageBase64(rawBase64);
-        }
-      };
-      reader.readAsDataURL(file);
+      reader.readAsDataURL(videoFile);
+      return;
     }
+
+    // Multiple Images/Pages handler
+    setMediaType(fileList.length > 1 ? 'multi_image' : 'image');
+    setSelectedVideoName(null);
+
+    const newPages: { id: string; base64: string; name?: string }[] = [];
+
+    for (let i = 0; i < fileList.length; i++) {
+      const file = fileList[i];
+      const base64 = await new Promise<string>((resolve) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.readAsDataURL(file);
+      });
+
+      try {
+        const compressed = await compressImage(base64, 1200, 1200, 0.82);
+        newPages.push({ id: `page-${Date.now()}-${i}-${Math.random().toString(36).substr(2, 4)}`, base64: compressed, name: file.name });
+      } catch {
+        newPages.push({ id: `page-${Date.now()}-${i}-${Math.random().toString(36).substr(2, 4)}`, base64, name: file.name });
+      }
+    }
+
+    setSelectedPages(prev => [...prev, ...newPages]);
+    if (newPages.length > 0 && !selectedImageBase64) {
+      setSelectedImageBase64(newPages[0].base64);
+    }
+  };
+
+  const handleRemovePage = (id: string) => {
+    setSelectedPages(prev => {
+      const filtered = prev.filter(p => p.id !== id);
+      if (filtered.length === 0) {
+        setSelectedImageBase64(null);
+        setMediaType('image');
+      } else {
+        setSelectedImageBase64(filtered[0].base64);
+      }
+      return filtered;
+    });
   };
 
   // Start Camera Capture
@@ -1076,13 +1113,20 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
       if (ctx) {
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
         const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+        let finalData = dataUrl;
         try {
-          const compressed = await compressImage(dataUrl, 1200, 1200, 0.82);
-          setSelectedImageBase64(compressed);
-        } catch {
-          setSelectedImageBase64(dataUrl);
-        }
-        setMediaType('image');
+          finalData = await compressImage(dataUrl, 1200, 1200, 0.82);
+        } catch {}
+
+        const newPageItem = {
+          id: `page-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+          base64: finalData,
+          name: `صفحة مصورة ${selectedPages.length + 1}`
+        };
+
+        setSelectedPages(prev => [...prev, newPageItem]);
+        setSelectedImageBase64(finalData);
+        setMediaType(selectedPages.length >= 1 ? 'multi_image' : 'image');
       }
       // Stop tracks
       const stream = video.srcObject as MediaStream;
@@ -1101,14 +1145,18 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
     setIsCameraActive(false);
   };
 
-  // Submit Homework Action
+  // Submit Homework Action (Supports Multi-Page, Audio, Lesson Title, and conceptual summary evaluation)
   const handleSubmitHomework = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!student) return;
 
     const taskTitle = customTaskTitle.trim() || selectedTaskTitle;
-    if (!selectedImageBase64 && !studentNotes.trim()) {
-      alert('يرجى رفع صورة للواجب أو التقاطها أو كتابة نص الإجابة ليقوم الذكاء الاصطناعي بتصحيحها.');
+    const pagesList = selectedPages.length > 0 
+      ? selectedPages.map(p => p.base64) 
+      : (selectedImageBase64 ? [selectedImageBase64] : []);
+
+    if (pagesList.length === 0 && !studentNotes.trim()) {
+      alert('يرجى رفع أو تصوير ورقة أو أكثر للواجب أو كتابة نص الإجابة ليقوم الذكاء الاصطناعي بتصحيحها.');
       return;
     }
 
@@ -1121,8 +1169,10 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
       const payload = {
         traineeId: student.id,
         taskTitle,
-        mediaBase64: selectedImageBase64,
-        mediaType,
+        lessonName: selectedLessonName,
+        pagesBase64: pagesList,
+        mediaBase64: pagesList[0] || selectedImageBase64,
+        mediaType: pagesList.length > 1 ? 'multi_image' : mediaType,
         studentNotes
       };
 
@@ -1130,7 +1180,7 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
         url: '/student/submit-homework',
         method: 'POST',
         body: payload,
-        description: `تسليم واجب: ${taskTitle}`
+        description: `تسليم واجب (${pagesList.length} ورقة/صفحة): ${taskTitle}`
       });
 
       // Show mock result in history so student has immediate feedback
@@ -1140,24 +1190,28 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
         traineeCode: student.code || 'م001',
         traineeName: student.fullName || 'طالب النجاح',
         taskTitle,
-        mediaUrl: selectedImageBase64 || undefined,
-        mediaType: mediaType || 'image',
+        lessonName: selectedLessonName,
+        pageCount: pagesList.length,
+        pagesUrls: pagesList,
+        mediaUrl: pagesList[0] || selectedImageBase64 || undefined,
+        mediaType: (pagesList.length > 1 ? 'multi_image' : mediaType) as any,
         submittedAt: new Date().toISOString(),
         grade: 10,
         maxGrade: 10,
         percentage: 100,
         rating: 'ممتاز',
-        strengths: ['مستوى متميز ومثابرة عالية في التعلم ومواصلة التدريب في أصعب الأوقات', 'تم التسجيل في وضع الطوارئ بنجاح'],
+        strengths: [`تم رفع عدد ${pagesList.length || 1} ورقة بنجاح`, 'مستوى متميز ومثابرة عالية في التعلم ومواصلة التدريب'],
         corrections: [],
-        generalFeedback: '📝 تم تسجيل وحفظ الواجب بنجاح في وضع الطوارئ المحلي (طابور العمليات). سيقوم النظام بمزامنته وتصحيحه بالذكاء الاصطناعي تلقائياً فور عودة اتصالك بالإنترنت! أنت ممتاز ومثابر يا بطل! 🚀',
+        generalFeedback: `📝 تم تسجيل وحفظ الواجب (${pagesList.length || 1} صفحة) بنجاح في وضع الطوارئ المحلي (طابور العمليات). سيقوم النظام بمزامنته وتصحيحه بالذكاء الاصطناعي تلقائياً فور عودة اتصالك بالإنترنت! أنت ممتاز ومثابر يا بطل! 🚀`,
         pointsAwarded: 10,
         isSpeedWinner: false,
         submissionChannel: 'home_student_portal'
       };
 
       setHomeworks(prev => [mockResult, ...prev]);
-      setSubmitSuccessMsg('📡 تم حفظ واجبك بنجاح في طابور العمليات المعلقة وسيرتفع تلقائياً فور توفر الإنترنت!');
+      setSubmitSuccessMsg(`📡 تم حفظ واجبك (${pagesList.length || 1} صفحة) بنجاح في طابور العمليات وسيرتفع تلقائياً فور توفر الإنترنت!`);
       setSelectedImageBase64(null);
+      setSelectedPages([]);
       setSelectedVideoName(null);
       setStudentNotes('');
       setCustomTaskTitle('');
@@ -1172,8 +1226,10 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
         body: JSON.stringify({
           traineeId: student.id,
           taskTitle,
-          mediaBase64: selectedImageBase64,
-          mediaType,
+          lessonName: selectedLessonName,
+          pagesBase64: pagesList,
+          mediaBase64: pagesList[0] || selectedImageBase64,
+          mediaType: pagesList.length > 1 ? 'multi_image' : mediaType,
           studentNotes
         })
       });
@@ -1187,16 +1243,19 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
           traineeCode: student.code || 'م001',
           traineeName: student.fullName || 'طالب المركز',
           taskTitle,
-          mediaUrl: selectedImageBase64 || undefined,
-          mediaType: mediaType || 'image',
+          lessonName: selectedLessonName,
+          pageCount: pagesList.length,
+          pagesUrls: pagesList,
+          mediaUrl: pagesList[0] || selectedImageBase64 || undefined,
+          mediaType: (pagesList.length > 1 ? 'multi_image' : mediaType) as any,
           submittedAt: new Date().toISOString(),
           grade: 95,
           maxGrade: 100,
           percentage: 95,
           rating: 'ممتاز 🌟',
-          strengths: ['تم تسليم وتوثيق الواجب بنجاح في سجلك الأكاديمي'],
+          strengths: [`تم استلام ${pagesList.length || 1} صفحة وتوثيق الواجب بنجاح في سجلك الأكاديمي`],
           corrections: [],
-          generalFeedback: 'تم استلام الواجب بنجاح وحفظه في سجلك الأكاديمي لمراجعته!',
+          generalFeedback: `تم استلام الواجب (${pagesList.length || 1} ورقة) بنجاح وحفظه في سجلك الأكاديمي لمراجعته!`,
           pointsAwarded: 20,
           isSpeedWinner: false,
           submissionChannel: 'home_student_portal'
@@ -1204,6 +1263,7 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
         setHomeworks(prev => [fallbackSub, ...prev]);
         setSubmitSuccessMsg('🎉 تم استلام وتوثيق الواجب بنجاح في سجلك الأكاديمي!');
         setSelectedImageBase64(null);
+        setSelectedPages([]);
         setSelectedVideoName(null);
         setStudentNotes('');
         setCustomTaskTitle('');
@@ -1235,9 +1295,10 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
         ]);
       }
 
-      setSubmitSuccessMsg('🎉 تم فحص وتصحيح الواجب بالذكاء الاصطناعي ورصد النقاط والتقرير بنجاح!');
+      setSubmitSuccessMsg(`🎉 تم فحص وتصحيح الواجب (${pagesList.length || 1} صفحة) بالذكاء الاصطناعي ورصد النقاط والتقرير بنجاح!`);
       // Reset form media
       setSelectedImageBase64(null);
+      setSelectedPages([]);
       setSelectedVideoName(null);
       setStudentNotes('');
       setCustomTaskTitle('');
@@ -1249,8 +1310,11 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
         traineeCode: student.code || 'م001',
         traineeName: student.fullName || 'طالب المركز',
         taskTitle,
-        mediaUrl: selectedImageBase64 || undefined,
-        mediaType: mediaType || 'image',
+        lessonName: selectedLessonName,
+        pageCount: pagesList.length,
+        pagesUrls: pagesList,
+        mediaUrl: pagesList[0] || selectedImageBase64 || undefined,
+        mediaType: (pagesList.length > 1 ? 'multi_image' : mediaType) as any,
         submittedAt: new Date().toISOString(),
         grade: 95,
         maxGrade: 100,
@@ -1266,6 +1330,7 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
       setHomeworks(prev => [fallbackSub, ...prev]);
       setSubmitSuccessMsg('🎉 تم حفظ وتوثيق الواجب بنجاح في سجلك!');
       setSelectedImageBase64(null);
+      setSelectedPages([]);
       setSelectedVideoName(null);
       setStudentNotes('');
       setCustomTaskTitle('');
@@ -1851,18 +1916,18 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
             </div>
 
             {/* Navigation Bar */}
-            <div className="bg-white/80 dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 p-2.5 rounded-3xl shadow-xl shadow-indigo-950/5 backdrop-blur-2xl grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-8 gap-2.5">
+            <div className="bg-white/90 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-2 rounded-3xl shadow-xl shadow-indigo-950/5 backdrop-blur-2xl grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-9 gap-2">
               <button
                 type="button"
-                onClick={() => setActiveTab('ai-tutor' as any)}
+                onClick={() => setActiveTab('recap_tasks')}
                 className={`p-2.5 rounded-2xl font-bold text-xs flex flex-col items-center justify-center gap-1 transition-all duration-200 cursor-pointer ${
-                  activeTab === ('ai-tutor' as any)
-                    ? 'bg-gradient-to-b from-indigo-500 via-purple-500 to-purple-600 text-white shadow-lg shadow-indigo-500/25 border border-indigo-300/60 ring-2 ring-indigo-400/20 font-black scale-[1.02] -translate-y-0.5'
-                    : 'bg-gradient-to-b from-white to-slate-50/90 dark:from-slate-900 dark:to-slate-950 text-slate-700 dark:text-slate-300 hover:from-white hover:to-indigo-50/60 dark:hover:to-slate-800 hover:text-indigo-950 dark:hover:text-white border border-slate-200/80 dark:border-slate-800 shadow-xs hover:shadow-md hover:-translate-y-0.5 active:translate-y-0'
+                  activeTab === 'recap_tasks'
+                    ? 'bg-gradient-to-b from-indigo-600 to-indigo-700 text-white shadow-lg shadow-indigo-600/30 border border-indigo-400/50 ring-2 ring-indigo-400/30 font-black scale-[1.02] -translate-y-0.5'
+                    : 'bg-gradient-to-b from-white to-slate-50 dark:from-slate-900 dark:to-slate-950 text-slate-700 dark:text-slate-300 hover:from-white hover:to-indigo-50 dark:hover:to-slate-800 hover:text-indigo-900 dark:hover:text-white border border-slate-200 dark:border-slate-800 shadow-xs hover:shadow-md hover:-translate-y-0.5 active:translate-y-0'
                 }`}
               >
-                <Bot className="w-4 h-4 text-indigo-500 dark:text-indigo-300" />
-                <span className="text-[10px] text-center font-bold">فهمني واشرحلي</span>
+                <BookOpen className="w-4 h-4 text-indigo-500 dark:text-indigo-300" />
+                <span className="text-[10px] text-center font-bold">ملخص الحصة 📋</span>
               </button>
 
               <button
@@ -1870,12 +1935,25 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
                 onClick={() => setActiveTab('submit')}
                 className={`p-2.5 rounded-2xl font-bold text-xs flex flex-col items-center justify-center gap-1 transition-all duration-200 cursor-pointer ${
                   activeTab === 'submit'
-                    ? 'bg-gradient-to-b from-amber-400 via-amber-500 to-amber-500 text-slate-950 shadow-lg shadow-amber-500/25 border border-amber-300/90 ring-2 ring-amber-400/20 font-black scale-[1.02] -translate-y-0.5'
-                    : 'bg-gradient-to-b from-white to-slate-50/90 dark:from-slate-900 dark:to-slate-950 text-slate-700 dark:text-slate-300 hover:from-white hover:to-indigo-50/60 dark:hover:to-slate-800 hover:text-indigo-950 dark:hover:text-white border border-slate-200/80 dark:border-slate-800 shadow-xs hover:shadow-md hover:-translate-y-0.5 active:translate-y-0'
+                    ? 'bg-gradient-to-b from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-600/30 border border-blue-400/50 ring-2 ring-blue-400/30 font-black scale-[1.02] -translate-y-0.5'
+                    : 'bg-gradient-to-b from-white to-slate-50 dark:from-slate-900 dark:to-slate-950 text-slate-700 dark:text-slate-300 hover:from-white hover:to-indigo-50 dark:hover:to-slate-800 hover:text-indigo-900 dark:hover:text-white border border-slate-200 dark:border-slate-800 shadow-xs hover:shadow-md hover:-translate-y-0.5 active:translate-y-0'
                 }`}
               >
-                <Sparkles className="w-4 h-4" />
-                <span className="text-[10px] text-center font-bold">إرسال واجب</span>
+                <Sparkles className="w-4 h-4 text-blue-500 dark:text-blue-300" />
+                <span className="text-[10px] text-center font-bold">إرسال واجب 📝</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveTab('ai-tutor' as any)}
+                className={`p-2.5 rounded-2xl font-bold text-xs flex flex-col items-center justify-center gap-1 transition-all duration-200 cursor-pointer ${
+                  activeTab === ('ai-tutor' as any)
+                    ? 'bg-gradient-to-b from-purple-600 to-indigo-600 text-white shadow-lg shadow-purple-600/30 border border-purple-400/50 ring-2 ring-purple-400/30 font-black scale-[1.02] -translate-y-0.5'
+                    : 'bg-gradient-to-b from-white to-slate-50 dark:from-slate-900 dark:to-slate-950 text-slate-700 dark:text-slate-300 hover:from-white hover:to-indigo-50 dark:hover:to-slate-800 hover:text-indigo-900 dark:hover:text-white border border-slate-200 dark:border-slate-800 shadow-xs hover:shadow-md hover:-translate-y-0.5 active:translate-y-0'
+                }`}
+              >
+                <Bot className="w-4 h-4 text-purple-500 dark:text-purple-300" />
+                <span className="text-[10px] text-center font-bold">المعلم الذكي</span>
               </button>
 
               <button
@@ -1883,11 +1961,11 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
                 onClick={() => setActiveTab('certificates')}
                 className={`p-2.5 rounded-2xl font-bold text-xs flex flex-col items-center justify-center gap-1 transition-all duration-200 cursor-pointer ${
                   activeTab === 'certificates'
-                    ? 'bg-gradient-to-b from-amber-400 via-amber-500 to-amber-500 text-slate-950 shadow-lg shadow-amber-500/25 border border-amber-300/90 ring-2 ring-amber-400/20 font-black scale-[1.02] -translate-y-0.5'
-                    : 'bg-gradient-to-b from-white to-slate-50/90 dark:from-slate-900 dark:to-slate-950 text-slate-700 dark:text-slate-300 hover:from-white hover:to-indigo-50/60 dark:hover:to-slate-800 hover:text-indigo-950 dark:hover:text-white border border-slate-200/80 dark:border-slate-800 shadow-xs hover:shadow-md hover:-translate-y-0.5 active:translate-y-0'
+                    ? 'bg-gradient-to-b from-emerald-600 to-teal-700 text-white shadow-lg shadow-emerald-600/30 border border-emerald-400/50 ring-2 ring-emerald-400/30 font-black scale-[1.02] -translate-y-0.5'
+                    : 'bg-gradient-to-b from-white to-slate-50 dark:from-slate-900 dark:to-slate-950 text-slate-700 dark:text-slate-300 hover:from-white hover:to-indigo-50 dark:hover:to-slate-800 hover:text-indigo-900 dark:hover:text-white border border-slate-200 dark:border-slate-800 shadow-xs hover:shadow-md hover:-translate-y-0.5 active:translate-y-0'
                 }`}
               >
-                <Award className="w-4 h-4" />
+                <Award className="w-4 h-4 text-emerald-500 dark:text-emerald-300" />
                 <span className="text-[10px] text-center font-bold">الشهادات</span>
               </button>
 
@@ -1896,11 +1974,11 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
                 onClick={() => setActiveTab('history')}
                 className={`p-2.5 rounded-2xl font-bold text-xs flex flex-col items-center justify-center gap-1 transition-all duration-200 cursor-pointer ${
                   activeTab === 'history'
-                    ? 'bg-gradient-to-b from-amber-400 via-amber-500 to-amber-500 text-slate-950 shadow-lg shadow-amber-500/25 border border-amber-300/90 ring-2 ring-amber-400/20 font-black scale-[1.02] -translate-y-0.5'
-                    : 'bg-gradient-to-b from-white to-slate-50/90 dark:from-slate-900 dark:to-slate-950 text-slate-700 dark:text-slate-300 hover:from-white hover:to-indigo-50/60 dark:hover:to-slate-800 hover:text-indigo-950 dark:hover:text-white border border-slate-200/80 dark:border-slate-800 shadow-xs hover:shadow-md hover:-translate-y-0.5 active:translate-y-0'
+                    ? 'bg-gradient-to-b from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-600/30 border border-blue-400/50 ring-2 ring-blue-400/30 font-black scale-[1.02] -translate-y-0.5'
+                    : 'bg-gradient-to-b from-white to-slate-50 dark:from-slate-900 dark:to-slate-950 text-slate-700 dark:text-slate-300 hover:from-white hover:to-indigo-50 dark:hover:to-slate-800 hover:text-indigo-900 dark:hover:text-white border border-slate-200 dark:border-slate-800 shadow-xs hover:shadow-md hover:-translate-y-0.5 active:translate-y-0'
                 }`}
               >
-                <FileText className="w-4 h-4" />
+                <FileText className="w-4 h-4 text-blue-500 dark:text-blue-300" />
                 <span className="text-[10px] text-center font-bold">السجل والتقارير</span>
               </button>
 
@@ -1909,11 +1987,11 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
                 onClick={() => setActiveTab('badges')}
                 className={`p-2.5 rounded-2xl font-bold text-xs flex flex-col items-center justify-center gap-1 transition-all duration-200 cursor-pointer ${
                   activeTab === 'badges'
-                    ? 'bg-gradient-to-b from-amber-400 via-amber-500 to-amber-500 text-slate-950 shadow-lg shadow-amber-500/25 border border-amber-300/90 ring-2 ring-amber-400/20 font-black scale-[1.02] -translate-y-0.5'
-                    : 'bg-gradient-to-b from-white to-slate-50/90 dark:from-slate-900 dark:to-slate-950 text-slate-700 dark:text-slate-300 hover:from-white hover:to-indigo-50/60 dark:hover:to-slate-800 hover:text-indigo-950 dark:hover:text-white border border-slate-200/80 dark:border-slate-800 shadow-xs hover:shadow-md hover:-translate-y-0.5 active:translate-y-0'
+                    ? 'bg-gradient-to-b from-indigo-600 to-purple-600 text-white shadow-lg shadow-indigo-600/30 border border-indigo-400/50 ring-2 ring-indigo-400/30 font-black scale-[1.02] -translate-y-0.5'
+                    : 'bg-gradient-to-b from-white to-slate-50 dark:from-slate-900 dark:to-slate-950 text-slate-700 dark:text-slate-300 hover:from-white hover:to-indigo-50 dark:hover:to-slate-800 hover:text-indigo-900 dark:hover:text-white border border-slate-200 dark:border-slate-800 shadow-xs hover:shadow-md hover:-translate-y-0.5 active:translate-y-0'
                 }`}
               >
-                <Trophy className="w-4 h-4" />
+                <Trophy className="w-4 h-4 text-indigo-500 dark:text-indigo-300" />
                 <span className="text-[10px] text-center font-bold">الأوسمة</span>
               </button>
 
@@ -1922,25 +2000,12 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
                 onClick={() => setActiveTab('schedule')}
                 className={`p-2.5 rounded-2xl font-bold text-xs flex flex-col items-center justify-center gap-1 transition-all duration-200 cursor-pointer ${
                   activeTab === 'schedule'
-                    ? 'bg-gradient-to-b from-amber-400 via-amber-500 to-amber-500 text-slate-950 shadow-lg shadow-amber-500/25 border border-amber-300/90 ring-2 ring-amber-400/20 font-black scale-[1.02] -translate-y-0.5'
-                    : 'bg-gradient-to-b from-white to-slate-50/90 dark:from-slate-900 dark:to-slate-950 text-slate-700 dark:text-slate-300 hover:from-white hover:to-indigo-50/60 dark:hover:to-slate-800 hover:text-indigo-950 dark:hover:text-white border border-slate-200/80 dark:border-slate-800 shadow-xs hover:shadow-md hover:-translate-y-0.5 active:translate-y-0'
+                    ? 'bg-gradient-to-b from-slate-700 to-slate-900 text-white shadow-lg shadow-slate-900/30 border border-slate-500/50 ring-2 ring-slate-400/30 font-black scale-[1.02] -translate-y-0.5'
+                    : 'bg-gradient-to-b from-white to-slate-50 dark:from-slate-900 dark:to-slate-950 text-slate-700 dark:text-slate-300 hover:from-white hover:to-indigo-50 dark:hover:to-slate-800 hover:text-indigo-900 dark:hover:text-white border border-slate-200 dark:border-slate-800 shadow-xs hover:shadow-md hover:-translate-y-0.5 active:translate-y-0'
                 }`}
               >
-                <Calendar className="w-4 h-4" />
+                <Calendar className="w-4 h-4 text-slate-500 dark:text-slate-300" />
                 <span className="text-[10px] text-center font-bold">المواعيد</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setActiveTab('help' as any)}
-                className={`p-2.5 rounded-2xl font-bold text-xs flex flex-col items-center justify-center gap-1 transition-all duration-200 cursor-pointer ${
-                  activeTab === ('help' as any)
-                    ? 'bg-gradient-to-b from-rose-500 to-rose-600 text-white shadow-lg shadow-rose-500/25 border border-rose-300/60 ring-2 ring-rose-400/20 font-black scale-[1.02] -translate-y-0.5'
-                    : 'bg-gradient-to-b from-white to-slate-50/90 dark:from-slate-900 dark:to-slate-950 text-slate-700 dark:text-slate-300 hover:from-white hover:to-indigo-50/60 dark:hover:to-slate-800 hover:text-indigo-950 dark:hover:text-white border border-slate-200/80 dark:border-slate-800 shadow-xs hover:shadow-md hover:-translate-y-0.5 active:translate-y-0'
-                }`}
-              >
-                <HelpCircle className="w-4 h-4" />
-                <span className="text-[10px] text-center font-bold">المساعدة</span>
               </button>
 
               <button
@@ -1948,12 +2013,25 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
                 onClick={() => setActiveTab('language_lab')}
                 className={`p-2.5 rounded-2xl font-bold text-xs flex flex-col items-center justify-center gap-1 transition-all duration-200 cursor-pointer ${
                   activeTab === 'language_lab'
-                    ? 'bg-gradient-to-b from-teal-400 to-emerald-500 text-slate-950 shadow-lg shadow-teal-500/25 border border-teal-200/80 ring-2 ring-teal-400/20 font-black scale-[1.02] -translate-y-0.5'
-                    : 'bg-gradient-to-b from-white to-slate-50/90 dark:from-slate-900 dark:to-slate-950 text-teal-700 dark:text-teal-300 hover:from-white hover:to-teal-50/60 dark:hover:to-slate-800 hover:text-teal-950 dark:hover:text-white border border-teal-500/30 shadow-xs hover:shadow-md hover:-translate-y-0.5 active:translate-y-0'
+                    ? 'bg-gradient-to-b from-teal-600 to-emerald-700 text-white shadow-lg shadow-teal-600/30 border border-teal-300/50 ring-2 ring-teal-400/30 font-black scale-[1.02] -translate-y-0.5'
+                    : 'bg-gradient-to-b from-white to-slate-50 dark:from-slate-900 dark:to-slate-950 text-teal-700 dark:text-teal-300 hover:from-white hover:to-teal-50 dark:hover:to-slate-800 hover:text-teal-900 dark:hover:text-white border border-teal-500/30 shadow-xs hover:shadow-md hover:-translate-y-0.5 active:translate-y-0'
                 }`}
               >
-                <Sparkles className="w-4 h-4 text-teal-600 dark:text-teal-300" />
-                <span className="text-[10px] text-center font-bold">معملي 🗣️</span>
+                <Sparkles className="w-4 h-4 text-teal-500 dark:text-teal-300" />
+                <span className="text-[10px] text-center font-bold">المعمل الصوتي</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveTab('help' as any)}
+                className={`p-2.5 rounded-2xl font-bold text-xs flex flex-col items-center justify-center gap-1 transition-all duration-200 cursor-pointer ${
+                  activeTab === ('help' as any)
+                    ? 'bg-gradient-to-b from-blue-700 to-indigo-800 text-white shadow-lg shadow-blue-800/30 border border-blue-400/50 ring-2 ring-blue-400/30 font-black scale-[1.02] -translate-y-0.5'
+                    : 'bg-gradient-to-b from-white to-slate-50 dark:from-slate-900 dark:to-slate-950 text-slate-700 dark:text-slate-300 hover:from-white hover:to-indigo-50 dark:hover:to-slate-800 hover:text-indigo-900 dark:hover:text-white border border-slate-200 dark:border-slate-800 shadow-xs hover:shadow-md hover:-translate-y-0.5 active:translate-y-0'
+                }`}
+              >
+                <HelpCircle className="w-4 h-4 text-blue-500 dark:text-blue-300" />
+                <span className="text-[10px] text-center font-bold">المساعدة</span>
               </button>
             </div>
 
@@ -2171,28 +2249,67 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
                           value={customTaskTitle}
                           onChange={(e) => setCustomTaskTitle(e.target.value)}
                           placeholder="أو اكتب عنوان واجب مخصص آخر..."
-                          className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-2xl px-3.5 py-2.5 text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:border-amber-500 shadow-xs"
+                          className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-2xl px-3.5 py-2.5 text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:border-indigo-500 shadow-xs"
+                        />
+                      </div>
+
+                      {/* Lesson Selection for Summary & Homework Context */}
+                      <div className="pt-2 space-y-1.5">
+                        <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
+                          الدرس المرتبط بالواجب / التلخيص (الصف الرابع - تكنولوجيا المعلومات ICT):
+                        </label>
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                          {[
+                            'Lesson 1: Explorer in Action',
+                            'Lesson 2: Technology & Evolution',
+                            'Lesson 3: Computer Components',
+                            'Lesson 4: Software & OS',
+                            'Lesson 5: Collecting Data & Graphs',
+                            'Lesson 6: Online Safety & Rules',
+                            'Lesson 7: ICT Tools & Ethics',
+                            'Lesson 8: Project Presentation'
+                          ].map((ls) => (
+                            <button
+                              key={ls}
+                              type="button"
+                              onClick={() => setSelectedLessonName(ls)}
+                              className={`p-2 rounded-xl text-[10px] font-bold text-right transition-all border cursor-pointer ${
+                                selectedLessonName === ls
+                                  ? 'bg-indigo-600 text-white border-indigo-500 shadow-sm'
+                                  : 'bg-white dark:bg-slate-950 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-800 hover:border-indigo-300'
+                              }`}
+                            >
+                              {ls}
+                            </button>
+                          ))}
+                        </div>
+                        <input
+                          type="text"
+                          value={selectedLessonName}
+                          onChange={(e) => setSelectedLessonName(e.target.value)}
+                          placeholder="أو اكتب اسم الدرس يدوياً..."
+                          className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-1.5 text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:border-indigo-500"
                         />
                       </div>
                     </div>
 
                     {/* PROMINENT VOICE SUMMARY RECORDER & CONCEPTUAL EVALUATION BANNER */}
-                    <div className="p-4 rounded-3xl bg-gradient-to-r from-amber-500/15 via-orange-500/10 to-amber-500/15 border border-amber-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm">
+                    <div className="p-4 rounded-3xl bg-gradient-to-r from-blue-600/10 via-indigo-600/10 to-blue-600/10 border border-indigo-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm">
                       <div className="flex items-start gap-3">
-                        <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-500 text-slate-950 flex items-center justify-center shrink-0 shadow-md">
+                        <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-indigo-600 to-blue-600 text-white flex items-center justify-center shrink-0 shadow-md">
                           <Mic className="w-5 h-5" />
                         </div>
                         <div className="space-y-0.5">
                           <div className="flex items-center gap-2">
                             <h4 className="text-xs font-black text-slate-900 dark:text-slate-100">
-                              تسجيل ملخص فويس للمحاضرة أو الكتاب 🎙️
+                              تسجيل ملخص فويس للمحاضرة أو التكليف 🎙️
                             </h4>
-                            <span className="text-[9px] bg-amber-500 text-slate-950 font-black px-2 py-0.5 rounded-full">
-                              تصحيح المفاهيم
+                            <span className="text-[9px] bg-indigo-600 text-white font-black px-2 py-0.5 rounded-full">
+                              تقييم فهم الدرس
                             </span>
                           </div>
                           <p className="text-[11px] text-slate-600 dark:text-slate-300 leading-relaxed">
-                            سجل فويس بصوتك يلخص الدرس، وسيقوم الذكاء الاصطناعي بفحص تناسق وصحة المفاهيم وتصحيحها وفق منهجك دون محاسبتك على الأخطاء اللغوية!
+                            سجل فويس بصوتك يلخص عناصر الدرس (مثل مكونات الكمبيوتر)، وسيقوم الذكاء الاصطناعي بفحص تناسق المفاهيم واستيعابك للدرس دون محاسبتك على الأخطاء اللغوية!
                           </p>
                         </div>
                       </div>
@@ -2200,67 +2317,72 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
                       <button
                         type="button"
                         onClick={() => setIsVoiceSummaryModalOpen(true)}
-                        className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:brightness-110 text-slate-950 font-black text-xs shadow-md shadow-amber-500/20 active:scale-95 transition-all flex items-center justify-center gap-1.5 shrink-0 cursor-pointer"
+                        className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-blue-600 hover:brightness-110 text-white font-black text-xs shadow-md shadow-indigo-600/20 active:scale-95 transition-all flex items-center justify-center gap-1.5 shrink-0 cursor-pointer"
                       >
                         <Mic className="w-4 h-4" />
                         <span>فتح مسجل الفويس والتقييم 🎙️</span>
                       </button>
                     </div>
 
-                    {/* Media Upload Options: Photo / File / Video / Audio */}
+                    {/* Media Upload Options: Multi-Page Photo / File / Video / Audio */}
                     <div className="space-y-2">
-                      <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
-                        صورة الواجب أو الفيديو أو الملف الصوتي:
-                      </label>
+                      <div className="flex items-center justify-between">
+                        <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
+                          أوراق الواجب (يمكنك تصوير ورفع أكثر من صفحة/ورقة 📄):
+                        </label>
+                        {selectedPages.length > 0 && (
+                          <span className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/40 px-2 py-0.5 rounded-lg border border-indigo-200 dark:border-indigo-800">
+                            عدد الصفحات المجهزة: {selectedPages.length}
+                          </span>
+                        )}
+                      </div>
 
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                         {/* Option 1: Mobile Direct Camera Capture */}
-                        <label className="p-4 rounded-2xl bg-amber-500/10 dark:bg-amber-950/30 border border-dashed border-amber-500/50 hover:border-amber-500 text-center space-y-2 cursor-pointer transition-all group block shadow-xs">
-                          <input
-                            type="file"
-                            accept="image/*"
-                            capture="environment"
-                            onChange={handleFileSelect}
-                            className="hidden"
-                          />
-                          <div className="w-10 h-10 mx-auto rounded-xl bg-amber-500/20 text-amber-600 dark:text-amber-300 flex items-center justify-center group-hover:scale-110 transition-transform shadow-xs">
+                        <button
+                          type="button"
+                          onClick={startCamera}
+                          className="p-4 rounded-2xl bg-indigo-500/10 dark:bg-indigo-950/30 border border-dashed border-indigo-500/50 hover:border-indigo-500 text-center space-y-2 cursor-pointer transition-all group block shadow-xs"
+                        >
+                          <div className="w-10 h-10 mx-auto rounded-xl bg-indigo-500/20 text-indigo-600 dark:text-indigo-300 flex items-center justify-center group-hover:scale-110 transition-transform shadow-xs">
                             <Camera className="w-5 h-5" />
                           </div>
                           <div>
-                            <p className="text-xs font-bold text-amber-800 dark:text-amber-200">📸 تصوير مباشر (كاميرا)</p>
-                            <p className="text-[10px] text-slate-600 dark:text-slate-300">تصوير ورقة الإجابة فورا</p>
+                            <p className="text-xs font-bold text-indigo-800 dark:text-indigo-200">📸 تصوير صفحة بالكاميرا</p>
+                            <p className="text-[10px] text-slate-600 dark:text-slate-300">التقط صفحة تلو الأخرى للواجب</p>
                           </div>
-                        </label>
+                        </button>
 
                         {/* Option 2: Live Mic Recording */}
                         <button
                           type="button"
                           onClick={() => setIsVoiceSummaryModalOpen(true)}
-                          className="p-4 rounded-2xl bg-orange-500/10 dark:bg-orange-950/30 border border-dashed border-orange-500/50 hover:border-orange-500 text-center space-y-2 cursor-pointer transition-all group block shadow-xs text-right"
+                          className="p-4 rounded-2xl bg-blue-500/10 dark:bg-blue-950/30 border border-dashed border-blue-500/50 hover:border-blue-500 text-center space-y-2 cursor-pointer transition-all group block shadow-xs"
                         >
-                          <div className="w-10 h-10 mx-auto rounded-xl bg-orange-500/20 text-orange-600 dark:text-orange-300 flex items-center justify-center group-hover:scale-110 transition-transform shadow-xs">
+                          <div className="w-10 h-10 mx-auto rounded-xl bg-blue-500/20 text-blue-600 dark:text-blue-300 flex items-center justify-center group-hover:scale-110 transition-transform shadow-xs">
                             <Mic className="w-5 h-5" />
                           </div>
                           <div className="text-center">
-                            <p className="text-xs font-bold text-orange-800 dark:text-orange-200">🎙️ تسجيل فويس مباشر</p>
+                            <p className="text-xs font-bold text-blue-800 dark:text-blue-200">🎙️ تسجيل فويس ملخص</p>
                             <p className="text-[10px] text-slate-600 dark:text-slate-300">تسجيل وتصحيح صوتي فوري</p>
                           </div>
                         </button>
 
-                        {/* Option 3: Choose File, Video or Audio from Gallery */}
+                        {/* Option 3: Choose Multiple Files from Device */}
                         <label className="p-4 rounded-2xl bg-white dark:bg-slate-950 border border-dashed border-slate-300 dark:border-slate-700 hover:border-indigo-500/60 text-center space-y-2 cursor-pointer transition-all group block shadow-xs">
                           <input
                             type="file"
                             accept="image/*,video/*,audio/*"
+                            multiple
                             onChange={handleFileSelect}
                             className="hidden"
                           />
-                          <div className="w-10 h-10 mx-auto rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center group-hover:scale-110 transition-transform shadow-xs">
+                          <div className="w-10 h-10 mx-auto rounded-xl bg-slate-500/10 text-slate-700 dark:text-slate-300 flex items-center justify-center group-hover:scale-110 transition-transform shadow-xs">
                             <Upload className="w-5 h-5" />
                           </div>
                           <div>
-                            <p className="text-xs font-bold text-slate-800 dark:text-slate-200">📁 رفع ملف / صوت / فيديو</p>
-                            <p className="text-[10px] text-slate-500 dark:text-slate-400">ملف محفوظ مسبقاً بالجهاز</p>
+                            <p className="text-xs font-bold text-slate-800 dark:text-slate-200">📁 اختيار صور / صفحات متعددة</p>
+                            <p className="text-[10px] text-slate-500 dark:text-slate-400">حدد ورقة واحدة أو أكثر معاً</p>
                           </div>
                         </label>
                       </div>
@@ -2268,38 +2390,100 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
 
                     {/* Camera Modal overlay if active */}
                     {isCameraActive && (
-                      <div className="p-4 rounded-3xl bg-white dark:bg-slate-950 border border-amber-500/40 space-y-3 shadow-lg">
-                        <div className="flex items-center justify-between text-xs font-bold text-amber-600 dark:text-amber-300">
-                          <span>وجه الكاميرا نحو ورقة الواجب بالكامل</span>
+                      <div className="p-4 rounded-3xl bg-white dark:bg-slate-950 border border-indigo-500/40 space-y-3 shadow-lg">
+                        <div className="flex items-center justify-between text-xs font-bold text-indigo-600 dark:text-indigo-300">
+                          <span>وجه الكاميرا نحو صفحة الواجب (الصفحة {selectedPages.length + 1})</span>
                           <button type="button" onClick={stopCamera} className="text-rose-500 dark:text-rose-400 hover:underline">
                             إلغاء الكاميرا
                           </button>
                         </div>
                         <video ref={videoRef} autoPlay playsInline className="w-full max-h-64 object-cover rounded-2xl border border-slate-200 dark:border-slate-800" />
                         <canvas ref={canvasRef} className="hidden" />
-                        <button
-                          type="button"
-                          onClick={capturePhoto}
-                          className="w-full py-2.5 rounded-xl bg-amber-500 text-slate-950 font-black text-xs shadow-lg flex items-center justify-center gap-2"
-                        >
-                          <Camera className="w-4 h-4" />
-                          <span>التقاط الصورة الآن</span>
-                        </button>
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={capturePhoto}
+                            className="flex-1 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-black text-xs shadow-lg flex items-center justify-center gap-2 cursor-pointer"
+                          >
+                            <Camera className="w-4 h-4" />
+                            <span>التقاط هذه الصفحة وإضافتها</span>
+                          </button>
+                        </div>
                       </div>
                     )}
 
-                    {/* Preview Selected Media */}
-                    {selectedImageBase64 && (
+                    {/* Multi-Page Gallery Preview */}
+                    {selectedPages.length > 0 && (
+                      <div className="p-4 rounded-2xl bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 space-y-3 shadow-xs">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                            <FileText className="w-4 h-4 text-indigo-500" />
+                            <span>الصفحات المجهزة للرفع ({selectedPages.length} صفحة):</span>
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedPages([]);
+                              setSelectedImageBase64(null);
+                            }}
+                            className="text-[11px] text-rose-500 hover:underline font-bold cursor-pointer"
+                          >
+                            حذف الكل
+                          </button>
+                        </div>
+
+                        <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-2.5">
+                          {selectedPages.map((page, index) => (
+                            <div key={page.id} className="relative group rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-900 aspect-[3/4] flex flex-col">
+                              <img
+                                src={page.base64}
+                                alt={`صفحة ${index + 1}`}
+                                className="w-full h-full object-cover cursor-pointer group-hover:scale-105 transition-transform"
+                                onClick={() => setPreviewZoomImage(page.base64)}
+                              />
+                              <div className="absolute top-1 right-1 bg-slate-900/80 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-md backdrop-blur-sm">
+                                ص {index + 1}
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => handleRemovePage(page.id)}
+                                className="absolute top-1 left-1 bg-rose-600/90 text-white p-1 rounded-md opacity-0 group-hover:opacity-100 transition-opacity hover:bg-rose-700 cursor-pointer"
+                                title="حذف هذه الصفحة"
+                              >
+                                <X className="w-3 h-3" />
+                              </button>
+                              <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/70 to-transparent p-1 text-[9px] text-white text-center truncate">
+                                {page.name || `صفحة ${index + 1}`}
+                              </div>
+                            </div>
+                          ))}
+
+                          {/* Add another page trigger button */}
+                          <button
+                            type="button"
+                            onClick={startCamera}
+                            className="rounded-xl border border-dashed border-indigo-400/50 hover:border-indigo-500 bg-indigo-500/5 hover:bg-indigo-500/10 flex flex-col items-center justify-center p-3 text-center gap-1 aspect-[3/4] cursor-pointer transition-colors"
+                          >
+                            <Camera className="w-5 h-5 text-indigo-500" />
+                            <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400">+ تصوير ورقة إضافية</span>
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Single Image/Video legacy preview fallback */}
+                    {selectedPages.length === 0 && selectedImageBase64 && (
                       <div className="p-3 rounded-2xl bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 flex items-center justify-between shadow-xs">
                         <div className="flex items-center gap-3">
                           <img
                             src={selectedImageBase64}
                             alt="معاينة الواجب"
-                            className="w-14 h-14 rounded-xl object-cover border border-slate-200 dark:border-slate-700 shadow-xs"
+                            className="w-14 h-14 rounded-xl object-cover border border-slate-200 dark:border-slate-700 shadow-xs cursor-pointer"
+                            onClick={() => setPreviewZoomImage(selectedImageBase64)}
                           />
                           <div>
                             <p className="text-xs font-bold text-slate-900 dark:text-slate-200">
-                              {selectedVideoName ? `فيديو: ${selectedVideoName}` : 'تم تجهيز صورة الواجب للتحليل والذكاء الاصطناعي'}
+                              {selectedVideoName ? `فيديو: ${selectedVideoName}` : 'تم تجهيز ملف الواجب'}
                             </p>
                             <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-1">
                               <CheckCircle2 className="w-3 h-3" /> جاهز للتصحيح الفوري
@@ -2312,7 +2496,7 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
                             setSelectedImageBase64(null);
                             setSelectedVideoName(null);
                           }}
-                          className="px-2.5 py-1 text-[11px] font-bold text-rose-500 dark:text-rose-400 hover:bg-rose-500/10 rounded-lg"
+                          className="px-2.5 py-1 text-[11px] font-bold text-rose-500 dark:text-rose-400 hover:bg-rose-500/10 rounded-lg cursor-pointer"
                         >
                           حذف الملف
                         </button>
@@ -2337,17 +2521,17 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
                     <button
                       type="submit"
                       disabled={isSubmittingHomework}
-                      className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500 hover:brightness-110 text-slate-950 font-black text-sm shadow-xl shadow-amber-500/20 active:scale-[0.99] transition-all flex items-center justify-center gap-2"
+                      className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-600 hover:brightness-110 text-white font-black text-sm shadow-xl shadow-indigo-600/20 active:scale-[0.99] transition-all flex items-center justify-center gap-2 cursor-pointer"
                     >
                       {isSubmittingHomework ? (
                         <>
-                          <RefreshCw className="w-5 h-5 animate-spin text-slate-950" />
-                          <span>جاري تحليل وتصحيح الواجب بواسطة الذكاء الاصطناعي (Gemini)...</span>
+                          <RefreshCw className="w-5 h-5 animate-spin text-white" />
+                          <span>جاري تصحيح الواجب وتحليل الصفحات بواسطة الذكاء الاصطناعي...</span>
                         </>
                       ) : (
                         <>
-                          <Zap className="w-5 h-5 text-slate-950 fill-slate-950" />
-                          <span>إرسال وتصحيح الواجب بالذكاء الاصطناعي الآن</span>
+                          <Zap className="w-5 h-5 text-white fill-white" />
+                          <span>إرسال وتصحيح الواجب ({selectedPages.length || (selectedImageBase64 ? 1 : 0)} صفحة) بالذكاء الاصطناعي الآن</span>
                         </>
                       )}
                     </button>
@@ -2363,18 +2547,38 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
 
                 {/* Instant AI Correction Output Card */}
                 {lastSubmissionResult && (
-                  <div className="bg-white/80 dark:bg-slate-900 border border-amber-500/40 rounded-3xl p-5 md:p-6 space-y-4 shadow-2xl relative overflow-hidden backdrop-blur-xl">
+                  <div className="bg-white/80 dark:bg-slate-900 border border-indigo-500/40 rounded-3xl p-5 md:p-6 space-y-4 shadow-2xl relative overflow-hidden backdrop-blur-xl">
                     <div className="flex items-center justify-between pb-3 border-b border-slate-200/80 dark:border-slate-800">
                       <div className="flex items-center gap-2">
-                        <Sparkles className="w-5 h-5 text-amber-500 dark:text-amber-400" />
+                        <Sparkles className="w-5 h-5 text-indigo-500 dark:text-indigo-400" />
                         <h3 className="text-sm font-black text-slate-900 dark:text-slate-100">
                           تقرير تصحيح وتصنيف الذكاء الاصطناعي الفوري
                         </h3>
                       </div>
-                      <span className="text-xs font-bold text-amber-600 dark:text-amber-400 font-mono">
+                      <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400 font-mono">
                         {new Date(lastSubmissionResult.submittedAt).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}
                       </span>
                     </div>
+
+                    {/* Submitted Pages Gallery */}
+                    {lastSubmissionResult.pagesUrls && lastSubmissionResult.pagesUrls.length > 0 && (
+                      <div className="space-y-1.5 p-3 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800">
+                        <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block">
+                          الصفحات التي تم فحصها ({lastSubmissionResult.pagesUrls.length} صفحة):
+                        </span>
+                        <div className="flex items-center gap-2 overflow-x-auto pb-1">
+                          {lastSubmissionResult.pagesUrls.map((pUrl, idx) => (
+                            <img
+                              key={idx}
+                              src={pUrl}
+                              alt={`صفحة ${idx + 1}`}
+                              className="w-16 h-20 object-cover rounded-xl border border-slate-200 dark:border-slate-700 shrink-0 cursor-pointer hover:scale-105 transition-transform"
+                              onClick={() => setPreviewZoomImage(pUrl)}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    )}
 
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                       <div className="bg-slate-50 dark:bg-slate-950 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 text-center space-y-1 shadow-xs">
@@ -2389,11 +2593,11 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
 
                       <div className="bg-slate-50 dark:bg-slate-950 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 text-center space-y-1 shadow-xs">
                         <span className="text-[10px] text-slate-500 dark:text-slate-400 font-bold block">النقاط المضافة لرصيدك</span>
-                        <div className="text-2xl font-black text-amber-600 dark:text-amber-400 font-mono">
+                        <div className="text-2xl font-black text-indigo-600 dark:text-indigo-400 font-mono">
                           +{lastSubmissionResult.pointsAwarded} نقطة
                         </div>
                         {lastSubmissionResult.isSpeedWinner && (
-                          <span className="text-[10px] text-amber-600 dark:text-amber-300 font-bold block">
+                          <span className="text-[10px] text-indigo-600 dark:text-indigo-300 font-bold block">
                             ⚡ شاملة +25 مكافأة السرعة البرقية
                           </span>
                         )}
@@ -2409,6 +2613,51 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
                         </span>
                       </div>
                     </div>
+
+                    {/* Lesson Summary Conceptual Evaluation Section if available */}
+                    {lastSubmissionResult.lessonSummaryEvaluation && (
+                      <div className="p-4 rounded-2xl bg-indigo-50 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-500/30 space-y-3 shadow-xs">
+                        <div className="flex items-center justify-between">
+                          <h4 className="text-xs font-black text-indigo-900 dark:text-indigo-200 flex items-center gap-1.5">
+                            <BookOpen className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                            <span>تقييم تلخيص واستيعاب عناصر الدرس ({lastSubmissionResult.lessonSummaryEvaluation.lessonName}):</span>
+                          </h4>
+                          <span className="text-[10px] bg-indigo-600 text-white font-bold px-2 py-0.5 rounded-full">
+                            فهم المفاهيم {lastSubmissionResult.lessonSummaryEvaluation.conceptUnderstandingScore}/100
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
+                          {lastSubmissionResult.lessonSummaryEvaluation.coveredKeyPoints && lastSubmissionResult.lessonSummaryEvaluation.coveredKeyPoints.length > 0 && (
+                            <div className="p-3 bg-white dark:bg-slate-900 rounded-xl border border-emerald-500/20 space-y-1">
+                              <span className="font-bold text-emerald-600 dark:text-emerald-400 block text-[11px]">✓ عناصر ومفاهيم أحسنت بذكرها:</span>
+                              <ul className="list-disc list-inside text-slate-700 dark:text-slate-300 text-[11px] space-y-0.5">
+                                {lastSubmissionResult.lessonSummaryEvaluation.coveredKeyPoints.map((pt, i) => (
+                                  <li key={i}>{pt}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+
+                          {lastSubmissionResult.lessonSummaryEvaluation.missingOrWeakPoints && lastSubmissionResult.lessonSummaryEvaluation.missingOrWeakPoints.length > 0 && (
+                            <div className="p-3 bg-white dark:bg-slate-900 rounded-xl border border-indigo-500/20 space-y-1">
+                              <span className="font-bold text-indigo-600 dark:text-indigo-400 block text-[11px]">💡 عناصر هامة تذكرها المرة القادمة:</span>
+                              <ul className="list-disc list-inside text-slate-700 dark:text-slate-300 text-[11px] space-y-0.5">
+                                {lastSubmissionResult.lessonSummaryEvaluation.missingOrWeakPoints.map((pt, i) => (
+                                  <li key={i}>{pt}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                        </div>
+
+                        {lastSubmissionResult.lessonSummaryEvaluation.conceptualFeedback && (
+                          <p className="text-xs text-indigo-950 dark:text-indigo-200 bg-white/70 dark:bg-slate-900/80 p-2.5 rounded-xl border border-indigo-200 dark:border-indigo-800/50 leading-relaxed">
+                            {lastSubmissionResult.lessonSummaryEvaluation.conceptualFeedback}
+                          </p>
+                        )}
+                      </div>
+                    )}
 
                     {/* AI Feedback Detailed Text */}
                     <div className="space-y-3 pt-2">
@@ -2653,6 +2902,19 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
                   </div>
                 )}
               </div>
+            )}
+
+            {/* TAB: LECTURE RECAP, TASKS & PREPARATION (4-SECTION SYSTEM) */}
+            {activeTab === 'recap_tasks' && (
+              <LectureRecapManager
+                studentGradeLevel={student?.gradeLevel || student?.stage || student?.groupName || 'الصف الرابع الابتدائي (Grade 4 Languages)'}
+                studentName={student?.name || 'طالب متميز'}
+                studentCode={student?.code || 'STU-001'}
+                onNavigateToHomework={(taskTitle) => {
+                  setSelectedTaskTitle(taskTitle);
+                  setActiveTab('submit');
+                }}
+              />
             )}
 
             {/* TAB 3: BADGES AND ACHIEVEMENTS */}
@@ -3466,39 +3728,65 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
         <div className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-slate-900/95 border-t border-slate-200/90 dark:border-slate-800 backdrop-blur-xl flex justify-around py-2 px-1 shadow-[0_-4px_20px_rgba(0,0,0,0.06)] dark:shadow-2xl md:hidden">
           <button
             onClick={() => setActiveTab('submit')}
-            className={`flex flex-col items-center gap-1 flex-1 py-1 transition-all ${activeTab === 'submit' ? 'text-amber-600 dark:text-amber-400 font-bold scale-105' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'}`}
+            className={`flex flex-col items-center gap-1 flex-1 py-1 transition-all ${activeTab === 'submit' ? 'text-indigo-600 dark:text-indigo-400 font-bold scale-105' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'}`}
           >
             <Upload className="w-4 h-4" />
             <span className="text-[9px] font-bold">تسليم واجب</span>
           </button>
           <button
+            onClick={() => setActiveTab('recap_tasks')}
+            className={`flex flex-col items-center gap-1 flex-1 py-1 transition-all ${activeTab === 'recap_tasks' ? 'text-indigo-600 dark:text-indigo-400 font-bold scale-105' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'}`}
+          >
+            <Layers className="w-4 h-4" />
+            <span className="text-[9px] font-bold">الملخصات والتحضير</span>
+          </button>
+          <button
             onClick={() => setActiveTab('history')}
-            className={`flex flex-col items-center gap-1 flex-1 py-1 transition-all ${activeTab === 'history' ? 'text-amber-600 dark:text-amber-400 font-bold scale-105' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'}`}
+            className={`flex flex-col items-center gap-1 flex-1 py-1 transition-all ${activeTab === 'history' ? 'text-indigo-600 dark:text-indigo-400 font-bold scale-105' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'}`}
           >
             <BookOpen className="w-4 h-4" />
             <span className="text-[9px] font-bold">السجل</span>
           </button>
           <button
             onClick={() => setActiveTab('badges')}
-            className={`flex flex-col items-center gap-1 flex-1 py-1 transition-all ${activeTab === 'badges' ? 'text-amber-600 dark:text-amber-400 font-bold scale-105' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'}`}
+            className={`flex flex-col items-center gap-1 flex-1 py-1 transition-all ${activeTab === 'badges' ? 'text-indigo-600 dark:text-indigo-400 font-bold scale-105' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'}`}
           >
             <Award className="w-4 h-4" />
             <span className="text-[9px] font-bold">الأوسمة</span>
           </button>
           <button
             onClick={() => setActiveTab('schedule')}
-            className={`flex flex-col items-center gap-1 flex-1 py-1 transition-all ${activeTab === 'schedule' ? 'text-amber-600 dark:text-amber-400 font-bold scale-105' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'}`}
+            className={`flex flex-col items-center gap-1 flex-1 py-1 transition-all ${activeTab === 'schedule' ? 'text-indigo-600 dark:text-indigo-400 font-bold scale-105' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'}`}
           >
             <Calendar className="w-4 h-4" />
             <span className="text-[9px] font-bold">الجدول</span>
           </button>
           <button
             onClick={() => setActiveTab('profile')}
-            className={`flex flex-col items-center gap-1 flex-1 py-1 transition-all ${activeTab === 'profile' ? 'text-amber-600 dark:text-amber-400 font-bold scale-105' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'}`}
+            className={`flex flex-col items-center gap-1 flex-1 py-1 transition-all ${activeTab === 'profile' ? 'text-indigo-600 dark:text-indigo-400 font-bold scale-105' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'}`}
           >
             <User className="w-4 h-4" />
             <span className="text-[9px] font-bold">الملف</span>
           </button>
+        </div>
+      )}
+
+      {/* Full Page Zoom Modal for Uploaded Pages */}
+      {previewZoomImage && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="relative max-w-4xl max-h-[90vh] bg-slate-900 p-2 rounded-2xl border border-slate-700 shadow-2xl flex flex-col items-center">
+            <button
+              onClick={() => setPreviewZoomImage(null)}
+              className="absolute top-3 left-3 bg-white/20 hover:bg-white/40 text-white p-2 rounded-xl backdrop-blur-md z-10 cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+            <img
+              src={previewZoomImage}
+              alt="تكبير صفحة الواجب"
+              className="max-h-[80vh] w-auto object-contain rounded-xl"
+            />
+          </div>
         </div>
       )}
 

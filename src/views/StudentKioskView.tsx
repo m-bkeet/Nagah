@@ -51,11 +51,6 @@ export const StudentKioskView: React.FC = () => {
     gamePin?: string;
   } | null>(null);
 
-  // Mini-Game Modal / Section
-  const [isMiniGameActive, setIsMiniGameActive] = useState(false);
-  const [gameScore, setGameScore] = useState(0);
-  const [gameStep, setGameStep] = useState(0);
-
   // Poll for trainer's quick question
   useEffect(() => {
     let isMounted = true;
@@ -162,7 +157,7 @@ export const StudentKioskView: React.FC = () => {
 
     try {
       const studentCode = currentTrainee.studentCode || currentTrainee.code || currentTrainee.id;
-      const studentName = currentTrainee.name || currentTrainee.fullName || 'طالب المعمل';
+      const studentName = currentTrainee.fullName || currentTrainee.name || '';
 
       await fetch('/api/lab/quick-question/answer', {
         method: 'POST',
@@ -182,25 +177,6 @@ export const StudentKioskView: React.FC = () => {
       setIsSubmittingAnswer(false);
     }
   };
-
-  // Mini Game Questions (Simple, fun educational puzzle)
-  const miniGameData = [
-    {
-      question: "ما هو العنصر الأساسي الذي يفهمه الحاسوب مباشرة؟",
-      options: ["لغة الصفر والواحد (Binary 0/1)", "اللغة الإنجليزية", "الصور"],
-      correct: 0
-    },
-    {
-      question: "في لغة بايثون Python، أي دالة تستخدم لطباعة النصوص على الشاشة؟",
-      options: ["print()", "write()", "show()"],
-      correct: 0
-    },
-    {
-      question: "ما هو اختصار شبكة الإنترنت العالمية؟",
-      options: ["WWW", "HTML", "CPU"],
-      correct: 0
-    }
-  ];
 
   // If not logged in, show the clean, welcoming Lab Check-in Screen
   if (!currentTrainee) {
@@ -262,7 +238,7 @@ export const StudentKioskView: React.FC = () => {
               <button
                 type="submit"
                 disabled={isLoggingIn || !studentCodeInput.trim()}
-                className="w-full bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 hover:to-amber-300 text-slate-950 font-black py-4 rounded-2xl transition-all shadow-xl shadow-amber-500/25 active:scale-[0.98] disabled:opacity-50 text-base cursor-pointer"
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-4 rounded-2xl transition-all shadow-lg shadow-blue-600/25 active:scale-[0.98] disabled:opacity-50 text-base cursor-pointer border border-blue-500"
               >
                 {isLoggingIn ? 'جاري التحقق وتسجيل الحضور...' : 'تسجيل حضور وبدء الجلسة 🚀'}
               </button>
@@ -295,12 +271,12 @@ export const StudentKioskView: React.FC = () => {
         
         <header className="bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-xl flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-4 w-full sm:w-auto">
-            <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-amber-500 to-amber-300 text-slate-950 flex items-center justify-center font-black text-2xl shadow-lg shadow-amber-500/20 shrink-0">
+            <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center font-black text-2xl shadow-lg shadow-blue-500/20 shrink-0">
               {studentName[0] || 'ط'}
             </div>
             <div>
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-xs bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2.5 py-0.5 rounded-lg font-black tracking-wider">
+                <span className="text-xs bg-blue-500/20 text-blue-300 border border-blue-500/30 px-2.5 py-0.5 rounded-lg font-black tracking-wider">
                   {studentCode}
                 </span>
 
@@ -348,10 +324,10 @@ export const StudentKioskView: React.FC = () => {
             )}
 
             {/* Stars Counter */}
-            <div className="bg-slate-950 border border-amber-500/30 px-4 py-2 rounded-2xl flex items-center gap-2 shadow-inner">
-              <Star className="w-5 h-5 text-amber-400 fill-amber-400 animate-bounce" />
+            <div className="bg-slate-950 border border-blue-500/30 px-4 py-2 rounded-2xl flex items-center gap-2 shadow-inner">
+              <Star className="w-5 h-5 text-blue-400 fill-blue-400 animate-bounce" />
               <div className="text-right">
-                <div className="text-lg font-black text-amber-400 leading-none">{currentPoints}</div>
+                <div className="text-lg font-black text-blue-400 leading-none">{currentPoints}</div>
                 <div className="text-[10px] text-slate-400 font-bold">نجمة تميز ⭐</div>
               </div>
             </div>
@@ -386,7 +362,7 @@ export const StudentKioskView: React.FC = () => {
           </div>
         )}
 
-        {/* ACTIVE LIVE EXTERNAL CHALLENGE (كاهوت / كلاس بوينت) */}
+        {/* ACTIVE LIVE EXTERNAL CHALLENGE (كلاس بوينت / كاهوت / كويزيز) */}
         {activeExternalActivity && (
           <div className="bg-gradient-to-r from-purple-900/50 via-indigo-900/40 to-blue-900/50 border-2 border-purple-400/60 rounded-3xl p-6 shadow-2xl relative overflow-hidden animate-fadeIn space-y-4">
             <div className="flex items-center justify-between flex-wrap gap-3">
@@ -395,33 +371,51 @@ export const StudentKioskView: React.FC = () => {
                 <div>
                   <div className="flex items-center gap-2">
                     <span className="text-xs bg-purple-500 text-white font-black px-2.5 py-0.5 rounded-full uppercase">
-                      {activeExternalActivity.platform || 'Kahoot'}
+                      {activeExternalActivity.platform || 'ClassPoint'}
                     </span>
                     <h3 className="text-lg sm:text-xl font-black text-white">
                       {activeExternalActivity.title || 'مسابقة تفاعلية أطلقها المعلم الآن!'}
                     </h3>
                   </div>
                   {activeExternalActivity.gamePin && (
-                    <p className="text-xs text-purple-200 mt-1">
-                      كود اللعبة (PIN): <span className="font-mono text-base font-black text-amber-300 tracking-wider mr-1">{activeExternalActivity.gamePin}</span>
-                    </p>
+                    <div className="flex items-center gap-3 flex-wrap mt-1">
+                      <p className="text-xs text-purple-200">
+                        كود الانضمام (PIN / Code): <span className="font-mono text-base font-black text-amber-300 tracking-wider mr-1">{activeExternalActivity.gamePin}</span>
+                      </p>
+                      <p className="text-xs text-emerald-300 bg-emerald-500/20 px-2 py-0.5 rounded-lg border border-emerald-500/30">
+                        اسمك المسجل: <strong className="text-white">{studentName}</strong> (جاهز للنسخ والدخول)
+                      </p>
+                    </div>
                   )}
                 </div>
               </div>
 
-              <a
-                href={
-                  activeExternalActivity.platform?.toLowerCase().includes('kahoot') && activeExternalActivity.gamePin
-                    ? `https://kahoot.it/?pin=${activeExternalActivity.gamePin}`
-                    : activeExternalActivity.url || (activeExternalActivity.platform?.toLowerCase().includes('classpoint') ? 'https://www.classpoint.app' : 'https://kahoot.it')
-                }
-                target="_blank"
-                rel="noopener noreferrer"
-                className="px-6 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-black text-sm rounded-2xl flex items-center gap-2 shadow-xl shadow-purple-600/40 hover:scale-105 active:scale-95 transition-all"
+              <button
+                onClick={() => {
+                  try {
+                    navigator.clipboard.writeText(studentName);
+                  } catch {}
+                  const plat = (activeExternalActivity.platform || '').toLowerCase();
+                  const pin = activeExternalActivity.gamePin || '';
+                  let targetUrl = activeExternalActivity.url || '';
+
+                  if (plat.includes('classpoint')) {
+                    targetUrl = 'https://www.classpoint.app';
+                  } else if (plat.includes('kahoot')) {
+                    targetUrl = pin ? `https://kahoot.it/?pin=${pin}` : 'https://kahoot.it';
+                  } else if (plat.includes('quizizz')) {
+                    targetUrl = pin ? `https://quizizz.com/join?gc=${pin}` : 'https://quizizz.com/join';
+                  } else if (!targetUrl) {
+                    targetUrl = 'https://www.classpoint.app';
+                  }
+
+                  window.open(targetUrl, '_blank', 'noopener,noreferrer');
+                }}
+                className="px-6 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-black text-sm rounded-2xl flex items-center gap-2 shadow-xl shadow-purple-600/40 hover:scale-105 active:scale-95 transition-all cursor-pointer"
               >
-                <span>الانضمام للمسابقة الآن 🚀</span>
+                <span>الانضمام للمسابقة بالاسم والكود فوراً 🚀</span>
                 <ExternalLink className="w-4 h-4" />
-              </a>
+              </button>
             </div>
           </div>
         )}
@@ -434,11 +428,11 @@ export const StudentKioskView: React.FC = () => {
                 <span className="w-3 h-3 rounded-full bg-rose-500 animate-ping"></span>
                 <h2 className="text-lg sm:text-xl font-black text-purple-200 flex items-center gap-2">
                   <Zap className="w-6 h-6 text-amber-400 fill-amber-400" />
-                  تحدي المعمل اللحظي (المنكش السريع)!
+                  تحدي المعمل اللحظي (التصويت والسؤال المباشر)!
                 </h2>
               </div>
               <span className="text-xs bg-purple-500/30 text-purple-200 px-3 py-1 rounded-full font-bold border border-purple-500/40">
-                سؤال مباشر من المعلم ⚡
+                {activeQuestion.closed ? '🔒 التصويت مغلق' : 'سؤال مباشر من المعلم ⚡'}
               </span>
             </div>
 
@@ -451,7 +445,7 @@ export const StudentKioskView: React.FC = () => {
               ) : (
                 <div className="space-y-1">
                   <p className="text-lg sm:text-xl font-black text-amber-300">
-                    🎧 استمع لسؤال المعلم شفوياً في القاعة
+                    🎧 استمع لسؤال المعلم شفوياً في القاعة أو انظر لشاشة العرض
                   </p>
                   <p className="text-xs text-slate-400">
                     اختر إجابتك فوراً من الأزرار الملونة بالأسفل!
@@ -464,19 +458,34 @@ export const StudentKioskView: React.FC = () => {
             <div className={`grid gap-4 ${activeQuestion.type === 'true_false' ? 'grid-cols-2' : 'grid-cols-1 sm:grid-cols-2'}`}>
               {(activeQuestion.options || []).map((opt) => {
                 const isSelected = submittedAnswer === opt.key;
+                const isRevealed = !!activeQuestion.revealed;
+                const isCorrectOption = isRevealed && String(activeQuestion.correctAnswer).toLowerCase() === String(opt.key).toLowerCase();
+
+                let extraClasses = opt.color;
+                if (isRevealed) {
+                  if (isCorrectOption) {
+                    extraClasses = 'bg-emerald-600 ring-4 ring-emerald-300 animate-pulse';
+                  } else if (isSelected) {
+                    extraClasses = 'bg-rose-700 opacity-60';
+                  } else {
+                    extraClasses = 'bg-slate-800 opacity-40';
+                  }
+                } else if (isSelected) {
+                  extraClasses = 'ring-4 ring-white/40 shadow-2xl ' + opt.color;
+                }
+
                 return (
                   <button
                     key={opt.key}
-                    disabled={isSubmittingAnswer}
+                    disabled={isSubmittingAnswer || activeQuestion.closed}
                     onClick={() => handleAnswerSubmit(opt.key)}
                     className={`p-6 sm:p-8 rounded-3xl font-black text-xl sm:text-2xl transition-all shadow-xl flex items-center justify-center gap-3 cursor-pointer border-2 ${
-                      isSelected
-                        ? 'border-white scale-[1.02] ring-4 ring-white/30 shadow-2xl ' + opt.color
-                        : 'border-transparent opacity-90 hover:opacity-100 hover:scale-[1.01] active:scale-95 ' + opt.color
-                    } text-white`}
+                      isSelected ? 'border-white scale-[1.02]' : 'border-transparent'
+                    } ${extraClasses} text-white`}
                   >
                     {isSelected && <Check className="w-7 h-7 animate-bounce" />}
                     <span>{opt.label}</span>
+                    {isRevealed && isCorrectOption && <span className="text-sm bg-black/40 px-2.5 py-1 rounded-full">✅ الإجابة الصحيحة</span>}
                   </button>
                 );
               })}
@@ -486,10 +495,12 @@ export const StudentKioskView: React.FC = () => {
             {submittedAnswer && (
               <div className="p-4 bg-emerald-500/20 border border-emerald-500/40 rounded-2xl text-center space-y-1">
                 <p className="text-emerald-300 font-black text-sm flex items-center justify-center gap-1.5">
-                  <CheckCircle2 className="w-4 h-4" /> تم استلام إجابتك بنجاح! في انتظار إعلان النتائج من المعلم
+                  <CheckCircle2 className="w-4 h-4" /> تم استلام اختيارك بنجاح!
                 </p>
                 <p className="text-[11px] text-slate-400">
-                  يمكنك تغيير إجابتك بالضغط على خيار آخر قبل إنهاء السؤال
+                  {activeQuestion.revealed
+                    ? 'تم إعلان النتيجة وتوزيع النجوم على أصحاب الإجابات الصحيحة 🌟'
+                    : 'في انتظار قيام المعلم بكشف الإجابة الصحيحة على شاشة العرض (البروجكتور)'}
                 </p>
               </div>
             )}
@@ -586,94 +597,7 @@ export const StudentKioskView: React.FC = () => {
 
         </div>
 
-        {/* Lightweight Educational Mini-Game Button */}
-        <div className="bg-gradient-to-r from-amber-500/10 via-purple-500/10 to-cyan-500/10 border border-slate-800 rounded-3xl p-5 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-2xl bg-amber-500/20 text-amber-400 flex items-center justify-center">
-              <Gamepad2 className="w-6 h-6" />
-            </div>
-            <div>
-              <h4 className="text-sm font-black text-white">لعبة السرعة والتحدي الذكية</h4>
-              <p className="text-xs text-slate-400">تحدى نفسك في ألغاز برمجية سريعة واكسب نجوم تميز إضافية!</p>
-            </div>
-          </div>
-
-          <button
-            onClick={() => {
-              setIsMiniGameActive(true);
-              setGameStep(0);
-              setGameScore(0);
-            }}
-            className="px-5 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs rounded-xl flex items-center gap-2 shadow-lg shadow-amber-500/20 transition-all cursor-pointer whitespace-nowrap"
-          >
-            <Play className="w-3.5 h-3.5 fill-current" />
-            <span>تشغيل اللعبة الآن</span>
-          </button>
-        </div>
-
       </div>
-
-      {/* Mini-Game Modal */}
-      {isMiniGameActive && (
-        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 max-w-lg w-full space-y-6 shadow-2xl relative">
-            <button
-              onClick={() => setIsMiniGameActive(false)}
-              className="absolute top-5 left-5 p-2 text-slate-400 hover:text-white rounded-xl bg-slate-800 hover:bg-slate-700"
-            >
-              <X className="w-5 h-5" />
-            </button>
-
-            {gameStep < miniGameData.length ? (
-              <div className="space-y-5">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs bg-amber-500/20 text-amber-300 px-3 py-1 rounded-lg font-black">
-                    لغز {gameStep + 1} من {miniGameData.length}
-                  </span>
-                  <span className="text-xs text-slate-400">
-                    النقاط الحالية: {gameScore} ⭐
-                  </span>
-                </div>
-
-                <h3 className="text-xl font-black text-white leading-snug">
-                  {miniGameData[gameStep].question}
-                </h3>
-
-                <div className="space-y-3">
-                  {miniGameData[gameStep].options.map((opt, idx) => (
-                    <button
-                      key={idx}
-                      onClick={() => {
-                        if (idx === miniGameData[gameStep].correct) {
-                          setGameScore(prev => prev + 5);
-                        }
-                        setGameStep(prev => prev + 1);
-                      }}
-                      className="w-full text-right p-4 bg-slate-950 hover:bg-amber-500/20 hover:border-amber-500/40 border border-slate-800 rounded-2xl text-sm font-bold text-slate-200 hover:text-white transition-all cursor-pointer"
-                    >
-                      {opt}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            ) : (
-              <div className="text-center space-y-4 py-4">
-                <div className="text-5xl">🏆</div>
-                <h3 className="text-2xl font-black text-white">أحسنت يا بطل!</h3>
-                <p className="text-slate-300 text-sm">
-                  أكملت التحدي بنجاح وحققت <span className="text-amber-400 font-black">{gameScore}</span> نقطة تميز إضافية!
-                </p>
-                <button
-                  onClick={() => setIsMiniGameActive(false)}
-                  className="px-6 py-3 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black rounded-xl text-sm transition-all"
-                >
-                  العودة لشاشة المعمل
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
 
       {/* Joyful Celebration Balloon / Star Effect */}
       {showCelebration && (

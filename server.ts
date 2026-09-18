@@ -1149,7 +1149,398 @@ app.post("/api/ai/grade/evaluate", async (req, res) => {
   }
 });
 
-// POST /api/ai/insights/student - Student Learning Insights & Early Intervention
+// -----------------------------------------------------------------------------
+// LECTURE RECAPS & HOMEWORK HUB (4-SECTION TARGETED SYSTEM)
+// -----------------------------------------------------------------------------
+interface ServerLectureRecap {
+  id: string;
+  title: string;
+  courseId?: string;
+  courseName?: string;
+  groupId?: string;
+  groupName?: string;
+  branchId?: string;
+  trainerId?: string;
+  trainerName?: string;
+  lectureDate: string;
+  gradeLevel: string;
+  subject?: string;
+  recapSummary: {
+    points: string[];
+    detailedNotes?: string;
+    audioUrl?: string;
+  };
+  homeworkTasks: {
+    tasks: string[];
+    bonusChallenge?: string;
+    dueDateTime?: string;
+    allowMultiPageUpload?: boolean;
+  };
+  nextLecturePrep: {
+    prepPoints: string[];
+    teaserNotes?: string;
+  };
+  closingMessage?: string;
+  audioVoiceUrl?: string;
+  isPublished: boolean;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+// In-Memory Recaps Store with Grade & Group Targeted Seed Data
+let serverLectureRecaps: ServerLectureRecap[] = [
+  {
+    id: "recap_grade4_lesson3",
+    title: "المحاضرة 3: فك الكيسة ومكونات الحاسوب الخمسة ودورة البيانات 💻",
+    gradeLevel: "الصف الرابع الابتدائي (Grade 4 Languages)",
+    groupName: "جروب الصف الرابع لغات - مركز بدر والنجاح",
+    groupId: "group_grade4_lang",
+    subject: "تكنولوجيا المعلومات والاتصالات ICT & Computer",
+    trainerName: "المهندس / المدرب المعتمد",
+    branchId: "branch_badr_center",
+    lectureDate: new Date().toISOString(),
+    recapSummary: {
+      points: [
+        "1. مراجعة شاملة Revision على ما تم دراسته سابقاً في Lesson 1 & Lesson 2.",
+        "2. أسئلة تفاعلية ومسابقة كاهوت حماسية لتثبيت المفاهيم وتكريم الفائزين.",
+        "3. حل وتصحيح الواجبات السابقة والتأكد من إتقان كل بطل للأسئلة.",
+        "4. فتح Lesson 3 مع عرض فيديو تمهيدي شيق عن أجزاء الكمبيوتر.",
+        "5. فك الـ Case عملياً في المعمل والتعرف على الأجزاء الداخلية للأجهزة.",
+        "6. مكونات الكيسة الخمسة: (عمو الكهربائي = Power Supply ⚡️، ماما نوسة = Motherboard 👩‍🍳، المخيخ = CPU 🧠، السمكة = RAM 🐟، الخزنة = Hard Disk 🔒).",
+        "7. دورة البيانات والمعلومات Data vs Information (دخول Data -> تحويل ومعالجة بالمخيخ CPU -> خروج Information مفيدة)."
+      ],
+      detailedNotes: "تمت المحاضرة وسط تفاعل عالي واستيعاب تطبيقي مباشر حيث قام الطلاب بالتعرف على مكونات الحاسوب وفك الكيسة وملاحظة وظيفة كل قطعة وربطها بالتشبيهات الذكية."
+    },
+    homeworkTasks: {
+      tasks: [
+        "1. كتابة وتوثيق أسماء مكونات الكيسة الخمسة بالعربي والإنجليزي في الكشكول.",
+        "2. تلخيص Lesson 1 & Lesson 2 في نصف صفحة + حل الأسئلة المهمة في النصف الثاني.",
+        "3. تلخيص تحضيري لـ Lesson 3 في صفحة كاملة.",
+        "4. تصوير صفحات الكشكول المكتوبة ورفعها عبر بوابة المتدرب للتصحيح الذكي."
+      ],
+      bonusChallenge: "🌟 بونص إضافي خاص: تسجيل فيديو أو فويس وأنت تشاور على مكونات الكيسة وتشرحها بصوتك!",
+      allowMultiPageUpload: true
+    },
+    nextLecturePrep: {
+      prepPoints: [
+        "تثبيت وحفظ مسميات مكونات الكيسة الخمسة (Power Supply, Motherboard, CPU, RAM, Hard Disk).",
+        "إحضار كشكول التدريب وأدوات المعمل والاستعداد لمسابقة كاهوت وتطبيق عملي جديد في المعمل."
+      ],
+      teaserNotes: "المحاضرة القادمة ستشهد تحديات برمجية وعملية تفاعلية وتفكيك كيسات جديدة داخل المعمل!"
+    },
+    closingMessage: "أبطال الصف الرابع، فخور جداً بتركيزكم وفهمكم العملي لمكونات الحاسوب، أنتم مهندسو المستقبل! ننتظر إبداعاتكم في تلخيص الدروس والتطبيق العملي. 🚀🌟",
+    isPublished: true,
+    createdAt: new Date().toISOString()
+  },
+  {
+    id: "recap_grade5_lesson2",
+    title: "المحاضرة 2: شبكات الحاسوب والإنترنت والأمن السيبراني 🌐🔒",
+    gradeLevel: "الصف الخامس الابتدائي (Grade 5 Languages)",
+    groupName: "جروب الصف الخامس لغات - السبت 2م",
+    groupId: "group_grade5_lang",
+    subject: "تكنولوجيا المعلومات والاتصالات ICT & Computer",
+    trainerName: "المهندس / المدرب المعتمد",
+    branchId: "branch_badr_center",
+    lectureDate: new Date().toISOString(),
+    recapSummary: {
+      points: [
+        "1. مراجعة أنواع الشبكات (LAN vs WAN) والفرق بين الشبكة المغلقة والمفتوحة.",
+        "2. مكونات توصيل الشبكة (الراوتر Router، كابلات Ethernet، منافذ Switch).",
+        "3. الإنترنت Internet وشبكة الويب العالمية World Wide Web (WWW).",
+        "4. قواعد حماية البيانات وكلمات المرور القوية (Strong Passwords & 2FA).",
+        "5. تطبيق عملي بالمعمل على فحص اتصال الشبكة ومشاركة الملفات بأمان."
+      ],
+      detailedNotes: "تم تطبيق ورشة عملية على توصيل الكابلات وفهم عنوان الـ IP وطرق حماية الخصوصية الرقمية."
+    },
+    homeworkTasks: {
+      tasks: [
+        "1. كتابة جدول مقارنة بين شبكة LAN وشبكة WAN في الكشكول.",
+        "2. وضع 5 شروط لكلمة المرور الآمنة التي تحمي الحسابات من الاختراق.",
+        "3. حل أسئلة نهاية الوحدة وتصوير صفحات الإجابة لرفعها عبر البوابة."
+      ],
+      bonusChallenge: "🌟 بونص إضافي: ابتكار كلمة مرور قوية باستخدام كلمات وحروف ورموز وتوضيح سبب قوتها.",
+      allowMultiPageUpload: true
+    },
+    nextLecturePrep: {
+      prepPoints: [
+        "قراءة درس استراتيجيات البحث المتقدم على محركات البحث (Search Strategies).",
+        "إحضار الكشكول ومتابعة المهام في الموعد."
+      ],
+      teaserNotes: "المحاضرة القادمة سنتعلم أسرار وتقنيات البحث الاحترافي والتحقق من مصادر المعلومات!"
+    },
+    closingMessage: "أبطال الصف الخامس، أبدعتم في فهم عالم الشبكات، استمروا في تطبيق عادات الأمان الرقمي! 🌐🛡️",
+    isPublished: true,
+    createdAt: new Date().toISOString()
+  },
+  {
+    id: "recap_python_loops",
+    title: "المحاضرة 4: الحلقات التكرارية والقوائم الذكية في بايثون 🐍🚀",
+    gradeLevel: "دورة بايثون والذكاء الاصطناعي (Python & AI)",
+    groupName: "جروب بايثون والذكاء الاصطناعي - الخميس 4م",
+    groupId: "group_python_ai",
+    subject: "برمجة بايثون وتطبيقات الذكاء الاصطناعي",
+    trainerName: "المهندس / المدرب المعتمد",
+    branchId: "branch_badr_center",
+    lectureDate: new Date().toISOString(),
+    recapSummary: {
+      points: [
+        "1. مراجعة الجمل الشرطية if-elif-else والعمليات المنطقية.",
+        "2. شرح وتطبيق الحلقات التكرارية For Loops و While Loops.",
+        "3. استخدام دالة range() للتكرار الموجه والتحكم في الخطوات Step.",
+        "4. التعامل مع القوائم Lists (append, pop, len, indexing).",
+        "5. بناء مشروع لعبة تخمين الأرقام الذكية Number Guessing Game مع عداد المحاولات."
+      ],
+      detailedNotes: "قام كل متدرب بكتابة وتشغيل الكود بنفسه في بيئة التطوير وتصحيح الأخطاء البرمجية (Debugging)."
+    },
+    homeworkTasks: {
+      tasks: [
+        "1. كتابة كود بايثون يطبع الأعداد الزوجية من 1 إلى 50 باستخدام For Loop.",
+        "2. بناء برنامج يسأل المستخدم عن 5 أسماء ويخزنها في قائمة ثم يطبعها مرتبة.",
+        "3. تصوير الكود أو رفع ملف .py / سكرين شوت لتنفيذ البرنامج عبر البوابة."
+      ],
+      bonusChallenge: "🌟 بونص متميز: إضافة ميزة المستويات (سهل/صعب) في لعبة تخمين الأرقام مع حد أقصى للفرص.",
+      allowMultiPageUpload: true
+    },
+    nextLecturePrep: {
+      prepPoints: [
+        "الاستعداد لموضوع الدوال البرمجية المخصصة Custom Functions (def keyword).",
+        "مراجعة التعامل مع القوائم والقواميس Dictionaries."
+      ],
+      teaserNotes: "المحاضرة القادمة سنبدأ أول خطوة في بناء شات بوت ذكي يتعرف على أوامر المستخدم!"
+    },
+    closingMessage: "مبرمجو المستقبل، خطوتكم اليوم في بايثون رائعة وتفكيركم الخوارزمي يتطور باحتراف! 🐍💻",
+    isPublished: true,
+    createdAt: new Date().toISOString()
+  }
+];
+
+// GET /api/lecture-recaps - List recaps with smart filtering by grade, group, or branch
+app.get("/api/lecture-recaps", (req, res) => {
+  const { gradeLevel, groupId, courseName, branchId } = req.query;
+
+  let filtered = [...serverLectureRecaps];
+
+  if (groupId && groupId !== "all") {
+    filtered = filtered.filter(r => 
+      !r.groupId || r.groupId === groupId || r.groupId === "all" || r.groupName?.includes(groupId as string)
+    );
+  }
+
+  if (gradeLevel && gradeLevel !== "all") {
+    const qGrade = (gradeLevel as string).toLowerCase().trim();
+    filtered = filtered.filter(r => {
+      const rGrade = (r.gradeLevel || "").toLowerCase();
+      // Match if identical or contains primary grade keyword
+      if (rGrade.includes(qGrade) || qGrade.includes(rGrade)) return true;
+      if (qGrade.includes("رابع") || qGrade.includes("grade 4") || qGrade.includes("رابعة")) {
+        return rGrade.includes("رابع") || rGrade.includes("grade 4");
+      }
+      if (qGrade.includes("خامس") || qGrade.includes("grade 5") || qGrade.includes("خامسة")) {
+        return rGrade.includes("خامس") || rGrade.includes("grade 5");
+      }
+      if (qGrade.includes("سادس") || qGrade.includes("grade 6") || qGrade.includes("سادسة")) {
+        return rGrade.includes("سادس") || rGrade.includes("grade 6");
+      }
+      if (qGrade.includes("بايثون") || qGrade.includes("python") || qGrade.includes("ذكاء")) {
+        return rGrade.includes("بايثون") || rGrade.includes("python");
+      }
+      if (qGrade.includes("أول إعدادي") || qGrade.includes("prep 1")) {
+        return rGrade.includes("أول إعدادي") || rGrade.includes("prep 1");
+      }
+      return false;
+    });
+  }
+
+  // Sort newest first
+  filtered.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+
+  res.json({
+    success: true,
+    recaps: filtered,
+    totalCount: filtered.length
+  });
+});
+
+// POST /api/lecture-recaps - Create or update lecture recap with target group & grade
+app.post("/api/lecture-recaps", (req, res) => {
+  try {
+    const payload = req.body;
+    if (!payload.title) {
+      return res.status(400).json({ success: false, message: "عنوان المحاضرة مطلوب" });
+    }
+
+    const newRecap: ServerLectureRecap = {
+      id: payload.id || `recap_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      title: payload.title,
+      gradeLevel: payload.gradeLevel || "الصف الرابع الابتدائي (Grade 4 Languages)",
+      groupId: payload.groupId,
+      groupName: payload.groupName,
+      courseId: payload.courseId,
+      courseName: payload.courseName,
+      branchId: payload.branchId || "branch_badr_center",
+      trainerId: payload.trainerId || "trainer_01",
+      trainerName: payload.trainerName || "المهندس / المدرب المعتمد",
+      lectureDate: payload.lectureDate || new Date().toISOString(),
+      subject: payload.subject || "تكنولوجيا المعلومات والاتصالات ICT & Computer",
+      recapSummary: payload.recapSummary || { points: [] },
+      homeworkTasks: payload.homeworkTasks || { tasks: [], allowMultiPageUpload: true },
+      nextLecturePrep: payload.nextLecturePrep || { prepPoints: [] },
+      closingMessage: payload.closingMessage || "ننتظر إبداعاتكم وتطبيقكم العملي في الواجب القادم!",
+      isPublished: payload.isPublished !== undefined ? payload.isPublished : true,
+      createdAt: payload.createdAt || new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    const existingIdx = serverLectureRecaps.findIndex(r => r.id === newRecap.id);
+    if (existingIdx >= 0) {
+      serverLectureRecaps[existingIdx] = newRecap;
+    } else {
+      serverLectureRecaps.unshift(newRecap);
+    }
+
+    res.json({
+      success: true,
+      recap: newRecap,
+      message: `تم نشر ملخص وتكليفات المحاضرة بنجاح لمجموعة (${newRecap.groupName || newRecap.gradeLevel})!`
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: "خطأ أثناء حفظ ملخص المحاضرة: " + err.message });
+  }
+});
+
+// DELETE /api/lecture-recaps/:id
+app.delete("/api/lecture-recaps/:id", (req, res) => {
+  const { id } = req.params;
+  serverLectureRecaps = serverLectureRecaps.filter(r => r.id !== id);
+  res.json({ success: true, message: "تم حذف ملخص المحاضرة بنجاح." });
+});
+
+// POST /api/lecture-recaps/ai-structure-voice - Structuring trainer notes/voice for specific Grade & Group
+app.post("/api/lecture-recaps/ai-structure-voice", async (req, res) => {
+  try {
+    const { teacherNotes, audioBase64, targetGrade, targetGroup, targetCourse } = req.body;
+    const grade = targetGrade || "الصف الرابع الابتدائي (Grade 4 Languages)";
+    const group = targetGroup || "المجموعة المحددة";
+    const course = targetCourse || "تكنولوجيا المعلومات والاتصالات ICT & Computer";
+
+    let structuredResult: any = null;
+
+    if (aiClient) {
+      try {
+        const parts: any[] = [];
+
+        if (audioBase64 && typeof audioBase64 === "string" && audioBase64.includes("base64,")) {
+          const [header, base64Data] = audioBase64.split("base64,");
+          const mimeTypeMatch = header.match(/:(.*?);/);
+          const mimeType = mimeTypeMatch ? mimeTypeMatch[1] : "audio/webm";
+          parts.push({
+            inlineData: {
+              mimeType,
+              data: base64Data
+            }
+          });
+        }
+
+        const prompt = `أنت مساعد تعليمي وإداري خبير في مركز النجاح للتدريب والاستشارات.
+المدرب قام بتسجيل صوتي أو كتابة ملاحظات سريعة عن المحاضرة التي تم إعطاؤها اليوم.
+البيانات المستهدفة:
+- المرحلة الدراسية المستهدفة: "${grade}"
+- المجموعة / الدورة: "${group} - ${course}"
+- ملاحظات ونص التسجيل الصوتي للمدرب: "${teacherNotes || 'تم شرح المحاضرة وحل الأسئلة والتطبيق بالمعمل والواجب'}"
+
+المطلوب:
+تنظيم الملاحظات بدقة واحترافية فائقة في الهيكل التعليمي الرباعي المعتمد، ومناسب تماماً للفئة العمرية والمنهج المستهدف (${grade}).
+أخرج النتيجة بتنسيق JSON حصراً (Valid JSON object):
+{
+  "title": "المحاضرة X: عنوان مشوق وجذاب للمحاضرة مناسب لـ ${grade}",
+  "recapSummary": {
+    "points": [
+      "1. نقطة رئيسية لما تم مراجعته وإنجازه",
+      "2. النشاط التفاعلي أو مسابقة كاهوت أو الأسئلة",
+      "3. المفهوم أو الجزء العملي الجديد المشروح",
+      "4. المصطلحات الأساسية بالعربي والإنجليزي"
+    ],
+    "detailedNotes": "فقرة توضيحية موجزة لما حدث في القاعة ومستوى التفاعل"
+  },
+  "homeworkTasks": {
+    "tasks": [
+      "1. المهمة التوثيقية في الكشكول (كتابة أو رسم أو تلخيص)",
+      "2. حل تدريبات أو أسئلة محددة",
+      "3. تحضير قراءة للدرس القادم",
+      "4. تصوير صفحات الكشكول ورفعها عبر البوابة"
+    ],
+    "bonusChallenge": "🌟 تحدي بونص ذكي إضافي للحصول على نجوم إضافية",
+    "allowMultiPageUpload": true
+  },
+  "nextLecturePrep": {
+    "prepPoints": [
+      "نقطة تحضيرية 1",
+      "إحضار الكشكول وأدوات المعمل"
+    ],
+    "teaserNotes": "عبارة تشويقية لما سيتم في الحصة القادمة بالمعمل"
+  },
+  "closingMessage": "رسالة تربوية محفزة وقصيرة من المدرب لأبطال هذا الصف (${grade}) لبث الحماس وروح التميز"
+}`;
+
+        parts.push({ text: prompt });
+
+        const response = await aiClient.models.generateContent({
+          model: "gemini-2.5-flash",
+          contents: parts
+        });
+
+        const rawText = response.text || "";
+        const jsonMatch = rawText.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          structuredResult = JSON.parse(jsonMatch[0]);
+        }
+      } catch (aiErr: any) {
+        console.warn("Gemini lecture recap structuring fallback:", aiErr?.message);
+      }
+    }
+
+    // High quality deterministic fallback matching the target grade
+    if (!structuredResult) {
+      structuredResult = {
+        title: `ملخص وتكليفات المحاضرة - ${grade} 🚀`,
+        recapSummary: {
+          points: [
+            `1. مراجعة شاملة وتطبيقية للمفاهيم السابقة في ${course}.`,
+            `2. أسئلة تفاعلية ومسابقة تقييمية لتثبيت استيعاب الطلاب.`,
+            `3. ورشة تطبيقية مباشرة في المعمل ومناقشة الأمثلة العملية.`,
+            teacherNotes ? `4. ${teacherNotes.slice(0, 100)}` : `4. التعرف على المصطلحات التقنية الأساسية بالعربية والإنجليزية.`
+          ],
+          detailedNotes: `تم تنفيذ محتوى المحاضرة المخصص لمرحلة (${grade}) وسط تفاعل ممتاز وتطبيق عملي من المتدربين.`
+        },
+        homeworkTasks: {
+          tasks: [
+            `1. توثيق وتلخيص ما تم دراسته اليوم في كشكول التدريب بخط واضح.`,
+            `2. حل التطبيقات والأسئلة المحددة في المحاضرة.`,
+            `3. تصوير صفحات الواجب المكتوبة ورفعها عبر بوابة المتدرب للتصحيح الذكي.`
+          ],
+          bonusChallenge: `🌟 بونص إضافي خاص: تلخيص الدرس في دقيقة صوتية أو شرحه بصوتك لنيل 15 نجمة إضافية!`,
+          allowMultiPageUpload: true
+        },
+        nextLecturePrep: {
+          prepPoints: [
+            `مراجعة المصطلحات الأساسية والاستعداد للتطبيق العملي القادم.`,
+            `إحضار الكشكول والتواجد في الموعد المحدد.`
+          ],
+          teaserNotes: `المحاضرة القادمة ستشهد تطبيقات حماسية ومسابقات شيقة وتحديات جديدة!`
+        },
+        closingMessage: `أبطال مرحلة (${grade})، فخورون بجهدكم وتركيزكم العالي، أنتم صناع المستقبل ورواد النجاح! 🌟🚀`
+      };
+    }
+
+    res.json({
+      success: true,
+      structured: structuredResult,
+      message: "تمت هيكلة وتنظيم ملخص وتكليفات المحاضرة بنجاح!"
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: "فشل تنظيم التسجيل: " + err.message });
+  }
+});
 app.post("/api/ai/insights/student", async (req, res) => {
   try {
     const { studentId, sessionId } = req.body;

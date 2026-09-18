@@ -247,12 +247,12 @@
   color: #1e1b4b !important;
 }
 
-/* 3. COLOR BRANCHING & ICON GLOW HARMONY IN LIGHT MODE (Harmonious, Soft & Natural) */
+/* 3. COLOR BRANCHING & ICON GLOW HARMONY IN LIGHT MODE (Harmonious, Soft & Natural for Panels & Cards) */
 
 /* Emerald Branch (Revenues, Active, Financial Gains, Success) */
-.light [class*="border-emerald-500"],
-.light [class*="border-emerald-400"],
-.light [class*="border-green-500"] {
+.light div[class*="border-emerald-500"]:not(button):not([class*="bg-emerald-600"]):not([class*="bg-emerald-700"]),
+.light div[class*="border-emerald-400"]:not(button):not([class*="bg-emerald-600"]):not([class*="bg-emerald-700"]),
+.light div[class*="border-green-500"]:not(button) {
   background: linear-gradient(145deg, #ffffff 60%, #f0fdf4 100%) !important;
   border-color: rgba(110, 231, 183, 0.7) !important;
   box-shadow: 0 4px 16px -2px rgba(16, 185, 129, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.9) !important;
@@ -262,10 +262,10 @@
 .light .text-green-400 {
   color: #059669 !important;
 }
-.light .bg-emerald-500\/20,
-.light .bg-emerald-500\/15,
-.light .bg-emerald-500\/10,
-.light .bg-green-500\/20 {
+.light div.bg-emerald-500\/20,
+.light div.bg-emerald-500\/15,
+.light div.bg-emerald-500\/10,
+.light div.bg-green-500\/20 {
   background: linear-gradient(180deg, #ecfdf5 0%, #d1fae5 100%) !important;
   color: #065f46 !important;
   border-color: rgba(110, 231, 183, 0.6) !important;
@@ -273,10 +273,10 @@
 }
 
 /* Rose & Red Branch (Expenses, Debts, Urgent Alerts, High Risk) */
-.light [class*="border-rose-500"],
-.light [class*="border-rose-400"],
-.light [class*="border-red-500"],
-.light [class*="border-red-400"] {
+.light div[class*="border-rose-500"]:not(button):not([class*="bg-rose-600"]):not([class*="bg-rose-700"]),
+.light div[class*="border-rose-400"]:not(button):not([class*="bg-rose-600"]):not([class*="bg-rose-700"]),
+.light div[class*="border-red-500"]:not(button),
+.light div[class*="border-red-400"]:not(button) {
   background: linear-gradient(145deg, #ffffff 60%, #fff1f2 100%) !important;
   border-color: rgba(253, 164, 175, 0.7) !important;
   box-shadow: 0 4px 16px -2px rgba(244, 63, 94, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.9) !important;
@@ -286,10 +286,10 @@
 .light .text-red-400 {
   color: #e11d48 !important;
 }
-.light .bg-rose-500\/20,
-.light .bg-rose-500\/15,
-.light .bg-rose-500\/10,
-.light .bg-red-500\/20 {
+.light div.bg-rose-500\/20,
+.light div.bg-rose-500\/15,
+.light div.bg-rose-500\/10,
+.light div.bg-red-500\/20 {
   background: linear-gradient(180deg, #fff1f2 0%, #ffe4e6 100%) !important;
   color: #be123c !important;
   border-color: rgba(253, 164, 175, 0.6) !important;
@@ -297,9 +297,9 @@
 }
 
 /* Amber & Gold Branch (Treasury, Top Honors, Certificates, Star Ratings) */
-.light [class*="border-amber-500"],
-.light [class*="border-amber-400"],
-.light [class*="border-yellow-500"] {
+.light div[class*="border-amber-500"]:not(button):not([class*="bg-amber-500"]):not([class*="bg-amber-600"]),
+.light div[class*="border-amber-400"]:not(button):not([class*="bg-amber-500"]):not([class*="bg-amber-600"]),
+.light div[class*="border-yellow-500"]:not(button) {
   background: linear-gradient(145deg, #ffffff 60%, #fffdf5 100%) !important;
   border-color: rgba(252, 211, 77, 0.7) !important;
   box-shadow: 0 4px 16px -2px rgba(245, 158, 11, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.9) !important;
@@ -309,10 +309,10 @@
 .light .text-yellow-400 {
   color: #d97706 !important;
 }
-.light .bg-amber-500\/20,
-.light .bg-amber-500\/15,
-.light .bg-amber-500\/10,
-.light .bg-yellow-500\/20 {
+.light div.bg-amber-500\/20,
+.light div.bg-amber-500\/15,
+.light div.bg-amber-500\/10,
+.light div.bg-yellow-500\/20 {
   background: linear-gradient(180deg, #fffbeb 0%, #fef3c7 100%) !important;
   color: #92400e !important;
   border-color: rgba(251, 191, 36, 0.6) !important;
@@ -320,9 +320,9 @@
 }
 
 /* Cyan & Teal Branch (Trainees, Instant Synchronizer, Cloud Network) */
-.light [class*="border-cyan-500"],
-.light [class*="border-cyan-400"],
-.light [class*="border-teal-500"] {
+.light div[class*="border-cyan-500"]:not(button):not([class*="bg-cyan-600"]),
+.light div[class*="border-cyan-400"]:not(button):not([class*="bg-cyan-600"]),
+.light div[class*="border-teal-500"]:not(button) {
   background: linear-gradient(145deg, #ffffff 60%, #f0fdfa 100%) !important;
   border-color: rgba(165, 243, 252, 0.7) !important;
   box-shadow: 0 4px 16px -2px rgba(6, 182, 212, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.9) !important;
@@ -332,10 +332,10 @@
 .light .text-teal-400 {
   color: #0891b2 !important;
 }
-.light .bg-cyan-500\/20,
-.light .bg-cyan-500\/15,
-.light .bg-cyan-500\/10,
-.light .bg-teal-500\/20 {
+.light div.bg-cyan-500\/20,
+.light div.bg-cyan-500\/15,
+.light div.bg-cyan-500\/10,
+.light div.bg-teal-500\/20 {
   background: linear-gradient(180deg, #ecfeff 0%, #cffafe 100%) !important;
   color: #0e7490 !important;
   border-color: rgba(103, 232, 249, 0.6) !important;
@@ -343,9 +343,9 @@
 }
 
 /* Blue & Sky Branch (Branches, Security, Communication Logs) */
-.light [class*="border-blue-500"],
-.light [class*="border-blue-400"],
-.light [class*="border-sky-500"] {
+.light div[class*="border-blue-500"]:not(button):not([class*="bg-blue-600"]):not([class*="bg-blue-700"]),
+.light div[class*="border-blue-400"]:not(button):not([class*="bg-blue-600"]):not([class*="bg-blue-700"]),
+.light div[class*="border-sky-500"]:not(button) {
   background: linear-gradient(145deg, #ffffff 60%, #eff6ff 100%) !important;
   border-color: rgba(191, 219, 254, 0.7) !important;
   box-shadow: 0 4px 16px -2px rgba(59, 130, 246, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.9) !important;
@@ -355,10 +355,10 @@
 .light .text-sky-400 {
   color: #2563eb !important;
 }
-.light .bg-blue-500\/20,
-.light .bg-blue-500\/15,
-.light .bg-blue-500\/10,
-.light .bg-sky-500\/20 {
+.light div.bg-blue-500\/20,
+.light div.bg-blue-500\/15,
+.light div.bg-blue-500\/10,
+.light div.bg-sky-500\/20 {
   background: linear-gradient(180deg, #eff6ff 0%, #dbeafe 100%) !important;
   color: #1d4ed8 !important;
   border-color: rgba(147, 197, 253, 0.6) !important;
@@ -366,9 +366,9 @@
 }
 
 /* Purple & Violet Branch (Courses, Exams, Question Banks, Labs) */
-.light [class*="border-purple-500"],
-.light [class*="border-purple-400"],
-.light [class*="border-violet-500"] {
+.light div[class*="border-purple-500"]:not(button):not([class*="bg-purple-600"]):not([class*="bg-purple-700"]),
+.light div[class*="border-purple-400"]:not(button):not([class*="bg-purple-600"]):not([class*="bg-purple-700"]),
+.light div[class*="border-violet-500"]:not(button) {
   background: linear-gradient(145deg, #ffffff 60%, #faf5ff 100%) !important;
   border-color: rgba(233, 213, 255, 0.7) !important;
   box-shadow: 0 4px 16px -2px rgba(168, 85, 247, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.9) !important;
@@ -378,10 +378,10 @@
 .light .text-violet-400 {
   color: #7c3aed !important;
 }
-.light .bg-purple-500\/20,
-.light .bg-purple-500\/15,
-.light .bg-purple-500\/10,
-.light .bg-violet-500\/20 {
+.light div.bg-purple-500\/20,
+.light div.bg-purple-500\/15,
+.light div.bg-purple-500\/10,
+.light div.bg-violet-500\/20 {
   background: linear-gradient(180deg, #faf5ff 0%, #f3e8ff 100%) !important;
   color: #6d28d9 !important;
   border-color: rgba(216, 180, 254, 0.6) !important;
@@ -389,8 +389,8 @@
 }
 
 /* Indigo Branch (Smart AI, Interactive Assistants) */
-.light [class*="border-indigo-500"],
-.light [class*="border-indigo-400"] {
+.light div[class*="border-indigo-500"]:not(button):not([class*="bg-indigo-600"]):not([class*="bg-indigo-700"]),
+.light div[class*="border-indigo-400"]:not(button):not([class*="bg-indigo-600"]):not([class*="bg-indigo-700"]) {
   background: linear-gradient(145deg, #ffffff 60%, #eef2ff 100%) !important;
   border-color: rgba(199, 210, 254, 0.7) !important;
   box-shadow: 0 4px 16px -2px rgba(99, 102, 241, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.9) !important;
@@ -399,9 +399,9 @@
 .light .text-indigo-300 {
   color: #4f46e5 !important;
 }
-.light .bg-indigo-500\/20,
-.light .bg-indigo-500\/15,
-.light .bg-indigo-500\/10 {
+.light div.bg-indigo-500\/20,
+.light div.bg-indigo-500\/15,
+.light div.bg-indigo-500\/10 {
   background: linear-gradient(180deg, #eef2ff 0%, #e0e7ff 100%) !important;
   color: #4338ca !important;
   border-color: rgba(165, 180, 252, 0.6) !important;
@@ -409,9 +409,9 @@
 }
 
 /* Pink Branch (Trainers, Stars, Celebrations) */
-.light [class*="border-pink-500"],
-.light [class*="border-pink-400"],
-.light [class*="border-fuchsia-500"] {
+.light div[class*="border-pink-500"]:not(button):not([class*="bg-pink-600"]),
+.light div[class*="border-pink-400"]:not(button):not([class*="bg-pink-600"]),
+.light div[class*="border-fuchsia-500"]:not(button) {
   background: linear-gradient(145deg, #ffffff 60%, #fdf2f8 100%) !important;
   border-color: rgba(251, 207, 232, 0.7) !important;
   box-shadow: 0 4px 16px -2px rgba(236, 72, 153, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.9) !important;
@@ -421,14 +421,40 @@
 .light .text-fuchsia-400 {
   color: #db2777 !important;
 }
-.light .bg-pink-500\/20,
-.light .bg-pink-500\/15,
-.light .bg-pink-500\/10,
-.light .bg-fuchsia-500\/20 {
+.light div.bg-pink-500\/20,
+.light div.bg-pink-500\/15,
+.light div.bg-pink-500\/10,
+.light div.bg-fuchsia-500\/20 {
   background: linear-gradient(180deg, #fdf2f8 0%, #fce7f3 100%) !important;
   color: #be185d !important;
   border-color: rgba(249, 168, 212, 0.6) !important;
   box-shadow: 0 2px 6px -1px rgba(236, 72, 153, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.9) !important;
+}
+
+/* Explicit Button Styling Safeguards for High Contrast & Visual Beauty */
+.light button[class*="bg-indigo-600"],
+.light button[class*="bg-indigo-700"],
+.light button[class*="bg-blue-600"],
+.light button[class*="bg-blue-700"],
+.light button[class*="bg-purple-600"],
+.light button[class*="bg-purple-700"],
+.light button[class*="bg-emerald-600"],
+.light button[class*="bg-emerald-700"],
+.light button[class*="bg-rose-600"] {
+  color: #ffffff !important;
+}
+
+.light button[class*="bg-indigo-600"] *,
+.light button[class*="bg-indigo-700"] *,
+.light button[class*="bg-blue-600"] *,
+.light button[class*="bg-blue-700"] *,
+.light button[class*="bg-purple-600"] *,
+.light button[class*="bg-purple-700"] *,
+.light button[class*="bg-emerald-600"] *,
+.light button[class*="bg-emerald-700"] *,
+.light button[class*="bg-rose-600"] * {
+  color: #ffffff !important;
+  fill: currentColor;
 }
 
 /* 4. BUTTONS & INTERACTIVE CONTROLS ENHANCEMENT (Tactile 3D Glass & Royal Elevation) */
@@ -491,10 +517,8 @@
   filter: drop-shadow(0 1px 1px rgba(0,0,0,0.06)) !important;
 }
 
-/* Top System Indicators Bar (Pills) in Light Mode */
-.light .grid.grid-cols-2 button[type="button"],
-.light .grid.grid-cols-3 button[type="button"],
-.light .grid.lg\:grid-cols-6 button[type="button"] {
+/* Top System Indicators Bar (Explicit indicator pills only) */
+.light .top-system-indicators button[type="button"] {
   background: #ffffff !important;
   box-shadow: 0 2px 10px rgba(124, 58, 237, 0.06) !important;
 }
@@ -526,14 +550,24 @@
     color: #1e244b;
   }
 
-  /* White and Very Light Text Classes -> Royal Ink Navy (Natural & Eye-Friendly) */
-  .text-white:not(button *):not(.bg-amber-500 *):not(.bg-amber-600 *):not(.bg-emerald-600 *):not(.bg-emerald-500 *):not(.bg-rose-600 *):not(.bg-rose-500 *):not(.bg-indigo-600 *):not(.bg-indigo-700 *):not(.bg-purple-600 *):not(.bg-purple-700 *):not(.bg-blue-600 *):not([class*="from-amber"]):not([class*="from-purple"]):not([class*="from-indigo"]):not([class*="from-emerald"]):not([class*="from-rose"]):not([class*="from-blue"]):not(.btn-primary *):not(.badge-solid *),
-  .text-slate-100,
-  .text-slate-200,
-  .text-gray-100,
-  .text-gray-200,
-  .text-zinc-100,
-  .text-zinc-200 {
+  /* Global Universal Selection */
+  ::selection {
+    background-color: #2563eb !important;
+    color: #ffffff !important;
+  }
+  ::-moz-selection {
+    background-color: #2563eb !important;
+    color: #ffffff !important;
+  }
+
+  /* White and Very Light Text Classes -> Royal Ink Navy in Light Mode (Protected on buttons/badges/colored surfaces) */
+  body:not(.dark) .text-white:not(button):not(button *):not([class*="bg-"]):not([class*="from-"]):not([class*="to-"]):not([class*="via-"]):not(.badge):not(.btn *),
+  body:not(.dark) .text-slate-100:not(button):not(button *):not([class*="bg-"]):not([class*="from-"]):not([class*="to-"]):not([class*="via-"]),
+  body:not(.dark) .text-slate-200:not(button):not(button *):not([class*="bg-"]):not([class*="from-"]):not([class*="to-"]):not([class*="via-"]),
+  body:not(.dark) .text-gray-100:not(button):not(button *):not([class*="bg-"]):not([class*="from-"]):not([class*="to-"]):not([class*="via-"]),
+  body:not(.dark) .text-gray-200:not(button):not(button *):not([class*="bg-"]):not([class*="from-"]):not([class*="to-"]):not([class*="via-"]),
+  body:not(.dark) .text-zinc-100:not(button):not(button *):not([class*="bg-"]):not([class*="from-"]):not([class*="to-"]):not([class*="via-"]),
+  body:not(.dark) .text-zinc-200:not(button):not(button *):not([class*="bg-"]):not([class*="from-"]):not([class*="to-"]):not([class*="via-"]) {
     color: #1e244b !important;
   }
 
