@@ -76,6 +76,7 @@ import {
 } from 'lucide-react';
 import { HomeworkSubmission, TraineeBadge } from '../types';
 import { StudentPhotoCropperModal } from '../components/StudentPhotoCropperModal';
+import { PublicQuizChallengeLanding } from '../components/homeworks/PublicQuizChallengeLanding';
 
 interface StudentData {
   id: string;
@@ -110,12 +111,34 @@ interface TrainerData {
 
 interface PublicStudentPortalViewProps {
   onBack?: () => void;
+  directTaskId?: string | null;
 }
 
-export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = ({ onBack }) => {
+export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = ({ onBack, directTaskId }) => {
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [chatMessage, setChatMessage] = useState('');
+
+  // Extract challenge taskId from prop or URL (supporting #student-portal?task=... and ?task=...)
+  const activeChallengeId = React.useMemo(() => {
+    if (directTaskId) return directTaskId;
+    if (typeof window !== 'undefined') {
+      const sp = new URLSearchParams(window.location.search);
+      const searchTask = sp.get('task');
+      if (searchTask) return searchTask;
+
+      const hash = window.location.hash || '';
+      const qIndex = hash.indexOf('?');
+      if (qIndex !== -1) {
+        const hp = new URLSearchParams(hash.slice(qIndex + 1));
+        const hashTask = hp.get('task');
+        if (hashTask) return hashTask;
+      }
+    }
+    return null;
+  }, [directTaskId]);
+
+  const [bypassChallengeLanding, setBypassChallengeLanding] = useState(false);
 
   // Helper to load session synchronously so camera switches / tab reloads NEVER kick student to login
   const getInitialStudentSession = () => {
@@ -1341,9 +1364,9 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
   };
 
   return (
-    <div className="h-screen bg-slate-100 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col font-sans overflow-hidden" dir="rtl">
+    <div className="fixed inset-0 w-full h-[100dvh] max-h-[100dvh] bg-slate-100 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col font-sans overflow-hidden" dir="rtl">
       {/* UNIFIED PROFESSIONAL TOP HEADER */}
-      <header className="bg-white/80 dark:bg-slate-900/95 backdrop-blur-xl border-b border-slate-200/90 dark:border-slate-800 px-4 py-2.5 shrink-0 z-40 shadow-sm dark:shadow-xl">
+      <header className="bg-white/80 dark:bg-slate-900/95 backdrop-blur-xl border-b border-slate-200/90 dark:border-slate-800 px-4 py-2.5 shrink-0 z-40 shadow-sm dark:shadow-xl safe-top">
         <div className="max-w-6xl mx-auto flex items-center justify-between gap-3">
           
           {/* Logo & Center Brand */}
@@ -1492,9 +1515,17 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
         </div>
       )}
 
-      <main className="flex-1 overflow-y-auto max-w-6xl w-full mx-auto p-4 md:p-6 space-y-6">
-        {/* LOGIN FORM SECTION */}
-        {!isLoggedIn ? (
+      <main className="flex-1 min-h-0 overflow-y-auto overscroll-contain max-w-6xl w-full mx-auto p-4 md:p-6 pb-24 md:pb-8 space-y-6 custom-scrollbar">
+        {/* PUBLIC CHALLENGE LANDING OR LOGIN FORM SECTION */}
+        {activeChallengeId && !bypassChallengeLanding && !isLoggedIn ? (
+          <div className="max-w-3xl mx-auto my-2">
+            <PublicQuizChallengeLanding
+              taskId={activeChallengeId}
+              onGoToPortal={() => setBypassChallengeLanding(true)}
+              onBack={onBack}
+            />
+          </div>
+        ) : !isLoggedIn ? (
           <div className="max-w-md mx-auto my-8 bg-white/80 dark:bg-slate-900/90 border border-slate-200/90 dark:border-slate-800 rounded-3xl p-6 shadow-2xl backdrop-blur-xl space-y-5">
             <div className="text-center space-y-2">
               <div className="w-20 h-20 mx-auto rounded-3xl bg-white p-2 border border-amber-500/40 shadow-xl flex items-center justify-center">
@@ -3726,7 +3757,7 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
 
       {/* Mobile Bottom Navigation Bar */}
       {isLoggedIn && (
-        <div className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-slate-900/95 border-t border-slate-200/90 dark:border-slate-800 backdrop-blur-xl flex justify-around py-2 px-1 shadow-[0_-4px_20px_rgba(0,0,0,0.06)] dark:shadow-2xl md:hidden">
+        <div className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-slate-900/95 border-t border-slate-200/90 dark:border-slate-800 backdrop-blur-xl flex justify-around py-2 px-1 shadow-[0_-4px_20px_rgba(0,0,0,0.06)] dark:shadow-2xl md:hidden safe-bottom select-none">
           <button
             onClick={() => setActiveTab('submit')}
             className={`flex flex-col items-center gap-1 flex-1 py-1 transition-all ${activeTab === 'submit' ? 'text-indigo-600 dark:text-indigo-400 font-bold scale-105' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'}`}

@@ -276,9 +276,16 @@ export const KahootGameModal: React.FC<KahootGameModalProps> = ({
   const handleSaveResultToDatabase = async () => {
     setIsSavingResult(true);
     try {
-      const maxPossibleScore = questions.length * 2000;
       const percentage = Math.round((correctAnswersCount / questions.length) * 100);
       const scaledGrade = Math.round((percentage / 100) * (assignment.totalMarks || 100));
+
+      if (assignment.id.startsWith('preview-')) {
+        setIsSavedSuccessfully(true);
+        if (onShowToast) onShowToast('أحسنت! انتهت جلسة المعاينة بنجاح، المسابقة ممتازة وجاهزة للنشر للطلاب 🎉', 'success');
+        if (onCompleted) onCompleted({ score: scaledGrade, percentage });
+        return;
+      }
+
       const traineeObj = trainees.find(t => t.id === selectedStudentId);
 
       const res = await api.submitQuizResult({
@@ -349,9 +356,15 @@ export const KahootGameModal: React.FC<KahootGameModalProps> = ({
             <div>
               <div className="flex items-center gap-2">
                 <h3 className="text-sm font-black text-white">{assignment.title}</h3>
-                <span className="text-[10px] bg-purple-500/20 text-purple-300 font-bold px-2 py-0.5 rounded-full border border-purple-500/30">
-                  وضع كاهوت التفاعلي 🎮
-                </span>
+                {assignment.id.startsWith('preview-') ? (
+                  <span className="text-[10px] bg-amber-500/20 text-amber-300 font-bold px-2 py-0.5 rounded-full border border-amber-500/30 animate-pulse">
+                    وضع معاينة المعلم 👁️
+                  </span>
+                ) : (
+                  <span className="text-[10px] bg-purple-500/20 text-purple-300 font-bold px-2 py-0.5 rounded-full border border-purple-500/30">
+                    وضع كاهوت التفاعلي 🎮
+                  </span>
+                )}
               </div>
               <p className="text-[11px] text-slate-400">
                 {assignment.courseName || 'التقييم الذكي المعتمد'} • {questions.length} أسئلة تفاعلية

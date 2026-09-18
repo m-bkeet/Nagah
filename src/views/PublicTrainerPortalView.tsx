@@ -623,7 +623,7 @@ export const PublicTrainerPortalView: React.FC<PublicTrainerPortalViewProps> = (
   const activeGroupTrainees = trainees.filter(t => t.groupId === selectedGroupId);
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-indigo-500 selection:text-white" dir="rtl">
+    <div className="fixed inset-0 w-full h-[100dvh] max-h-[100dvh] bg-slate-950 text-slate-100 flex flex-col overflow-hidden font-sans selection:bg-indigo-500 selection:text-white" dir="rtl">
       
       {/* Toast popup */}
       {toast && (
@@ -637,8 +637,8 @@ export const PublicTrainerPortalView: React.FC<PublicTrainerPortalViewProps> = (
         </div>
       )}
 
-      {/* UNIFIED TOP BAR */}
-      <header className="bg-slate-900/90 border-b border-slate-800 px-4 py-3 sticky top-0 z-40 backdrop-blur-md">
+      {/* UNIFIED TOP BAR - Fixed Top */}
+      <header className="shrink-0 z-40 bg-slate-900/90 border-b border-slate-800 px-4 py-3 backdrop-blur-md w-full safe-top">
         <div className="max-w-6xl mx-auto flex items-center justify-between gap-3">
           
           {/* Logo & Name */}
@@ -699,8 +699,8 @@ export const PublicTrainerPortalView: React.FC<PublicTrainerPortalViewProps> = (
         </div>
       </header>
 
-      {/* MAIN CONTENT AREA */}
-      <main className="flex-1 max-w-6xl w-full mx-auto p-4 md:p-6 space-y-6">
+      {/* MAIN CONTENT AREA - Independent Scroll Container */}
+      <main className="flex-1 min-h-0 overflow-y-auto overscroll-contain max-w-6xl w-full mx-auto p-4 md:p-6 pb-20 md:pb-8 space-y-6 custom-scrollbar">
 
         {/* NOT LOGGED IN: LOGIN VIEW */}
         {!trainer ? (

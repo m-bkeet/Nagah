@@ -167,12 +167,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
             </div>
           ) : (
             honorTrainees.slice(0, 3).map((trainee, idx) => {
-              // Card styles: Exactly matching image.png in dark mode, and soft clean glass in light mode
+              // Card styles: Exactly matching image.png in dark mode, and pure luminous white in light mode
               const cardStyles = idx === 0
-                ? "border-amber-400/80 bg-white/80 hover:bg-white shadow-[0_4px_16px_rgba(245,158,11,0.15)] dark:bg-[#0f172a]/90 dark:border-amber-500/80 dark:shadow-[0_0_18px_rgba(245,158,11,0.3)] dark:hover:border-amber-400"
+                ? "border-amber-400/80 bg-white hover:bg-amber-50/50 shadow-[0_4px_16px_rgba(245,158,11,0.12)] dark:bg-[#0f172a]/90 dark:border-amber-500/80 dark:shadow-[0_0_18px_rgba(245,158,11,0.3)] dark:hover:border-amber-400"
                 : idx === 1
-                ? "border-sky-400/80 bg-white/80 hover:bg-white shadow-[0_4px_16px_rgba(14,165,233,0.15)] dark:bg-[#0f172a]/90 dark:border-cyan-400/80 dark:shadow-[0_0_18px_rgba(6,182,212,0.3)] dark:hover:border-cyan-300"
-                : "border-purple-400/80 bg-white/80 hover:bg-white shadow-[0_4px_16px_rgba(168,85,247,0.15)] dark:bg-[#0f172a]/90 dark:border-purple-500/80 dark:shadow-[0_0_18px_rgba(168,85,247,0.3)] dark:hover:border-purple-400";
+                ? "border-sky-400/80 bg-white hover:bg-sky-50/50 shadow-[0_4px_16px_rgba(14,165,233,0.12)] dark:bg-[#0f172a]/90 dark:border-cyan-400/80 dark:shadow-[0_0_18px_rgba(6,182,212,0.3)] dark:hover:border-cyan-300"
+                : "border-purple-400/80 bg-white hover:bg-purple-50/50 shadow-[0_4px_16px_rgba(168,85,247,0.12)] dark:bg-[#0f172a]/90 dark:border-purple-500/80 dark:shadow-[0_0_18px_rgba(168,85,247,0.3)] dark:hover:border-purple-400";
 
               const badgeBorder = idx === 0
                 ? "bg-amber-100 border-amber-300 text-amber-900 dark:bg-amber-950/90 dark:border-amber-500/70 dark:text-amber-300"

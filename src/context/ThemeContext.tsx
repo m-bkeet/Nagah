@@ -37,12 +37,45 @@ export interface ThemeConfig {
 
 export const AVAILABLE_THEMES: ThemeConfig[] = [
   {
+    id: 'light_mode',
+    name: 'الوضع الملكي النهاري',
+    nameEn: 'Royal Light Mode',
+    category: 'light',
+    description: 'تصميم ناصع البياض ومشرق بنقاء الحرير الأبيض واللمسات البنفسجية والذهبية المضيئة وخلفيات خالية تماماً من الكتمة والقتامة.',
+    isDefault: true,
+    isDark: false,
+    colors: {
+      bgMain: '#ffffff',
+      bgMainGradientStart: '#ffffff',
+      bgMainGradientMid: '#ffffff',
+      bgMainGradientEnd: '#f8fafc',
+      bgHeader: 'rgba(255, 255, 255, 0.98)',
+      bgSidebar: '#ffffff',
+      bgCard: '#ffffff',
+      bgCardHover: '#f8fafc',
+      border: '#e2e8f0',
+      borderHover: '#cbd5e1',
+      accent: '#7c3aed',
+      accentHover: '#6d28d9',
+      accentLight: 'rgba(124, 58, 237, 0.08)',
+      accentText: '#6d28d9',
+      accentGlow: 'rgba(124, 58, 237, 0.15)',
+      secondaryAccent: '#f59e0b',
+      textPrimary: '#0f172a',
+      textSecondary: '#334155',
+      textMuted: '#64748b',
+      goldTone: '#d97706',
+      glowShadow: '0 4px 20px rgba(0, 0, 0, 0.05)'
+    },
+    previewColors: ['#ffffff', '#f8fafc', '#7c3aed', '#d97706']
+  },
+  {
     id: 'dark_mode',
     name: 'الوضع الملكي الليلي',
     nameEn: 'Royal Dark Mode',
     category: 'dark',
     description: 'وضع ليلي ملكي مريح للعين يجمع بين درجات الفخامة الداكنة، والبنفسجي الملكي، والتذهيب الفاخر مع تباين عالي الجودة.',
-    isDefault: true,
+    isDefault: false,
     isDark: true,
     colors: {
       bgMain: '#080a14',
@@ -101,39 +134,6 @@ export const AVAILABLE_THEMES: ThemeConfig[] = [
       glowShadow: '0 0 25px rgba(245, 158, 11, 0.25)'
     },
     previewColors: ['#0f1117', '#181c28', '#d97706', '#fbbf24']
-  },
-  {
-    id: 'light_mode',
-    name: 'الوضع الملكي النهاري',
-    nameEn: 'Royal Light Mode',
-    category: 'light',
-    description: 'تصميم ملكي رفيع بنقاء الحرير الأبيض واللمسات البنفسجية والذهبية المشرقة، بألوان مشبعة وحيوية وخلفيات خالية تماماً من الكتمة والقتامة.',
-    isDefault: false,
-    isDark: false,
-    colors: {
-      bgMain: '#faf7ff',
-      bgMainGradientStart: '#ffffff',
-      bgMainGradientMid: '#f5f0ff',
-      bgMainGradientEnd: '#fffaf0',
-      bgHeader: 'rgba(255, 255, 255, 0.98)',
-      bgSidebar: 'rgba(252, 250, 255, 0.98)',
-      bgCard: '#ffffff',
-      bgCardHover: '#faf5ff',
-      border: 'rgba(167, 139, 250, 0.4)',
-      borderHover: 'rgba(124, 58, 237, 0.7)',
-      accent: '#7c3aed',
-      accentHover: '#6d28d9',
-      accentLight: 'rgba(124, 58, 237, 0.12)',
-      accentText: '#6d28d9',
-      accentGlow: 'rgba(124, 58, 237, 0.25)',
-      secondaryAccent: '#d97706',
-      textPrimary: '#1e1b4b',
-      textSecondary: '#334155',
-      textMuted: '#64748b',
-      goldTone: '#d97706',
-      glowShadow: '0 4px 20px rgba(124, 58, 237, 0.08)'
-    },
-    previewColors: ['#ffffff', '#faf7ff', '#7c3aed', '#d97706']
   },
   {
     id: 'day_rose_gold',
@@ -214,7 +214,7 @@ const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [currentThemeId, setCurrentThemeId] = useState<string>(() => {
-    return localStorage.getItem('nagah_theme_id') || 'dark_mode';
+    return localStorage.getItem('nagah_theme_id') || 'light_mode';
   });
 
   const themeConfig = useMemo(() => {
@@ -227,9 +227,9 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   }, []);
 
   const toggleDarkMode = useCallback(() => {
-    const nextId = currentThemeId === 'dark_mode' ? 'light_mode' : 'dark_mode';
+    const nextId = themeConfig.isDark ? 'light_mode' : 'dark_mode';
     setThemeId(nextId);
-  }, [currentThemeId, setThemeId]);
+  }, [themeConfig.isDark, setThemeId]);
 
   // Apply theme attributes and variables to document root
   useEffect(() => {
@@ -239,6 +239,14 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     root.setAttribute('data-theme', themeConfig.id);
     root.setAttribute('data-color-mode', themeConfig.isDark ? 'dark' : 'light');
     
+    // Explicitly enforce background and text colors directly on DOM nodes
+    root.style.backgroundColor = themeConfig.colors.bgMain;
+    body.style.backgroundColor = themeConfig.colors.bgMain;
+    root.style.color = themeConfig.colors.textPrimary;
+    body.style.color = themeConfig.colors.textPrimary;
+    root.style.setProperty('--theme-bg-main', themeConfig.colors.bgMain);
+    root.style.setProperty('--theme-text-primary', themeConfig.colors.textPrimary);
+
     if (themeConfig.isDark) {
       root.classList.add('dark');
       root.classList.remove('light');

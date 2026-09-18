@@ -5667,6 +5667,31 @@ apiRouter.get('/assignments', (req: Request, res: Response) => {
   res.json(assignments);
 });
 
+apiRouter.get('/assignments/:id', (req: Request, res: Response) => {
+  const { id } = req.params;
+  const assignments = db.getData().assignments || [];
+  const found = assignments.find((a: any) => a.id === id || a.shareableCode === id);
+  if (!found) {
+    return res.status(404).json({ success: false, error: 'لم يتم العثور على التكليف أو المسابقة' });
+  }
+  res.json({ success: true, assignment: found });
+});
+
+// Public Challenge Access for direct student links (Zero-Login Challenge Landing)
+apiRouter.get('/public/challenge/:id', (req: Request, res: Response) => {
+  const { id } = req.params;
+  const assignments = db.getData().assignments || [];
+  const found = assignments.find((a: any) => a.id === id || a.shareableCode === id);
+  if (!found) {
+    return res.status(404).json({ success: false, error: 'لم يتم العثور على التحدي المطلوب' });
+  }
+  res.json({ 
+    success: true, 
+    challenge: found,
+    trainees: db.getData().trainees || []
+  });
+});
+
 apiRouter.post('/assignments', (req: Request, res: Response) => {
   const { 
     title, description, courseId, courseName, groupId, groupName, branchId, 
@@ -9361,14 +9386,17 @@ apiRouter.post('/trainer/generate-presentation', async (req: Request, res: Respo
 // Dedicated AI Kahoot Quiz Generator Endpoint
 apiRouter.post('/trainer/generate-kahoot', async (req: Request, res: Response) => {
   try {
-    const { topic, grade, subject, questionCount, difficulty, image } = req.body;
+    const { topic, grade, subject, questionCount, difficulty, image, pageStart, pageEnd, specificInstructions } = req.body;
     const kahootGame = await generateKahootQuiz({
-      topic: topic || 'أساسيات البرمجة والتكنولوجيا',
+      topic: topic || 'تقييم الوزارة والمناهج الدراسية',
       grade: grade || 'الصف الرابع الابتدائي',
       subject: subject || 'تكنولوجيا المعلومات والبرمجة',
-      questionCount: Number(questionCount) || 8,
+      questionCount: Number(questionCount) || 15,
       difficulty: difficulty || 'متوسط',
-      imageBase64: image
+      imageBase64: image,
+      pageStart: pageStart ? Number(pageStart) : undefined,
+      pageEnd: pageEnd ? Number(pageEnd) : undefined,
+      specificInstructions
     });
 
     res.json({ success: true, kahootGame });

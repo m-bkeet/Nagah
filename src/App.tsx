@@ -95,40 +95,66 @@ const AppContent: React.FC = () => {
     } catch (e) {}
   }, [isSidebarCollapsed]);
 
-  const [activeTab, setActiveTab] = useState<string>(() => {
-    if (typeof window !== 'undefined') {
-      const params = new URLSearchParams(window.location.search);
-      const viewParam = params.get('view');
-      if (viewParam) {
-        if (['kiosk', 'lab', 'lab_kiosk', 'student_kiosk'].includes(viewParam)) return 'kiosk';
-        return viewParam;
-      }
-      if (params.get('role') === 'trainee_device' || params.get('kiosk') === 'true' || params.get('lab') === 'true') {
-        return 'kiosk';
-      }
-      if (params.get('projector') === 'true') return 'projector';
-      if (params.get('register') === 'true') return 'register';
-    }
-    return 'dashboard';
-  });
+  // Robust URL Parser supporting both Search Params (?view=...&task=...) and Hash Params (#student-portal?task=...)
+  const parseNavigationState = (): { tab: string; taskId: string | null } => {
+    if (typeof window === 'undefined') return { tab: 'dashboard', taskId: null };
 
-  // Sync tab with URL search parameter if present
-  useEffect(() => {
-    const handlePopState = () => {
-      const params = new URLSearchParams(window.location.search);
-      const viewParam = params.get('view');
-      if (viewParam) {
-        if (['kiosk', 'lab', 'lab_kiosk', 'student_kiosk'].includes(viewParam)) {
-          setActiveTab('kiosk');
-        } else {
-          setActiveTab(viewParam);
-        }
-      } else if (params.get('role') === 'trainee_device' || params.get('kiosk') === 'true' || params.get('lab') === 'true') {
-        setActiveTab('kiosk');
+    const searchParams = new URLSearchParams(window.location.search);
+    let view = searchParams.get('view');
+    let taskId = searchParams.get('task');
+
+    // Parse location.hash (e.g. #student-portal?task=assign-123 or #quiz-challenge?task=assign-123)
+    const hash = window.location.hash || '';
+    if (hash.startsWith('#')) {
+      const raw = hash.slice(1);
+      const [hashPath, hashQuery] = raw.split('?');
+      if (hashPath) {
+        if (!view) view = hashPath;
       }
+      if (hashQuery) {
+        const hp = new URLSearchParams(hashQuery);
+        if (!taskId) taskId = hp.get('task');
+        if (!view && hp.get('view')) view = hp.get('view');
+      }
+    }
+
+    // Direct link to assignment or quiz challenge (e.g. from WhatsApp)
+    if (taskId && (!view || view === 'dashboard' || view === 'public_home' || view === 'login')) {
+      view = 'student-portal';
+    }
+
+    if (view) {
+      if (['kiosk', 'lab', 'lab_kiosk', 'student_kiosk'].includes(view)) return { tab: 'kiosk', taskId };
+      return { tab: view, taskId };
+    }
+    if (searchParams.get('role') === 'trainee_device' || searchParams.get('kiosk') === 'true' || searchParams.get('lab') === 'true') {
+      return { tab: 'kiosk', taskId };
+    }
+    if (searchParams.get('projector') === 'true') return { tab: 'projector', taskId };
+    if (searchParams.get('register') === 'true') return { tab: 'register', taskId };
+
+    return { tab: 'dashboard', taskId };
+  };
+
+  const [navState, setNavState] = useState<{ tab: string; taskId: string | null }>(() => parseNavigationState());
+  const activeTab = navState.tab;
+  const directTaskId = navState.taskId;
+
+  const setActiveTab = (tab: string) => {
+    setNavState(prev => ({ ...prev, tab }));
+  };
+
+  // Sync tab with URL search parameter & hash if present
+  useEffect(() => {
+    const handleUrlChange = () => {
+      setNavState(parseNavigationState());
     };
-    window.addEventListener('popstate', handlePopState);
-    return () => window.removeEventListener('popstate', handlePopState);
+    window.addEventListener('popstate', handleUrlChange);
+    window.addEventListener('hashchange', handleUrlChange);
+    return () => {
+      window.removeEventListener('popstate', handleUrlChange);
+      window.removeEventListener('hashchange', handleUrlChange);
+    };
   }, []);
 
   // Helper to render public/standalone views without duplicated wrappers
@@ -151,9 +177,11 @@ const AppContent: React.FC = () => {
         return <PublicRegistrationView onBack={() => setActiveTab('public_home')} />;
       case 'register-trainer':
         return <PublicTrainerRegistrationView onBack={() => setActiveTab('public_home')} />;
+      case 'quiz-challenge':
+      case 'challenge':
       case 'student-portal':
       case 'student_portal':
-        return <PublicStudentPortalView onBack={() => setActiveTab('public_home')} />;
+        return <PublicStudentPortalView directTaskId={directTaskId} onBack={() => setActiveTab('public_home')} />;
       case 'parent-portal':
       case 'parent_portal':
         return <PublicParentPortalView onBack={() => setActiveTab('public_home')} />;
@@ -180,9 +208,9 @@ const AppContent: React.FC = () => {
   // Authentication check
   if (isLoading) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-950 text-white gap-4">
-        <div className="w-12 h-12 border-4 border-amber-400 border-t-transparent rounded-full animate-spin" />
-        <p className="text-sm font-semibold tracking-wider text-amber-300">جاري تحميل نظام النجاح...</p>
+      <div className="min-h-screen flex flex-col items-center justify-center bg-white dark:bg-slate-950 text-slate-900 dark:text-white gap-4">
+        <div className="w-12 h-12 border-4 border-amber-500 border-t-transparent rounded-full animate-spin" />
+        <p className="text-sm font-semibold tracking-wider text-amber-600 dark:text-amber-300">جاري تحميل نظام النجاح...</p>
       </div>
     );
   }
@@ -258,21 +286,22 @@ const AppContent: React.FC = () => {
 
   return (
     <div 
-      className="min-h-screen flex flex-col text-slate-900 dark:text-slate-100 antialiased selection:bg-blue-600 selection:text-white font-sans"
+      id="app-root-container"
+      className="fixed inset-0 w-full h-[100dvh] max-h-[100dvh] flex flex-col overflow-hidden bg-white dark:bg-[#080a14] text-slate-900 dark:text-slate-100 antialiased selection:bg-blue-600 selection:text-white font-sans"
       style={{
         backgroundColor: themeConfig.colors.bgMain,
         color: themeConfig.colors.textPrimary
       }}
       dir="rtl"
     >
-      {/* Top Header */}
+      {/* Top Header - Locked & Stationary */}
       <Header 
         toggleSidebar={() => setIsSidebarCollapsed(prev => !prev)} 
         onNavigate={setActiveTab} 
       />
 
       {/* Main Body with Sidebar and Content */}
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex-1 min-h-0 min-w-0 flex overflow-hidden relative bg-white dark:bg-[#080a14]">
         {/* Right Sidebar (in RTL) */}
         <Sidebar 
           currentView={activeTab}
@@ -284,10 +313,13 @@ const AppContent: React.FC = () => {
           onToggleCollapse={() => setIsSidebarCollapsed(prev => !prev)}
         />
 
-        {/* Dynamic Main View Area */}
-        <main className={`flex-1 min-w-0 overflow-y-auto px-3 sm:px-6 py-4 pb-6 custom-scrollbar transition-all duration-300 ${
-          isSidebarCollapsed ? 'md:pr-14 xl:pr-16' : 'md:pr-60 xl:pr-64'
-        }`}>
+        {/* Dynamic Main View Area - Independent Touch & Momentum Scroll Container */}
+        <main 
+          id="main-content-scrollable"
+          className={`flex-1 min-w-0 h-full overflow-y-auto overflow-x-hidden px-3 sm:px-6 py-4 pb-24 md:pb-8 custom-scrollbar overscroll-contain transition-all duration-300 bg-white dark:bg-[#080a14] ${
+            isSidebarCollapsed ? 'md:pr-14 xl:pr-16' : 'md:pr-60 xl:pr-64'
+          }`}
+        >
           <ErrorBoundary key={activeTab} fallbackTitle={`حدث خطأ في تحميل هذا التبويب (${activeTab})`}>
             {renderActiveView()}
           </ErrorBoundary>

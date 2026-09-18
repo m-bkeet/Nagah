@@ -24,18 +24,6 @@ export const MobileAppNavigation: React.FC<MobileAppNavigationProps> = ({
   const { user } = useAuth();
   const { settings, showToast, unreadNotifsCount, setIsSearchOpen, openAiModal } = useCenter();
 
-  // Top Clean Icon Tabs
-  const topIconTabs = [
-    { id: 'dashboard', label: 'الرئيسية', icon: Home },
-    { id: 'trainees', label: 'الطلاب', icon: Users },
-    { id: 'courses', label: 'الدورات', icon: BookOpen },
-    { id: 'homeworks', label: 'الواجبات', icon: CheckSquare },
-    { id: 'messages', label: 'المحادثات', icon: MessageSquare },
-    { id: 'student_portal', label: 'بوابة الطالب', icon: GraduationCap },
-    { id: 'parent_portal', label: 'ولي الأمر', icon: UserCheck },
-    { id: 'more_menu', label: 'القائمة', icon: Menu },
-  ];
-
   // Primary Bottom Tabs
   const bottomTabs = [
     { id: 'dashboard', label: 'الرئيسية', icon: Home },
@@ -87,53 +75,19 @@ export const MobileAppNavigation: React.FC<MobileAppNavigationProps> = ({
 
   return (
     <>
-      {/* 1. Mobile Clean Icon Top Tab Bar (Facebook App Style) */}
-      <div className="md:hidden bg-white/95 dark:bg-slate-900/95 border-b border-slate-200/90 dark:border-slate-800/90 sticky top-14 z-30 backdrop-blur-md px-1 select-none shadow-xs">
-        <div className="flex items-center justify-between overflow-x-auto no-scrollbar py-1">
-          {topIconTabs.map(tab => {
-            const Icon = tab.icon;
-            const isActive = activeTab === tab.id || (tab.id === 'more_menu' && isMenuOpen);
-            return (
-              <button
-                key={tab.id}
-                onClick={() => handleTabClick(tab.id)}
-                className={`relative flex items-center justify-center p-2.5 min-w-[48px] rounded-xl transition-all duration-150 active:scale-90 ${
-                  isActive
-                    ? 'text-purple-600 dark:text-purple-300 bg-purple-600/15 dark:bg-purple-500/20 font-bold shadow-xs'
-                    : 'text-slate-600 dark:text-slate-400 hover:text-purple-600 dark:hover:text-slate-200 hover:bg-purple-50 dark:hover:bg-slate-800/50'
-                }`}
-                title={tab.label}
-              >
-                <Icon className={`w-5 h-5 ${isActive ? 'stroke-[2.5]' : 'stroke-2'}`} />
-                
-                {/* Active Indicator Underline Bar */}
-                {isActive && (
-                  <span className="absolute bottom-0 inset-x-2 h-0.5 bg-purple-600 dark:bg-purple-400 rounded-full" />
-                )}
-
-                {/* Optional notification badge / dot */}
-                {tab.hasDot && (
-                  <span className="absolute top-1.5 right-2 w-2 h-2 bg-red-500 rounded-full ring-2 ring-white dark:ring-slate-900" />
-                )}
-                {tab.badge && (
-                  <span className="absolute -top-1 -right-1 bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 text-[9px] font-black px-1.5 py-0.2 rounded-full shadow-xs">
-                    {tab.badge}
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* 2. Mobile Clean Bottom Navigation Bar (WhatsApp / Facebook Mobile Style) */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-slate-950/95 border-t border-slate-200/90 dark:border-slate-800/90 backdrop-blur-xl px-2 py-1 shadow-[0_-4px_25px_rgba(0,0,0,0.08)] dark:shadow-2xl flex items-center justify-around h-16 safe-bottom">
+      {/* Fixed Mobile Bottom Navigation Bar */}
+      <nav 
+        id="mobile-app-bottom-nav"
+        aria-label="شريط التنقل الرئيسي السفلي"
+        className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white dark:bg-slate-950 border-t border-slate-200 dark:border-slate-800 shadow-[0_-4px_20px_rgba(0,0,0,0.05)] dark:shadow-2xl flex items-center justify-around h-16 safe-bottom shrink-0 select-none"
+      >
         {bottomTabs.map(tab => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id || (tab.id === 'more_menu' && isMenuOpen);
           return (
             <button
               key={tab.id}
+              id={`bottom-nav-${tab.id}`}
               onClick={() => handleTabClick(tab.id)}
               className={`flex flex-col items-center justify-center flex-1 h-full py-1 transition-all active:scale-95 ${
                 isActive ? 'text-amber-600 dark:text-amber-400 font-bold' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
@@ -156,7 +110,7 @@ export const MobileAppNavigation: React.FC<MobileAppNavigationProps> = ({
             </button>
           );
         })}
-      </div>
+      </nav>
 
       {/* 3. Facebook-Style "Menu / القائمة" Sheet */}
       {isMenuOpen && (
@@ -164,7 +118,7 @@ export const MobileAppNavigation: React.FC<MobileAppNavigationProps> = ({
           <div className="bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 rounded-t-3xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
             
             {/* Sheet Header: User Profile Card */}
-            <div className="p-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50/90 dark:bg-slate-950/70 flex items-center justify-between">
+            <div className="p-4 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950/70 flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-amber-500 to-amber-300 text-slate-950 font-black text-base flex items-center justify-center shadow-md">
                   {user?.fullName?.slice(0, 2) || 'نجاح'}
@@ -189,7 +143,7 @@ export const MobileAppNavigation: React.FC<MobileAppNavigationProps> = ({
             </div>
 
             {/* Search within Menu (Facebook style search bar) */}
-            <div className="p-3 bg-slate-50/60 dark:bg-slate-950/40 border-b border-slate-200 dark:border-slate-800/80">
+            <div className="p-3 bg-white dark:bg-slate-950/40 border-b border-slate-200 dark:border-slate-800/80">
               <div className="relative">
                 <Search className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2" />
                 <input
@@ -228,7 +182,7 @@ export const MobileAppNavigation: React.FC<MobileAppNavigationProps> = ({
                         className={`p-3 rounded-2xl border flex flex-col items-center justify-center text-center transition-all duration-150 active:scale-95 ${
                           isSecActive
                             ? 'bg-amber-50 dark:bg-amber-500/15 border-amber-500 text-amber-700 dark:text-amber-300 shadow-sm'
-                            : 'bg-slate-50/80 dark:bg-slate-950/80 border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-200 hover:border-amber-300 dark:hover:border-slate-700 hover:bg-white dark:hover:bg-slate-950'
+                            : 'bg-white border-slate-200 dark:bg-slate-950/80 dark:border-slate-800 text-slate-800 dark:text-slate-200 hover:border-amber-300 dark:hover:border-slate-700 shadow-xs'
                         }`}
                       >
                         <div className={`w-10 h-10 rounded-xl flex items-center justify-center mb-1.5 border ${sec.color}`}>
@@ -262,7 +216,7 @@ export const MobileAppNavigation: React.FC<MobileAppNavigationProps> = ({
                       setIsMenuOpen(false);
                       setIsSearchOpen(true);
                     }}
-                    className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 flex items-center gap-2 text-xs font-bold active:scale-95"
+                    className="p-2.5 rounded-xl bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 flex items-center gap-2 text-xs font-bold active:scale-95 shadow-xs"
                   >
                     <Search className="w-4 h-4 text-amber-600 dark:text-amber-400" />
                     <span>البحث الشامل</span>
@@ -272,7 +226,7 @@ export const MobileAppNavigation: React.FC<MobileAppNavigationProps> = ({
             </div>
 
             {/* Menu Footer */}
-            <div className="p-3 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
+            <div className="p-3 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
               <span className="font-mono text-[11px] text-slate-400">Nagah Mobile App</span>
               <button
                 onClick={() => {

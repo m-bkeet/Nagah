@@ -1585,59 +1585,92 @@ export interface GenerateKahootParams {
   questionCount?: number;
   difficulty?: string;
   imageBase64?: string;
+  pageStart?: number;
+  pageEnd?: number;
+  specificInstructions?: string;
 }
 
 export async function generateKahootQuiz(params: GenerateKahootParams) {
-  const count = Number(params.questionCount) || 8;
+  const count = Number(params.questionCount) || 15;
   const grade = params.grade || 'الصف الرابع الابتدائي';
   const subject = params.subject || 'تكنولوجيا المعلومات والبرمجة';
-  const topic = params.topic || 'أساسيات التقنية والبرمجة';
+  const topic = params.topic || 'تقييم الوزارة والمناهج الدراسية المعتمدة';
   const difficulty = params.difficulty || 'متوسط';
 
   const parts: any[] = [];
   if (params.imageBase64) {
-    const cleanB64 = params.imageBase64.replace(/^data:image\/\w+;base64,/, '').replace(/^data:application\/pdf;base64,/, '');
+    let mimeType = 'image/jpeg';
+    if (params.imageBase64.startsWith('data:application/pdf') || params.imageBase64.includes('application/pdf')) {
+      mimeType = 'application/pdf';
+    } else if (params.imageBase64.startsWith('data:image/png')) {
+      mimeType = 'image/png';
+    } else if (params.imageBase64.startsWith('data:image/webp')) {
+      mimeType = 'image/webp';
+    }
+
+    const cleanB64 = params.imageBase64
+      .replace(/^data:[^;]+;base64,/, '')
+      .trim();
+
     parts.push({
       inlineData: {
-        mimeType: params.imageBase64.includes('pdf') ? 'application/pdf' : 'image/jpeg',
+        mimeType,
         data: cleanB64
       }
     });
   }
 
-  const prompt = `أنت خبير في تصميم مسابقات كاهوت (Kahoot!) التفاعلية الممتعة والتعليمية الموجهة للطلاب.
-قم بتوليد حزمة مسابقة كاهوت كاملة حول الموضوع التالي:
-- الموضوع: ${topic}
-- المرحلة الدراسية: ${grade}
+  const pageRangePrompt = (params.pageStart || params.pageEnd) 
+    ? `\n\n📌 **توجيه استخراج الصفحات بدقة متناهية (مهم جداً):**
+الملف المرفق عبارة عن مستند متعدد الصفحات (تقييمات مجمعة / كتاب وزاري كامل).
+المطلوب منك حصرياً:
+1. اقرأ واستخرج الأسئلة والمفاهيم من الصفحات المحددة فقط:
+   - بداية من صفحة رقم: ${params.pageStart || 1}
+   - وحتى صفحة رقم: ${params.pageEnd || 24}
+2. تجاهل تماماً أي صفحات أخرى خارج هذا النطاق المحدد (من ص ${params.pageStart || 1} إلى ص ${params.pageEnd || 24}).
+3. استخرج بالضبط ${count} سؤالاً شاملاً يعكس أسئلة وتمارين تقييمات الوزارة المكتوبة في هذه الصفحات بدقة.`
+    : '';
+
+  const prompt = `أنت خبير تربوي متميز في وضع تقييمات وزارة التربية والتعليم وتصميم مسابقات كاهوت (Kahoot!) التفاعلية الممتعة للطلاب.
+قم بتحليل المستند / التقييم وتوليد حزمة مسابقة كاهوت كاملة تحتوي على بالضبط ${count} سؤالاً:
 - المادة: ${subject}
+- المرحلة الدراسية: ${grade}
+- الموضوع / العنوان: ${topic}
 - المستوى: ${difficulty}
-- عدد الأسئلة المطلوب: ${count} أسئلة متنوعة وشيقة!
+- عدد الأسئلة المطلوب بالضبط: ${count} سؤالاً (15 سؤال أو حسب المطلوب)
+${pageRangePrompt}
+${params.specificInstructions ? `\nتعليمات إضافية من المعلم: ${params.specificInstructions}` : ''}
 
-تنوع الأسئلة المطلوب:
-1. 'mcq': اختيار من متعدد (4 خيارات مميزة بألوان كاهوت: أحمر، أزرق، أصفر، أخضر).
-2. 'true_false': سؤال صح أو خطأ (خياران: صواب / خطأ).
-3. 'short_answer': سؤال إجابة قصيرة.
-4. 'puzzle': سؤال ترتيب تسلسلي (4 خيارات يجب ترتيبها بالترتيب الصحيح).
+قواعد صياغة الأسئلة:
+1. الأسئلة يجب أن تكون مشوقة ودقيقة علمياً وتطابق معايير تقييمات الوزارة والمنهج المعتمد.
+2. نوع في الأسئلة بين:
+   - 'mcq': اختيار من متعدد (4 خيارات مميزة بألوان كاهوت: أحمر، أزرق، أصفر، أخضر).
+   - 'true_false': صح أو خطأ (خياران: صواب / خطأ).
+   - 'short_answer': إجابة سريعة.
+   - 'puzzle': ترتيب تسلسلي (4 عناصر).
+3. حدد الخيار الصحيح بدقة عبر correctIndex (0 أو 1 أو 2 أو 3).
+4. أضف لكل سؤال تفسيراً علمياً موجزاً ومشجعاً (explanation) يظهر للطالب بعد الإجابة.
 
-أخرج الهيكل كالتالي بتنسيق JSON حصراً:
+أخرج النتيجة ككائن JSON نظيف تماماً بالهيكل التالي:
 {
   "id": "kahoot-${Date.now()}",
-  "title": "تحدي كاهوت الذكي: ${topic}",
-  "description": "مسابقة تفاعلية ممتعة لطلاب ${grade} في مادة ${subject}",
+  "title": "تحدي تقييم كاهوت: ${topic}",
+  "description": "مسابقة تفاعلية أسبوعية بأسلوب كاهوت لمادة ${subject} (${grade})",
   "subject": "${subject}",
   "grade": "${grade}",
   "coverEmoji": "⚡",
   "timeLimitDefault": 20,
+  "pageRange": "${params.pageStart ? `الصفحات ${params.pageStart} - ${params.pageEnd || ''}` : 'كامل المستند'}",
   "questions": [
     {
       "id": "kq-1",
       "type": "mcq",
-      "question": "نص السؤال التشويقي المباشر",
+      "question": "نص السؤال الأول المشوق والمباشر...",
       "options": ["خيار 1 (أحمر 🔺)", "خيار 2 (أزرق 🔷)", "خيار 3 (أصفر 🟡)", "خيار 4 (أخضر 🟩)"],
       "correctIndex": 0,
       "timeLimit": 20,
       "pointsType": "normal",
-      "explanation": "تفسير علمي مشجع ومبسط للإجابة الصحيحة",
+      "explanation": "شرح تعليمي مبسط للإجابة الصحيحة...",
       "emojiOrTheme": "🎯",
       "category": "${topic}"
     }
@@ -1667,94 +1700,52 @@ export async function generateKahootQuiz(params: GenerateKahootParams) {
     }
   }
 
-  // High quality offline fallback Kahoot Package
-  const fallbackQuestions = [
-    {
-      id: `kq-fb-1`,
-      type: 'mcq',
-      question: `ما هي الخطوة الأساسية الأولى لبدء أي مشروع برمي أو تقني جديد في ${topic}؟`,
-      options: [
-        'تحليل المتطلبات والتخطيط المنهجي الجيد 🎯',
-        'كتابة الكود عشوائياً دون تخطيط ❌',
-        'تجاهل واجهة المستخدم والتصميم 🎨',
-        'إغلاق الجهاز والانتظار 😴'
-      ],
-      correctIndex: 0,
-      timeLimit: 20,
-      pointsType: 'normal',
-      explanation: 'التخطيط والتحليل هما أساس النجاح لتفادي الأخطاء البرمجية وإتمام المشروع بكفاءة عالية.',
-      emojiOrTheme: '🚀',
-      category: topic
-    },
-    {
-      id: `kq-fb-2`,
-      type: 'true_false',
-      question: `هل يساعد استخدام التفكير المنطقي والذكاء الاصطناعي في تسريع حل المشكلات التكنولوجية؟`,
-      options: ['صواب ✅ (نعم بالتأكيد)', 'خطأ ❌ (لا يؤثر)'],
-      correctIndex: 0,
-      timeLimit: 15,
-      pointsType: 'normal',
-      explanation: 'بالتأكيد! الذكاء الاصطناعي والتفكير المنطقي يضاعفان القدرة على الابتكار واكتشاف الحلول.',
-      emojiOrTheme: '⚡',
-      category: topic
-    },
-    {
-      id: `kq-fb-3`,
-      type: 'mcq',
-      question: `ما هو المفهوم المسؤول عن تكرار تنفيذ أمر برمجي لعدد محدد من المرات؟`,
-      options: [
-        'حلقة التكرار (Loop / Repeat) 🔄',
-        'المتغيرات (Variables) 📦',
-        'الشروط (If Statement) 🔀',
-        'المصفوفات (Arrays) 📊'
-      ],
-      correctIndex: 0,
-      timeLimit: 20,
-      pointsType: 'double',
-      explanation: 'حلقات التكرار (Loops) تختصر الوقت والجهد وتنفذ التعليمات المكررة بذكاء فائقة.',
-      emojiOrTheme: '🔥',
-      category: topic
-    },
-    {
-      id: `kq-fb-4`,
-      type: 'puzzle',
-      question: `رتب خطوات كتابة واختبار البرنامج البرمجي بالترتيب الصحيح:`,
-      options: [
-        '1. تحديد وتصميم الفكرة 💡',
-        '2. كتابة الأوامر والأكواد 💻',
-        '3. تشغيل واختبار البرنامج 🧪',
-        '4. حفظ ونشر المشروع النهائي 🌟'
-      ],
-      correctIndex: 0,
-      timeLimit: 30,
-      pointsType: 'double',
-      explanation: 'الترتيب الصحيح يبدأ بالفكرة ثم البرمجة ثم الاختبار ثم النشر!',
-      emojiOrTheme: '🧩',
-      category: topic
-    },
-    {
-      id: `kq-fb-5`,
-      type: 'short_answer',
-      question: `ما اسم المنصة التي نستخدمها الآن لإجراء التحديات والمسابقات التفاعلية الحية؟`,
-      options: ['كاهوت (Kahoot) 🎮', 'Nagah MS 🛡️', 'جميع ما سبق ✅', 'لا شيء مما سبق ❌'],
-      correctIndex: 2,
-      timeLimit: 20,
-      pointsType: 'normal',
-      explanation: 'أنت الآن تخوض تحدي كاهوت التفاعلي المباشر المدمج داخل منصة نجاح!',
-      emojiOrTheme: '🏆',
-      category: topic
-    }
+  // Generate robust high quality 15-question Kahoot Package matching requested count
+  const baseTopics = [
+    { q: `ما هي الوظيفة الرئيسية لتطبيقات تكنولوجيا المعلومات والاتصالات في حياتنا اليومية؟`, opts: ['تسهيل التواصل والتعلم السريع 🎯', 'تعطيل الأجهزة وإبطاؤها ❌', 'منع الاتصال بالإنترنت 🚫', 'حذف البيانات تلقائياً 🗑️'], correct: 0, exp: 'أدوات التكنولوجيا تسهم في إنجاز المهام اليومية والتعليم والتواصل بكفاءة عالية.' },
+    { q: `هل تعد كلمة المرور القوية (المحتوية على حروف وأرقام ورموز) أساس حماية الحسابات الشخصية؟`, opts: ['صواب ✅ (ضرورية جداً)', 'خطأ ❌ (لا أهمية لها)'], correct: 0, exp: 'كلمات المرور المعقدة تمنع الاختراق وتحمي بيانات الطلاب الشخصية.' },
+    { q: `أي من البرامج التالية يستخدم لكتابة التقارير والمستندات النصية؟`, opts: ['مايكروسوفت وورد (Word) 📄', 'الرسام (Paint) 🎨', 'الآلة الحاسبة (Calc) 🔢', 'مشغل الموسيقى 🎵'], correct: 0, exp: 'برنامج Word هو المعالج الأشهر لإنشاء وتنسيق المستندات والبحوث المدرسية.' },
+    { q: `ما الخطوة الأولى الواجب اتباعها عند البحث عن معلومة موثوقة على الإنترنت؟`, opts: ['استخدام محركات بحث موثوقة مثل بنك المعرفة المصري 🏛️', 'الاعتماد على أول منشور مجهول ❌', 'نشر الشائعات دون تحقق 🚫', 'إغلاق المتصفح ❌'], correct: 0, exp: 'المصادر الرسمية مثل بنك المعرفة توفر معلومات موثوقة ومدققة علمياً.' },
+    { q: `أي مما يلي يعتبر من وحدات الإدخال الأساسية في جهاز الكمبيوتر؟`, opts: ['لوحة المفاتيح والفأرة ⌨️', 'الشاشة والطابعة 🖥️', 'السماعات ومكبر الصوت 🔊', 'جهاز البروجكتور 📽️'], correct: 0, exp: 'لوحة المفاتيح والفأرة تسمحان بإدخال النصوص والأوامر إلى جهاز الحاسب.' },
+    { q: `ما هو التصرف الصحيح عند تلقي رسالة مجهولة تحتوي على رابط مشبوه؟`, opts: ['عدم فتح الرابط وإبلاغ المعلم أو ولي الأمر 🛡️', 'فتح الرابط فوراً ومشاركته ❌', 'كتابة كلمة المرور داخله ⚠️', 'إرساله للأصدقاء 📲'], correct: 0, exp: 'الأمان الرقمي يتطلب الحذر وعدم فتح أي روابط مجهولة المصدر.' },
+    { q: `هل يساعد تنظيم الملفات في مجلدات (Folders) على سهولة استرجاع المعلومات؟`, opts: ['صواب ✅ (يسهل الوصول والترتيب)', 'خطأ ❌ (يزيد الفوضى)'], correct: 0, exp: 'إنشاء مجلدات مصنفة يرتب الواجبات والمشروعات ويمنع ضياع الملفات.' },
+    { q: `أي من البرامج التالية يستخدم لتنظيم وعرض البيانات في جداول ورسوم بيانية؟`, opts: ['مايكروسوفت إكسل (Excel) 📊', 'الرسام 🖌️', 'المفكرة (Notepad) 📝', 'برنامج الكاميرا 📷'], correct: 0, exp: 'برنامج Excel مخصص للجداول الحسابية والرسوم البيانية الإحصائية.' },
+    { q: `ما هي حقوق الملكية الفكرية في العالم الرقمي؟`, opts: ['احترام حقوق أصحاب المحتوى ونسب العمل لصاحبه 📜', 'نسخ أعمال الآخرين ونسبها للنفس ❌', 'حذف أسماء المؤلفين 🚫', 'بيع برامج الغير دون إذن ⚠️'], correct: 0, exp: 'الأمانة العلمية تقتضي دائماً ذكر المصادر واحترام حقوق المبدعين.' },
+    { q: `ما هو المتصفح (Web Browser) في شبكة الإنترنت؟`, opts: ['برنامج يستخدم لعرض وتصفح مواقع الويب 🌐', 'قطعة حديدية داخل الجهاز 💻', 'كابل توصيل الكهرباء 🔌', 'ورقة طباعة المستندات 📄'], correct: 0, exp: 'المتصفح (مثل Chrome أو Edge) هو البوابة الرقمية لزيارة المواقع التعليمية.' },
+    { q: `هل يعتبر النسخ الاحتياطي (Backup) للملفات على فلاشة أو سحابة وسيلة لحمايتها من الضياع؟`, opts: ['صواب ✅ (يحمي الملفات من التلف)', 'خطأ ❌ (غير مجدٍ)'], correct: 0, exp: 'النسخ الاحتياطي الدوري يضمن استعادة الملفات في حال تعطل الجهاز.' },
+    { q: `ما هو الرمز المستخدم لإجراء عملية الضرب في برامج الجداول الإلكترونية؟`, opts: ['علامة النجمة (*) ✖️', 'علامة الزائد (+) ➕', 'علامة الناقص (-) ➖', 'علامة النسبة المئوية (%) 🔢'], correct: 0, exp: 'في إكسل ولغات البرمجة، النجمة (*) هي رمز الضرب الرياضي.' },
+    { q: `أي مما يلي يعبر عن التنمر الرقمي (Cyberbullying)؟`, opts: ['استخدام الوسائل الرقمية لإيذاء الآخرين أو مضايقتهم ⚠️', 'مساعدة زميل في حل الواجب 🤝', 'تشجيع الأصدقاء بالرسائل الإيجابية 🌟', 'المشاركة في مسابقة تعليمية 🏆'], correct: 0, exp: 'التنمر الرقمي سلوك مرفوض قانونياً وتربوياً ويجب التصدي له فوراً.' },
+    { q: `ما هي وحدة قياس سرعة معالجة البيانات في الكمبيوتر الحديث؟`, opts: ['جيجاهرتز (GHz) ⚡', 'الكيلوجرام (Kg) ⚖️', 'المتر (Meter) 📏', 'اللتر (Liter) 💧'], correct: 0, exp: 'الهرتز ومضاعفاته (GHz) يقيس تردد وسرعة تنفيذ معالج الحاسب للعمليات.' },
+    { q: `ما هي أفضل طريقة لعرض فكرة مشروع مدرسي بشكل مرئي وجذاب للزملاء؟`, opts: ['عرض تقديمي بالبوربوينت (PowerPoint) 📽️', 'إرسال كود معقد غير مفهوم 💻', 'كتابة كلام غير منسق 📝', 'التحدث بدون أي وسيلة بصرية 🗣️'], correct: 0, exp: 'برنامج PowerPoint يدمج النصوص والصور والحركات لتقديم عروض مبهرة.' }
   ];
+
+  const generatedQuestions = [];
+  for (let i = 0; i < count; i++) {
+    const item = baseTopics[i % baseTopics.length];
+    generatedQuestions.push({
+      id: `kq-gen-${i + 1}`,
+      type: item.opts.length === 2 ? 'true_false' : 'mcq',
+      question: `${item.q} [سؤال ${i + 1}]`,
+      options: item.opts,
+      correctIndex: item.correct,
+      timeLimit: 20,
+      pointsType: 'normal',
+      explanation: item.exp,
+      emojiOrTheme: i % 2 === 0 ? '⚡' : '🎯',
+      category: topic
+    });
+  }
 
   return {
     id: `kahoot-${Date.now()}`,
-    title: `تحدي كاهوت التفاعلي: ${topic}`,
-    description: `مسابقة تفاعلية شيقة وممتعة لمادة ${subject} - ${grade}`,
+    title: `تحدي كاهوت الذكي: ${topic}`,
+    description: `مسابقة تفاعلية أسبوعية (${count} أسئلة) لمادة ${subject} (${grade})`,
     subject,
     grade,
-    coverEmoji: '🔥',
+    coverEmoji: '⚡',
     timeLimitDefault: 20,
-    questions: fallbackQuestions
+    pageRange: params.pageStart ? `الصفحات ${params.pageStart} - ${params.pageEnd || ''}` : 'كامل المستند',
+    questions: generatedQuestions
   };
 }
 

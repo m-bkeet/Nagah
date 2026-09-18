@@ -797,10 +797,10 @@ export const PublicParentPortalView: React.FC<PublicParentPortalViewProps> = ({ 
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 font-sans pb-20 md:pb-6 antialiased dir-rtl select-none">
+    <div className="fixed inset-0 w-full h-[100dvh] max-h-[100dvh] flex flex-col overflow-hidden bg-slate-950 text-slate-100 font-sans antialiased dir-rtl select-none">
       
-      {/* Simplified Header with App Share Option */}
-      <header className="sticky top-0 z-40 bg-slate-900 border-b border-slate-800 px-4 py-2 shadow-md">
+      {/* Simplified Header with App Share Option - Fixed Top */}
+      <header className="shrink-0 z-40 bg-slate-900 border-b border-slate-800 px-4 py-2 shadow-md w-full safe-top">
         <div className="max-w-4xl mx-auto flex items-center justify-between gap-3">
           
           {/* Brand Logo & Name */}
@@ -878,18 +878,20 @@ export const PublicParentPortalView: React.FC<PublicParentPortalViewProps> = ({ 
         </div>
       </header>
 
-      {/* Connectivity & Emergency Offline Warning Banner */}
-      {children.length > 0 && (!isOnline || isOfflineFallback) && (
-        <div className="bg-gradient-to-r from-indigo-700 via-indigo-600 to-indigo-700 border-b border-indigo-500/40 text-white font-bold text-xs py-2 px-4 shadow-md flex items-center justify-between transition-all">
-          <div className="flex items-center gap-2">
-            <AlertCircle className="w-4 h-4 animate-pulse shrink-0 text-amber-400" />
-            <span>⚠️ وضع الطوارئ نشط: أنت تعمل دون اتصال بالإنترنت حالياً. تم تحميل آخر بيانات مسجلة محلياً لولي الأمر ومتابعة الأبناء.</span>
+      {/* 2. SCROLLABLE MIDDLE BODY */}
+      <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain custom-scrollbar pb-24 md:pb-8">
+        {/* Connectivity & Emergency Offline Warning Banner */}
+        {children.length > 0 && (!isOnline || isOfflineFallback) && (
+          <div className="bg-gradient-to-r from-indigo-700 via-indigo-600 to-indigo-700 border-b border-indigo-500/40 text-white font-bold text-xs py-2 px-4 shadow-md flex items-center justify-between transition-all">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 animate-pulse shrink-0 text-amber-400" />
+              <span>⚠️ وضع الطوارئ نشط: أنت تعمل دون اتصال بالإنترنت حالياً. تم تحميل آخر بيانات مسجلة محلياً لولي الأمر ومتابعة الأبناء.</span>
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* 2. MAIN CONTAINER */}
-      <main className="max-w-4xl mx-auto px-4 py-5 space-y-5">
+        {/* 2. MAIN CONTAINER */}
+        <main className="max-w-4xl mx-auto px-4 py-5 space-y-5">
 
         {/* LOGIN SCREEN (If not logged in) */}
         {children.length === 0 ? (
@@ -2055,10 +2057,11 @@ export const PublicParentPortalView: React.FC<PublicParentPortalViewProps> = ({ 
       <footer className="mt-12 text-center text-[11px] text-slate-500 space-y-1">
         <p>جميع الحقوق محفوظة © مركز النجاح للتدريب والاستشارات • بوابة ولي الأمر الذكية</p>
       </footer>
+      </div>
 
       {/* Mobile Bottom Navigation Bar for Parents */}
       {children.length > 0 && (
-        <div className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-slate-900/95 border-t border-slate-200/90 dark:border-slate-800 backdrop-blur-xl flex justify-around py-2 px-1 shadow-[0_-4px_20px_rgba(0,0,0,0.06)] dark:shadow-2xl md:hidden">
+        <div className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-slate-900/95 border-t border-slate-200/90 dark:border-slate-800 backdrop-blur-xl flex justify-around py-2 px-1 shadow-[0_-4px_20px_rgba(0,0,0,0.06)] dark:shadow-2xl md:hidden safe-bottom select-none">
           <button
             onClick={() => setActiveTab('overview')}
             className={`flex flex-col items-center gap-1 flex-1 py-1 transition-all ${activeTab === 'overview' ? 'text-indigo-600 dark:text-indigo-400 font-bold scale-105' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'}`}

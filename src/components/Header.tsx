@@ -250,19 +250,19 @@ export const Header: React.FC<HeaderProps> = ({ toggleSidebar, onNavigate }) => 
   };
 
   return (
-    <header className="bg-slate-900/90 backdrop-blur-md border-b border-slate-800 sticky top-0 z-30 px-3 sm:px-4 py-1.5 flex items-center justify-between text-slate-100 no-print">
+    <header className="shrink-0 w-full bg-white/95 dark:bg-slate-900/90 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 sticky top-0 z-30 px-3 sm:px-4 py-1.5 flex items-center justify-between text-slate-800 dark:text-slate-100 no-print transition-colors shadow-xs dark:shadow-md select-none safe-top">
       {/* Right Side: Center Brand & Active Branch */}
       <div className="flex items-center gap-3 md:gap-5">
         <button
           onClick={toggleSidebar}
-          className="p-1.5 text-slate-300 hover:text-amber-400 transition-all flex items-center justify-center hover:scale-110 cursor-pointer"
+          className="p-1.5 text-slate-600 hover:text-amber-600 dark:text-slate-300 dark:hover:text-amber-400 transition-all flex items-center justify-center hover:scale-110 cursor-pointer"
           title="إظهار / إخفاء القائمة الجانبية"
         >
-          <Menu className="w-5 h-5 filter drop-shadow-[0_0_6px_rgba(255,255,255,0.4)]" />
+          <Menu className="w-5 h-5 filter drop-shadow-[0_0_6px_rgba(0,0,0,0.1)] dark:drop-shadow-[0_0_6px_rgba(255,255,255,0.4)]" />
         </button>
 
         <div className="flex items-center gap-2 sm:gap-3 cursor-pointer" onClick={() => onNavigate?.('dashboard')}>
-          <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-slate-900 p-0.5 shadow-md border-2 border-amber-400/80 flex items-center justify-center overflow-hidden shrink-0">
+          <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-slate-100 dark:bg-slate-900 p-0.5 shadow-md border-2 border-amber-500/80 flex items-center justify-center overflow-hidden shrink-0">
             <img
               src={settings?.logoUrl || '/logo.svg'}
               alt={settings?.centerName || 'النجاح للتدريب والاستشارات'}
@@ -274,30 +274,30 @@ export const Header: React.FC<HeaderProps> = ({ toggleSidebar, onNavigate }) => 
             />
           </div>
           <div className="min-w-0">
-            <h1 className="font-extrabold text-sm sm:text-base md:text-lg text-slate-100 tracking-tight truncate leading-tight flex items-center gap-1.5">
+            <h1 className="font-extrabold text-sm sm:text-base md:text-lg text-slate-900 dark:text-slate-100 tracking-tight truncate leading-tight flex items-center gap-1.5">
               <span>{settings?.centerName || 'النجاح للتدريب والاستشارات'}</span>
             </h1>
-            <p className="text-[10px] sm:text-xs text-amber-400 font-mono font-bold tracking-wider hidden xs:block leading-none mt-0.5">
+            <p className="text-[10px] sm:text-xs text-amber-600 dark:text-amber-400 font-mono font-bold tracking-wider hidden xs:block leading-none mt-0.5">
               {settings?.licenseNumber ? `ترخيص: ${settings.licenseNumber}` : (settings?.taxNumber ? `ترخيص: ${settings.taxNumber}` : (settings?.centerSubtitle || 'Nagah M-S'))}
             </p>
           </div>
         </div>
 
         {/* Branch Selector Filter */}
-        <div className="hidden lg:flex items-center gap-1.5 bg-slate-800/80 border border-slate-700/80 px-2.5 py-1.5 rounded-xl">
-          <Building2 className="w-4 h-4 text-amber-400" />
+        <div className="hidden lg:flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 px-2.5 py-1.5 rounded-xl">
+          <Building2 className="w-4 h-4 text-amber-600 dark:text-amber-400" />
           <select
             id="header-branch-select"
             value={activeBranchId}
             onChange={(e) => setActiveBranchId(e.target.value)}
-            className="bg-transparent text-xs font-semibold text-amber-300 focus:outline-none cursor-pointer pr-1"
+            className="bg-transparent text-xs font-semibold text-amber-800 dark:text-amber-300 focus:outline-none cursor-pointer pr-1"
             title="تصفية البيانات حسب الفرع"
           >
-            <option value="all" className="bg-slate-900 text-slate-100">
+            <option value="all" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100">
               جميع الفروع
             </option>
             {(branches || []).map((b) => (
-              <option key={b.id} value={b.id} className="bg-slate-900 text-slate-100">
+              <option key={b.id} value={b.id} className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100">
                 {b.name}
               </option>
             ))}
@@ -417,13 +417,13 @@ export const Header: React.FC<HeaderProps> = ({ toggleSidebar, onNavigate }) => 
         <button
           type="button"
           onClick={() => setShowDateStatsModal(true)}
-          className="hidden lg:flex items-center gap-2 text-xs text-slate-300 bg-slate-900/80 border border-slate-700/80 hover:border-purple-500 px-3 py-1.5 rounded-xl shadow-inner transition-all cursor-pointer group"
+          className="hidden lg:flex items-center gap-2 text-xs text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-700/80 hover:border-purple-500 px-3 py-1.5 rounded-xl shadow-xs dark:shadow-inner transition-all cursor-pointer group"
           title="انقر لاختيار التاريخ وعرض إحصائيات هذا اليوم"
         >
           <div className="flex flex-col text-right">
-            <span className="font-bold text-slate-200 leading-none group-hover:text-purple-300 transition-colors">{currentTime}</span>
+            <span className="font-bold text-slate-800 dark:text-slate-200 leading-none group-hover:text-purple-600 dark:group-hover:text-purple-300 transition-colors">{currentTime}</span>
             {hijriDate && (
-              <span className="text-[10px] text-amber-400 font-semibold tracking-tight mt-0.5">
+              <span className="text-[10px] text-amber-600 dark:text-amber-400 font-semibold tracking-tight mt-0.5">
                 {hijriDate}
               </span>
             )}
@@ -445,10 +445,10 @@ export const Header: React.FC<HeaderProps> = ({ toggleSidebar, onNavigate }) => 
         >
           <button
             onClick={() => setShowNotifMenu(!showNotifMenu)}
-            className="p-1.5 text-slate-300 hover:text-amber-300 relative transition-all hover:scale-110 cursor-pointer"
+            className="p-1.5 text-slate-600 hover:text-amber-600 dark:text-slate-300 dark:hover:text-amber-300 relative transition-all hover:scale-110 cursor-pointer"
             title="التنبيهات"
           >
-            <Bell className="w-5 h-5 filter drop-shadow-[0_0_6px_rgba(255,255,255,0.4)]" />
+            <Bell className="w-5 h-5 filter drop-shadow-[0_0_6px_rgba(0,0,0,0.1)] dark:drop-shadow-[0_0_6px_rgba(255,255,255,0.4)]" />
             {unreadNotifsCount > 0 && (
               <span className="absolute -top-1 -right-1 w-4 h-4 bg-rose-500 text-white font-bold text-[9px] rounded-full flex items-center justify-center animate-bounce">
                 {unreadNotifsCount}
@@ -458,26 +458,26 @@ export const Header: React.FC<HeaderProps> = ({ toggleSidebar, onNavigate }) => 
 
           {showNotifMenu && (
             <div
-              className="absolute left-0 top-full mt-1.5 w-64 max-w-[85vw] bg-slate-900/95 border border-slate-700 rounded-xl shadow-2xl z-[999] p-2.5 animate-in fade-in zoom-in-95 max-h-[80vh] overflow-y-auto backdrop-blur-xl"
+              className="absolute left-0 top-full mt-1.5 w-64 max-w-[85vw] bg-white dark:bg-slate-900/95 border border-slate-200 dark:border-slate-700 rounded-xl shadow-2xl z-[999] p-2.5 animate-in fade-in zoom-in-95 max-h-[80vh] overflow-y-auto backdrop-blur-xl"
             >
-              <div className="flex items-center justify-between pb-1.5 border-b border-slate-700 mb-1.5">
-                <span className="text-xs font-bold text-slate-200">الإشعارات والتنبيهات</span>
-                <span className="text-[10px] bg-slate-700 text-amber-300 px-1.5 py-0.5 rounded-full font-bold">
+              <div className="flex items-center justify-between pb-1.5 border-b border-slate-200 dark:border-slate-700 mb-1.5">
+                <span className="text-xs font-bold text-slate-800 dark:text-slate-200">الإشعارات والتنبيهات</span>
+                <span className="text-[10px] bg-slate-100 dark:bg-slate-700 text-amber-700 dark:text-amber-300 px-1.5 py-0.5 rounded-full font-bold">
                   {(notifications || []).length}
                 </span>
               </div>
               <div className="max-h-48 overflow-y-auto space-y-1.5">
                 {(!notifications || notifications.length === 0) ? (
-                  <p className="text-xs text-slate-400 text-center py-3">لا توجد إشعارات حالياً</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 text-center py-3">لا توجد إشعارات حالياً</p>
                 ) : (
                   (notifications || []).map((n) => (
                     <div
                       key={n.id}
-                      className="p-2 rounded-lg bg-slate-900/60 border border-slate-700/60 hover:border-amber-500/40 transition-all text-right"
+                      className="p-2 rounded-lg bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700/60 hover:border-amber-500/40 transition-all text-right"
                     >
-                      <p className="text-xs font-bold text-amber-300">{n.title}</p>
-                      <p className="text-[11px] text-slate-300 mt-0.5 leading-relaxed">{n.message}</p>
-                      <span className="text-[9px] text-slate-500 mt-0.5 block font-mono">
+                      <p className="text-xs font-bold text-amber-700 dark:text-amber-300">{n.title}</p>
+                      <p className="text-[11px] text-slate-600 dark:text-slate-300 mt-0.5 leading-relaxed">{n.message}</p>
+                      <span className="text-[9px] text-slate-400 dark:text-slate-500 mt-0.5 block font-mono">
                         {new Date(n.createdAt).toLocaleTimeString('ar-EG')}
                       </span>
                     </div>
@@ -497,26 +497,26 @@ export const Header: React.FC<HeaderProps> = ({ toggleSidebar, onNavigate }) => 
         >
           <button
             onClick={() => setShowUserMenu(!showUserMenu)}
-            className="flex items-center gap-2 p-1.5 pr-2.5 rounded-xl bg-slate-800/90 border border-slate-700 hover:border-amber-500/50 transition-all text-slate-200"
+            className="flex items-center gap-2 p-1.5 pr-2.5 rounded-xl bg-slate-100 dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700 hover:border-amber-500/50 transition-all text-slate-800 dark:text-slate-200 shadow-xs"
           >
-            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-amber-500/30 to-amber-700/30 border-2 border-amber-400/80 text-amber-300 shadow-[0_0_15px_rgba(245,158,11,0.5)] flex items-center justify-center font-black text-xs backdrop-blur-md animate-pulse">
+            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-amber-500/20 to-amber-600/20 dark:from-amber-500/30 dark:to-amber-700/30 border-2 border-amber-500/80 text-amber-700 dark:text-amber-300 shadow-xs flex items-center justify-center font-black text-xs backdrop-blur-md">
               {user?.fullName?.charAt(0) || 'م'}
             </div>
             <div className="text-right hidden sm:block">
-              <div className="text-xs font-bold leading-tight">{user?.fullName || 'مدير النظام'}</div>
+              <div className="text-xs font-bold leading-tight text-slate-800 dark:text-slate-200">{user?.fullName || 'مدير النظام'}</div>
             </div>
-            <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+            <ChevronDown className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
           </button>
 
           {showUserMenu && (
             <div
-              className="absolute left-0 top-full mt-1.5 w-60 max-w-[85vw] bg-slate-900/95 border border-slate-700 rounded-xl shadow-2xl z-[999] p-2.5 text-right animate-in fade-in zoom-in-95 max-h-[80vh] overflow-y-auto backdrop-blur-xl"
+              className="absolute left-0 top-full mt-1.5 w-60 max-w-[85vw] bg-white dark:bg-slate-900/95 border border-slate-200 dark:border-slate-700 rounded-xl shadow-2xl z-[999] p-2.5 text-right animate-in fade-in zoom-in-95 max-h-[80vh] overflow-y-auto backdrop-blur-xl"
             >
-              <div className="pb-1.5 mb-1.5 border-b border-slate-700 flex items-center justify-between">
+              <div className="pb-1.5 mb-1.5 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
                 <div>
-                  <p className="text-xs font-bold text-slate-200">{user?.fullName}</p>
-                  <p className="text-[10px] text-slate-400 truncate max-w-[180px]">{user?.email || user?.username}</p>
-                  <span className="inline-block mt-0.5 text-[9px] bg-amber-500/20 text-amber-300 border border-amber-500/40 px-1.5 py-0.5 rounded-full font-bold">
+                  <p className="text-xs font-bold text-slate-800 dark:text-slate-200">{user?.fullName}</p>
+                  <p className="text-[10px] text-slate-500 dark:text-slate-400 truncate max-w-[180px]">{user?.email || user?.username}</p>
+                  <span className="inline-block mt-0.5 text-[9px] bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30 dark:border-amber-500/40 px-1.5 py-0.5 rounded-full font-bold">
                     {roleLabels[user?.role || 'super_admin']}
                   </span>
                 </div>
@@ -524,9 +524,9 @@ export const Header: React.FC<HeaderProps> = ({ toggleSidebar, onNavigate }) => 
 
               {/* Demo Role Switcher to test all user roles */}
               {user && (user.role === 'super_admin' || user.role === 'branch_manager' || user.role === 'trainer') && (
-                <div className="py-1.5 border-b border-slate-700">
-                  <p className="text-[10px] font-bold text-slate-400 mb-1 flex items-center gap-1">
-                    <Shield className="w-3 h-3 text-amber-400" />
+                <div className="py-1.5 border-b border-slate-200 dark:border-slate-700">
+                  <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-1 flex items-center gap-1">
+                    <Shield className="w-3 h-3 text-amber-600 dark:text-amber-400" />
                     تبديل الدور للاختبار:
                   </p>
                   <div className="grid grid-cols-1 gap-0.5">
@@ -555,31 +555,31 @@ export const Header: React.FC<HeaderProps> = ({ toggleSidebar, onNavigate }) => 
                         }}
                         className={`text-[11px] py-1 px-2 rounded-md text-right flex items-center justify-between transition-colors ${
                           user?.role === item.role
-                            ? 'bg-amber-500/20 text-amber-300 font-bold border border-amber-500/30'
-                            : 'hover:bg-slate-700/60 text-slate-300'
+                            ? 'bg-amber-500/20 text-amber-800 dark:text-amber-300 font-bold border border-amber-500/30'
+                            : 'hover:bg-slate-100 dark:hover:bg-slate-700/60 text-slate-700 dark:text-slate-300'
                         }`}
                       >
                         <span>{item.label}</span>
-                        {user?.role === item.role && <Check className="w-3 h-3 text-amber-400" />}
+                        {user?.role === item.role && <Check className="w-3 h-3 text-amber-600 dark:text-amber-400" />}
                       </button>
                     ))}
                   </div>
                 </div>
               )}
 
-              <div className="py-1.5 border-b border-slate-700">
+              <div className="py-1.5 border-b border-slate-200 dark:border-slate-700">
                 <button
                   onClick={() => {
                     openAiModal('manager');
                     setShowUserMenu(false);
                   }}
-                  className="w-full flex items-center justify-between py-1.5 px-2 rounded-lg text-xs font-bold text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 transition-colors"
+                  className="w-full flex items-center justify-between py-1.5 px-2 rounded-lg text-xs font-bold text-amber-800 dark:text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 transition-colors"
                 >
                   <div className="flex items-center gap-2">
-                    <Bot className="w-3.5 h-3.5 text-amber-400" />
+                    <Bot className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
                     <span>مركز الذكاء الاصطناعي</span>
                   </div>
-                  <Sparkles className="w-3 h-3 text-amber-400 animate-pulse" />
+                  <Sparkles className="w-3 h-3 text-amber-600 dark:text-amber-400 animate-pulse" />
                 </button>
               </div>
 
@@ -589,7 +589,7 @@ export const Header: React.FC<HeaderProps> = ({ toggleSidebar, onNavigate }) => 
                     logout();
                     setShowUserMenu(false);
                   }}
-                  className="w-full flex items-center gap-2 py-1.5 px-2 rounded-lg text-xs font-bold text-rose-400 hover:bg-rose-950/40 transition-colors"
+                  className="w-full flex items-center gap-2 py-1.5 px-2 rounded-lg text-xs font-bold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors"
                 >
                   <LogOut className="w-3.5 h-3.5" />
                   <span>تسجيل الخروج</span>

@@ -817,7 +817,21 @@ export const api = {
     request<{ success: boolean }>(`/assignments/${id}`, {
       method: 'DELETE'
     }),
-  generateKahootQuiz: (data: { topic?: string; grade?: string; subject?: string; questionCount?: number; difficulty?: string; image?: string }) =>
+  getAssignmentById: (id: string) =>
+    request<{ success: boolean; assignment: any }>(`/assignments/${id}`),
+  getPublicChallenge: (id: string) =>
+    request<{ success: boolean; challenge: any; trainees?: any[] }>(`/public/challenge/${id}`),
+  generateKahootQuiz: (data: { 
+    topic?: string; 
+    grade?: string; 
+    subject?: string; 
+    questionCount?: number; 
+    difficulty?: string; 
+    image?: string;
+    pageStart?: number;
+    pageEnd?: number;
+    specificInstructions?: string;
+  }) =>
     request<{ success: boolean; kahootGame: any }>('/trainer/generate-kahoot', {
       method: 'POST',
       body: JSON.stringify(data)
