@@ -71,7 +71,8 @@ import {
   Instagram,
   Github,
   Youtube,
-  ShieldAlert
+  ShieldAlert,
+  Layers
 } from 'lucide-react';
 import { HomeworkSubmission, TraineeBadge } from '../types';
 import { StudentPhotoCropperModal } from '../components/StudentPhotoCropperModal';
@@ -2907,7 +2908,7 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
             {/* TAB: LECTURE RECAP, TASKS & PREPARATION (4-SECTION SYSTEM) */}
             {activeTab === 'recap_tasks' && (
               <LectureRecapManager
-                studentGradeLevel={student?.gradeLevel || student?.stage || student?.groupName || 'الصف الرابع الابتدائي (Grade 4 Languages)'}
+                studentGradeLevel={student?.grade || student?.gradeLevel || student?.stage || student?.courseName || student?.groupName || ''}
                 studentName={student?.name || 'طالب متميز'}
                 studentCode={student?.code || 'STU-001'}
                 onNavigateToHomework={(taskTitle) => {

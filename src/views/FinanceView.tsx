@@ -30,7 +30,8 @@ import {
   Sparkles,
   Bot,
   FileSpreadsheet,
-  AlertTriangle
+  AlertTriangle,
+  RefreshCw
 } from 'lucide-react';
 import { Payment, TrainerSettlement, Trainee, Course } from '../types';
 import { OfficialReceiptModal } from '../components/OfficialReceiptModal';

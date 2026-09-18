@@ -33,6 +33,8 @@ interface ChildRecord extends Trainee {
   schedules: LabScheduleSlot[];
   payments?: Payment[];
   messages?: any[];
+  assignments?: any[];
+  recaps?: any[];
   groupDetails?: any;
   trainer?: {
     id: string;
@@ -1149,11 +1151,21 @@ export const PublicParentPortalView: React.FC<PublicParentPortalViewProps> = ({ 
                       </span>
                       <h3 className="font-black text-sm text-slate-900 dark:text-white flex items-center gap-1.5">
                         <BookOpen className="w-4 h-4 text-amber-500" />
-                        <span>ملخص الحصة وتكليفات الواجب المطلوب من الطالب</span>
+                        <span>
+                          {selectedChild.assignments && selectedChild.assignments.length > 0
+                            ? `تكليف اليوم: ${selectedChild.assignments[0].title}`
+                            : selectedChild.recaps && selectedChild.recaps.length > 0
+                            ? `ملخص الحصة: ${selectedChild.recaps[0].title}`
+                            : 'ملخص الحصة وتكليفات الواجب المطلوب من الطالب'}
+                        </span>
                       </h3>
                     </div>
                     <p className="text-xs text-slate-600 dark:text-slate-300 max-w-xl leading-relaxed">
-                      تابع ما تعلمه ابنك اليوم في المحاضرة (فك الكيسة، مكونات الحاسوب الخمسة، دورة البيانات) وتأكد من كتابة التلخيص وحل الواجب في الكشكول قبل المحاضرة القادمة.
+                      {selectedChild.assignments && selectedChild.assignments.length > 0
+                        ? `الواجب المعتمد للطالب: ${selectedChild.assignments[0].instructions || selectedChild.assignments[0].title} • يرجى متابعة الحل والتسليم قبل الموعد المحدد.`
+                        : selectedChild.recaps && selectedChild.recaps.length > 0
+                        ? `تابع ما تعلمه ابنك اليوم في المحاضرة وتأكد من مراجعة النقاط التدريبية والتطبيق العملي في المعمل.`
+                        : 'تابع ما تعلمه ابنك اليوم في المحاضرة وتأكد من كتابة التلخيص وحل الواجب في الكشكول قبل المحاضرة القادمة.'}
                     </p>
                   </div>
 
@@ -1224,11 +1236,108 @@ export const PublicParentPortalView: React.FC<PublicParentPortalViewProps> = ({ 
 
             {/* TAB: LECTURE RECAP & TODAY'S HOMEWORK ASSIGNMENTS FOR PARENTS */}
             {activeTab === 'recap' && selectedChild && (
-              <div className="space-y-4">
+              <div className="space-y-6">
+                {/* 1. Official Daily Assignments & Homework Tasks Card */}
+                <div className="p-5 md:p-6 rounded-3xl bg-slate-900 border border-slate-800 shadow-xl space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-800">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-9 h-9 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-400 flex items-center justify-center font-black">
+                        📝
+                      </div>
+                      <div>
+                        <h3 className="font-black text-sm text-white flex items-center gap-2">
+                          <span>التكليفات والواجبات المطلوبة من الطالب اليوم</span>
+                          <span className="text-[10px] bg-amber-500/20 text-amber-300 font-bold px-2 py-0.5 rounded-full border border-amber-500/40">
+                            متابعة ولي الأمر 👨‍👦
+                          </span>
+                        </h3>
+                        <p className="text-[11px] text-slate-400">
+                          قائمة المهام والواجبات المحددة من المدرب لـ ({selectedChild.fullName}) - الصف: {selectedChild.grade || selectedChild.courseName || selectedChild.groupName || 'المرحلة التدريبية'}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="text-left sm:text-right">
+                      <span className="text-xs font-black text-slate-300">
+                        {selectedChild.assignments ? selectedChild.assignments.length : 0} تكليفات معتمدة
+                      </span>
+                    </div>
+                  </div>
+
+                  {selectedChild.assignments && selectedChild.assignments.length > 0 ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {selectedChild.assignments.map((asg: any, idx: number) => {
+                        const isDone = asg.isSubmitted || asg.status === 'graded' || asg.status === 'submitted';
+                        return (
+                          <div
+                            key={asg.id || idx}
+                            className={`p-4 rounded-2xl border transition-all ${
+                              isDone
+                                ? 'bg-emerald-950/20 border-emerald-500/40'
+                                : 'bg-slate-950 border-amber-500/30 shadow-md shadow-amber-500/5'
+                            }`}
+                          >
+                            <div className="flex items-start justify-between gap-3 mb-2">
+                              <div className="flex items-center gap-2">
+                                <span className="text-lg">{isDone ? '✅' : '📌'}</span>
+                                <h4 className="font-bold text-xs text-white line-clamp-1">{asg.title}</h4>
+                              </div>
+                              <span
+                                className={`text-[10px] font-black px-2.5 py-0.5 rounded-full shrink-0 ${
+                                  isDone
+                                    ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                                    : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                                }`}
+                              >
+                                {isDone ? 'تم التسليم بنجاح' : 'مطلوب إنجازه اليوم'}
+                              </span>
+                            </div>
+
+                            {asg.instructions && (
+                              <p className="text-xs text-slate-300 mb-3 line-clamp-2 leading-relaxed bg-slate-900/60 p-2.5 rounded-xl border border-slate-800">
+                                {asg.instructions}
+                              </p>
+                            )}
+
+                            <div className="flex items-center justify-between text-[11px] text-slate-400 pt-2 border-t border-slate-800/80">
+                              <span className="flex items-center gap-1">
+                                <Calendar className="w-3.5 h-3.5 text-slate-500" />
+                                <span>آخر موعد: {asg.dueDate ? asg.dueDate.split('T')[0] : 'قبل المحاضرة القادمة'}</span>
+                              </span>
+                              {asg.points && (
+                                <span className="font-black text-amber-400 font-mono">
+                                  {asg.points} نقطة ⭐️
+                                </span>
+                              )}
+                            </div>
+
+                            {isDone && asg.score !== null && asg.score !== undefined && (
+                              <div className="mt-2.5 p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-between text-xs">
+                                <span className="text-emerald-300 font-bold">تقييم المدرب:</span>
+                                <span className="font-black font-mono text-emerald-400">{asg.score} / {asg.points || 100}</span>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="p-6 rounded-2xl bg-slate-950/60 border border-dashed border-slate-800 text-center space-y-2">
+                      <p className="text-xs text-slate-400 font-medium">
+                        لا توجد تكليفات واجب متأخرة أو مطلوبة حالياً على هذا الطالب.
+                      </p>
+                      <p className="text-[11px] text-slate-500">
+                        سيظهر هنا أي تكليف جديد يعتمده المدرب مباشرة ليتابعه ولي الأمر خطوة بخطوة.
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                {/* 2. Structured Lecture Recap & Learning Highlights */}
                 <LectureRecapManager
                   mode="parent_view"
-                  currentGradeLevel={selectedChild.groupName || selectedChild.courseName || 'الصف الرابع الابتدائي (Grade 4 Languages)'}
-                  studentGradeLevel={selectedChild.groupName || selectedChild.courseName}
+                  currentGradeLevel={selectedChild.grade || selectedChild.courseName || selectedChild.groupName || ''}
+                  studentGradeLevel={selectedChild.grade || selectedChild.courseName || selectedChild.groupName || ''}
                   studentName={selectedChild.fullName}
                   studentCode={selectedChild.code}
                 />

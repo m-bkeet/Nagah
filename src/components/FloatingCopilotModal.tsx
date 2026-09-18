@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Bot, Sparkles, Send, BrainCircuit, RefreshCw } from 'lucide-react';
+import { X, Bot, Sparkles, Send, BrainCircuit, RefreshCw, Target } from 'lucide-react';
 
 interface FloatingCopilotModalProps {
   isOpen: boolean;

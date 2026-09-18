@@ -99,6 +99,8 @@ export const LectureRecapManager: React.FC<LectureRecapManagerProps> = ({
   const [customGroupInput, setCustomGroupInput] = useState<string>('');
   const [selectedSubject, setSelectedSubject] = useState<string>(SUBJECT_OPTIONS[0]);
   const [selectedBranch, setSelectedBranch] = useState<string>(BRANCH_OPTIONS[0]);
+  const [availableCourses, setAvailableCourses] = useState<any[]>([]);
+  const [availableGroups, setAvailableGroups] = useState<any[]>([]);
 
   // New Recap Form
   const [formData, setFormData] = useState<Partial<LectureRecap>>({
@@ -148,10 +150,20 @@ export const LectureRecapManager: React.FC<LectureRecapManagerProps> = ({
   const loadRecaps = async () => {
     setIsLoading(true);
     try {
-      const res = await fetch('/api/lecture-recaps');
-      const data = await res.json();
-      if (data.success && Array.isArray(data.recaps)) {
-        setRecaps(data.recaps);
+      const [res, coursesRes, groupsRes] = await Promise.all([
+        fetch('/api/lecture-recaps').then(r => r.json()).catch(() => ({ success: false })),
+        fetch('/api/courses').then(r => r.json()).catch(() => []),
+        fetch('/api/groups').then(r => r.json()).catch(() => [])
+      ]);
+
+      if (res.success && Array.isArray(res.recaps)) {
+        setRecaps(res.recaps);
+      }
+      if (Array.isArray(coursesRes)) {
+        setAvailableCourses(coursesRes);
+      }
+      if (Array.isArray(groupsRes)) {
+        setAvailableGroups(groupsRes);
       }
     } catch (e) {
       console.warn('Could not load lecture recaps from server:', e);
@@ -178,54 +190,57 @@ export const LectureRecapManager: React.FC<LectureRecapManagerProps> = ({
     const target = effectiveGrade.toLowerCase();
     const recapGrade = (recap.gradeLevel || '').toLowerCase();
     const recapGroup = (recap.groupName || '').toLowerCase();
+    const recapCourse = ((recap as any).courseName || '').toLowerCase();
 
-    // Universal recaps
+    // Universal recaps explicitly marked for all groups
     if (recapGrade.includes('جميع المجموعات') || recapGrade.includes('all') || recap.groupId === 'all') {
       return true;
     }
 
-    // Grade 4 Primary
-    if (target.includes('رابع') || target.includes('grade 4') || target.includes('رابعة') || target.includes('primary 4')) {
-      return recapGrade.includes('رابع') || recapGrade.includes('grade 4') || recapGrade.includes('رابعة') || recapGroup.includes('رابع');
-    }
+    // STRICT Grade 4 Check:
+    const isTargetG4 = target.includes('رابع') || target.includes('grade 4') || target.includes('رابعة') || target.includes('primary 4') || target.includes('ict4');
+    const isRecapG4 = recapGrade.includes('رابع') || recapGrade.includes('grade 4') || recapGrade.includes('رابعة') || recapGroup.includes('رابع') || recapGroup.includes('ict4') || recapCourse.includes('ict4');
 
-    // Grade 5 Primary
-    if (target.includes('خامس') || target.includes('grade 5') || target.includes('خامسة') || target.includes('primary 5')) {
-      return recapGrade.includes('خامس') || recapGrade.includes('grade 5') || recapGrade.includes('خامسة') || recapGroup.includes('خامس');
-    }
+    // STRICT Grade 5 Check:
+    const isTargetG5 = target.includes('خامس') || target.includes('grade 5') || target.includes('خامسة') || target.includes('primary 5') || target.includes('ict5');
+    const isRecapG5 = recapGrade.includes('خامس') || recapGrade.includes('grade 5') || recapGrade.includes('خامسة') || recapGroup.includes('خامس') || recapGroup.includes('ict5') || recapCourse.includes('ict5');
 
-    // Grade 6 Primary
-    if (target.includes('سادس') || target.includes('grade 6') || target.includes('سادسة') || target.includes('primary 6')) {
-      return recapGrade.includes('سادس') || recapGrade.includes('grade 6') || recapGrade.includes('سادسة') || recapGroup.includes('سادس');
-    }
+    // STRICT Grade 6 Check:
+    const isTargetG6 = target.includes('سادس') || target.includes('grade 6') || target.includes('سادسة') || target.includes('primary 6') || target.includes('ict6');
+    const isRecapG6 = recapGrade.includes('سادس') || recapGrade.includes('grade 6') || recapGrade.includes('سادسة') || recapGroup.includes('سادس') || recapGroup.includes('ict6') || recapCourse.includes('ict6');
 
-    // Prep 1
-    if (target.includes('أول إعدادي') || target.includes('اول اعدادي') || target.includes('prep 1') || target.includes('prep1')) {
-      return recapGrade.includes('أول إعدادي') || recapGrade.includes('اول اعدادي') || recapGrade.includes('prep 1');
-    }
+    // STRICT Prep 1 Check:
+    const isTargetPrep1 = target.includes('أول إعدادي') || target.includes('اول اعدادي') || target.includes('prep 1') || target.includes('prep1');
+    const isRecapPrep1 = recapGrade.includes('أول إعدادي') || recapGrade.includes('اول اعدادي') || recapGrade.includes('prep 1');
 
-    // Prep 2
-    if (target.includes('ثاني إعدادي') || target.includes('ثاني اعدادي') || target.includes('prep 2') || target.includes('prep2')) {
-      return recapGrade.includes('ثاني إعدادي') || recapGrade.includes('prep 2');
-    }
+    // STRICT Prep 2 Check:
+    const isTargetPrep2 = target.includes('ثاني إعدادي') || target.includes('ثاني اعدادي') || target.includes('prep 2');
+    const isRecapPrep2 = recapGrade.includes('ثاني إعدادي') || recapGrade.includes('prep 2');
 
-    // Prep 3
-    if (target.includes('ثالث إعدادي') || target.includes('ثالث اعدادي') || target.includes('prep 3') || target.includes('prep3')) {
-      return recapGrade.includes('ثالث إعدادي') || recapGrade.includes('prep 3');
-    }
+    // STRICT Prep 3 Check:
+    const isTargetPrep3 = target.includes('ثالث إعدادي') || target.includes('ثالث اعدادي') || target.includes('prep 3');
+    const isRecapPrep3 = recapGrade.includes('ثالث إعدادي') || recapGrade.includes('prep 3');
 
-    // Python & AI
-    if (target.includes('بايثون') || target.includes('python') || target.includes('ذكاء')) {
-      return recapGrade.includes('بايثون') || recapGrade.includes('python') || recapGroup.includes('بايثون');
-    }
+    // Python & AI Check:
+    const isTargetPython = target.includes('بايثون') || target.includes('python') || target.includes('ذكاء');
+    const isRecapPython = recapGrade.includes('بايثون') || recapGrade.includes('python') || recapGroup.includes('بايثون');
 
-    // Robotics
-    if (target.includes('روبوت') || target.includes('robot') || target.includes('إلكترونيات')) {
-      return recapGrade.includes('روبوت') || recapGrade.includes('robot');
-    }
+    // Robotics Check:
+    const isTargetRobotics = target.includes('روبوت') || target.includes('robot') || target.includes('إلكترونيات');
+    const isRecapRobotics = recapGrade.includes('روبوت') || recapGrade.includes('robot');
 
-    // Direct string match fallback
-    return recapGrade.includes(target) || target.includes(recapGrade) || recapGroup.includes(target);
+    // If target belongs to any specific grade/program, strictly prevent cross-grade leakage:
+    if (isTargetG4) return isRecapG4;
+    if (isTargetG5) return isRecapG5;
+    if (isTargetG6) return isRecapG6;
+    if (isTargetPrep1) return isRecapPrep1;
+    if (isTargetPrep2) return isRecapPrep2;
+    if (isTargetPrep3) return isRecapPrep3;
+    if (isTargetPython) return isRecapPython;
+    if (isTargetRobotics) return isRecapRobotics;
+
+    // Direct match if exact group or grade
+    return recapGrade.includes(target) || (target.length > 3 && recapGrade.includes(target));
   };
 
   const visibleRecaps = recaps.filter(isMatchingTarget);
@@ -558,7 +573,7 @@ ${window.location.origin}/student
               </div>
 
               <div>
-                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">المجموعة / الجروب:</label>
+                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">المجموعة / الجروب المستهدف:</label>
                 <select
                   value={selectedGroup}
                   onChange={(e) => {
@@ -567,14 +582,23 @@ ${window.location.origin}/student
                   }}
                   className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl p-2 font-semibold text-slate-900 dark:text-slate-100 focus:outline-none focus:border-amber-500"
                 >
-                  {GROUP_OPTIONS.map((grp, idx) => (
-                    <option key={idx} value={grp}>{grp}</option>
-                  ))}
+                  {availableGroups.length > 0 && (
+                    <optgroup label="مجموعات المركز الفعلية المسجلة">
+                      {availableGroups.map((grp: any) => (
+                        <option key={grp.id} value={grp.name || grp.id}>{grp.name || grp.id} ({grp.courseName || 'دورة'})</option>
+                      ))}
+                    </optgroup>
+                  )}
+                  <optgroup label="المجموعات النموذجية">
+                    {GROUP_OPTIONS.map((grp, idx) => (
+                      <option key={idx} value={grp}>{grp}</option>
+                    ))}
+                  </optgroup>
                 </select>
               </div>
 
               <div>
-                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">المادة / الدورة:</label>
+                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">المادة / الدورة التدريبية:</label>
                 <select
                   value={selectedSubject}
                   onChange={(e) => {
@@ -583,9 +607,18 @@ ${window.location.origin}/student
                   }}
                   className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl p-2 font-semibold text-slate-900 dark:text-slate-100 focus:outline-none focus:border-amber-500"
                 >
-                  {SUBJECT_OPTIONS.map((sub, idx) => (
-                    <option key={idx} value={sub}>{sub}</option>
-                  ))}
+                  {availableCourses.length > 0 && (
+                    <optgroup label="الدورات المعتمدة بالنظام">
+                      {availableCourses.map((c: any) => (
+                        <option key={c.id} value={c.name || c.id}>{c.name} {c.code ? `(${c.code})` : ''}</option>
+                      ))}
+                    </optgroup>
+                  )}
+                  <optgroup label="المواد والمسارات التدريبية">
+                    {SUBJECT_OPTIONS.map((sub, idx) => (
+                      <option key={idx} value={sub}>{sub}</option>
+                    ))}
+                  </optgroup>
                 </select>
               </div>
 

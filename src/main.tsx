@@ -4,6 +4,20 @@ import App from './App.tsx';
 import { ErrorBoundary } from './components/ErrorBoundary.tsx';
 import './index.css';
 
+// Universal safety polyfills for device enumeration and legacy components
+if (typeof window !== 'undefined') {
+  if (!(window as any).loadDevices) {
+    (window as any).loadDevices = async () => {
+      try {
+        const res = await fetch('/api/devices').then(r => r.json()).catch(() => []);
+        return Array.isArray(res) ? res : [];
+      } catch {
+        return [];
+      }
+    };
+  }
+}
+
 // PWA Service Worker management
 if ('serviceWorker' in navigator) {
   if (import.meta.env.PROD && !window.location.hostname.includes('ais-dev')) {

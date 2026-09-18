@@ -574,7 +574,7 @@ export const api = {
   saveAttendanceBatch: (data: {
     records: { traineeId: string; status: string; notes?: string }[];
     date: string;
-    groupId: string;
+    groupId?: string;
     branchId?: string;
     courseId?: string;
     trainerId?: string;
@@ -583,6 +583,28 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(data)
     }),
+  markAttendance: (data: {
+    traineeId: string;
+    status: string;
+    date?: string;
+    notes?: string;
+    groupId?: string;
+    branchId?: string;
+    courseId?: string;
+    trainerId?: string;
+    checkInTime?: string;
+    method?: string;
+  }) => {
+    const today = data.date || new Date().toISOString().split('T')[0];
+    return api.saveAttendanceBatch({
+      records: [{ traineeId: data.traineeId, status: data.status, notes: data.notes }],
+      date: today,
+      groupId: data.groupId || '',
+      branchId: data.branchId,
+      courseId: data.courseId,
+      trainerId: data.trainerId
+    });
+  },
 
   // Finance
   getPayments: (params?: Record<string, string>) => {

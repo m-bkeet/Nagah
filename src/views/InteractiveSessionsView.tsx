@@ -76,21 +76,34 @@ export const InteractiveSessionsView: React.FC = () => {
   const [customQuestionInput, setCustomQuestionInput] = useState<string>('');
   const [selectedCorrectOption, setSelectedCorrectOption] = useState<string>('A');
   const [pointsReward, setPointsReward] = useState<number>(5);
+  const [devices, setDevices] = useState<any[]>([]);
+
+  // Load Lab Devices
+  const loadDevices = useCallback(async () => {
+    try {
+      const devList = await api.getDevices().catch(() => []);
+      setDevices(Array.isArray(devList) ? devList : []);
+    } catch (e) {
+      console.warn('Error loading lab devices:', e);
+    }
+  }, []);
 
   // Load Initial Data
   const loadData = useCallback(async () => {
     try {
       setIsLoading(true);
-      const [trainersData, groupsData, coursesData, traineesData] = await Promise.all([
+      const [trainersData, groupsData, coursesData, traineesData, devicesData] = await Promise.all([
         api.getTrainers().catch(() => []),
         api.getGroups().catch(() => []),
         api.getCourses().catch(() => []),
-        api.getTrainees().catch(() => [])
+        api.getTrainees().catch(() => []),
+        api.getDevices().catch(() => [])
       ]);
       setTrainers(Array.isArray(trainersData) ? trainersData : []);
       setGroups(Array.isArray(groupsData) ? groupsData : []);
       setCourses(Array.isArray(coursesData) ? coursesData : []);
       setTrainees(Array.isArray(traineesData) ? traineesData : []);
+      setDevices(Array.isArray(devicesData) ? devicesData : []);
     } catch (e) {
       console.error('Error loading lab data:', e);
     } finally {

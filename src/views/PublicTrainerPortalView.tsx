@@ -39,6 +39,7 @@ import {
   Video,
   Mic,
   Lock,
+  Unlock,
   ChevronLeft,
   ChevronRight
 } from 'lucide-react';
