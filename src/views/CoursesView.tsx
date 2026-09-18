@@ -474,11 +474,12 @@ export const CoursesView: React.FC = () => {
   };
 
   // Filter and Sort Courses
-  const filteredCourses = courses.filter((c) => {
+  const filteredCourses = (courses || []).filter((c) => {
+    if (!c) return false;
     const matchesSearch =
       !searchQuery.trim() ||
-      c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      c.code.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (c.name && c.name.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      (c.code && c.code.toLowerCase().includes(searchQuery.toLowerCase())) ||
       (c.category && c.category.toLowerCase().includes(searchQuery.toLowerCase())) ||
       (c.grade && c.grade.toLowerCase().includes(searchQuery.toLowerCase()));
 
@@ -490,7 +491,8 @@ export const CoursesView: React.FC = () => {
   });
 
   const sortedCourses = [...filteredCourses].sort((a, b) => {
-    if (sortBy === 'name') return a.name.localeCompare(b.name, 'ar');
+    if (!a || !b) return 0;
+    if (sortBy === 'name') return (a.name || '').localeCompare(b.name || '', 'ar');
     if (sortBy === 'fee') return (b.feeAmount || 0) - (a.feeAmount || 0);
     if (sortBy === 'hours') return (b.hoursCount || 0) - (a.hoursCount || 0);
     if (sortBy === 'category') return (a.category || '').localeCompare(b.category || '', 'ar');
@@ -587,9 +589,9 @@ export const CoursesView: React.FC = () => {
               className="w-full bg-slate-900 border border-amber-500/40 rounded-xl pr-9 pl-3 py-2 text-xs text-amber-300 font-bold focus:outline-none focus:border-amber-500 cursor-pointer"
             >
               <option value="all">🎓 تصفية حسب الصف (الكل - {courses.length})</option>
-              <option value="none">بدون تحديد صف ({courses.filter(c => !c.grade).length})</option>
+              <option value="none">بدون تحديد صف ({courses.filter(c => !c?.grade).length})</option>
               {GRADE_OPTIONS.map((g) => {
-                const count = courses.filter(c => c.grade === g).length;
+                const count = courses.filter(c => c?.grade === g).length;
                 return (
                   <option key={g} value={g}>
                     {g} ({count})

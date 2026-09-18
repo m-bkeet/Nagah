@@ -995,6 +995,30 @@ export interface AssignmentTestCase {
   points?: number;
 }
 
+export interface KahootQuestion {
+  id: string;
+  type: 'mcq' | 'true_false' | 'short_answer' | 'puzzle';
+  question: string;
+  options: string[];
+  correctIndex: number;
+  timeLimit?: number;
+  pointsType?: string;
+  explanation?: string;
+  emojiOrTheme?: string;
+  category?: string;
+}
+
+export interface KahootQuizGame {
+  id?: string;
+  title: string;
+  description?: string;
+  subject?: string;
+  grade?: string;
+  coverEmoji?: string;
+  timeLimitDefault?: number;
+  questions: KahootQuestion[];
+}
+
 export interface AssignmentTask {
   id: string;
   title: string;
@@ -1013,6 +1037,11 @@ export interface AssignmentTask {
   codeTemplate?: string;
   programmingLanguage?: string;
   testCases?: AssignmentTestCase[];
+  assignmentType?: 'interactive_quiz' | 'ministry_evaluation' | 'practical' | 'code' | 'standard';
+  quizGame?: KahootQuizGame;
+  evaluationSource?: string;
+  shareableCode?: string;
+  aiGenerated?: boolean;
   createdAt: string;
   submissionsCount?: number;
   gradedCount?: number;
@@ -1031,7 +1060,13 @@ export interface HomeworkSubmission {
   taskTitle: string;
   submittedAt: string;
   mediaUrl?: string;
-  mediaType: 'image' | 'video' | 'text' | 'code';
+  mediaType: 'image' | 'video' | 'text' | 'code' | 'audio' | 'voice';
+  audioDurationSeconds?: number;
+  voiceTranscription?: string;
+  conceptsCovered?: string[];
+  conceptCorrections?: { concept: string; studentSaid?: string; correctedExplanation: string }[];
+  missingKeyConcepts?: string[];
+  studentGradeLevel?: string;
   codeSolution?: string;
   studentNotes?: string;
   grade: number;

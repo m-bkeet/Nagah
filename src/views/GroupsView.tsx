@@ -887,7 +887,7 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ onNavigate }) => {
                       </div>
 
                       <div className="flex flex-wrap gap-1.5 mt-1.5">
-                        {g.grade && (
+                        {g?.grade && (
                           <div className="flex items-center gap-1 text-[10px] text-emerald-700 dark:text-emerald-400 font-bold bg-emerald-50 dark:bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-200 dark:border-emerald-500/20">
                             <Sparkles className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
                             <span>الصف: {g.grade}</span>

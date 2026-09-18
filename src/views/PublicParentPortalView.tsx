@@ -1896,31 +1896,31 @@ export const PublicParentPortalView: React.FC<PublicParentPortalViewProps> = ({ 
 
       {/* Mobile Bottom Navigation Bar for Parents */}
       {children.length > 0 && (
-        <div className="fixed bottom-0 left-0 right-0 z-40 bg-slate-900 border-t border-slate-800 flex justify-around py-2 px-1 shadow-2xl md:hidden">
+        <div className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-slate-900/95 border-t border-slate-200/90 dark:border-slate-800 backdrop-blur-xl flex justify-around py-2 px-1 shadow-[0_-4px_20px_rgba(0,0,0,0.06)] dark:shadow-2xl md:hidden">
           <button
             onClick={() => setActiveTab('overview')}
-            className={`flex flex-col items-center gap-1 flex-1 py-1 transition-all ${activeTab === 'overview' ? 'text-indigo-400 scale-105' : 'text-slate-400'}`}
+            className={`flex flex-col items-center gap-1 flex-1 py-1 transition-all ${activeTab === 'overview' ? 'text-indigo-600 dark:text-indigo-400 font-bold scale-105' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'}`}
           >
             <TrendingUp className="w-4 h-4" />
             <span className="text-[9px] font-bold">الملف والمتابعة</span>
           </button>
           <button
             onClick={() => setActiveTab('courses')}
-            className={`flex flex-col items-center gap-1 flex-1 py-1 transition-all ${activeTab === 'courses' ? 'text-indigo-400 scale-105' : 'text-slate-400'}`}
+            className={`flex flex-col items-center gap-1 flex-1 py-1 transition-all ${activeTab === 'courses' ? 'text-indigo-600 dark:text-indigo-400 font-bold scale-105' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'}`}
           >
             <BookOpen className="w-4 h-4" />
             <span className="text-[9px] font-bold">الجدول والدورات</span>
           </button>
           <button
             onClick={() => setActiveTab('finance')}
-            className={`flex flex-col items-center gap-1 flex-1 py-1 transition-all ${activeTab === 'finance' ? 'text-indigo-400 scale-105' : 'text-slate-400'}`}
+            className={`flex flex-col items-center gap-1 flex-1 py-1 transition-all ${activeTab === 'finance' ? 'text-indigo-600 dark:text-indigo-400 font-bold scale-105' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'}`}
           >
             <DollarSign className="w-4 h-4" />
             <span className="text-[9px] font-bold">المصروفات والسندات</span>
           </button>
           <button
             onClick={() => setActiveTab('messages')}
-            className={`flex flex-col items-center gap-1 flex-1 py-1 transition-all ${activeTab === 'messages' ? 'text-indigo-400 scale-105' : 'text-slate-400'}`}
+            className={`flex flex-col items-center gap-1 flex-1 py-1 transition-all ${activeTab === 'messages' ? 'text-indigo-600 dark:text-indigo-400 font-bold scale-105' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'}`}
           >
             <MessageSquare className="w-4 h-4" />
             <span className="text-[9px] font-bold">المحادثات ({parentMessages.length})</span>

@@ -444,7 +444,7 @@ export const CertificatesView: React.FC = () => {
                     <div className="space-y-1.5 text-xs text-slate-300 bg-slate-900/60 p-3 rounded-xl border border-slate-700/60 my-3">
                       <div className="flex items-center justify-between">
                         <span className="text-slate-400">التقدير العام:</span>
-                        <span className="font-bold text-amber-300">{cert.grade}</span>
+                        <span className="font-bold text-amber-300">{cert?.grade || 'امتياز'}</span>
                       </div>
                       <div className="flex items-center justify-between">
                         <span className="text-slate-400">النموذج المستخدم:</span>

@@ -58,6 +58,9 @@ import {
   ShieldAlert,
   Camera,
   Hash,
+  User,
+  MapPin,
+  Calendar,
   Image as ImageIcon,
   LayoutGrid,
   List,
@@ -257,6 +260,7 @@ export const TraineesView: React.FC = () => {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [profileTab, setProfileTab] = useState<'finance' | 'attendance' | 'points' | 'guidance' | 'vault'>('finance');
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isFormsImportModalOpen, setIsFormsImportModalOpen] = useState(false);
@@ -2943,14 +2947,14 @@ export const TraineesView: React.FC = () => {
                     className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 focus:outline-none focus:border-amber-500 font-bold text-xs"
                   >
                     <option value="">-- اختر الدورة --</option>
-                    {courses
-                      .filter(c => !formData.grade || c.grade === formData.grade || (c.name && formData.grade && (c.name.includes(formData.grade) || formData.grade.includes(c.name))))
+                    {(courses || [])
+                      .filter(c => c && (!formData.grade || c.grade === formData.grade || (c.name && formData.grade && (c.name.includes(formData.grade) || formData.grade.includes(c.name)))))
                       .map((c) => (
                         <option key={c.id} value={c.id}>
                           {c.name} ({c.feeAmount} ج.م)
                         </option>
                       ))}
-                    {courses.filter(c => !formData.grade || c.grade === formData.grade || (c.name && formData.grade && (c.name.includes(formData.grade) || formData.grade.includes(c.name)))).length === 0 && courses.map((c) => (
+                    {(courses || []).filter(c => c && (!formData.grade || c.grade === formData.grade || (c.name && formData.grade && (c.name.includes(formData.grade) || formData.grade.includes(c.name))))).length === 0 && (courses || []).map((c) => (
                         <option key={c.id} value={c.id}>
                           {c.name} ({c.feeAmount} ج.م)
                         </option>
@@ -2963,9 +2967,9 @@ export const TraineesView: React.FC = () => {
                     value={formData.groupId ?? ''}
                     onChange={(e) => {
                       const gid = e.target.value;
-                      const selGroup = groups.find(g => g.id === gid);
+                      const selGroup = (groups || []).find(g => g?.id === gid);
                       if (selGroup) {
-                        const selCourse = courses.find(c => c.id === selGroup.courseId);
+                        const selCourse = (courses || []).find(c => c?.id === selGroup.courseId);
                         setFormData({
                           ...formData,
                           groupId: gid,
@@ -2982,17 +2986,17 @@ export const TraineesView: React.FC = () => {
                     className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 focus:outline-none focus:border-amber-500 text-xs"
                   >
                     <option value="">-- اختر مجموعة --</option>
-                    {groups
-                      .filter((g) => (!formData.courseId || g.courseId === formData.courseId) && (!formData.branchId || g.branchId === formData.branchId) && (!formData.grade || g.grade === formData.grade))
+                    {(groups || [])
+                      .filter((g) => g && (!formData.courseId || g.courseId === formData.courseId) && (!formData.branchId || g.branchId === formData.branchId) && (!formData.grade || g.grade === formData.grade))
                       .map((g) => (
                         <option key={g.id} value={g.id}>
                           {g.name}
                         </option>
                       ))}
-                    {groups.filter((g) => !((!formData.courseId || g.courseId === formData.courseId) && (!formData.branchId || g.branchId === formData.branchId) && (!formData.grade || g.grade === formData.grade))).length > 0 && (
+                    {(groups || []).filter((g) => g && !((!formData.courseId || g.courseId === formData.courseId) && (!formData.branchId || g.branchId === formData.branchId) && (!formData.grade || g.grade === formData.grade))).length > 0 && (
                       <optgroup label="مجموعات أخرى">
-                        {groups
-                          .filter((g) => !((!formData.courseId || g.courseId === formData.courseId) && (!formData.branchId || g.branchId === formData.branchId) && (!formData.grade || g.grade === formData.grade)))
+                        {(groups || [])
+                          .filter((g) => g && !((!formData.courseId || g.courseId === formData.courseId) && (!formData.branchId || g.branchId === formData.branchId) && (!formData.grade || g.grade === formData.grade)))
                           .map((g) => (
                             <option key={g.id} value={g.id}>
                               {g.name}
@@ -3768,71 +3772,105 @@ export const TraineesView: React.FC = () => {
 
       {/* ----------------- MODAL: Trainee Full Profile ----------------- */}
       {isProfileModalOpen && activeTrainee && typeof document !== 'undefined' && createPortal(
-        <div className="fixed inset-0 z-[99999] flex items-center justify-center p-2 sm:p-4 bg-slate-950/75 backdrop-blur-sm overflow-y-auto">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-3xl shadow-2xl max-w-4xl w-full my-auto max-h-[88vh] flex flex-col overflow-hidden text-slate-900 dark:text-slate-100 modal-dialog-box">
-            <div className="shrink-0 p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-900/90">
-              <div className="flex items-center gap-2">
-                <Eye className="w-5 h-5 text-amber-500" />
-                <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100">الملف الشامل وبطاقة المتدرب: {activeTrainee.fullName}</h3>
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center p-2 sm:p-4 bg-slate-950/75 backdrop-blur-md overflow-y-auto">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-3xl shadow-2xl max-w-4xl w-full my-auto max-h-[90vh] flex flex-col overflow-hidden text-slate-900 dark:text-slate-100 modal-dialog-box">
+            
+            {/* Modal Header */}
+            <div className="shrink-0 px-5 py-3.5 border-b border-slate-100 dark:border-slate-800/80 flex items-center justify-between bg-slate-50/90 dark:bg-slate-900/90">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-xl bg-amber-500/15 border border-amber-500/25 flex items-center justify-center text-amber-600 dark:text-amber-400">
+                  <Eye className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm text-slate-900 dark:text-white flex items-center gap-2">
+                    الملف الشامل وبطاقة المتدرب
+                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-800/60">
+                      متدرب نشط
+                    </span>
+                  </h3>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                    بيانات المتدرب الأكاديمية والمالية وبطاقات التقييم والمتابعة
+                  </p>
+                </div>
               </div>
               <button
                 onClick={() => setIsProfileModalOpen(false)}
-                className="p-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-white rounded-lg hover:bg-slate-200/60 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                className="p-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-white rounded-xl hover:bg-slate-200/60 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                title="إغلاق"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto custom-scrollbar p-4 sm:p-6 space-y-5 text-xs">
-              {/* Profile Card Header */}
-              <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-500/10 via-amber-50/50 to-slate-50 dark:from-slate-800 dark:via-slate-850 dark:to-slate-900 border border-amber-500/30 dark:border-slate-700 flex flex-col md:flex-row items-center justify-between gap-4 shadow-xs">
+            {/* Modal Body */}
+            <div className="flex-1 overflow-y-auto custom-scrollbar p-4 sm:p-6 space-y-4 text-xs">
+              
+              {/* Profile Card Header (Hero Identity Card) */}
+              <div className="p-4 sm:p-5 rounded-2xl bg-slate-50/80 dark:bg-slate-850/90 border border-slate-200/90 dark:border-slate-800 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 shadow-2xs">
                 <div className="flex items-center gap-4 text-right">
                   {activeTrainee.photoUrl ? (
                     <img
                       src={activeTrainee.photoUrl}
                       alt={activeTrainee.fullName}
-                      className="w-16 h-16 rounded-2xl object-cover border-2 border-amber-500 shadow-md"
+                      className="w-16 h-16 rounded-2xl object-cover ring-2 ring-amber-500/40 border-2 border-white dark:border-slate-800 shadow-sm shrink-0"
                     />
                   ) : (
-                    <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-amber-500 to-amber-400 text-slate-950 flex items-center justify-center font-black text-2xl shadow-md">
+                    <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-amber-500 to-amber-600 text-slate-950 flex items-center justify-center font-black text-2xl shadow-sm ring-2 ring-amber-500/30 border-2 border-white dark:border-slate-800 shrink-0">
                       {activeTrainee.fullName?.charAt(0) || '?'}
                     </div>
                   )}
-                  <div>
-                    <h3 className="text-base font-black text-slate-900 dark:text-slate-100 flex items-center gap-2">
-                      {activeTrainee.fullName}
-                      <span className="text-xs font-mono font-bold bg-amber-500/20 text-amber-800 dark:text-amber-300 px-2 py-0.5 rounded border border-amber-500/40">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h3 className="text-base font-black text-slate-900 dark:text-white">
+                        {activeTrainee.fullName}
+                      </h3>
+                      <span className="text-xs font-mono font-bold bg-amber-500/15 text-amber-800 dark:text-amber-300 px-2 py-0.5 rounded-lg border border-amber-500/30">
                         {activeTrainee.code}
                       </span>
-                    </h3>
-                    <p className="text-slate-600 dark:text-slate-300 mt-1 font-medium">
-                      هاتف: <span className="font-mono font-bold text-slate-900 dark:text-slate-100">{activeTrainee.phone}</span> | ولي الأمر: <span className="text-slate-800 dark:text-slate-200">{activeTrainee.parentName || 'غير مسجل'}</span> ({activeTrainee.parentPhone || '-'})
-                    </p>
-                    <p className="text-slate-500 dark:text-slate-400 mt-0.5 text-[11px]">
-                      الفرع: <span className="font-semibold text-slate-700 dark:text-slate-300">{branches.find(b => b.id === activeTrainee.branchId)?.name || 'الفرع الرئيسي'}</span> | تاريخ التسجيل: <span className="font-mono text-slate-700 dark:text-slate-300">{activeTrainee.registrationDate}</span>
-                    </p>
+                      <span className="text-xs font-bold bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 px-2.5 py-0.5 rounded-lg border border-indigo-200/80 dark:border-indigo-800/60">
+                        {courses.find(c => c.id === activeTrainee.courseId)?.name || 'دورة تدريبية'}
+                      </span>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-600 dark:text-slate-300 pt-0.5">
+                      <div className="flex items-center gap-1.5">
+                        <Phone className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                        <span className="font-mono font-bold text-slate-900 dark:text-slate-100" dir="ltr">{activeTrainee.phone}</span>
+                      </div>
+                      <span className="text-slate-300 dark:text-slate-700 hidden sm:inline">•</span>
+                      <div className="flex items-center gap-1.5">
+                        <User className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                        <span>ولي الأمر: <strong className="text-slate-800 dark:text-slate-200">{activeTrainee.parentName || 'غير مسجل'}</strong></span>
+                        {activeTrainee.parentPhone && <span className="font-mono text-slate-500 dark:text-slate-400 mr-1" dir="ltr">({activeTrainee.parentPhone})</span>}
+                      </div>
+                      <span className="text-slate-300 dark:text-slate-700 hidden sm:inline">•</span>
+                      <div className="flex items-center gap-1.5">
+                        <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                        <span className="text-slate-700 dark:text-slate-300">{branches.find(b => b.id === activeTrainee.branchId)?.name || 'الفرع الرئيسي'}</span>
+                      </div>
+                    </div>
                   </div>
                 </div>
 
-                {/* Quick Print Badge & WhatsApp & Digital Card */}
-                <div className="flex items-center gap-2">
+                {/* Quick Action Buttons */}
+                <div className="flex items-center gap-2 self-stretch lg:self-center justify-end flex-wrap pt-2 lg:pt-0 border-t lg:border-t-0 border-slate-200/60 dark:border-slate-800">
                   <button
                     onClick={() => setSelectedDigitalCardTrainee(activeTrainee)}
-                    className="flex items-center gap-1.5 px-3 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 rounded-xl font-black shadow-md shadow-amber-500/20 active:scale-95 transition-all text-xs"
+                    className="flex items-center gap-1.5 px-3.5 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 rounded-xl font-bold text-xs shadow-xs active:scale-95 transition-all cursor-pointer"
                   >
                     <Sparkles className="w-4 h-4 text-slate-950" />
-                    <span>كارت المتدرب الرقمي 💳</span>
+                    <span>كارت المتدرب 💳</span>
                   </button>
                   <button
                     onClick={() => handlePrintBadge(activeTrainee)}
-                    className="flex items-center gap-1.5 px-3 py-2 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-200 dark:border-slate-700 rounded-xl font-bold text-xs shadow-2xs active:scale-95 transition-all"
+                    className="flex items-center gap-1.5 px-3.5 py-2 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 dark:bg-slate-800 dark:hover:bg-slate-750 dark:text-slate-200 dark:border-slate-700 rounded-xl font-bold text-xs shadow-2xs active:scale-95 transition-all cursor-pointer"
                   >
-                    <Printer className="w-4 h-4" />
+                    <Printer className="w-4 h-4 text-slate-500 dark:text-slate-400" />
                     <span>طباعة</span>
                   </button>
                   <button
                     onClick={() => handleOpenWhatsApp(activeTrainee)}
-                    className="flex items-center gap-1.5 px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs shadow-2xs active:scale-95 transition-all"
+                    className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs shadow-2xs active:scale-95 transition-all cursor-pointer"
                   >
                     <MessageSquare className="w-4 h-4" />
                     <span>WhatsApp</span>
@@ -3844,22 +3882,22 @@ export const TraineesView: React.FC = () => {
               {(() => {
                 const tier = getTraineeStarTier(activeTrainee.totalPoints || activeTrainee.points || 0);
                 return (
-                  <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-500/10 via-amber-50/50 to-indigo-50/40 dark:from-amber-500/10 dark:via-slate-900 dark:to-indigo-500/10 border border-amber-500/30 flex flex-col md:flex-row items-center justify-between gap-4 shadow-xs">
+                  <div className="p-3.5 sm:p-4 rounded-2xl bg-amber-50/50 dark:bg-amber-950/20 border border-amber-200/70 dark:border-amber-800/40 flex flex-col md:flex-row items-center justify-between gap-3 shadow-2xs">
                     <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 rounded-2xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-2xl shadow-inner">
-                        ⭐
+                      <div className="w-10 h-10 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-500 dark:text-amber-400 shrink-0">
+                        <Star className="w-5 h-5 fill-amber-400 text-amber-500" />
                       </div>
                       <div>
                         <div className="flex items-center gap-2">
-                          <span className="font-bold text-sm text-slate-900 dark:text-slate-100">رصيد النجوم والتميز التحفيزي</span>
+                          <span className="font-bold text-sm text-slate-900 dark:text-white">النجوم والتميز التحفيزي</span>
                           <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${tier.badgeColor}`}>
                             {tier.name}
                           </span>
                         </div>
-                        <p className="text-slate-600 dark:text-slate-400 text-[11px] mt-0.5">
-                          الرصيد الإجمالي: <span className="font-mono font-black text-amber-700 dark:text-amber-300 text-sm">{activeTrainee.totalPoints || activeTrainee.points || 0} نقطة</span>
-                          <span className="text-slate-400 dark:text-slate-500 mx-2">•</span>
-                          يعادل تقريباً <span className="font-bold text-amber-600 dark:text-amber-400">{tier.stars} نجوم تميز 🌟</span>
+                        <p className="text-slate-600 dark:text-slate-400 text-xs mt-0.5">
+                          الرصيد: <strong className="font-mono text-amber-700 dark:text-amber-300 font-bold">{activeTrainee.totalPoints || activeTrainee.points || 0} نقطة</strong>
+                          <span className="text-slate-300 dark:text-slate-700 mx-2">•</span>
+                          يعادل تقريباً <strong className="text-amber-600 dark:text-amber-400 font-bold">{tier.stars} نجوم تميز 🌟</strong>
                         </p>
                       </div>
                     </div>
@@ -3868,157 +3906,270 @@ export const TraineesView: React.FC = () => {
                     <div className="flex flex-wrap items-center gap-1.5">
                       <button
                         onClick={() => handleQuickAward(activeTrainee, 1, 'مشاركة ممتازة في الحصة ⭐')}
-                        className="px-2.5 py-1.5 bg-amber-100/90 hover:bg-amber-500 text-amber-900 hover:text-white dark:bg-amber-500/20 dark:hover:bg-amber-500 dark:text-amber-300 dark:hover:text-slate-950 rounded-xl text-xs font-bold border border-amber-400/50 dark:border-amber-500/40 transition-all shadow-2xs"
+                        className="px-2.5 py-1.5 bg-white hover:bg-amber-50 text-slate-800 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-amber-300 rounded-xl text-xs font-bold border border-slate-200 dark:border-slate-700 transition-all shadow-2xs cursor-pointer"
                         title="إضافة 1 نجمة (+10 نقاط)"
                       >
-                        +1 ⭐ (+10)
+                        +1 ⭐
                       </button>
                       <button
                         onClick={() => handleQuickAward(activeTrainee, 2, 'إتمام الواجب والتطبيق العملي ⭐⭐')}
-                        className="px-2.5 py-1.5 bg-amber-100/90 hover:bg-amber-500 text-amber-900 hover:text-white dark:bg-amber-500/20 dark:hover:bg-amber-500 dark:text-amber-300 dark:hover:text-slate-950 rounded-xl text-xs font-bold border border-amber-400/50 dark:border-amber-500/40 transition-all shadow-2xs"
+                        className="px-2.5 py-1.5 bg-white hover:bg-amber-50 text-slate-800 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-amber-300 rounded-xl text-xs font-bold border border-slate-200 dark:border-slate-700 transition-all shadow-2xs cursor-pointer"
                         title="إضافة 2 نجوم (+20 نقطة)"
                       >
-                        +2 ⭐ (+20)
+                        +2 ⭐
                       </button>
                       <button
                         onClick={() => handleQuickAward(activeTrainee, 5, 'تفوق واختبار متميز 🌟')}
-                        className="px-2.5 py-1.5 bg-amber-100/90 hover:bg-amber-500 text-amber-900 hover:text-white dark:bg-amber-500/20 dark:hover:bg-amber-500 dark:text-amber-300 dark:hover:text-slate-950 rounded-xl text-xs font-bold border border-amber-400/50 dark:border-amber-500/40 transition-all shadow-2xs"
+                        className="px-2.5 py-1.5 bg-white hover:bg-amber-50 text-slate-800 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-amber-300 rounded-xl text-xs font-bold border border-slate-200 dark:border-slate-700 transition-all shadow-2xs cursor-pointer"
                         title="إضافة 5 نجوم (+50 نقطة)"
                       >
-                        +5 🌟 (+50)
+                        +5 🌟
                       </button>
                       <button
                         onClick={() => handleOpenStarModal(activeTrainee)}
-                        className="flex items-center gap-1 px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-xl text-xs font-bold shadow-md transition-all"
+                        className="flex items-center gap-1 px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-xl text-xs shadow-2xs transition-all cursor-pointer"
                       >
                         <Sparkles className="w-3.5 h-3.5" />
-                        <span>منح نجوم مخصصة...</span>
+                        <span>منح مخصص...</span>
                       </button>
                     </div>
                   </div>
                 );
               })()}
 
-              {/* Financial Balance Summary */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
-                  <span className="text-slate-600 dark:text-slate-400 text-xs font-bold block mb-1">رسوم الدورة</span>
-                  <span className="text-lg font-black font-mono text-slate-900 dark:text-slate-100">
-                    {activeTrainee.feeAmount && activeTrainee.feeAmount > 0 
-                      ? activeTrainee.feeAmount 
-                      : (courses.find(c => c.id === activeTrainee.courseId)?.feeAmount || 2500)} ج.م
-                  </span>
-                </div>
-                <div className="p-3 rounded-xl bg-amber-50/60 dark:bg-slate-800 border border-amber-200 dark:border-slate-700">
-                  <span className="text-amber-800 dark:text-slate-400 text-xs font-bold block mb-1">الخصم الممنوح</span>
-                  <span className="text-lg font-black font-mono text-amber-700 dark:text-amber-400">{activeTrainee.discountAmount || 0} ج.م</span>
-                </div>
-                <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800">
-                  <span className="text-emerald-700 dark:text-emerald-300 text-xs font-bold block mb-1">إجمالي المدفوع</span>
-                  <span className="text-lg font-black font-mono text-emerald-700 dark:text-emerald-400">{activeTrainee.paidAmount || 0} ج.م</span>
-                </div>
-                <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800">
-                  <span className="text-rose-700 dark:text-rose-300 text-xs font-bold block mb-1">المتبقي المطلوب</span>
-                  <span className="text-lg font-black font-mono text-rose-700 dark:text-rose-400">
-                    {Math.max(0, (activeTrainee.feeAmount && activeTrainee.feeAmount > 0 ? activeTrainee.feeAmount : (courses.find(c => c.id === activeTrainee.courseId)?.feeAmount || 2500)) - (activeTrainee.discountAmount || 0) - (activeTrainee.paidAmount || 0))} ج.م
-                  </span>
-                </div>
-              </div>
+              {/* Financial Balance Summary (4 Balanced Stat Cards) */}
+              {(() => {
+                const feeAmount = activeTrainee.feeAmount && activeTrainee.feeAmount > 0 
+                  ? activeTrainee.feeAmount 
+                  : (courses.find(c => c.id === activeTrainee.courseId)?.feeAmount || 2500);
+                const discountAmount = activeTrainee.discountAmount || 0;
+                const paidAmount = activeTrainee.paidAmount || 0;
+                const remainingDebt = Math.max(0, feeAmount - discountAmount - paidAmount);
 
-              {/* Payment Receipts History */}
-              <div className="bg-slate-50 dark:bg-slate-800/60 p-4 rounded-xl border border-slate-200 dark:border-slate-700/80">
-                <h4 className="font-bold text-slate-900 dark:text-slate-200 mb-3 flex items-center gap-2">
-                  <CreditCard className="w-4 h-4 text-emerald-500" />
-                  سجل سندات القبض والدفعات المسجلة ({traineeProfileData?.payments?.length || 0})
-                </h4>
-                {traineeProfileData?.payments?.length === 0 ? (
-                  <p className="text-slate-500 dark:text-slate-400">لا توجد سندات قبض مسجلة حتى الآن.</p>
-                ) : (
-                  <div className="space-y-2">
-                    {traineeProfileData?.payments?.map((p: any) => (
-                      <div key={p.id} className="p-2.5 rounded-lg bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700/60 flex items-center justify-between shadow-2xs">
-                        <div>
-                          <span className="font-mono font-bold text-amber-700 dark:text-amber-400">{p.receiptNumber}</span>
-                          <span className="text-slate-600 dark:text-slate-400 mr-3">تاريخ: {p.date}</span>
-                          <span className="text-slate-600 dark:text-slate-400 mr-3">طريقة: {p.paymentMethod}</span>
-                          {p.notes && <span className="text-slate-500 mr-3">({p.notes})</span>}
-                        </div>
-                        <div className="font-mono font-black text-emerald-700 dark:text-emerald-400 text-sm">
-                          {p.amount} ج.م
-                        </div>
-                      </div>
-                    ))}
+                return (
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-850 border border-slate-200/80 dark:border-slate-800">
+                      <span className="text-slate-500 dark:text-slate-400 text-xs font-medium block mb-1">رسوم الدورة المقررة</span>
+                      <span className="text-base sm:text-lg font-black font-mono text-slate-900 dark:text-white">
+                        {feeAmount} <span className="text-xs font-bold text-slate-500 dark:text-slate-400">ج.م</span>
+                      </span>
+                    </div>
+
+                    <div className="p-3.5 rounded-xl bg-amber-50/50 dark:bg-amber-950/20 border border-amber-200/70 dark:border-amber-800/40">
+                      <span className="text-amber-800 dark:text-amber-400 text-xs font-medium block mb-1">الخصم الممنوح</span>
+                      <span className="text-base sm:text-lg font-black font-mono text-amber-700 dark:text-amber-300">
+                        {discountAmount} <span className="text-xs font-bold text-amber-700/70 dark:text-amber-400/70">ج.م</span>
+                      </span>
+                    </div>
+
+                    <div className="p-3.5 rounded-xl bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-200/70 dark:border-emerald-800/40">
+                      <span className="text-emerald-800 dark:text-emerald-400 text-xs font-medium block mb-1">إجمالي المدفوع</span>
+                      <span className="text-base sm:text-lg font-black font-mono text-emerald-700 dark:text-emerald-300">
+                        {paidAmount} <span className="text-xs font-bold text-emerald-700/70 dark:text-emerald-400/70">ج.م</span>
+                      </span>
+                    </div>
+
+                    <div className={`p-3.5 rounded-xl border ${
+                      remainingDebt > 0
+                        ? 'bg-rose-50/60 dark:bg-rose-950/20 border-rose-200/70 dark:border-rose-800/40'
+                        : 'bg-slate-50 dark:bg-slate-850 border-slate-200/80 dark:border-slate-800'
+                    }`}>
+                      <span className={`text-xs font-medium block mb-1 ${remainingDebt > 0 ? 'text-rose-800 dark:text-rose-400' : 'text-slate-500 dark:text-slate-400'}`}>
+                        المتبقي المطلوب
+                      </span>
+                      <span className={`text-base sm:text-lg font-black font-mono ${remainingDebt > 0 ? 'text-rose-700 dark:text-rose-300' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                        {remainingDebt} <span className="text-xs font-bold opacity-75">ج.م</span>
+                      </span>
+                    </div>
                   </div>
-                )}
+                );
+              })()}
+
+              {/* Navigation Tabs for Sub-Records */}
+              <div className="border-b border-slate-200 dark:border-slate-800 flex items-center gap-1 overflow-x-auto custom-scrollbar pt-1">
+                <button
+                  type="button"
+                  onClick={() => setProfileTab('finance')}
+                  className={`px-3.5 py-2 font-bold text-xs rounded-t-xl transition-all flex items-center gap-1.5 shrink-0 border-b-2 cursor-pointer ${
+                    profileTab === 'finance'
+                      ? 'border-amber-500 text-amber-700 dark:text-amber-400 bg-amber-500/10'
+                      : 'border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'
+                  }`}
+                >
+                  <CreditCard className="w-3.5 h-3.5" />
+                  <span>سندات القبض ({traineeProfileData?.payments?.length || 0})</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setProfileTab('attendance')}
+                  className={`px-3.5 py-2 font-bold text-xs rounded-t-xl transition-all flex items-center gap-1.5 shrink-0 border-b-2 cursor-pointer ${
+                    profileTab === 'attendance'
+                      ? 'border-amber-500 text-amber-700 dark:text-amber-400 bg-amber-500/10'
+                      : 'border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'
+                  }`}
+                >
+                  <Clock className="w-3.5 h-3.5" />
+                  <span>الحضور والغياب ({traineeProfileData?.attendance?.length || 0})</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setProfileTab('points')}
+                  className={`px-3.5 py-2 font-bold text-xs rounded-t-xl transition-all flex items-center gap-1.5 shrink-0 border-b-2 cursor-pointer ${
+                    profileTab === 'points'
+                      ? 'border-amber-500 text-amber-700 dark:text-amber-400 bg-amber-500/10'
+                      : 'border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'
+                  }`}
+                >
+                  <Star className="w-3.5 h-3.5" />
+                  <span>سجل النقاط ({traineeProfileData?.points?.length || 0})</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setProfileTab('guidance')}
+                  className={`px-3.5 py-2 font-bold text-xs rounded-t-xl transition-all flex items-center gap-1.5 shrink-0 border-b-2 cursor-pointer ${
+                    profileTab === 'guidance'
+                      ? 'border-amber-500 text-amber-700 dark:text-amber-400 bg-amber-500/10'
+                      : 'border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'
+                  }`}
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>المرشد الطلابي الذكي</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setProfileTab('vault')}
+                  className={`px-3.5 py-2 font-bold text-xs rounded-t-xl transition-all flex items-center gap-1.5 shrink-0 border-b-2 cursor-pointer ${
+                    profileTab === 'vault'
+                      ? 'border-amber-500 text-amber-700 dark:text-amber-400 bg-amber-500/10'
+                      : 'border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'
+                  }`}
+                >
+                  <Shield className="w-3.5 h-3.5" />
+                  <span>الخزنة السرية 🔐</span>
+                </button>
               </div>
 
-              {/* Attendance & Points History */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="bg-slate-50 dark:bg-slate-800/60 p-4 rounded-xl border border-slate-200 dark:border-slate-700/80">
-                  <h4 className="font-bold text-slate-900 dark:text-slate-200 mb-3 flex items-center gap-2">
-                    <Clock className="w-4 h-4 text-purple-500" />
-                    سجل الحضور والغياب ({traineeProfileData?.attendance?.length || 0})
+              {/* Tab 1: Financial Receipts */}
+              {profileTab === 'finance' && (
+                <div className="bg-slate-50/60 dark:bg-slate-850/60 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h4 className="font-bold text-slate-900 dark:text-white flex items-center gap-2 text-xs">
+                      <CreditCard className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                      سجل سندات القبض والدفعات المسجلة
+                    </h4>
+                    <span className="text-slate-500 dark:text-slate-400 text-xs">
+                      الإجمالي: <strong className="font-mono text-emerald-700 dark:text-emerald-400 font-bold">{activeTrainee.paidAmount || 0} ج.م</strong>
+                    </span>
+                  </div>
+
+                  {traineeProfileData?.payments?.length === 0 ? (
+                    <div className="text-center py-8 bg-white dark:bg-slate-900/60 rounded-xl border border-dashed border-slate-200 dark:border-slate-800 text-slate-400 dark:text-slate-500">
+                      لا توجد سندات قبض مسجلة حتى الآن لهذا المتدرب.
+                    </div>
+                  ) : (
+                    <div className="space-y-2 max-h-56 overflow-y-auto custom-scrollbar">
+                      {traineeProfileData?.payments?.map((p: any) => (
+                        <div key={p.id} className="p-3 rounded-xl bg-white dark:bg-slate-900/70 border border-slate-200/80 dark:border-slate-750 flex items-center justify-between shadow-2xs">
+                          <div className="flex items-center gap-3">
+                            <span className="font-mono font-bold text-amber-700 dark:text-amber-400 bg-amber-500/10 px-2.5 py-0.5 rounded text-xs">
+                              {p.receiptNumber}
+                            </span>
+                            <span className="text-slate-600 dark:text-slate-400 text-xs">تاريخ: {p.date}</span>
+                            <span className="text-slate-500 dark:text-slate-400 text-xs">طريقة: {p.paymentMethod}</span>
+                            {p.notes && <span className="text-slate-400 dark:text-slate-500 text-xs italic">({p.notes})</span>}
+                          </div>
+                          <div className="font-mono font-black text-emerald-600 dark:text-emerald-400 text-sm">
+                            {p.amount} ج.م
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Tab 2: Attendance History */}
+              {profileTab === 'attendance' && (
+                <div className="bg-slate-50/60 dark:bg-slate-850/60 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 space-y-3">
+                  <h4 className="font-bold text-slate-900 dark:text-white flex items-center gap-2 text-xs">
+                    <Clock className="w-4 h-4 text-indigo-500" />
+                    سجل الحضور والغياب للمتدرب
                   </h4>
-                  <div className="max-h-40 overflow-y-auto space-y-1.5">
-                    {traineeProfileData?.attendance?.length === 0 ? (
-                      <p className="text-slate-500 dark:text-slate-400">لا توجد سجلات حضور بعد.</p>
-                    ) : (
-                      traineeProfileData?.attendance?.map((a: any) => (
-                        <div key={a.id} className="p-2 rounded-lg bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 flex justify-between text-slate-800 dark:text-slate-200">
-                          <span>{a.date}</span>
-                          <span className={a.status === 'present' ? 'text-emerald-600 dark:text-emerald-400 font-bold' : 'text-rose-600 dark:text-rose-400 font-bold'}>
+                  {traineeProfileData?.attendance?.length === 0 ? (
+                    <div className="text-center py-8 bg-white dark:bg-slate-900/60 rounded-xl border border-dashed border-slate-200 dark:border-slate-800 text-slate-400 dark:text-slate-500">
+                      لا توجد سجلات حضور مسجلة حتى الآن.
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-56 overflow-y-auto custom-scrollbar">
+                      {traineeProfileData?.attendance?.map((a: any) => (
+                        <div key={a.id} className="p-2.5 rounded-xl bg-white dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800 flex justify-between items-center text-xs">
+                          <span className="text-slate-700 dark:text-slate-300 font-medium">{a.date}</span>
+                          <span className={`font-bold px-2 py-0.5 rounded-md ${
+                            a.status === 'present'
+                              ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300'
+                              : 'bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300'
+                          }`}>
                             {a.status === 'present' ? 'حاضر ✓' : a.status === 'absent' ? 'غائب ✗' : a.status}
                           </span>
                         </div>
-                      ))
-                    )}
-                  </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
+              )}
 
-                <div className="bg-slate-50 dark:bg-slate-800/60 p-4 rounded-xl border border-slate-200 dark:border-slate-700/80">
-                  <div className="flex items-center justify-between mb-3">
-                    <h4 className="font-bold text-slate-900 dark:text-slate-200 flex items-center gap-2">
+              {/* Tab 3: Points & Star History */}
+              {profileTab === 'points' && (
+                <div className="bg-slate-50/60 dark:bg-slate-850/60 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h4 className="font-bold text-slate-900 dark:text-white flex items-center gap-2 text-xs">
                       <Star className="w-4 h-4 text-amber-500" />
-                      سجل النقاط والنجوم ({activeTrainee.totalPoints || activeTrainee.points || 0} نقطة)
+                      سجل نقاط التميز والتحفيز
                     </h4>
                     <button
                       onClick={() => handleOpenStarModal(activeTrainee)}
-                      className="text-[11px] px-2.5 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-800 dark:text-amber-300 rounded-lg border border-amber-500/40 font-bold"
+                      className="text-[11px] px-3 py-1 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-lg font-bold transition-all cursor-pointer"
                     >
-                      + منح نجوم
+                      + منح نجوم جديدة
                     </button>
                   </div>
-                  <div className="max-h-40 overflow-y-auto space-y-1.5">
-                    {traineeProfileData?.points?.length === 0 ? (
-                      <p className="text-slate-500 dark:text-slate-400">لا توجد نقاط مسجلة بعد.</p>
-                    ) : (
-                      traineeProfileData?.points?.map((pt: any) => (
-                        <div key={pt.id} className="p-2 rounded-lg bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 flex justify-between items-center text-slate-800 dark:text-slate-200">
+                  {traineeProfileData?.points?.length === 0 ? (
+                    <div className="text-center py-8 bg-white dark:bg-slate-900/60 rounded-xl border border-dashed border-slate-200 dark:border-slate-800 text-slate-400 dark:text-slate-500">
+                      لا توجد نقاط مسجلة بعد.
+                    </div>
+                  ) : (
+                    <div className="space-y-2 max-h-56 overflow-y-auto custom-scrollbar">
+                      {traineeProfileData?.points?.map((pt: any) => (
+                        <div key={pt.id} className="p-3 rounded-xl bg-white dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800 flex justify-between items-center text-xs">
                           <div>
                             <span className="text-slate-800 dark:text-slate-200 font-medium">{pt.reason}</span>
                             {pt.createdAt && (
-                              <span className="text-[10px] text-slate-500 mr-2">
+                              <span className="text-[10px] text-slate-400 dark:text-slate-500 mr-2">
                                 ({new Date(pt.createdAt).toLocaleDateString('ar-EG')})
                               </span>
                             )}
                           </div>
-                          <span className="font-mono font-bold text-amber-600 dark:text-amber-400">+{pt.points}</span>
+                          <span className="font-mono font-bold text-amber-600 dark:text-amber-400 text-sm">+{pt.points}</span>
                         </div>
-                      ))
-                    )}
-                  </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
-              </div>
+              )}
 
-              {/* 🚨 Student Early Warning & AI Development Plan (المرشد الطلابي والإنذار المبكر) */}
-              {(() => {
+              {/* Tab 4: Student Guidance & 360 Plan */}
+              {profileTab === 'guidance' && (() => {
                 const totalAttendance = traineeProfileData?.attendance?.length || 0;
                 const presentCount = traineeProfileData?.attendance?.filter((a: any) => a.status === 'present')?.length || 0;
                 const attendanceRate = totalAttendance > 0 ? Math.round((presentCount / totalAttendance) * 100) : 100;
                 const remainingDebt = activeTrainee.remainingAmount || 0;
 
                 let warningStatus: 'green' | 'yellow' | 'red' = 'green';
-                let warningLabel = 'وضع تعليمي متميز ومستقر 🟢';
+                let warningLabel = 'وضع تعليمي مستقر ومتميز 🟢';
                 let recommendation = 'الطالب يسير بخطى ثابته، نوصي باستمرار تكريمه ومنحه أوسمة تفوق لرفع التنافسية.';
 
                 if (attendanceRate < 60 || remainingDebt > 500) {
@@ -4032,29 +4183,30 @@ export const TraineesView: React.FC = () => {
                 }
 
                 return (
-                  <div className={`p-4 rounded-2xl border ${
-                    warningStatus === 'red' ? 'bg-rose-50/70 border-rose-200 dark:bg-rose-950/30 dark:border-rose-500/40' :
-                    warningStatus === 'yellow' ? 'bg-amber-50/70 border-amber-200 dark:bg-amber-950/30 dark:border-amber-500/40' :
-                    'bg-slate-50 border-slate-200 dark:bg-slate-800/80 dark:border-slate-700'
+                  <div className={`p-4 rounded-2xl border space-y-3 ${
+                    warningStatus === 'red' ? 'bg-rose-50/50 border-rose-200/80 dark:bg-rose-950/20 dark:border-rose-900/50' :
+                    warningStatus === 'yellow' ? 'bg-amber-50/50 border-amber-200/80 dark:bg-amber-950/20 dark:border-amber-900/50' :
+                    'bg-slate-50/60 border-slate-200/80 dark:bg-slate-850/60 dark:border-slate-800'
                   }`}>
-                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-2">
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                       <div className="flex items-center gap-2">
-                        <Sparkles className="w-5 h-5 text-amber-500" />
-                        <h4 className="font-bold text-sm text-slate-900 dark:text-slate-100">المرشد الطلابي الذكي ومؤشر الإنذار المبكر (Student 360 Plan)</h4>
+                        <Sparkles className="w-4 h-4 text-amber-500" />
+                        <h4 className="font-bold text-xs text-slate-900 dark:text-white">المرشد الطلابي الذكي ومؤشر الإنذار المبكر (Student 360)</h4>
                       </div>
-                      <span className={`px-2.5 py-1 rounded-xl font-bold text-xs ${
-                        warningStatus === 'red' ? 'bg-rose-500/20 text-rose-700 dark:text-rose-300 border border-rose-500/30' :
-                        warningStatus === 'yellow' ? 'bg-amber-500/20 text-amber-800 dark:text-amber-300 border border-amber-500/30' :
-                        'bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 border border-emerald-500/30'
+                      <span className={`px-2.5 py-1 rounded-xl font-bold text-[11px] ${
+                        warningStatus === 'red' ? 'bg-rose-500/15 text-rose-700 dark:text-rose-300 border border-rose-500/30' :
+                        warningStatus === 'yellow' ? 'bg-amber-500/15 text-amber-800 dark:text-amber-300 border border-amber-500/30' :
+                        'bg-emerald-500/15 text-emerald-800 dark:text-emerald-300 border border-emerald-500/30'
                       }`}>
                         {warningLabel}
                       </span>
                     </div>
-                    <div className="text-slate-700 dark:text-slate-300 text-xs leading-relaxed mt-2 bg-white dark:bg-slate-900/60 p-3 rounded-xl border border-slate-200 dark:border-slate-700/60 shadow-2xs">
-                      <span className="font-bold text-amber-800 dark:text-amber-300 block mb-1">💡 التوصيات والخطة العلاجية الموصى بها:</span>
+
+                    <div className="text-slate-700 dark:text-slate-300 text-xs leading-relaxed bg-white dark:bg-slate-900/60 p-3.5 rounded-xl border border-slate-200/70 dark:border-slate-800 shadow-2xs">
+                      <span className="font-bold text-slate-900 dark:text-white block mb-1">💡 التوصيات والخطة العلاجية المقترحة:</span>
                       <p>{recommendation}</p>
-                      <div className="mt-2 pt-2 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between text-[11px] text-slate-600 dark:text-slate-400">
-                        <span>نسبة الحضور الفعلية: <strong className="font-mono text-slate-900 dark:text-slate-200">{attendanceRate}%</strong></span>
+                      <div className="mt-3 pt-2.5 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400">
+                        <span>نسبة الحضور: <strong className="font-mono text-slate-800 dark:text-slate-200">{attendanceRate}%</strong></span>
                         <span>رصيد النقاط: <strong className="font-mono text-amber-700 dark:text-amber-400">{activeTrainee.totalPoints || 0} نقطة</strong></span>
                         <span>المتبقي المالي: <strong className="font-mono text-rose-700 dark:text-rose-400">{activeTrainee.remainingAmount || 0} ج.م</strong></span>
                       </div>
@@ -4063,128 +4215,129 @@ export const TraineesView: React.FC = () => {
                 );
               })()}
 
-              {/* 🔐 Confidential Student Care Vault (الخزنة السرية للرعاية والتقرير التربوي/النفسي) */}
-              <div className="bg-slate-50 dark:bg-slate-900 border border-amber-500/30 rounded-2xl p-4 space-y-3">
-                <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
-                  <div className="flex items-center gap-2">
-                    <Shield className="w-5 h-5 text-amber-500" />
-                    <div>
-                      <h4 className="font-bold text-xs text-amber-800 dark:text-amber-300">الخزنة السرية للرعاية والتوجيه (Student Care Vault 🔐)</h4>
-                      <p className="text-[10px] text-slate-500 dark:text-slate-400">ملاحظات نفسية، اجتماعية، تربوية وخطط دعم سرية خاصة بإدارة المركز والمرشد الطلابي</p>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setIsVaultUnlocked(!isVaultUnlocked)}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
-                      isVaultUnlocked
-                        ? 'bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 border border-emerald-500/40'
-                        : 'bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-md'
-                    }`}
-                  >
-                    {isVaultUnlocked ? '🔐 إغلاق الخزنة السرية' : '🔑 فتح الخزنة السرية (PIN: 1234)'}
-                  </button>
-                </div>
-
-                {!isVaultUnlocked ? (
-                  <div className="py-6 text-center text-slate-500 dark:text-slate-400 text-xs space-y-2">
-                    <p className="font-bold text-slate-700 dark:text-slate-300">هذه المنطقة مشفرة وم محمية بكلمة مرور الخزنة السرية.</p>
-                    <div className="flex items-center justify-center gap-2 max-w-xs mx-auto">
-                      <input
-                        type="password"
-                        placeholder="أدخل رمز الخزنة (1234)"
-                        value={vaultPinInput}
-                        onChange={(e) => setVaultPinInput(e.target.value)}
-                        className="bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 px-3 py-1.5 rounded-xl text-center text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:border-amber-400"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (vaultPinInput === '1234' || vaultPinInput.trim() === '') {
-                            setIsVaultUnlocked(true);
-                            showToast('تم فتح الخزنة السرية بنجاح 🔑', 'success');
-                          } else {
-                            showToast('رمز الخزنة غير صحيح!', 'error');
-                          }
-                        }}
-                        className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-xl"
-                      >
-                        فتح
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="space-y-3 text-xs animate-in fade-in">
-                    {/* Add new care note */}
-                    <div className="bg-white dark:bg-slate-850 p-3 rounded-xl border border-slate-200 dark:border-slate-750 space-y-2 shadow-2xs">
-                      <div className="flex items-center justify-between">
-                        <label className="font-bold text-slate-800 dark:text-slate-200">إضافة تقرير رعاية/ملاحظة سرية جديدة:</label>
-                        <select
-                          value={careCategory}
-                          onChange={(e: any) => setCareCategory(e.target.value)}
-                          className="bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 px-2 py-1 rounded-lg text-slate-800 dark:text-slate-200 font-bold"
-                        >
-                          <option value="psychological">🧠 تقرير نفسي وسلوكي</option>
-                          <option value="social">👨‍👩‍👧‍👦 حالة اجتماعية/ولي الأمر</option>
-                          <option value="academic_support">📚 خطة دعم تعليمية خاصة</option>
-                          <option value="counselor_plan">📝 توجيهات المرشد الطلابي</option>
-                        </select>
+              {/* Tab 5: Confidential Care Vault */}
+              {profileTab === 'vault' && (
+                <div className="bg-slate-50/60 dark:bg-slate-850/60 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-4 space-y-3">
+                  <div className="flex items-center justify-between border-b border-slate-200/60 dark:border-slate-800 pb-3">
+                    <div className="flex items-center gap-2">
+                      <Shield className="w-5 h-5 text-amber-500" />
+                      <div>
+                        <h4 className="font-bold text-xs text-slate-900 dark:text-white">الخزنة السرية للرعاية والتوجيه (Student Care Vault 🔐)</h4>
+                        <p className="text-[10px] text-slate-500 dark:text-slate-400">تقارير نفسية واجتماعية وتربوية سرية خاصة بالإدارة والمرشد</p>
                       </div>
-                      <textarea
-                        rows={2}
-                        placeholder="اكتب تفاصيل التقرير السري، الاستجابة السلوكية، أو ملاحظات المرشد النفسي والاجتماعي..."
-                        value={newCareNote}
-                        onChange={(e) => setNewCareNote(e.target.value)}
-                        className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 p-2.5 rounded-xl text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:border-amber-400"
-                      />
-                      <div className="flex justify-end">
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setIsVaultUnlocked(!isVaultUnlocked)}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                        isVaultUnlocked
+                          ? 'bg-emerald-500/15 text-emerald-800 dark:text-emerald-300 border border-emerald-500/40'
+                          : 'bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-2xs'
+                      }`}
+                    >
+                      {isVaultUnlocked ? '🔐 إغلاق الخزنة' : '🔑 فتح الخزنة (PIN: 1234)'}
+                    </button>
+                  </div>
+
+                  {!isVaultUnlocked ? (
+                    <div className="py-8 text-center text-slate-500 dark:text-slate-400 text-xs space-y-3">
+                      <p className="font-bold text-slate-700 dark:text-slate-300">هذه المنطقة محمية برمز الأمان الخاص بالخزنة السرية.</p>
+                      <div className="flex items-center justify-center gap-2 max-w-xs mx-auto">
+                        <input
+                          type="password"
+                          placeholder="أدخل رمز الخزنة (1234)"
+                          value={vaultPinInput}
+                          onChange={(e) => setVaultPinInput(e.target.value)}
+                          className="bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 px-3 py-1.5 rounded-xl text-center text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:border-amber-400"
+                        />
                         <button
                           type="button"
                           onClick={() => {
-                            if (!newCareNote.trim()) return;
-                            const noteObj = {
-                              id: 'care-' + Date.now(),
-                              category: careCategory,
-                              text: newCareNote,
-                              createdAt: new Date().toISOString(),
-                              author: 'إدارة المركز / المرشد'
-                            };
-                            setCareNotes([noteObj, ...careNotes]);
-                            setNewCareNote('');
-                            showToast('تم حفظ التقرير السري بالخزنة بنجاح 🔒', 'success');
+                            if (vaultPinInput === '1234' || vaultPinInput.trim() === '') {
+                              setIsVaultUnlocked(true);
+                              showToast('تم فتح الخزنة السرية بنجاح 🔑', 'success');
+                            } else {
+                              showToast('رمز الخزنة غير صحيح!', 'error');
+                            }
                           }}
-                          className="px-4 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-xl shadow-xs"
+                          className="px-3.5 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-xl cursor-pointer"
                         >
-                          + حفظ التقرير بالخزنة
+                          فتح
                         </button>
                       </div>
                     </div>
+                  ) : (
+                    <div className="space-y-3 text-xs animate-in fade-in">
+                      <div className="bg-white dark:bg-slate-900/70 p-3.5 rounded-xl border border-slate-200/80 dark:border-slate-750 space-y-2.5 shadow-2xs">
+                        <div className="flex items-center justify-between flex-wrap gap-2">
+                          <label className="font-bold text-slate-800 dark:text-slate-200">إضافة تقرير رعاية جديد:</label>
+                          <select
+                            value={careCategory}
+                            onChange={(e: any) => setCareCategory(e.target.value)}
+                            className="bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 px-2.5 py-1 rounded-lg text-slate-800 dark:text-slate-200 font-bold text-xs"
+                          >
+                            <option value="psychological">🧠 تقرير نفسي وسلوكي</option>
+                            <option value="social">👨‍👩‍👧‍👦 حالة اجتماعية/ولي الأمر</option>
+                            <option value="academic_support">📚 خطة دعم تعليمية خاصة</option>
+                            <option value="counselor_plan">📝 توجيهات المرشد الطلابي</option>
+                          </select>
+                        </div>
+                        <textarea
+                          rows={2}
+                          placeholder="اكتب تفاصيل التقرير السري أو ملاحظات المرشد النفسي والتربوي..."
+                          value={newCareNote}
+                          onChange={(e) => setNewCareNote(e.target.value)}
+                          className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 p-2.5 rounded-xl text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:border-amber-400 text-xs"
+                        />
+                        <div className="flex justify-end">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (!newCareNote.trim()) return;
+                              const noteObj = {
+                                id: 'care-' + Date.now(),
+                                category: careCategory,
+                                text: newCareNote,
+                                createdAt: new Date().toISOString(),
+                                author: 'إدارة المركز / المرشد'
+                              };
+                              setCareNotes([noteObj, ...careNotes]);
+                              setNewCareNote('');
+                              showToast('تم حفظ التقرير السري بالخزنة بنجاح 🔒', 'success');
+                            }}
+                            className="px-4 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-xl shadow-2xs cursor-pointer"
+                          >
+                            + حفظ التقرير بالخزنة
+                          </button>
+                        </div>
+                      </div>
 
-                    {/* Care notes list */}
-                    <div className="space-y-2 max-h-48 overflow-y-auto">
-                      {careNotes.length === 0 ? (
-                        <p className="text-slate-500 text-center py-3">لا توجد تقارير سرية مسجلة سابقاً لهذا الطالب.</p>
-                      ) : (
-                        careNotes.map((cn) => (
-                          <div key={cn.id} className="p-3 bg-white dark:bg-slate-800/80 rounded-xl border border-slate-200 dark:border-slate-700/80 flex items-start justify-between shadow-2xs">
-                            <div>
-                              <div className="flex items-center gap-2 mb-1">
-                                <span className="text-[10px] bg-amber-500/20 text-amber-800 dark:text-amber-300 px-2 py-0.5 rounded font-bold">
-                                  {cn.category === 'psychological' ? '🧠 نفسي وسلوكي' :
-                                   cn.category === 'social' ? '👨‍👩‍👧‍👦 اجتماعي' :
-                                   cn.category === 'academic_support' ? '📚 دعم تعليمي' : '📝 مرشد طلابي'}
-                                </span>
-                                <span className="text-[10px] text-slate-500 dark:text-slate-400">({new Date(cn.createdAt).toLocaleDateString('ar-EG')})</span>
+                      {/* Care notes list */}
+                      <div className="space-y-2 max-h-48 overflow-y-auto custom-scrollbar">
+                        {careNotes.length === 0 ? (
+                          <p className="text-slate-400 dark:text-slate-500 text-center py-4">لا توجد تقارير سرية مسجلة سابقاً لهذا الطالب.</p>
+                        ) : (
+                          careNotes.map((cn) => (
+                            <div key={cn.id} className="p-3 bg-white dark:bg-slate-900/70 rounded-xl border border-slate-200/80 dark:border-slate-750 flex items-start justify-between shadow-2xs">
+                              <div>
+                                <div className="flex items-center gap-2 mb-1">
+                                  <span className="text-[10px] bg-amber-500/15 text-amber-800 dark:text-amber-300 px-2 py-0.5 rounded font-bold">
+                                    {cn.category === 'psychological' ? '🧠 نفسي وسلوكي' :
+                                     cn.category === 'social' ? '👨‍👩‍👧‍👦 اجتماعي' :
+                                     cn.category === 'academic_support' ? '📚 دعم تعليمي' : '📝 مرشد طلابي'}
+                                  </span>
+                                  <span className="text-[10px] text-slate-400 dark:text-slate-500">({new Date(cn.createdAt).toLocaleDateString('ar-EG')})</span>
+                                </div>
+                                <p className="text-slate-800 dark:text-slate-200 text-xs">{cn.text}</p>
                               </div>
-                              <p className="text-slate-800 dark:text-slate-200">{cn.text}</p>
                             </div>
-                          </div>
-                        ))
-                      )}
+                          ))
+                        )}
+                      </div>
                     </div>
-                  </div>
-                )}
-              </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </div>,

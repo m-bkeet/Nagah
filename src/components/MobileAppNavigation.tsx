@@ -88,7 +88,7 @@ export const MobileAppNavigation: React.FC<MobileAppNavigationProps> = ({
   return (
     <>
       {/* 1. Mobile Clean Icon Top Tab Bar (Facebook App Style) */}
-      <div className="md:hidden bg-slate-900/95 border-b border-slate-800/90 sticky top-14 z-30 backdrop-blur-md px-1 select-none">
+      <div className="md:hidden bg-white/95 dark:bg-slate-900/95 border-b border-slate-200/90 dark:border-slate-800/90 sticky top-14 z-30 backdrop-blur-md px-1 select-none shadow-xs">
         <div className="flex items-center justify-between overflow-x-auto no-scrollbar py-1">
           {topIconTabs.map(tab => {
             const Icon = tab.icon;
@@ -99,7 +99,7 @@ export const MobileAppNavigation: React.FC<MobileAppNavigationProps> = ({
                 onClick={() => handleTabClick(tab.id)}
                 className={`relative flex items-center justify-center p-2.5 min-w-[48px] rounded-xl transition-all duration-150 active:scale-90 ${
                   isActive
-                    ? 'text-purple-600 dark:text-purple-300 bg-purple-600/15 dark:bg-purple-500/20 font-bold shadow-sm'
+                    ? 'text-purple-600 dark:text-purple-300 bg-purple-600/15 dark:bg-purple-500/20 font-bold shadow-xs'
                     : 'text-slate-600 dark:text-slate-400 hover:text-purple-600 dark:hover:text-slate-200 hover:bg-purple-50 dark:hover:bg-slate-800/50'
                 }`}
                 title={tab.label}
@@ -113,10 +113,10 @@ export const MobileAppNavigation: React.FC<MobileAppNavigationProps> = ({
 
                 {/* Optional notification badge / dot */}
                 {tab.hasDot && (
-                  <span className="absolute top-1.5 right-2 w-2 h-2 bg-red-500 rounded-full ring-2 ring-slate-900" />
+                  <span className="absolute top-1.5 right-2 w-2 h-2 bg-red-500 rounded-full ring-2 ring-white dark:ring-slate-900" />
                 )}
                 {tab.badge && (
-                  <span className="absolute -top-1 -right-1 bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 text-[9px] font-black px-1.5 py-0.2 rounded-full shadow-sm">
+                  <span className="absolute -top-1 -right-1 bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 text-[9px] font-black px-1.5 py-0.2 rounded-full shadow-xs">
                     {tab.badge}
                   </span>
                 )}
@@ -127,7 +127,7 @@ export const MobileAppNavigation: React.FC<MobileAppNavigationProps> = ({
       </div>
 
       {/* 2. Mobile Clean Bottom Navigation Bar (WhatsApp / Facebook Mobile Style) */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-slate-950/95 border-t border-slate-800/90 backdrop-blur-xl px-2 py-1 shadow-2xl flex items-center justify-around h-16 safe-bottom">
+      <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-slate-950/95 border-t border-slate-200/90 dark:border-slate-800/90 backdrop-blur-xl px-2 py-1 shadow-[0_-4px_25px_rgba(0,0,0,0.08)] dark:shadow-2xl flex items-center justify-around h-16 safe-bottom">
         {bottomTabs.map(tab => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id || (tab.id === 'more_menu' && isMenuOpen);
@@ -136,19 +136,21 @@ export const MobileAppNavigation: React.FC<MobileAppNavigationProps> = ({
               key={tab.id}
               onClick={() => handleTabClick(tab.id)}
               className={`flex flex-col items-center justify-center flex-1 h-full py-1 transition-all active:scale-95 ${
-                isActive ? 'text-amber-400 font-bold' : 'text-slate-400 hover:text-slate-200'
+                isActive ? 'text-amber-600 dark:text-amber-400 font-bold' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
               }`}
             >
-              <div className={`relative p-1.5 rounded-2xl transition-all ${isActive ? 'bg-amber-500/15 text-amber-400' : ''}`}>
+              <div className={`relative p-1.5 rounded-2xl transition-all ${
+                isActive ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400' : 'hover:bg-slate-100 dark:hover:bg-slate-900/60'
+              }`}>
                 <Icon className={`w-5 h-5 ${isActive ? 'stroke-[2.5]' : 'stroke-2'}`} />
                 
                 {tab.badge && (
-                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center ring-2 ring-slate-950">
+                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center ring-2 ring-white dark:ring-slate-950">
                     {tab.badge}
                   </span>
                 )}
               </div>
-              <span className="text-[10px] mt-0.5 tracking-tight font-sans">
+              <span className={`text-[10px] mt-0.5 tracking-tight font-sans ${isActive ? 'font-black text-amber-600 dark:text-amber-400' : 'text-slate-600 dark:text-slate-400'}`}>
                 {tab.label}
               </span>
             </button>
@@ -158,36 +160,36 @@ export const MobileAppNavigation: React.FC<MobileAppNavigationProps> = ({
 
       {/* 3. Facebook-Style "Menu / القائمة" Sheet */}
       {isMenuOpen && (
-        <div className="md:hidden fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex flex-col justify-end animate-in fade-in duration-200">
-          <div className="bg-slate-900 border-t border-slate-800 rounded-t-3xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+        <div className="md:hidden fixed inset-0 z-50 bg-slate-950/60 dark:bg-slate-950/85 backdrop-blur-md flex flex-col justify-end animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 rounded-t-3xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
             
             {/* Sheet Header: User Profile Card */}
-            <div className="p-4 border-b border-slate-800 bg-slate-950/70 flex items-center justify-between">
+            <div className="p-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50/90 dark:bg-slate-950/70 flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-amber-500 to-amber-300 text-slate-950 font-black text-base flex items-center justify-center shadow-md">
                   {user?.fullName?.slice(0, 2) || 'نجاح'}
                 </div>
                 <div>
-                  <h3 className="font-extrabold text-slate-100 text-sm">{user?.fullName || 'مستخدم المنظومة'}</h3>
+                  <h3 className="font-extrabold text-slate-900 dark:text-slate-100 text-sm">{user?.fullName || 'مستخدم المنظومة'}</h3>
                   <div className="flex items-center gap-2 mt-0.5">
-                    <span className="text-[11px] text-amber-400 font-bold bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20">
+                    <span className="text-[11px] text-amber-700 dark:text-amber-400 font-bold bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20">
                       {user?.role === 'admin' || user?.role === 'super_admin' ? 'مدير المنظومة' : 'مدرب معتمد'}
                     </span>
-                    <span className="text-[11px] text-slate-400">مركز النجاح</span>
+                    <span className="text-[11px] text-slate-500 dark:text-slate-400">مركز النجاح</span>
                   </div>
                 </div>
               </div>
 
               <button
                 onClick={() => setIsMenuOpen(false)}
-                className="w-9 h-9 rounded-full bg-slate-800 text-slate-300 hover:text-white flex items-center justify-center transition-colors active:scale-95"
+                className="w-9 h-9 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white flex items-center justify-center transition-colors active:scale-95"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             {/* Search within Menu (Facebook style search bar) */}
-            <div className="p-3 bg-slate-950/40 border-b border-slate-800/80">
+            <div className="p-3 bg-slate-50/60 dark:bg-slate-950/40 border-b border-slate-200 dark:border-slate-800/80">
               <div className="relative">
                 <Search className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2" />
                 <input
@@ -195,12 +197,12 @@ export const MobileAppNavigation: React.FC<MobileAppNavigationProps> = ({
                   placeholder="بحث في القوائم والأدوات..."
                   value={menuSearch}
                   onChange={(e) => setMenuSearch(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl pr-9 pl-4 py-2 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-amber-500/50"
+                  className="w-full bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl pr-9 pl-4 py-2 text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-amber-500/50 shadow-xs"
                 />
                 {menuSearch && (
                   <button 
                     onClick={() => setMenuSearch('')} 
-                    className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
+                    className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-white"
                   >
                     <X className="w-3.5 h-3.5" />
                   </button>
@@ -211,7 +213,7 @@ export const MobileAppNavigation: React.FC<MobileAppNavigationProps> = ({
             {/* Shortcuts Grid: Clean rounded square cards like Facebook Menu */}
             <div className="p-4 overflow-y-auto custom-scrollbar flex-1 space-y-4">
               <div>
-                <h4 className="text-xs font-bold text-slate-400 mb-2.5 px-1">الاختصارات السريعة</h4>
+                <h4 className="text-xs font-bold text-slate-500 dark:text-slate-400 mb-2.5 px-1">الاختصارات السريعة</h4>
                 <div className="grid grid-cols-3 gap-2.5">
                   {filteredSections.map(sec => {
                     const Icon = sec.icon;
@@ -225,8 +227,8 @@ export const MobileAppNavigation: React.FC<MobileAppNavigationProps> = ({
                         }}
                         className={`p-3 rounded-2xl border flex flex-col items-center justify-center text-center transition-all duration-150 active:scale-95 ${
                           isSecActive
-                            ? 'bg-amber-500/15 border-amber-500 text-amber-300 shadow-md'
-                            : 'bg-slate-950/80 border-slate-800 text-slate-200 hover:border-slate-700 hover:bg-slate-950'
+                            ? 'bg-amber-50 dark:bg-amber-500/15 border-amber-500 text-amber-700 dark:text-amber-300 shadow-sm'
+                            : 'bg-slate-50/80 dark:bg-slate-950/80 border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-200 hover:border-amber-300 dark:hover:border-slate-700 hover:bg-white dark:hover:bg-slate-950'
                         }`}
                       >
                         <div className={`w-10 h-10 rounded-xl flex items-center justify-center mb-1.5 border ${sec.color}`}>
@@ -242,16 +244,16 @@ export const MobileAppNavigation: React.FC<MobileAppNavigationProps> = ({
               </div>
 
               {/* Quick AI & Support Actions */}
-              <div className="pt-2 border-t border-slate-800/80">
+              <div className="pt-2 border-t border-slate-200 dark:border-slate-800/80">
                 <div className="grid grid-cols-2 gap-2">
                   <button
                     onClick={() => {
                       setIsMenuOpen(false);
                       openAiModal('manager');
                     }}
-                    className="p-2.5 rounded-xl bg-purple-950/40 border border-purple-500/30 text-purple-300 flex items-center gap-2 text-xs font-bold active:scale-95"
+                    className="p-2.5 rounded-xl bg-purple-50 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-500/30 text-purple-700 dark:text-purple-300 flex items-center gap-2 text-xs font-bold active:scale-95"
                   >
-                    <Bot className="w-4 h-4 text-purple-400" />
+                    <Bot className="w-4 h-4 text-purple-600 dark:text-purple-400" />
                     <span>المساعد الذكي AI</span>
                   </button>
 
@@ -260,9 +262,9 @@ export const MobileAppNavigation: React.FC<MobileAppNavigationProps> = ({
                       setIsMenuOpen(false);
                       setIsSearchOpen(true);
                     }}
-                    className="p-2.5 rounded-xl bg-slate-950 border border-slate-800 text-slate-300 flex items-center gap-2 text-xs font-bold active:scale-95"
+                    className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 flex items-center gap-2 text-xs font-bold active:scale-95"
                   >
-                    <Search className="w-4 h-4 text-amber-400" />
+                    <Search className="w-4 h-4 text-amber-600 dark:text-amber-400" />
                     <span>البحث الشامل</span>
                   </button>
                 </div>
@@ -270,13 +272,13 @@ export const MobileAppNavigation: React.FC<MobileAppNavigationProps> = ({
             </div>
 
             {/* Menu Footer */}
-            <div className="p-3 border-t border-slate-800 bg-slate-950 flex items-center justify-between text-xs text-slate-400">
-              <span className="font-mono text-[11px] text-slate-500">Nagah Mobile App</span>
+            <div className="p-3 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
+              <span className="font-mono text-[11px] text-slate-400">Nagah Mobile App</span>
               <button
                 onClick={() => {
                   showToast('تم نسخ رابط المنظومة بنجاح 📲', 'success');
                 }}
-                className="flex items-center gap-1.5 text-amber-400 font-bold active:scale-95"
+                className="flex items-center gap-1.5 text-amber-600 dark:text-amber-400 font-bold active:scale-95"
               >
                 <Share2 className="w-3.5 h-3.5" />
                 <span>مشاركة الرابط</span>

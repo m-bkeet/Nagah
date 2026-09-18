@@ -795,6 +795,16 @@ export const api = {
     request<{ success: boolean }>(`/assignments/${id}`, {
       method: 'DELETE'
     }),
+  generateKahootQuiz: (data: { topic?: string; grade?: string; subject?: string; questionCount?: number; difficulty?: string; image?: string }) =>
+    request<{ success: boolean; kahootGame: any }>('/trainer/generate-kahoot', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    }),
+  submitQuizResult: (data: any) =>
+    request<{ success: boolean; submission: any; message: string }>('/homeworks/submit-quiz', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    }),
   generateTestCases: (data: { title: string; description: string; programmingLanguage?: string; courseName?: string }) =>
     request<{ success: boolean; testCases: any[] }>('/assignments/generate-testcases', {
       method: 'POST',

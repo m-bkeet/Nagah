@@ -47,6 +47,7 @@ import { KahootStudio } from '../components/kahoot/KahootStudio';
 import { SessionCeremonyModal } from '../components/SessionCeremonyModal';
 import { SmartWhiteboardModal } from '../components/SmartWhiteboardModal';
 import { CelebrationBalloonsOverlay } from '../components/CelebrationBalloonsOverlay';
+import { AllInOneLessonPlanModal } from '../components/trainer/AllInOneLessonPlanModal';
 import { audioService } from '../services/audioService';
 import {
   Presentation,
@@ -128,6 +129,7 @@ console.log("نتيجة الطالب:", calculateGrade(48, 50));`);
   const [quizMode, setQuizMode] = useState<'individual' | 'team_vs_team' | 'class_vs_class'>('individual');
 
   // External Platform State (Kahoot, Quizizz, Forms)
+  const [isAllInOneModalOpen, setIsAllInOneModalOpen] = useState(false);
   const [externalPlatform, setExternalPlatform] = useState<'Kahoot' | 'Quizizz' | 'Google Forms' | 'Microsoft Forms' | 'Other'>('Kahoot');
   const [externalTitle, setExternalTitle] = useState('مسابقة تحدي المعمل الحية - كاهوت (Kahoot Live)');
   const [externalUrl, setExternalUrl] = useState('https://kahoot.it');
@@ -374,33 +376,16 @@ console.log("نتيجة الطالب:", calculateGrade(48, 50));`);
     }
   };
 
-  // Event-driven & focus-based load for responses & devices
+  // Event-driven & focus-based load for active sessions (without device polling)
   useEffect(() => {
     const handleFocus = () => {
       loadSessions(false);
-      loadDevices();
     };
     window.addEventListener('focus', handleFocus);
-    // Relaxed periodic check (30s) only if active session exists
-    const interval = setInterval(() => {
-      if (typeof document !== 'undefined' && !document.hidden && activeSession?.id) {
-        loadSessions(false);
-      }
-    }, 30000);
     return () => {
       window.removeEventListener('focus', handleFocus);
-      clearInterval(interval);
     };
   }, [activeSession?.id]);
-
-  const loadDevices = async () => {
-    try {
-      const devs = await api.getDevices();
-      setOnlineDevicesCount(devs.filter(d => d.isOnline || d.status === 'active').length || 12);
-    } catch (e) {
-      // fallback
-    }
-  };
 
   const loadSessions = async (showLoading = true) => {
     if (showLoading) setIsLoading(true);
@@ -649,17 +634,16 @@ console.log("نتيجة الطالب:", calculateGrade(48, 50));`);
           </div>
         </div>
 
-        {/* Live System Status Indicator */}
+        {/* Live System Status Actions */}
         <div className="flex items-center gap-3 relative z-10 flex-wrap">
-          <div className="flex items-center gap-2 bg-slate-950 border border-slate-800 px-4 py-2 rounded-2xl">
-            <span className="w-3 h-3 rounded-full bg-emerald-400 animate-ping" />
-            <div className="text-right">
-              <span className="text-[10px] text-slate-400 block">الأجهزة النشطة بالمعمل</span>
-              <span className="text-xs font-black text-emerald-400 font-mono">
-                {onlineDevicesCount} جهاز متصل جاهز للبث
-              </span>
-            </div>
-          </div>
+          <button
+            onClick={() => setIsAllInOneModalOpen(true)}
+            className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-2xl bg-gradient-to-r from-purple-600 via-indigo-600 to-purple-700 hover:from-purple-500 hover:to-indigo-600 text-white transition-all text-xs font-black shadow-lg shadow-purple-600/30 border border-purple-400/40"
+            title="توليد خطة الدرس والعرض التقديمي ومسابقة الكاهوت والواجب الصوتي بنقرة واحدة"
+          >
+            <Sparkles className="w-4 h-4 text-amber-300" />
+            <span>حزمة الدرس بنقرة واحدة (AI) 🪄</span>
+          </button>
 
           <button
             onClick={handleClearQuestionBroadcast}
@@ -2771,6 +2755,21 @@ console.log("نتيجة الطالب:", calculateGrade(48, 50));`);
         subtitle={celebrationOverlay.subtitle}
         onComplete={() => setCelebrationOverlay(prev => ({ ...prev, active: false }))}
       />
+
+      {/* All In One Master Lesson Plan Modal */}
+      {isAllInOneModalOpen && (
+        <AllInOneLessonPlanModal
+          isOpen={isAllInOneModalOpen}
+          onClose={() => setIsAllInOneModalOpen(false)}
+          onLaunchKahoot={(quiz) => {
+            setIsAllInOneModalOpen(false);
+            if (quiz) {
+              setQuizzes(prev => [quiz, ...prev]);
+              handleStartNagahQuiz(quiz);
+            }
+          }}
+        />
+      )}
     </div>
   );
 };

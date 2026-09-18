@@ -7,7 +7,7 @@ import {
   CertificateRepo, CertificateTemplateRepo, UserRepo, AuditLogRepo,
   HomeworkSubmissionRepo, BadgeRepo, AssignmentRepo, PortalMessageRepo
 } from './data/index.ts';
-import { saveCollectionToFirestore, allocateNextTraineeCode, loadCollectionFromFirestore } from './firestoreStorage.js';
+import { allocateNextTraineeCode, loadCollectionFromFirestore } from './firestoreStorage.js';
 import { exportAllFirestoreData, previewDatabaseImport, executeDatabaseImport } from './data/phase2b.ts';
 import { handlePublicRegister, handlePublicTrainerRegister, matchCourseForRegistration, resolveGradePrefix } from './registerLogic';
 import express, { Request, Response } from 'express';
@@ -17,7 +17,7 @@ import path from 'path';
 import crypto from 'crypto';
 import { migrationRouter } from './migrationRoutes';
 import { db, hashPassword } from './db';
-import { extractExamFromMediaOrText, gradeHomeworkOrExamFromImage, generateWithModelCascade, designCertificateWithAI, generateTestCasesWithAI, autoGradeCodeWithAI, AIGradeScanResult, generateTrainerPresentation, generateTrainerAdvancedExam, generateKahootQuiz } from './gemini';
+import { extractExamFromMediaOrText, gradeHomeworkOrExamFromImage, generateWithModelCascade, designCertificateWithAI, generateTestCasesWithAI, autoGradeCodeWithAI, AIGradeScanResult, generateTrainerPresentation, generateTrainerAdvancedExam, generateKahootQuiz, evaluateAudioOrVoiceSummaryWithAI, AIVoiceEvaluationResult, generateAllInOneLessonPlan } from './gemini';
 import { languageLabRouter } from './languageLabRoutes';
 import {
   Trainee,
@@ -5243,16 +5243,6 @@ apiRouter.post('/points/add', async (req: Request, res: Response) => {
       dbData.trainees = db.deduplicateTrainees(dbData.trainees);
     }
 
-    // Fast targeted cloud save (only changed collections: trainees & pointTransactions)
-    try {
-      await Promise.all([
-        saveCollectionToFirestore('trainees', dbData.trainees),
-        saveCollectionToFirestore('pointTransactions', dbData.pointTransactions)
-      ]);
-    } catch (e) {
-      console.warn('[Points] Targeted Firestore sync notice:', e);
-    }
-
     // Update master broadcast state for instant sync
     masterBroadcast.lastPointsAwarded = {
       traineeIds,
@@ -5678,11 +5668,17 @@ apiRouter.get('/assignments', (req: Request, res: Response) => {
 });
 
 apiRouter.post('/assignments', (req: Request, res: Response) => {
-  const { title, description, courseId, courseName, groupId, groupName, branchId, totalMarks, dueDate, preventLateSubmission, attachments, codeTemplate, programmingLanguage, testCases } = req.body;
+  const { 
+    title, description, courseId, courseName, groupId, groupName, branchId, 
+    totalMarks, dueDate, preventLateSubmission, attachments, codeTemplate, 
+    programmingLanguage, testCases, quizGame, assignmentType, evaluationSource,
+    shareableCode, aiGenerated 
+  } = req.body;
   if (!title || !courseId) {
     return res.status(400).json({ error: 'العنوان والدورة حقول مطلوبة' });
   }
 
+  const generatedCode = shareableCode || ('KHT-' + Math.floor(1000 + Math.random() * 9000));
   const newAssignment = {
     id: 'assign-' + Date.now(),
     title: title.trim(),
@@ -5699,6 +5695,11 @@ apiRouter.post('/assignments', (req: Request, res: Response) => {
     codeTemplate: codeTemplate || '',
     programmingLanguage: programmingLanguage || 'python',
     testCases: Array.isArray(testCases) ? testCases : [],
+    quizGame: quizGame || null,
+    assignmentType: assignmentType || (quizGame ? 'interactive_quiz' : 'standard'),
+    evaluationSource: evaluationSource || '',
+    shareableCode: generatedCode,
+    aiGenerated: !!aiGenerated,
     createdAt: new Date().toISOString(),
     submissionsCount: 0,
     gradedCount: 0
@@ -5730,6 +5731,88 @@ apiRouter.post('/assignments', (req: Request, res: Response) => {
   });
 
   res.json({ success: true, assignment: newAssignment });
+});
+
+// Submit Interactive Kahoot Quiz Result
+apiRouter.post('/homeworks/submit-quiz', async (req: Request, res: Response) => {
+  try {
+    const { 
+      assignmentId, 
+      traineeId, 
+      traineeCode, 
+      traineeName, 
+      score, 
+      maxScore, 
+      percentage, 
+      starsEarned, 
+      totalTimeSpent 
+    } = req.body;
+
+    const data = db.getData();
+    if (!Array.isArray(data.homeworkSubmissions)) data.homeworkSubmissions = [];
+
+    const assignment = (data.assignments || []).find((a: any) => a.id === assignmentId);
+    const taskTitle = assignment?.title || req.body.taskTitle || 'تحدي كاهوت التفاعلي';
+
+    const grade = Math.round(Number(score) || 0);
+    const totalMax = Math.round(Number(maxScore) || 100);
+    const pct = Math.round(Number(percentage) || Math.round((grade / totalMax) * 100));
+
+    let rating = 'ممتاز 🌟';
+    if (pct < 50) rating = 'يحتاج لمزيد من المراجعة';
+    else if (pct < 75) rating = 'جيد 👍';
+    else if (pct < 90) rating = 'جيد جداً 🎯';
+
+    const submissionId = 'sub-kht-' + Date.now();
+    const submission: HomeworkSubmission = {
+      id: submissionId,
+      assignmentId: assignmentId || undefined,
+      traineeId: traineeId || 'student-guest',
+      traineeCode: traineeCode || 'م000',
+      traineeName: traineeName || 'متدرب متميز',
+      courseId: assignment?.courseId,
+      courseName: assignment?.courseName,
+      taskTitle,
+      submittedAt: new Date().toISOString(),
+      mediaType: 'text',
+      studentNotes: `تم إكمال التحدي التفاعلي بنجاح خلال ${totalTimeSpent || 0} ثانية`,
+      grade,
+      maxGrade: totalMax,
+      percentage: pct,
+      rating,
+      strengths: [`إكمال مسابقة كاهوت بنسبة نجاح ${pct}%`],
+      corrections: [],
+      generalFeedback: `أداء تفاعلي متميز في تحدي الأسئلة! تم الحصول على ${grade} من ${totalMax} نقطة.`,
+      status: 'reviewed',
+      stars: starsEarned || (pct >= 80 ? 3 : pct >= 60 ? 2 : 1),
+      pointsAwarded: Math.max(10, Math.round(grade / 2)),
+      submissionChannel: 'home_student_portal'
+    };
+
+    data.homeworkSubmissions.unshift(submission);
+
+    // Update assignment submissions count
+    if (assignment) {
+      assignment.submissionsCount = (assignment.submissionsCount || 0) + 1;
+      assignment.gradedCount = (assignment.gradedCount || 0) + 1;
+    }
+
+    // Award real points and star tier to trainee if traineeId is valid
+    if (traineeId && traineeId !== 'student-guest') {
+      const pts = submission.pointsAwarded;
+      await awardTraineePoints(traineeId, pts, `🎯 إنجاز تحدي كاهوت والواجب التفاعلي: ${taskTitle}`, {
+        addedByUserId: 'system-lms',
+        addedByUserName: 'منظومة التحديات الذكية'
+      });
+    }
+
+    db.saveImmediate();
+
+    res.json({ success: true, submission, message: 'تم حفظ النتيجة ومنح النقاط للمتدرب بنجاح 🎉' });
+  } catch (err: any) {
+    console.error('Error submitting quiz result:', err);
+    res.status(500).json({ success: false, error: err.message || 'فشل حفظ نتيجة التحدي' });
+  }
 });
 
 apiRouter.delete('/assignments/:id', (req: Request, res: Response) => {
@@ -5820,11 +5903,6 @@ apiRouter.post('/homeworks/batch-grade', async (req: Request, res: Response) => 
   }
 
   db.saveImmediate();
-  try {
-    saveCollectionToFirestore('homeworkSubmissions', data.homeworkSubmissions);
-  } catch (e) {
-    console.warn('[Homeworks] Firestore sync notice:', e);
-  }
 
   res.json({ success: true, updatedCount, message: `تم تصحيح ${updatedCount} واجبات جماعياً وإرسال الدرجات بنجاح` });
 });
@@ -5943,11 +6021,6 @@ apiRouter.put('/homeworks/:id', async (req: Request, res: Response) => {
     }
 
     db.saveImmediate();
-    try {
-      saveCollectionToFirestore('homeworkSubmissions', data.homeworkSubmissions);
-    } catch (e) {
-      console.warn('[Homeworks] Firestore sync notice:', e);
-    }
     res.json(sub);
   } catch (err: any) {
     res.status(500).json({ error: 'فشل حفظ التعديلات على التقرير: ' + err.message });
@@ -7086,10 +7159,25 @@ apiRouter.post('/student/login', async (req: Request, res: Response) => {
     specialization: 'خبير البرمجة والتكنولوجيا'
   };
 
-  const groupTasks = [
-    { id: 'task-1', title: 'واجب تطبيق الدرس العملي والمشروع الرئيسي', courseName: studentData.courseName, maxPoints: 50 },
+  // Load real assignments from database matching student's course or group, fallback to defaults
+  const dbAssignments = (db.getData().assignments || []).filter((a: any) => 
+    !a.courseId || a.courseId === trainee.courseId || (a.courseName && studentData.courseName && a.courseName.toLowerCase() === studentData.courseName.toLowerCase()) ||
+    !a.groupId || a.groupId === trainee.groupId
+  );
+
+  const groupTasks = dbAssignments.length > 0 ? dbAssignments.map((a: any) => ({
+    id: a.id,
+    title: a.title,
+    courseName: a.courseName || studentData.courseName,
+    maxPoints: a.totalMarks || 50,
+    dueDate: a.dueDate,
+    assignmentType: a.assignmentType,
+    quizGame: a.quizGame,
+    evaluationSource: a.evaluationSource
+  })) : [
+    { id: 'task-1', title: 'واجب تطبيق الدرس العملي والتقييم الأسبوعي', courseName: studentData.courseName, maxPoints: 50 },
     { id: 'task-2', title: 'حل تمارين كتاب الأنشطة وتصوير الصفحة', courseName: studentData.courseName, maxPoints: 30 },
-    { id: 'task-3', title: 'مشروع الابتكار والتطبيق الذاتي البرمجي', courseName: studentData.courseName, maxPoints: 50 }
+    { id: 'task-3', title: 'تحدي المعرفة والابتكار الذاتي', courseName: studentData.courseName, maxPoints: 50 }
   ];
 
   const allStudentHW = (db.getData().homeworkSubmissions || []).filter((h: any) =>
@@ -8388,10 +8476,47 @@ apiRouter.post(['/student/submit-homework', '/student/submit-homework/'], async 
     const courseName = effectiveCourse?.name || 'البرنامج التدريبي';
 
     let aiGradingResult: AIGradeScanResult;
+    let voiceResult: AIVoiceEvaluationResult | null = null;
+    const isVoiceSubmission = mediaType === 'audio' || mediaType === 'voice' || (mediaBase64 && String(mediaBase64).startsWith('data:audio')) || !!req.body.audioBase64;
 
-    // Check if mediaBase64 (photo/scan) or text code/notes provided with graceful fallback
+    // Check if voice note, mediaBase64 (photo/scan) or text code/notes provided with graceful fallback
     try {
-      if (mediaBase64 && String(mediaBase64).length > 20) {
+      if (isVoiceSubmission) {
+        const audioData = req.body.audioBase64 || mediaBase64;
+        const studentGrade = trainee.grade || (trainee as any).schoolGrade || (trainee as any).stage || 'الصف الرابع الابتدائي (Grade 4)';
+        voiceResult = await evaluateAudioOrVoiceSummaryWithAI({
+          audioBase64: audioData,
+          mimeType: req.body.mimeType || 'audio/webm',
+          transcribedText: req.body.transcribedText,
+          studentNotes,
+          studentGrade,
+          courseName,
+          topicTitle: effectiveTaskTitle,
+          studentName: trainee.fullName,
+          maxScore: 100
+        });
+
+        aiGradingResult = {
+          score: voiceResult.score,
+          maxScore: 100,
+          percentage: voiceResult.percentage,
+          rating: voiceResult.rating as any,
+          status: voiceResult.status,
+          suggestedPoints: voiceResult.suggestedPoints,
+          strengths: voiceResult.strengths,
+          weaknesses: voiceResult.conceptCorrections.map((c) => `⚠️ ${c.concept}: ${c.correctedExplanation}`),
+          mistakes: [],
+          difficultPointsExplained: voiceResult.difficultPointsExplained,
+          badgeAwarded: voiceResult.badgeAwarded || {
+            title: '🎙️ وسام الإلقاء والفهم المفاهيمي المتميز',
+            icon: '🎙️',
+            category: 'educational',
+            points: 25
+          },
+          generalFeedback: voiceResult.generalFeedback,
+          confidence: voiceResult.confidence
+        };
+      } else if (mediaBase64 && String(mediaBase64).length > 20) {
         aiGradingResult = await gradeHomeworkOrExamFromImage({
           imageBase64: mediaBase64,
           mimeType: 'image/jpeg',
@@ -8488,8 +8613,8 @@ apiRouter.post(['/student/submit-homework', '/student/submit-homework/'], async 
     let badgeObj = aiGradingResult.badgeAwarded || null;
     if (!badgeObj && finalPercentage >= 85) {
       badgeObj = {
-        title: '🏆 وسام التفوق والحل الفوري',
-        icon: '🏆',
+        title: isVoiceSubmission ? '🎙️ وسام الإلقاء والفهم المفاهيمي' : '🏆 وسام التفوق والحل الفوري',
+        icon: isVoiceSubmission ? '🎙️' : '🏆',
         category: 'educational',
         points: 25
       };
@@ -8505,14 +8630,9 @@ apiRouter.post(['/student/submit-homework', '/student/submit-homework/'], async 
         points: badgeObj.points || 25,
         icon: badgeObj.icon || '🎖️',
         awardedAt: new Date().toISOString(),
-        awardedBy: 'ذكاء المصحح التلقائي'
+        awardedBy: isVoiceSubmission ? 'ذكاء تقييم الفويس المفاهيمي' : 'ذكاء المصحح التلقائي'
       };
       (data as any).badges.unshift(newBadge);
-      try {
-        saveCollectionToFirestore('badges', (data as any).badges);
-      } catch (e) {
-        console.warn('[Badges] Firestore sync notice:', e);
-      }
     }
 
     // 2. Guaranteed Point Awarding & Firestore Sync
@@ -8520,7 +8640,9 @@ apiRouter.post(['/student/submit-homework', '/student/submit-homework/'], async 
     const awardResult = await awardTraineePoints(
       trainee.id,
       totalPointsToAward,
-      `📝 درجات ونقاط تفوق تسليم الواجب (${effectiveTaskTitle})`,
+      isVoiceSubmission
+        ? `🎙️ نقاط تقييم الملخص الصوتي والمفاهيم (${effectiveTaskTitle})`
+        : `📝 درجات ونقاط تفوق تسليم الواجب (${effectiveTaskTitle})`,
       {
         addedByUserId: 'system-ai',
         addedByUserName: 'مصحح الذكاء الاصطناعي',
@@ -8545,8 +8667,14 @@ apiRouter.post(['/student/submit-homework', '/student/submit-homework/'], async 
       courseName: courseName,
       taskTitle: effectiveTaskTitle,
       submittedAt: new Date().toISOString(),
-      mediaUrl: mediaBase64 || undefined,
-      mediaType: mediaType || 'image',
+      mediaUrl: mediaBase64 || req.body.audioBase64 || undefined,
+      mediaType: isVoiceSubmission ? 'audio' : (mediaType || 'image'),
+      audioDurationSeconds: req.body.audioDurationSeconds || undefined,
+      voiceTranscription: voiceResult?.transcribedText || req.body.transcribedText || undefined,
+      conceptsCovered: voiceResult?.conceptsCovered || [],
+      conceptCorrections: voiceResult?.conceptCorrections || [],
+      missingKeyConcepts: voiceResult?.missingKeyConcepts || [],
+      studentGradeLevel: trainee.grade || (trainee as any).schoolGrade || (trainee as any).stage || 'الصف الرابع الابتدائي',
       codeSolution: codeSolution || undefined,
       studentNotes: studentNotes || undefined,
       grade: finalGrade,
@@ -8575,8 +8703,12 @@ apiRouter.post(['/student/submit-homework', '/student/submit-homework/'], async 
     data.notifications.unshift({
       id: 'notif-hw-' + Date.now(),
       type: 'system' as any,
-      title: `📝 تسليم وتصحيح واجب جديد: ${trainee.fullName}`,
-      message: `قام الطالب ${trainee.fullName} (كود: ${trainee.code || 'بدون'}) بتسليم واجب "${effectiveTaskTitle}" وتم تصحيحه آلياً بنتيجة ${finalGrade}/100 (+${totalPointsToAward} نقطة).`,
+      title: isVoiceSubmission
+        ? `🎙️ ملخص فويس وتقييم مفاهيمي: ${trainee.fullName}`
+        : `📝 تسليم وتصحيح واجب جديد: ${trainee.fullName}`,
+      message: isVoiceSubmission
+        ? `قام الطالب ${trainee.fullName} (كود: ${trainee.code || 'بدون'}) بتسجيل فويس لموضوع "${effectiveTaskTitle}" وتم تقييم وتصحيح تناسق المفاهيم بنتيجة ${finalGrade}/100 (+${totalPointsToAward} نقطة).`
+        : `قام الطالب ${trainee.fullName} (كود: ${trainee.code || 'بدون'}) بتسليم واجب "${effectiveTaskTitle}" وتم تصحيحه آلياً بنتيجة ${finalGrade}/100 (+${totalPointsToAward} نقطة).`,
       linkView: 'homeworks',
       createdAt: new Date().toISOString(),
       read: false,
@@ -8587,7 +8719,8 @@ apiRouter.post(['/student/submit-homework', '/student/submit-homework/'], async 
         taskTitle: effectiveTaskTitle,
         grade: finalGrade,
         rating: aiGradingResult.rating,
-        badgeTitle: badgeObj?.title
+        badgeTitle: badgeObj?.title,
+        mediaType: isVoiceSubmission ? 'audio' : (mediaType || 'image')
       }
     });
 
@@ -8595,31 +8728,79 @@ apiRouter.post(['/student/submit-homework', '/student/submit-homework/'], async 
     db.logAudit({
       userId: trainee.id,
       userName: trainee.fullName,
-      action: 'تسليم وتصحيح واجب آلي بالذكاء الاصطناعي',
+      action: isVoiceSubmission ? 'تقييم ملخص صوتي ومفاهيم بالذكاء الاصطناعي' : 'تسليم وتصحيح واجب آلي بالذكاء الاصطناعي',
       entity: 'بوابة الطالب',
-      details: `تم تسليم واجب "${effectiveTaskTitle}" للطالب ${trainee.fullName} وتصحيحه بنجاح بدرجة ${finalGrade}/100 ومنحه ${totalPointsToAward} نقطة.`
+      details: `تم تسليم ${isVoiceSubmission ? 'تسجيل صوتي' : 'واجب'} "${effectiveTaskTitle}" للطالب ${trainee.fullName} وتصحيحه بنجاح بدرجة ${finalGrade}/100 ومنحه ${totalPointsToAward} نقطة.`
     });
 
     db.saveImmediate();
-    try {
-      saveCollectionToFirestore('homeworkSubmissions', data.homeworkSubmissions);
-      saveCollectionToFirestore('notifications', data.notifications);
-    } catch (e) {
-      console.warn('[Firestore Homeworks] Sync notice:', e);
-    }
 
     res.json({
       success: true,
       submission: newSubmission,
+      voiceResult: voiceResult || undefined,
       newTotalPoints: updatedStudentPoints,
       pointsAwarded: totalPointsToAward,
       badgeAwarded: badgeObj,
       speedBadgeAwarded: !!badgeObj,
-      message: 'تم فحص وتصحيح الواجب ورصد التقرير الأكاديمي والأوسمة والنقاط بنجاح'
+      message: isVoiceSubmission
+        ? 'تم فحص التسجيل الصوتي وتقييم تناسق المفاهيم العلمية ورصد التقرير والأوسمة والنقاط بنجاح 🎙️'
+        : 'تم فحص وتصحيح الواجب ورصد التقرير الأكاديمي والأوسمة والنقاط بنجاح'
     });
   } catch (err: any) {
     console.error('Error in student submit homework API:', err);
     res.status(500).json({ error: 'فشل تسليم الواجب: ' + err.message });
+  }
+});
+
+// Dedicated Real-Time Voice Summary Evaluator Endpoint (For Live Voice Check & Practice)
+apiRouter.post(['/student/evaluate-voice-summary', '/student/evaluate-voice-summary/'], async (req: Request, res: Response) => {
+  try {
+    const {
+      traineeId,
+      audioBase64,
+      mimeType,
+      transcribedText,
+      topicTitle,
+      studentNotes,
+      courseId
+    } = req.body;
+
+    const data = db.getData();
+    let trainee: any = null;
+    if (traineeId) {
+      const allTrainees = await TraineeRepo.getAll();
+      trainee = allTrainees.find((t: any) => t.id === traineeId || t.code === traineeId);
+      if (!trainee && Array.isArray(data.trainees)) {
+        trainee = data.trainees.find((t: any) => t.id === traineeId || t.code === traineeId);
+      }
+    }
+
+    const studentGrade = trainee?.grade || trainee?.schoolGrade || trainee?.stage || req.body.studentGrade || 'الصف الرابع الابتدائي (Grade 4)';
+    const effectiveCourse = (data.courses || []).find((c: any) => c.id === (courseId || trainee?.courseId));
+    const courseName = effectiveCourse?.name || trainee?.courseName || req.body.courseName || 'مادة تكنولوجيا المعلومات والاتصالات ICT لغات';
+
+    const result = await evaluateAudioOrVoiceSummaryWithAI({
+      audioBase64,
+      mimeType: mimeType || 'audio/webm',
+      transcribedText,
+      studentNotes,
+      studentGrade,
+      courseName,
+      topicTitle: topicTitle || 'ملخص المحاضرة والمفاهيم العلمية',
+      studentName: trainee?.fullName || 'المتدرب',
+      maxScore: 100
+    });
+
+    res.json({
+      success: true,
+      result,
+      studentGrade,
+      courseName
+    });
+  } catch (err: any) {
+    console.error('Error evaluating voice summary:', err);
+    res.status(500).json({ error: 'فشل تقييم التسجيل الصوتي: ' + err.message });
   }
 });
 
@@ -9261,12 +9442,6 @@ apiRouter.post('/trainer-portal/review-homework', async (req: Request, res: Resp
     });
 
     db.saveImmediate();
-    try {
-      saveCollectionToFirestore('homeworkSubmissions', data.homeworkSubmissions);
-      saveCollectionToFirestore('notifications', data.notifications);
-    } catch (e) {
-      console.warn('[Firestore Homeworks] Sync notice:', e);
-    }
     res.json({ success: true, submission: sub, message: 'تم حفظ اعتماد الواجب ورصد النقاط والتقارير بنجاح' });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
@@ -9329,3 +9504,49 @@ apiRouter.post('/materials', async (req: Request, res: Response) => {
     res.status(500).json({ success: false, error: err.message });
   }
 });
+
+// All-in-One Master Lesson Package Generator (شامل العرض + الكاهوت + الواجب التفاعلي + نموذج الإجابة)
+apiRouter.post('/ai/all-in-one-lesson', async (req: Request, res: Response) => {
+  try {
+    const { topic, subject, grade, durationMinutes, learningGoals, autoSaveAssignment } = req.body;
+    if (!topic || String(topic).trim().length === 0) {
+      return res.status(400).json({ success: false, error: 'يرجى إدخال عنوان أو موضوع الدرس' });
+    }
+
+    const lessonPackage = await generateAllInOneLessonPlan({
+      topic: String(topic).trim(),
+      subject: subject || 'تكنولوجيا المعلومات والاتصالات والحاسب الآلي',
+      grade: grade || 'الصف الأول الإعدادي',
+      durationMinutes: Number(durationMinutes || 45),
+      learningGoals: learningGoals || ''
+    });
+
+    // Optionally auto-create assignment in system so trainees see it immediately
+    if (autoSaveAssignment) {
+      const data = db.getData();
+      if (!Array.isArray(data.assignments)) data.assignments = [];
+      const newAssignment = {
+        id: 'asg-lesson-' + Date.now(),
+        title: lessonPackage.homeworkAndWorksheet.title || `واجب: ${topic}`,
+        courseName: lessonPackage.subject,
+        dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+        totalMarks: lessonPackage.homeworkAndWorksheet.maxScore || 100,
+        assignmentType: 'voice_and_written',
+        instructions: lessonPackage.homeworkAndWorksheet.instructions,
+        voicePrompt: lessonPackage.homeworkAndWorksheet.voiceSummaryPrompt,
+        writtenTasks: lessonPackage.homeworkAndWorksheet.writtenTasks,
+        modelAnswer: lessonPackage.modelAnswer,
+        rubricPoints: lessonPackage.homeworkAndWorksheet.rubricPoints,
+        createdAt: new Date().toISOString()
+      };
+      data.assignments.unshift(newAssignment);
+      db.save();
+    }
+
+    res.json({ success: true, package: lessonPackage });
+  } catch (err: any) {
+    console.error('All-in-one lesson route error:', err);
+    res.status(500).json({ success: false, error: err.message || 'حدث خطأ أثناء توليد حزمة الدرس المتكاملة' });
+  }
+});
+

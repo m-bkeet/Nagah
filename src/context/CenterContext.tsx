@@ -2,8 +2,6 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import { Branch, CenterSettings, SystemNotification, Trainee, Trainer, Course, Group } from '../types';
 import { api } from '../services/api';
 import { isTrainerSessionActive, setTrainerLabSessionState } from '../utils/labSecurity';
-import { db as firestoreDb } from '../lib/firebase';
-import { collection, doc, onSnapshot } from 'firebase/firestore';
 import { normalizeArabicFull } from '../utils/arabicUtils';
 
 export interface ToastMessage {
@@ -651,46 +649,6 @@ export const CenterProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     window.addEventListener('storage', handleStorage);
     return () => window.removeEventListener('storage', handleStorage);
-  }, []);
-
-  // Real-time Firestore Snapshot Listener for Live Multi-Device Sync
-  useEffect(() => {
-    let unsubscribeTraineesChunk: (() => void) | null = null;
-    try {
-      if (firestoreDb) {
-        // Listen to chunk store document for instant server sync
-        const chunkDocRef = doc(firestoreDb, 'nagah_store', 'trainees_chunk_0');
-        unsubscribeTraineesChunk = onSnapshot(chunkDocRef, (snap) => {
-          if (snap.exists()) {
-            const data = snap.data();
-            if (data && Array.isArray(data.items)) {
-              setTrainees(prev => {
-                const incoming: Trainee[] = data.items;
-                const prevMap = new Map(prev.map(p => [p.id, p]));
-                const merged = incoming.map(inc => {
-                  // Protect active pending optimistic updates from being overwritten
-                  if (pendingUpdatesRef.current.has(inc.id) && prevMap.has(inc.id)) {
-                    return prevMap.get(inc.id)!;
-                  }
-                  return inc;
-                });
-                const deduped = deduplicateTraineeList(merged);
-                try { localStorage.setItem('nagah_trainees', JSON.stringify(deduped)); } catch {}
-                return deduped;
-              });
-            }
-          }
-        }, (err) => {
-          console.warn('[Firestore Real-time Listener Notice]', err?.message);
-        });
-      }
-    } catch (e) {
-      console.warn('[Firestore Init Listener Notice]', e);
-    }
-
-    return () => {
-      if (unsubscribeTraineesChunk) unsubscribeTraineesChunk();
-    };
   }, []);
 
   useEffect(() => {

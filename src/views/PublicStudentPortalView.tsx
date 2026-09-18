@@ -13,6 +13,8 @@ import { isTrainerSessionActive } from '../utils/labSecurity';
 
 import React, { useState, useRef, useEffect } from 'react';
 import { AIExplainModal } from '../components/AIExplainModal';
+import { KahootGameModal } from '../components/homeworks/KahootGameModal';
+import { VoiceSummaryRecorderModal } from '../components/homeworks/VoiceSummaryRecorderModal';
 import { ThemeQuickSwitcher } from '../components/ThemeQuickSwitcher';
 import html2canvas from 'html2canvas';
 import {
@@ -58,6 +60,10 @@ import {
   Trash2,
   Settings,
   Globe,
+  Play,
+  Mic,
+  Volume2,
+  Radio,
   Facebook,
   Twitter,
   Linkedin,
@@ -176,6 +182,8 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
   const [activeMessageModal, setActiveMessageModal] = useState<any | null>(null);
   const [isPhotoStudioOpen, setIsPhotoStudioOpen] = useState(false);
   const [isAiExplainOpen, setIsAiExplainOpen] = useState(false);
+  const [isVoiceSummaryModalOpen, setIsVoiceSummaryModalOpen] = useState(false);
+  const [activeKahootGameTask, setActiveKahootGameTask] = useState<any | null>(null);
 
   // Session Celebration & Real-Time Event State
   const [showCelebrationOverlay, setShowCelebrationOverlay] = useState(false);
@@ -1294,6 +1302,17 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
           <div className="flex items-center gap-2">
             {isLoggedIn && (
               <>
+                {/* Voice Summary Conceptual Evaluator Header Button */}
+                <button
+                  type="button"
+                  onClick={() => setIsVoiceSummaryModalOpen(true)}
+                  className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-400 hover:to-amber-400 text-slate-950 font-black text-xs shadow-md shadow-orange-500/20 active:scale-95 transition-all flex items-center gap-1.5"
+                  title="تسجيل ملخص فويس للمحاضرة ومراجعة المفاهيم بالذكاء الاصطناعي"
+                >
+                  <Mic className="w-3.5 h-3.5 animate-pulse" />
+                  <span className="hidden sm:inline">ملخص فويس 🎙️</span>
+                </button>
+
                 {/* Highlighted "Explain to Me" AI Feature Button */}
                 <button
                   type="button"
@@ -2090,27 +2109,59 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
                       </label>
 
                       {(groupTasks || []).length > 0 && (
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mb-3">
-                          {(groupTasks || []).map((t, idx) => (
-                            <button
-                              key={idx}
-                              type="button"
-                              onClick={() => {
-                                setSelectedTaskTitle(t.title);
-                                setCustomTaskTitle('');
-                              }}
-                              className={`p-3 rounded-2xl border text-right transition-all ${
-                                selectedTaskTitle === t.title && !customTaskTitle
-                                  ? 'bg-amber-500/10 border-amber-500 text-amber-700 dark:text-amber-300 font-bold shadow-xs'
-                                  : 'bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-700 shadow-xs'
-                              }`}
-                            >
-                              <p className="text-xs font-bold truncate">{t.title}</p>
-                              <span className="text-[10px] text-slate-500 dark:text-slate-400 block mt-1">
-                                حد أقصى للنقاط: +{t.maxPoints}
-                              </span>
-                            </button>
-                          ))}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5 mb-3">
+                          {(groupTasks || []).map((t, idx) => {
+                            const isQuiz = !!(t.quizGame || t.assignmentType === 'interactive_quiz');
+                            const isSelected = selectedTaskTitle === t.title && !customTaskTitle;
+                            return (
+                              <div
+                                key={idx}
+                                className={`p-3 rounded-2xl border text-right transition-all flex flex-col justify-between ${
+                                  isSelected
+                                    ? 'bg-amber-500/10 border-amber-500 text-amber-700 dark:text-amber-300 font-bold shadow-xs'
+                                    : 'bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-700 shadow-xs'
+                                }`}
+                              >
+                                <div>
+                                  <div className="flex items-center justify-between gap-1 mb-1">
+                                    <p className="text-xs font-bold truncate">{t.title}</p>
+                                    {isQuiz && (
+                                      <span className="text-[9px] bg-purple-500/20 text-purple-700 dark:text-purple-300 font-black px-1.5 py-0.5 rounded-md border border-purple-500/30 shrink-0">
+                                        ⚡ كاهوت
+                                      </span>
+                                    )}
+                                  </div>
+                                  <span className="text-[10px] text-slate-500 dark:text-slate-400 block">
+                                    حد أقصى للنقاط: +{t.maxPoints}
+                                  </span>
+                                </div>
+
+                                <div className="pt-2 mt-2 border-t border-slate-200/60 dark:border-slate-800/60">
+                                  {isQuiz ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => setActiveKahootGameTask(t)}
+                                      className="w-full py-1.5 px-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:opacity-95 text-white text-[11px] font-black rounded-xl flex items-center justify-center gap-1.5 shadow-sm cursor-pointer"
+                                    >
+                                      <Play className="w-3 h-3 fill-white" />
+                                      <span>بدء التحدي التفاعلي 🎮</span>
+                                    </button>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setSelectedTaskTitle(t.title);
+                                        setCustomTaskTitle('');
+                                      }}
+                                      className="w-full py-1 px-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-[10px] font-bold rounded-lg cursor-pointer text-center"
+                                    >
+                                      {isSelected ? '✓ محدد للرفع' : 'تحديد لرفع الحل'}
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
                         </div>
                       )}
 
@@ -2125,14 +2176,45 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
                       </div>
                     </div>
 
-                    {/* Media Upload Options: Photo / File / Video */}
+                    {/* PROMINENT VOICE SUMMARY RECORDER & CONCEPTUAL EVALUATION BANNER */}
+                    <div className="p-4 rounded-3xl bg-gradient-to-r from-amber-500/15 via-orange-500/10 to-amber-500/15 border border-amber-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm">
+                      <div className="flex items-start gap-3">
+                        <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-500 text-slate-950 flex items-center justify-center shrink-0 shadow-md">
+                          <Mic className="w-5 h-5" />
+                        </div>
+                        <div className="space-y-0.5">
+                          <div className="flex items-center gap-2">
+                            <h4 className="text-xs font-black text-slate-900 dark:text-slate-100">
+                              تسجيل ملخص فويس للمحاضرة أو الكتاب 🎙️
+                            </h4>
+                            <span className="text-[9px] bg-amber-500 text-slate-950 font-black px-2 py-0.5 rounded-full">
+                              تصحيح المفاهيم
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-slate-600 dark:text-slate-300 leading-relaxed">
+                            سجل فويس بصوتك يلخص الدرس، وسيقوم الذكاء الاصطناعي بفحص تناسق وصحة المفاهيم وتصحيحها وفق منهجك دون محاسبتك على الأخطاء اللغوية!
+                          </p>
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => setIsVoiceSummaryModalOpen(true)}
+                        className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:brightness-110 text-slate-950 font-black text-xs shadow-md shadow-amber-500/20 active:scale-95 transition-all flex items-center justify-center gap-1.5 shrink-0 cursor-pointer"
+                      >
+                        <Mic className="w-4 h-4" />
+                        <span>فتح مسجل الفويس والتقييم 🎙️</span>
+                      </button>
+                    </div>
+
+                    {/* Media Upload Options: Photo / File / Video / Audio */}
                     <div className="space-y-2">
                       <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
-                        صورة الواجب أو الفيديو المرفق (يُفضل صورة لورقة الإجابة):
+                        صورة الواجب أو الفيديو أو الملف الصوتي:
                       </label>
 
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        {/* Option 1: Mobile Direct Camera Capture (No permission issues) */}
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        {/* Option 1: Mobile Direct Camera Capture */}
                         <label className="p-4 rounded-2xl bg-amber-500/10 dark:bg-amber-950/30 border border-dashed border-amber-500/50 hover:border-amber-500 text-center space-y-2 cursor-pointer transition-all group block shadow-xs">
                           <input
                             type="file"
@@ -2145,16 +2227,31 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
                             <Camera className="w-5 h-5" />
                           </div>
                           <div>
-                            <p className="text-xs font-bold text-amber-800 dark:text-amber-200">📸 تصوير مباشر فوراً (كاميرا الهاتف)</p>
-                            <p className="text-[10px] text-slate-600 dark:text-slate-300">يفتح كاميرا المحمول مباشرة لتصوير الواجب بدون أخطاء</p>
+                            <p className="text-xs font-bold text-amber-800 dark:text-amber-200">📸 تصوير مباشر (كاميرا)</p>
+                            <p className="text-[10px] text-slate-600 dark:text-slate-300">تصوير ورقة الإجابة فورا</p>
                           </div>
                         </label>
 
-                        {/* Option 2: Choose File or Video from Gallery */}
+                        {/* Option 2: Live Mic Recording */}
+                        <button
+                          type="button"
+                          onClick={() => setIsVoiceSummaryModalOpen(true)}
+                          className="p-4 rounded-2xl bg-orange-500/10 dark:bg-orange-950/30 border border-dashed border-orange-500/50 hover:border-orange-500 text-center space-y-2 cursor-pointer transition-all group block shadow-xs text-right"
+                        >
+                          <div className="w-10 h-10 mx-auto rounded-xl bg-orange-500/20 text-orange-600 dark:text-orange-300 flex items-center justify-center group-hover:scale-110 transition-transform shadow-xs">
+                            <Mic className="w-5 h-5" />
+                          </div>
+                          <div className="text-center">
+                            <p className="text-xs font-bold text-orange-800 dark:text-orange-200">🎙️ تسجيل فويس مباشر</p>
+                            <p className="text-[10px] text-slate-600 dark:text-slate-300">تسجيل وتصحيح صوتي فوري</p>
+                          </div>
+                        </button>
+
+                        {/* Option 3: Choose File, Video or Audio from Gallery */}
                         <label className="p-4 rounded-2xl bg-white dark:bg-slate-950 border border-dashed border-slate-300 dark:border-slate-700 hover:border-indigo-500/60 text-center space-y-2 cursor-pointer transition-all group block shadow-xs">
                           <input
                             type="file"
-                            accept="image/*,video/*"
+                            accept="image/*,video/*,audio/*"
                             onChange={handleFileSelect}
                             className="hidden"
                           />
@@ -2162,8 +2259,8 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
                             <Upload className="w-5 h-5" />
                           </div>
                           <div>
-                            <p className="text-xs font-bold text-slate-800 dark:text-slate-200">📁 اختيار صورة أو فيديو من الاستوديو</p>
-                            <p className="text-[10px] text-slate-500 dark:text-slate-400">رفع صورة محفوطة مسبقاً أو فيديو من معرض الصور</p>
+                            <p className="text-xs font-bold text-slate-800 dark:text-slate-200">📁 رفع ملف / صوت / فيديو</p>
+                            <p className="text-[10px] text-slate-500 dark:text-slate-400">ملف محفوظ مسبقاً بالجهاز</p>
                           </div>
                         </label>
                       </div>
@@ -2463,6 +2560,74 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
                           {hw.generalFeedback}
                         </p>
 
+                        {/* Voice Submission Specifics */}
+                        {(hw.mediaType === 'audio' || hw.voiceTranscription || hw.conceptsCovered?.length) && (
+                          <div className="p-3.5 rounded-xl bg-orange-500/10 border border-orange-500/20 space-y-2.5">
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs font-black text-orange-600 dark:text-orange-400 flex items-center gap-1.5">
+                                <Mic className="w-4 h-4" />
+                                <span>ملخص فويس مفاهيمي للمحاضرة</span>
+                              </span>
+                              {hw.studentGradeLevel && (
+                                <span className="text-[10px] bg-orange-500/20 text-orange-800 dark:text-orange-200 px-2 py-0.5 rounded-md font-bold">
+                                  {hw.studentGradeLevel}
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Audio Player */}
+                            {hw.mediaUrl && (
+                              <div className="pt-1">
+                                <audio controls className="w-full h-9 rounded-lg" src={hw.mediaUrl}>
+                                  متصفحك لا يدعم تشغيل الصوت
+                                </audio>
+                              </div>
+                            )}
+
+                            {/* Transcription text */}
+                            {hw.voiceTranscription && (
+                              <div className="bg-white/80 dark:bg-slate-900/80 p-2.5 rounded-lg border border-orange-500/20 text-xs text-slate-700 dark:text-slate-300">
+                                <span className="font-bold text-orange-600 dark:text-orange-400 block mb-0.5">النص المنطوق صوتياً:</span>
+                                <p className="italic font-serif">"{hw.voiceTranscription}"</p>
+                              </div>
+                            )}
+
+                            {/* Concepts Mastered */}
+                            {hw.conceptsCovered && hw.conceptsCovered.length > 0 && (
+                              <div className="space-y-1">
+                                <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                                  <CheckCircle2 className="w-3.5 h-3.5" />
+                                  <span>مفاهيم علمية أتقنتها في الفويس:</span>
+                                </span>
+                                <div className="flex flex-wrap gap-1.5">
+                                  {hw.conceptsCovered.map((c, i) => (
+                                    <span key={i} className="text-[10px] bg-emerald-500/15 text-emerald-800 dark:text-emerald-200 px-2 py-0.5 rounded-full font-bold border border-emerald-500/30">
+                                      ✓ {c}
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Concept Corrections */}
+                            {hw.conceptCorrections && hw.conceptCorrections.length > 0 && (
+                              <div className="space-y-1 pt-1">
+                                <span className="text-[11px] font-bold text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                                  <AlertCircle className="w-3.5 h-3.5" />
+                                  <span>تصحيحات وتدقيقات مفاهيمية للمنهج:</span>
+                                </span>
+                                <div className="space-y-1">
+                                  {hw.conceptCorrections.map((corr, i) => (
+                                    <div key={i} className="text-[11px] bg-amber-500/10 text-amber-900 dark:text-amber-200 p-2 rounded-lg border border-amber-500/20">
+                                      {corr}
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
                         {hw.trainerNotes && (
                           <p className="text-xs text-indigo-800 dark:text-indigo-300 leading-relaxed bg-indigo-50 dark:bg-indigo-950/50 p-3 rounded-xl border border-indigo-200 dark:border-indigo-800/60">
                             <strong className="text-indigo-600 dark:text-indigo-400 block mb-1">ملاحظات واعتتماد المدرب:</strong>
@@ -2470,7 +2635,7 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
                           </p>
                         )}
 
-                        {hw.mediaUrl && (
+                        {hw.mediaUrl && hw.mediaType !== 'audio' && (
                           <div className="pt-1">
                             <a
                               href={hw.mediaUrl}
@@ -3246,40 +3411,90 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
         />
       )}
 
+      {/* Interactive Kahoot Game Modal for Student Portal */}
+      {activeKahootGameTask && (
+        <KahootGameModal
+          assignment={{
+            id: activeKahootGameTask.id || `task-${Date.now()}`,
+            title: activeKahootGameTask.title,
+            courseName: activeKahootGameTask.courseName || student?.courseName,
+            totalMarks: activeKahootGameTask.maxPoints || 100,
+            dueDate: activeKahootGameTask.dueDate || new Date().toISOString(),
+            preventLateSubmission: false,
+            quizGame: activeKahootGameTask.quizGame
+          } as any}
+          currentStudentId={student?.id}
+          onClose={() => setActiveKahootGameTask(null)}
+          onCompleted={(newSub) => {
+            if (newSub) {
+              setHomeworks(prev => [newSub, ...prev]);
+            }
+          }}
+          onShowToast={(msg) => alert(msg)}
+        />
+      )}
+
+      {/* Voice Summary Conceptual Recorder Modal */}
+      {isVoiceSummaryModalOpen && (
+        <VoiceSummaryRecorderModal
+          isOpen={isVoiceSummaryModalOpen}
+          onClose={() => setIsVoiceSummaryModalOpen(false)}
+          studentData={student ? {
+            id: student.id,
+            fullName: student.fullName,
+            courseName: student.courseName,
+            groupName: student.groupName,
+            studentCode: student.code
+          } : undefined}
+          defaultTaskTitle={selectedTaskTitle || customTaskTitle || undefined}
+          onSubmissionSuccess={(newSub) => {
+            if (newSub) {
+              setHomeworks(prev => [newSub, ...prev]);
+              setSubmitSuccessMsg(`تم تسجيل ملخص الفويس وتقييمه بنجاح وحصلت على ${newSub.grade}/${newSub.maxGrade} (+${newSub.pointsAwarded} نقطة)!`);
+              setLastSubmissionResult(newSub);
+              if (student) {
+                setStudent(prev => prev ? { ...prev, points: prev.points + (newSub.pointsAwarded || 0), totalPoints: (prev.totalPoints || prev.points) + (newSub.pointsAwarded || 0) } : null);
+              }
+            }
+          }}
+          onShowToast={(msg) => alert(msg)}
+        />
+      )}
+
       {/* Mobile Bottom Navigation Bar */}
       {isLoggedIn && (
-        <div className="fixed bottom-0 left-0 right-0 z-40 bg-slate-900 border-t border-slate-800 flex justify-around py-2 px-1 shadow-2xl md:hidden">
+        <div className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-slate-900/95 border-t border-slate-200/90 dark:border-slate-800 backdrop-blur-xl flex justify-around py-2 px-1 shadow-[0_-4px_20px_rgba(0,0,0,0.06)] dark:shadow-2xl md:hidden">
           <button
             onClick={() => setActiveTab('submit')}
-            className={`flex flex-col items-center gap-1 flex-1 py-1 transition-all ${activeTab === 'submit' ? 'text-amber-400 scale-105' : 'text-slate-400'}`}
+            className={`flex flex-col items-center gap-1 flex-1 py-1 transition-all ${activeTab === 'submit' ? 'text-amber-600 dark:text-amber-400 font-bold scale-105' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'}`}
           >
             <Upload className="w-4 h-4" />
             <span className="text-[9px] font-bold">تسليم واجب</span>
           </button>
           <button
             onClick={() => setActiveTab('history')}
-            className={`flex flex-col items-center gap-1 flex-1 py-1 transition-all ${activeTab === 'history' ? 'text-amber-400 scale-105' : 'text-slate-400'}`}
+            className={`flex flex-col items-center gap-1 flex-1 py-1 transition-all ${activeTab === 'history' ? 'text-amber-600 dark:text-amber-400 font-bold scale-105' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'}`}
           >
             <BookOpen className="w-4 h-4" />
             <span className="text-[9px] font-bold">السجل</span>
           </button>
           <button
             onClick={() => setActiveTab('badges')}
-            className={`flex flex-col items-center gap-1 flex-1 py-1 transition-all ${activeTab === 'badges' ? 'text-amber-400 scale-105' : 'text-slate-400'}`}
+            className={`flex flex-col items-center gap-1 flex-1 py-1 transition-all ${activeTab === 'badges' ? 'text-amber-600 dark:text-amber-400 font-bold scale-105' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'}`}
           >
             <Award className="w-4 h-4" />
             <span className="text-[9px] font-bold">الأوسمة</span>
           </button>
           <button
             onClick={() => setActiveTab('schedule')}
-            className={`flex flex-col items-center gap-1 flex-1 py-1 transition-all ${activeTab === 'schedule' ? 'text-amber-400 scale-105' : 'text-slate-400'}`}
+            className={`flex flex-col items-center gap-1 flex-1 py-1 transition-all ${activeTab === 'schedule' ? 'text-amber-600 dark:text-amber-400 font-bold scale-105' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'}`}
           >
             <Calendar className="w-4 h-4" />
             <span className="text-[9px] font-bold">الجدول</span>
           </button>
           <button
             onClick={() => setActiveTab('profile')}
-            className={`flex flex-col items-center gap-1 flex-1 py-1 transition-all ${activeTab === 'profile' ? 'text-amber-400 scale-105' : 'text-slate-400'}`}
+            className={`flex flex-col items-center gap-1 flex-1 py-1 transition-all ${activeTab === 'profile' ? 'text-amber-600 dark:text-amber-400 font-bold scale-105' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'}`}
           >
             <User className="w-4 h-4" />
             <span className="text-[9px] font-bold">الملف</span>

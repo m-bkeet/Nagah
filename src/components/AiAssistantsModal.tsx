@@ -1,11 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { api } from '../services/api';
-import { X, Sparkles, Code, MessageCircle, Send, Bot, CheckCircle2, ShieldCheck, Cpu, GraduationCap, Video, Mic, Camera, Globe, Share2, Square } from 'lucide-react';
+import { X, Sparkles, Code, MessageCircle, Send, Bot, CheckCircle2, ShieldCheck, Cpu, GraduationCap, Video, Mic, Camera, Globe, Share2, Square, BookOpen, Layers } from 'lucide-react';
+import { AllInOneLessonPlanModal } from './trainer/AllInOneLessonPlanModal';
 
 interface AiAssistantsModalProps {
   isOpen: boolean;
   onClose: () => void;
-  initialTab?: 'manager' | 'developer' | 'social_bots' | 'trainer';
+  initialTab?: 'manager' | 'developer' | 'social_bots' | 'trainer' | 'master_lesson';
 }
 
 const VoiceInputButton: React.FC<{
@@ -90,7 +91,8 @@ const VoiceInputButton: React.FC<{
 };
 
 export const AiAssistantsModal: React.FC<AiAssistantsModalProps> = ({ isOpen, onClose, initialTab = 'manager' }) => {
-  const [activeTab, setActiveTab] = useState<'manager' | 'developer' | 'social_bots' | 'trainer'>(initialTab);
+  const [activeTab, setActiveTab] = useState<'manager' | 'developer' | 'social_bots' | 'trainer' | 'master_lesson'>(initialTab);
+  const [isMasterLessonOpen, setIsMasterLessonOpen] = useState(false);
 
   useEffect(() => {
     if (isOpen && initialTab) {
@@ -387,6 +389,15 @@ export const AiAssistantsModal: React.FC<AiAssistantsModalProps> = ({ isOpen, on
           >
             <GraduationCap className="w-3.5 h-3.5" />
             <span>مساعد المدرب</span>
+          </button>
+          <button
+            onClick={() => {
+              setIsMasterLessonOpen(true);
+            }}
+            className="flex items-center gap-1.5 py-2 px-3 font-bold border-b-2 transition-all whitespace-nowrap border-purple-500 text-purple-300 bg-purple-500/15 hover:bg-purple-500/25"
+          >
+            <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+            <span>حزمة الدرس المتكاملة (AI) 🪄</span>
           </button>
           <button
             onClick={() => setActiveTab('manager')}
@@ -929,6 +940,14 @@ export const AiAssistantsModal: React.FC<AiAssistantsModalProps> = ({ isOpen, on
         </div>
 
       </div>
+
+      {/* Master Lesson Plan All In One Modal */}
+      {isMasterLessonOpen && (
+        <AllInOneLessonPlanModal
+          isOpen={isMasterLessonOpen}
+          onClose={() => setIsMasterLessonOpen(false)}
+        />
+      )}
     </div>
   );
 };

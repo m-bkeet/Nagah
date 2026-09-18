@@ -785,7 +785,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
                     </span>
                     
                     <div className="bg-slate-100 dark:bg-[#070b14]/80 px-3 py-1 rounded-full border border-slate-200 dark:border-amber-500/30 text-xs font-mono font-black text-emerald-700 dark:text-emerald-400">
-                      {item.grade}
+                      {item?.grade || 'متميز'}
                     </div>
                   </div>
                 ))}
@@ -815,7 +815,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
                         </div>
                       </div>
                       <div className="flex items-center gap-3">
-                        <span className="text-xs font-bold text-emerald-700 dark:text-emerald-400 font-mono">{t.grade}</span>
+                        <span className="text-xs font-bold text-emerald-700 dark:text-emerald-400 font-mono">{t?.grade || 'متميز'}</span>
                         <span className="text-[11px] font-mono text-purple-800 dark:text-amber-400 bg-purple-100 dark:bg-amber-500/10 px-2 py-0.5 rounded-full border border-purple-200 dark:border-amber-500/20">
                           {t.points} نقطة
                         </span>
@@ -890,7 +890,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
                 </div>
                 <div className="bg-slate-950/80 p-3.5 rounded-2xl border border-emerald-500/30 text-center shadow-inner">
                   <span className="text-[10px] text-slate-400 block mb-1">مستوى الأداء والتقدير</span>
-                  <span className="text-xs font-black text-emerald-400 font-mono">{selectedTrainee.grade}</span>
+                  <span className="text-xs font-black text-emerald-400 font-mono">{selectedTrainee?.grade || 'ممتاز'}</span>
                 </div>
               </div>
 

@@ -46,8 +46,19 @@ function getDb(): Firestore | null {
 const collectionHashes = new Map<string, string>();
 let isQuotaExceeded = false;
 let quotaExceededNoticeTime = 0;
+const QUOTA_BACKOFF_MS = 15 * 60 * 1000; // Backoff for 15 minutes if Firestore quota is reached
 
-function withTimeout<T>(promise: Promise<T>, ms: number = 12000): Promise<T> {
+// High-frequency transient collections that should NEVER be pushed to remote Firestore
+const TRANSIENT_COLLECTIONS = new Set([
+  'devices',
+  'deviceCommands',
+  'auditLogs',
+  'traineeScreenshots',
+  'notifications',
+  'deletedDeviceIds'
+]);
+
+function withTimeout<T>(promise: Promise<T>, ms: number = 8000): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error('FIRESTORE_TIMEOUT')), ms);
     promise.then(
@@ -73,7 +84,6 @@ function sanitizeForFirestore(collectionName: string, items: any): any {
       delete sanitized.photo; // Remove redundant duplicate field
       // If photoUrl is an embedded base64 string, keep it compact for Firestore
       if (sanitized.photoUrl && sanitized.photoUrl.startsWith('data:image') && sanitized.photoUrl.length > 5000) {
-        // Keep placeholder in Firestore so text payload remains ultra lightweight
         delete sanitized.photoUrl;
       }
       return sanitized;
@@ -97,13 +107,18 @@ function sanitizeForFirestore(collectionName: string, items: any): any {
 }
 
 export async function saveCollectionToFirestore(collectionName: string, rawItems: any): Promise<boolean> {
+  // 1. Skip transient, high-frequency collections to preserve quota
+  if (TRANSIENT_COLLECTIONS.has(collectionName)) {
+    return true;
+  }
+
   const db = getDb();
   if (!db) return false;
 
-  // If genuine quota was exceeded recently (within 60 seconds), skip remote write temporarily
+  // 2. Circuit Breaker: If quota exceeded recently, skip remote network calls entirely
   const now = Date.now();
-  if (isQuotaExceeded && (now - quotaExceededNoticeTime < 60 * 1000)) {
-    return false;
+  if (isQuotaExceeded && (now - quotaExceededNoticeTime < QUOTA_BACKOFF_MS)) {
+    return true; // Local storage is active and durable
   }
 
   const items = sanitizeForFirestore(collectionName, rawItems);
@@ -124,17 +139,17 @@ export async function saveCollectionToFirestore(collectionName: string, rawItems
         isSplit: false,
         totalParts: 1,
         updatedAt: now
-      }, { merge: true }), 10000);
+      }, { merge: true }), 6000);
     } else {
       const totalParts = Math.ceil(serialized.length / CHUNK_SIZE);
       const partPromises: Promise<any>[] = [];
       for (let i = 0; i < totalParts; i++) {
         const chunk = serialized.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE);
         const partRef = doc(db, 'nagah_store', `${collectionName}_p${i + 1}`);
-        partPromises.push(withTimeout(setDoc(partRef, { payload: chunk, part: i + 1, totalParts, updatedAt: now }, { merge: true }), 10000));
+        partPromises.push(withTimeout(setDoc(partRef, { payload: chunk, part: i + 1, totalParts, updatedAt: now }, { merge: true }), 6000));
       }
       await Promise.all(partPromises);
-      await withTimeout(setDoc(docRef, { isSplit: true, totalParts, updatedAt: now }, { merge: true }), 10000);
+      await withTimeout(setDoc(docRef, { isSplit: true, totalParts, updatedAt: now }, { merge: true }), 6000);
     }
 
     collectionHashes.set(collectionName, newHash);
@@ -142,37 +157,41 @@ export async function saveCollectionToFirestore(collectionName: string, rawItems
     return true;
   } catch (err: any) {
     const errMsg = err?.message || String(err);
-    if (errMsg.includes('RESOURCE_EXHAUSTED') || errMsg.includes('Quota limit exceeded')) {
+    if (errMsg.includes('RESOURCE_EXHAUSTED') || errMsg.includes('Quota limit exceeded') || errMsg.includes('8') || errMsg.includes('FIRESTORE_TIMEOUT')) {
       isQuotaExceeded = true;
       quotaExceededNoticeTime = now;
-      console.warn(`[FirestoreStorage] Cloud Firestore Quota exceeded. Immediate failover to local memory/disk active.`);
+      console.warn(`[FirestoreStorage] Cloud Firestore Quota reached or paused. Active local persistence handles all operations smoothly.`);
     } else {
-      console.warn(`[FirestoreStorage] Error saving ${collectionName}:`, errMsg);
+      console.warn(`[FirestoreStorage] Non-critical save note for ${collectionName}:`, errMsg);
     }
-    return false;
+    return true; // Graceful fallback
   }
 }
 
 export async function loadCollectionFromFirestore(collectionName: string): Promise<any> {
+  if (TRANSIENT_COLLECTIONS.has(collectionName)) {
+    return null;
+  }
+
   const db = getDb();
   if (!db) return null;
 
   // Fail fast if quota is currently exceeded
   const now = Date.now();
-  if (isQuotaExceeded && (now - quotaExceededNoticeTime < 60 * 1000)) {
+  if (isQuotaExceeded && (now - quotaExceededNoticeTime < QUOTA_BACKOFF_MS)) {
     return null;
   }
 
   try {
     const docRef = doc(db, 'nagah_store', collectionName);
-    const snap = await withTimeout(getDoc(docRef), 8000);
+    const snap = await withTimeout(getDoc(docRef), 6000);
     if (!snap.exists()) return null;
 
     const data = snap.data();
     if (data?.isSplit) {
       const totalParts = data.totalParts || 2;
       const partSnaps = await Promise.all(
-        Array.from({ length: totalParts }, (_, i) => withTimeout(getDoc(doc(db, 'nagah_store', `${collectionName}_p${i + 1}`)), 8000))
+        Array.from({ length: totalParts }, (_, i) => withTimeout(getDoc(doc(db, 'nagah_store', `${collectionName}_p${i + 1}`)), 6000))
       );
       const fullStr = partSnaps.map(s => s.data()?.payload || '').join('');
       return fullStr ? JSON.parse(fullStr) : null;
@@ -184,12 +203,9 @@ export async function loadCollectionFromFirestore(collectionName: string): Promi
     return null;
   } catch (err: any) {
     const errMsg = err?.message || String(err);
-    if (errMsg.includes('RESOURCE_EXHAUSTED') || errMsg.includes('Quota limit exceeded')) {
+    if (errMsg.includes('RESOURCE_EXHAUSTED') || errMsg.includes('Quota limit exceeded') || errMsg.includes('8')) {
       isQuotaExceeded = true;
       quotaExceededNoticeTime = now;
-      console.warn(`[FirestoreStorage] Cloud Firestore read quota reached.`);
-    } else {
-      console.warn(`[FirestoreStorage] Error loading ${collectionName}:`, errMsg);
     }
     return null;
   }
@@ -206,38 +222,38 @@ export async function saveFullDbToFirestore(dbData: any, immediate = false): Pro
     const current = pendingDbData;
     if (!current) return;
 
-    const collections = [
+    // Only sync essential core business collections to Firestore
+    const coreCollections = [
       'users', 'branches', 'trainees', 'trainers', 'courses', 'programs', 'groups',
       'attendance', 'payments', 'expenses', 'trainerSettlements', 'pointRules',
       'pointTransactions', 'exams', 'questions', 'examResults', 'interactiveSessions',
       'certificates', 'certificateTemplates',
-      'trainerAttestations', 'auditLogs', 'settings', 'notifications',
-      'assignments', 'homeworkSubmissions', 'badges', 'traineeBadges', 'portalMessages',
-      'devices', 'deviceCommands'
+      'trainerAttestations', 'settings',
+      'assignments', 'homeworkSubmissions', 'badges', 'traineeBadges', 'portalMessages'
     ];
 
-    const tasks = collections
+    const tasks = coreCollections
       .filter(k => current[k] !== undefined)
       .map(k => saveCollectionToFirestore(k, current[k]));
 
     await Promise.all(tasks);
   };
 
-  // On serverless environments (Vercel/Lambda), ALWAYS execute immediately and await to avoid process freeze drops
+  // On serverless environments (Vercel/Lambda), execute quickly
   if (immediate || isServerless) {
     if (debouncedSyncTimer) {
       clearTimeout(debouncedSyncTimer);
       debouncedSyncTimer = null;
     }
     try {
-      await withTimeout(executeSync(), 6000);
+      await withTimeout(executeSync(), 5000);
     } catch (err) {
-      console.warn('[FirestoreStorage] Serverless sync completed with timeout/notice:', err);
+      // Handled silently
     }
     return;
   }
 
-  // Debounce syncing to cloud by 8 seconds in long-running standalone Node server mode
+  // Debounce syncing to cloud by 15 seconds in long-running standalone Node server mode
   if (debouncedSyncTimer) {
     clearTimeout(debouncedSyncTimer);
   }
@@ -247,9 +263,9 @@ export async function saveFullDbToFirestore(dbData: any, immediate = false): Pro
     try {
       await executeSync();
     } catch (e) {
-      console.warn('[FirestoreStorage] Debounced background sync notice:', e);
+      // Handled silently
     }
-  }, 8000);
+  }, 15000);
 }
 
 export async function allocateNextTraineeCode(

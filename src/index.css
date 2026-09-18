@@ -147,14 +147,14 @@
 .light [class*="bg-[#0b101d]"]:not([class*="fixed"]):not([class*="inset-0"]),
 .light [class*="bg-[#0f172a]"]:not([class*="fixed"]):not([class*="inset-0"]),
 .light [class*="bg-[#111827]"]:not([class*="fixed"]):not([class*="inset-0"]),
-.light [class*="bg-[#1a2542]"]:not([class*="fixed"]):not([class*="inset-0"]),
-.light [class*="bg-slate-900"]:not([class*="fixed"]):not([class*="inset-0"]):not(.modal-dialog-box),
-.light [class*="bg-slate-950"]:not([class*="fixed"]):not([class*="inset-0"]):not(.modal-dialog-box),
-.light [class*="from-slate-800"]:not([class*="fixed"]):not([class*="inset-0"]),
-.light [class*="from-slate-900"]:not([class*="fixed"]):not([class*="inset-0"]),
-.light [class*="from-slate-950"]:not([class*="fixed"]):not([class*="inset-0"]),
-.light [class*="from-indigo-950"]:not([class*="fixed"]):not([class*="inset-0"]),
-.light [class*="via-indigo-950"]:not([class*="fixed"]):not([class*="inset-0"]) {
+.light [class*="bg-[#1a2542]"]:not([class*="fixed"]):not([class*="inset-0"]):not(.modal-dialog-box):not(.modal-dialog-box *),
+.light [class*="bg-slate-900"]:not([class*="fixed"]):not([class*="inset-0"]):not(.modal-dialog-box):not(.modal-dialog-box *),
+.light [class*="bg-slate-950"]:not([class*="fixed"]):not([class*="inset-0"]):not(.modal-dialog-box):not(.modal-dialog-box *),
+.light [class*="from-slate-800"]:not([class*="fixed"]):not([class*="inset-0"]):not(.modal-dialog-box):not(.modal-dialog-box *),
+.light [class*="from-slate-900"]:not([class*="fixed"]):not([class*="inset-0"]):not(.modal-dialog-box):not(.modal-dialog-box *),
+.light [class*="from-slate-950"]:not([class*="fixed"]):not([class*="inset-0"]):not(.modal-dialog-box):not(.modal-dialog-box *),
+.light [class*="from-indigo-950"]:not([class*="fixed"]):not([class*="inset-0"]):not(.modal-dialog-box):not(.modal-dialog-box *),
+.light [class*="via-indigo-950"]:not([class*="fixed"]):not([class*="inset-0"]):not(.modal-dialog-box):not(.modal-dialog-box *) {
   background: linear-gradient(135deg, rgba(255, 255, 255, 0.94) 0%, rgba(250, 251, 255, 0.86) 50%, rgba(255, 253, 248, 0.9) 100%) !important;
   backdrop-filter: blur(16px) saturate(160%) !important;
   -webkit-backdrop-filter: blur(16px) saturate(160%) !important;
@@ -185,15 +185,15 @@
   border-color: #e2e8f0 !important;
   box-shadow: 0 25px 50px -12px rgba(15, 23, 42, 0.25) !important;
 }
-.light .modal-dialog-box [class*="text-slate-100"],
-.light .modal-dialog-box [class*="text-slate-200"],
-.light .modal-dialog-box [class*="text-white"]:not(button *):not([class*="bg-"]):not([class*="badge"]) {
+.light .modal-dialog-box [class*="text-slate-100"]:not(button):not(button *):not([class*="bg-"]):not([class*="badge"]),
+.light .modal-dialog-box [class*="text-slate-200"]:not(button):not(button *):not([class*="bg-"]):not([class*="badge"]),
+.light .modal-dialog-box [class*="text-white"]:not(button):not(button *):not([class*="bg-"]):not([class*="badge"]) {
   color: #0f172a !important;
 }
-.light .modal-dialog-box [class*="text-slate-400"] {
+.light .modal-dialog-box [class*="text-slate-400"]:not(button):not(button *):not([class*="bg-"]) {
   color: #64748b !important;
 }
-.light .modal-dialog-box [class*="text-slate-300"] {
+.light .modal-dialog-box [class*="text-slate-300"]:not(button):not(button *):not([class*="bg-"]) {
   color: #475569 !important;
 }
 
