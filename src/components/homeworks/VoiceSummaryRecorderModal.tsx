@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
   Mic,
   MicOff,
@@ -24,6 +24,7 @@ import {
   Clock
 } from 'lucide-react';
 import { audioService } from '../../services/audioService';
+import { detectCurriculum, getVoiceSummaryTopicsForGrade, getGradeLessonsList } from '../../domain/curriculumRegistry';
 
 interface VoiceSummaryRecorderModalProps {
   isOpen: boolean;
@@ -75,17 +76,18 @@ export const VoiceSummaryRecorderModal: React.FC<VoiceSummaryRecorderModalProps>
   const recognitionRef = useRef<any>(null);
   const audioElementRef = useRef<HTMLAudioElement | null>(null);
 
-  const detectedGrade = student.grade || student.stage || 'الصف الرابع الابتدائي (Grade 4)';
-  const courseName = student.courseName || 'مادة تكنولوجيا المعلومات والاتصالات (ICT) لغات';
+  // Dynamic Grade & Curriculum detection
+  const studentCurriculum = useMemo(() => {
+    return detectCurriculum(student);
+  }, [student]);
 
-  // Quick curriculum topics for ICT & Computer
-  const curriculumTopics = [
-    { title: '🌐 شبكات الحاسوب وأجهزتها (Networks, Modem, Router, Switch)', category: 'ict_grade4' },
-    { title: '💻 المكونات المادية وأنظمة التشغيل (Hardware & OS)', category: 'ict_grade4' },
-    { title: '🔒 الأمان الرقمي وحماية كلمات المرور (Cybersecurity & Passwords)', category: 'ict_grade4' },
-    { title: '⚙️ أجهزة الإدخال والإخراج ووظائفها (Input & Output Devices)', category: 'ict_grade4' },
-    { title: '🚀 ملخص المحاضرة والدرس العملي الأخير', category: 'general' }
-  ];
+  const detectedGrade = student.grade || student.stage || studentCurriculum.gradeNameAr;
+  const courseName = student.courseName || studentCurriculum.subjectNameAr;
+
+  // Grade-Specific Quick Curriculum Topics for Voice Summaries
+  const curriculumTopics = useMemo(() => {
+    return getVoiceSummaryTopicsForGrade(studentCurriculum);
+  }, [studentCurriculum]);
 
   useEffect(() => {
     if (initialTopic) {

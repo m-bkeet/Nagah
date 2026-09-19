@@ -62,11 +62,11 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({ onNavigate
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center pt-14 px-4 bg-slate-950/70 backdrop-blur-sm no-print" onClick={() => setIsSearchOpen(false)}>
-      <div className="bg-slate-900 border border-slate-700 w-full max-w-lg rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[60vh] animate-in fade-in zoom-in-95 duration-200 mt-1" onClick={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 z-50 flex items-start justify-center pt-14 px-4 bg-slate-900/50 dark:bg-slate-950/70 backdrop-blur-sm no-print" onClick={() => setIsSearchOpen(false)}>
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[60vh] animate-in fade-in zoom-in-95 duration-200 mt-1 text-slate-800 dark:text-slate-100" onClick={(e) => e.stopPropagation()}>
         {/* Search Input Header */}
-        <div className="p-4 border-b border-slate-800 flex items-center gap-3">
-          <Search className="w-5 h-5 text-amber-400 shrink-0" />
+        <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center gap-3 bg-slate-50/80 dark:bg-slate-900">
+          <Search className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0" />
           <input
             id="global-search-input"
             type="text"
@@ -74,19 +74,19 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({ onNavigate
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             autoFocus
-            className="w-full bg-transparent text-slate-100 text-sm placeholder-slate-400 focus:outline-none"
+            className="w-full bg-transparent text-slate-900 dark:text-slate-100 text-sm placeholder-slate-400 focus:outline-none font-medium"
           />
           {query && (
             <button
               onClick={() => setQuery('')}
-              className="p-1 text-slate-400 hover:text-white rounded-lg"
+              className="p-1 text-slate-400 hover:text-slate-700 dark:hover:text-white rounded-lg transition-colors"
             >
               <X className="w-4 h-4" />
             </button>
           )}
           <button
             onClick={() => setIsSearchOpen(false)}
-            className="text-xs bg-slate-800 text-slate-300 hover:text-white px-2.5 py-1 rounded-lg border border-slate-700"
+            className="text-xs bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700 font-bold"
           >
             Esc
           </button>
@@ -95,20 +95,20 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({ onNavigate
         {/* Results Container */}
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
           {isLoading && (
-            <div className="py-8 text-center text-xs text-amber-400 flex items-center justify-center gap-2">
-              <div className="w-4 h-4 border-2 border-amber-400 border-t-transparent rounded-full animate-spin" />
+            <div className="py-8 text-center text-xs text-amber-600 dark:text-amber-400 flex items-center justify-center gap-2">
+              <div className="w-4 h-4 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
               <span>جاري البحث في قاعدة بيانات المركز...</span>
             </div>
           )}
 
           {!isLoading && query && totalResults === 0 && (
-            <div className="py-12 text-center text-slate-400 text-xs">
+            <div className="py-12 text-center text-slate-500 dark:text-slate-400 text-xs">
               لم يتم العثور على أي نتائج مطابقة لـ "{query}"
             </div>
           )}
 
           {!isLoading && !query && (
-            <div className="py-8 text-center text-slate-400 text-xs leading-relaxed">
+            <div className="py-8 text-center text-slate-500 dark:text-slate-400 text-xs leading-relaxed">
               اكتب كلمة البحث للوصول السريع إلى أي متدرب، مدرب، دورة تدريبية، إيصال مالي أو جهاز معمل.
             </div>
           )}
@@ -116,7 +116,7 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({ onNavigate
           {/* Trainees Section */}
           {results.trainees.length > 0 && (
             <div>
-              <h4 className="text-[11px] font-bold text-amber-400 mb-2 flex items-center gap-1.5">
+              <h4 className="text-[11px] font-bold text-amber-700 dark:text-amber-400 mb-2 flex items-center gap-1.5">
                 <Users className="w-3.5 h-3.5" />
                 المتدربون ({results.trainees.length})
               </h4>
@@ -125,20 +125,20 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({ onNavigate
                   <div
                     key={t.id}
                     onClick={() => handleSelect('trainees', t.id)}
-                    className="p-2.5 rounded-xl bg-slate-800/60 hover:bg-slate-800 border border-slate-700/60 hover:border-amber-500/40 cursor-pointer flex items-center justify-between transition-all"
+                    className="p-2.5 rounded-xl bg-slate-50 hover:bg-amber-50/70 dark:bg-slate-800/60 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700/60 hover:border-amber-400 dark:hover:border-amber-500/40 cursor-pointer flex items-center justify-between transition-all"
                   >
                     <div>
-                      <div className="text-xs font-bold text-slate-200 flex items-center gap-2">
+                      <div className="text-xs font-bold text-slate-900 dark:text-slate-200 flex items-center gap-2">
                         <span>{t.fullName}</span>
-                        <span className="text-[10px] bg-amber-500/20 text-amber-300 px-1.5 py-0.5 rounded font-mono">
+                        <span className="text-[10px] bg-amber-100 dark:bg-amber-500/20 text-amber-800 dark:text-amber-300 px-1.5 py-0.5 rounded font-mono font-bold border border-amber-200 dark:border-amber-500/30">
                           {t.code}
                         </span>
                       </div>
-                      <div className="text-[11px] text-slate-400 mt-0.5">
+                      <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
                         هاتف: {t.phone} | الرسوم المتبقية: {t.remainingAmount} ج.م
                       </div>
                     </div>
-                    <ArrowLeft className="w-4 h-4 text-slate-500" />
+                    <ArrowLeft className="w-4 h-4 text-slate-400" />
                   </div>
                 ))}
               </div>
@@ -148,7 +148,7 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({ onNavigate
           {/* Trainers Section */}
           {results.trainers.length > 0 && (
             <div>
-              <h4 className="text-[11px] font-bold text-amber-400 mb-2 flex items-center gap-1.5">
+              <h4 className="text-[11px] font-bold text-amber-700 dark:text-amber-400 mb-2 flex items-center gap-1.5">
                 <GraduationCap className="w-3.5 h-3.5" />
                 المدربون ({results.trainers.length})
               </h4>
@@ -157,15 +157,15 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({ onNavigate
                   <div
                     key={tr.id}
                     onClick={() => handleSelect('trainers', tr.id)}
-                    className="p-2.5 rounded-xl bg-slate-800/60 hover:bg-slate-800 border border-slate-700/60 hover:border-amber-500/40 cursor-pointer flex items-center justify-between transition-all"
+                    className="p-2.5 rounded-xl bg-slate-50 hover:bg-amber-50/70 dark:bg-slate-800/60 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700/60 hover:border-amber-400 dark:hover:border-amber-500/40 cursor-pointer flex items-center justify-between transition-all"
                   >
                     <div>
-                      <div className="text-xs font-bold text-slate-200">{tr.name}</div>
-                      <div className="text-[11px] text-slate-400 mt-0.5">
+                      <div className="text-xs font-bold text-slate-900 dark:text-slate-200">{tr.name}</div>
+                      <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
                         تخصص: {tr.specialty} | هاتف: {tr.phone}
                       </div>
                     </div>
-                    <ArrowLeft className="w-4 h-4 text-slate-500" />
+                    <ArrowLeft className="w-4 h-4 text-slate-400" />
                   </div>
                 ))}
               </div>
@@ -175,7 +175,7 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({ onNavigate
           {/* Courses Section */}
           {results.courses.length > 0 && (
             <div>
-              <h4 className="text-[11px] font-bold text-amber-400 mb-2 flex items-center gap-1.5">
+              <h4 className="text-[11px] font-bold text-amber-700 dark:text-amber-400 mb-2 flex items-center gap-1.5">
                 <BookOpen className="w-3.5 h-3.5" />
                 الدورات التدريبية ({results.courses.length})
               </h4>
@@ -184,20 +184,20 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({ onNavigate
                   <div
                     key={c.id}
                     onClick={() => handleSelect('courses', c.id)}
-                    className="p-2.5 rounded-xl bg-slate-800/60 hover:bg-slate-800 border border-slate-700/60 hover:border-amber-500/40 cursor-pointer flex items-center justify-between transition-all"
+                    className="p-2.5 rounded-xl bg-slate-50 hover:bg-amber-50/70 dark:bg-slate-800/60 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700/60 hover:border-amber-400 dark:hover:border-amber-500/40 cursor-pointer flex items-center justify-between transition-all"
                   >
                     <div>
-                      <div className="text-xs font-bold text-slate-200 flex items-center gap-2">
+                      <div className="text-xs font-bold text-slate-900 dark:text-slate-200 flex items-center gap-2">
                         <span>{c.name}</span>
-                        <span className="text-[10px] bg-slate-700 text-slate-300 px-1.5 py-0.5 rounded font-mono">
+                        <span className="text-[10px] bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 px-1.5 py-0.5 rounded font-mono font-bold">
                           {c.code}
                         </span>
                       </div>
-                      <div className="text-[11px] text-slate-400 mt-0.5">
+                      <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
                         رسوم: {c.feeAmount} ج.م | الساعات: {c.hoursCount} ساعة
                       </div>
                     </div>
-                    <ArrowLeft className="w-4 h-4 text-slate-500" />
+                    <ArrowLeft className="w-4 h-4 text-slate-400" />
                   </div>
                 ))}
               </div>
@@ -207,7 +207,7 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({ onNavigate
           {/* Payments Section */}
           {results.payments.length > 0 && (
             <div>
-              <h4 className="text-[11px] font-bold text-amber-400 mb-2 flex items-center gap-1.5">
+              <h4 className="text-[11px] font-bold text-amber-700 dark:text-amber-400 mb-2 flex items-center gap-1.5">
                 <Wallet className="w-3.5 h-3.5" />
                 إيصالات القبض ({results.payments.length})
               </h4>
@@ -216,20 +216,20 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({ onNavigate
                   <div
                     key={p.id}
                     onClick={() => handleSelect('finance')}
-                    className="p-2.5 rounded-xl bg-slate-800/60 hover:bg-slate-800 border border-slate-700/60 hover:border-amber-500/40 cursor-pointer flex items-center justify-between transition-all"
+                    className="p-2.5 rounded-xl bg-slate-50 hover:bg-amber-50/70 dark:bg-slate-800/60 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700/60 hover:border-amber-400 dark:hover:border-amber-500/40 cursor-pointer flex items-center justify-between transition-all"
                   >
                     <div>
-                      <div className="text-xs font-bold text-slate-200 flex items-center gap-2">
+                      <div className="text-xs font-bold text-slate-900 dark:text-slate-200 flex items-center gap-2">
                         <span>إيصال رقم: {p.receiptNumber}</span>
-                        <span className="text-[10px] text-emerald-400 font-bold">
+                        <span className="text-[10px] text-emerald-700 dark:text-emerald-400 font-bold bg-emerald-50 dark:bg-emerald-950/60 px-1.5 py-0.5 rounded border border-emerald-200 dark:border-emerald-800">
                           {p.amount} ج.م
                         </span>
                       </div>
-                      <div className="text-[11px] text-slate-400 mt-0.5">
+                      <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
                         التاريخ: {p.date} | المستلم: {p.receivedByUserName || 'الخزينة'}
                       </div>
                     </div>
-                    <ArrowLeft className="w-4 h-4 text-slate-500" />
+                    <ArrowLeft className="w-4 h-4 text-slate-400" />
                   </div>
                 ))}
               </div>
@@ -239,7 +239,7 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({ onNavigate
           {/* Devices Section */}
           {results.devices.length > 0 && (
             <div>
-              <h4 className="text-[11px] font-bold text-amber-400 mb-2 flex items-center gap-1.5">
+              <h4 className="text-[11px] font-bold text-amber-700 dark:text-amber-400 mb-2 flex items-center gap-1.5">
                 <Monitor className="w-3.5 h-3.5" />
                 أجهزة المعمل ({results.devices.length})
               </h4>
@@ -248,20 +248,20 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({ onNavigate
                   <div
                     key={d.id}
                     onClick={() => handleSelect('devices', d.id)}
-                    className="p-2.5 rounded-xl bg-slate-800/60 hover:bg-slate-800 border border-slate-700/60 hover:border-amber-500/40 cursor-pointer flex items-center justify-between transition-all"
+                    className="p-2.5 rounded-xl bg-slate-50 hover:bg-amber-50/70 dark:bg-slate-800/60 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700/60 hover:border-amber-400 dark:hover:border-amber-500/40 cursor-pointer flex items-center justify-between transition-all"
                   >
                     <div>
-                      <div className="text-xs font-bold text-slate-200 flex items-center gap-2">
+                      <div className="text-xs font-bold text-slate-900 dark:text-slate-200 flex items-center gap-2">
                         <span>{d.name}</span>
-                        <span className="text-[10px] bg-slate-700 text-slate-300 px-1.5 py-0.5 rounded font-mono">
+                        <span className="text-[10px] bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 px-1.5 py-0.5 rounded font-mono font-bold">
                           {d.deviceId}
                         </span>
                       </div>
-                      <div className="text-[11px] text-slate-400 mt-0.5">
+                      <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
                         IP: {d.ipAddress} | الحالة: {d.isOnline ? '🟢 متصل' : '🔴 غير متصل'}
                       </div>
                     </div>
-                    <ArrowLeft className="w-4 h-4 text-slate-500" />
+                    <ArrowLeft className="w-4 h-4 text-slate-400" />
                   </div>
                 ))}
               </div>

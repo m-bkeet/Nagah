@@ -17,7 +17,7 @@ import path from 'path';
 import crypto from 'crypto';
 import { migrationRouter } from './migrationRoutes';
 import { db, hashPassword } from './db';
-import { extractExamFromMediaOrText, gradeHomeworkOrExamFromImage, generateWithModelCascade, designCertificateWithAI, generateTestCasesWithAI, autoGradeCodeWithAI, AIGradeScanResult, generateTrainerPresentation, generateTrainerAdvancedExam, generateKahootQuiz, evaluateAudioOrVoiceSummaryWithAI, AIVoiceEvaluationResult, generateAllInOneLessonPlan } from './gemini';
+import { extractExamFromMediaOrText, gradeHomeworkOrExamFromImage, generateWithModelCascade, designCertificateWithAI, generateTestCasesWithAI, autoGradeCodeWithAI, AIGradeScanResult, generateTrainerPresentation, generateTrainerAdvancedExam, generateKahootQuiz, evaluateAudioOrVoiceSummaryWithAI, AIVoiceEvaluationResult, generateAllInOneLessonPlan, structurePostLectureVoiceMemo } from './gemini';
 import { languageLabRouter } from './languageLabRoutes';
 import {
   Trainee,
@@ -8906,27 +8906,112 @@ apiRouter.post(['/student/submit-homework', '/student/submit-homework/'], async 
 });
 
 // ===================================================
-// Lecture Recaps & Tasks AI Service (Grade 4 & All Stages)
+// Lecture Recaps & Tasks AI Service (Grade 6, 5, 4, Prep 1, Python, Robotics)
 // ===================================================
-const getStandardGrade4Recap = (): any => ({
-  id: 'recap-grade4-ict-main',
-  title: 'أبطال الصف الرابع لغات - فرع مركز بدر والنجاح 💻🌟',
-  gradeLevel: 'الصف الرابع الابتدائي (Grade 4 Languages)',
-  subject: 'تكنولوجيا المعلومات والاتصالات ICT & Computer',
+const getStandardGrade6Recap = (): any => ({
+  id: 'recap-grade6-ict-main',
+  title: 'المحاضرة 1: أجهزة شبكات الكمبيوتر والتكنولوجيا المتقدمة وتصميم الويب HTML 🌐🚀',
+  gradeLevel: 'الصف السادس الابتدائي (Grade 6 Languages) - دورة ICT 6',
+  subject: 'تكنولوجيا المعلومات والاتصالات ICT 6 & Computer',
+  groupName: 'جروب الصف السادس لغات (ICT 6) - الأحد 4م',
+  courseName: 'دورة ICT 6 - الصف السادس الابتدائي',
   lectureDate: new Date().toISOString(),
   trainerName: 'المهندس / المدرب المعتمد',
   recapSummary: {
     points: [
-      '1. مراجعة شاملة Revision على ما تم دراسته سابقاً.',
-      '2. أسئلة تفاعلية وتطبيقية على Lesson 1 & Lesson 2.',
-      '3. حل وتصحيح الواجبات والتأكد من إتقان كل بطل للأسئلة.',
-      '4. مسابقة كاهوت Kahoot حماسية لتثبيت المعلومات والتنافس الشريف.',
-      '5. فتح Lesson 3 مع عرض فيديو تمهيدي شيق وممتع.',
-      '6. فتح وفك الـ Case عملياً والتعرف على الأجزاء الداخلية للأجهزة.',
-      '7. مكونات الكيسة الخمسة: (عمو الكهربائي = Power Supply ⚡️، ماما نوسة = Motherboard 👩🍳، المخيخ = CPU 🧠، السمكة = RAM 🐟، الخزنة = Hard Disk 🔒).',
-      '8. دورة البيانات والمعلومات Data vs Information (دخول Data -> تحويل ومعالجة بالمخيخ CPU -> خروج Information مفيدة).'
+      '1. مراجعة شاملة وأسئلة تفاعلية ومسابقة كاهوت لتثبيت المفاهيم وتكريم الأبطال المتفوقين.',
+      '2. شرح أجهزة شبكات الكمبيوتر (المودم Modem، المحول Switch، الراوتر Router) والفرق بين الشبكات السلكية واللاسلكية.',
+      '3. استعراض التكنولوجيا المتقدمة وتطبيقات الذكاء الاصطناعي (AI) والواقع المعزز (AR) والواقع الافتراضي (VR).',
+      '4. مقدمة عملية في لغة ترميز النصوص التشعبية (HTML) لبناء صفحات الويب التفاعلية وهيكلة الوسوم الأساسية.',
+      '5. تطبيق عملي بالمعمل على كتابة كود HTML وبناء صفحة ويب شخصية بسيطة وفحص الاتصال بالأجهزة الذكية.'
     ],
-    detailedNotes: 'تمت المحاضرة وسط تفاعل عالي واستيعاب تطبيقي مباشر حيث قام الطلاب بالتعرف على مكونات الحاسوب وفك الكيسة وملاحظة وظيفة كل قطعة وربطها بالتشبيهات الذكية.',
+    detailedNotes: 'تمت المحاضرة بتفاعل رائع وفهم عميق للفرق بين المودم والمحول وتطبيق كتابة وسوم HTML في المعمل بنجاح.'
+  },
+  homeworkTasks: {
+    tasks: [
+      '1. كتابة الفروق الجوهرية بين المودم (Modem) والمحول (Switch) والراوتر في كشكول التدريب مع رسم توضيحي.',
+      '2. كتابة كود HTML بسيط يحتوي على وسم العنوان <h1> وفقرة <p> وقائمة نقطية <ul> في الكشكول.',
+      '3. تصوير صفحات الواجب بالكشكول ورفعها عبر بوابة المتدرب للتصحيح الذكي والحصول على النجوم.'
+    ],
+    bonusChallenge: '🌟 بونص إضافي خاص: إنشاء ملف HTML حقيقي على الكمبيوتر وتجربة فتحه بمتصفح الويب وتصوير الشاشة.',
+    dueDateTime: new Date(Date.now() + 6 * 86400000).toISOString(),
+    allowMultiPageUpload: true
+  },
+  nextLecturePrep: {
+    prepPoints: [
+      'التحضير لدرس حماية البيانات والألعاب الإلكترونية وتطبيقات الحوسبة السحابية (Cloud Computing).',
+      'إحضار كشكول التدريب وأدوات المعمل والاستعداد لمسابقة كاهوت جديدة.'
+    ],
+    teaserNotes: 'المحاضرة القادمة سنتعلم كيف نحمي حساباتنا من المخاطر السيبرانية ونخزن ملفاتنا سحابياً!'
+  },
+  closingMessage: 'أبطال الصف السادس (ICT 6)، نضج فكري وتطبيقي استثنائي في استيعاب التكنولوجيا المتقدمة والشبكات! فخور جداً بتميزكم. 🌐🚀⭐',
+  isPublished: true,
+  createdAt: new Date().toISOString(),
+  updatedAt: new Date().toISOString()
+});
+
+const getStandardGrade5Recap = (): any => ({
+  id: 'recap-grade5-ict-main',
+  title: 'المحاضرة 2: شبكات الحاسوب والإنترنت والأمن السيبراني 🌐🔒',
+  gradeLevel: 'الصف الخامس الابتدائي (Grade 5 Languages) - دورة ICT 5',
+  subject: 'تكنولوجيا المعلومات والاتصالات ICT 5 & Computer',
+  groupName: 'جروب الصف الخامس لغات (ICT 5) - السبت 2م',
+  courseName: 'دورة ICT 5 - الصف الخامس الابتدائي',
+  lectureDate: new Date().toISOString(),
+  trainerName: 'المهندس / المدرب المعتمد',
+  recapSummary: {
+    points: [
+      '1. مراجعة أنواع الشبكات (LAN vs WAN) والفرق بين الشبكة المغلقة والمفتوحة.',
+      '2. مكونات توصيل الشبكة (الراوتر Router، كابلات Ethernet، منافذ Switch).',
+      '3. الإنترنت Internet وشبكة الويب العالمية World Wide Web (WWW).',
+      '4. قواعد حماية البيانات وكلمات المرور القوية (Strong Passwords & 2FA).',
+      '5. تطبيق عملي بالمعمل على فحص اتصال الشبكة ومشاركة الملفات بأمان.'
+    ],
+    detailedNotes: 'تم تطبيق ورشة عملية على توصيل الكابلات وفهم عنوان الـ IP وطرق حماية الخصوصية الرقمية.'
+  },
+  homeworkTasks: {
+    tasks: [
+      '1. كتابة جدول مقارنة بين شبكة LAN وشبكة WAN في الكشكول.',
+      '2. وضع 5 شروط لكلمة المرور الآمنة التي تحمي الحسابات من الاختراق.',
+      '3. حل أسئلة نهاية الوحدة وتصوير صفحات الإجابة لرفعها عبر البوابة.'
+    ],
+    bonusChallenge: '🌟 بونص إضافي: ابتكار كلمة مرور قوية باستخدام كلمات وحروف ورموز وتوضيح سبب قوتها.',
+    dueDateTime: new Date(Date.now() + 6 * 86400000).toISOString(),
+    allowMultiPageUpload: true
+  },
+  nextLecturePrep: {
+    prepPoints: [
+      'قراءة درس استراتيجيات البحث المتقدم على محركات البحث (Search Strategies).',
+      'إحضار الكشكول ومتابعة المهام في الموعد.'
+    ],
+    teaserNotes: 'المحاضرة القادمة سنتعلم أسرار وتقنيات البحث الاحترافي والتحقق من مصادر المعلومات!'
+  },
+  closingMessage: 'أبطال الصف الخامس، أبدعتم في فهم عالم الشبكات، استمروا في تطبيق عادات الأمان الرقمي! 🌐🛡️',
+  isPublished: true,
+  createdAt: new Date().toISOString(),
+  updatedAt: new Date().toISOString()
+});
+
+const getStandardGrade4Recap = (): any => ({
+  id: 'recap-grade4-ict-main',
+  title: 'المحاضرة 3: مكونات الكيسة الخمسة والعتاد ودورة معالجة البيانات 💻⚡️',
+  gradeLevel: 'الصف الرابع الابتدائي (Grade 4 Languages)',
+  subject: 'تكنولوجيا المعلومات والاتصالات ICT 4 & Computer',
+  groupName: 'جروب الصف الرابع لغات (ICT 4) - مركز بدر والنجاح',
+  courseName: 'دورة ICT 4 - الصف الرابع الابتدائي',
+  lectureDate: new Date().toISOString(),
+  trainerName: 'المهندس / المدرب المعتمد',
+  recapSummary: {
+    points: [
+      '1. مراجعة شاملة Revision على ما تم دراسته سابقاً في الدرس الأول والثاني.',
+      '2. أسئلة تفاعلية ومسابقة كاهوت حماسية لتثبيت المفاهيم وتكريم الفائزين.',
+      '3. حل وتصحيح الواجبات السابقة والتأكد من إتقان كل بطل للأسئلة.',
+      '4. فتح Lesson 3 مع عرض فيديو تمهيدي شيق عن أجزاء الكمبيوتر.',
+      '5. فك الـ Case عملياً في المعمل والتعرف على الأجزاء الداخلية للأجهزة.',
+      '6. مكونات الكيسة الخمسة: (عمو الكهربائي = Power Supply ⚡️، ماما نوسة = Motherboard 👩‍🍳، المخيخ = CPU 🧠، السمكة = RAM 🐟، الخزنة = Hard Disk 🔒).',
+      '7. دورة البيانات والمعلومات Data vs Information (دخول Data -> تحويل ومعالجة بالمخيخ CPU -> خروج Information مفيدة).'
+    ],
+    detailedNotes: 'تمت المحاضرة وسط تفاعل عالي واستيعاب تطبيقي مباشر حيث قام الطلاب بالتعرف على مكونات الحاسوب وفك الكيسة وملاحظة وظيفة كل قطعة وربطها بالتشبيهات الذكية.'
   },
   homeworkTasks: {
     tasks: [
@@ -8941,24 +9026,86 @@ const getStandardGrade4Recap = (): any => ({
   },
   nextLecturePrep: {
     prepPoints: [
-      'ربط المسميات الأساسية (عمو الكهربائي = Power Supply, ماما نوسة = Motherboard, المخيخ = CPU, السمكة = RAM, الخزنة = Hard Disk).',
+      'تثبيت وحفظ مسميات مكونات الكيسة الخمسة (Power Supply, Motherboard, CPU, RAM, Hard Disk).',
       'إحضار كشكول التدريب وأدوات المعمل والاستعداد لمسابقة كاهوت وتطبيق عملي جديد في المعمل.'
     ],
     teaserNotes: 'المحاضرة القادمة ستشهد تحديات برمجية وعملية تفاعلية وتفكيك كيسات جديدة داخل المعمل!'
   },
-  closingMessage: 'أبطال المستقبل، فخور جداً بتركيزكم وفهمكم العملي لمكونات الحاسوب، أنتم لستم مستخدمين عاديين بل مهندسون ومبتكرون! ننتظر إبداعاتكم في تلخيص الدروس والتطبيق العملي. 🚀🌟',
+  closingMessage: 'أبطال الصف الرابع، فخور جداً بتركيزكم وفهمكم العملي لمكونات الحاسوب، أنتم مهندسو المستقبل! ننتظر إبداعاتكم في تلخيص الدروس والتطبيق العملي. 🚀🌟',
   isPublished: true,
-  createdAt: new Date().toISOString()
+  createdAt: new Date().toISOString(),
+  updatedAt: new Date().toISOString()
 });
+
+const getStandardPrep1Recap = (): any => ({
+  id: 'recap-prep1-ict-main',
+  title: 'المحاضرة 1: التكنولوجيا الخضراء والتحول الرقمي وأنظمة التشغيل الحديثة 🌿💻',
+  gradeLevel: 'الصف الأول الإعدادي (Prep 1) - دورة ICT & AI',
+  subject: 'تكنولوجيا المعلومات والاتصالات والذكاء الاصطناعي Prep 1',
+  groupName: 'جروب الأول الإعدادي لغات (Prep 1) - الاثنين 3م',
+  courseName: 'دورة ICT & AI - الصف الأول الإعدادي',
+  lectureDate: new Date().toISOString(),
+  trainerName: 'المهندس / المدرب المعتمد',
+  recapSummary: {
+    points: [
+      '1. شرح مفهوم التكنولوجيا الخضراء (Green Technology) ودورها في الاستدامة البيئية وترشيد الطاقة.',
+      '2. استعراض التحول الرقمي (Digital Transformation) وتطبيقاته الحكومية والتعليمية والخدمية في مصر.',
+      '3. التعرف على أنظمة التشغيل المختلفة (Windows, Android, Linux, iOS) ووظائفها في إدارة العتاد والبرامج.',
+      '4. خطوات تثبيت وإلغاء تثبيت البرمجيات وإدارة الأجهزة الرقمية والملحقات ومنافذ التوصيل.',
+      '5. إنشاء واستخدام البريد الإلكتروني والحساب المدرسي الموحد والتواصل الرقمي الآمن والمحترف.'
+    ],
+    detailedNotes: 'تم تطبيق ورشة عمل تفاعلية على تفعيل الحساب الموحد وتجربة أنظمة التشغيل وفهم معايير التكنولوجيا الخضراء وإدارة الطاقة بالأجهزة.'
+  },
+  homeworkTasks: {
+    tasks: [
+      '1. كتابة تقرير قصير في الكشكول يوضح 3 أمثلة لتطبيقات التكنولوجيا الخضراء في الأجهزة الذكية.',
+      '2. عمل جدول مقارنة بين أنظمة تشغيل الحواسيب (Windows/Linux) وأنظمة الهواتف (Android/iOS).',
+      '3. تسجيل الدخول بالبريد المدرسي الموحد وتصوير صفحة الحساب ورفعها عبر البوابة.'
+    ],
+    bonusChallenge: '🌟 بونص متميز: ابتكار فكرة مشروع رقمي يدعم البيئة المستدامة باستخدام الذكاء الاصطناعي أو إنترنت الأشياء.',
+    dueDateTime: new Date(Date.now() + 6 * 86400000).toISOString(),
+    allowMultiPageUpload: true
+  },
+  nextLecturePrep: {
+    prepPoints: [
+      'التحضير لموضوع الحوسبة السحابية (Cloud Storage) وخدمات Google Drive و OneDrive.',
+      'تجهيز بيئة العمل لاجتماعات Google Meet وإدارة المشروعات الرقمية.'
+    ],
+    teaserNotes: 'المحاضرة القادمة سنتعلم كيفية حفظ ملفاتنا سحابياً وإدارتها والعمل الجماعي عبر الإنترنت!'
+  },
+  closingMessage: 'أبطال الصف الأول الإعدادي، بداية استثنائية ونضج تكنولوجي رائع في استيعاب مفاهيم التكنولوجيا الخضراء والتحول الرقمي! 🌿🚀⭐',
+  isPublished: true,
+  createdAt: new Date().toISOString(),
+  updatedAt: new Date().toISOString()
+});
+
+const getStandardInitialRecaps = (): any[] => [
+  getStandardGrade6Recap(),
+  getStandardGrade5Recap(),
+  getStandardGrade4Recap(),
+  getStandardPrep1Recap()
+];
 
 apiRouter.get(['/lecture-recaps', '/lecture-recaps/'], async (req: Request, res: Response) => {
   try {
+    const { gradeLevel, groupId, courseId } = req.query;
     const data = db.getData();
     if (!Array.isArray((data as any).lectureRecaps) || (data as any).lectureRecaps.length === 0) {
-      (data as any).lectureRecaps = [getStandardGrade4Recap()];
+      (data as any).lectureRecaps = getStandardInitialRecaps();
       db.saveImmediate();
     }
-    res.json({ success: true, recaps: (data as any).lectureRecaps });
+    let list: any[] = (data as any).lectureRecaps;
+    if (gradeLevel) {
+      const gl = String(gradeLevel).toLowerCase();
+      list = list.filter(r => (r.gradeLevel || '').toLowerCase().includes(gl) || (r.title || '').toLowerCase().includes(gl));
+    }
+    if (groupId && groupId !== 'all') {
+      list = list.filter(r => r.groupId === groupId || r.groupName?.includes(String(groupId)));
+    }
+    if (courseId && courseId !== 'all') {
+      list = list.filter(r => r.courseId === courseId || r.courseName?.includes(String(courseId)));
+    }
+    res.json({ success: true, recaps: list });
   } catch (err: any) {
     res.status(500).json({ error: 'فشل تحميل ملخصات المحاضرات: ' + err.message });
   }
@@ -8969,13 +9116,17 @@ apiRouter.get(['/lecture-recaps/latest', '/lecture-recaps/latest/'], async (req:
     const { gradeLevel, groupId, courseId } = req.query;
     const data = db.getData();
     if (!Array.isArray((data as any).lectureRecaps) || (data as any).lectureRecaps.length === 0) {
-      (data as any).lectureRecaps = [getStandardGrade4Recap()];
+      (data as any).lectureRecaps = getStandardInitialRecaps();
       db.saveImmediate();
     }
     const recaps: any[] = (data as any).lectureRecaps;
-    let found = recaps.find(r => r.isPublished && (!gradeLevel || r.gradeLevel?.includes(String(gradeLevel)) || r.title?.includes(String(gradeLevel))));
+    let found = null;
+    if (gradeLevel) {
+      const gl = String(gradeLevel).toLowerCase();
+      found = recaps.find(r => r.isPublished && ((r.gradeLevel || '').toLowerCase().includes(gl) || (r.title || '').toLowerCase().includes(gl)));
+    }
     if (!found) {
-      found = recaps[0] || getStandardGrade4Recap();
+      found = recaps[0] || getStandardGrade6Recap();
     }
     res.json({ success: true, recap: found });
   } catch (err: any) {
@@ -8990,11 +9141,14 @@ apiRouter.post(['/lecture-recaps', '/lecture-recaps/'], async (req: Request, res
       gradeLevel,
       subject,
       courseId,
+      courseName,
       groupId,
+      groupName,
       branchId,
       trainerId,
       trainerName,
       lectureDate,
+      lectureNumber,
       recapSummary,
       homeworkTasks,
       nextLecturePrep,
@@ -9011,14 +9165,17 @@ apiRouter.post(['/lecture-recaps', '/lecture-recaps/'], async (req: Request, res
     const newRecap: any = {
       id: 'recap-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6),
       title: title || 'ملخص المحاضرة والتكليفات والتطبيق العملي',
-      gradeLevel: gradeLevel || 'الصف الرابع الابتدائي (Grade 4 Languages)',
+      gradeLevel: gradeLevel || 'الصف السادس الابتدائي (Grade 6 Languages)',
       subject: subject || 'تكنولوجيا المعلومات والاتصالات ICT',
       courseId: courseId || '',
+      courseName: courseName || '',
       groupId: groupId || '',
+      groupName: groupName || '',
       branchId: branchId || '',
       trainerId: trainerId || '',
       trainerName: trainerName || 'المدرب المعتمد',
       lectureDate: lectureDate || new Date().toISOString(),
+      lectureNumber: lectureNumber || undefined,
       recapSummary: recapSummary || { points: [], detailedNotes: '' },
       homeworkTasks: homeworkTasks || { tasks: [], bonusChallenge: '' },
       nextLecturePrep: nextLecturePrep || { prepPoints: [], teaserNotes: '' },
@@ -9037,7 +9194,7 @@ apiRouter.post(['/lecture-recaps', '/lecture-recaps/'], async (req: Request, res
       id: 'notif-recap-' + Date.now(),
       type: 'system' as any,
       title: `📢 نشر ملخص وتاسكات المحاضرة: ${newRecap.title}`,
-      message: `تم نشر ملخص المحاضرة والتطبيق العملي وفك الكيسة والتاسك المطلوب للمرحلة (${newRecap.gradeLevel}). تفقد البوابة للتسليم!`,
+      message: `تم نشر ملخص وتاسك المحاضرة للمجموعة (${newRecap.groupName || newRecap.gradeLevel}). تفقد البوابة للتسليم!`,
       linkView: 'homeworks',
       createdAt: new Date().toISOString(),
       read: false
@@ -9048,7 +9205,7 @@ apiRouter.post(['/lecture-recaps', '/lecture-recaps/'], async (req: Request, res
       userName: trainerName || 'المدرب',
       action: 'نشر ملخص محاضرة وتاسكات ومراجعة عملية',
       entity: 'إدارة الواجبات والملخصات',
-      details: `تم نشر ملخص "${newRecap.title}" لطلاب ${newRecap.gradeLevel}.`
+      details: `تم نشر ملخص "${newRecap.title}" لطلاب ${newRecap.groupName || newRecap.gradeLevel}.`
     });
 
     db.saveImmediate();
@@ -9056,6 +9213,75 @@ apiRouter.post(['/lecture-recaps', '/lecture-recaps/'], async (req: Request, res
     res.json({ success: true, recap: newRecap, message: '🎉 تم نشر ملخص وتاسكات المحاضرة وإشعار الطلاب وأولياء الأمور بنجاح!' });
   } catch (err: any) {
     res.status(500).json({ error: 'فشل حفظ ونشر ملخص المحاضرة: ' + err.message });
+  }
+});
+
+// Update/Edit Existing Lecture Recap (PUT)
+apiRouter.put(['/lecture-recaps/:id', '/lecture-recaps/:id/'], async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const updateFields = req.body;
+    const data = db.getData();
+    if (!Array.isArray((data as any).lectureRecaps)) {
+      (data as any).lectureRecaps = [];
+    }
+
+    const index = (data as any).lectureRecaps.findIndex((r: any) => r.id === id);
+    if (index === -1) {
+      return res.status(404).json({ error: 'لم يتم العثور على ملخص المحاضرة المطلوب تعديله' });
+    }
+
+    const current = (data as any).lectureRecaps[index];
+    const updatedRecap = {
+      ...current,
+      ...updateFields,
+      id: current.id,
+      updatedAt: new Date().toISOString()
+    };
+
+    (data as any).lectureRecaps[index] = updatedRecap;
+
+    db.logAudit({
+      userId: updateFields.trainerId || 'trainer',
+      userName: updateFields.trainerName || 'المدرب',
+      action: 'تعديل ملخص وتاسكات المحاضرة',
+      entity: 'إدارة الواجبات والملخصات',
+      details: `تم تعديل ملخص "${updatedRecap.title}" بنجاح.`
+    });
+
+    db.saveImmediate();
+
+    res.json({ success: true, recap: updatedRecap, message: '✅ تم تعديل وحفظ ملخص المحاضرة بنجاح!' });
+  } catch (err: any) {
+    res.status(500).json({ error: 'فشل تعديل ملخص المحاضرة: ' + err.message });
+  }
+});
+
+// Delete Existing Lecture Recap (DELETE)
+apiRouter.delete(['/lecture-recaps/:id', '/lecture-recaps/:id/'], async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const data = db.getData();
+    if (!Array.isArray((data as any).lectureRecaps)) {
+      (data as any).lectureRecaps = [];
+    }
+
+    const prevLength = (data as any).lectureRecaps.length;
+    (data as any).lectureRecaps = (data as any).lectureRecaps.filter((r: any) => r.id !== id);
+
+    db.logAudit({
+      userId: 'trainer',
+      userName: 'المدرب',
+      action: 'حذف ملخص محاضرة',
+      entity: 'إدارة الواجبات والملخصات',
+      details: `تم حذف ملخص المحاضرة رقم (${id}).`
+    });
+
+    db.saveImmediate();
+
+    res.json({ success: true, message: '🗑️ تم حذف ملخص وتكليف المحاضرة بنجاح' });
+  } catch (err: any) {
+    res.status(500).json({ error: 'فشل حذف ملخص المحاضرة: ' + err.message });
   }
 });
 

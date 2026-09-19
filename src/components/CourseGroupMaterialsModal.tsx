@@ -378,36 +378,36 @@ export const CourseGroupMaterialsModal: React.FC<CourseGroupMaterialsModalProps>
 
   return (
     <>
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/80 backdrop-blur-md animate-fadeIn overflow-hidden">
-        <div className="bg-slate-900 border border-emerald-500/30 rounded-3xl shadow-2xl max-w-3xl w-full text-slate-100 max-h-[90vh] flex flex-col overflow-hidden">
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-900/60 dark:bg-slate-950/80 backdrop-blur-sm animate-fadeIn overflow-hidden">
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-emerald-500/30 rounded-3xl shadow-2xl max-w-3xl w-full text-slate-800 dark:text-slate-100 max-h-[90vh] flex flex-col overflow-hidden">
           
           {/* Modal Header */}
-          <div className="shrink-0 p-4 sm:p-5 flex items-start justify-between border-b border-slate-800 bg-slate-900/90">
+          <div className="shrink-0 p-4 sm:p-5 flex items-start justify-between border-b border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/90">
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-2xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 shrink-0">
+              <div className="w-12 h-12 rounded-2xl bg-emerald-100 dark:bg-emerald-500/20 border border-emerald-300 dark:border-emerald-500/40 flex items-center justify-center text-emerald-700 dark:text-emerald-400 shrink-0 shadow-sm">
                 <BookOpen className="w-6 h-6" />
               </div>
               <div>
                 <div className="flex items-center gap-2">
-                  <h3 className="font-black text-lg text-white">
+                  <h3 className="font-black text-lg text-slate-900 dark:text-white">
                     إدارة مناهج ومذكرات {isCourse ? 'الدورة' : 'المجموعة'} (Google Drive)
                   </h3>
-                  <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
+                  <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-500/40">
                     {isCourse ? 'على مستوى الدورة' : 'على مستوى المجموعة'}
                   </span>
                 </div>
-                <p className="text-xs text-slate-400 mt-0.5">
+                <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">
                   {isCourse ? (
-                    <>الدورة: <span className="text-emerald-300 font-bold">{(currentTarget as Course).name}</span> (كود: {(currentTarget as Course).code})</>
+                    <>الدورة: <span className="text-emerald-700 dark:text-emerald-300 font-bold">{(currentTarget as Course).name}</span> (كود: {(currentTarget as Course).code})</>
                   ) : (
-                    <>المجموعة: <span className="text-emerald-300 font-bold">{(currentTarget as Group).name}</span> {parentCourse && <>| الدورة: <span className="text-amber-300 font-bold">{parentCourse.name}</span></>}</>
+                    <>المجموعة: <span className="text-emerald-700 dark:text-emerald-300 font-bold">{(currentTarget as Group).name}</span> {parentCourse && <>| الدورة: <span className="text-amber-700 dark:text-amber-300 font-bold">{parentCourse.name}</span></>}</>
                   )}
                 </p>
               </div>
             </div>
             <button
               onClick={onClose}
-              className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors cursor-pointer"
+              className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors cursor-pointer border border-slate-200 dark:border-slate-700"
             >
               <X className="w-5 h-5" />
             </button>
@@ -417,13 +417,13 @@ export const CourseGroupMaterialsModal: React.FC<CourseGroupMaterialsModalProps>
           <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 custom-scrollbar">
 
             {/* Smart Track Tabs */}
-            <div className="flex items-center gap-2 p-1.5 bg-slate-950/80 rounded-2xl border border-slate-800">
+            <div className="flex items-center gap-2 p-1.5 bg-slate-100 dark:bg-slate-950/80 rounded-2xl border border-slate-200 dark:border-slate-800">
               <button
                 onClick={() => setActiveTab('arabic')}
                 className={`flex-1 py-2.5 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 ${
                   activeTab === 'arabic'
-                    ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/30 scale-[1.01]'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+                    ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/30 scale-[1.01]'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-white/80 dark:hover:bg-slate-800/60'
                 }`}
               >
                 <span>🇪🇬 منهج المسار العربي</span>
@@ -431,7 +431,7 @@ export const CourseGroupMaterialsModal: React.FC<CourseGroupMaterialsModalProps>
                   <span className="w-2 h-2 rounded-full bg-emerald-300 animate-pulse"></span>
                 )}
                 {currentArabicInfo.isInherited && (
-                  <span className="text-[10px] bg-emerald-900/80 px-1.5 py-0.5 rounded text-emerald-200">موروث</span>
+                  <span className="text-[10px] bg-emerald-800 text-white px-1.5 py-0.5 rounded font-medium">موروث</span>
                 )}
               </button>
 
@@ -439,8 +439,8 @@ export const CourseGroupMaterialsModal: React.FC<CourseGroupMaterialsModalProps>
                 onClick={() => setActiveTab('languages')}
                 className={`flex-1 py-2.5 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 ${
                   activeTab === 'languages'
-                    ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/30 scale-[1.01]'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+                    ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30 scale-[1.01]'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-white/80 dark:hover:bg-slate-800/60'
                 }`}
               >
                 <span>🌐 منهج مسار اللغات (تجريبي / دولي)</span>
@@ -448,7 +448,7 @@ export const CourseGroupMaterialsModal: React.FC<CourseGroupMaterialsModalProps>
                   <span className="w-2 h-2 rounded-full bg-blue-300 animate-pulse"></span>
                 )}
                 {currentLanguagesInfo.isInherited && (
-                  <span className="text-[10px] bg-blue-900/80 px-1.5 py-0.5 rounded text-blue-200">موروث</span>
+                  <span className="text-[10px] bg-blue-800 text-white px-1.5 py-0.5 rounded font-medium">موروث</span>
                 )}
               </button>
 
@@ -456,8 +456,8 @@ export const CourseGroupMaterialsModal: React.FC<CourseGroupMaterialsModalProps>
                 onClick={() => setActiveTab('all')}
                 className={`py-2.5 px-4 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
                   activeTab === 'all'
-                    ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+                    ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-white/80 dark:hover:bg-slate-800/60'
                 }`}
               >
                 <Layers className="w-3.5 h-3.5" />
@@ -467,8 +467,8 @@ export const CourseGroupMaterialsModal: React.FC<CourseGroupMaterialsModalProps>
 
             {/* If viewed in Group mode: Notification about inheritance */}
             {!isCourse && (
-              <div className="p-3 bg-amber-950/30 border border-amber-500/30 rounded-2xl flex items-start gap-3 text-xs text-amber-200">
-                <Sparkles className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+              <div className="p-3.5 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-500/30 rounded-2xl flex items-start gap-3 text-xs text-amber-900 dark:text-amber-200">
+                <Sparkles className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
                 <div>
                   <span className="font-bold block">ميزة الربط التلقائي والوراثة الذكية:</span>
                   مناهج الدورة الرئيسية ترتبط تلقائياً بمجموعات المسار المقابل (عربي / لغات). رفع المنهج مرة واحدة في الدورة يجعله متاحاً فورياً لكافة الطلاب والمدربين في المجموعة، ويمكنك أيضاً تخصيص منهج منفصل لهذه المجموعة إذا رغبت.
@@ -478,26 +478,26 @@ export const CourseGroupMaterialsModal: React.FC<CourseGroupMaterialsModalProps>
 
             {/* Active Track Status Card */}
             {(activeTab === 'arabic' || activeTab === 'languages') && (
-              <div className="bg-slate-950/60 p-4 rounded-2xl border border-slate-800 space-y-3">
+              <div className="bg-slate-50 dark:bg-slate-800/60 p-4 rounded-2xl border border-slate-200 dark:border-slate-700/80 space-y-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold text-slate-200">
+                    <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
                       المنهج النشط لـ {getTrackLabel(activeTab)}:
                     </span>
                     {activeTrackCurriculum?.material ? (
-                      <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
+                      <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-100 dark:bg-emerald-500/20 text-emerald-800 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/30 flex items-center gap-1">
                         <CheckCircle2 className="w-3 h-3" />
                         مربوط وجاهز
                       </span>
                     ) : (
-                      <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-slate-800 text-slate-400 border border-slate-700">
+                      <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-600">
                         غير مربوط بعد
                       </span>
                     )}
                   </div>
 
                   {activeTrackCurriculum?.isInherited && (
-                    <span className="text-[11px] text-amber-300 font-bold bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-lg flex items-center gap-1">
+                    <span className="text-[11px] text-amber-800 dark:text-amber-300 font-bold bg-amber-100 dark:bg-amber-500/10 border border-amber-300 dark:border-amber-500/20 px-2.5 py-0.5 rounded-lg flex items-center gap-1">
                       <Sparkles className="w-3 h-3" />
                       موروث من الدورة ({parentCourse?.name})
                     </span>
@@ -505,9 +505,9 @@ export const CourseGroupMaterialsModal: React.FC<CourseGroupMaterialsModalProps>
                 </div>
 
                 {activeTrackCurriculum?.material ? (
-                  <div className="p-3.5 bg-slate-900 rounded-xl border border-slate-700/80 flex items-center justify-between gap-3">
+                  <div className="p-3.5 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 flex items-center justify-between gap-3 shadow-sm">
                     <div className="flex items-center gap-3 overflow-hidden">
-                      <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0">
+                      <div className="w-10 h-10 rounded-xl bg-emerald-100 dark:bg-emerald-500/10 border border-emerald-300 dark:border-emerald-500/30 flex items-center justify-center text-emerald-700 dark:text-emerald-400 shrink-0">
                         {activeTrackCurriculum.material.isGoogleDrive ? (
                           <span className="font-bold text-xs">Drive</span>
                         ) : (
@@ -515,15 +515,15 @@ export const CourseGroupMaterialsModal: React.FC<CourseGroupMaterialsModalProps>
                         )}
                       </div>
                       <div className="overflow-hidden">
-                        <h4 className="font-bold text-sm text-white truncate">
+                        <h4 className="font-bold text-sm text-slate-900 dark:text-white truncate">
                           {activeTrackCurriculum.material.title}
                         </h4>
-                        <div className="flex items-center gap-3 text-[11px] text-slate-400 mt-0.5">
+                        <div className="flex items-center gap-3 text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
                           <span>{activeTrackCurriculum.material.fileSize || 'Google Drive'}</span>
                           <span>•</span>
                           <span>{activeTrackCurriculum.material.fileName}</span>
                           {activeTrackCurriculum.material.isGoogleDrive && (
-                            <span className="text-emerald-400 font-mono text-[10px]">Cloud Synced</span>
+                            <span className="text-emerald-700 dark:text-emerald-400 font-mono text-[10px] font-bold">Cloud Synced</span>
                           )}
                         </div>
                       </div>
@@ -534,7 +534,7 @@ export const CourseGroupMaterialsModal: React.FC<CourseGroupMaterialsModalProps>
                       <button
                         type="button"
                         onClick={() => handleOpenPreview(activeTrackCurriculum.material!)}
-                        className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-all flex items-center gap-1.5 shadow-md shadow-emerald-600/20"
+                        className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm"
                         title="معاينة وقراءة المنهج التفاعلي"
                       >
                         <Eye className="w-3.5 h-3.5" />
@@ -547,7 +547,7 @@ export const CourseGroupMaterialsModal: React.FC<CourseGroupMaterialsModalProps>
                           href={getGoogleDriveViewUrl(activeTrackCurriculum.material.driveFileId)}
                           target="_blank"
                           rel="noreferrer"
-                          className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors"
+                          className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-colors border border-slate-200 dark:border-slate-700"
                           title="فتح في علامة تبويب جديدة على Google Drive"
                         >
                           <ExternalLink className="w-3.5 h-3.5" />
@@ -559,7 +559,7 @@ export const CourseGroupMaterialsModal: React.FC<CourseGroupMaterialsModalProps>
                         <button
                           type="button"
                           onClick={() => handleRemoveCurriculum(activeTab)}
-                          className="p-2 rounded-xl bg-rose-500/10 hover:bg-rose-500 text-rose-400 hover:text-white border border-rose-500/30 transition-colors"
+                          className="p-2 rounded-xl bg-rose-50 hover:bg-rose-100 dark:bg-rose-500/10 dark:hover:bg-rose-500 text-rose-600 dark:text-rose-400 dark:hover:text-white border border-rose-200 dark:border-rose-500/30 transition-colors"
                           title="حذف هذا المنهج"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
@@ -568,7 +568,7 @@ export const CourseGroupMaterialsModal: React.FC<CourseGroupMaterialsModalProps>
                     </div>
                   </div>
                 ) : (
-                  <div className="p-4 rounded-xl bg-slate-900/50 border border-dashed border-slate-800 text-center text-xs text-slate-400">
+                  <div className="p-4 rounded-xl bg-white dark:bg-slate-900/50 border border-dashed border-slate-300 dark:border-slate-700 text-center text-xs text-slate-600 dark:text-slate-400 font-medium leading-relaxed">
                     لا يوجد منهج مربوط لمسار ({getTrackLabel(activeTab)}) حالياً. استخدم النموذج أدناه للربط الفوري عبر Google Drive أو رفع ملف PDF.
                   </div>
                 )}
@@ -577,20 +577,20 @@ export const CourseGroupMaterialsModal: React.FC<CourseGroupMaterialsModalProps>
 
             {/* Upload or Link Section */}
             {(activeTab === 'arabic' || activeTab === 'languages') && (
-              <div className="bg-slate-950/70 p-4 rounded-2xl border border-indigo-900/40 space-y-3">
+              <div className="bg-slate-50 dark:bg-slate-950/70 p-4 rounded-2xl border border-slate-200 dark:border-indigo-900/40 space-y-3">
                 <div className="flex items-center justify-between">
-                  <h4 className="text-xs font-bold text-indigo-300 flex items-center gap-1.5">
-                    <Upload className="w-4 h-4" />
+                  <h4 className="text-xs font-black text-indigo-900 dark:text-indigo-300 flex items-center gap-1.5">
+                    <Upload className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
                     <span>{activeTrackCurriculum?.material ? 'تحديث أو استبدال المنهج' : 'ربط أو رفع منهج جديد'} ({getTrackLabel(activeTab)})</span>
                   </h4>
 
                   {/* Mode Switcher */}
-                  <div className="flex items-center gap-1 bg-slate-900 p-1 rounded-xl border border-slate-800 text-xs">
+                  <div className="flex items-center gap-1 bg-white dark:bg-slate-900 p-1 rounded-xl border border-slate-200 dark:border-slate-800 text-xs shadow-sm">
                     <button
                       type="button"
                       onClick={() => setInputMode('link')}
                       className={`px-2.5 py-1 rounded-lg font-bold transition-all flex items-center gap-1 ${
-                        inputMode === 'link' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'
+                        inputMode === 'link' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                       }`}
                     >
                       <LinkIcon className="w-3 h-3" />
@@ -600,7 +600,7 @@ export const CourseGroupMaterialsModal: React.FC<CourseGroupMaterialsModalProps>
                       type="button"
                       onClick={() => setInputMode('upload')}
                       className={`px-2.5 py-1 rounded-lg font-bold transition-all flex items-center gap-1 ${
-                        inputMode === 'upload' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'
+                        inputMode === 'upload' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                       }`}
                     >
                       <FileUp className="w-3 h-3" />
@@ -612,7 +612,7 @@ export const CourseGroupMaterialsModal: React.FC<CourseGroupMaterialsModalProps>
                 {inputMode === 'link' ? (
                   <div className="space-y-2">
                     <div>
-                      <label className="text-[11px] text-slate-300 font-bold block mb-1">
+                      <label className="text-xs text-slate-700 dark:text-slate-300 font-bold block mb-1">
                         رابط مشاركة ملف Google Drive (أو معرّف الملف) *
                       </label>
                       <div className="relative">
@@ -621,39 +621,39 @@ export const CourseGroupMaterialsModal: React.FC<CourseGroupMaterialsModalProps>
                           placeholder="مثال: https://drive.google.com/file/d/1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OIvE2up0Y/view?usp=sharing"
                           value={driveUrlOrId}
                           onChange={(e) => setDriveUrlOrId(e.target.value)}
-                          className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-indigo-500 font-mono"
+                          className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:border-indigo-500 font-mono shadow-sm"
                         />
                         {driveUrlOrId && extractGoogleDriveId(driveUrlOrId) && (
-                          <div className="absolute left-3 top-2 text-[10px] text-emerald-400 font-bold flex items-center gap-1">
+                          <div className="absolute left-3 top-2 text-[10px] text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-1">
                             <CheckCircle2 className="w-3 h-3" />
                             <span>معرّف صالح</span>
                           </div>
                         )}
                       </div>
-                      <p className="text-[10px] text-slate-400 mt-1">
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
                         💡 يمكنك لصق رابط المشاركة المباشر من Google Drive لأي مذكرة أو كتاب، وسيقوم النظام باستخراج معرّف الملف وربطه فورياً بقارئ المناهج التفاعلي.
                       </p>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                       <div>
-                        <label className="text-[11px] text-slate-300 font-bold block mb-1">عنوان المنهج / المذكرة (اختياري)</label>
+                        <label className="text-xs text-slate-700 dark:text-slate-300 font-bold block mb-1">عنوان المنهج / المذكرة (اختياري)</label>
                         <input
                           type="text"
                           placeholder={`مثال: مذكرة ${getTrackLabel(activeTab)} الرسمية`}
                           value={materialTitle}
                           onChange={(e) => setMaterialTitle(e.target.value)}
-                          className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-indigo-500"
+                          className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:border-indigo-500 shadow-sm"
                         />
                       </div>
                       <div>
-                        <label className="text-[11px] text-slate-300 font-bold block mb-1">تعليمات أو ملاحظات للطلاب (اختياري)</label>
+                        <label className="text-xs text-slate-700 dark:text-slate-300 font-bold block mb-1">تعليمات أو ملاحظات للطلاب (اختياري)</label>
                         <input
                           type="text"
                           placeholder="مثال: يرجى دراسة الوحدة الأولى قبل بدء المحاضرة"
                           value={materialDesc}
                           onChange={(e) => setMaterialDesc(e.target.value)}
-                          className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-indigo-500"
+                          className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:border-indigo-500 shadow-sm"
                         />
                       </div>
                     </div>
@@ -662,53 +662,53 @@ export const CourseGroupMaterialsModal: React.FC<CourseGroupMaterialsModalProps>
                   <div className="space-y-2">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                       <div>
-                        <label className="text-[11px] text-slate-300 font-bold block mb-1">عنوان المادة *</label>
+                        <label className="text-xs text-slate-700 dark:text-slate-300 font-bold block mb-1">عنوان المادة *</label>
                         <input
                           type="text"
                           placeholder={`مثال: كتاب الشرح - ${getTrackLabel(activeTab)}`}
                           value={materialTitle}
                           onChange={(e) => setMaterialTitle(e.target.value)}
-                          className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-indigo-500"
+                          className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:border-indigo-500 shadow-sm"
                         />
                       </div>
                       <div>
-                        <label className="text-[11px] text-slate-300 font-bold block mb-1">اختيار الملف (PDF أو PPT أو DOC) *</label>
+                        <label className="text-xs text-slate-700 dark:text-slate-300 font-bold block mb-1">اختيار الملف (PDF أو PPT أو DOC) *</label>
                         <input
                           type="file"
                           accept=".pdf,.ppt,.pptx,.doc,.docx"
                           onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
-                          className="w-full text-xs text-slate-400 file:mr-2 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-indigo-600 file:text-white hover:file:bg-indigo-500 cursor-pointer"
+                          className="w-full text-xs text-slate-600 dark:text-slate-400 file:mr-2 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-indigo-600 file:text-white hover:file:bg-indigo-500 cursor-pointer"
                         />
                       </div>
                     </div>
 
                     {selectedFile && (
-                      <div className="p-3 bg-slate-900/90 border border-slate-700/80 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
-                        <div className="flex items-center gap-2 text-slate-200 min-w-0">
-                          <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0"></span>
-                          <span className="font-bold text-white truncate max-w-xs">{selectedFile.name}</span>
-                          <span className="text-[11px] text-slate-400 shrink-0">
+                      <div className="p-3 bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-700/80 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs shadow-sm">
+                        <div className="flex items-center gap-2 text-slate-800 dark:text-slate-200 min-w-0">
+                          <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0"></span>
+                          <span className="font-bold text-slate-900 dark:text-white truncate max-w-xs">{selectedFile.name}</span>
+                          <span className="text-[11px] text-slate-500 dark:text-slate-400 shrink-0">
                             ({(selectedFile.size / (1024 * 1024)).toFixed(2)} MB)
                           </span>
                         </div>
-                        <span className="text-[11px] text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-lg border border-emerald-500/20 font-medium whitespace-nowrap self-start sm:self-auto">
+                        <span className="text-[11px] text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/10 px-2.5 py-1 rounded-lg border border-emerald-200 dark:border-emerald-500/20 font-medium whitespace-nowrap self-start sm:self-auto">
                           ☁️ مدعوم بالكامل على حساب Google Drive (5 TB)
                         </span>
                       </div>
                     )}
 
                     {uploadProgress !== null && (
-                      <div className="p-3 bg-slate-900 border border-emerald-500/40 rounded-xl space-y-2 animate-fadeIn">
+                      <div className="p-3 bg-white dark:bg-slate-900 border border-emerald-300 dark:border-emerald-500/40 rounded-xl space-y-2 animate-fadeIn shadow-sm">
                         <div className="flex items-center justify-between text-xs">
-                          <span className="text-emerald-300 font-bold flex items-center gap-1.5">
-                            <RefreshCw className="w-3.5 h-3.5 animate-spin text-emerald-400" />
+                          <span className="text-emerald-700 dark:text-emerald-300 font-bold flex items-center gap-1.5">
+                            <RefreshCw className="w-3.5 h-3.5 animate-spin text-emerald-600 dark:text-emerald-400" />
                             {uploadStatusText || 'جاري الرفع إلى Google Drive...'}
                           </span>
-                          <span className="font-mono font-bold text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-500/30">
+                          <span className="font-mono font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-200 dark:border-emerald-500/30">
                             {uploadProgress}%
                           </span>
                         </div>
-                        <div className="w-full bg-slate-800 rounded-full h-2.5 overflow-hidden p-0.5 border border-slate-700">
+                        <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-2.5 overflow-hidden p-0.5 border border-slate-200 dark:border-slate-700">
                           <div 
                             className="bg-gradient-to-r from-emerald-500 via-teal-400 to-emerald-400 h-full rounded-full transition-all duration-200"
                             style={{ width: `${uploadProgress}%` }}
@@ -718,13 +718,13 @@ export const CourseGroupMaterialsModal: React.FC<CourseGroupMaterialsModalProps>
                     )}
 
                     <div>
-                      <label className="text-[11px] text-slate-300 font-bold block mb-1">وصف أو تعليمات المنهج (اختياري)</label>
+                      <label className="text-xs text-slate-700 dark:text-slate-300 font-bold block mb-1">وصف أو تعليمات المنهج (اختياري)</label>
                       <input
                         type="text"
                         placeholder="مثال: المذكرة المقررة للفصل الدراسي الأول"
                         value={materialDesc}
                         onChange={(e) => setMaterialDesc(e.target.value)}
-                        className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-indigo-500"
+                        className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:border-indigo-500 shadow-sm"
                       />
                     </div>
                   </div>
@@ -735,7 +735,7 @@ export const CourseGroupMaterialsModal: React.FC<CourseGroupMaterialsModalProps>
                     type="button"
                     onClick={handleSaveCurriculum}
                     disabled={isSubmitting || (inputMode === 'link' ? !driveUrlOrId.trim() : !selectedFile)}
-                    className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-emerald-600/30 flex items-center gap-2 disabled:opacity-50 transition-all cursor-pointer"
+                    className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold shadow-md shadow-emerald-600/20 flex items-center gap-2 disabled:opacity-50 transition-all cursor-pointer"
                   >
                     {isSubmitting ? (
                       <>
@@ -756,13 +756,13 @@ export const CourseGroupMaterialsModal: React.FC<CourseGroupMaterialsModalProps>
             {/* Tab: All Materials */}
             {activeTab === 'all' && (
               <div className="space-y-2">
-                <h4 className="text-xs font-bold text-slate-300 flex items-center gap-2">
-                  <Layers className="w-4 h-4 text-indigo-400" />
+                <h4 className="text-xs font-bold text-slate-800 dark:text-slate-300 flex items-center gap-2">
+                  <Layers className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
                   <span>جميع المواد والمرفقات المسجلة ({currentTarget.materials?.length || 0})</span>
                 </h4>
 
                 {(!currentTarget.materials || currentTarget.materials.length === 0) ? (
-                  <div className="p-8 text-center bg-slate-950/40 rounded-2xl border border-slate-800 text-slate-400 text-xs">
+                  <div className="p-8 text-center bg-slate-50 dark:bg-slate-950/40 rounded-2xl border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 text-xs">
                     لا توجد مواد علمية أو مناهج مسجلة حالياً. اختر المسار العربي أو مسار اللغات بالأعلى لربط المنهج المخصص.
                   </div>
                 ) : (
@@ -770,22 +770,22 @@ export const CourseGroupMaterialsModal: React.FC<CourseGroupMaterialsModalProps>
                     {currentTarget.materials.map((mat) => (
                       <div
                         key={mat.id}
-                        className="p-3 bg-slate-950/60 rounded-xl border border-slate-800 flex items-center justify-between gap-3"
+                        className="p-3 bg-white dark:bg-slate-950/60 rounded-xl border border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3 shadow-sm"
                       >
                         <div className="flex items-center gap-3">
-                          <div className="w-9 h-9 rounded-xl bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-center text-indigo-400 font-bold text-xs">
+                          <div className="w-9 h-9 rounded-xl bg-indigo-100 dark:bg-indigo-500/10 border border-indigo-200 dark:border-indigo-500/30 flex items-center justify-center text-indigo-700 dark:text-indigo-400 font-bold text-xs">
                             {mat.fileType.toUpperCase()}
                           </div>
                           <div>
                             <div className="flex items-center gap-2">
-                              <h5 className="font-bold text-xs text-white">{mat.title}</h5>
+                              <h5 className="font-bold text-xs text-slate-900 dark:text-white">{mat.title}</h5>
                               {mat.track && (
-                                <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700">
+                                <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
                                   {mat.track === 'arabic' || mat.track === 'عربي' ? '🇪🇬 عربي' : '🌐 لغات'}
                                 </span>
                               )}
                             </div>
-                            <p className="text-[11px] text-slate-400">{mat.fileName} • {mat.fileSize || 'Drive'}</p>
+                            <p className="text-[11px] text-slate-500 dark:text-slate-400">{mat.fileName} • {mat.fileSize || 'Drive'}</p>
                           </div>
                         </div>
 
@@ -793,7 +793,7 @@ export const CourseGroupMaterialsModal: React.FC<CourseGroupMaterialsModalProps>
                           <button
                             type="button"
                             onClick={() => handleOpenPreview(mat)}
-                            className="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold flex items-center gap-1"
+                            className="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold flex items-center gap-1 shadow-sm"
                           >
                             <Eye className="w-3.5 h-3.5" />
                             <span>معاينة</span>
@@ -809,14 +809,14 @@ export const CourseGroupMaterialsModal: React.FC<CourseGroupMaterialsModalProps>
           </div>
 
           {/* Modal Footer */}
-          <div className="shrink-0 border-t border-slate-800 p-4 flex items-center justify-between text-xs text-slate-400 bg-slate-900/95">
+          <div className="shrink-0 border-t border-slate-200 dark:border-slate-800 p-4 flex items-center justify-between text-xs text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-slate-900/95">
             <div className="flex items-center gap-1.5">
-              <Sparkles className="w-4 h-4 text-emerald-400" />
-              <span>مربوط بسلاسة مع Google Drive وقاعدة بيانات الإنتاج</span>
+              <Sparkles className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+              <span className="font-medium text-slate-700 dark:text-slate-400">مربوط بسلاسة مع Google Drive وقاعدة بيانات الإنتاج</span>
             </div>
             <button
               onClick={onClose}
-              className="px-5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold transition-colors cursor-pointer"
+              className="px-5 py-2 rounded-xl bg-white hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-700 font-bold shadow-sm transition-colors cursor-pointer"
             >
               إغلاق النافذة
             </button>
@@ -827,13 +827,13 @@ export const CourseGroupMaterialsModal: React.FC<CourseGroupMaterialsModalProps>
 
       {/* Embedded Document & Google Drive Interactive Reader Modal */}
       {previewMaterial && (
-        <div className="fixed inset-0 z-60 flex items-center justify-center p-2 sm:p-4 bg-slate-950/90 backdrop-blur-md animate-fadeIn">
-          <div className="bg-slate-900 border border-emerald-500/40 rounded-3xl shadow-2xl w-full max-w-5xl h-[92vh] flex flex-col overflow-hidden">
+        <div className="fixed inset-0 z-60 flex items-center justify-center p-2 sm:p-4 bg-slate-900/70 dark:bg-slate-950/90 backdrop-blur-md animate-fadeIn">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-emerald-500/40 rounded-3xl shadow-2xl w-full max-w-5xl h-[92vh] flex flex-col overflow-hidden">
             {/* Header */}
-            <div className="p-3.5 bg-slate-950 border-b border-slate-800 flex items-center justify-between">
+            <div className="p-3.5 bg-slate-50 dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <BookOpen className="w-5 h-5 text-emerald-400" />
-                <h4 className="font-bold text-sm text-white truncate max-w-md">
+                <BookOpen className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+                <h4 className="font-bold text-sm text-slate-900 dark:text-white truncate max-w-md">
                   قارئ المنهج التفاعلي: {previewMaterial.title}
                 </h4>
               </div>
@@ -844,7 +844,7 @@ export const CourseGroupMaterialsModal: React.FC<CourseGroupMaterialsModalProps>
                     href={previewMaterial.directDownloadUrl}
                     target="_blank"
                     rel="noreferrer"
-                    className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold flex items-center gap-1.5 transition-colors"
+                    className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold flex items-center gap-1.5 transition-colors border border-slate-200 dark:border-slate-700"
                   >
                     <ExternalLink className="w-3.5 h-3.5" />
                     <span>فتح في صفحة مستقلة</span>
@@ -852,7 +852,7 @@ export const CourseGroupMaterialsModal: React.FC<CourseGroupMaterialsModalProps>
                 )}
                 <button
                   onClick={() => setPreviewMaterial(null)}
-                  className="p-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors cursor-pointer"
+                  className="p-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors cursor-pointer border border-slate-200 dark:border-slate-700"
                 >
                   <X className="w-5 h-5" />
                 </button>
@@ -860,7 +860,7 @@ export const CourseGroupMaterialsModal: React.FC<CourseGroupMaterialsModalProps>
             </div>
 
             {/* Embedded Iframe Reader */}
-            <div className="flex-1 bg-slate-950 w-full h-full relative">
+            <div className="flex-1 bg-slate-100 dark:bg-slate-950 w-full h-full relative">
               <iframe
                 src={previewMaterial.previewUrl}
                 className="w-full h-full border-0"

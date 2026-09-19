@@ -133,7 +133,7 @@
       "status": "active",
       "address": "",
       "groupId": "",
-      "ranking": 82,
+      "ranking": 84,
       "branchId": "branch-1",
       "courseId": "course-1787347508908",
       "fullName": "محمد عادل احمد محمد",
@@ -220,7 +220,7 @@
       "dataValidationStatus": "verified",
       "initialPaymentMethod": "cash",
       "parentPortalPassword": "",
-      "ranking": 83
+      "ranking": 85
     },
     {
       "id": "trainee-1787541849210-96lvp",
@@ -235,7 +235,7 @@
       "status": "active",
       "address": "",
       "groupId": "grp-1787433234491",
-      "ranking": 84,
+      "ranking": 86,
       "branchId": "branch-1",
       "courseId": "crs-1787427970903",
       "fullName": "آيه محسن محمد فرحات",
@@ -319,7 +319,7 @@
       "updatedByUserName": "مدير عام النظام",
       "dataValidationStatus": "needs_review",
       "parentPortalPassword": "",
-      "ranking": 85,
+      "ranking": 87,
       "initialPayment": 0,
       "initialPaymentMethod": "cash"
     },
@@ -520,7 +520,7 @@
       "registrationDate": "2026-09-11",
       "dataValidationStatus": "verified",
       "parentPortalPassword": "",
-      "ranking": 86
+      "ranking": 88
     },
     {
       "id": "trainee-1787541849209-0f0b4",
@@ -535,7 +535,7 @@
       "status": "active",
       "address": "",
       "groupId": "grp-1787432103884",
-      "ranking": 87,
+      "ranking": 89,
       "branchId": "branch-2",
       "courseId": "course-1787347401956",
       "fullName": "مارينا عماد ثروت سليم",
@@ -640,7 +640,7 @@
       "status": "active",
       "address": "",
       "groupId": "",
-      "ranking": 88,
+      "ranking": 90,
       "branchId": "branch-1",
       "courseId": "course-1787347508908",
       "fullName": "محمد محمود عبدالعزيز محمد",
@@ -723,7 +723,7 @@
       "registrationDate": "2026-09-11",
       "dataValidationStatus": "verified",
       "parentPortalPassword": "",
-      "ranking": 89
+      "ranking": 91
     },
     {
       "id": "trainee-1787955396186",
@@ -769,7 +769,7 @@
       "registrationDate": "2026-09-11",
       "dataValidationStatus": "verified",
       "parentPortalPassword": "",
-      "ranking": 90
+      "ranking": 92
     },
     {
       "id": "trainee-1787875324594",
@@ -815,7 +815,7 @@
       "registrationDate": "2026-09-11",
       "dataValidationStatus": "verified",
       "parentPortalPassword": "",
-      "ranking": 6
+      "ranking": 7
     },
     {
       "id": "trainee-1787541962983-tp0u",
@@ -830,7 +830,7 @@
       "status": "active",
       "address": "",
       "groupId": "grp-1787351870532",
-      "ranking": 17,
+      "ranking": 18,
       "branchId": "branch-1",
       "courseId": "course-1787347401956",
       "fullName": "عبدالله عبدالملك رمضان بخيت",
@@ -878,7 +878,7 @@
       "status": "active",
       "address": "",
       "groupId": "grp-1787358559234",
-      "ranking": 91,
+      "ranking": 93,
       "branchId": "branch-1",
       "courseId": "course-1787347569318",
       "fullName": "محمود السيد مصطفى فايد",
@@ -976,7 +976,7 @@
       "status": "active",
       "address": "",
       "groupId": "grp-1787431802246",
-      "ranking": 29,
+      "ranking": 30,
       "branchId": "branch-1",
       "courseId": "course-1787347508908",
       "fullName": "اميرة محمد عبدالبصير ربيع",
@@ -1058,7 +1058,7 @@
       "registrationDate": "2026-09-11",
       "dataValidationStatus": "verified",
       "parentPortalPassword": "",
-      "ranking": 92
+      "ranking": 94
     },
     {
       "id": "trainee-1787541849210-8y0f7",
@@ -1073,7 +1073,7 @@
       "status": "active",
       "address": "",
       "groupId": "",
-      "ranking": 93,
+      "ranking": 95,
       "branchId": "branch-1",
       "courseId": "course-1787347508908",
       "fullName": "أحمد حمدى محمد ابراهيم",
@@ -1125,7 +1125,7 @@
       "status": "active",
       "address": "",
       "groupId": "grp-1787351870532",
-      "ranking": 22,
+      "ranking": 23,
       "branchId": "branch-1",
       "courseId": "course-1787347401956",
       "fullName": "ادم ربيع احمد احمد",
@@ -1204,7 +1204,7 @@
       "registrationDate": "2026-09-11",
       "dataValidationStatus": "verified",
       "parentPortalPassword": "",
-      "ranking": 94
+      "ranking": 96
     },
     {
       "id": "trainee-1787541849210-d5zdo",
@@ -1297,7 +1297,7 @@
       "registrationDate": "2026-09-11",
       "dataValidationStatus": "verified",
       "parentPortalPassword": "",
-      "ranking": 95
+      "ranking": 97
     },
     {
       "id": "trainee-1787541849210-ge762",
@@ -1312,7 +1312,7 @@
       "status": "active",
       "address": "",
       "groupId": "grp-1787431802246",
-      "ranking": 30,
+      "ranking": 31,
       "branchId": "branch-1",
       "courseId": "course-1787347508908",
       "fullName": "شيرين مبروك محمد الحداد",
@@ -1390,7 +1390,7 @@
       "registrationDate": "2026-09-11",
       "dataValidationStatus": "verified",
       "parentPortalPassword": "",
-      "ranking": 96
+      "ranking": 98
     },
     {
       "id": "trainee-1787663430814",
@@ -1441,7 +1441,7 @@
       "updatedByUserName": "المدير العام (Super Admin)",
       "dataValidationStatus": "needs_review",
       "parentPortalPassword": "",
-      "ranking": 97
+      "ranking": 99
     },
     {
       "id": "trainee-1787756086876",
@@ -1486,7 +1486,7 @@
       "registrationDate": "2026-09-11",
       "dataValidationStatus": "verified",
       "parentPortalPassword": "",
-      "ranking": 31
+      "ranking": 32
     },
     {
       "id": "trainee-1787541849210-n8r31",
@@ -1501,7 +1501,7 @@
       "status": "active",
       "address": "",
       "groupId": "grp-1787433160347",
-      "ranking": 98,
+      "ranking": 100,
       "branchId": "branch-2",
       "courseId": "course-1787347569318",
       "fullName": "مصطفي عبد الله هاشم",
@@ -1580,7 +1580,7 @@
       "createdByUserName": "مدير عام النظام",
       "initialPaymentMethod": "cash",
       "parentPortalPassword": "",
-      "ranking": 23
+      "ranking": 24
     },
     {
       "id": "trainee-1788267739227-aqg2",
@@ -1626,7 +1626,7 @@
       "createdByUserName": "مدير عام النظام",
       "initialPaymentMethod": "cash",
       "parentPortalPassword": "",
-      "ranking": 18
+      "ranking": 19
     },
     {
       "id": "trainee-1787541849210-13pem",
@@ -1641,7 +1641,7 @@
       "status": "active",
       "address": "",
       "groupId": "grp-1787431825818",
-      "ranking": 32,
+      "ranking": 33,
       "branchId": "branch-1",
       "courseId": "course-1787347508908",
       "fullName": "انس محمد فتحي مبروك",
@@ -1719,7 +1719,7 @@
       "createdByUserName": "مدير عام النظام",
       "initialPaymentMethod": "cash",
       "parentPortalPassword": "",
-      "ranking": 33
+      "ranking": 34
     },
     {
       "id": "trainee-1788359122667-30dx",
@@ -1765,7 +1765,7 @@
       "createdByUserName": "مدير عام النظام",
       "initialPaymentMethod": "cash",
       "parentPortalPassword": "",
-      "ranking": 34
+      "ranking": 35
     },
     {
       "id": "trainee-1788359237418-8bum",
@@ -1810,7 +1810,7 @@
       "createdByUserName": "مدير عام النظام",
       "initialPaymentMethod": "cash",
       "parentPortalPassword": "",
-      "ranking": 15
+      "ranking": 16
     },
     {
       "id": "trainee-1788359371618-3rgv",
@@ -1855,7 +1855,7 @@
       "createdByUserName": "مدير عام النظام",
       "initialPaymentMethod": "cash",
       "parentPortalPassword": "",
-      "ranking": 16
+      "ranking": 17
     },
     {
       "id": "trainee-1788348931160-wd6r",
@@ -1904,7 +1904,7 @@
       "updatedByUserName": "مدير عام النظام",
       "initialPaymentMethod": "cash",
       "parentPortalPassword": "",
-      "ranking": 35
+      "ranking": 36
     },
     {
       "id": "trainee-1788351553588-e82d",
@@ -1953,7 +1953,7 @@
       "updatedByUserName": "مدير عام النظام",
       "initialPaymentMethod": "cash",
       "parentPortalPassword": "",
-      "ranking": 36
+      "ranking": 37
     },
     {
       "id": "trainee-1788354298403-4rxe",
@@ -1999,7 +1999,7 @@
       "createdByUserName": "مدير عام النظام",
       "initialPaymentMethod": "cash",
       "parentPortalPassword": "",
-      "ranking": 37
+      "ranking": 38
     },
     {
       "id": "trainee-1788355869605-o1e8",
@@ -2048,7 +2048,7 @@
       "updatedByUserName": "مدير عام النظام",
       "initialPaymentMethod": "cash",
       "parentPortalPassword": "",
-      "ranking": 38
+      "ranking": 39
     },
     {
       "id": "trainee-1787746135198",
@@ -2146,7 +2146,7 @@
       "createdByUserName": "مدير عام النظام",
       "initialPaymentMethod": "cash",
       "parentPortalPassword": "",
-      "ranking": 19
+      "ranking": 20
     },
     {
       "id": "trainee-1788434285377-q7xd",
@@ -2191,7 +2191,7 @@
       "createdByUserName": "مدير عام النظام",
       "initialPaymentMethod": "cash",
       "parentPortalPassword": "",
-      "ranking": 8
+      "ranking": 9
     },
     {
       "id": "trainee-1788434203404-zhp6",
@@ -2236,7 +2236,7 @@
       "createdByUserName": "مدير عام النظام",
       "initialPaymentMethod": "cash",
       "parentPortalPassword": "",
-      "ranking": 10
+      "ranking": 11
     },
     {
       "id": "trainee-1787541849209-sfgme",
@@ -2251,7 +2251,7 @@
       "status": "active",
       "address": "",
       "groupId": "grp-1787351870532",
-      "ranking": 24,
+      "ranking": 25,
       "branchId": "branch-1",
       "courseId": "course-1787347401956",
       "fullName": "هلا محمد فتحي يحيي",
@@ -2386,7 +2386,7 @@
       "createdByUserName": "مدير عام النظام",
       "initialPaymentMethod": "cash",
       "parentPortalPassword": "",
-      "ranking": 7
+      "ranking": 8
     },
     {
       "id": "trainee-1787541849209-ga4bt",
@@ -2401,7 +2401,7 @@
       "status": "active",
       "address": "",
       "groupId": "grp-1787431802246",
-      "ranking": 39,
+      "ranking": 40,
       "branchId": "branch-1",
       "courseId": "course-1787347508908",
       "fullName": "أحمد حامد احمد السيد",
@@ -2453,7 +2453,7 @@
       "status": "active",
       "address": "",
       "groupId": "grp-1787350487970",
-      "ranking": 99,
+      "ranking": 101,
       "branchId": "branch-1",
       "courseId": "course-1787347401956",
       "fullName": "احمد الشحات صلاح الشحات",
@@ -2533,7 +2533,7 @@
       "createdByUserName": "مدير عام النظام",
       "initialPaymentMethod": "cash",
       "parentPortalPassword": "",
-      "ranking": 40
+      "ranking": 41
     },
     {
       "id": "trainee-1788272413231-25ts",
@@ -2679,7 +2679,7 @@
       "createdByUserName": "مدير عام النظام",
       "initialPaymentMethod": "cash",
       "parentPortalPassword": "",
-      "ranking": 41
+      "ranking": 42
     },
     {
       "id": "trainee-1787541849209-vmr8g",
@@ -2694,7 +2694,7 @@
       "status": "active",
       "address": "",
       "groupId": "grp-1787431608023",
-      "ranking": 11,
+      "ranking": 12,
       "branchId": "branch-1",
       "courseId": "course-1787347462419",
       "fullName": "مصطفى محمود احمد خلف",
@@ -2920,7 +2920,7 @@
       "createdByUserName": "مدير عام النظام",
       "initialPaymentMethod": "cash",
       "parentPortalPassword": "",
-      "ranking": 100
+      "ranking": 102
     },
     {
       "id": "trainee-1788441737087-oclb",
@@ -2965,7 +2965,7 @@
       "createdByUserName": "مدير عام النظام",
       "initialPaymentMethod": "cash",
       "parentPortalPassword": "",
-      "ranking": 101
+      "ranking": 103
     },
     {
       "id": "trainee-1788441590683-ngqn",
@@ -3016,7 +3016,7 @@
       "createdByUserName": "مدير عام النظام",
       "initialPaymentMethod": "cash",
       "parentPortalPassword": "",
-      "ranking": 102
+      "ranking": 104
     },
     {
       "id": "trainee-1788446613950-0nmo",
@@ -3060,7 +3060,7 @@
       "createdByUserName": "مدير عام النظام",
       "initialPaymentMethod": "cash",
       "parentPortalPassword": "",
-      "ranking": 111
+      "ranking": 112
     },
     {
       "id": "trainee-1788446099678-14gq",
@@ -3105,7 +3105,7 @@
       "createdByUserName": "مدير عام النظام",
       "initialPaymentMethod": "cash",
       "parentPortalPassword": "",
-      "ranking": 103
+      "ranking": 105
     },
     {
       "id": "trainee-1788446260388-hnyt",
@@ -3150,7 +3150,7 @@
       "createdByUserName": "مدير عام النظام",
       "initialPaymentMethod": "cash",
       "parentPortalPassword": "",
-      "ranking": 104
+      "ranking": 106
     },
     {
       "id": "trainee-1788446486450-581z",
@@ -3246,7 +3246,7 @@
       "id": "trainee-1788450172521-h0zs",
       "code": "A036",
       "grade": "الصف الرابع الابتدائي",
-      "notes": "",
+      "notes": "ربط إخوة مع (زياد احمد ابراهيم عبدالوهاب - D030) - تم تطبيق خصم الأخوات",
       "phone": "01101426617",
       "track": "",
       "gender": "male",
@@ -3264,9 +3264,9 @@
       "createdAt": "2026-09-11T18:58:22.121Z",
       "feeAmount": 200,
       "groupName": "ICT4 - 3",
-      "netAmount": 200,
+      "netAmount": 160,
       "trainerId": "trainer-1787349806643",
-      "updatedAt": "2026-09-03T15:45:34.000Z",
+      "updatedAt": "2026-09-18T22:59:21.487Z",
       "nationalId": "",
       "paidAmount": 0,
       "parentName": "احمد ابراهيم عبدالوهاب",
@@ -3281,17 +3281,19 @@
       "siblingNames": [
         "زياد احمد ابراهيم عبدالوهاب"
       ],
-      "discountAmount": 0,
+      "discountAmount": 40,
       "initialPayment": 0,
       "portalPassword": "",
       "_lastAutoParent": "احمد ابراهيم عبدالوهاب",
       "createdByUserId": "user-admin",
-      "remainingAmount": 200,
+      "remainingAmount": 160,
       "registrationDate": "2026-09-11",
       "createdByUserName": "مدير عام النظام",
       "initialPaymentMethod": "cash",
       "parentPortalPassword": "",
-      "ranking": 57
+      "ranking": 57,
+      "updatedByUserId": "user-admin",
+      "updatedByUserName": "مدير عام النظام"
     },
     {
       "id": "trainee-1788450041999-a84z",
@@ -3309,15 +3311,15 @@
       "branchId": "branch-1",
       "courseId": "course-1787347401956",
       "fullName": "لاما كريم طاهر علي",
-      "isExempt": false,
+      "isExempt": true,
       "photoUrl": "",
       "birthDate": "",
       "createdAt": "2026-09-11T18:58:22.137Z",
       "feeAmount": 200,
       "groupName": "ICT4 - 3",
-      "netAmount": 200,
+      "netAmount": 0,
       "trainerId": "trainer-1787349806643",
-      "updatedAt": "2026-09-03T20:31:24.124Z",
+      "updatedAt": "2026-09-18T22:58:55.445Z",
       "nationalId": "",
       "paidAmount": 0,
       "parentName": "كريم طاهر علي",
@@ -3328,20 +3330,20 @@
       "studentCode": "A035",
       "totalPoints": 40,
       "traineeCode": "A035",
-      "exemptReason": "",
+      "exemptReason": "friend_children",
       "siblingNames": [
         "منة اللة كريم طاهر"
       ],
-      "discountAmount": 0,
+      "discountAmount": 200,
       "initialPayment": 0,
       "portalPassword": "",
       "_lastAutoParent": "كريم طاهر علي",
       "createdByUserId": "user-admin",
-      "remainingAmount": 200,
-      "updatedByUserId": "u-admin",
+      "remainingAmount": 0,
+      "updatedByUserId": "user-admin",
       "registrationDate": "2026-09-11",
       "createdByUserName": "مدير عام النظام",
-      "updatedByUserName": "المدير العام (Super Admin)",
+      "updatedByUserName": "مدير عام النظام",
       "initialPaymentMethod": "cash",
       "parentPortalPassword": "",
       "ranking": 58
@@ -3444,7 +3446,7 @@
       "updatedByUserName": "مدير عام النظام",
       "initialPaymentMethod": "cash",
       "parentPortalPassword": "",
-      "ranking": 42
+      "ranking": 43
     },
     {
       "id": "trainee-1789160240943-wwfv",
@@ -3488,7 +3490,7 @@
       "updatedByUserName": "مدير عام النظام",
       "initialPaymentMethod": "cash",
       "parentPortalPassword": "",
-      "ranking": 105
+      "ranking": 107
     },
     {
       "id": "trainee-1788449704942-pqx8",
@@ -3535,7 +3537,7 @@
       "updatedByUserName": "المدير العام (Super Admin)",
       "initialPaymentMethod": "cash",
       "parentPortalPassword": "",
-      "ranking": 25
+      "ranking": 26
     },
     {
       "id": "trainee-1787541849210-xqtko",
@@ -3550,7 +3552,7 @@
       "status": "active",
       "address": "",
       "groupId": "grp-1787431825818",
-      "ranking": 21,
+      "ranking": 22,
       "branchId": "branch-1",
       "courseId": "course-1787347508908",
       "fullName": "رمضان وائل مهدي الخضراوي",
@@ -3699,7 +3701,7 @@
       "status": "active",
       "address": "",
       "groupId": "grp-1787350487970",
-      "ranking": 26,
+      "ranking": 27,
       "branchId": "branch-1",
       "courseId": "course-1787347401956",
       "fullName": "شيم حامد احمد السيد",
@@ -3809,7 +3811,7 @@
       "status": "active",
       "address": "",
       "groupId": "grp-1787350488774",
-      "ranking": 106,
+      "ranking": 108,
       "branchId": "branch-1",
       "courseId": "course-1787347401956",
       "fullName": "سما سراج الدين محمد لطفي علي",
@@ -3998,7 +4000,7 @@
       "dataValidationStatus": "verified",
       "initialPaymentMethod": "cash",
       "parentPortalPassword": "",
-      "ranking": 12
+      "ranking": 13
     },
     {
       "id": "trainee-1787541849209-sguwt",
@@ -4112,7 +4114,7 @@
       "status": "active",
       "address": "",
       "groupId": "grp-1787431802246",
-      "ranking": 43,
+      "ranking": 44,
       "branchId": "branch-1",
       "courseId": "course-1787347508908",
       "fullName": "رودينا محمد جمال عبد السلام",
@@ -4160,7 +4162,7 @@
       "status": "active",
       "address": "",
       "groupId": "grp-1787433082510",
-      "ranking": 27,
+      "ranking": 28,
       "branchId": "branch-2",
       "courseId": "course-1787347508908",
       "fullName": "اسيل محمد شوقي عبدالحافظ",
@@ -4239,7 +4241,7 @@
       "createdByUserName": "مدير عام النظام",
       "initialPaymentMethod": "cash",
       "parentPortalPassword": "",
-      "ranking": 28
+      "ranking": 29
     },
     {
       "id": "trainee-1787541849209-nk3i7",
@@ -4254,7 +4256,7 @@
       "status": "active",
       "address": "",
       "groupId": "grp-1787432635686",
-      "ranking": 20,
+      "ranking": 21,
       "branchId": "branch-2",
       "courseId": "course-1787347462419",
       "fullName": "ياسر عمار ياسر راشد",
@@ -4333,7 +4335,7 @@
       "createdByUserName": "مدير عام النظام",
       "initialPaymentMethod": "cash",
       "parentPortalPassword": "",
-      "ranking": 44
+      "ranking": 45
     },
     {
       "id": "trainee-1788355755634-ofcm",
@@ -4379,7 +4381,7 @@
       "createdByUserName": "مدير عام النظام",
       "initialPaymentMethod": "cash",
       "parentPortalPassword": "",
-      "ranking": 45
+      "ranking": 46
     },
     {
       "id": "trainee-1788349582919-h9x9",
@@ -4425,7 +4427,7 @@
       "createdByUserName": "مدير عام النظام",
       "initialPaymentMethod": "cash",
       "parentPortalPassword": "",
-      "ranking": 46
+      "ranking": 47
     },
     {
       "id": "trainee-1788351682285-1vs0",
@@ -4474,7 +4476,7 @@
       "updatedByUserName": "مدير عام النظام",
       "initialPaymentMethod": "cash",
       "parentPortalPassword": "",
-      "ranking": 47
+      "ranking": 48
     },
     {
       "id": "trainee-1788349656427-9f1p",
@@ -4520,7 +4522,7 @@
       "createdByUserName": "مدير عام النظام",
       "initialPaymentMethod": "cash",
       "parentPortalPassword": "",
-      "ranking": 48
+      "ranking": 49
     },
     {
       "id": "trainee-1788348803502-lln1",
@@ -4568,7 +4570,7 @@
       "updatedByUserName": "مدير عام النظام",
       "initialPaymentMethod": "cash",
       "parentPortalPassword": "",
-      "ranking": 49
+      "ranking": 50
     },
     {
       "id": "trainee-1788351434704-xse0",
@@ -4617,7 +4619,7 @@
       "updatedByUserName": "مدير عام النظام",
       "initialPaymentMethod": "cash",
       "parentPortalPassword": "",
-      "ranking": 50
+      "ranking": 51
     },
     {
       "id": "trainee-1788434693014-74k1",
@@ -4662,7 +4664,7 @@
       "createdByUserName": "مدير عام النظام",
       "initialPaymentMethod": "cash",
       "parentPortalPassword": "",
-      "ranking": 9
+      "ranking": 10
     },
     {
       "id": "trainee-1788434372373-9lbi",
@@ -4707,7 +4709,7 @@
       "createdByUserName": "مدير عام النظام",
       "initialPaymentMethod": "cash",
       "parentPortalPassword": "",
-      "ranking": 13
+      "ranking": 14
     },
     {
       "id": "trainee-1788433811697-19bi",
@@ -4752,7 +4754,7 @@
       "createdByUserName": "مدير عام النظام",
       "initialPaymentMethod": "cash",
       "parentPortalPassword": "",
-      "ranking": 14
+      "ranking": 15
     },
     {
       "id": "trainee-1787541849210-hstjh",
@@ -4855,7 +4857,7 @@
       "updatedByUserName": "مدير عام النظام",
       "initialPaymentMethod": "cash",
       "parentPortalPassword": "",
-      "ranking": 51
+      "ranking": 52
     },
     {
       "id": "trainee-1788276627580-qls2",
@@ -5044,7 +5046,7 @@
       "createdByUserName": "مدير عام النظام",
       "initialPaymentMethod": "cash",
       "parentPortalPassword": "",
-      "ranking": 107
+      "ranking": 109
     },
     {
       "id": "trainee-1788445962647-bskx",
@@ -5089,7 +5091,7 @@
       "createdByUserName": "مدير عام النظام",
       "initialPaymentMethod": "cash",
       "parentPortalPassword": "",
-      "ranking": 108
+      "ranking": 110
     },
     {
       "id": "trainee-1788446345093-kr2y",
@@ -5134,7 +5136,7 @@
       "createdByUserName": "مدير عام النظام",
       "initialPaymentMethod": "cash",
       "parentPortalPassword": "",
-      "ranking": 109
+      "ranking": 111
     },
     {
       "id": "trainee-1788449807037-ogbg",
@@ -5144,7 +5146,7 @@
       "phone": "01011180221",
       "track": "",
       "gender": "male",
-      "points": 40,
+      "points": 50,
       "prefix": "A",
       "status": "active",
       "address": "",
@@ -5169,7 +5171,7 @@
       ],
       "parentPhone": "01011180221",
       "studentCode": "A033",
-      "totalPoints": 40,
+      "totalPoints": 50,
       "traineeCode": "A033",
       "exemptReason": "",
       "siblingNames": [
@@ -5197,7 +5199,7 @@
       "phone": "01029904008",
       "track": "",
       "gender": "male",
-      "points": 44,
+      "points": 104,
       "prefix": "D",
       "status": "active",
       "address": "",
@@ -5205,38 +5207,38 @@
       "branchId": "branch-1",
       "courseId": "course-1787347569318",
       "fullName": "دارين عماد همام سليمان",
-      "isExempt": false,
+      "isExempt": true,
       "photoUrl": "",
       "birthDate": "",
       "createdAt": "2026-09-11T18:58:22.188Z",
       "feeAmount": 200,
       "groupName": "ICT - p1 - 2",
-      "netAmount": 200,
+      "netAmount": 0,
       "trainerId": "trainer-1787349806643",
-      "updatedAt": "2026-09-03T20:30:39.847Z",
+      "updatedAt": "2026-09-18T22:58:27.905Z",
       "nationalId": "",
       "paidAmount": 0,
       "parentName": "عماد همام سليمان",
       "siblingIds": [],
       "parentPhone": "01146262565",
       "studentCode": "D015",
-      "totalPoints": 44,
+      "totalPoints": 104,
       "traineeCode": "D015",
-      "exemptReason": "",
+      "exemptReason": "friend_children",
       "siblingNames": [],
-      "discountAmount": 0,
+      "discountAmount": 200,
       "initialPayment": 0,
       "portalPassword": "",
       "_lastAutoParent": "عماد همام سليمان",
       "createdByUserId": "user-admin",
-      "remainingAmount": 200,
-      "updatedByUserId": "u-admin",
+      "remainingAmount": 0,
+      "updatedByUserId": "user-admin",
       "registrationDate": "2026-09-11",
       "createdByUserName": "مدير عام النظام",
-      "updatedByUserName": "المدير العام (Super Admin)",
+      "updatedByUserName": "مدير عام النظام",
       "initialPaymentMethod": "cash",
       "parentPortalPassword": "",
-      "ranking": 52
+      "ranking": 6
     },
     {
       "id": "trainee-1788446195929-h3ag",
@@ -5400,9 +5402,9 @@
       "updatedByUserId": "user-admin",
       "updatedByUserName": "مدير عام النظام",
       "updatedAt": "2026-09-17T13:19:32.492Z",
-      "totalPoints": 10,
-      "points": 10,
-      "ranking": 110
+      "totalPoints": 20,
+      "points": 20,
+      "ranking": 82
     },
     {
       "fullName": "احمد ابراهيم احمد راجح",
@@ -5436,9 +5438,9 @@
       "createdAt": "2026-09-17T13:14:02.933Z",
       "id": "trainee-1789650842933-x01c",
       "isExempt": false,
-      "totalPoints": 0,
-      "points": 0,
-      "ranking": 112
+      "totalPoints": 20,
+      "points": 20,
+      "ranking": 83
     },
     {
       "fullName": "ادم ابراهيم بسيوني محمد بسيوني",
@@ -7203,6 +7205,54 @@
     }
   ],
   "pointTransactions": [
+    {
+      "id": "pt-1789772229833-wbugh",
+      "traineeId": "trainee-1788355309014-jfeq",
+      "groupId": "grp-1787358595611",
+      "branchId": "branch-1",
+      "points": 10,
+      "reason": "مشاركة وتفاعل إيجابي ⭐",
+      "ruleId": "rule-manual",
+      "addedByUserId": "user-admin",
+      "addedByUserName": "مدير عام النظام",
+      "createdAt": "2026-09-18T22:57:09.833Z"
+    },
+    {
+      "id": "pt-1789772215944-2iyss",
+      "traineeId": "trainee-1788355309014-jfeq",
+      "groupId": "grp-1787358595611",
+      "branchId": "branch-1",
+      "points": 50,
+      "reason": "تفوق واختبار متميز 🌟",
+      "ruleId": "rule-manual",
+      "addedByUserId": "user-admin",
+      "addedByUserName": "مدير عام النظام",
+      "createdAt": "2026-09-18T22:56:55.944Z"
+    },
+    {
+      "id": "pt-1789772185339-gjpd0",
+      "traineeId": "trainee-1789663328757-6ow0",
+      "groupId": "grp-1787350488774",
+      "branchId": "branch-1",
+      "points": 10,
+      "reason": "مشاركة وتفاعل إيجابي ⭐",
+      "ruleId": "rule-manual",
+      "addedByUserId": "user-admin",
+      "addedByUserName": "مدير عام النظام",
+      "createdAt": "2026-09-18T22:56:25.339Z"
+    },
+    {
+      "id": "pt-1789772173123-dryri",
+      "traineeId": "trainee-1789650842933-x01c",
+      "groupId": "grp-1787350487970",
+      "branchId": "branch-1",
+      "points": 20,
+      "reason": "إتمام الواجب والتطبيق العملي ⭐⭐",
+      "ruleId": "rule-manual",
+      "addedByUserId": "user-admin",
+      "addedByUserName": "مدير عام النظام",
+      "createdAt": "2026-09-18T22:56:13.123Z"
+    },
     {
       "id": "pt-1789764974509-8js8j",
       "traineeId": "trainee-1787459300939-62ly",
@@ -9986,6 +10036,18 @@
       "addedByUserId": "user-admin",
       "addedByUserName": "مدير عام النظام",
       "createdAt": "2026-09-15T15:53:43.558Z"
+    },
+    {
+      "id": "pt-1789772387716-hhy78",
+      "traineeId": "trainee-1788449807037-ogbg",
+      "groupId": "grp-1787351870532",
+      "branchId": "branch-1",
+      "points": 10,
+      "reason": "مشاركة ممتازة في الحصة ⭐",
+      "ruleId": "rule-manual",
+      "addedByUserId": "user-admin",
+      "addedByUserName": "مدير عام النظام",
+      "createdAt": "2026-09-18T22:59:47.716Z"
     }
   ],
   "exams": [
@@ -10464,6 +10526,60 @@
     }
   ],
   "auditLogs": [
+    {
+      "userId": "trainer",
+      "userName": "دكتور محمد رمضان بخيت",
+      "action": "نشر ملخص محاضرة وتاسكات ومراجعة عملية",
+      "entity": "إدارة الواجبات والملخصات",
+      "details": "تم نشر ملخص \"مراجعة لغات - فرع مركز بدر والنجاح 💻🌟\" لطلاب الصف السادس الابتدائي (Grade 6 Languages).",
+      "id": "log-1789775832174-19dg",
+      "timestamp": "2026-09-18T23:57:12.174Z"
+    },
+    {
+      "userId": "user-admin",
+      "userName": "مدير عام النظام",
+      "action": "إضافة/خصم نقاط",
+      "entity": "نظام النقاط",
+      "details": "تم منح/تعديل 10 نقطة لعدد 1 متدرب - السبب: مشاركة ممتازة في الحصة ⭐",
+      "id": "log-1789772387736-1mbn",
+      "timestamp": "2026-09-18T22:59:47.736Z"
+    },
+    {
+      "userId": "user-admin",
+      "userName": "مدير عام النظام",
+      "action": "إضافة/خصم نقاط",
+      "entity": "نظام النقاط",
+      "details": "تم منح/تعديل 10 نقطة لعدد 1 متدرب - السبب: مشاركة وتفاعل إيجابي ⭐",
+      "id": "log-1789772229854-ijak",
+      "timestamp": "2026-09-18T22:57:09.854Z"
+    },
+    {
+      "userId": "user-admin",
+      "userName": "مدير عام النظام",
+      "action": "إضافة/خصم نقاط",
+      "entity": "نظام النقاط",
+      "details": "تم منح/تعديل 50 نقطة لعدد 1 متدرب - السبب: تفوق واختبار متميز 🌟",
+      "id": "log-1789772215963-oroe",
+      "timestamp": "2026-09-18T22:56:55.963Z"
+    },
+    {
+      "userId": "user-admin",
+      "userName": "مدير عام النظام",
+      "action": "إضافة/خصم نقاط",
+      "entity": "نظام النقاط",
+      "details": "تم منح/تعديل 10 نقطة لعدد 1 متدرب - السبب: مشاركة وتفاعل إيجابي ⭐",
+      "id": "log-1789772185366-ezmx",
+      "timestamp": "2026-09-18T22:56:25.366Z"
+    },
+    {
+      "userId": "user-admin",
+      "userName": "مدير عام النظام",
+      "action": "إضافة/خصم نقاط",
+      "entity": "نظام النقاط",
+      "details": "تم منح/تعديل 20 نقطة لعدد 1 متدرب - السبب: إتمام الواجب والتطبيق العملي ⭐⭐",
+      "id": "log-1789772173144-ouz5",
+      "timestamp": "2026-09-18T22:56:13.144Z"
+    },
     {
       "userId": "trainer",
       "userName": "المهندس / المدرب المعتمد",
@@ -11053,6 +11169,15 @@
   },
   "notifications": [
     {
+      "id": "notif-recap-1789775832174",
+      "type": "system",
+      "title": "📢 نشر ملخص وتاسكات المحاضرة: مراجعة لغات - فرع مركز بدر والنجاح 💻🌟",
+      "message": "تم نشر ملخص المحاضرة والتطبيق العملي وفك الكيسة والتاسك المطلوب للمرحلة (الصف السادس الابتدائي (Grade 6 Languages)). تفقد البوابة للتسليم!",
+      "linkView": "homeworks",
+      "createdAt": "2026-09-18T23:57:12.174Z",
+      "read": false
+    },
+    {
       "id": "notif-recap-1789763038450",
       "type": "system",
       "title": "📢 نشر ملخص وتاسكات المحاضرة: أبطال الصف الرابع لغات - فرع مركز بدر والنجاح 💻🌟",
@@ -11599,68 +11724,117 @@
   "session_attendance_records": [],
   "lectureRecaps": [
     {
-      "id": "recap-1789763038450-p61s",
-      "title": "أبطال الصف الرابع لغات - فرع مركز بدر والنجاح 💻🌟",
-      "gradeLevel": "الصف الرابع الابتدائي (Grade 4 Languages)",
-      "subject": "تكنولوجيا المعلومات والاتصالات ICT & Computer",
-      "courseId": "",
+      "id": "recap-grade6-ict-main",
+      "title": "المحاضرة 1: أجهزة شبكات الكمبيوتر والتكنولوجيا المتقدمة وتصميم الويب HTML 🌐🚀",
+      "gradeLevel": "الصف السادس الابتدائي (Grade 6 Languages) - دورة ICT 6",
+      "subject": "تكنولوجيا المعلومات والاتصالات ICT 6 & Computer",
+      "groupName": "جروب الصف السادس لغات (ICT 6) - الأحد 4م",
+      "courseName": "دورة ICT 6 - الصف السادس الابتدائي",
+      "courseId": "course-1787347401957",
       "groupId": "",
-      "branchId": "",
-      "trainerId": "",
+      "branchId": "فرع مركز بدر والنجاح (الرئيسي)",
+      "trainerId": "trainer-1",
       "trainerName": "المهندس / المدرب المعتمد",
-      "lectureDate": "2026-09-18T20:23:58.450Z",
+      "lectureDate": "2026-09-18T18:00:00.000Z",
       "recapSummary": {
         "points": [
-          "1. مراجعة شاملة Revision على ما تم دراسته سابقاً.",
-          "2. أسئلة تفاعلية وتطبيقية على Lesson 1 & Lesson 2.",
-          "3. حل وتصحيح الواجبات والتأكد من إتقان كل بطل للأسئلة.",
-          "4. مسابقة كاهوت Kahoot حماسية لتثبيت المعلومات والتنافس الشريف.",
-          "5. فتح Lesson 3 مع عرض فيديو تمهيدي شيق وممتع.",
-          "6. فتح وفك الـ Case عملياً والتعرف على الأجزاء الداخلية للأجهزة.",
-          "7. مكونات الكيسة الخمسة: (عمو الكهربائي = Power Supply ⚡️، ماما نوسة = Motherboard 👩🍳، المخيخ = CPU 🧠، السمكة = RAM 🐟، الخزنة = Hard Disk 🔒).",
-          "8. دورة البيانات والمعلومات Data vs Information (دخول Data -> تحويل ومعالجة بالمخيخ CPU -> خروج Information مفيدة)."
+          "1. مراجعة شاملة وأسئلة تفاعلية ومسابقة كاهوت لتثبيت المفاهيم وتكريم الأبطال المتفوقين.",
+          "2. شرح أجهزة شبكات الكمبيوتر (المودم Modem، المحول Switch، الراوتر Router) والفرق بين الشبكات السلكية واللاسلكية.",
+          "3. استعراض التكنولوجيا المتقدمة وتطبيقات الذكاء الاصطناعي (AI) والواقع المعزز (AR) والواقع الافتراضي (VR).",
+          "4. مقدمة عملية في لغة ترميز النصوص التشعبية (HTML) لبناء صفحات الويب التفاعلية وهيكلة العناصر الأساسية.",
+          "5. تطبيق عملي بالمعمل على كتابة كود HTML وبناء صفحة ويب شخصية بسيطة وفحص الاتصال بالأجهزة الذكية."
         ],
-        "detailedNotes": "تمت المحاضرة وسط تفاعل عالي واستيعاب تطبيقي مباشر حيث قام الطلاب بالتعرف على مكونات الحاسوب وفك الكيسة وملاحظة وظيفة كل قطعة وربطها بالتشبيهات الذكية."
+        "detailedNotes": "تمت المحاضرة بتفاعل رائع وفهم عميق للفرق بين المودم والمحول وتطبيق كتابة وسوم HTML في المعمل بنجاح."
       },
       "homeworkTasks": {
         "tasks": [
-          "1. كتابة وتوثيق أسماء مكونات الكيسة الخمسة بالعربي والإنجليزي في الكشكول.",
-          "2. تلخيص Lesson 1 & Lesson 2 في نصف صفحة + حل الأسئلة المهمة في النصف الثاني.",
-          "3. تلخيص تحضيري لـ Lesson 3 في صفحة كاملة.",
-          "4. إمكانية تصوير ورفع أكثر من ورقة/صفحة في الواجب عبر بوابة المتدرب."
+          "1. كتابة الفروق الجوهرية بين المودم (Modem) والمحول (Switch) والراوتر في كشكول التدريب مع رسم توضيحي.",
+          "2. كتابة كود HTML بسيط يحتوي على وسم العنوان <h1> وفقرة <p> وقائمة نقطية <ul> في الكشكول.",
+          "3. تصوير صفحات الواجب بالكشكول ورفعها عبر بوابة المتدرب للتصحيح الذكي والحصول على النجوم."
         ],
-        "bonusChallenge": "🌟 بونص إضافي خاص: تسجيل فيديو أو فويس وأنت تشاور على مكونات الكيسة وتشرحها بصوتك!",
+        "bonusChallenge": "🌟 بونص إضافي خاص: إنشاء ملف HTML حقيقي على الكمبيوتر وتجربة فتحه بمتصفح الويب وتصوير الشاشة.",
+        "dueDateTime": "2026-09-25T18:00:00.000Z",
         "allowMultiPageUpload": true
       },
       "nextLecturePrep": {
         "prepPoints": [
-          "ربط المسميات الأساسية (عمو الكهربائي = Power Supply, ماما نوسة = Motherboard, المخيخ = CPU, السمكة = RAM, الخزنة = Hard Disk).",
-          "إحضار كشكول التدريب وأدوات المعمل والاستعداد لمسابقة كاهوت وتطبيق عملي جديد في المعمل."
+          "التحضير لدرس حماية البيانات والألعاب الإلكترونية وتطبيقات الحوسبة السحابية (Cloud Computing).",
+          "إحضار كشكول التدريب وأدوات المعمل والاستعداد لمسابقة كاهوت جديدة."
         ],
-        "teaserNotes": "المحاضرة القادمة ستشهد تحديات برمجية وعملية تفاعلية وتفكيك كيسات جديدة داخل المعمل!"
+        "teaserNotes": "المحاضرة القادمة سنتعلم كيف نحمي حساباتنا من المخاطر السيبرانية ونخزن ملفاتنا سحابياً!"
       },
-      "closingMessage": "أبطال المستقبل، فخور جداً بتركيزكم وفهمكم العملي لمكونات الحاسوب، أنتم لستم مستخدمين عاديين بل مهندسون ومبتكرون! ننتظر إبداعاتكم في تلخيص الدروس والتطبيق العملي. 🚀🌟",
+      "closingMessage": "أبطال الصف السادس (ICT 6)، نضج فكري وتطبيقي استثنائي في استيعاب التكنولوجيا المتقدمة والشبكات! فخور جداً بتميزكم. 🌐🚀⭐",
       "isPublished": true,
-      "createdAt": "2026-09-18T20:23:58.450Z",
-      "updatedAt": "2026-09-18T20:23:58.450Z"
+      "createdAt": "2026-09-18T18:00:00.000Z",
+      "updatedAt": "2026-09-18T18:00:00.000Z"
+    },
+    {
+      "id": "recap-grade5-ict-main",
+      "title": "المحاضرة 2: شبكات الحاسوب والإنترنت والأمن السيبراني 🌐🔒",
+      "gradeLevel": "الصف الخامس الابتدائي (Grade 5 Languages) - دورة ICT 5",
+      "subject": "تكنولوجيا المعلومات والاتصالات ICT 5 & Computer",
+      "groupName": "جروب الصف الخامس لغات (ICT 5) - السبت 2م",
+      "courseName": "دورة ICT 5 - الصف الخامس الابتدائي",
+      "courseId": "",
+      "groupId": "",
+      "branchId": "فرع مركز بدر والنجاح (الرئيسي)",
+      "trainerId": "trainer-1",
+      "trainerName": "المهندس / المدرب المعتمد",
+      "lectureDate": "2026-09-18T16:00:00.000Z",
+      "recapSummary": {
+        "points": [
+          "1. مراجعة أنواع الشبكات (LAN vs WAN) والفرق بين الشبكة المغلقة والمفتوحة.",
+          "2. مكونات توصيل الشبكة (الراوتر Router، كابلات Ethernet، منافذ Switch).",
+          "3. الإنترنت Internet وشبكة الويب العالمية World Wide Web (WWW).",
+          "4. قواعد حماية البيانات وكلمات المرور القوية (Strong Passwords & 2FA).",
+          "5. تطبيق عملي بالمعمل على فحص اتصال الشبكة ومشاركة الملفات بأمان."
+        ],
+        "detailedNotes": "تم تطبيق ورشة عملية على توصيل الكابلات وفهم عنوان الـ IP وطرق حماية الخصوصية الرقمية."
+      },
+      "homeworkTasks": {
+        "tasks": [
+          "1. كتابة جدول مقارنة بين شبكة LAN وشبكة WAN في الكشكول.",
+          "2. وضع 5 شروط لكلمة المرور الآمنة التي تحمي الحسابات من الاختراق.",
+          "3. حل أسئلة نهاية الوحدة وتصوير صفحات الإجابة لرفعها عبر البوابة."
+        ],
+        "bonusChallenge": "🌟 بونص إضافي: ابتكار كلمة مرور قوية باستخدام كلمات وحروف ورموز وتوضيح سبب قوتها.",
+        "dueDateTime": "2026-09-25T16:00:00.000Z",
+        "allowMultiPageUpload": true
+      },
+      "nextLecturePrep": {
+        "prepPoints": [
+          "قراءة درس استراتيجيات البحث المتقدم على محركات البحث (Search Strategies).",
+          "إحضار الكشكول ومتابعة المهام في الموعد."
+        ],
+        "teaserNotes": "المحاضرة القادمة سنتعلم أسرار وتقنيات البحث الاحترافي والتحقق من مصادر المعلومات!"
+      },
+      "closingMessage": "أبطال الصف الخامس، أبدعتم في فهم عالم الشبكات، استمروا في تطبيق عادات الأمان الرقمي! 🌐🛡️",
+      "isPublished": true,
+      "createdAt": "2026-09-18T16:00:00.000Z",
+      "updatedAt": "2026-09-18T16:00:00.000Z"
     },
     {
       "id": "recap-grade4-ict-main",
-      "title": "أبطال الصف الرابع لغات - فرع مركز بدر والنجاح 💻🌟",
+      "title": "المحاضرة 3: مكونات الكيسة الخمسة والعتاد ودورة معالجة البيانات 💻⚡️",
       "gradeLevel": "الصف الرابع الابتدائي (Grade 4 Languages)",
-      "subject": "تكنولوجيا المعلومات والاتصالات ICT & Computer",
-      "lectureDate": "2026-09-18T20:22:10.179Z",
+      "subject": "تكنولوجيا المعلومات والاتصالات ICT 4 & Computer",
+      "groupName": "جروب الصف الرابع لغات (ICT 4) - مركز بدر والنجاح",
+      "courseName": "دورة ICT 4 - الصف الرابع الابتدائي",
+      "courseId": "course-1787347401956",
+      "groupId": "",
+      "branchId": "فرع مركز بدر والنجاح (الرئيسي)",
+      "trainerId": "trainer-1",
       "trainerName": "المهندس / المدرب المعتمد",
+      "lectureDate": "2026-09-18T14:00:00.000Z",
       "recapSummary": {
         "points": [
-          "1. مراجعة شاملة Revision على ما تم دراسته سابقاً.",
-          "2. أسئلة تفاعلية وتطبيقية على Lesson 1 & Lesson 2.",
-          "3. حل وتصحيح الواجبات والتأكد من إتقان كل بطل للأسئلة.",
-          "4. مسابقة كاهوت Kahoot حماسية لتثبيت المعلومات والتنافس الشريف.",
-          "5. فتح Lesson 3 مع عرض فيديو تمهيدي شيق وممتع.",
-          "6. فتح وفك الـ Case عملياً والتعرف على الأجزاء الداخلية للأجهزة.",
-          "7. مكونات الكيسة الخمسة: (عمو الكهربائي = Power Supply ⚡️، ماما نوسة = Motherboard 👩🍳، المخيخ = CPU 🧠، السمكة = RAM 🐟، الخزنة = Hard Disk 🔒).",
-          "8. دورة البيانات والمعلومات Data vs Information (دخول Data -> تحويل ومعالجة بالمخيخ CPU -> خروج Information مفيدة)."
+          "1. مراجعة شاملة Revision على ما تم دراسته سابقاً في الدرس الأول والثاني.",
+          "2. أسئلة تفاعلية ومسابقة كاهوت حماسية لتثبيت المفاهيم وتكريم الفائزين.",
+          "3. حل وتصحيح الواجبات السابقة والتأكد من إتقان كل بطل للأسئلة.",
+          "4. فتح Lesson 3 مع عرض فيديو تمهيدي شيق عن أجزاء الكمبيوتر.",
+          "5. فك الـ Case عملياً في المعمل والتعرف على الأجزاء الداخلية للأجهزة.",
+          "6. مكونات الكيسة الخمسة: (عمو الكهربائي = Power Supply ⚡️، ماما نوسة = Motherboard 👩‍🍳، المخيخ = CPU 🧠، السمكة = RAM 🐟، الخزنة = Hard Disk 🔒).",
+          "7. دورة البيانات والمعلومات Data vs Information (دخول Data -> تحويل ومعالجة بالمخيخ CPU -> خروج Information مفيدة)."
         ],
         "detailedNotes": "تمت المحاضرة وسط تفاعل عالي واستيعاب تطبيقي مباشر حيث قام الطلاب بالتعرف على مكونات الحاسوب وفك الكيسة وملاحظة وظيفة كل قطعة وربطها بالتشبيهات الذكية."
       },
@@ -11672,19 +11846,91 @@
           "4. إمكانية تصوير ورفع أكثر من ورقة/صفحة في الواجب عبر بوابة المتدرب."
         ],
         "bonusChallenge": "🌟 بونص إضافي خاص: تسجيل فيديو أو فويس وأنت تشاور على مكونات الكيسة وتشرحها بصوتك!",
-        "dueDateTime": "2026-09-24T20:22:10.179Z",
+        "dueDateTime": "2026-09-25T14:00:00.000Z",
         "allowMultiPageUpload": true
       },
       "nextLecturePrep": {
         "prepPoints": [
-          "ربط المسميات الأساسية (عمو الكهربائي = Power Supply, ماما نوسة = Motherboard, المخيخ = CPU, السمكة = RAM, الخزنة = Hard Disk).",
+          "تثبيت وحفظ مسميات مكونات الكيسة الخمسة (Power Supply, Motherboard, CPU, RAM, Hard Disk).",
           "إحضار كشكول التدريب وأدوات المعمل والاستعداد لمسابقة كاهوت وتطبيق عملي جديد في المعمل."
         ],
         "teaserNotes": "المحاضرة القادمة ستشهد تحديات برمجية وعملية تفاعلية وتفكيك كيسات جديدة داخل المعمل!"
       },
-      "closingMessage": "أبطال المستقبل، فخور جداً بتركيزكم وفهمكم العملي لمكونات الحاسوب، أنتم لستم مستخدمين عاديين بل مهندسون ومبتكرون! ننتظر إبداعاتكم في تلخيص الدروس والتطبيق العملي. 🚀🌟",
+      "closingMessage": "أبطال الصف الرابع، فخور جداً بتركيزكم وفهمكم العملي لمكونات الحاسوب، أنتم مهندسو المستقبل! ننتظر إبداعاتكم في تلخيص الدروس والتطبيق العملي. 🚀🌟",
       "isPublished": true,
-      "createdAt": "2026-09-18T20:22:10.179Z"
+      "createdAt": "2026-09-18T14:00:00.000Z",
+      "updatedAt": "2026-09-18T14:00:00.000Z"
+    },
+    {
+      "id": "recap-prep1-ict-main",
+      "title": "المحاضرة 1: التكنولوجيا الخضراء والتحول الرقمي وأنظمة التشغيل الحديثة 🌿💻",
+      "gradeLevel": "الصف الأول الإعدادي (Prep 1) - دورة ICT & AI",
+      "subject": "تكنولوجيا المعلومات والاتصالات والذكاء الاصطناعي Prep 1",
+      "groupName": "جروب الأول الإعدادي لغات (Prep 1) - الاثنين 3م",
+      "courseName": "دورة ICT & AI - الصف الأول الإعدادي",
+      "courseId": "",
+      "groupId": "",
+      "branchId": "فرع مركز بدر والنجاح (الرئيسي)",
+      "trainerId": "trainer-1",
+      "trainerName": "المهندس / المدرب المعتمد",
+      "lectureDate": "2026-09-18T12:00:00.000Z",
+      "recapSummary": {
+        "points": [
+          "1. شرح مفهوم التكنولوجيا الخضراء (Green Technology) ودورها في الاستدامة البيئية وترشيد الطاقة.",
+          "2. استعراض التحول الرقمي (Digital Transformation) وتطبيقاته الحكومية والتعليمية والخدمية في مصر.",
+          "3. التعرف على أنظمة التشغيل المختلفة (Windows, Android, Linux, iOS) ووظائفها في إدارة العتاد والبرامج.",
+          "4. خطوات تثبيت وإلغاء تثبيت البرمجيات وإدارة الأجهزة الرقمية والملحقات ومنافذ التوصيل.",
+          "5. إنشاء واستخدام البريد الإلكتروني والحساب المدرسي الموحد والتواصل الرقمي الآمن والمحترف."
+        ],
+        "detailedNotes": "تم تطبيق ورشة عمل تفاعلية على تفعيل الحساب الموحد وتجربة أنظمة التشغيل وفهم معايير التكنولوجيا الخضراء وإدارة الطاقة بالأجهزة."
+      },
+      "homeworkTasks": {
+        "tasks": [
+          "1. كتابة تقرير قصير في الكشكول يوضح 3 أمثلة لتطبيقات التكنولوجيا الخضراء في الأجهزة الذكية.",
+          "2. عمل جدول مقارنة بين أنظمة تشغيل الحواسيب (Windows/Linux) وأنظمة الهواتف (Android/iOS).",
+          "3. تسجيل الدخول بالبريد المدرسي الموحد وتصوير صفحة الحساب ورفعها عبر البوابة."
+        ],
+        "bonusChallenge": "🌟 بونص متميز: ابتكار فكرة مشروع رقمي يدعم البيئة المستدامة باستخدام الذكاء الاصطناعي أو إنترنت الأشياء.",
+        "dueDateTime": "2026-09-25T12:00:00.000Z",
+        "allowMultiPageUpload": true
+      },
+      "nextLecturePrep": {
+        "prepPoints": [
+          "التحضير لموضوع الحوسبة السحابية (Cloud Storage) وخدمات Google Drive و OneDrive.",
+          "تجهيز بيئة العمل لاجتماعات Google Meet وإدارة المشروعات الرقمية."
+        ],
+        "teaserNotes": "المحاضرة القادمة سنتعلم كيفية حفظ ملفاتنا سحابياً وإدارتها والعمل الجماعي عبر الإنترنت!"
+      },
+      "closingMessage": "أبطال الصف الأول الإعدادي، بداية استثنائية ونضج تكنولوجي رائع في استيعاب مفاهيم التكنولوجيا الخضراء والتحول الرقمي! 🌿🚀⭐",
+      "isPublished": true,
+      "createdAt": "2026-09-18T12:00:00.000Z",
+      "updatedAt": "2026-09-18T12:00:00.000Z"
+    }
+  ],
+  "assignments": [
+    {
+      "id": "assign-1789770989791",
+      "title": "تقييمات أسبوعية للصف الرابع",
+      "description": "",
+      "courseId": "course-1787347401956",
+      "courseName": "ICT4",
+      "groupId": "",
+      "branchId": "branch-1",
+      "totalMarks": 100,
+      "dueDate": "2026-09-25T23:33",
+      "preventLateSubmission": true,
+      "attachments": [],
+      "codeTemplate": "def solution():\n    # اكتب كود الحل هنا\n    pass",
+      "programmingLanguage": "python",
+      "testCases": [],
+      "quizGame": null,
+      "assignmentType": "practical",
+      "evaluationSource": "تقييم وزارة التربية والتعليم",
+      "shareableCode": "KHT-4484",
+      "aiGenerated": false,
+      "createdAt": "2026-09-18T22:36:29.791Z",
+      "submissionsCount": 0,
+      "gradedCount": 0
     }
   ]
 }

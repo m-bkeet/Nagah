@@ -1417,7 +1417,7 @@ export const PublicTrainerPortalView: React.FC<PublicTrainerPortalViewProps> = (
                 {homeworkSubTab === 'recaps' && (
                   <LectureRecapManager
                     mode="trainer_admin"
-                    currentGradeLevel={groups[0]?.name || 'الصف الرابع الابتدائي (Grade 4 Languages)'}
+                    currentGradeLevel={selectedGroup ? selectedGroup.name : 'الصف السادس الابتدائي (Grade 6 Languages) - دورة ICT 6'}
                   />
                 )}
 
