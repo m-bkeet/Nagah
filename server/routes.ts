@@ -7,7 +7,7 @@ import {
   CertificateRepo, CertificateTemplateRepo, UserRepo, AuditLogRepo,
   HomeworkSubmissionRepo, BadgeRepo, AssignmentRepo, PortalMessageRepo, ScheduleRepo
 } from './data/index.ts';
-import { allocateNextTraineeCode, loadCollectionFromFirestore } from './firestoreStorage.js';
+import { allocateNextTraineeCode, loadCollectionFromFirestore, saveCollectionToFirestore } from './firestoreStorage';
 import { exportAllFirestoreData, previewDatabaseImport, executeDatabaseImport } from './data/phase2b.ts';
 import { handlePublicRegister, handlePublicTrainerRegister, matchCourseForRegistration, resolveGradePrefix } from './registerLogic';
 import express, { Request, Response } from 'express';
@@ -1004,24 +1004,10 @@ apiRouter.get('/trainees/next-code', async (req: Request, res: Response) => {
       : (db.getData().settings?.traineeCodePrefix || 'A');
     
     const allTrainees = await TraineeRepo.getAll();
-    
-    // Calculate atomic next code against Firestore state
     const pfx = (resolvedPrefix || 'A').toUpperCase();
-    const regex = new RegExp(`^${pfx}-?(\\d+)$`, 'i');
-    let maxNum = 0;
-    allTrainees.forEach(t => {
-      if (t.code && (!excludeId || t.id !== excludeId)) {
-        const match = String(t.code).trim().match(regex);
-        if (match) {
-          const num = parseInt(match[1], 10);
-          if (!isNaN(num) && num > maxNum) {
-            maxNum = num;
-          }
-        }
-      }
-    });
-    const nextNum = maxNum + 1;
-    const code = `${pfx}${String(nextNum).padStart(3, '0')}`;
+    const code = await allocateNextTraineeCode(pfx, allTrainees);
+    const numMatch = code.match(/\d+$/);
+    const nextNum = numMatch ? parseInt(numMatch[0], 10) : 1;
     
     res.json({ code, prefix: pfx, nextNumber: nextNum });
   } catch (err: any) {
@@ -1031,7 +1017,8 @@ apiRouter.get('/trainees/next-code', async (req: Request, res: Response) => {
 
 apiRouter.get('/trainees', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
   try {
-    let list = await TraineeRepo.getAll();
+    const isFresh = req.query.fresh === 'true' || req.headers['x-fresh'] === 'true';
+    let list = await TraineeRepo.getAll(isFresh);
     list = db.deduplicateTrainees(list);
     const user = req.user;
 
@@ -1133,15 +1120,18 @@ apiRouter.post('/trainees', async (req: Request, res: Response) => {
     const recentDuplicate = list.find(t => {
       const tNormName = normalizeArabic(t.fullName);
       const sameName = tNormName === normName;
+      if (!sameName) return false;
+
       const tPhone = String(t.phone || '').replace(/[^0-9]/g, '').slice(-10);
       const tParentPhone = String(t.parentPhone || '').replace(/[^0-9]/g, '').slice(-10);
       const sameStudentPhone = normPhone && tPhone && tPhone === normPhone;
       const sameParentPhone = normParentPhone && tParentPhone && tParentPhone === normParentPhone;
+      const sameNatId = data.nationalId && t.nationalId && String(data.nationalId).trim().length >= 10 && String(t.nationalId).trim() === String(data.nationalId).trim();
       
       const createdInDoubleTapWindow = t.createdAt && (Date.now() - new Date(t.createdAt).getTime() < 8000);
 
-      // Same normalized name AND (same phone OR same parent phone OR double-clicked within last 8s)
-      if (sameName && (sameStudentPhone || sameParentPhone || createdInDoubleTapWindow)) {
+      // Same normalized name AND (same phone OR same parent phone OR same nationalId OR double-clicked within last 8s)
+      if (sameStudentPhone || sameParentPhone || sameNatId || createdInDoubleTapWindow) {
         return true;
       }
       return false;
@@ -1158,29 +1148,27 @@ apiRouter.post('/trainees', async (req: Request, res: Response) => {
 
     let code = data.code?.trim()?.toUpperCase();
 
-    // Check if user manually supplied a code that already exists
+    let prefix = 'A'; // Default to 4th grade
+    try {
+      const course = await CourseRepo.getById(data.courseId || '');
+      if (course && course.grade) {
+        prefix = db.getPrefixForGradeOrCourse(course.grade);
+      } else if (data.grade) {
+        prefix = db.getPrefixForGradeOrCourse(data.grade);
+      }
+    } catch(e) {
+      console.warn('Could not determine grade prefix, using fallback', e);
+    }
+    prefix = (prefix || 'A').toUpperCase();
+
+    // Check if user supplied code is missing or already taken by another student
     if (code) {
       const duplicate = list.find(t => t.code && String(t.code).trim().toUpperCase() === code);
       if (duplicate) {
-        return res.status(400).json({
-          success: false,
-          error: `كود الطالب (${code}) مستخدم بالفعل للطالب "${duplicate.fullName}". يرجى إدخال كود فريد أو ترك الخانة فارغة للتوليد التلقائي.`
-        });
+        console.warn(`[Trainee] Code ${code} already in use by "${duplicate.fullName}". Automatically generating fresh unique atomic code.`);
+        code = await allocateNextTraineeCode(prefix, list);
       }
     } else {
-      let prefix = 'A'; // Default to 4th grade
-      try {
-        const course = await CourseRepo.getById(data.courseId || '');
-        if (course && course.grade) {
-          prefix = db.getPrefixForGradeOrCourse(course.grade);
-        } else if (data.grade) {
-          prefix = db.getPrefixForGradeOrCourse(data.grade);
-        }
-      } catch(e) {
-        console.warn('Could not determine grade prefix, using fallback', e);
-      }
-      prefix = (prefix || 'A').toUpperCase();
-
       code = await allocateNextTraineeCode(prefix, list);
     }
 
@@ -5255,6 +5243,14 @@ apiRouter.post('/points/add', async (req: Request, res: Response) => {
     db.recalculateTraineeRankings();
     db.save();
     TraineeRepo.invalidateCache();
+
+    // GUARANTEED FIRESTORE PERSISTENCE FOR SERVERLESS/VERCEL ENVIRONMENTS
+    try {
+      await saveCollectionToFirestore('trainees', dbData.trainees);
+      await saveCollectionToFirestore('pointTransactions', dbData.pointTransactions);
+    } catch (fsErr) {
+      console.warn('[Points] Firestore cloud sync warning:', fsErr);
+    }
 
     db.logAudit({
       userId: addedByUserId || 'admin',

@@ -46,7 +46,7 @@ function getDb(): Firestore | null {
 const collectionHashes = new Map<string, string>();
 let isQuotaExceeded = false;
 let quotaExceededNoticeTime = 0;
-const QUOTA_BACKOFF_MS = 15 * 60 * 1000; // Backoff for 15 minutes if Firestore quota is reached
+const QUOTA_BACKOFF_MS = 30 * 1000; // Fast retry backoff (30s) if Google Cloud quota is hit
 
 // High-frequency transient collections that should NEVER be pushed to remote Firestore
 const TRANSIENT_COLLECTIONS = new Set([
@@ -58,7 +58,7 @@ const TRANSIENT_COLLECTIONS = new Set([
   'deletedDeviceIds'
 ]);
 
-function withTimeout<T>(promise: Promise<T>, ms: number = 8000): Promise<T> {
+function withTimeout<T>(promise: Promise<T>, ms: number = 12000): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error('FIRESTORE_TIMEOUT')), ms);
     promise.then(
@@ -115,7 +115,7 @@ export async function saveCollectionToFirestore(collectionName: string, rawItems
   const db = getDb();
   if (!db) return false;
 
-  // 2. Circuit Breaker: If quota exceeded recently, skip remote network calls entirely
+  // 2. Circuit Breaker: If genuine quota exceeded recently, skip remote network calls briefly
   const now = Date.now();
   if (isQuotaExceeded && (now - quotaExceededNoticeTime < QUOTA_BACKOFF_MS)) {
     return true; // Local storage is active and durable
@@ -139,17 +139,30 @@ export async function saveCollectionToFirestore(collectionName: string, rawItems
         isSplit: false,
         totalParts: 1,
         updatedAt: now
-      }, { merge: true }), 6000);
+      }, { merge: true }), 10000);
     } else {
       const totalParts = Math.ceil(serialized.length / CHUNK_SIZE);
       const partPromises: Promise<any>[] = [];
       for (let i = 0; i < totalParts; i++) {
         const chunk = serialized.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE);
         const partRef = doc(db, 'nagah_store', `${collectionName}_p${i + 1}`);
-        partPromises.push(withTimeout(setDoc(partRef, { payload: chunk, part: i + 1, totalParts, updatedAt: now }, { merge: true }), 6000));
+        partPromises.push(withTimeout(setDoc(partRef, { payload: chunk, part: i + 1, totalParts, updatedAt: now }, { merge: true }), 10000));
       }
       await Promise.all(partPromises);
-      await withTimeout(setDoc(docRef, { isSplit: true, totalParts, updatedAt: now }, { merge: true }), 6000);
+      await withTimeout(setDoc(docRef, { isSplit: true, totalParts, updatedAt: now }, { merge: true }), 10000);
+    }
+
+    // Update global sync heartbeat in Firestore for real-time client notice
+    try {
+      const metaRef = doc(db, 'nagah_store', 'sync_meta');
+      await setDoc(metaRef, { 
+        lastUpdatedCollection: collectionName, 
+        lastCollection: collectionName,
+        updatedAt: now,
+        version: now
+      }, { merge: true });
+    } catch (metaErr) {
+      console.warn('[FirestoreStorage] sync_meta write notice:', metaErr);
     }
 
     collectionHashes.set(collectionName, newHash);
@@ -157,14 +170,14 @@ export async function saveCollectionToFirestore(collectionName: string, rawItems
     return true;
   } catch (err: any) {
     const errMsg = err?.message || String(err);
-    if (errMsg.includes('RESOURCE_EXHAUSTED') || errMsg.includes('Quota limit exceeded') || errMsg.includes('8') || errMsg.includes('FIRESTORE_TIMEOUT')) {
+    if (errMsg.includes('RESOURCE_EXHAUSTED') || errMsg.includes('Quota limit exceeded')) {
       isQuotaExceeded = true;
       quotaExceededNoticeTime = now;
-      console.warn(`[FirestoreStorage] Cloud Firestore Quota reached or paused. Active local persistence handles all operations smoothly.`);
+      console.warn(`[FirestoreStorage] Cloud Firestore Quota reached. Backing off for 30s.`);
     } else {
-      console.warn(`[FirestoreStorage] Non-critical save note for ${collectionName}:`, errMsg);
+      console.warn(`[FirestoreStorage] Note for ${collectionName}:`, errMsg);
     }
-    return true; // Graceful fallback
+    return false;
   }
 }
 
@@ -184,14 +197,14 @@ export async function loadCollectionFromFirestore(collectionName: string): Promi
 
   try {
     const docRef = doc(db, 'nagah_store', collectionName);
-    const snap = await withTimeout(getDoc(docRef), 6000);
+    const snap = await withTimeout(getDoc(docRef), 10000);
     if (!snap.exists()) return null;
 
     const data = snap.data();
     if (data?.isSplit) {
       const totalParts = data.totalParts || 2;
       const partSnaps = await Promise.all(
-        Array.from({ length: totalParts }, (_, i) => withTimeout(getDoc(doc(db, 'nagah_store', `${collectionName}_p${i + 1}`)), 6000))
+        Array.from({ length: totalParts }, (_, i) => withTimeout(getDoc(doc(db, 'nagah_store', `${collectionName}_p${i + 1}`)), 10000))
       );
       const fullStr = partSnaps.map(s => s.data()?.payload || '').join('');
       return fullStr ? JSON.parse(fullStr) : null;
@@ -203,7 +216,7 @@ export async function loadCollectionFromFirestore(collectionName: string): Promi
     return null;
   } catch (err: any) {
     const errMsg = err?.message || String(err);
-    if (errMsg.includes('RESOURCE_EXHAUSTED') || errMsg.includes('Quota limit exceeded') || errMsg.includes('8')) {
+    if (errMsg.includes('RESOURCE_EXHAUSTED') || errMsg.includes('Quota limit exceeded')) {
       isQuotaExceeded = true;
       quotaExceededNoticeTime = now;
     }
@@ -239,21 +252,21 @@ export async function saveFullDbToFirestore(dbData: any, immediate = false): Pro
     await Promise.all(tasks);
   };
 
-  // On serverless environments (Vercel/Lambda), execute quickly
+  // On serverless or immediate calls, execute right away
   if (immediate || isServerless) {
     if (debouncedSyncTimer) {
       clearTimeout(debouncedSyncTimer);
       debouncedSyncTimer = null;
     }
     try {
-      await withTimeout(executeSync(), 5000);
+      await withTimeout(executeSync(), 12000);
     } catch (err) {
-      // Handled silently
+      // Handled gracefully
     }
     return;
   }
 
-  // Debounce syncing to cloud by 15 seconds in long-running standalone Node server mode
+  // Very short 500ms debounce in long-running Node server mode to keep Vercel & AI Studio in near real-time sync
   if (debouncedSyncTimer) {
     clearTimeout(debouncedSyncTimer);
   }
@@ -265,7 +278,7 @@ export async function saveFullDbToFirestore(dbData: any, immediate = false): Pro
     } catch (e) {
       // Handled silently
     }
-  }, 15000);
+  }, 500);
 }
 
 export async function allocateNextTraineeCode(
@@ -296,24 +309,16 @@ export async function allocateNextTraineeCode(
   const db = getDb();
   if (db) {
     try {
-      const traineesDocRef = doc(db, 'nagah_store', 'trainees');
-      const snap = await withTimeout(getDoc(traineesDocRef), 4000);
-      if (snap.exists()) {
-        const raw = snap.data();
-        let remoteList: any[] = [];
-        if (raw?.payload) {
-          try { remoteList = JSON.parse(raw.payload); } catch {}
-        }
-        if (Array.isArray(remoteList)) {
-          for (const t of remoteList) {
-            if (t && t.code) {
-              const c = String(t.code).trim().toUpperCase();
-              usedCodes.add(c);
-              const m = c.match(regex);
-              if (m) {
-                const num = parseInt(m[1], 10);
-                if (!isNaN(num) && num > maxNum) maxNum = num;
-              }
+      const remoteList = await loadCollectionFromFirestore('trainees');
+      if (Array.isArray(remoteList)) {
+        for (const t of remoteList) {
+          if (t && t.code) {
+            const c = String(t.code).trim().toUpperCase();
+            usedCodes.add(c);
+            const m = c.match(regex);
+            if (m) {
+              const num = parseInt(m[1], 10);
+              if (!isNaN(num) && num > maxNum) maxNum = num;
             }
           }
         }
@@ -362,6 +367,21 @@ export async function allocateNextTraineeCode(
   return candidate;
 }
 
+export async function getSyncMeta(): Promise<{ lastCollection?: string; updatedAt?: number; version?: number } | null> {
+  const db = getDb();
+  if (!db) return null;
+  try {
+    const metaRef = doc(db, 'nagah_store', 'sync_meta');
+    const snap = await withTimeout(getDoc(metaRef), 3000);
+    if (snap.exists()) {
+      return snap.data() as any;
+    }
+  } catch (e) {
+    // Non-critical
+  }
+  return null;
+}
+
 export async function loadFullDbFromFirestore(): Promise<any> {
   const collections = [
     'users', 'branches', 'trainees', 'trainers', 'courses', 'programs', 'groups',
@@ -376,22 +396,27 @@ export async function loadFullDbFromFirestore(): Promise<any> {
   const result: any = {};
   let loadedCount = 0;
 
-  const loadTasks = await Promise.all(
-    collections.map(async (col) => {
-      try {
-        const data = await loadCollectionFromFirestore(col);
-        return { col, data };
-      } catch (e) {
-        return { col, data: null };
-      }
-    })
-  );
+  // Load collections in controlled batches of 6 to prevent socket & quota exhaustion
+  const batchSize = 6;
+  for (let i = 0; i < collections.length; i += batchSize) {
+    const batch = collections.slice(i, i + batchSize);
+    const batchTasks = await Promise.all(
+      batch.map(async (col) => {
+        try {
+          const data = await loadCollectionFromFirestore(col);
+          return { col, data };
+        } catch (e) {
+          return { col, data: null };
+        }
+      })
+    );
 
-  for (const { col, data } of loadTasks) {
-    if (data !== null) {
-      result[col] = data;
-      collectionHashes.set(col, hashPayload(data));
-      loadedCount++;
+    for (const { col, data } of batchTasks) {
+      if (data !== null) {
+        result[col] = data;
+        collectionHashes.set(col, hashPayload(data));
+        loadedCount++;
+      }
     }
   }
 

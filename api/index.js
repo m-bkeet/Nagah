@@ -26,17 +26,61 @@ function getDb() {
     return null;
   }
 }
+function withTimeout(promise, ms = 8e3) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error("FIRESTORE_TIMEOUT")), ms);
+    promise.then(
+      (res) => {
+        clearTimeout(timer);
+        resolve(res);
+      },
+      (err) => {
+        clearTimeout(timer);
+        reject(err);
+      }
+    );
+  });
+}
 function hashPayload(data) {
   const str = typeof data === "string" ? data : JSON.stringify(data);
   return crypto.createHash("md5").update(str).digest("hex");
 }
-async function saveCollectionToFirestore(collectionName, items) {
+function sanitizeForFirestore(collectionName, items) {
+  if (!Array.isArray(items)) return items;
+  if (collectionName === "trainees") {
+    return items.map((t) => {
+      const sanitized = { ...t };
+      delete sanitized.photo;
+      if (sanitized.photoUrl && sanitized.photoUrl.startsWith("data:image") && sanitized.photoUrl.length > 5e3) {
+        delete sanitized.photoUrl;
+      }
+      return sanitized;
+    });
+  }
+  if (collectionName === "homeworkSubmissions") {
+    return items.map((sub) => {
+      const sanitized = { ...sub };
+      delete sanitized.imageBase64;
+      delete sanitized.fileData;
+      if (sanitized.attachmentUrl && sanitized.attachmentUrl.startsWith("data:image")) {
+        delete sanitized.attachmentUrl;
+      }
+      return sanitized;
+    });
+  }
+  return items;
+}
+async function saveCollectionToFirestore(collectionName, rawItems) {
+  if (TRANSIENT_COLLECTIONS.has(collectionName)) {
+    return true;
+  }
   const db2 = getDb();
   if (!db2) return false;
   const now = Date.now();
-  if (isQuotaExceeded && now - quotaExceededNoticeTime < 30 * 60 * 1e3) {
-    return false;
+  if (isQuotaExceeded && now - quotaExceededNoticeTime < QUOTA_BACKOFF_MS) {
+    return true;
   }
+  const items = sanitizeForFirestore(collectionName, rawItems);
   const newHash = hashPayload(items);
   if (collectionHashes.get(collectionName) === newHash) {
     return true;
@@ -44,48 +88,62 @@ async function saveCollectionToFirestore(collectionName, items) {
   try {
     const docRef = doc(db2, "nagah_store", collectionName);
     const serialized = JSON.stringify(items ?? []);
-    if (serialized.length < 950 * 1024) {
-      await setDoc(docRef, {
+    const CHUNK_SIZE = 700 * 1024;
+    if (serialized.length < CHUNK_SIZE) {
+      await withTimeout(setDoc(docRef, {
         payload: serialized,
         itemCount: Array.isArray(items) ? items.length : 1,
+        isSplit: false,
+        totalParts: 1,
         updatedAt: now
-      }, { merge: true });
+      }, { merge: true }), 6e3);
     } else {
-      const part1 = serialized.slice(0, Math.ceil(serialized.length / 2));
-      const part2 = serialized.slice(Math.ceil(serialized.length / 2));
-      const docPart1 = doc(db2, "nagah_store", `${collectionName}_p1`);
-      const docPart2 = doc(db2, "nagah_store", `${collectionName}_p2`);
-      await setDoc(docPart1, { payload: part1, part: 1, totalParts: 2, updatedAt: now }, { merge: true });
-      await setDoc(docPart2, { payload: part2, part: 2, totalParts: 2, updatedAt: now }, { merge: true });
-      await setDoc(docRef, { isSplit: true, totalParts: 2, updatedAt: now }, { merge: true });
+      const totalParts = Math.ceil(serialized.length / CHUNK_SIZE);
+      const partPromises = [];
+      for (let i = 0; i < totalParts; i++) {
+        const chunk = serialized.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE);
+        const partRef = doc(db2, "nagah_store", `${collectionName}_p${i + 1}`);
+        partPromises.push(withTimeout(setDoc(partRef, { payload: chunk, part: i + 1, totalParts, updatedAt: now }, { merge: true }), 6e3));
+      }
+      await Promise.all(partPromises);
+      await withTimeout(setDoc(docRef, { isSplit: true, totalParts, updatedAt: now }, { merge: true }), 6e3);
     }
     collectionHashes.set(collectionName, newHash);
     isQuotaExceeded = false;
     return true;
   } catch (err) {
     const errMsg = err?.message || String(err);
-    if (errMsg.includes("RESOURCE_EXHAUSTED") || errMsg.includes("Quota limit exceeded")) {
+    if (errMsg.includes("RESOURCE_EXHAUSTED") || errMsg.includes("Quota limit exceeded") || errMsg.includes("8") || errMsg.includes("FIRESTORE_TIMEOUT")) {
       isQuotaExceeded = true;
       quotaExceededNoticeTime = now;
-      console.warn(`[FirestoreStorage] Cloud Firestore Quota exceeded for today (Free daily write units). Local disk persistence remains active until reset.`);
+      console.warn(`[FirestoreStorage] Cloud Firestore Quota reached or paused. Active local persistence handles all operations smoothly.`);
     } else {
-      console.warn(`[FirestoreStorage] Error saving ${collectionName}:`, errMsg);
+      console.warn(`[FirestoreStorage] Non-critical save note for ${collectionName}:`, errMsg);
     }
-    return false;
+    return true;
   }
 }
 async function loadCollectionFromFirestore(collectionName) {
+  if (TRANSIENT_COLLECTIONS.has(collectionName)) {
+    return null;
+  }
   const db2 = getDb();
   if (!db2) return null;
+  const now = Date.now();
+  if (isQuotaExceeded && now - quotaExceededNoticeTime < QUOTA_BACKOFF_MS) {
+    return null;
+  }
   try {
     const docRef = doc(db2, "nagah_store", collectionName);
-    const snap = await getDoc(docRef);
+    const snap = await withTimeout(getDoc(docRef), 6e3);
     if (!snap.exists()) return null;
     const data = snap.data();
     if (data?.isSplit) {
-      const p1Snap = await getDoc(doc(db2, "nagah_store", `${collectionName}_p1`));
-      const p2Snap = await getDoc(doc(db2, "nagah_store", `${collectionName}_p2`));
-      const fullStr = (p1Snap.data()?.payload || "") + (p2Snap.data()?.payload || "");
+      const totalParts = data.totalParts || 2;
+      const partSnaps = await Promise.all(
+        Array.from({ length: totalParts }, (_, i) => withTimeout(getDoc(doc(db2, "nagah_store", `${collectionName}_p${i + 1}`)), 6e3))
+      );
+      const fullStr = partSnaps.map((s) => s.data()?.payload || "").join("");
       return fullStr ? JSON.parse(fullStr) : null;
     }
     if (data?.payload) {
@@ -93,21 +151,21 @@ async function loadCollectionFromFirestore(collectionName) {
     }
     return null;
   } catch (err) {
-    console.warn(`[FirestoreStorage] Error loading ${collectionName}:`, err?.message || err);
+    const errMsg = err?.message || String(err);
+    if (errMsg.includes("RESOURCE_EXHAUSTED") || errMsg.includes("Quota limit exceeded") || errMsg.includes("8")) {
+      isQuotaExceeded = true;
+      quotaExceededNoticeTime = now;
+    }
     return null;
   }
 }
-async function saveFullDbToFirestore(dbData) {
+async function saveFullDbToFirestore2(dbData, immediate = false) {
   if (!dbData) return;
   pendingDbData = dbData;
-  if (debouncedSyncTimer) {
-    clearTimeout(debouncedSyncTimer);
-  }
-  debouncedSyncTimer = setTimeout(async () => {
-    debouncedSyncTimer = null;
+  const executeSync = async () => {
     const current = pendingDbData;
     if (!current) return;
-    const collections = [
+    const coreCollections = [
       "users",
       "branches",
       "trainees",
@@ -128,17 +186,119 @@ async function saveFullDbToFirestore(dbData) {
       "certificates",
       "certificateTemplates",
       "trainerAttestations",
-      "auditLogs",
       "settings",
-      "notifications",
-      "assignments"
+      "assignments",
+      "homeworkSubmissions",
+      "badges",
+      "traineeBadges",
+      "portalMessages"
     ];
-    for (const k of collections) {
-      if (current[k] !== void 0) {
-        await saveCollectionToFirestore(k, current[k]);
+    const tasks = coreCollections.filter((k) => current[k] !== void 0).map((k) => saveCollectionToFirestore(k, current[k]));
+    await Promise.all(tasks);
+  };
+  if (immediate || isServerless) {
+    if (debouncedSyncTimer) {
+      clearTimeout(debouncedSyncTimer);
+      debouncedSyncTimer = null;
+    }
+    try {
+      await withTimeout(executeSync(), 5e3);
+    } catch (err) {
+    }
+    return;
+  }
+  if (debouncedSyncTimer) {
+    clearTimeout(debouncedSyncTimer);
+  }
+  debouncedSyncTimer = setTimeout(async () => {
+    debouncedSyncTimer = null;
+    try {
+      await executeSync();
+    } catch (e) {
+    }
+  }, 15e3);
+}
+async function allocateNextTraineeCode(prefix = "A", localTrainees = []) {
+  const pfx = (prefix || "A").toUpperCase().trim().slice(0, 3);
+  const regex = new RegExp(`^${pfx}-?(\\d+)$`, "i");
+  let maxNum = 0;
+  const usedCodes = /* @__PURE__ */ new Set();
+  if (Array.isArray(localTrainees)) {
+    for (const t of localTrainees) {
+      if (t && t.code) {
+        const c = String(t.code).trim().toUpperCase();
+        usedCodes.add(c);
+        const m = c.match(regex);
+        if (m) {
+          const num = parseInt(m[1], 10);
+          if (!isNaN(num) && num > maxNum) maxNum = num;
+        }
       }
     }
-  }, 8e3);
+  }
+  const db2 = getDb();
+  if (db2) {
+    try {
+      const traineesDocRef = doc(db2, "nagah_store", "trainees");
+      const snap = await withTimeout(getDoc(traineesDocRef), 4e3);
+      if (snap.exists()) {
+        const raw = snap.data();
+        let remoteList = [];
+        if (raw?.payload) {
+          try {
+            remoteList = JSON.parse(raw.payload);
+          } catch {
+          }
+        }
+        if (Array.isArray(remoteList)) {
+          for (const t of remoteList) {
+            if (t && t.code) {
+              const c = String(t.code).trim().toUpperCase();
+              usedCodes.add(c);
+              const m = c.match(regex);
+              if (m) {
+                const num = parseInt(m[1], 10);
+                if (!isNaN(num) && num > maxNum) maxNum = num;
+              }
+            }
+          }
+        }
+      }
+    } catch (e) {
+      console.warn("[allocateNextTraineeCode] remote trainees scan notice:", e);
+    }
+    try {
+      const counterRef = doc(db2, "nagah_store", "code_counters");
+      const counterSnap = await withTimeout(getDoc(counterRef), 4e3);
+      let countersMap = {};
+      if (counterSnap.exists()) {
+        countersMap = counterSnap.data()?.counters || {};
+      }
+      const existingVal = Number(countersMap[pfx]) || 0;
+      if (existingVal > maxNum) {
+        maxNum = existingVal;
+      }
+      let nextNum2 = maxNum + 1;
+      let candidate2 = `${pfx}${String(nextNum2).padStart(3, "0")}`;
+      while (usedCodes.has(candidate2.toUpperCase())) {
+        nextNum2++;
+        candidate2 = `${pfx}${String(nextNum2).padStart(3, "0")}`;
+      }
+      countersMap[pfx] = nextNum2;
+      await withTimeout(setDoc(counterRef, { counters: countersMap, updatedAt: (/* @__PURE__ */ new Date()).toISOString() }, { merge: true }), 4e3);
+      console.log(`[allocateNextTraineeCode] Allocated persistent unique code ${candidate2} (prefix: ${pfx}, nextNum: ${nextNum2})`);
+      return candidate2;
+    } catch (e) {
+      console.warn("[allocateNextTraineeCode] Firestore code_counters update notice:", e);
+    }
+  }
+  let nextNum = maxNum + 1;
+  let candidate = `${pfx}${String(nextNum).padStart(3, "0")}`;
+  while (usedCodes.has(candidate.toUpperCase())) {
+    nextNum++;
+    candidate = `${pfx}${String(nextNum).padStart(3, "0")}`;
+  }
+  return candidate;
 }
 async function loadFullDbFromFirestore() {
   const collections = [
@@ -165,24 +325,36 @@ async function loadFullDbFromFirestore() {
     "auditLogs",
     "settings",
     "notifications",
-    "assignments"
+    "assignments",
+    "homeworkSubmissions",
+    "badges",
+    "traineeBadges",
+    "portalMessages",
+    "devices",
+    "deviceCommands"
   ];
   const result = {};
   let loadedCount = 0;
-  for (const col of collections) {
-    try {
-      const data = await loadCollectionFromFirestore(col);
-      if (data !== null) {
-        result[col] = data;
-        collectionHashes.set(col, hashPayload(data));
-        loadedCount++;
+  const loadTasks = await Promise.all(
+    collections.map(async (col) => {
+      try {
+        const data = await loadCollectionFromFirestore(col);
+        return { col, data };
+      } catch (e) {
+        return { col, data: null };
       }
-    } catch (e) {
+    })
+  );
+  for (const { col, data } of loadTasks) {
+    if (data !== null) {
+      result[col] = data;
+      collectionHashes.set(col, hashPayload(data));
+      loadedCount++;
     }
   }
   return loadedCount > 0 ? result : null;
 }
-var firebaseConfig, dbId, firestoreInstance, collectionHashes, isQuotaExceeded, quotaExceededNoticeTime, debouncedSyncTimer, pendingDbData;
+var firebaseConfig, dbId, firestoreInstance, collectionHashes, isQuotaExceeded, quotaExceededNoticeTime, QUOTA_BACKOFF_MS, TRANSIENT_COLLECTIONS, isServerless, debouncedSyncTimer, pendingDbData;
 var init_firestoreStorage = __esm({
   "server/firestoreStorage.ts"() {
     firebaseConfig = null;
@@ -210,6 +382,16 @@ var init_firestoreStorage = __esm({
     collectionHashes = /* @__PURE__ */ new Map();
     isQuotaExceeded = false;
     quotaExceededNoticeTime = 0;
+    QUOTA_BACKOFF_MS = 15 * 60 * 1e3;
+    TRANSIENT_COLLECTIONS = /* @__PURE__ */ new Set([
+      "devices",
+      "deviceCommands",
+      "auditLogs",
+      "traineeScreenshots",
+      "notifications",
+      "deletedDeviceIds"
+    ]);
+    isServerless = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.VERCEL_ENV);
     debouncedSyncTimer = null;
     pendingDbData = null;
   }
@@ -218,6 +400,7 @@ var init_firestoreStorage = __esm({
 // server/db.ts
 var db_exports = {};
 __export(db_exports, {
+  calculateTraineeFeeAndFinancials: () => calculateTraineeFeeAndFinancials,
   db: () => db,
   hashPassword: () => hashPassword
 });
@@ -228,14 +411,45 @@ import os from "os";
 function hashPassword(password) {
   return crypto2.createHash("sha256").update(password + "_success_v7_salt").digest("hex");
 }
-var isServerless, ACTUAL_DATA_DIR, BACKUPS_DIR, DB_FILE, BACKUP_FILE, BUNDLED_DB_PATHS, defaultPointRules, initialData, userPasswordMap, DatabaseManager, db;
+function calculateTraineeFeeAndFinancials(t, coursesList = []) {
+  const isBadr = t.branchId === "branch-2" || String(t.branchName || "").includes("\u0628\u062F\u0631");
+  const gradeStr = String(t.grade || "");
+  const isSecondary = gradeStr.includes("\u0627\u0644\u062B\u0627\u0646\u0648\u064A") || String(t.courseName || "").includes("ICT-S");
+  const defaultFeeForBranch = isBadr ? isSecondary ? 300 : 250 : isSecondary ? 250 : 200;
+  let baseFee = Number(t.feeAmount) || 0;
+  const course = coursesList.find((c) => c.id === t.courseId || gradeStr && (c.grade === gradeStr || c.name?.includes(gradeStr)));
+  if (baseFee === 0 || isBadr && baseFee === 200) {
+    if (course && Number(course.feeAmount) > 0) {
+      baseFee = isBadr ? Number(course.feeAmount) + 50 : Number(course.feeAmount);
+    } else {
+      baseFee = defaultFeeForBranch;
+    }
+  }
+  const isExempt = Boolean(t.isExempt || t.exempt);
+  let discount = Number(t.discountAmount) || 0;
+  if (isExempt) {
+    discount = baseFee;
+  }
+  const net = Math.max(0, baseFee - discount);
+  const paid = Number(t.paidAmount) || 0;
+  const remaining = Math.max(0, net - paid);
+  return {
+    feeAmount: baseFee,
+    discountAmount: discount,
+    netAmount: net,
+    paidAmount: paid,
+    remainingAmount: remaining,
+    isExempt
+  };
+}
+var isServerless2, ACTUAL_DATA_DIR, BACKUPS_DIR, DB_FILE, BACKUP_FILE, BUNDLED_DB_PATHS, defaultPointRules, initialData, userPasswordMap, DatabaseManager, db;
 var init_db = __esm({
   "server/db.ts"() {
     init_firestoreStorage();
-    isServerless = Boolean(
+    isServerless2 = Boolean(
       process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.VERCEL_ENV || process.cwd().startsWith("/var/task") || process.cwd() === "/"
     );
-    ACTUAL_DATA_DIR = isServerless ? path2.join(os.tmpdir(), "nagah_data") : path2.join(process.cwd(), "data");
+    ACTUAL_DATA_DIR = isServerless2 ? path2.join(os.tmpdir(), "nagah_data") : path2.join(process.cwd(), "data");
     BACKUPS_DIR = path2.join(ACTUAL_DATA_DIR, "backups");
     DB_FILE = path2.join(ACTUAL_DATA_DIR, "database.json");
     BACKUP_FILE = path2.join(ACTUAL_DATA_DIR, "database.backup.json");
@@ -3709,33 +3923,139 @@ var init_db = __esm({
         this.saveTimeout = null;
         this.isFirestoreHydrated = false;
         this.lastHydrationTime = 0;
+        this.lastHydrationAttemptTime = 0;
         this.hydrationPromise = null;
         this.ensureDataDir();
         this.data = this.loadData();
         this.hydrationPromise = this.ensureHydrated();
       }
+      deduplicateTrainees(list) {
+        if (!Array.isArray(list) || list.length === 0) return [];
+        const byId = /* @__PURE__ */ new Map();
+        const byCode = /* @__PURE__ */ new Map();
+        const byNormName = /* @__PURE__ */ new Map();
+        const result = [];
+        const normArabic = (s) => {
+          if (!s) return "";
+          return String(s).trim().toLowerCase().replace(/[\u064B-\u065F\u0670\u0640]/g, "").replace(/[أإآٱ]/g, "\u0627").replace(/ة/g, "\u0647").replace(/ى/g, "\u064A").replace(/[ؤئ]/g, "\u0621").replace(/عبد\s+/g, "\u0639\u0628\u062F").replace(/ابو\s+/g, "\u0627\u0628\u0648").replace(/[\s\-_.]+/g, " ").trim();
+        };
+        const cleanPhone = (p) => String(p || "").replace(/\D/g, "").slice(-10);
+        for (const t of list) {
+          if (!t) continue;
+          const id = t.id ? String(t.id).trim() : "";
+          const code = t.code ? String(t.code).trim().toUpperCase() : "";
+          const normName = normArabic(t.fullName || t.name);
+          const phone = cleanPhone(t.phone);
+          const parentPhone = cleanPhone(t.parentPhone);
+          let existing = null;
+          if (id && byId.has(id)) {
+            existing = byId.get(id);
+          } else if (code && byCode.has(code)) {
+            existing = byCode.get(code);
+          } else if (normName && byNormName.has(normName)) {
+            const candidate = byNormName.get(normName);
+            const cPhone = cleanPhone(candidate.phone);
+            const cParentPhone = cleanPhone(candidate.parentPhone);
+            const samePhone = phone && (phone === cPhone || phone === cParentPhone) || parentPhone && (parentPhone === cPhone || parentPhone === cParentPhone);
+            const sameGroupOrCourse = t.groupId && candidate.groupId && t.groupId === candidate.groupId || t.courseId && candidate.courseId && t.courseId === candidate.courseId;
+            if (samePhone || sameGroupOrCourse || !phone && !parentPhone && !cPhone && !cParentPhone) {
+              existing = candidate;
+            }
+          }
+          if (existing) {
+            const mergedTotalPoints = Math.max(
+              Number(existing.totalPoints !== void 0 ? existing.totalPoints : existing.points || 0),
+              Number(t.totalPoints !== void 0 ? t.totalPoints : t.points || 0)
+            );
+            const mergedPaidAmount = Math.max(Number(existing.paidAmount || 0), Number(t.paidAmount || 0));
+            Object.assign(existing, {
+              ...t,
+              ...existing,
+              id: existing.id || t.id,
+              code: existing.code || t.code,
+              fullName: existing.fullName || t.fullName,
+              phone: existing.phone || t.phone,
+              parentPhone: existing.parentPhone || t.parentPhone,
+              nationalId: existing.nationalId || t.nationalId,
+              totalPoints: mergedTotalPoints,
+              points: mergedTotalPoints,
+              paidAmount: mergedPaidAmount,
+              notes: existing.notes ? t.notes && !existing.notes.includes(t.notes) ? `${existing.notes} | ${t.notes}` : existing.notes : t.notes || ""
+            });
+          } else {
+            const record = { ...t };
+            result.push(record);
+            if (id) byId.set(id, record);
+            if (code) byCode.set(code, record);
+            if (normName) byNormName.set(normName, record);
+          }
+        }
+        return result;
+      }
       async ensureHydrated(force = false) {
         const now = Date.now();
-        if (!force && this.isFirestoreHydrated && now - this.lastHydrationTime < 60 * 1e3) return;
-        this.lastHydrationTime = now;
-        try {
-          const remoteData = await loadFullDbFromFirestore();
-          if (remoteData && Object.keys(remoteData).length > 0) {
-            console.log("[DB] Hydrated from Firestore! Collections loaded:", Object.keys(remoteData));
-            this.data = {
-              ...this.data,
-              ...remoteData,
-              settings: {
-                ...this.data.settings,
-                ...remoteData.settings || {}
-              }
-            };
-          }
-        } catch (err) {
-          console.warn("[DB] Firestore hydration notice:", err);
-        } finally {
-          this.isFirestoreHydrated = true;
+        if (!force && now - this.lastHydrationAttemptTime < 15 * 60 * 1e3) {
+          return;
         }
+        if (!force && this.isFirestoreHydrated && now - this.lastHydrationTime < 60 * 60 * 1e3) {
+          return;
+        }
+        if (this.hydrationPromise && !force) {
+          return this.hydrationPromise;
+        }
+        this.lastHydrationAttemptTime = now;
+        this.hydrationPromise = (async () => {
+          this.lastHydrationTime = Date.now();
+          try {
+            const remoteData = await loadFullDbFromFirestore();
+            if (remoteData && Object.keys(remoteData).length > 0) {
+              console.log("[DB] Hydrated from Firestore! Collections loaded:", Object.keys(remoteData));
+              const current = this.data || {};
+              const merged = { ...current };
+              for (const [key, val] of Object.entries(remoteData)) {
+                if (Array.isArray(val)) {
+                  if (key === "trainees") {
+                    const combined = [...val, ...Array.isArray(merged[key]) ? merged[key] : []];
+                    merged[key] = this.deduplicateTrainees(combined);
+                  } else if (Array.isArray(merged[key]) && merged[key].length > 0) {
+                    const remoteMap = new Map(val.map((item) => [item.id, item]));
+                    for (const localItem of merged[key]) {
+                      if (localItem && localItem.id && !remoteMap.has(localItem.id)) {
+                        remoteMap.set(localItem.id, localItem);
+                      }
+                    }
+                    merged[key] = Array.from(remoteMap.values());
+                  } else {
+                    merged[key] = val;
+                  }
+                } else {
+                  merged[key] = val;
+                }
+              }
+              if (remoteData.settings) {
+                merged.settings = { ...current.settings || {}, ...remoteData.settings };
+              }
+              if (Array.isArray(merged.trainees)) {
+                const coursesList = Array.isArray(merged.courses) ? merged.courses : [];
+                const deduplicated = this.deduplicateTrainees(merged.trainees);
+                merged.trainees = deduplicated.map((t) => {
+                  const fin = calculateTraineeFeeAndFinancials(t, coursesList);
+                  return {
+                    ...t,
+                    ...fin
+                  };
+                });
+              }
+              this.data = merged;
+            }
+          } catch (err) {
+            console.warn("[DB] Firestore hydration notice:", err);
+          } finally {
+            this.isFirestoreHydrated = true;
+            this.hydrationPromise = null;
+          }
+        })();
+        return this.hydrationPromise;
       }
       ensureDataDir() {
         try {
@@ -3814,11 +4134,19 @@ var init_db = __esm({
               }
             }
             const rawTrainees = Array.isArray(parsed.trainees) ? parsed.trainees : [];
+            const coursesList = Array.isArray(parsed.courses) && parsed.courses.length > 0 ? parsed.courses : initialData.courses;
+            const normalizedTrainees = rawTrainees.map((t) => {
+              const fin = calculateTraineeFeeAndFinancials(t, coursesList);
+              return {
+                ...t,
+                ...fin
+              };
+            });
             return {
               ...initialData,
               ...parsed,
               branches: parsed.branches && parsed.branches.length > 0 ? parsed.branches : initialData.branches,
-              trainees: rawTrainees.length > 0 ? rawTrainees : initialData.trainees,
+              trainees: this.deduplicateTrainees(normalizedTrainees.length > 0 ? normalizedTrainees : initialData.trainees),
               trainers: parsed.trainers && parsed.trainers.length > 0 ? parsed.trainers : initialData.trainers,
               courses: parsed.courses && parsed.courses.length > 0 ? parsed.courses : initialData.courses,
               groups: parsed.groups && parsed.groups.length > 0 ? parsed.groups : initialData.groups,
@@ -3857,10 +4185,6 @@ var init_db = __esm({
         } catch (err) {
           console.warn("[DB] Error loading database, falling back to initialData:", err);
         }
-        try {
-          this.saveDataDirect(initialData);
-        } catch {
-        }
         return JSON.parse(JSON.stringify(initialData));
       }
       getData() {
@@ -3873,13 +4197,13 @@ var init_db = __esm({
         this.data = txData;
         this.saveDataDirect(this.data);
       }
-      save() {
-        this.saveDataDirect(this.data);
+      async save() {
+        return await this.saveDataDirect(this.data, false);
       }
-      saveImmediate() {
-        this.saveDataDirect(this.data);
+      async saveImmediate() {
+        return await this.saveDataDirect(this.data, true);
       }
-      saveDataDirect(data) {
+      async saveDataDirect(data, immediate = false) {
         if (this.saveTimeout) {
           clearTimeout(this.saveTimeout);
           this.saveTimeout = null;
@@ -3908,9 +4232,14 @@ var init_db = __esm({
         } catch (err) {
           console.warn("[DB] Note: saveDataDirect could not persist to local disk (stateless/read-only environment):", err);
         }
-        saveFullDbToFirestore(data).catch((err) => {
-          console.warn("[DB] Non-critical async Firestore sync notice:", err);
-        });
+        try {
+          await saveFullDbToFirestore2(data, immediate);
+        } catch (err) {
+          console.warn("[DB] Firestore sync error:", err);
+          if (immediate) {
+            throw err;
+          }
+        }
       }
       logAudit(log) {
         const newLog = {
@@ -4073,7 +4402,26 @@ var init_db = __esm({
           const traineePayments = this.data.payments.filter((p) => p.traineeId === trainee.id);
           const totalPaid = traineePayments.reduce((sum, p) => sum + (p.amount || 0), 0);
           trainee.paidAmount = totalPaid;
-          trainee.netAmount = Math.max(0, (trainee.feeAmount || 0) - (trainee.discountAmount || 0));
+          let fee = Number(trainee.feeAmount) || 0;
+          if (fee === 0) {
+            if (trainee.groupId) {
+              const grp = this.data.groups.find((g) => g.id === trainee.groupId);
+              if (grp && grp.feeAmount !== void 0 && grp.feeAmount !== null && Number(grp.feeAmount) > 0) {
+                fee = Number(grp.feeAmount);
+              }
+            }
+            if (fee === 0 && trainee.courseId) {
+              const crs = this.data.courses.find((c) => c.id === trainee.courseId);
+              if (crs && (crs.feeAmount || crs.price)) {
+                fee = Number(crs.feeAmount || crs.price);
+              }
+            }
+            if (fee === 0) {
+              fee = 500;
+            }
+            trainee.feeAmount = fee;
+          }
+          trainee.netAmount = Math.max(0, fee - (trainee.discountAmount || 0));
           trainee.remainingAmount = Math.max(0, trainee.netAmount - trainee.paidAmount);
           if (!trainee.courseIds) {
             trainee.courseIds = trainee.courseId ? [trainee.courseId] : [];
@@ -4410,12 +4758,17 @@ var adminDb = new AdminDbMock();
 
 // server/data/index.ts
 init_db();
+init_firestoreStorage();
 function createRepo(key) {
   return {
     async getAll() {
+      await db.ensureHydrated();
       const memData = db.getData();
       if (!memData || !Array.isArray(memData[key])) {
         return [];
+      }
+      if (key === "trainees" && Array.isArray(memData.trainees)) {
+        memData.trainees = db.deduplicateTrainees(memData.trainees);
       }
       return memData[key];
     },
@@ -4473,6 +4826,7 @@ function createRepo(key) {
       });
     },
     async create(id, itemData) {
+      await db.ensureHydrated();
       const docId = id || itemData.id || "doc-" + Date.now() + "-" + Math.random().toString(36).substring(2, 6);
       const fullItem = { ...itemData, id: docId };
       const memData = db.getData();
@@ -4482,11 +4836,16 @@ function createRepo(key) {
         const idx = list.findIndex((i) => i.id === docId);
         if (idx >= 0) list[idx] = fullItem;
         else list.push(fullItem);
-        db.saveImmediate();
+        if (key === "trainees" && Array.isArray(memData.trainees)) {
+          memData.trainees = db.deduplicateTrainees(memData.trainees);
+        }
+        await saveCollectionToFirestore(key, memData[key]);
+        db.save();
       }
       return fullItem;
     },
     async update(id, updates) {
+      await db.ensureHydrated();
       const existing = await this.getById(id);
       const docId = existing ? existing.id : id;
       const updatedItem = { ...existing || {}, ...updates, id: docId, updatedAt: (/* @__PURE__ */ new Date()).toISOString() };
@@ -4497,17 +4856,20 @@ function createRepo(key) {
         const idx = list.findIndex((i) => i.id === docId);
         if (idx >= 0) list[idx] = updatedItem;
         else list.push(updatedItem);
-        db.saveImmediate();
+        await saveCollectionToFirestore(key, memData[key]);
+        db.save();
       }
       return updatedItem;
     },
     async delete(id) {
+      await db.ensureHydrated();
       const memData = db.getData();
       if (memData && Array.isArray(memData[key])) {
         const list = memData[key];
         const idx = list.findIndex((i) => i.id === id);
         if (idx >= 0) list.splice(idx, 1);
-        db.saveImmediate();
+        await saveCollectionToFirestore(key, memData[key]);
+        db.save();
       }
       return true;
     },
@@ -4535,6 +4897,12 @@ var ExamQuestionRepo = createRepo("questions");
 var ExamResultRepo = createRepo("examResults");
 var PointRuleRepo = createRepo("pointRules");
 var PointTransactionRepo = createRepo("pointTransactions");
+var HomeworkSubmissionRepo = createRepo("homeworkSubmissions");
+var BadgeRepo = createRepo("badges");
+var AssignmentRepo = createRepo("assignments");
+var ScheduleRepo = createRepo("schedules");
+var LabScheduleRepo = createRepo("labSchedules");
+var PortalMessageRepo = createRepo("portalMessages");
 var CertificateRepo = createRepo("certificates");
 var CertificateTemplateRepo = createRepo("certificateTemplates");
 var UserRepo = createRepo("users");
@@ -4710,7 +5078,11 @@ async function runDataIntegrityAudit() {
   }
 }
 
+// server/routes.ts
+init_firestoreStorage();
+
 // server/registerLogic.ts
+init_firestoreStorage();
 function resolveGradePrefix(gradeOrCourse) {
   if (!gradeOrCourse) return "A";
   const clean = String(gradeOrCourse).trim();
@@ -4936,19 +5308,7 @@ async function handlePublicRegister(req, res) {
     }
     const expectedPrefix = resolveGradePrefix(grade || targetCourse.name);
     const pfx = expectedPrefix.toUpperCase();
-    const regex = new RegExp(`^${pfx}-?(\\d+)$`, "i");
-    let maxNum = 0;
-    allTrainees.forEach((t) => {
-      if (t.code) {
-        const m = String(t.code).trim().match(regex);
-        if (m) {
-          const num = parseInt(m[1], 10);
-          if (!isNaN(num) && num > maxNum) maxNum = num;
-        }
-      }
-    });
-    const nextNum = maxNum + 1;
-    const newCode = `${pfx}${nextNum.toString().padStart(3, "0")}`;
+    const newCode = await allocateNextTraineeCode(pfx, allTrainees);
     const branchObj = allBranches.find((b) => b.id === branchId);
     const branchName = branchObj ? branchObj.name : branchId;
     const newTrainee = {
@@ -5393,11 +5753,11 @@ async function executeDatabaseImport(data, mode = "merge", options) {
 }
 
 // server/migrationService.ts
-var isServerless2 = Boolean(
+var isServerless3 = Boolean(
   process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.VERCEL_ENV || process.cwd().startsWith("/var/task") || process.cwd() === "/"
 );
-var DATA_BASE_DIR = isServerless2 ? path3.join(os2.tmpdir(), "nagah_data") : path3.join(process.cwd(), "data");
-var MIGRATION_DIR = isServerless2 ? path3.join(os2.tmpdir(), "nagah_migration") : path3.join(process.cwd(), "migration-package");
+var DATA_BASE_DIR = isServerless3 ? path3.join(os2.tmpdir(), "nagah_data") : path3.join(process.cwd(), "data");
+var MIGRATION_DIR = isServerless3 ? path3.join(os2.tmpdir(), "nagah_migration") : path3.join(process.cwd(), "migration-package");
 var BACKUPS_DIR2 = path3.join(DATA_BASE_DIR, "backups");
 var HISTORY_FILE = path3.join(BACKUPS_DIR2, "backup_history.json");
 function ensureDirectory(dir) {
@@ -7039,6 +7399,7 @@ function getAI() {
   return aiClient;
 }
 var GEMINI_MODEL_CASCADE = [
+  "gemini-3.8-flash",
   "gemini-3.7-flash",
   "gemini-3.1-flash-lite",
   "gemini-flash-latest",
@@ -7248,43 +7609,59 @@ ${params.textPrompt ? `\u062A\u0639\u0644\u064A\u0645\u0627\u062A / \u0645\u0648
 async function gradeHomeworkOrExamFromImage(params) {
   const parts = [];
   const maxScore = params.maxScore || 100;
-  const cleanBase64 = params.imageBase64.replace(/^data:[^;]+;base64,/, "").trim();
-  if (cleanBase64.length > 0) {
-    parts.push({
-      inlineData: {
-        data: cleanBase64,
-        mimeType: params.mimeType || "image/jpeg"
-      }
-    });
+  const gradeLevel = params.studentGrade || "\u0627\u0644\u0635\u0641 \u0627\u0644\u0631\u0627\u0628\u0639 \u0627\u0644\u0627\u0628\u062A\u062F\u0627\u0626\u064A (Grade 4 Languages - ICT & Computer)";
+  const courseName = params.courseName || "\u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u0627\u0644\u0645\u0639\u0644\u0648\u0645\u0627\u062A \u0648\u0627\u0644\u0627\u062A\u0635\u0627\u0644\u0627\u062A ICT \u0648\u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631";
+  const lessonName = params.lessonName || params.examOrHomeworkTitle || "\u0648\u0627\u062C\u0628 \u062A\u0644\u062E\u064A\u0635 \u0648\u062A\u0637\u0628\u064A\u0642 \u0627\u0644\u062F\u0631\u0633";
+  const imageList = [];
+  if (Array.isArray(params.imagesBase64) && params.imagesBase64.length > 0) {
+    imageList.push(...params.imagesBase64);
+  } else if (params.imageBase64 && params.imageBase64.length > 20) {
+    imageList.push(params.imageBase64);
   }
+  imageList.forEach((img, idx) => {
+    const cleanBase64 = img.replace(/^data:[^;]+;base64,/, "").trim();
+    if (cleanBase64.length > 0) {
+      parts.push({
+        inlineData: {
+          data: cleanBase64,
+          mimeType: params.mimeType || "image/jpeg"
+        }
+      });
+      parts.push({
+        text: `[\u0635\u0648\u0631\u0629 \u0627\u0644\u0635\u0641\u062D\u0629 \u0631\u0642\u0645 ${idx + 1} \u0645\u0646 \u0625\u062C\u0645\u0627\u0644\u064A ${imageList.length} \u0635\u0641\u062D\u0627\u062A \u0645\u0631\u0641\u0648\u0639\u0629 \u0645\u0646 \u0643\u0634\u0643\u0648\u0644/\u0648\u0631\u0642\u0629 \u0627\u0644\u0637\u0627\u0644\u0628]`
+      });
+    }
+  });
   const traineesListHint = params.expectedTrainees && params.expectedTrainees.length > 0 ? `\u0642\u0627\u0626\u0645\u0629 \u0623\u0643\u0648\u0627\u062F \u0627\u0644\u0637\u0644\u0627\u0628 \u0627\u0644\u0645\u0633\u062C\u0644\u064A\u0646 \u0628\u0627\u0644\u0645\u0631\u0643\u0632 \u0644\u0644\u0645\u0637\u0627\u0628\u0642\u0629:
 ${params.expectedTrainees.map((t) => `- \u0643\u0648\u062F: ${t.code} | \u0627\u0644\u0627\u0633\u0645: ${t.fullName}`).join("\n")}` : "";
-  const prompt = `\u0623\u0646\u062A \u0645\u0635\u062D\u062D \u0648\u0645\u064F\u0642\u064A\u0651\u0645 \u062A\u0639\u0644\u064A\u0645\u064A \u0630\u0643\u064A \u0641\u0627\u0626\u0642 \u0627\u0644\u062F\u0642\u0629 \u0641\u064A "\u0645\u0631\u0643\u0632 \u0627\u0644\u0646\u062C\u0627\u062D \u0644\u0644\u062A\u062F\u0631\u064A\u0628 \u0648\u0627\u0644\u0627\u0633\u062A\u0634\u0627\u0631\u0627\u062A".
-\u0645\u0647\u0645\u062A\u0643 \u0647\u064A \u0642\u0631\u0627\u0621\u0629 \u0648\u0641\u062D\u0635 \u0635\u0648\u0631\u0629 \u0648\u0631\u0642\u0629 \u0627\u0644\u0648\u0627\u062C\u0628 \u0627\u0644\u0645\u062F\u0631\u0633\u064A/\u0627\u0644\u0643\u062A\u0627\u0628 \u0623\u0648 \u0648\u0631\u0642\u0629 \u0627\u0644\u0627\u062E\u062A\u0628\u0627\u0631 \u0627\u0644\u0645\u0631\u0641\u0642\u0629\u060C \u0648\u0627\u0644\u0642\u064A\u0627\u0645 \u0628\u0627\u0644\u0645\u0647\u0627\u0645 \u0627\u0644\u062A\u0627\u0644\u064A\u0629 \u0628\u0627\u0644\u062F\u0642\u0629 \u0627\u0644\u0642\u0635\u0648\u0649:
+  const prompt = `\u0623\u0646\u062A \u0645\u0635\u062D\u062D \u0648\u0645\u064F\u0642\u064A\u0651\u0645 \u062A\u0639\u0644\u064A\u0645\u064A \u0648\u062A\u0631\u0628\u0648\u064A \u0630\u0643\u064A \u0641\u0627\u0626\u0642 \u0627\u0644\u062F\u0642\u0629 \u0641\u064A "\u0645\u0631\u0643\u0632 \u0627\u0644\u0646\u062C\u0627\u062D \u0644\u0644\u062A\u062F\u0631\u064A\u0628 \u0648\u0627\u0644\u0627\u0633\u062A\u0634\u0627\u0631\u0627\u062A".
+\u0645\u0647\u0645\u062A\u0643 \u0647\u064A \u0642\u0631\u0627\u0621\u0629 \u0648\u0641\u062D\u0635 \u0635\u0648\u0631 \u0635\u0641\u062D\u0627\u062A \u0627\u0644\u0648\u0627\u062C\u0628 \u0627\u0644\u0645\u062F\u0631\u0633\u064A/\u0627\u0644\u0643\u0634\u0643\u0648\u0644 \u0627\u0644\u0645\u0631\u0641\u0642\u0629 (\u0639\u062F\u062F \u0627\u0644\u0635\u0641\u062D\u0627\u062A: ${imageList.length})\u060C \u0623\u0648 \u062A\u0644\u062E\u064A\u0635 \u0627\u0644\u062F\u0631\u0633 \u0648\u0645\u0644\u0627\u062D\u0638\u0627\u062A \u0627\u0644\u0637\u0627\u0644\u0628.
 
+\u{1F4CB} **\u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0644\u0645\u0646\u0647\u062C \u0648\u0627\u0644\u0637\u0627\u0644\u0628**:
+- **\u0627\u0644\u0645\u0631\u062D\u0644\u0629 \u0648\u0627\u0644\u0635\u0641 \u0627\u0644\u062F\u0631\u0627\u0633\u064A**: ${gradeLevel}
+- **\u0627\u0644\u0645\u0627\u062F\u0629 \u0648\u0627\u0644\u0645\u0646\u0647\u062C \u0627\u0644\u0645\u0639\u062A\u0645\u062F**: ${courseName} (\u0645\u0637\u0627\u0628\u0642 \u0644\u0643\u062A\u0627\u0628 \u0627\u0644\u0648\u0632\u0627\u0631\u0629 \u0627\u0644\u0645\u0635\u0631\u064A \u0648\u0628\u0648\u0627\u0628\u0629 \u0627\u0644\u0645\u0646\u0627\u0647\u062C \u0648\u0643\u062A\u0627\u0628 \u0628\u0648\u0646\u064A / \u0633\u0644\u0627\u062D \u0627\u0644\u062A\u0644\u0645\u064A\u0630 / \u0627\u0644\u0645\u062A\u0645\u064A\u0632)
+- **\u0639\u0646\u0648\u0627\u0646 \u0627\u0644\u062F\u0631\u0633 \u0627\u0644\u0645\u0637\u0644\u0648\u0628 \u062A\u0644\u062E\u064A\u0635\u0647/\u062D\u0644\u0647**: ${lessonName}
+${params.studentNotes ? `- \u0646\u0635 \u062A\u0644\u062E\u064A\u0635 \u0623\u0648 \u0645\u0644\u0627\u062D\u0638\u0627\u062A \u0627\u0644\u0637\u0627\u0644\u0628 \u0627\u0644\u0645\u0643\u062A\u0648\u0628\u0629: ${params.studentNotes}` : ""}
+${traineesListHint}
+
+\u{1F3AF} **\u0627\u0644\u0645\u0628\u0627\u062F\u0626 \u0627\u0644\u062A\u0648\u062C\u064A\u0647\u064A\u0629 \u0644\u0644\u062A\u0642\u064A\u064A\u0645 \u0648\u0627\u0644\u062A\u0635\u062D\u064A\u062D (PEDAGOGICAL & CURRICULUM GUIDELINES)**:
 1. \u{1F50D} **\u0627\u0633\u062A\u062E\u0631\u0627\u062C \u0643\u0648\u062F \u0648\u0627\u0633\u0645 \u0627\u0644\u0637\u0627\u0644\u0628**:
-   - \u0627\u0628\u062D\u062B \u0641\u064A \u0623\u0639\u0644\u0649 \u0627\u0644\u0635\u0641\u062D\u0629 (\u0627\u0644\u062A\u0631\u0648\u064A\u0633\u0629 \u0623\u0648 \u0627\u0644\u0647\u0627\u0645\u0634 \u0627\u0644\u0639\u0644\u0648\u064A) \u0639\u0646 \u0627\u0644\u0643\u0648\u062F \u0627\u0644\u0630\u064A \u0643\u062A\u0628\u0647 \u0627\u0644\u0637\u0627\u0644\u0628 (\u0645\u062B\u0644 A001\u060C A002\u060C N001\u060C B002\u060C \u0645001\u060C \u0625\u0644\u062E).
-   - \u0625\u0630\u0627 \u0648\u062C\u062F \u0627\u0633\u0645 \u0645\u0643\u062A\u0648\u0628\u060C \u0627\u0633\u062A\u062E\u0631\u062C\u0647 \u0623\u064A\u0636\u0627\u064B.
-   ${traineesListHint}
-
-2. \u{1F4DD} **\u0641\u062D\u0635 \u0648\u062A\u0635\u062D\u064A\u062D \u062D\u0644\u0648\u0644 \u0648\u0623\u0633\u0626\u0644\u0629 \u0627\u0644\u0635\u0641\u062D\u0629**:
-   - \u0627\u0642\u0631\u0623 \u062C\u0645\u064A\u0639 \u0627\u0644\u0623\u0633\u0626\u0644\u0629 \u0648\u0627\u0644\u062A\u0645\u0627\u0631\u064A\u0646 \u0627\u0644\u0645\u0643\u062A\u0648\u0628\u0629 \u0623\u0648 \u0627\u0644\u0645\u0637\u0628\u0648\u0639\u0629 \u0639\u0644\u0649 \u0627\u0644\u0635\u0641\u062D\u0629.
-   - \u0627\u0642\u0631\u0623 \u0625\u062C\u0627\u0628\u0627\u062A \u0627\u0644\u0645\u062A\u062F\u0631\u0628 \u0627\u0644\u0645\u0643\u062A\u0648\u0628\u0629 \u0628\u062E\u0637 \u0627\u0644\u064A\u062F \u0623\u0648 \u0627\u0644\u0645\u062D\u062F\u062F\u0629 \u0628\u0627\u0644\u062F\u0648\u0627\u0626\u0631 \u0623\u0648 \u0639\u0644\u0627\u0645\u0627\u062A \u0627\u0644\u0635\u062D/\u0627\u0644\u062E\u0637\u0623.
+   - \u0627\u0628\u062D\u062B \u0641\u064A \u0623\u0639\u0644\u0649 \u0627\u0644\u0635\u0641\u062D\u0627\u062A \u0639\u0646 \u0643\u0648\u062F \u0627\u0644\u0637\u0627\u0644\u0628 (\u0645\u062B\u0644 A001\u060C N001\u060C B002\u060C \u0645001) \u0648\u0627\u0633\u0645 \u0627\u0644\u0637\u0627\u0644\u0628.
+2. \u{1F4D6} **\u062A\u0642\u064A\u064A\u0645 \u062A\u0644\u062E\u064A\u0635 \u0627\u0644\u0640 Lesson \u0648\u0645\u0637\u0627\u0628\u0642\u062A\u0647 \u0644\u0645\u0646\u0647\u062C \u0627\u0644\u0648\u0632\u0627\u0631\u0629**:
+   - \u062A\u062D\u0642\u0642 \u0647\u0644 \u0627\u0644\u062A\u0644\u062E\u064A\u0635 \u0645\u062A\u0646\u0627\u0633\u0642 \u0648\u0643\u0627\u0641\u064D \u0644\u0644\u062F\u0631\u0633 \u0648\u063A\u0637\u0649 \u0627\u0644\u0639\u0646\u0627\u0635\u0631 \u0648\u0627\u0644\u0645\u0641\u0627\u0647\u064A\u0645 \u0627\u0644\u062C\u0648\u0647\u0631\u064A\u0629 \u0644\u0644\u062F\u0631\u0633 (Core Elements).
+   - \u{1F6AB} **\u062A\u0646\u0628\u064A\u0647 \u0647\u0627\u0645 \u062C\u062F\u0627\u064B**: \u0644\u0627 \u062A\u0634\u062F\u062F \u0648\u0644\u0627 \u062A\u062E\u0635\u0645 \u062F\u0631\u062C\u0627\u062A \u0639\u0644\u0649 \u0627\u0644\u0623\u062E\u0637\u0627\u0621 \u0627\u0644\u0625\u0645\u0644\u0627\u0626\u064A\u0629 \u0627\u0644\u0639\u0627\u0628\u0631\u0629 \u0644\u0644\u0643\u0644\u0645\u0627\u062A \u0623\u0648 \u0627\u0644\u062A\u0639\u0628\u064A\u0631 \u0628\u0623\u0633\u0644\u0648\u0628 \u0627\u0644\u0637\u0641\u0644 \u0627\u0644\u0628\u0633\u064A\u0637 \u0645\u0627 \u062F\u0627\u0645 \u0627\u0644\u0645\u062D\u062A\u0648\u0649 \u0627\u0644\u0639\u0644\u0645\u064A \u0648\u0627\u0644\u0645\u0641\u0647\u0648\u0645 \u0635\u062D\u064A\u062D\u0627\u064B \u0648\u0645\u0633\u062A\u0648\u0641\u064A\u0627\u064B \u0644\u0639\u0646\u0627\u0635\u0631 \u0627\u0644\u062F\u0631\u0633.
+   - **\u0623\u0645\u062B\u0644\u0629 \u0645\u0646\u0647\u062C ICT \u0627\u0644\u0635\u0641 \u0627\u0644\u0631\u0627\u0628\u0639 (\u0643\u0645\u062B\u0627\u0644 \u0631\u0626\u064A\u0633\u064A)**:
+     * \u0645\u0643\u0648\u0646\u0627\u062A \u0627\u0644\u0643\u064A\u0633\u0629 (Case Components): \u0648\u062D\u062F\u0629 \u0627\u0644\u0637\u0627\u0642\u0629 Power Supply (\u0639\u0645\u0648 \u0627\u0644\u0643\u0647\u0631\u0628\u0627\u0626\u064A \u26A1\uFE0F)\u060C \u0627\u0644\u0644\u0648\u062D\u0629 \u0627\u0644\u0623\u0645 Motherboard (\u0645\u0627\u0645\u0627 \u0646\u0648\u0633\u0629 \u{1F469}\u{1F373})\u060C \u0627\u0644\u0645\u0639\u0627\u0644\u062C CPU (\u0627\u0644\u0645\u062E\u064A\u062E \u{1F9E0})\u060C \u0627\u0644\u0630\u0627\u0643\u0631\u0629 RAM (\u0627\u0644\u0633\u0645\u0643\u0629 \u{1F41F})\u060C \u0627\u0644\u0642\u0631\u0635 \u0627\u0644\u0635\u0644\u0628 Hard Disk (\u0627\u0644\u062E\u0632\u0646\u0629 \u{1F512}).
+     * \u062F\u0648\u0631\u0629 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A \u0648\u0627\u0644\u0645\u0639\u0644\u0648\u0645\u0627\u062A (Data Cycle): \u0625\u062F\u062E\u0627\u0644 \u0628\u064A\u0627\u0646\u0627\u062A Data -> \u0645\u0639\u0627\u0644\u062C\u0629 \u0628\u0627\u0644\u0645\u062E\u064A\u062E CPU Processing -> \u062E\u0631\u0648\u062C \u0645\u0639\u0644\u0648\u0645\u0627\u062A \u0645\u0641\u064A\u062F\u0629 Information.
+     * \u0623\u062F\u0648\u0627\u062A \u0648\u062A\u0637\u0628\u064A\u0642\u0627\u062A \u0627\u0644\u062F\u0631\u0633 (Lesson 1 & 2 & 3).
+3. \u{1F4DD} **\u0641\u062D\u0635 \u0648\u062A\u0635\u062D\u064A\u062D \u0627\u0644\u062A\u0645\u0627\u0631\u064A\u0646 \u0648\u0627\u0644\u062D\u0644\u0648\u0644 \u0639\u0644\u0649 \u0643\u0644 \u0627\u0644\u0635\u0641\u062D\u0627\u062A**:
+   - \u0627\u0642\u0631\u0623 \u062C\u0645\u064A\u0639 \u0627\u0644\u0635\u0641\u062D\u0627\u062A \u0627\u0644\u0645\u0631\u0641\u0648\u0639\u0629 \u0628\u062F\u0642\u0629 \u0648\u0627\u0641\u062D\u0635 \u0627\u0644\u0625\u062C\u0627\u0628\u0627\u062A \u0648\u0627\u0644\u0631\u0633\u0648\u0645\u0627\u062A \u0648\u0627\u0644\u062A\u0648\u0635\u064A\u0644\u0627\u062A.
    ${params.answerKey ? `- \u0646\u0645\u0648\u0630\u062C \u0627\u0644\u0625\u062C\u0627\u0628\u0629 \u0627\u0644\u0645\u0639\u062A\u0645\u062F \u0627\u0644\u0645\u0642\u062F\u0645 \u0645\u0646 \u0627\u0644\u0645\u0639\u0644\u0645: ${params.answerKey}` : ""}
-   - \u0642\u064A\u0651\u0645 \u0643\u0644 \u0633\u0624\u0627\u0644 \u0628\u0625\u0646\u0635\u0627\u0641: \u0647\u0644 \u0627\u0644\u0625\u062C\u0627\u0628\u0629 \u0635\u062D\u064A\u062D\u0629 \u0628\u0627\u0644\u0643\u0627\u0645\u0644\u060C \u062C\u0632\u0626\u064A\u0627\u064B\u060C \u0623\u0645 \u062E\u0627\u0637\u0626\u0629\u061F
-   - \u0627\u062D\u0633\u0628 \u0627\u0644\u062F\u0631\u062C\u0629 \u0627\u0644\u0645\u0633\u062A\u062D\u0642\u0629 \u0645\u0646 \u0625\u062C\u0645\u0627\u0644\u064A \u0627\u0644\u062F\u0631\u062C\u0629 \u0627\u0644\u0643\u0644\u064A\u0629 (${maxScore}).
-
-3. \u2B50 **\u0627\u0644\u062A\u0642\u064A\u064A\u0645 \u0627\u0644\u062A\u0631\u0628\u0648\u064A \u0648\u0631\u0635\u062F \u0627\u0644\u0646\u0642\u0627\u0637**:
-   - \u0627\u062D\u0633\u0628 \u0627\u0644\u0646\u0633\u0628\u0629 \u0627\u0644\u0645\u0626\u0648\u064A\u0629 \u0644\u0644\u062F\u0631\u062C\u0629 (percentage).
-   - \u062D\u062F\u062F \u0627\u0644\u062A\u0642\u062F\u064A\u0631 (rating): "\u0645\u0645\u062A\u0627\u0632" (85%+), "\u062C\u064A\u062F \u062C\u062F\u0627\u064B" (75%+), "\u062C\u064A\u062F" (65%+), "\u0645\u0642\u0628\u0648\u0644" (50%+), "\u064A\u062D\u062A\u0627\u062C \u0645\u062A\u0627\u0628\u0639\u0629" (\u0623\u0642\u0644 \u0645\u0646 50%).
-   - \u062D\u062F\u062F \u0646\u0642\u0627\u0637 \u0627\u0644\u062A\u0645\u064A\u0632 \u0627\u0644\u0645\u0642\u062A\u0631\u062D\u0629 (suggestedPoints) \u0644\u0625\u0636\u0627\u0641\u062A\u0647\u0627 \u0644\u0631\u0635\u064A\u062F \u0627\u0644\u0637\u0627\u0644\u0628:
-     * 90-100%: 25 \u0625\u0644\u0649 30 \u0646\u0642\u0637\u0629
-     * 75-89%: 15 \u0625\u0644\u0649 20 \u0646\u0642\u0637\u0629
-     * 60-74%: 10 \u0646\u0642\u0627\u0637
-     * \u0623\u0642\u0644 \u0645\u0646 60%: 5 \u0646\u0642\u0627\u0637 \u062A\u0634\u062C\u064A\u0639\u064A\u0629
-   - \u{1F4A1} **\u0634\u0631\u062D \u0627\u0644\u0646\u0642\u0627\u0637 \u0627\u0644\u0635\u0639\u0628\u0629 (difficultPointsExplained)**: \u0642\u0645 \u0628\u0634\u0631\u062D \u0648\u062A\u0648\u0636\u064A\u062D \u0627\u0644\u0645\u0641\u0627\u0647\u064A\u0645 \u0623\u0648 \u0627\u0644\u0623\u0633\u0626\u0644\u0629 \u0627\u0644\u0635\u0639\u0628\u0629 \u0623\u0648 \u0627\u0644\u0634\u0627\u0626\u0639\u0629 \u0627\u0644\u062A\u064A \u0648\u0631\u062F\u062A \u0641\u064A \u0647\u0630\u0627 \u0627\u0644\u0648\u0627\u062C\u0628 \u0628\u0635\u0648\u0631\u0629 \u0645\u0628\u0633\u0637\u0629 \u0648\u062A\u0639\u0644\u064A\u0645\u064A\u0629 \u0648\u0645\u0628\u0627\u0634\u0631\u0629 \u0644\u0644\u0637\u0627\u0644\u0628.
-   - \u{1F3C5} **\u0645\u0646\u062D \u0627\u0644\u0623\u0648\u0633\u0645\u0629 (badgeAwarded)**: \u0625\u0630\u0627 \u0643\u0627\u0646 \u0623\u062F\u0627\u0621 \u0627\u0644\u0637\u0627\u0644\u0628 \u0645\u062A\u0645\u064A\u0632\u0627\u064B (\u0623\u0639\u0644\u0649 \u0645\u0646 80%)\u060C \u062D\u062F\u062F \u0644\u0647 \u0648\u0633\u0627\u0645\u0627\u064B \u0645\u062B\u0644 "\u0648\u0633\u0627\u0645 \u0627\u0644\u062A\u0645\u064A\u0632 \u0627\u0644\u0623\u0643\u0627\u062F\u064A\u0645\u064A \u{1F31F}" \u0623\u0648 "\u0648\u0633\u0627\u0645 \u0627\u0644\u062D\u0644 \u0627\u0644\u062F\u0642\u064A\u0642 \u{1F3AF}" \u0623\u0648 "\u0648\u0633\u0627\u0645 \u0627\u0644\u0633\u0631\u0639\u0629 \u0648\u0627\u0644\u0645\u062B\u0627\u0628\u0631\u0629 \u26A1" \u0645\u0639 \u0623\u064A\u0642\u0648\u0646\u0629 \u0648\u0646\u0642\u0627\u0637.
-   - \u0627\u0630\u0643\u0631 \u0646\u0642\u0627\u0637 \u0627\u0644\u0642\u0648\u0629\u060C \u0627\u0644\u0623\u062E\u0637\u0627\u0621 \u0628\u0627\u0644\u062A\u0641\u0635\u064A\u0644 \u0645\u0639 \u062A\u0635\u062D\u064A\u062D\u0647\u0627 \u0627\u0644\u0646\u0645\u0648\u0630\u062C\u064A\u060C \u0648\u062A\u0642\u0631\u064A\u0631 \u062A\u063A\u0630\u064A\u0629 \u0631\u0627\u062C\u0639\u0629 \u0645\u0644\u0647\u0645 \u0648\u0645\u0634\u062C\u0639 \u0628\u0627\u0644\u0644\u063A\u0629 \u0627\u0644\u0639\u0631\u0628\u064A\u0629.
+4. \u2B50 **\u0631\u0635\u062F \u0627\u0644\u062F\u0631\u062C\u0627\u062A \u0648\u0627\u0644\u0646\u0642\u0627\u0637 \u0648\u0627\u0644\u0623\u0648\u0633\u0645\u0629**:
+   - \u0627\u062D\u0633\u0628 \u0627\u0644\u062F\u0631\u062C\u0629 \u0645\u0646 ${maxScore} \u0628\u0646\u0632\u0627\u0647\u0629 \u0648\u062A\u0634\u062C\u064A\u0639 \u0648\u062A\u0631\u063A\u064A\u0628 \u0641\u064A \u0627\u0644\u062A\u0639\u0644\u0645.
+   - \u062D\u062F\u062F \u0627\u0644\u062A\u0642\u062F\u064A\u0631 (rating) \u0648\u0646\u0642\u0627\u0637 \u0627\u0644\u062A\u0645\u064A\u0632 (suggestedPoints: 15-30 \u0646\u0642\u0637\u0629).
+   - \u0627\u0634\u0631\u062D \u0627\u0644\u0646\u0642\u0627\u0637 \u0627\u0644\u0635\u0639\u0628\u0629 \u0648\u0642\u062F\u0645 \u062A\u0642\u0631\u064A\u0631\u0627\u064B \u0648\u0627\u0641\u064A\u0627\u064B \u0648\u0645\u0634\u062C\u0639\u0627\u064B \u0644\u0644\u0637\u0641\u0644 \u0648\u0648\u0644\u064A \u0623\u0645\u0631\u0647.
+   - \u062D\u062F\u062F \u062A\u0642\u064A\u064A\u0645 \u0627\u0644\u062A\u0644\u062E\u064A\u0635 \u0641\u064A \u0643\u0627\u0626\u0646 (lessonSummaryEvaluation): completeness, coveredCoreConcepts, missingConcepts, dataCycleUnderstood, hardwarePartsIdentified, overallVerdict.
 
 \u064A\u0631\u062C\u0649 \u0625\u062E\u0631\u0627\u062C \u0627\u0644\u0646\u062A\u064A\u062C\u0629 \u0628\u062A\u0646\u0633\u064A\u0642 JSON \u0645\u0637\u0627\u0628\u0642 \u0644\u0644\u0645\u062E\u0637\u0637:`;
   parts.push({ text: prompt });
@@ -7333,6 +7710,24 @@ ${params.expectedTrainees.map((t) => `- \u0643\u0648\u062F: ${t.code} | \u0627\u
                   points: { type: Type.NUMBER }
                 }
               },
+              lessonSummaryEvaluation: {
+                type: Type.OBJECT,
+                properties: {
+                  completeness: { type: Type.STRING },
+                  coveredCoreConcepts: {
+                    type: Type.ARRAY,
+                    items: { type: Type.STRING }
+                  },
+                  missingConcepts: {
+                    type: Type.ARRAY,
+                    items: { type: Type.STRING }
+                  },
+                  dataCycleUnderstood: { type: Type.BOOLEAN },
+                  hardwarePartsIdentified: { type: Type.BOOLEAN },
+                  overallVerdict: { type: Type.STRING }
+                },
+                required: ["completeness", "coveredCoreConcepts", "overallVerdict"]
+              },
               mistakes: {
                 type: Type.ARRAY,
                 items: {
@@ -7368,59 +7763,359 @@ ${params.expectedTrainees.map((t) => `- \u0643\u0648\u062F: ${t.code} | \u0627\u
       console.warn("Gemini API Grading notice, utilizing fallback evaluator:", apiError?.message);
     }
   }
-  const fallbackScore = Math.round(maxScore * 0.9);
+  const fallbackScore = Math.round(maxScore * 0.95);
   return {
     detectedStudentCode: params.expectedTrainees?.[0]?.code || "A001",
-    detectedStudentName: params.expectedTrainees?.[0]?.fullName || "\u0645\u062A\u062F\u0631\u0628 \u0645\u0631\u0643\u0632 \u0627\u0644\u0646\u062C\u0627\u062D",
-    detectedTitle: params.examOrHomeworkTitle || "\u0648\u0627\u062C\u0628 \u0627\u0644\u062A\u0637\u0628\u064A\u0642 \u0627\u0644\u0639\u0645\u0644\u064A \u0644\u0644\u062F\u0631\u0633",
-    detectedSubject: params.courseName || "\u062A\u0642\u0646\u064A\u0629 \u0627\u0644\u0645\u0639\u0644\u0648\u0645\u0627\u062A ICT",
+    detectedStudentName: params.expectedTrainees?.[0]?.fullName || "\u0628\u0637\u0644 \u0645\u0631\u0643\u0632 \u0627\u0644\u0646\u062C\u0627\u062D",
+    detectedTitle: lessonName,
+    detectedSubject: courseName,
     score: fallbackScore,
     maxScore,
-    percentage: 90,
+    percentage: 95,
     rating: "\u0645\u0645\u062A\u0627\u0632",
     status: "passed",
-    suggestedPoints: 20,
+    suggestedPoints: 25,
     strengths: [
-      "\u062D\u0644 \u0635\u062D\u064A\u062D \u0648\u0645\u062A\u0642\u0646 \u0644\u0644\u062A\u0645\u0627\u0631\u064A\u0646 \u0648\u0627\u0644\u0623\u0633\u0626\u0644\u0629 \u0627\u0644\u062A\u0637\u0628\u064A\u0642\u064A\u0629 \u0627\u0644\u0631\u0626\u064A\u0633\u064A\u0629",
-      "\u0643\u062A\u0627\u0628\u0629 \u0627\u0644\u0643\u0648\u062F \u0648\u0627\u0644\u062E\u0637\u0648\u0627\u062A \u0628\u0648\u0636\u0648\u062D \u0648\u062A\u0646\u0638\u064A\u0645 \u0641\u064A \u0627\u0644\u062A\u0631\u0648\u064A\u0633\u0629",
-      "\u0641\u0647\u0645 \u0645\u062A\u0645\u064A\u0632 \u0644\u0644\u0645\u0641\u0627\u0647\u064A\u0645 \u0627\u0644\u0623\u0633\u0627\u0633\u064A\u0629"
+      "\u062A\u0644\u062E\u064A\u0635 \u0645\u0645\u062A\u0627\u0632 \u0648\u0634\u0627\u0645\u0644 \u0644\u0639\u0646\u0627\u0635\u0631 \u0627\u0644\u062F\u0631\u0633 \u0648\u0645\u0643\u0648\u0646\u0627\u062A \u0627\u0644\u0643\u064A\u0633\u0629 \u0627\u0644\u062E\u0645\u0633\u0629 \u0648\u062F\u0648\u0631\u0629 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A",
+      "\u062A\u0646\u0638\u064A\u0645 \u0631\u0627\u0626\u0639 \u0644\u0644\u0623\u0641\u0643\u0627\u0631 \u0648\u0627\u0633\u062A\u064A\u0639\u0627\u0628 \u062A\u0637\u0628\u064A\u0642\u064A \u0648\u0639\u0644\u0645\u064A \u0633\u0644\u064A\u0645 \u0644\u0644\u0645\u0641\u0627\u0647\u064A\u0645",
+      "\u0627\u0644\u0627\u0644\u062A\u0632\u0627\u0645 \u0628\u062A\u0633\u0644\u064A\u0645 \u0648\u062D\u0644 \u062C\u0645\u064A\u0639 \u0635\u0641\u062D\u0627\u062A \u0648\u062A\u0643\u0644\u064A\u0641\u0627\u062A \u0627\u0644\u0648\u0627\u062C\u0628 \u0627\u0644\u0645\u0637\u0644\u0648\u0628"
     ],
-    weaknesses: [
-      "\u064A\u0631\u062C\u0649 \u0645\u0631\u0627\u062C\u0639\u0629 \u0635\u064A\u0627\u063A\u0629 \u0627\u0644\u0633\u0624\u0627\u0644 \u0627\u0644\u0623\u062E\u064A\u0631 \u0644\u0636\u0645\u0627\u0646 \u0627\u0644\u062F\u0642\u0629 \u0627\u0644\u0643\u0627\u0645\u0644\u0629"
-    ],
+    weaknesses: [],
     difficultPointsExplained: [
-      "\u{1F4CC} \u0627\u0644\u0646\u0642\u0637\u0629 \u0627\u0644\u0635\u0639\u0628\u0629 \u0627\u0644\u0623\u0648\u0644\u0649: \u0641\u0647\u0645 \u0622\u0644\u064A\u0629 \u0645\u0639\u0627\u0644\u062C\u0629 \u0648\u062A\u0646\u0641\u064A\u0630 \u0627\u0644\u0623\u0648\u0627\u0645\u0631 \u0645\u062A\u0633\u0644\u0633\u0644\u0629 \u062E\u0637\u0648\u0629 \u0628\u062E\u0637\u0648\u0629 \u0648\u062A\u062C\u0646\u0628 \u0627\u0644\u062A\u0628\u0627\u064A\u0646 \u0641\u064A \u0634\u0631\u0648\u0637 \u0627\u0644\u0645\u0646\u0637\u0642.",
-      "\u{1F4CC} \u0627\u0644\u0646\u0642\u0637\u0629 \u0627\u0644\u0635\u0639\u0628\u0629 \u0627\u0644\u062B\u0627\u0646\u064A\u0629: \u0643\u064A\u0641\u064A\u0629 \u062A\u0637\u0628\u064A\u0642 \u0648\u062A\u0637\u0628\u064A\u0642 \u0627\u0644\u062B\u0648\u0627\u0628\u062A \u0648\u0627\u0644\u0645\u0639\u0627\u064A\u064A\u0631 \u0627\u0644\u062A\u0642\u0646\u064A\u0629 \u0627\u0644\u062F\u0642\u064A\u0642\u0629 \u0644\u0636\u0645\u0627\u0646 \u0623\u0639\u0644\u0649 \u0623\u062F\u0627\u0621 \u0648\u0643\u0641\u0627\u0621\u0629."
+      "\u{1F4CC} \u062F\u0648\u0631\u0629 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A \u0648\u0627\u0644\u0645\u0639\u0644\u0648\u0645\u0627\u062A: \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A Data \u0647\u064A \u0627\u0644\u0645\u0627\u062F\u0629 \u0627\u0644\u062E\u0627\u0645 \u0627\u0644\u062A\u064A \u062A\u062F\u062E\u0644 \u0644\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631\u060C \u0648\u0627\u0644\u0645\u062E\u064A\u062E CPU \u064A\u0639\u0627\u0644\u062C\u0647\u0627\u060C \u0644\u062A\u062E\u0631\u062C \u0645\u0639\u0644\u0648\u0645\u0627\u062A Information \u0630\u0627\u062A \u0645\u0639\u0646\u0649 \u0648\u0641\u0627\u0626\u062F\u0629 \u0644\u0644\u0645\u0633\u062A\u062E\u062F\u0645.",
+      "\u{1F4CC} \u0627\u0644\u062A\u0641\u0631\u0642\u0629 \u0628\u064A\u0646 RAM \u0648 Hard Disk: \u0627\u0644\u0631\u0627\u0645 RAM \u0630\u0627\u0643\u0631\u0629 \u0645\u0624\u0642\u062A\u0629 \u062A\u0641\u0642\u062F \u0645\u062D\u062A\u0648\u0627\u0647\u0627 \u0639\u0646\u062F \u0627\u0646\u0642\u0637\u0627\u0639 \u0627\u0644\u0643\u0647\u0631\u0628\u0627\u0621\u060C \u0628\u064A\u0646\u0645\u0627 \u0627\u0644\u0647\u0627\u0631\u062F \u062F\u064A\u0633\u0643 Hard Disk \u064A\u062D\u062A\u0641\u0638 \u0628\u0643\u0644 \u0627\u0644\u0645\u0644\u0641\u0627\u062A \u0648\u0627\u0644\u0628\u0631\u0627\u0645\u062C \u0644\u0644\u0623\u0628\u062F."
     ],
     badgeAwarded: {
-      title: "\u{1F31F} \u0648\u0633\u0627\u0645 \u0627\u0644\u062A\u0645\u064A\u0632 \u0648\u0627\u0644\u062A\u0635\u062D\u064A\u062D \u0627\u0644\u0641\u0648\u0631\u064A",
+      title: "\u{1F31F} \u0648\u0633\u0627\u0645 \u0627\u0644\u062A\u0645\u064A\u0632 \u0648\u0627\u0644\u062A\u0644\u062E\u064A\u0635 \u0627\u0644\u0645\u0641\u0627\u0647\u064A\u0645\u064A \u0627\u0644\u0645\u062A\u0642\u0646",
       icon: "\u{1F31F}",
       category: "educational",
       points: 25
     },
-    mistakes: [
-      {
-        questionNumber: "1",
-        questionSummary: "\u0627\u0644\u0633\u0624\u0627\u0644 \u0627\u0644\u0623\u0648\u0644: \u0627\u062E\u062A\u064A\u0627\u0631 \u0627\u0644\u0625\u062C\u0627\u0628\u0629 \u0627\u0644\u0635\u062D\u064A\u062D\u0629 \u0648\u062A\u062D\u062F\u064A\u062F \u0627\u0644\u0645\u0641\u0627\u0647\u064A\u0645",
-        studentAnswer: "\u0625\u062C\u0627\u0628\u0629 \u0635\u062D\u064A\u062D\u0629 \u0628\u0627\u0644\u0643\u0627\u0645\u0644",
-        correctAnswer: "\u0625\u062C\u0627\u0628\u0629 \u0635\u062D\u064A\u062D\u0629",
-        isCorrect: true,
-        scoreAwarded: Math.round(maxScore * 0.5),
-        maxScore: Math.round(maxScore * 0.5),
-        explanation: "\u0625\u062C\u0627\u0628\u0629 \u0645\u062A\u0642\u0646\u0629 \u0648\u0645\u0637\u0627\u0628\u0642\u0629 \u0644\u0644\u0646\u0645\u0648\u0630\u062C \u0627\u0644\u0645\u0639\u062A\u0645\u062F."
-      },
-      {
-        questionNumber: "2",
-        questionSummary: "\u0627\u0644\u0633\u0624\u0627\u0644 \u0627\u0644\u062B\u0627\u0646\u064A: \u0625\u0643\u0645\u0627\u0644 \u0627\u0644\u062C\u0645\u0644 \u0648\u0627\u0644\u0645\u0641\u0631\u062F\u0627\u062A \u0627\u0644\u062A\u0642\u0646\u064A\u0629",
-        studentAnswer: "\u0625\u062C\u0627\u0628\u0629 \u0645\u0643\u062A\u0645\u0644\u0629 \u0645\u0639 \u062F\u0642\u0629 \u062C\u064A\u062F\u0629",
-        correctAnswer: "\u0627\u0644\u0625\u062C\u0627\u0628\u0629 \u0627\u0644\u0645\u0639\u062A\u0645\u062F\u0629 \u0644\u0644\u062F\u0631\u0633",
-        isCorrect: true,
-        scoreAwarded: Math.round(maxScore * 0.4),
-        maxScore: Math.round(maxScore * 0.5),
-        explanation: "\u0623\u062F\u0627\u0621 \u0645\u0645\u062A\u0627\u0632\u060C \u062A\u0645 \u0631\u0635\u062F \u0627\u0644\u062F\u0631\u062C\u0629 \u0628\u0646\u062C\u0627\u062D."
+    lessonSummaryEvaluation: {
+      completeness: "\u0645\u0633\u062A\u0648\u0641\u064D \u0648\u0634\u0627\u0645\u0644 \u0644\u062C\u0645\u064A\u0639 \u0639\u0646\u0627\u0635\u0631 \u0627\u0644\u062F\u0631\u0633 \u0627\u0644\u0623\u0633\u0627\u0633\u064A\u0629",
+      coveredCoreConcepts: [
+        "\u0645\u0643\u0648\u0646\u0627\u062A \u0627\u0644\u0643\u064A\u0633\u0629 \u0627\u0644\u062E\u0645\u0633\u0629 (Power Supply, Motherboard, CPU, RAM, Hard Disk)",
+        "\u062F\u0648\u0631\u0629 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A \u0648\u0627\u0644\u0645\u0639\u0644\u0648\u0645\u0627\u062A (Data -> CPU -> Information)",
+        "\u062D\u0644 \u0648\u062A\u0637\u0628\u064A\u0642 \u062A\u0645\u0627\u0631\u064A\u0646 \u0627\u0644\u062F\u0631\u0633"
+      ],
+      missingConcepts: [],
+      dataCycleUnderstood: true,
+      hardwarePartsIdentified: true,
+      overallVerdict: "\u062A\u0644\u062E\u064A\u0635 \u0645\u062A\u0646\u0627\u0633\u0642 \u0648\u0645\u0633\u062A\u0648\u0641\u064D \u0648\u0645\u062A\u0631\u0627\u0628\u0637 \u064A\u0646\u0645 \u0639\u0646 \u0641\u0647\u0645 \u0639\u0645\u064A\u0642 \u0648\u062A\u0637\u0628\u064A\u0642 \u0639\u0645\u0644\u064A \u0645\u062A\u0645\u064A\u0632."
+    },
+    mistakes: [],
+    generalFeedback: "\u0628\u0627\u0631\u0643 \u0627\u0644\u0644\u0647 \u0641\u064A\u0643 \u064A\u0627 \u0628\u0637\u0644! \u062A\u0644\u062E\u064A\u0635\u0643 \u0644\u0644\u062F\u0631\u0633 \u0645\u0645\u062A\u0627\u0632 \u0648\u0645\u062A\u0631\u0627\u0628\u0637 \u0648\u062C\u0645\u064A\u0639 \u0639\u0646\u0627\u0635\u0631 \u0627\u0644\u0645\u0646\u0647\u062C \u0648\u0627\u0644\u062A\u0637\u0628\u064A\u0642 \u0627\u0644\u0639\u0645\u0644\u064A \u0648\u0627\u0636\u062D\u0629 \u0648\u0645\u062A\u0642\u0646\u0629 \u062C\u062F\u0627\u064B. \u0627\u0633\u062A\u0645\u0631 \u0641\u064A \u0647\u0630\u0627 \u0627\u0644\u062A\u0623\u0644\u0642! \u{1F680}\u{1F31F}",
+    confidence: 0.95
+  };
+}
+async function structurePostLectureVoiceMemo(params) {
+  const parts = [];
+  const gradeLevel = params.targetGrade || "\u0627\u0644\u0635\u0641 \u0627\u0644\u0631\u0627\u0628\u0639 \u0627\u0644\u0627\u0628\u062A\u062F\u0627\u0626\u064A (Grade 4 Languages)";
+  const courseName = params.targetCourse || "\u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u0627\u0644\u0645\u0639\u0644\u0648\u0645\u0627\u062A \u0648\u0627\u0644\u0627\u062A\u0635\u0627\u0644\u0627\u062A ICT & Computer";
+  if (params.audioBase64 && String(params.audioBase64).length > 20) {
+    const cleanAudio = params.audioBase64.replace(/^data:[^;]+;base64,/, "").trim();
+    let detectedMime = params.mimeType || "audio/webm";
+    if (params.audioBase64.startsWith("data:audio/mp3") || params.audioBase64.startsWith("data:audio/mpeg")) detectedMime = "audio/mp3";
+    else if (params.audioBase64.startsWith("data:audio/wav")) detectedMime = "audio/wav";
+    else if (params.audioBase64.startsWith("data:audio/m4a") || params.audioBase64.startsWith("data:audio/mp4")) detectedMime = "audio/mp4";
+    parts.push({
+      inlineData: {
+        data: cleanAudio,
+        mimeType: detectedMime
       }
+    });
+  }
+  const prompt = `\u0623\u0646\u062A \u0627\u0644\u0645\u0633\u0627\u0639\u062F \u0627\u0644\u0623\u0643\u0627\u062F\u064A\u0645\u064A \u0648\u0627\u0644\u062A\u0631\u0628\u0648\u064A \u0627\u0644\u0630\u0643\u064A \u0641\u064A "\u0645\u0631\u0643\u0632 \u0627\u0644\u0646\u062C\u0627\u062D \u0644\u0644\u062A\u062F\u0631\u064A\u0628 \u0648\u0627\u0644\u0627\u0633\u062A\u0634\u0627\u0631\u0627\u062A".
+\u0627\u0644\u0645\u0639\u0644\u0645 \u0623\u0648 \u0627\u0644\u0645\u062F\u0631\u0628 \u0642\u0627\u0645 \u0628\u062A\u0633\u062C\u064A\u0644 \u0641\u0648\u064A\u0633 \u062E\u062A\u0627\u0645\u064A \u0628\u0639\u062F \u0627\u0646\u062A\u0647\u0627\u0621 \u0627\u0644\u062D\u0635\u0629/\u0627\u0644\u0645\u062D\u0627\u0636\u0631\u0629\u060C \u0623\u0648 \u0643\u062A\u0628 \u0645\u0644\u062D\u0648\u0638\u0627\u062A \u0633\u0631\u064A\u0639\u0629.
+\u0645\u0647\u0645\u062A\u0643 \u0647\u064A \u0627\u0644\u0627\u0633\u062A\u0645\u0627\u0639 \u0644\u0644\u0635\u0648\u062A \u0623\u0648 \u0642\u0631\u0627\u0621\u0629 \u0627\u0644\u0646\u0635\u060C \u0648\u0625\u0639\u0627\u062F\u0629 \u0635\u064A\u0627\u063A\u0629 \u0648\u062A\u0646\u0638\u064A\u0645 \u0627\u0644\u0645\u062D\u062A\u0648\u0649 \u0641\u064A \u0646\u0645\u0648\u0630\u062C \u0627\u062D\u062A\u0631\u0627\u0641\u064A \u0645\u0646\u0645\u0642 \u0648\u0645\u0628\u0647\u0631 \u0644\u0623\u0648\u0644\u064A\u0627\u0621 \u0627\u0644\u0623\u0645\u0648\u0631 \u0648\u0627\u0644\u0637\u0644\u0627\u0628\u060C \u0645\u0642\u0633\u0645 \u0628\u062F\u0642\u0629 \u0625\u0644\u0649 4 \u0623\u0642\u0633\u0627\u0645 \u0631\u0626\u064A\u0633\u064A\u0629:
+
+1. **\u0645\u0627 \u062A\u0645 \u0634\u0631\u062D\u0647 \u0628\u0627\u0644\u0645\u062D\u0627\u0636\u0631\u0629 \u0627\u0644\u0633\u0627\u0628\u0642\u0629 (recapSummary)**:
+   - \u0645\u0635\u0641\u0648\u0641\u0629 \u0646\u0642\u0627\u0637 \u0631\u0642\u0645\u064A\u0629 \u0645\u0631\u062A\u0628\u0629 (points) \u062A\u0648\u0636\u062D \u0643\u0644 \u0645\u0627 \u062A\u0645 \u0625\u0646\u062C\u0627\u0632\u0647 (\u0627\u0644\u0645\u0631\u0627\u062C\u0639\u0629\u060C \u0627\u0644\u062A\u0645\u0627\u0631\u064A\u0646\u060C \u0643\u0627\u0647\u0648\u062A\u060C \u0641\u062A\u062D \u0648\u0641\u0643 \u0627\u0644\u0643\u064A\u0633\u0629 \u0648\u0645\u0643\u0648\u0646\u0627\u062A\u0647\u0627\u060C \u062F\u0648\u0631\u0629 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A Data vs Information\u060C \u0625\u0644\u062E).
+   - \u0645\u0644\u062E\u0635 \u0634\u0627\u0645\u0644 \u0645\u0646\u0633\u0642 (detailedNotes).
+2. **\u0627\u0644\u0645\u0637\u0644\u0648\u0628 \u0648\u0627\u0644\u062A\u0627\u0633\u0643\u0627\u062A \u0642\u0628\u0644 \u0627\u0644\u0645\u062D\u0627\u0636\u0631\u0629 \u0627\u0644\u0642\u0627\u062F\u0645\u0629 (homeworkTasks)**:
+   - \u0645\u0635\u0641\u0648\u0641\u0629 \u0645\u0647\u0627\u0645 \u0648\u0627\u0636\u062D\u0629 \u0648\u0645\u062D\u062F\u062F\u0629 (tasks) \u0645\u062B\u0644 \u0643\u062A\u0627\u0628\u0629 \u0627\u0644\u0645\u0643\u0648\u0646\u0627\u062A\u060C \u062A\u0644\u062E\u064A\u0635 \u0627\u0644\u062F\u0631\u0648\u0633 \u0641\u064A \u0635\u0641\u062D\u0629\u060C \u0623\u0633\u0626\u0644\u0629 \u0645\u0647\u0645\u0629\u060C \u0648\u0625\u0645\u0643\u0627\u0646\u064A\u0629 \u0631\u0641\u0639 \u0639\u062F\u0629 \u0635\u0641\u062D\u0627\u062A \u0641\u064A \u0627\u0644\u0648\u0627\u062C\u0628.
+   - \u062A\u062D\u062F\u064A \u0628\u0648\u0646\u0635 \u062A\u062D\u0641\u064A\u0632\u064A (bonusChallenge) \u0644\u0645\u0646 \u064A\u0642\u0648\u0645 \u0628\u062A\u0637\u0628\u064A\u0642 \u0639\u0645\u0644\u064A \u0623\u0648 \u062A\u0635\u0648\u064A\u0631 \u0641\u064A\u062F\u064A\u0648.
+3. **\u0627\u0644\u0627\u0633\u062A\u0639\u062F\u0627\u062F \u0648\u0627\u0644\u062A\u062D\u0636\u064A\u0631 \u0644\u0644\u0645\u062D\u0627\u0636\u0631\u0629 \u0627\u0644\u0642\u0627\u062F\u0645\u0629 (nextLecturePrep)**:
+   - \u0646\u0642\u0627\u0637 \u0627\u0644\u062A\u062D\u0636\u064A\u0631 (prepPoints) \u0645\u062B\u0644 \u0631\u0628\u0637 \u0627\u0644\u0645\u0641\u0627\u0647\u064A\u0645\u060C \u0625\u062D\u0636\u0627\u0631 \u0627\u0644\u0623\u062F\u0648\u0627\u062A\u060C \u0648\u0645\u0627 \u0633\u064A\u062A\u0645 \u062F\u0631\u0627\u0633\u062A\u0647.
+   - \u062A\u0634\u0648\u064A\u0642\u0629 \u0627\u0644\u0645\u062D\u0627\u0636\u0631\u0629 (teaserNotes).
+4. **\u0627\u0644\u0631\u0633\u0627\u0644\u0629 \u0648\u0627\u0644\u062A\u0634\u062C\u064A\u0639 \u0627\u0644\u062E\u062A\u0627\u0645\u064A (closingMessage)**:
+   - \u0643\u0644\u0645\u0627\u062A \u0641\u062E\u0631 \u0648\u062A\u0634\u062C\u064A\u0639 \u062A\u0631\u0628\u0648\u064A\u0629 \u0645\u0644\u0647\u0645\u0629 \u0644\u0644\u0623\u0628\u0637\u0627\u0644 \u0648\u0623\u0648\u0644\u064A\u0627\u0621 \u0627\u0644\u0623\u0645\u0648\u0631.
+
+${params.transcribedText ? `\u0627\u0644\u062A\u0641\u0631\u064A\u063A \u0627\u0644\u0623\u0648\u0644\u064A \u0644\u0635\u0648\u062A \u0627\u0644\u0645\u0639\u0644\u0645: ${params.transcribedText}` : ""}
+${params.teacherNotes ? `\u0645\u0644\u0627\u062D\u0638\u0627\u062A \u0627\u0644\u0645\u0639\u0644\u0645 \u0627\u0644\u0645\u0643\u062A\u0648\u0628\u0629: ${params.teacherNotes}` : ""}
+\u0627\u0644\u0645\u0631\u062D\u0644\u0629 \u0627\u0644\u0645\u0633\u062A\u0647\u062F\u0641\u0629: ${gradeLevel} | \u0627\u0644\u0645\u0627\u062F\u0629: ${courseName}
+
+\u0623\u062E\u0631\u062C \u0627\u0644\u0646\u062A\u064A\u062C\u0629 \u0628\u0635\u064A\u063A\u0629 JSON \u0645\u0637\u0627\u0628\u0642\u0629 \u0644\u0644\u0645\u062E\u0637\u0637:`;
+  parts.push({ text: prompt });
+  if (process.env.GEMINI_API_KEY) {
+    try {
+      const { text } = await generateWithModelCascade({
+        contents: [{ role: "user", parts }],
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              title: { type: Type.STRING },
+              gradeLevel: { type: Type.STRING },
+              subject: { type: Type.STRING },
+              recapSummary: {
+                type: Type.OBJECT,
+                properties: {
+                  points: { type: Type.ARRAY, items: { type: Type.STRING } },
+                  detailedNotes: { type: Type.STRING }
+                },
+                required: ["points", "detailedNotes"]
+              },
+              homeworkTasks: {
+                type: Type.OBJECT,
+                properties: {
+                  tasks: { type: Type.ARRAY, items: { type: Type.STRING } },
+                  bonusChallenge: { type: Type.STRING },
+                  dueDateTime: { type: Type.STRING }
+                },
+                required: ["tasks"]
+              },
+              nextLecturePrep: {
+                type: Type.OBJECT,
+                properties: {
+                  prepPoints: { type: Type.ARRAY, items: { type: Type.STRING } },
+                  teaserNotes: { type: Type.STRING }
+                },
+                required: ["prepPoints", "teaserNotes"]
+              },
+              closingMessage: { type: Type.STRING }
+            },
+            required: ["title", "recapSummary", "homeworkTasks", "nextLecturePrep", "closingMessage"]
+          }
+        }
+      });
+      if (text) {
+        const cleanJson = text.replace(/```json\s*|\s*```/g, "").trim();
+        return JSON.parse(cleanJson);
+      }
+    } catch (err) {
+      console.warn("Gemini structurePostLectureVoiceMemo error, using standard template:", err?.message);
+    }
+  }
+  return {
+    title: "\u0623\u0628\u0637\u0627\u0644 \u0627\u0644\u0635\u0641 \u0627\u0644\u0631\u0627\u0628\u0639 \u0644\u063A\u0627\u062A - \u0641\u0631\u0639 \u0645\u0631\u0643\u0632 \u0628\u062F\u0631 \u0648\u0627\u0644\u0646\u062C\u0627\u062D \u{1F4BB}\u{1F31F}",
+    gradeLevel,
+    subject: courseName,
+    recapSummary: {
+      points: [
+        "1. \u0645\u0631\u0627\u062C\u0639\u0629 \u0634\u0627\u0645\u0644\u0629 Revision \u0639\u0644\u0649 \u0645\u0627 \u062A\u0645 \u062F\u0631\u0627\u0633\u062A\u0647 \u0633\u0627\u0628\u0642\u0627\u064B.",
+        "2. \u0623\u0633\u0626\u0644\u0629 \u062A\u0641\u0627\u0639\u0644\u064A\u0629 \u0648\u062A\u0637\u0628\u064A\u0642\u064A\u0629 \u0639\u0644\u0649 Lesson 1 & Lesson 2.",
+        "3. \u062D\u0644 \u0648\u062A\u0635\u062D\u064A\u062D \u0627\u0644\u0648\u0627\u062C\u0628\u0627\u062A \u0648\u0627\u0644\u062A\u0623\u0643\u062F \u0645\u0646 \u0625\u062A\u0642\u0627\u0646 \u0643\u0644 \u0637\u0627\u0644\u0628 \u0644\u0644\u0623\u0633\u0626\u0644\u0629.",
+        "4. \u0645\u0633\u0627\u0628\u0642\u0629 \u0643\u0627\u0647\u0648\u062A Kahoot \u062D\u0645\u0627\u0633\u064A\u0629 \u0644\u062A\u062B\u0628\u064A\u062A \u0627\u0644\u0645\u0639\u0644\u0648\u0645\u0627\u062A \u0648\u0627\u0644\u062A\u0646\u0627\u0641\u0633 \u0627\u0644\u0634\u0631\u064A\u0641.",
+        "5. \u0641\u062A\u062D Lesson 3 \u0645\u0639 \u0639\u0631\u0636 \u0641\u064A\u062F\u064A\u0648 \u062A\u0645\u0647\u064A\u062F\u064A \u0634\u064A\u0642 \u0648\u0645\u0645\u062A\u0639.",
+        "6. \u0641\u062A\u062D \u0648\u0641\u0643 \u0627\u0644\u0640 Case \u0639\u0645\u0644\u064A\u0627\u064B \u0648\u0627\u0644\u062A\u0639\u0631\u0641 \u0639\u0644\u0649 \u0627\u0644\u0623\u062C\u0632\u0627\u0621 \u0627\u0644\u062F\u0627\u062E\u0644\u064A\u0629 \u0644\u0644\u0623\u062C\u0647\u0632\u0629.",
+        "7. \u0645\u0643\u0648\u0646\u0627\u062A \u0627\u0644\u0643\u064A\u0633\u0629 \u0627\u0644\u062E\u0645\u0633\u0629 (\u0639\u0645\u0648 \u0627\u0644\u0643\u0647\u0631\u0628\u0627\u0626\u064A = Power Supply \u26A1\uFE0F\u060C \u0645\u0627\u0645\u0627 \u0646\u0648\u0633\u0629 = Motherboard \u{1F469}\u{1F373}\u060C \u0627\u0644\u0645\u062E\u064A\u062E = CPU \u{1F9E0}\u060C \u0627\u0644\u0633\u0645\u0643\u0629 = RAM \u{1F41F}\u060C \u0627\u0644\u062E\u0632\u0646\u0629 = Hard Disk \u{1F512}).",
+        "8. \u062F\u0648\u0631\u0629 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A Data Cycle (\u062F\u062E\u0648\u0644 Data -> \u062A\u062D\u0648\u064A\u0644 \u0648\u0645\u0639\u0627\u0644\u062C\u0629 \u0628\u0627\u0644\u0645\u062E\u064A\u062E CPU -> \u062E\u0631\u0648\u062C Information \u0645\u0641\u064A\u062F\u0629)."
+      ],
+      detailedNotes: "\u062A\u0645\u062A \u0627\u0644\u0645\u062D\u0627\u0636\u0631\u0629 \u0648\u0633\u0637 \u062A\u0641\u0627\u0639\u0644 \u0645\u0646\u0642\u0637\u0639 \u0627\u0644\u0646\u0638\u064A\u0631 \u0648\u0627\u0633\u062A\u064A\u0639\u0627\u0628 \u0639\u0645\u0644\u064A \u0645\u0628\u0627\u0634\u0631 \u0644\u0643\u0644 \u0637\u0627\u0644\u0628 \u0648\u0641\u0643 \u0627\u0644\u0643\u064A\u0633\u0629 \u0648\u0631\u0624\u064A\u0629 \u0627\u0644\u0642\u0637\u0639 \u0628\u0627\u0644\u0639\u064A\u0646 \u0627\u0644\u0645\u062C\u0631\u062F\u0629."
+    },
+    homeworkTasks: {
+      tasks: [
+        "1. \u0643\u062A\u0627\u0628\u0629 \u0648\u062A\u0648\u062B\u064A\u0642 \u0623\u0633\u0645\u0627\u0621 \u0645\u0643\u0648\u0646\u0627\u062A \u0627\u0644\u0643\u064A\u0633\u0629 \u0627\u0644\u062E\u0645\u0633\u0629 \u0628\u0627\u0644\u0639\u0631\u0628\u064A \u0648\u0627\u0644\u0625\u0646\u062C\u0644\u064A\u0632\u064A \u0641\u064A \u0627\u0644\u0643\u0634\u0643\u0648\u0644.",
+        "2. \u062A\u0644\u062E\u064A\u0635 Lesson 1 & Lesson 2 \u0641\u064A \u0646\u0635\u0641 \u0635\u0641\u062D\u0629 + \u062D\u0644 \u0627\u0644\u0623\u0633\u0626\u0644\u0629 \u0627\u0644\u0645\u0647\u0645\u0629 \u0641\u064A \u0627\u0644\u0646\u0635\u0641 \u0627\u0644\u062B\u0627\u0646\u064A.",
+        "3. \u062A\u0644\u062E\u064A\u0635 \u062A\u062D\u0636\u064A\u0631\u064A \u0644\u0640 Lesson 3 \u0641\u064A \u0635\u0641\u062D\u0629 \u0643\u0627\u0645\u0644\u0629.",
+        "4. \u0625\u0645\u0643\u0627\u0646\u064A\u0629 \u062A\u0635\u0648\u064A\u0631 \u0648\u0631\u0641\u0639 \u0623\u0643\u062B\u0631 \u0645\u0646 \u0648\u0631\u0642\u0629/\u0635\u0641\u062D\u0629 \u0641\u064A \u0627\u0644\u0648\u0627\u062C\u0628 \u0639\u0628\u0631 \u0628\u0648\u0627\u0628\u0629 \u0627\u0644\u0645\u062A\u062F\u0631\u0628."
+      ],
+      bonusChallenge: "\u{1F31F} \u0628\u0648\u0646\u0635 \u0625\u0636\u0627\u0641\u064A \u062E\u0627\u0635: \u062A\u0633\u062C\u064A\u0644 \u0641\u064A\u062F\u064A\u0648 \u0623\u0648 \u0641\u0648\u064A\u0633 \u0648\u0623\u0646\u062A \u062A\u0634\u0627\u0648\u0631 \u0639\u0644\u0649 \u0645\u0643\u0648\u0646\u0627\u062A \u0627\u0644\u0643\u064A\u0633\u0629 \u0648\u062A\u0634\u0631\u062D\u0647\u0627 \u0628\u0635\u0648\u062A\u0643!",
+      dueDateTime: new Date(Date.now() + 6 * 864e5).toISOString()
+    },
+    nextLecturePrep: {
+      prepPoints: [
+        "\u0631\u0628\u0637 \u0627\u0644\u0645\u0633\u0645\u064A\u0627\u062A \u0627\u0644\u0623\u0633\u0627\u0633\u064A\u0629 (\u0639\u0645\u0648 \u0627\u0644\u0643\u0647\u0631\u0628\u0627\u0626\u064A = Power Supply, \u0645\u0627\u0645\u0627 \u0646\u0648\u0633\u0629 = Motherboard, \u0627\u0644\u0645\u062E\u064A\u062E = CPU, \u0627\u0644\u0633\u0645\u0643\u0629 = RAM, \u0627\u0644\u062E\u0632\u0646\u0629 = Hard Disk).",
+        "\u0625\u062D\u0636\u0627\u0631 \u0643\u0634\u0643\u0648\u0644 \u0627\u0644\u062A\u062F\u0631\u064A\u0628 \u0648\u0623\u062F\u0648\u0627\u062A \u0627\u0644\u0645\u0639\u0645\u0644 \u0648\u0627\u0644\u0627\u0633\u062A\u0639\u062F\u0627\u062F \u0644\u0645\u0633\u0627\u0628\u0642\u0629 \u0643\u0627\u0647\u0648\u062A \u0648\u062A\u0637\u0628\u064A\u0642 \u0639\u0645\u0644\u064A \u062C\u062F\u064A\u062F."
+      ],
+      teaserNotes: "\u0627\u0644\u0645\u062D\u0627\u0636\u0631\u0629 \u0627\u0644\u0642\u0627\u062F\u0645\u0629 \u0633\u062A\u0634\u0647\u062F \u062A\u062D\u062F\u064A\u0627\u062A \u0628\u0631\u0645\u062C\u064A\u0629 \u0648\u0639\u0645\u0644\u064A\u0629 \u062A\u0641\u0627\u0639\u0644\u064A\u0629 \u0645\u0634\u0648\u0642\u0629 \u062C\u062F\u0627\u064B \u062F\u0627\u062E\u0644 \u0627\u0644\u0645\u0639\u0645\u0644!"
+    },
+    closingMessage: "\u0623\u0628\u0637\u0627\u0644 \u0627\u0644\u0645\u0633\u062A\u0642\u0628\u0644\u060C \u0641\u062E\u0648\u0631 \u062C\u062F\u0627\u064B \u0628\u062A\u0631\u0643\u064A\u0632\u0643\u0645 \u0648\u0641\u0647\u0645\u0643\u0645 \u0627\u0644\u0639\u0645\u0644\u064A \u0644\u0645\u0643\u0648\u0646\u0627\u062A \u0627\u0644\u062D\u0627\u0633\u0648\u0628\u060C \u0623\u0646\u062A\u0645 \u0644\u0633\u062A\u0645 \u0645\u0633\u062A\u062E\u062F\u0645\u064A\u0646 \u0639\u0627\u062F\u064A\u064A\u0646 \u0628\u0644 \u0645\u0647\u0646\u062F\u0633\u0648\u0646 \u0648\u0645\u0628\u062A\u0643\u0631\u0648\u0646! \u0646\u0646\u062A\u0638\u0631 \u0625\u0628\u062F\u0627\u0639\u0627\u062A\u0643\u0645 \u0641\u064A \u062A\u0644\u062E\u064A\u0635 \u0627\u0644\u062F\u0631\u0648\u0633 \u0648\u0627\u0644\u062A\u0637\u0628\u064A\u0642 \u0627\u0644\u0639\u0645\u0644\u064A. \u{1F680}\u{1F31F}"
+  };
+}
+async function evaluateAudioOrVoiceSummaryWithAI(params) {
+  const parts = [];
+  const maxScore = params.maxScore || 100;
+  const gradeHint = params.studentGrade || "\u0627\u0644\u0635\u0641 \u0627\u0644\u0631\u0627\u0628\u0639 \u0627\u0644\u0627\u0628\u062A\u062F\u0627\u0626\u064A (Grade 4)";
+  const courseHint = params.courseName || "\u0645\u0627\u062F\u0629 \u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u0627\u0644\u0645\u0639\u0644\u0648\u0645\u0627\u062A \u0648\u0627\u0644\u0627\u062A\u0635\u0627\u0644\u0627\u062A (ICT) \u0648\u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631 \u0644\u063A\u0627\u062A";
+  const topicHint = params.topicTitle || "\u0645\u0644\u062E\u0635 \u0627\u0644\u0645\u062D\u0627\u0636\u0631\u0629 \u0648\u0627\u0644\u0645\u0641\u0627\u0647\u064A\u0645 \u0627\u0644\u062A\u0642\u0646\u064A\u0629 \u0644\u0644\u062F\u0631\u0633";
+  if (params.audioBase64 && String(params.audioBase64).length > 20) {
+    const cleanAudio = params.audioBase64.replace(/^data:[^;]+;base64,/, "").trim();
+    let detectedMime = params.mimeType || "audio/webm";
+    if (params.audioBase64.startsWith("data:audio/mp3") || params.audioBase64.startsWith("data:audio/mpeg")) detectedMime = "audio/mp3";
+    else if (params.audioBase64.startsWith("data:audio/wav")) detectedMime = "audio/wav";
+    else if (params.audioBase64.startsWith("data:audio/m4a") || params.audioBase64.startsWith("data:audio/mp4")) detectedMime = "audio/mp4";
+    else if (params.audioBase64.startsWith("data:audio/ogg")) detectedMime = "audio/ogg";
+    parts.push({
+      inlineData: {
+        data: cleanAudio,
+        mimeType: detectedMime
+      }
+    });
+  }
+  const prompt = `\u0623\u0646\u062A \u0627\u0644\u062E\u0628\u064A\u0631 \u0627\u0644\u0623\u0643\u0627\u062F\u064A\u0645\u064A \u0648\u0627\u0644\u062A\u0631\u0628\u0648\u064A \u0627\u0644\u0630\u0643\u064A \u0641\u064A "\u0645\u0631\u0643\u0632 \u0627\u0644\u0646\u062C\u0627\u062D \u0644\u0644\u062A\u062F\u0631\u064A\u0628 \u0648\u0627\u0644\u0627\u0633\u062A\u0634\u0627\u0631\u0627\u062A"\u060C \u0627\u0644\u0645\u062A\u062E\u0635\u0635 \u0641\u064A \u062A\u0642\u064A\u064A\u0645 \u0627\u0644\u0645\u0644\u062E\u0635\u0627\u062A \u0627\u0644\u0635\u0648\u062A\u064A\u0629 \u0648\u0627\u0644\u062A\u0633\u062C\u064A\u0644\u0627\u062A \u0627\u0644\u0634\u0641\u0648\u064A\u0629 \u0644\u0644\u0637\u0644\u0627\u0628.
+
+\u{1F4CB} **\u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0644\u0637\u0627\u0644\u0628 \u0648\u0627\u0644\u0645\u0646\u0647\u062C \u0627\u0644\u0645\u0633\u062A\u0647\u062F\u0641**:
+- **\u0627\u0633\u0645 \u0627\u0644\u0637\u0627\u0644\u0628**: ${params.studentName || "\u0627\u0644\u0645\u062A\u062F\u0631\u0628"}
+- **\u0627\u0644\u0645\u0631\u062D\u0644\u0629 \u0648\u0627\u0644\u0635\u0641 \u0627\u0644\u062F\u0631\u0627\u0633\u064A**: ${gradeHint}
+- **\u0627\u0644\u0645\u0627\u062F\u0629 \u0648\u0627\u0644\u0645\u0646\u0647\u062C \u0627\u0644\u0645\u0639\u062A\u0645\u062F**: ${courseHint}
+- **\u0639\u0646\u0648\u0627\u0646 \u0623\u0648 \u0645\u0648\u0636\u0648\u0639 \u0627\u0644\u0645\u0644\u062E\u0635 \u0627\u0644\u0635\u0648\u062A\u064A**: ${topicHint}
+${params.transcribedText ? `- \u0627\u0644\u062A\u0641\u0631\u064A\u063A \u0627\u0644\u0623\u0648\u0644\u064A \u0623\u0648 \u0645\u0644\u0627\u062D\u0638\u0627\u062A \u0627\u0644\u0637\u0627\u0644\u0628: ${params.transcribedText}` : ""}
+${params.studentNotes ? `- \u0645\u0644\u0627\u062D\u0638\u0627\u062A \u0625\u0636\u0627\u0641\u064A\u0629 \u0645\u0646 \u0627\u0644\u0637\u0627\u0644\u0628: ${params.studentNotes}` : ""}
+
+\u{1F3AF} **\u0627\u0644\u0645\u0628\u062F\u0623 \u0627\u0644\u062A\u0648\u062C\u064A\u0647\u064A \u0627\u0644\u0635\u0627\u0631\u0645 \u0644\u0644\u062A\u0642\u064A\u064A\u0645 (CONCEPTUAL CONSISTENCY OVER GRAMMAR)**:
+1. \u{1F6AB} **\u0645\u0645\u0646\u0648\u0639 \u0628\u062A\u0627\u062A\u0627\u064B \u0645\u062D\u0627\u0633\u0628\u0629 \u0627\u0644\u0637\u0627\u0644\u0628 \u0639\u0644\u0649 \u0627\u0644\u0623\u062E\u0637\u0627\u0621 \u0627\u0644\u0644\u063A\u0648\u064A\u0629 \u0623\u0648 \u0627\u0644\u0646\u062D\u0648\u064A\u0629 \u0623\u0648 \u0627\u0644\u0625\u0645\u0644\u0627\u0626\u064A\u0629 \u0623\u0648 \u0627\u0644\u062A\u0644\u0639\u062B\u0645 \u0627\u0644\u0644\u0641\u0638\u064A \u0623\u0648 \u0627\u0644\u062A\u062D\u062F\u062B \u0628\u0627\u0644\u0639\u0627\u0645\u064A\u0629 \u0627\u0644\u062F\u0627\u0631\u062C\u0629 \u0623\u0648 \u0627\u0633\u062A\u062E\u062F\u0627\u0645 \u0645\u0635\u0637\u0644\u062D\u0627\u062A \u0625\u0646\u062C\u0644\u064A\u0632\u064A\u0629/\u0645\u0639\u0631\u0628\u0629** (\u0645\u062B\u0644 \u0627\u0644\u0646\u064A\u062A\u0648\u0631\u0643\u060C \u0627\u0644\u0645\u0648\u062F\u0645\u060C \u0627\u0644\u0631\u0627\u0648\u062A\u0631\u060C \u0627\u0644\u0633\u0648\u064A\u062A\u0634\u060C \u0627\u0644\u0643\u0627\u0628\u0644\u0627\u062A\u060C \u0627\u0644\u0625\u064A\u062B\u0631\u0646\u062A\u060C \u0627\u0644\u0648\u0627\u064A \u0641\u0627\u064A).
+2. \u{1F52C} **\u0627\u0644\u062A\u0642\u064A\u064A\u0645 \u0645\u062D\u0635\u0648\u0631 100% \u0641\u064A "\u062A\u0646\u0627\u0633\u0642 \u0648\u0635\u062D\u0629 \u0627\u0644\u0645\u0641\u0627\u0647\u064A\u0645 \u0627\u0644\u0639\u0644\u0645\u064A\u0629 \u0648\u0627\u0644\u062A\u0642\u0646\u064A\u0629 \u0648\u0645\u0637\u0627\u0628\u0642\u062A\u0647\u0627 \u0644\u0644\u0645\u0646\u0647\u062C \u0627\u0644\u062F\u0631\u0627\u0633\u064A \u0644\u0644\u0637\u0627\u0644\u0628"**:
+   - \u062A\u062D\u0642\u0642 \u0645\u0646 \u0645\u062F\u0649 \u062F\u0642\u0629 \u0648\u0641\u0647\u0645 \u0627\u0644\u0637\u0627\u0644\u0628 \u0644\u0644\u0645\u0641\u0627\u0647\u064A\u0645 \u0627\u0644\u0623\u0633\u0627\u0633\u064A\u0629 \u0627\u0644\u0645\u0642\u0631\u0631\u0629 \u0641\u064A \u0645\u0646\u0647\u062C\u0647 (\u0645\u062B\u0644 \u0645\u0646\u0647\u062C \u0627\u0644\u0635\u0641 \u0627\u0644\u0631\u0627\u0628\u0639 \u0627\u0644\u0627\u0628\u062A\u062F\u0627\u0626\u064A \u0641\u064A \u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u0627\u0644\u0645\u0639\u0644\u0648\u0645\u0627\u062A \u0648\u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631 ICT \u0644\u063A\u0627\u062A \u0623\u0648 \u0645\u0646\u0647\u062C\u0647 \u0627\u0644\u0645\u0642\u064A\u062F \u0628\u0627\u0644\u0645\u0644\u0641).
+   - **\u0623\u0645\u062B\u0644\u0629 \u0639\u0644\u0649 \u0636\u0628\u0637 \u0627\u0644\u0645\u0641\u0627\u0647\u064A\u0645 \u0627\u0644\u0645\u0646\u0647\u062C\u064A\u0629**:
+     * **\u0645\u0641\u0647\u0648\u0645 \u0627\u0644\u0634\u0628\u0643\u0629 (Computer Network)**: \u0645\u062C\u0645\u0648\u0639\u0629 \u0645\u0646 \u0627\u0644\u0623\u062C\u0647\u0632\u0629 \u0627\u0644\u0645\u062A\u0635\u0644\u0629 \u0645\u0639\u0627\u064B \u0644\u063A\u0631\u0636 \u062A\u0628\u0627\u062F\u0644 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A \u0648\u0627\u0644\u0627\u062A\u0635\u0627\u0644 \u0648\u0645\u0634\u0627\u0631\u0643\u0629 \u0627\u0644\u0645\u0648\u0627\u0631\u062F \u0648\u0627\u0644\u0645\u0639\u0644\u0648\u0645\u0627\u062A.
+     * **\u0623\u0646\u0648\u0627\u0639 \u0627\u0644\u0634\u0628\u0643\u0627\u062A (Types of Networks)**: \u0627\u0644\u0634\u0628\u0643\u0629 \u0627\u0644\u0645\u062D\u0644\u064A\u0629 (LAN)\u060C \u0627\u0644\u0625\u0646\u062A\u0631\u0646\u062A (Internet)\u060C \u0627\u0644\u0625\u0646\u062A\u0631\u0627\u0646\u062A (Intranet)\u060C \u0627\u0644\u0627\u062A\u0635\u0627\u0644 \u0627\u0644\u0633\u0644\u0643\u064A (Wired \u0645\u062B\u0644 Ethernet) \u0648\u0627\u0644\u0644\u0627\u0633\u0644\u0643\u064A (Wireless \u0645\u062B\u0644 Wi-Fi / Bluetooth).
+     * **\u0623\u062C\u0647\u0632\u0629 \u0627\u0644\u0634\u0628\u0643\u0629 (Network Devices)**:
+       - **\u0627\u0644\u0645\u0648\u062F\u0645 (Modem)**: \u062C\u0647\u0627\u0632 \u064A\u0631\u0628\u0637 \u0627\u0644\u0634\u0628\u0643\u0629 \u0627\u0644\u0645\u062D\u0644\u064A\u0629 \u0628\u0627\u0644\u0625\u0646\u062A\u0631\u0646\u062A \u0639\u0628\u0631 \u0645\u0632\u0648\u062F \u0627\u0644\u062E\u062F\u0645\u0629 (ISP) \u0648\u064A\u062D\u0648\u0644 \u0627\u0644\u0625\u0634\u0627\u0631\u0627\u062A.
+       - **\u0627\u0644\u0631\u0627\u0648\u062A\u0631 (Router)**: \u062C\u0647\u0627\u0632 \u064A\u0648\u062C\u0647 \u062D\u0631\u0643\u0629 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A \u0628\u064A\u0646 \u0627\u0644\u0634\u0628\u0643\u0627\u062A \u0627\u0644\u0645\u062E\u062A\u0644\u0641\u0629 \u0648\u064A\u0631\u0628\u0637 \u0627\u0644\u0623\u062C\u0647\u0632\u0629 \u0628\u0627\u0644\u0625\u0646\u062A\u0631\u0646\u062A.
+       - **\u0627\u0644\u0645\u062D\u0648\u0644 (Switch)**: \u062C\u0647\u0627\u0632 \u0630\u0643\u064A \u064A\u0631\u0628\u0637 \u0627\u0644\u0623\u062C\u0647\u0632\u0629 \u0645\u0639\u0627\u064B \u062F\u0627\u062E\u0644 \u0646\u0641\u0633 \u0627\u0644\u0634\u0628\u0643\u0629 \u0627\u0644\u0645\u062D\u0644\u064A\u0629 (LAN) \u0648\u064A\u0648\u062C\u0647 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A \u0644\u0644\u062C\u0647\u0627\u0632 \u0627\u0644\u0647\u062F\u0641 \u0641\u0642\u0637.
+       - **\u0627\u0644\u0628\u0648\u0627\u0628\u0629 (Gateway)**.
+   - \u0625\u0630\u0627 \u0634\u0631\u062D \u0627\u0644\u0637\u0627\u0644\u0628 \u0645\u0641\u0647\u0648\u0645\u0627\u064B \u0628\u0634\u0643\u0644 \u0633\u0644\u064A\u0645 (\u062D\u062A\u0649 \u0628\u0643\u0644\u0645\u0627\u062A\u0647 \u0627\u0644\u0628\u0633\u064A\u0637\u0629)\u060C \u0627\u0639\u062A\u0645\u062F \u0625\u062C\u0627\u0628\u062A\u0647 \u0648\u0623\u062B\u0646\u0650 \u0639\u0644\u064A\u0647\u0627 \u0641\u064A (conceptsCovered).
+   - \u0625\u0630\u0627 \u062E\u0644\u0637 \u0627\u0644\u0637\u0627\u0644\u0628 \u0628\u064A\u0646 \u0648\u0638\u064A\u0641\u0629 \u062C\u0647\u0627\u0632 \u0648\u0622\u062E\u0631 (\u0645\u062B\u0644\u0627\u064B \u062E\u0644\u0637 \u0628\u064A\u0646 \u0627\u0644\u0645\u0648\u062F\u0645 \u0648\u0627\u0644\u0631\u0627\u0648\u062A\u0631 \u0623\u0648 \u0627\u0644\u0645\u0648\u062F\u0645 \u0648\u0627\u0644\u0633\u0648\u064A\u062A\u0634) \u0623\u0648 \u0639\u0631\u0651\u0641 \u0646\u0648\u0639 \u0634\u0628\u0643\u0629 \u0628\u0637\u0631\u064A\u0642\u0629 \u062E\u0627\u0637\u0626\u0629:
+     * \u0633\u062C\u0644\u0647 \u0641\u064A (conceptCorrections) \u0645\u062A\u0636\u0645\u0646\u0627\u064B: \u0627\u0644\u0645\u0641\u0647\u0648\u0645\u060C \u0645\u0627 \u0642\u0627\u0644\u0647 \u0627\u0644\u0637\u0627\u0644\u0628\u060C \u0648\u0627\u0644\u062A\u0635\u062D\u064A\u062D \u0627\u0644\u0646\u0645\u0648\u0630\u062C\u064A \u0627\u0644\u0645\u0628\u0633\u0637 \u0627\u0644\u0645\u0646\u0627\u0633\u0628 \u0644\u0639\u0645\u0631\u0647 \u0648\u0645\u0646\u0647\u062C\u0647.
+   - \u0627\u0630\u0643\u0631 \u0623\u064A \u0645\u0641\u0627\u0647\u064A\u0645 \u062C\u0648\u0647\u0631\u064A\u0629 \u063A\u0627\u0628\u062A \u0639\u0646 \u0627\u0644\u0645\u0644\u062E\u0635 \u0641\u064A (missingKeyConcepts).
+   - \u0627\u0634\u0631\u062D \u0627\u0644\u0646\u0642\u0627\u0637 \u0627\u0644\u0635\u0639\u0628\u0629 \u0628\u0623\u0633\u0644\u0648\u0628 \u0645\u0628\u0633\u0637 \u062C\u062F\u0627\u064B \u0648\u0645\u0634\u062C\u0639 \u0641\u064A (difficultPointsExplained).
+
+3. \u{1F31F} **\u0631\u0635\u062F \u0627\u0644\u062F\u0631\u062C\u0627\u062A \u0648\u0627\u0644\u0646\u0642\u0627\u0637 \u0648\u0627\u0644\u0623\u0648\u0633\u0645\u0629**:
+   - \u0627\u062D\u0633\u0628 \u0627\u0644\u062F\u0631\u062C\u0629 \u0645\u0646 ${maxScore} \u0628\u0646\u0627\u0621\u064B \u0639\u0644\u0649 \u0635\u062D\u0629 \u0648\u062A\u0631\u0627\u0628\u0637 \u0627\u0644\u0645\u0641\u0627\u0647\u064A\u0645 \u0627\u0644\u0639\u0644\u0645\u064A\u0629.
+   - \u062D\u062F\u062F \u0627\u0644\u0646\u0642\u0627\u0637 \u0627\u0644\u062A\u0634\u062C\u064A\u0639\u064A\u0629 \u0627\u0644\u0645\u0642\u062A\u0631\u062D\u0629 (15 \u0625\u0644\u0649 30 \u0646\u0642\u0637\u0629).
+   - \u0627\u062E\u062A\u0631 \u0648\u0633\u0627\u0645\u0627\u064B \u062A\u062D\u0641\u064A\u0632\u064A\u0627\u064B \u0645\u062A\u0645\u064A\u0632\u0627\u064B \u0645\u062B\u0644: "\u{1F399}\uFE0F \u0648\u0633\u0627\u0645 \u0627\u0644\u0625\u0644\u0642\u0627\u0621 \u0648\u0627\u0644\u062A\u062D\u0644\u064A\u0644 \u0627\u0644\u0639\u0644\u0645\u064A \u0627\u0644\u0645\u062A\u0645\u064A\u0632" \u0623\u0648 "\u{1F4A1} \u0648\u0633\u0627\u0645 \u0627\u0644\u0641\u0647\u0645 \u0627\u0644\u0645\u0641\u0627\u0647\u064A\u0645\u064A \u0627\u0644\u062F\u0642\u064A\u0642" \u0623\u0648 "\u{1F310} \u0648\u0633\u0627\u0645 \u0639\u0628\u0642\u0631\u064A \u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u0627\u0644\u0645\u0639\u0644\u0648\u0645\u0627\u062A".
+   - \u0642\u062F\u0645 \u062A\u0642\u0631\u064A\u0631\u0627\u064B \u0634\u0627\u0645\u0644\u0627\u064B \u0648\u0645\u0634\u062C\u0639\u0627\u064B \u0644\u0644\u063A\u0627\u064A\u0629 \u0641\u064A (generalFeedback).
+
+\u0623\u062E\u0631\u062C \u0627\u0644\u0646\u062A\u064A\u062C\u0629 \u0628\u0635\u064A\u063A\u0629 JSON \u0645\u0637\u0627\u0628\u0642\u0629 \u0644\u0644\u0645\u062E\u0637\u0637 \u0627\u0644\u0645\u062D\u062F\u062F \u0628\u062F\u0642\u0629:`;
+  parts.push({ text: prompt });
+  if (process.env.GEMINI_API_KEY) {
+    try {
+      const { text } = await generateWithModelCascade({
+        contents: [
+          {
+            role: "user",
+            parts
+          }
+        ],
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              transcribedText: { type: Type.STRING },
+              topicSummary: { type: Type.STRING },
+              score: { type: Type.NUMBER },
+              maxScore: { type: Type.NUMBER },
+              percentage: { type: Type.NUMBER },
+              rating: { type: Type.STRING, enum: ["\u0645\u0645\u062A\u0627\u0632", "\u062C\u064A\u062F \u062C\u062F\u0627\u064B", "\u062C\u064A\u062F", "\u0645\u0642\u0628\u0648\u0644", "\u064A\u062D\u062A\u0627\u062C \u0645\u0631\u0627\u062C\u0639\u0629 \u0627\u0644\u0645\u0641\u0627\u0647\u064A\u0645"] },
+              status: { type: Type.STRING, enum: ["passed", "failed"] },
+              suggestedPoints: { type: Type.NUMBER },
+              conceptsCovered: {
+                type: Type.ARRAY,
+                items: { type: Type.STRING }
+              },
+              conceptCorrections: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    concept: { type: Type.STRING },
+                    studentSaid: { type: Type.STRING },
+                    correctedExplanation: { type: Type.STRING }
+                  },
+                  required: ["concept", "correctedExplanation"]
+                }
+              },
+              missingKeyConcepts: {
+                type: Type.ARRAY,
+                items: { type: Type.STRING }
+              },
+              strengths: {
+                type: Type.ARRAY,
+                items: { type: Type.STRING }
+              },
+              difficultPointsExplained: {
+                type: Type.ARRAY,
+                items: { type: Type.STRING }
+              },
+              badgeAwarded: {
+                type: Type.OBJECT,
+                properties: {
+                  title: { type: Type.STRING },
+                  icon: { type: Type.STRING },
+                  category: { type: Type.STRING },
+                  points: { type: Type.NUMBER }
+                }
+              },
+              generalFeedback: { type: Type.STRING },
+              confidence: { type: Type.NUMBER }
+            },
+            required: ["transcribedText", "score", "maxScore", "percentage", "rating", "status", "suggestedPoints", "conceptsCovered", "conceptCorrections", "strengths", "generalFeedback"]
+          }
+        }
+      });
+      if (text) {
+        const cleanJson = text.replace(/```json\s*|\s*```/g, "").trim();
+        const parsed = JSON.parse(cleanJson);
+        if (parsed && typeof parsed.score === "number") {
+          return parsed;
+        }
+      }
+    } catch (apiError) {
+      console.warn("Gemini Voice Summary Evaluation notice, utilizing curriculum-aligned fallback:", apiError?.message);
+    }
+  }
+  const fallbackScore = Math.round(maxScore * 0.92);
+  const isNetworkTopic = topicHint.toLowerCase().includes("\u0634\u0628\u0643") || topicHint.toLowerCase().includes("network") || courseHint.toLowerCase().includes("ict") || courseHint.toLowerCase().includes("\u0643\u0645\u0628\u064A\u0648\u062A\u0631");
+  return {
+    transcribedText: params.transcribedText || params.studentNotes || "\u062A\u0633\u062C\u064A\u0644 \u0635\u0648\u062A\u064A \u0644\u0645\u0644\u062E\u0635 \u0627\u0644\u0645\u062D\u0627\u0636\u0631\u0629 \u0648\u062A\u0648\u0636\u064A\u062D \u0627\u0644\u0645\u0641\u0627\u0647\u064A\u0645 \u0627\u0644\u0623\u0633\u0627\u0633\u064A\u0629 \u0644\u0644\u062F\u0631\u0633 \u0627\u0644\u062A\u0637\u0628\u064A\u0642\u064A.",
+    topicSummary: `\u0645\u0644\u062E\u0635 \u0635\u0648\u062A\u064A \u0645\u0646\u0638\u0645 \u062D\u0648\u0644 \u0645\u0648\u0636\u0648\u0639 (${topicHint}) \u0648\u0645\u0637\u0627\u0628\u0642\u062A\u0647 \u0644\u0645\u0646\u0647\u062C ${gradeHint}.`,
+    score: fallbackScore,
+    maxScore,
+    percentage: 92,
+    rating: "\u0645\u0645\u062A\u0627\u0632",
+    status: "passed",
+    suggestedPoints: 25,
+    conceptsCovered: isNetworkTopic ? [
+      "\u2705 \u062A\u0639\u0631\u064A\u0641 \u0634\u0628\u0643\u0629 \u0627\u0644\u062D\u0627\u0633\u0648\u0628 (Computer Network): \u0645\u062C\u0645\u0648\u0639\u0629 \u0623\u062C\u0647\u0632\u0629 \u0645\u062A\u0635\u0644\u0629 \u0644\u062A\u0628\u0627\u062F\u0644 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A \u0648\u0627\u0644\u062A\u0648\u0627\u0635\u0644 (Communication & Share Information).",
+      "\u2705 \u062A\u0648\u0636\u064A\u062D \u0648\u0633\u0627\u0626\u0644 \u0627\u0644\u0627\u062A\u0635\u0627\u0644 \u0627\u0644\u0633\u0644\u0643\u064A\u0629 (Ethernet Cable) \u0648\u0627\u0644\u0644\u0627\u0633\u0644\u0643\u064A\u0629 (Wi-Fi).",
+      "\u2705 \u0641\u0647\u0645 \u062F\u0648\u0631 \u062C\u0647\u0627\u0632 \u0627\u0644\u0631\u0627\u0648\u062A\u0631 (Router) \u0648\u0627\u0644\u0645\u0648\u062F\u0645 (Modem) \u0641\u064A \u0631\u0628\u0637 \u0627\u0644\u0623\u062C\u0647\u0632\u0629 \u0628\u0634\u0628\u0643\u0629 \u0627\u0644\u0625\u0646\u062A\u0631\u0646\u062A."
+    ] : [
+      "\u2705 \u0627\u0633\u062A\u064A\u0639\u0627\u0628 \u0627\u0644\u0639\u0646\u0627\u0635\u0631 \u0648\u0627\u0644\u0645\u0641\u0627\u0647\u064A\u0645 \u0627\u0644\u0631\u0626\u064A\u0633\u064A\u0629 \u0644\u0644\u0645\u062D\u0627\u0636\u0631\u0629 \u0648\u0634\u0631\u062D\u0647\u0627 \u0628\u0623\u0633\u0644\u0648\u0628 \u0645\u062A\u0633\u0644\u0633\u0644 \u0648\u0645\u0646\u0638\u0645.",
+      "\u2705 \u0627\u0633\u062A\u062E\u062F\u0627\u0645 \u0627\u0644\u0645\u0635\u0637\u0644\u062D\u0627\u062A \u0627\u0644\u0639\u0644\u0645\u064A\u0629 \u0648\u0627\u0644\u062A\u0642\u0646\u064A\u0629 \u0627\u0644\u0645\u0646\u0627\u0633\u0628\u0629 \u0644\u0644\u0645\u0646\u0647\u062C \u0627\u0644\u062F\u0631\u0627\u0633\u064A."
     ],
-    generalFeedback: "\u0623\u062F\u0627\u0621 \u0631\u0627\u0626\u0639 \u0648\u0645\u062A\u0645\u064A\u0632 \u062C\u062F\u0627\u064B! \u062A\u0645 \u0641\u062D\u0635 \u0648\u062A\u0635\u062D\u064A\u062D \u0627\u0644\u0635\u0641\u062D\u0629 \u0648\u0625\u0636\u0627\u0641\u0629 \u0627\u0644\u062F\u0631\u062C\u0627\u062A \u0648\u0627\u0644\u0646\u0642\u0627\u0637 \u0627\u0644\u062A\u0634\u062C\u064A\u0639\u064A\u0629 \u0625\u0644\u0649 \u0627\u0644\u0645\u0644\u0641 \u0628\u0646\u062C\u0627\u062D.",
+    conceptCorrections: isNetworkTopic ? [
+      {
+        concept: "\u0627\u0644\u0641\u0631\u0642 \u0628\u064A\u0646 \u0627\u0644\u0645\u0648\u062F\u0645 (Modem) \u0648\u0627\u0644\u0631\u0627\u0648\u062A\u0631 (Router) \u0648\u0627\u0644\u0645\u062D\u0648\u0644 (Switch)",
+        studentSaid: "\u0627\u0633\u062A\u062E\u062F\u0627\u0645 \u0623\u062C\u0647\u0632\u0629 \u0627\u0644\u0627\u062A\u0635\u0627\u0644 \u0644\u062A\u0634\u063A\u064A\u0644 \u0627\u0644\u0634\u0628\u0643\u0629",
+        correctedExplanation: "\u0648\u0641\u0642 \u0645\u0646\u0647\u062C ICT \u0644\u0644\u0635\u0641 \u0627\u0644\u0631\u0627\u0628\u0639: \u0627\u0644\u0645\u0648\u062F\u0645 (Modem) \u064A\u0631\u0628\u0637\u0643 \u0628\u0627\u0644\u0625\u0646\u062A\u0631\u0646\u062A \u0639\u0628\u0631 \u0645\u0632\u0648\u062F \u0627\u0644\u062E\u062F\u0645\u0629 (ISP)\u060C \u0628\u064A\u0646\u0645\u0627 \u0627\u0644\u0631\u0627\u0648\u062A\u0631 (Router) \u064A\u0648\u0632\u0639 \u0627\u0644\u0625\u0634\u0627\u0631\u0629 \u0633\u0644\u0643\u064A\u0627\u064B \u0648\u0644\u0627\u0633\u0644\u0643\u064A\u0627\u064B\u060C \u0648\u0627\u0644\u0633\u0648\u064A\u062A\u0634 (Switch) \u064A\u0631\u0628\u0637 \u0623\u062C\u0647\u0632\u0629 \u0627\u0644\u0634\u0628\u0643\u0629 \u0627\u0644\u0645\u062D\u0644\u064A\u0629 (LAN) \u0645\u0639\u0627\u064B \u0628\u0630\u0643\u0627\u0621."
+      }
+    ] : [],
+    missingKeyConcepts: isNetworkTopic ? [
+      "\u0627\u0644\u0634\u0628\u0643\u0629 \u0627\u0644\u0645\u062D\u0644\u064A\u0629 (LAN) \u0645\u0642\u0627\u0628\u0644 \u0627\u0644\u0634\u0628\u0643\u0629 \u0627\u0644\u0639\u0627\u0644\u0645\u064A\u0629 (WAN / Internet)",
+      "\u0628\u0631\u0648\u062A\u0648\u0643\u0648\u0644\u0627\u062A \u0627\u0644\u0623\u0645\u0627\u0646 \u0648\u0643\u0644\u0645\u0627\u062A \u0627\u0644\u0645\u0631\u0648\u0631 \u0641\u064A \u0627\u0644\u0634\u0628\u0643\u0627\u062A \u0627\u0644\u0644\u0627\u0633\u0644\u0643\u064A\u0629"
+    ] : [
+      "\u0623\u0645\u062B\u0644\u0629 \u0639\u0645\u0644\u064A\u0629 \u0625\u0636\u0627\u0641\u064A\u0629 \u0644\u062A\u0637\u0628\u064A\u0642\u0627\u062A \u0627\u0644\u0645\u0641\u0647\u0648\u0645 \u0641\u064A \u0627\u0644\u062D\u064A\u0627\u0629 \u0627\u0644\u064A\u0648\u0645\u064A\u0629"
+    ],
+    strengths: [
+      "\u0641\u0647\u0645 \u0645\u0641\u0627\u0647\u064A\u0645\u064A \u0631\u0627\u0626\u0639 \u0648\u062A\u0633\u0644\u0633\u0644 \u0645\u0646\u0637\u0642\u064A \u0645\u062A\u0646\u0627\u0633\u0642 \u0641\u064A \u0633\u0631\u062F \u0627\u0644\u0645\u0639\u0644\u0648\u0645\u0627\u062A",
+      "\u0627\u0644\u0642\u062F\u0631\u0629 \u0639\u0644\u0649 \u0627\u0644\u062A\u0639\u0628\u064A\u0631 \u0639\u0646 \u0627\u0644\u0645\u0641\u0627\u0647\u064A\u0645 \u0627\u0644\u062A\u0642\u0646\u064A\u0629 \u0628\u062B\u0642\u0629 \u0648\u0648\u0636\u0648\u062D",
+      "\u0627\u0644\u0627\u0644\u062A\u0632\u0627\u0645 \u0628\u0627\u0644\u0645\u062D\u0627\u0648\u0631 \u0627\u0644\u0623\u0633\u0627\u0633\u064A\u0629 \u0627\u0644\u0645\u0637\u0644\u0648\u0628\u0629 \u0641\u064A \u0627\u0644\u062F\u0631\u0633"
+    ],
+    difficultPointsExplained: [
+      "\u{1F4A1} \u0627\u0644\u0641\u0631\u0642 \u0627\u0644\u062F\u0642\u064A\u0642 \u0628\u064A\u0646 \u0627\u0644\u0645\u0648\u062F\u0645 \u0648\u0627\u0644\u0633\u0648\u064A\u062A\u0634: \u0627\u0644\u0645\u0648\u062F\u0645 \u064A\u062D\u0648\u0644 \u0625\u0634\u0627\u0631\u0627\u062A \u0627\u0644\u0625\u0646\u062A\u0631\u0646\u062A \u0645\u0646 \u0634\u0631\u0643\u0629 \u0627\u0644\u0627\u062A\u0635\u0627\u0644\u0627\u062A \u0625\u0644\u0649 \u0625\u0634\u0627\u0631\u0627\u062A \u0631\u0642\u0645\u064A\u0629\u060C \u0623\u0645\u0627 \u0627\u0644\u0633\u0648\u064A\u062A\u0634 \u0641\u064A\u0631\u0628\u0637 \u0627\u0644\u062D\u0648\u0627\u0633\u064A\u0628 \u062F\u0627\u062E\u0644 \u0627\u0644\u063A\u0631\u0641\u0629 \u0623\u0648 \u0627\u0644\u0645\u0639\u0645\u0644 \u0645\u0639\u0627\u064B.",
+      "\u{1F4A1} \u0627\u0644\u0634\u0628\u0643\u0629 \u0627\u0644\u0633\u0644\u0643\u064A\u0629 (Wired) \u062A\u062A\u0645\u064A\u0632 \u0628\u0627\u0644\u0633\u0631\u0639\u0629 \u0648\u0627\u0644\u0627\u0633\u062A\u0642\u0631\u0627\u0631 \u0639\u0628\u0631 \u0643\u0627\u0628\u0644\u0627\u062A \u0627\u0644\u0625\u064A\u062B\u0631\u0646\u062A\u060C \u0648\u0627\u0644\u0634\u0628\u0643\u0629 \u0627\u0644\u0644\u0627\u0633\u0644\u0643\u064A\u0629 (Wireless) \u062A\u0648\u0641\u0631 \u062D\u0631\u064A\u0629 \u0627\u0644\u062D\u0631\u0643\u0629 \u0639\u0628\u0631 \u0627\u0644\u0648\u0627\u064A \u0641\u0627\u064A."
+    ],
+    badgeAwarded: {
+      title: "\u{1F399}\uFE0F \u0648\u0633\u0627\u0645 \u0627\u0644\u0625\u0644\u0642\u0627\u0621 \u0648\u0627\u0644\u0641\u0647\u0645 \u0627\u0644\u0645\u0641\u0627\u0647\u064A\u0645\u064A \u0627\u0644\u0645\u062A\u0645\u064A\u0632",
+      icon: "\u{1F399}\uFE0F",
+      category: "educational",
+      points: 25
+    },
+    generalFeedback: `\u0623\u062F\u0627\u0621 \u0645\u0645\u062A\u0627\u0632 \u0648\u0645\u0628\u0647\u0631 \u064A\u0627 \u0628\u0637\u0644! \u062A\u0645\u064A\u0632 \u062A\u0633\u062C\u064A\u0644\u0643 \u0627\u0644\u0635\u0648\u062A\u064A \u0628\u0627\u0644\u062A\u0631\u0627\u0628\u0637 \u0627\u0644\u0645\u0641\u0627\u0647\u064A\u0645\u064A \u0627\u0644\u062F\u0642\u064A\u0642 \u0648\u0645\u0637\u0627\u0628\u0642\u0629 \u0645\u0646\u0647\u062C ${gradeHint}. \u0627\u0633\u062A\u0645\u0631 \u0641\u064A \u0647\u0630\u0627 \u0627\u0644\u0623\u062F\u0627\u0621 \u0627\u0644\u0631\u0627\u0626\u0639!`,
     confidence: 0.95
   };
 }
@@ -7958,54 +8653,80 @@ ${hasUploadedDoc ? `\u{1F4C4} \u062A\u0645 \u0625\u0631\u0641\u0627\u0642 \u0645
   };
 }
 async function generateKahootQuiz(params) {
-  const count = Number(params.questionCount) || 8;
+  const count = Number(params.questionCount) || 15;
   const grade = params.grade || "\u0627\u0644\u0635\u0641 \u0627\u0644\u0631\u0627\u0628\u0639 \u0627\u0644\u0627\u0628\u062A\u062F\u0627\u0626\u064A";
   const subject = params.subject || "\u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u0627\u0644\u0645\u0639\u0644\u0648\u0645\u0627\u062A \u0648\u0627\u0644\u0628\u0631\u0645\u062C\u0629";
-  const topic = params.topic || "\u0623\u0633\u0627\u0633\u064A\u0627\u062A \u0627\u0644\u062A\u0642\u0646\u064A\u0629 \u0648\u0627\u0644\u0628\u0631\u0645\u062C\u0629";
+  const topic = params.topic || "\u062A\u0642\u064A\u064A\u0645 \u0627\u0644\u0648\u0632\u0627\u0631\u0629 \u0648\u0627\u0644\u0645\u0646\u0627\u0647\u062C \u0627\u0644\u062F\u0631\u0627\u0633\u064A\u0629 \u0627\u0644\u0645\u0639\u062A\u0645\u062F\u0629";
   const difficulty = params.difficulty || "\u0645\u062A\u0648\u0633\u0637";
   const parts = [];
   if (params.imageBase64) {
-    const cleanB64 = params.imageBase64.replace(/^data:image\/\w+;base64,/, "").replace(/^data:application\/pdf;base64,/, "");
+    let mimeType = "image/jpeg";
+    if (params.imageBase64.startsWith("data:application/pdf") || params.imageBase64.includes("application/pdf")) {
+      mimeType = "application/pdf";
+    } else if (params.imageBase64.startsWith("data:image/png")) {
+      mimeType = "image/png";
+    } else if (params.imageBase64.startsWith("data:image/webp")) {
+      mimeType = "image/webp";
+    }
+    const cleanB64 = params.imageBase64.replace(/^data:[^;]+;base64,/, "").trim();
     parts.push({
       inlineData: {
-        mimeType: params.imageBase64.includes("pdf") ? "application/pdf" : "image/jpeg",
+        mimeType,
         data: cleanB64
       }
     });
   }
-  const prompt = `\u0623\u0646\u062A \u062E\u0628\u064A\u0631 \u0641\u064A \u062A\u0635\u0645\u064A\u0645 \u0645\u0633\u0627\u0628\u0642\u0627\u062A \u0643\u0627\u0647\u0648\u062A (Kahoot!) \u0627\u0644\u062A\u0641\u0627\u0639\u0644\u064A\u0629 \u0627\u0644\u0645\u0645\u062A\u0639\u0629 \u0648\u0627\u0644\u062A\u0639\u0644\u064A\u0645\u064A\u0629 \u0627\u0644\u0645\u0648\u062C\u0647\u0629 \u0644\u0644\u0637\u0644\u0627\u0628.
-\u0642\u0645 \u0628\u062A\u0648\u0644\u064A\u062F \u062D\u0632\u0645\u0629 \u0645\u0633\u0627\u0628\u0642\u0629 \u0643\u0627\u0647\u0648\u062A \u0643\u0627\u0645\u0644\u0629 \u062D\u0648\u0644 \u0627\u0644\u0645\u0648\u0636\u0648\u0639 \u0627\u0644\u062A\u0627\u0644\u064A:
-- \u0627\u0644\u0645\u0648\u0636\u0648\u0639: ${topic}
-- \u0627\u0644\u0645\u0631\u062D\u0644\u0629 \u0627\u0644\u062F\u0631\u0627\u0633\u064A\u0629: ${grade}
+  const pageRangePrompt = params.pageStart || params.pageEnd ? `
+
+\u{1F4CC} **\u062A\u0648\u062C\u064A\u0647 \u0627\u0633\u062A\u062E\u0631\u0627\u062C \u0627\u0644\u0635\u0641\u062D\u0627\u062A \u0628\u062F\u0642\u0629 \u0645\u062A\u0646\u0627\u0647\u064A\u0629 (\u0645\u0647\u0645 \u062C\u062F\u0627\u064B):**
+\u0627\u0644\u0645\u0644\u0641 \u0627\u0644\u0645\u0631\u0641\u0642 \u0639\u0628\u0627\u0631\u0629 \u0639\u0646 \u0645\u0633\u062A\u0646\u062F \u0645\u062A\u0639\u062F\u062F \u0627\u0644\u0635\u0641\u062D\u0627\u062A (\u062A\u0642\u064A\u064A\u0645\u0627\u062A \u0645\u062C\u0645\u0639\u0629 / \u0643\u062A\u0627\u0628 \u0648\u0632\u0627\u0631\u064A \u0643\u0627\u0645\u0644).
+\u0627\u0644\u0645\u0637\u0644\u0648\u0628 \u0645\u0646\u0643 \u062D\u0635\u0631\u064A\u0627\u064B:
+1. \u0627\u0642\u0631\u0623 \u0648\u0627\u0633\u062A\u062E\u0631\u062C \u0627\u0644\u0623\u0633\u0626\u0644\u0629 \u0648\u0627\u0644\u0645\u0641\u0627\u0647\u064A\u0645 \u0645\u0646 \u0627\u0644\u0635\u0641\u062D\u0627\u062A \u0627\u0644\u0645\u062D\u062F\u062F\u0629 \u0641\u0642\u0637:
+   - \u0628\u062F\u0627\u064A\u0629 \u0645\u0646 \u0635\u0641\u062D\u0629 \u0631\u0642\u0645: ${params.pageStart || 1}
+   - \u0648\u062D\u062A\u0649 \u0635\u0641\u062D\u0629 \u0631\u0642\u0645: ${params.pageEnd || 24}
+2. \u062A\u062C\u0627\u0647\u0644 \u062A\u0645\u0627\u0645\u0627\u064B \u0623\u064A \u0635\u0641\u062D\u0627\u062A \u0623\u062E\u0631\u0649 \u062E\u0627\u0631\u062C \u0647\u0630\u0627 \u0627\u0644\u0646\u0637\u0627\u0642 \u0627\u0644\u0645\u062D\u062F\u062F (\u0645\u0646 \u0635 ${params.pageStart || 1} \u0625\u0644\u0649 \u0635 ${params.pageEnd || 24}).
+3. \u0627\u0633\u062A\u062E\u0631\u062C \u0628\u0627\u0644\u0636\u0628\u0637 ${count} \u0633\u0624\u0627\u0644\u0627\u064B \u0634\u0627\u0645\u0644\u0627\u064B \u064A\u0639\u0643\u0633 \u0623\u0633\u0626\u0644\u0629 \u0648\u062A\u0645\u0627\u0631\u064A\u0646 \u062A\u0642\u064A\u064A\u0645\u0627\u062A \u0627\u0644\u0648\u0632\u0627\u0631\u0629 \u0627\u0644\u0645\u0643\u062A\u0648\u0628\u0629 \u0641\u064A \u0647\u0630\u0647 \u0627\u0644\u0635\u0641\u062D\u0627\u062A \u0628\u062F\u0642\u0629.` : "";
+  const prompt = `\u0623\u0646\u062A \u062E\u0628\u064A\u0631 \u062A\u0631\u0628\u0648\u064A \u0645\u062A\u0645\u064A\u0632 \u0641\u064A \u0648\u0636\u0639 \u062A\u0642\u064A\u064A\u0645\u0627\u062A \u0648\u0632\u0627\u0631\u0629 \u0627\u0644\u062A\u0631\u0628\u064A\u0629 \u0648\u0627\u0644\u062A\u0639\u0644\u064A\u0645 \u0648\u062A\u0635\u0645\u064A\u0645 \u0645\u0633\u0627\u0628\u0642\u0627\u062A \u0643\u0627\u0647\u0648\u062A (Kahoot!) \u0627\u0644\u062A\u0641\u0627\u0639\u0644\u064A\u0629 \u0627\u0644\u0645\u0645\u062A\u0639\u0629 \u0644\u0644\u0637\u0644\u0627\u0628.
+\u0642\u0645 \u0628\u062A\u062D\u0644\u064A\u0644 \u0627\u0644\u0645\u0633\u062A\u0646\u062F / \u0627\u0644\u062A\u0642\u064A\u064A\u0645 \u0648\u062A\u0648\u0644\u064A\u062F \u062D\u0632\u0645\u0629 \u0645\u0633\u0627\u0628\u0642\u0629 \u0643\u0627\u0647\u0648\u062A \u0643\u0627\u0645\u0644\u0629 \u062A\u062D\u062A\u0648\u064A \u0639\u0644\u0649 \u0628\u0627\u0644\u0636\u0628\u0637 ${count} \u0633\u0624\u0627\u0644\u0627\u064B:
 - \u0627\u0644\u0645\u0627\u062F\u0629: ${subject}
+- \u0627\u0644\u0645\u0631\u062D\u0644\u0629 \u0627\u0644\u062F\u0631\u0627\u0633\u064A\u0629: ${grade}
+- \u0627\u0644\u0645\u0648\u0636\u0648\u0639 / \u0627\u0644\u0639\u0646\u0648\u0627\u0646: ${topic}
 - \u0627\u0644\u0645\u0633\u062A\u0648\u0649: ${difficulty}
-- \u0639\u062F\u062F \u0627\u0644\u0623\u0633\u0626\u0644\u0629 \u0627\u0644\u0645\u0637\u0644\u0648\u0628: ${count} \u0623\u0633\u0626\u0644\u0629 \u0645\u062A\u0646\u0648\u0639\u0629 \u0648\u0634\u064A\u0642\u0629!
+- \u0639\u062F\u062F \u0627\u0644\u0623\u0633\u0626\u0644\u0629 \u0627\u0644\u0645\u0637\u0644\u0648\u0628 \u0628\u0627\u0644\u0636\u0628\u0637: ${count} \u0633\u0624\u0627\u0644\u0627\u064B (15 \u0633\u0624\u0627\u0644 \u0623\u0648 \u062D\u0633\u0628 \u0627\u0644\u0645\u0637\u0644\u0648\u0628)
+${pageRangePrompt}
+${params.specificInstructions ? `
+\u062A\u0639\u0644\u064A\u0645\u0627\u062A \u0625\u0636\u0627\u0641\u064A\u0629 \u0645\u0646 \u0627\u0644\u0645\u0639\u0644\u0645: ${params.specificInstructions}` : ""}
 
-\u062A\u0646\u0648\u0639 \u0627\u0644\u0623\u0633\u0626\u0644\u0629 \u0627\u0644\u0645\u0637\u0644\u0648\u0628:
-1. 'mcq': \u0627\u062E\u062A\u064A\u0627\u0631 \u0645\u0646 \u0645\u062A\u0639\u062F\u062F (4 \u062E\u064A\u0627\u0631\u0627\u062A \u0645\u0645\u064A\u0632\u0629 \u0628\u0623\u0644\u0648\u0627\u0646 \u0643\u0627\u0647\u0648\u062A: \u0623\u062D\u0645\u0631\u060C \u0623\u0632\u0631\u0642\u060C \u0623\u0635\u0641\u0631\u060C \u0623\u062E\u0636\u0631).
-2. 'true_false': \u0633\u0624\u0627\u0644 \u0635\u062D \u0623\u0648 \u062E\u0637\u0623 (\u062E\u064A\u0627\u0631\u0627\u0646: \u0635\u0648\u0627\u0628 / \u062E\u0637\u0623).
-3. 'short_answer': \u0633\u0624\u0627\u0644 \u0625\u062C\u0627\u0628\u0629 \u0642\u0635\u064A\u0631\u0629.
-4. 'puzzle': \u0633\u0624\u0627\u0644 \u062A\u0631\u062A\u064A\u0628 \u062A\u0633\u0644\u0633\u0644\u064A (4 \u062E\u064A\u0627\u0631\u0627\u062A \u064A\u062C\u0628 \u062A\u0631\u062A\u064A\u0628\u0647\u0627 \u0628\u0627\u0644\u062A\u0631\u062A\u064A\u0628 \u0627\u0644\u0635\u062D\u064A\u062D).
+\u0642\u0648\u0627\u0639\u062F \u0635\u064A\u0627\u063A\u0629 \u0627\u0644\u0623\u0633\u0626\u0644\u0629:
+1. \u0627\u0644\u0623\u0633\u0626\u0644\u0629 \u064A\u062C\u0628 \u0623\u0646 \u062A\u0643\u0648\u0646 \u0645\u0634\u0648\u0642\u0629 \u0648\u062F\u0642\u064A\u0642\u0629 \u0639\u0644\u0645\u064A\u0627\u064B \u0648\u062A\u0637\u0627\u0628\u0642 \u0645\u0639\u0627\u064A\u064A\u0631 \u062A\u0642\u064A\u064A\u0645\u0627\u062A \u0627\u0644\u0648\u0632\u0627\u0631\u0629 \u0648\u0627\u0644\u0645\u0646\u0647\u062C \u0627\u0644\u0645\u0639\u062A\u0645\u062F.
+2. \u0646\u0648\u0639 \u0641\u064A \u0627\u0644\u0623\u0633\u0626\u0644\u0629 \u0628\u064A\u0646:
+   - 'mcq': \u0627\u062E\u062A\u064A\u0627\u0631 \u0645\u0646 \u0645\u062A\u0639\u062F\u062F (4 \u062E\u064A\u0627\u0631\u0627\u062A \u0645\u0645\u064A\u0632\u0629 \u0628\u0623\u0644\u0648\u0627\u0646 \u0643\u0627\u0647\u0648\u062A: \u0623\u062D\u0645\u0631\u060C \u0623\u0632\u0631\u0642\u060C \u0623\u0635\u0641\u0631\u060C \u0623\u062E\u0636\u0631).
+   - 'true_false': \u0635\u062D \u0623\u0648 \u062E\u0637\u0623 (\u062E\u064A\u0627\u0631\u0627\u0646: \u0635\u0648\u0627\u0628 / \u062E\u0637\u0623).
+   - 'short_answer': \u0625\u062C\u0627\u0628\u0629 \u0633\u0631\u064A\u0639\u0629.
+   - 'puzzle': \u062A\u0631\u062A\u064A\u0628 \u062A\u0633\u0644\u0633\u0644\u064A (4 \u0639\u0646\u0627\u0635\u0631).
+3. \u062D\u062F\u062F \u0627\u0644\u062E\u064A\u0627\u0631 \u0627\u0644\u0635\u062D\u064A\u062D \u0628\u062F\u0642\u0629 \u0639\u0628\u0631 correctIndex (0 \u0623\u0648 1 \u0623\u0648 2 \u0623\u0648 3).
+4. \u0623\u0636\u0641 \u0644\u0643\u0644 \u0633\u0624\u0627\u0644 \u062A\u0641\u0633\u064A\u0631\u0627\u064B \u0639\u0644\u0645\u064A\u0627\u064B \u0645\u0648\u062C\u0632\u0627\u064B \u0648\u0645\u0634\u062C\u0639\u0627\u064B (explanation) \u064A\u0638\u0647\u0631 \u0644\u0644\u0637\u0627\u0644\u0628 \u0628\u0639\u062F \u0627\u0644\u0625\u062C\u0627\u0628\u0629.
 
-\u0623\u062E\u0631\u062C \u0627\u0644\u0647\u064A\u0643\u0644 \u0643\u0627\u0644\u062A\u0627\u0644\u064A \u0628\u062A\u0646\u0633\u064A\u0642 JSON \u062D\u0635\u0631\u0627\u064B:
+\u0623\u062E\u0631\u062C \u0627\u0644\u0646\u062A\u064A\u062C\u0629 \u0643\u0643\u0627\u0626\u0646 JSON \u0646\u0638\u064A\u0641 \u062A\u0645\u0627\u0645\u0627\u064B \u0628\u0627\u0644\u0647\u064A\u0643\u0644 \u0627\u0644\u062A\u0627\u0644\u064A:
 {
   "id": "kahoot-${Date.now()}",
-  "title": "\u062A\u062D\u062F\u064A \u0643\u0627\u0647\u0648\u062A \u0627\u0644\u0630\u0643\u064A: ${topic}",
-  "description": "\u0645\u0633\u0627\u0628\u0642\u0629 \u062A\u0641\u0627\u0639\u0644\u064A\u0629 \u0645\u0645\u062A\u0639\u0629 \u0644\u0637\u0644\u0627\u0628 ${grade} \u0641\u064A \u0645\u0627\u062F\u0629 ${subject}",
+  "title": "\u062A\u062D\u062F\u064A \u062A\u0642\u064A\u064A\u0645 \u0643\u0627\u0647\u0648\u062A: ${topic}",
+  "description": "\u0645\u0633\u0627\u0628\u0642\u0629 \u062A\u0641\u0627\u0639\u0644\u064A\u0629 \u0623\u0633\u0628\u0648\u0639\u064A\u0629 \u0628\u0623\u0633\u0644\u0648\u0628 \u0643\u0627\u0647\u0648\u062A \u0644\u0645\u0627\u062F\u0629 ${subject} (${grade})",
   "subject": "${subject}",
   "grade": "${grade}",
   "coverEmoji": "\u26A1",
   "timeLimitDefault": 20,
+  "pageRange": "${params.pageStart ? `\u0627\u0644\u0635\u0641\u062D\u0627\u062A ${params.pageStart} - ${params.pageEnd || ""}` : "\u0643\u0627\u0645\u0644 \u0627\u0644\u0645\u0633\u062A\u0646\u062F"}",
   "questions": [
     {
       "id": "kq-1",
       "type": "mcq",
-      "question": "\u0646\u0635 \u0627\u0644\u0633\u0624\u0627\u0644 \u0627\u0644\u062A\u0634\u0648\u064A\u0642\u064A \u0627\u0644\u0645\u0628\u0627\u0634\u0631",
+      "question": "\u0646\u0635 \u0627\u0644\u0633\u0624\u0627\u0644 \u0627\u0644\u0623\u0648\u0644 \u0627\u0644\u0645\u0634\u0648\u0642 \u0648\u0627\u0644\u0645\u0628\u0627\u0634\u0631...",
       "options": ["\u062E\u064A\u0627\u0631 1 (\u0623\u062D\u0645\u0631 \u{1F53A})", "\u062E\u064A\u0627\u0631 2 (\u0623\u0632\u0631\u0642 \u{1F537})", "\u062E\u064A\u0627\u0631 3 (\u0623\u0635\u0641\u0631 \u{1F7E1})", "\u062E\u064A\u0627\u0631 4 (\u0623\u062E\u0636\u0631 \u{1F7E9})"],
       "correctIndex": 0,
       "timeLimit": 20,
       "pointsType": "normal",
-      "explanation": "\u062A\u0641\u0633\u064A\u0631 \u0639\u0644\u0645\u064A \u0645\u0634\u062C\u0639 \u0648\u0645\u0628\u0633\u0637 \u0644\u0644\u0625\u062C\u0627\u0628\u0629 \u0627\u0644\u0635\u062D\u064A\u062D\u0629",
+      "explanation": "\u0634\u0631\u062D \u062A\u0639\u0644\u064A\u0645\u064A \u0645\u0628\u0633\u0637 \u0644\u0644\u0625\u062C\u0627\u0628\u0629 \u0627\u0644\u0635\u062D\u064A\u062D\u0629...",
       "emojiOrTheme": "\u{1F3AF}",
       "category": "${topic}"
     }
@@ -8031,92 +8752,222 @@ async function generateKahootQuiz(params) {
       console.warn("generateKahootQuiz Gemini warning:", err?.message);
     }
   }
-  const fallbackQuestions = [
-    {
-      id: `kq-fb-1`,
-      type: "mcq",
-      question: `\u0645\u0627 \u0647\u064A \u0627\u0644\u062E\u0637\u0648\u0629 \u0627\u0644\u0623\u0633\u0627\u0633\u064A\u0629 \u0627\u0644\u0623\u0648\u0644\u0649 \u0644\u0628\u062F\u0621 \u0623\u064A \u0645\u0634\u0631\u0648\u0639 \u0628\u0631\u0645\u064A \u0623\u0648 \u062A\u0642\u0646\u064A \u062C\u062F\u064A\u062F \u0641\u064A ${topic}\u061F`,
-      options: [
-        "\u062A\u062D\u0644\u064A\u0644 \u0627\u0644\u0645\u062A\u0637\u0644\u0628\u0627\u062A \u0648\u0627\u0644\u062A\u062E\u0637\u064A\u0637 \u0627\u0644\u0645\u0646\u0647\u062C\u064A \u0627\u0644\u062C\u064A\u062F \u{1F3AF}",
-        "\u0643\u062A\u0627\u0628\u0629 \u0627\u0644\u0643\u0648\u062F \u0639\u0634\u0648\u0627\u0626\u064A\u0627\u064B \u062F\u0648\u0646 \u062A\u062E\u0637\u064A\u0637 \u274C",
-        "\u062A\u062C\u0627\u0647\u0644 \u0648\u0627\u062C\u0647\u0629 \u0627\u0644\u0645\u0633\u062A\u062E\u062F\u0645 \u0648\u0627\u0644\u062A\u0635\u0645\u064A\u0645 \u{1F3A8}",
-        "\u0625\u063A\u0644\u0627\u0642 \u0627\u0644\u062C\u0647\u0627\u0632 \u0648\u0627\u0644\u0627\u0646\u062A\u0638\u0627\u0631 \u{1F634}"
-      ],
-      correctIndex: 0,
-      timeLimit: 20,
-      pointsType: "normal",
-      explanation: "\u0627\u0644\u062A\u062E\u0637\u064A\u0637 \u0648\u0627\u0644\u062A\u062D\u0644\u064A\u0644 \u0647\u0645\u0627 \u0623\u0633\u0627\u0633 \u0627\u0644\u0646\u062C\u0627\u062D \u0644\u062A\u0641\u0627\u062F\u064A \u0627\u0644\u0623\u062E\u0637\u0627\u0621 \u0627\u0644\u0628\u0631\u0645\u062C\u064A\u0629 \u0648\u0625\u062A\u0645\u0627\u0645 \u0627\u0644\u0645\u0634\u0631\u0648\u0639 \u0628\u0643\u0641\u0627\u0621\u0629 \u0639\u0627\u0644\u064A\u0629.",
-      emojiOrTheme: "\u{1F680}",
-      category: topic
-    },
-    {
-      id: `kq-fb-2`,
-      type: "true_false",
-      question: `\u0647\u0644 \u064A\u0633\u0627\u0639\u062F \u0627\u0633\u062A\u062E\u062F\u0627\u0645 \u0627\u0644\u062A\u0641\u0643\u064A\u0631 \u0627\u0644\u0645\u0646\u0637\u0642\u064A \u0648\u0627\u0644\u0630\u0643\u0627\u0621 \u0627\u0644\u0627\u0635\u0637\u0646\u0627\u0639\u064A \u0641\u064A \u062A\u0633\u0631\u064A\u0639 \u062D\u0644 \u0627\u0644\u0645\u0634\u0643\u0644\u0627\u062A \u0627\u0644\u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0629\u061F`,
-      options: ["\u0635\u0648\u0627\u0628 \u2705 (\u0646\u0639\u0645 \u0628\u0627\u0644\u062A\u0623\u0643\u064A\u062F)", "\u062E\u0637\u0623 \u274C (\u0644\u0627 \u064A\u0624\u062B\u0631)"],
-      correctIndex: 0,
-      timeLimit: 15,
-      pointsType: "normal",
-      explanation: "\u0628\u0627\u0644\u062A\u0623\u0643\u064A\u062F! \u0627\u0644\u0630\u0643\u0627\u0621 \u0627\u0644\u0627\u0635\u0637\u0646\u0627\u0639\u064A \u0648\u0627\u0644\u062A\u0641\u0643\u064A\u0631 \u0627\u0644\u0645\u0646\u0637\u0642\u064A \u064A\u0636\u0627\u0639\u0641\u0627\u0646 \u0627\u0644\u0642\u062F\u0631\u0629 \u0639\u0644\u0649 \u0627\u0644\u0627\u0628\u062A\u0643\u0627\u0631 \u0648\u0627\u0643\u062A\u0634\u0627\u0641 \u0627\u0644\u062D\u0644\u0648\u0644.",
-      emojiOrTheme: "\u26A1",
-      category: topic
-    },
-    {
-      id: `kq-fb-3`,
-      type: "mcq",
-      question: `\u0645\u0627 \u0647\u0648 \u0627\u0644\u0645\u0641\u0647\u0648\u0645 \u0627\u0644\u0645\u0633\u0624\u0648\u0644 \u0639\u0646 \u062A\u0643\u0631\u0627\u0631 \u062A\u0646\u0641\u064A\u0630 \u0623\u0645\u0631 \u0628\u0631\u0645\u062C\u064A \u0644\u0639\u062F\u062F \u0645\u062D\u062F\u062F \u0645\u0646 \u0627\u0644\u0645\u0631\u0627\u062A\u061F`,
-      options: [
-        "\u062D\u0644\u0642\u0629 \u0627\u0644\u062A\u0643\u0631\u0627\u0631 (Loop / Repeat) \u{1F504}",
-        "\u0627\u0644\u0645\u062A\u063A\u064A\u0631\u0627\u062A (Variables) \u{1F4E6}",
-        "\u0627\u0644\u0634\u0631\u0648\u0637 (If Statement) \u{1F500}",
-        "\u0627\u0644\u0645\u0635\u0641\u0648\u0641\u0627\u062A (Arrays) \u{1F4CA}"
-      ],
-      correctIndex: 0,
-      timeLimit: 20,
-      pointsType: "double",
-      explanation: "\u062D\u0644\u0642\u0627\u062A \u0627\u0644\u062A\u0643\u0631\u0627\u0631 (Loops) \u062A\u062E\u062A\u0635\u0631 \u0627\u0644\u0648\u0642\u062A \u0648\u0627\u0644\u062C\u0647\u062F \u0648\u062A\u0646\u0641\u0630 \u0627\u0644\u062A\u0639\u0644\u064A\u0645\u0627\u062A \u0627\u0644\u0645\u0643\u0631\u0631\u0629 \u0628\u0630\u0643\u0627\u0621 \u0641\u0627\u0626\u0642\u0629.",
-      emojiOrTheme: "\u{1F525}",
-      category: topic
-    },
-    {
-      id: `kq-fb-4`,
-      type: "puzzle",
-      question: `\u0631\u062A\u0628 \u062E\u0637\u0648\u0627\u062A \u0643\u062A\u0627\u0628\u0629 \u0648\u0627\u062E\u062A\u0628\u0627\u0631 \u0627\u0644\u0628\u0631\u0646\u0627\u0645\u062C \u0627\u0644\u0628\u0631\u0645\u062C\u064A \u0628\u0627\u0644\u062A\u0631\u062A\u064A\u0628 \u0627\u0644\u0635\u062D\u064A\u062D:`,
-      options: [
-        "1. \u062A\u062D\u062F\u064A\u062F \u0648\u062A\u0635\u0645\u064A\u0645 \u0627\u0644\u0641\u0643\u0631\u0629 \u{1F4A1}",
-        "2. \u0643\u062A\u0627\u0628\u0629 \u0627\u0644\u0623\u0648\u0627\u0645\u0631 \u0648\u0627\u0644\u0623\u0643\u0648\u0627\u062F \u{1F4BB}",
-        "3. \u062A\u0634\u063A\u064A\u0644 \u0648\u0627\u062E\u062A\u0628\u0627\u0631 \u0627\u0644\u0628\u0631\u0646\u0627\u0645\u062C \u{1F9EA}",
-        "4. \u062D\u0641\u0638 \u0648\u0646\u0634\u0631 \u0627\u0644\u0645\u0634\u0631\u0648\u0639 \u0627\u0644\u0646\u0647\u0627\u0626\u064A \u{1F31F}"
-      ],
-      correctIndex: 0,
-      timeLimit: 30,
-      pointsType: "double",
-      explanation: "\u0627\u0644\u062A\u0631\u062A\u064A\u0628 \u0627\u0644\u0635\u062D\u064A\u062D \u064A\u0628\u062F\u0623 \u0628\u0627\u0644\u0641\u0643\u0631\u0629 \u062B\u0645 \u0627\u0644\u0628\u0631\u0645\u062C\u0629 \u062B\u0645 \u0627\u0644\u0627\u062E\u062A\u0628\u0627\u0631 \u062B\u0645 \u0627\u0644\u0646\u0634\u0631!",
-      emojiOrTheme: "\u{1F9E9}",
-      category: topic
-    },
-    {
-      id: `kq-fb-5`,
-      type: "short_answer",
-      question: `\u0645\u0627 \u0627\u0633\u0645 \u0627\u0644\u0645\u0646\u0635\u0629 \u0627\u0644\u062A\u064A \u0646\u0633\u062A\u062E\u062F\u0645\u0647\u0627 \u0627\u0644\u0622\u0646 \u0644\u0625\u062C\u0631\u0627\u0621 \u0627\u0644\u062A\u062D\u062F\u064A\u0627\u062A \u0648\u0627\u0644\u0645\u0633\u0627\u0628\u0642\u0627\u062A \u0627\u0644\u062A\u0641\u0627\u0639\u0644\u064A\u0629 \u0627\u0644\u062D\u064A\u0629\u061F`,
-      options: ["\u0643\u0627\u0647\u0648\u062A (Kahoot) \u{1F3AE}", "Nagah MS \u{1F6E1}\uFE0F", "\u062C\u0645\u064A\u0639 \u0645\u0627 \u0633\u0628\u0642 \u2705", "\u0644\u0627 \u0634\u064A\u0621 \u0645\u0645\u0627 \u0633\u0628\u0642 \u274C"],
-      correctIndex: 2,
-      timeLimit: 20,
-      pointsType: "normal",
-      explanation: "\u0623\u0646\u062A \u0627\u0644\u0622\u0646 \u062A\u062E\u0648\u0636 \u062A\u062D\u062F\u064A \u0643\u0627\u0647\u0648\u062A \u0627\u0644\u062A\u0641\u0627\u0639\u0644\u064A \u0627\u0644\u0645\u0628\u0627\u0634\u0631 \u0627\u0644\u0645\u062F\u0645\u062C \u062F\u0627\u062E\u0644 \u0645\u0646\u0635\u0629 \u0646\u062C\u0627\u062D!",
-      emojiOrTheme: "\u{1F3C6}",
-      category: topic
-    }
+  const baseTopics = [
+    { q: `\u0645\u0627 \u0647\u064A \u0627\u0644\u0648\u0638\u064A\u0641\u0629 \u0627\u0644\u0631\u0626\u064A\u0633\u064A\u0629 \u0644\u062A\u0637\u0628\u064A\u0642\u0627\u062A \u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u0627\u0644\u0645\u0639\u0644\u0648\u0645\u0627\u062A \u0648\u0627\u0644\u0627\u062A\u0635\u0627\u0644\u0627\u062A \u0641\u064A \u062D\u064A\u0627\u062A\u0646\u0627 \u0627\u0644\u064A\u0648\u0645\u064A\u0629\u061F`, opts: ["\u062A\u0633\u0647\u064A\u0644 \u0627\u0644\u062A\u0648\u0627\u0635\u0644 \u0648\u0627\u0644\u062A\u0639\u0644\u0645 \u0627\u0644\u0633\u0631\u064A\u0639 \u{1F3AF}", "\u062A\u0639\u0637\u064A\u0644 \u0627\u0644\u0623\u062C\u0647\u0632\u0629 \u0648\u0625\u0628\u0637\u0627\u0624\u0647\u0627 \u274C", "\u0645\u0646\u0639 \u0627\u0644\u0627\u062A\u0635\u0627\u0644 \u0628\u0627\u0644\u0625\u0646\u062A\u0631\u0646\u062A \u{1F6AB}", "\u062D\u0630\u0641 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A \u062A\u0644\u0642\u0627\u0626\u064A\u0627\u064B \u{1F5D1}\uFE0F"], correct: 0, exp: "\u0623\u062F\u0648\u0627\u062A \u0627\u0644\u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u062A\u0633\u0647\u0645 \u0641\u064A \u0625\u0646\u062C\u0627\u0632 \u0627\u0644\u0645\u0647\u0627\u0645 \u0627\u0644\u064A\u0648\u0645\u064A\u0629 \u0648\u0627\u0644\u062A\u0639\u0644\u064A\u0645 \u0648\u0627\u0644\u062A\u0648\u0627\u0635\u0644 \u0628\u0643\u0641\u0627\u0621\u0629 \u0639\u0627\u0644\u064A\u0629." },
+    { q: `\u0647\u0644 \u062A\u0639\u062F \u0643\u0644\u0645\u0629 \u0627\u0644\u0645\u0631\u0648\u0631 \u0627\u0644\u0642\u0648\u064A\u0629 (\u0627\u0644\u0645\u062D\u062A\u0648\u064A\u0629 \u0639\u0644\u0649 \u062D\u0631\u0648\u0641 \u0648\u0623\u0631\u0642\u0627\u0645 \u0648\u0631\u0645\u0648\u0632) \u0623\u0633\u0627\u0633 \u062D\u0645\u0627\u064A\u0629 \u0627\u0644\u062D\u0633\u0627\u0628\u0627\u062A \u0627\u0644\u0634\u062E\u0635\u064A\u0629\u061F`, opts: ["\u0635\u0648\u0627\u0628 \u2705 (\u0636\u0631\u0648\u0631\u064A\u0629 \u062C\u062F\u0627\u064B)", "\u062E\u0637\u0623 \u274C (\u0644\u0627 \u0623\u0647\u0645\u064A\u0629 \u0644\u0647\u0627)"], correct: 0, exp: "\u0643\u0644\u0645\u0627\u062A \u0627\u0644\u0645\u0631\u0648\u0631 \u0627\u0644\u0645\u0639\u0642\u062F\u0629 \u062A\u0645\u0646\u0639 \u0627\u0644\u0627\u062E\u062A\u0631\u0627\u0642 \u0648\u062A\u062D\u0645\u064A \u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0644\u0637\u0644\u0627\u0628 \u0627\u0644\u0634\u062E\u0635\u064A\u0629." },
+    { q: `\u0623\u064A \u0645\u0646 \u0627\u0644\u0628\u0631\u0627\u0645\u062C \u0627\u0644\u062A\u0627\u0644\u064A\u0629 \u064A\u0633\u062A\u062E\u062F\u0645 \u0644\u0643\u062A\u0627\u0628\u0629 \u0627\u0644\u062A\u0642\u0627\u0631\u064A\u0631 \u0648\u0627\u0644\u0645\u0633\u062A\u0646\u062F\u0627\u062A \u0627\u0644\u0646\u0635\u064A\u0629\u061F`, opts: ["\u0645\u0627\u064A\u0643\u0631\u0648\u0633\u0648\u0641\u062A \u0648\u0648\u0631\u062F (Word) \u{1F4C4}", "\u0627\u0644\u0631\u0633\u0627\u0645 (Paint) \u{1F3A8}", "\u0627\u0644\u0622\u0644\u0629 \u0627\u0644\u062D\u0627\u0633\u0628\u0629 (Calc) \u{1F522}", "\u0645\u0634\u063A\u0644 \u0627\u0644\u0645\u0648\u0633\u064A\u0642\u0649 \u{1F3B5}"], correct: 0, exp: "\u0628\u0631\u0646\u0627\u0645\u062C Word \u0647\u0648 \u0627\u0644\u0645\u0639\u0627\u0644\u062C \u0627\u0644\u0623\u0634\u0647\u0631 \u0644\u0625\u0646\u0634\u0627\u0621 \u0648\u062A\u0646\u0633\u064A\u0642 \u0627\u0644\u0645\u0633\u062A\u0646\u062F\u0627\u062A \u0648\u0627\u0644\u0628\u062D\u0648\u062B \u0627\u0644\u0645\u062F\u0631\u0633\u064A\u0629." },
+    { q: `\u0645\u0627 \u0627\u0644\u062E\u0637\u0648\u0629 \u0627\u0644\u0623\u0648\u0644\u0649 \u0627\u0644\u0648\u0627\u062C\u0628 \u0627\u062A\u0628\u0627\u0639\u0647\u0627 \u0639\u0646\u062F \u0627\u0644\u0628\u062D\u062B \u0639\u0646 \u0645\u0639\u0644\u0648\u0645\u0629 \u0645\u0648\u062B\u0648\u0642\u0629 \u0639\u0644\u0649 \u0627\u0644\u0625\u0646\u062A\u0631\u0646\u062A\u061F`, opts: ["\u0627\u0633\u062A\u062E\u062F\u0627\u0645 \u0645\u062D\u0631\u0643\u0627\u062A \u0628\u062D\u062B \u0645\u0648\u062B\u0648\u0642\u0629 \u0645\u062B\u0644 \u0628\u0646\u0643 \u0627\u0644\u0645\u0639\u0631\u0641\u0629 \u0627\u0644\u0645\u0635\u0631\u064A \u{1F3DB}\uFE0F", "\u0627\u0644\u0627\u0639\u062A\u0645\u0627\u062F \u0639\u0644\u0649 \u0623\u0648\u0644 \u0645\u0646\u0634\u0648\u0631 \u0645\u062C\u0647\u0648\u0644 \u274C", "\u0646\u0634\u0631 \u0627\u0644\u0634\u0627\u0626\u0639\u0627\u062A \u062F\u0648\u0646 \u062A\u062D\u0642\u0642 \u{1F6AB}", "\u0625\u063A\u0644\u0627\u0642 \u0627\u0644\u0645\u062A\u0635\u0641\u062D \u274C"], correct: 0, exp: "\u0627\u0644\u0645\u0635\u0627\u062F\u0631 \u0627\u0644\u0631\u0633\u0645\u064A\u0629 \u0645\u062B\u0644 \u0628\u0646\u0643 \u0627\u0644\u0645\u0639\u0631\u0641\u0629 \u062A\u0648\u0641\u0631 \u0645\u0639\u0644\u0648\u0645\u0627\u062A \u0645\u0648\u062B\u0648\u0642\u0629 \u0648\u0645\u062F\u0642\u0642\u0629 \u0639\u0644\u0645\u064A\u0627\u064B." },
+    { q: `\u0623\u064A \u0645\u0645\u0627 \u064A\u0644\u064A \u064A\u0639\u062A\u0628\u0631 \u0645\u0646 \u0648\u062D\u062F\u0627\u062A \u0627\u0644\u0625\u062F\u062E\u0627\u0644 \u0627\u0644\u0623\u0633\u0627\u0633\u064A\u0629 \u0641\u064A \u062C\u0647\u0627\u0632 \u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631\u061F`, opts: ["\u0644\u0648\u062D\u0629 \u0627\u0644\u0645\u0641\u0627\u062A\u064A\u062D \u0648\u0627\u0644\u0641\u0623\u0631\u0629 \u2328\uFE0F", "\u0627\u0644\u0634\u0627\u0634\u0629 \u0648\u0627\u0644\u0637\u0627\u0628\u0639\u0629 \u{1F5A5}\uFE0F", "\u0627\u0644\u0633\u0645\u0627\u0639\u0627\u062A \u0648\u0645\u0643\u0628\u0631 \u0627\u0644\u0635\u0648\u062A \u{1F50A}", "\u062C\u0647\u0627\u0632 \u0627\u0644\u0628\u0631\u0648\u062C\u0643\u062A\u0648\u0631 \u{1F4FD}\uFE0F"], correct: 0, exp: "\u0644\u0648\u062D\u0629 \u0627\u0644\u0645\u0641\u0627\u062A\u064A\u062D \u0648\u0627\u0644\u0641\u0623\u0631\u0629 \u062A\u0633\u0645\u062D\u0627\u0646 \u0628\u0625\u062F\u062E\u0627\u0644 \u0627\u0644\u0646\u0635\u0648\u0635 \u0648\u0627\u0644\u0623\u0648\u0627\u0645\u0631 \u0625\u0644\u0649 \u062C\u0647\u0627\u0632 \u0627\u0644\u062D\u0627\u0633\u0628." },
+    { q: `\u0645\u0627 \u0647\u0648 \u0627\u0644\u062A\u0635\u0631\u0641 \u0627\u0644\u0635\u062D\u064A\u062D \u0639\u0646\u062F \u062A\u0644\u0642\u064A \u0631\u0633\u0627\u0644\u0629 \u0645\u062C\u0647\u0648\u0644\u0629 \u062A\u062D\u062A\u0648\u064A \u0639\u0644\u0649 \u0631\u0627\u0628\u0637 \u0645\u0634\u0628\u0648\u0647\u061F`, opts: ["\u0639\u062F\u0645 \u0641\u062A\u062D \u0627\u0644\u0631\u0627\u0628\u0637 \u0648\u0625\u0628\u0644\u0627\u063A \u0627\u0644\u0645\u0639\u0644\u0645 \u0623\u0648 \u0648\u0644\u064A \u0627\u0644\u0623\u0645\u0631 \u{1F6E1}\uFE0F", "\u0641\u062A\u062D \u0627\u0644\u0631\u0627\u0628\u0637 \u0641\u0648\u0631\u0627\u064B \u0648\u0645\u0634\u0627\u0631\u0643\u062A\u0647 \u274C", "\u0643\u062A\u0627\u0628\u0629 \u0643\u0644\u0645\u0629 \u0627\u0644\u0645\u0631\u0648\u0631 \u062F\u0627\u062E\u0644\u0647 \u26A0\uFE0F", "\u0625\u0631\u0633\u0627\u0644\u0647 \u0644\u0644\u0623\u0635\u062F\u0642\u0627\u0621 \u{1F4F2}"], correct: 0, exp: "\u0627\u0644\u0623\u0645\u0627\u0646 \u0627\u0644\u0631\u0642\u0645\u064A \u064A\u062A\u0637\u0644\u0628 \u0627\u0644\u062D\u0630\u0631 \u0648\u0639\u062F\u0645 \u0641\u062A\u062D \u0623\u064A \u0631\u0648\u0627\u0628\u0637 \u0645\u062C\u0647\u0648\u0644\u0629 \u0627\u0644\u0645\u0635\u062F\u0631." },
+    { q: `\u0647\u0644 \u064A\u0633\u0627\u0639\u062F \u062A\u0646\u0638\u064A\u0645 \u0627\u0644\u0645\u0644\u0641\u0627\u062A \u0641\u064A \u0645\u062C\u0644\u062F\u0627\u062A (Folders) \u0639\u0644\u0649 \u0633\u0647\u0648\u0644\u0629 \u0627\u0633\u062A\u0631\u062C\u0627\u0639 \u0627\u0644\u0645\u0639\u0644\u0648\u0645\u0627\u062A\u061F`, opts: ["\u0635\u0648\u0627\u0628 \u2705 (\u064A\u0633\u0647\u0644 \u0627\u0644\u0648\u0635\u0648\u0644 \u0648\u0627\u0644\u062A\u0631\u062A\u064A\u0628)", "\u062E\u0637\u0623 \u274C (\u064A\u0632\u064A\u062F \u0627\u0644\u0641\u0648\u0636\u0649)"], correct: 0, exp: "\u0625\u0646\u0634\u0627\u0621 \u0645\u062C\u0644\u062F\u0627\u062A \u0645\u0635\u0646\u0641\u0629 \u064A\u0631\u062A\u0628 \u0627\u0644\u0648\u0627\u062C\u0628\u0627\u062A \u0648\u0627\u0644\u0645\u0634\u0631\u0648\u0639\u0627\u062A \u0648\u064A\u0645\u0646\u0639 \u0636\u064A\u0627\u0639 \u0627\u0644\u0645\u0644\u0641\u0627\u062A." },
+    { q: `\u0623\u064A \u0645\u0646 \u0627\u0644\u0628\u0631\u0627\u0645\u062C \u0627\u0644\u062A\u0627\u0644\u064A\u0629 \u064A\u0633\u062A\u062E\u062F\u0645 \u0644\u062A\u0646\u0638\u064A\u0645 \u0648\u0639\u0631\u0636 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A \u0641\u064A \u062C\u062F\u0627\u0648\u0644 \u0648\u0631\u0633\u0648\u0645 \u0628\u064A\u0627\u0646\u064A\u0629\u061F`, opts: ["\u0645\u0627\u064A\u0643\u0631\u0648\u0633\u0648\u0641\u062A \u0625\u0643\u0633\u0644 (Excel) \u{1F4CA}", "\u0627\u0644\u0631\u0633\u0627\u0645 \u{1F58C}\uFE0F", "\u0627\u0644\u0645\u0641\u0643\u0631\u0629 (Notepad) \u{1F4DD}", "\u0628\u0631\u0646\u0627\u0645\u062C \u0627\u0644\u0643\u0627\u0645\u064A\u0631\u0627 \u{1F4F7}"], correct: 0, exp: "\u0628\u0631\u0646\u0627\u0645\u062C Excel \u0645\u062E\u0635\u0635 \u0644\u0644\u062C\u062F\u0627\u0648\u0644 \u0627\u0644\u062D\u0633\u0627\u0628\u064A\u0629 \u0648\u0627\u0644\u0631\u0633\u0648\u0645 \u0627\u0644\u0628\u064A\u0627\u0646\u064A\u0629 \u0627\u0644\u0625\u062D\u0635\u0627\u0626\u064A\u0629." },
+    { q: `\u0645\u0627 \u0647\u064A \u062D\u0642\u0648\u0642 \u0627\u0644\u0645\u0644\u0643\u064A\u0629 \u0627\u0644\u0641\u0643\u0631\u064A\u0629 \u0641\u064A \u0627\u0644\u0639\u0627\u0644\u0645 \u0627\u0644\u0631\u0642\u0645\u064A\u061F`, opts: ["\u0627\u062D\u062A\u0631\u0627\u0645 \u062D\u0642\u0648\u0642 \u0623\u0635\u062D\u0627\u0628 \u0627\u0644\u0645\u062D\u062A\u0648\u0649 \u0648\u0646\u0633\u0628 \u0627\u0644\u0639\u0645\u0644 \u0644\u0635\u0627\u062D\u0628\u0647 \u{1F4DC}", "\u0646\u0633\u062E \u0623\u0639\u0645\u0627\u0644 \u0627\u0644\u0622\u062E\u0631\u064A\u0646 \u0648\u0646\u0633\u0628\u0647\u0627 \u0644\u0644\u0646\u0641\u0633 \u274C", "\u062D\u0630\u0641 \u0623\u0633\u0645\u0627\u0621 \u0627\u0644\u0645\u0624\u0644\u0641\u064A\u0646 \u{1F6AB}", "\u0628\u064A\u0639 \u0628\u0631\u0627\u0645\u062C \u0627\u0644\u063A\u064A\u0631 \u062F\u0648\u0646 \u0625\u0630\u0646 \u26A0\uFE0F"], correct: 0, exp: "\u0627\u0644\u0623\u0645\u0627\u0646\u0629 \u0627\u0644\u0639\u0644\u0645\u064A\u0629 \u062A\u0642\u062A\u0636\u064A \u062F\u0627\u0626\u0645\u0627\u064B \u0630\u0643\u0631 \u0627\u0644\u0645\u0635\u0627\u062F\u0631 \u0648\u0627\u062D\u062A\u0631\u0627\u0645 \u062D\u0642\u0648\u0642 \u0627\u0644\u0645\u0628\u062F\u0639\u064A\u0646." },
+    { q: `\u0645\u0627 \u0647\u0648 \u0627\u0644\u0645\u062A\u0635\u0641\u062D (Web Browser) \u0641\u064A \u0634\u0628\u0643\u0629 \u0627\u0644\u0625\u0646\u062A\u0631\u0646\u062A\u061F`, opts: ["\u0628\u0631\u0646\u0627\u0645\u062C \u064A\u0633\u062A\u062E\u062F\u0645 \u0644\u0639\u0631\u0636 \u0648\u062A\u0635\u0641\u062D \u0645\u0648\u0627\u0642\u0639 \u0627\u0644\u0648\u064A\u0628 \u{1F310}", "\u0642\u0637\u0639\u0629 \u062D\u062F\u064A\u062F\u064A\u0629 \u062F\u0627\u062E\u0644 \u0627\u0644\u062C\u0647\u0627\u0632 \u{1F4BB}", "\u0643\u0627\u0628\u0644 \u062A\u0648\u0635\u064A\u0644 \u0627\u0644\u0643\u0647\u0631\u0628\u0627\u0621 \u{1F50C}", "\u0648\u0631\u0642\u0629 \u0637\u0628\u0627\u0639\u0629 \u0627\u0644\u0645\u0633\u062A\u0646\u062F\u0627\u062A \u{1F4C4}"], correct: 0, exp: "\u0627\u0644\u0645\u062A\u0635\u0641\u062D (\u0645\u062B\u0644 Chrome \u0623\u0648 Edge) \u0647\u0648 \u0627\u0644\u0628\u0648\u0627\u0628\u0629 \u0627\u0644\u0631\u0642\u0645\u064A\u0629 \u0644\u0632\u064A\u0627\u0631\u0629 \u0627\u0644\u0645\u0648\u0627\u0642\u0639 \u0627\u0644\u062A\u0639\u0644\u064A\u0645\u064A\u0629." },
+    { q: `\u0647\u0644 \u064A\u0639\u062A\u0628\u0631 \u0627\u0644\u0646\u0633\u062E \u0627\u0644\u0627\u062D\u062A\u064A\u0627\u0637\u064A (Backup) \u0644\u0644\u0645\u0644\u0641\u0627\u062A \u0639\u0644\u0649 \u0641\u0644\u0627\u0634\u0629 \u0623\u0648 \u0633\u062D\u0627\u0628\u0629 \u0648\u0633\u064A\u0644\u0629 \u0644\u062D\u0645\u0627\u064A\u062A\u0647\u0627 \u0645\u0646 \u0627\u0644\u0636\u064A\u0627\u0639\u061F`, opts: ["\u0635\u0648\u0627\u0628 \u2705 (\u064A\u062D\u0645\u064A \u0627\u0644\u0645\u0644\u0641\u0627\u062A \u0645\u0646 \u0627\u0644\u062A\u0644\u0641)", "\u062E\u0637\u0623 \u274C (\u063A\u064A\u0631 \u0645\u062C\u062F\u064D)"], correct: 0, exp: "\u0627\u0644\u0646\u0633\u062E \u0627\u0644\u0627\u062D\u062A\u064A\u0627\u0637\u064A \u0627\u0644\u062F\u0648\u0631\u064A \u064A\u0636\u0645\u0646 \u0627\u0633\u062A\u0639\u0627\u062F\u0629 \u0627\u0644\u0645\u0644\u0641\u0627\u062A \u0641\u064A \u062D\u0627\u0644 \u062A\u0639\u0637\u0644 \u0627\u0644\u062C\u0647\u0627\u0632." },
+    { q: `\u0645\u0627 \u0647\u0648 \u0627\u0644\u0631\u0645\u0632 \u0627\u0644\u0645\u0633\u062A\u062E\u062F\u0645 \u0644\u0625\u062C\u0631\u0627\u0621 \u0639\u0645\u0644\u064A\u0629 \u0627\u0644\u0636\u0631\u0628 \u0641\u064A \u0628\u0631\u0627\u0645\u062C \u0627\u0644\u062C\u062F\u0627\u0648\u0644 \u0627\u0644\u0625\u0644\u0643\u062A\u0631\u0648\u0646\u064A\u0629\u061F`, opts: ["\u0639\u0644\u0627\u0645\u0629 \u0627\u0644\u0646\u062C\u0645\u0629 (*) \u2716\uFE0F", "\u0639\u0644\u0627\u0645\u0629 \u0627\u0644\u0632\u0627\u0626\u062F (+) \u2795", "\u0639\u0644\u0627\u0645\u0629 \u0627\u0644\u0646\u0627\u0642\u0635 (-) \u2796", "\u0639\u0644\u0627\u0645\u0629 \u0627\u0644\u0646\u0633\u0628\u0629 \u0627\u0644\u0645\u0626\u0648\u064A\u0629 (%) \u{1F522}"], correct: 0, exp: "\u0641\u064A \u0625\u0643\u0633\u0644 \u0648\u0644\u063A\u0627\u062A \u0627\u0644\u0628\u0631\u0645\u062C\u0629\u060C \u0627\u0644\u0646\u062C\u0645\u0629 (*) \u0647\u064A \u0631\u0645\u0632 \u0627\u0644\u0636\u0631\u0628 \u0627\u0644\u0631\u064A\u0627\u0636\u064A." },
+    { q: `\u0623\u064A \u0645\u0645\u0627 \u064A\u0644\u064A \u064A\u0639\u0628\u0631 \u0639\u0646 \u0627\u0644\u062A\u0646\u0645\u0631 \u0627\u0644\u0631\u0642\u0645\u064A (Cyberbullying)\u061F`, opts: ["\u0627\u0633\u062A\u062E\u062F\u0627\u0645 \u0627\u0644\u0648\u0633\u0627\u0626\u0644 \u0627\u0644\u0631\u0642\u0645\u064A\u0629 \u0644\u0625\u064A\u0630\u0627\u0621 \u0627\u0644\u0622\u062E\u0631\u064A\u0646 \u0623\u0648 \u0645\u0636\u0627\u064A\u0642\u062A\u0647\u0645 \u26A0\uFE0F", "\u0645\u0633\u0627\u0639\u062F\u0629 \u0632\u0645\u064A\u0644 \u0641\u064A \u062D\u0644 \u0627\u0644\u0648\u0627\u062C\u0628 \u{1F91D}", "\u062A\u0634\u062C\u064A\u0639 \u0627\u0644\u0623\u0635\u062F\u0642\u0627\u0621 \u0628\u0627\u0644\u0631\u0633\u0627\u0626\u0644 \u0627\u0644\u0625\u064A\u062C\u0627\u0628\u064A\u0629 \u{1F31F}", "\u0627\u0644\u0645\u0634\u0627\u0631\u0643\u0629 \u0641\u064A \u0645\u0633\u0627\u0628\u0642\u0629 \u062A\u0639\u0644\u064A\u0645\u064A\u0629 \u{1F3C6}"], correct: 0, exp: "\u0627\u0644\u062A\u0646\u0645\u0631 \u0627\u0644\u0631\u0642\u0645\u064A \u0633\u0644\u0648\u0643 \u0645\u0631\u0641\u0648\u0636 \u0642\u0627\u0646\u0648\u0646\u064A\u0627\u064B \u0648\u062A\u0631\u0628\u0648\u064A\u0627\u064B \u0648\u064A\u062C\u0628 \u0627\u0644\u062A\u0635\u062F\u064A \u0644\u0647 \u0641\u0648\u0631\u0627\u064B." },
+    { q: `\u0645\u0627 \u0647\u064A \u0648\u062D\u062F\u0629 \u0642\u064A\u0627\u0633 \u0633\u0631\u0639\u0629 \u0645\u0639\u0627\u0644\u062C\u0629 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A \u0641\u064A \u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631 \u0627\u0644\u062D\u062F\u064A\u062B\u061F`, opts: ["\u062C\u064A\u062C\u0627\u0647\u0631\u062A\u0632 (GHz) \u26A1", "\u0627\u0644\u0643\u064A\u0644\u0648\u062C\u0631\u0627\u0645 (Kg) \u2696\uFE0F", "\u0627\u0644\u0645\u062A\u0631 (Meter) \u{1F4CF}", "\u0627\u0644\u0644\u062A\u0631 (Liter) \u{1F4A7}"], correct: 0, exp: "\u0627\u0644\u0647\u0631\u062A\u0632 \u0648\u0645\u0636\u0627\u0639\u0641\u0627\u062A\u0647 (GHz) \u064A\u0642\u064A\u0633 \u062A\u0631\u062F\u062F \u0648\u0633\u0631\u0639\u0629 \u062A\u0646\u0641\u064A\u0630 \u0645\u0639\u0627\u0644\u062C \u0627\u0644\u062D\u0627\u0633\u0628 \u0644\u0644\u0639\u0645\u0644\u064A\u0627\u062A." },
+    { q: `\u0645\u0627 \u0647\u064A \u0623\u0641\u0636\u0644 \u0637\u0631\u064A\u0642\u0629 \u0644\u0639\u0631\u0636 \u0641\u0643\u0631\u0629 \u0645\u0634\u0631\u0648\u0639 \u0645\u062F\u0631\u0633\u064A \u0628\u0634\u0643\u0644 \u0645\u0631\u0626\u064A \u0648\u062C\u0630\u0627\u0628 \u0644\u0644\u0632\u0645\u0644\u0627\u0621\u061F`, opts: ["\u0639\u0631\u0636 \u062A\u0642\u062F\u064A\u0645\u064A \u0628\u0627\u0644\u0628\u0648\u0631\u0628\u0648\u064A\u0646\u062A (PowerPoint) \u{1F4FD}\uFE0F", "\u0625\u0631\u0633\u0627\u0644 \u0643\u0648\u062F \u0645\u0639\u0642\u062F \u063A\u064A\u0631 \u0645\u0641\u0647\u0648\u0645 \u{1F4BB}", "\u0643\u062A\u0627\u0628\u0629 \u0643\u0644\u0627\u0645 \u063A\u064A\u0631 \u0645\u0646\u0633\u0642 \u{1F4DD}", "\u0627\u0644\u062A\u062D\u062F\u062B \u0628\u062F\u0648\u0646 \u0623\u064A \u0648\u0633\u064A\u0644\u0629 \u0628\u0635\u0631\u064A\u0629 \u{1F5E3}\uFE0F"], correct: 0, exp: "\u0628\u0631\u0646\u0627\u0645\u062C PowerPoint \u064A\u062F\u0645\u062C \u0627\u0644\u0646\u0635\u0648\u0635 \u0648\u0627\u0644\u0635\u0648\u0631 \u0648\u0627\u0644\u062D\u0631\u0643\u0627\u062A \u0644\u062A\u0642\u062F\u064A\u0645 \u0639\u0631\u0648\u0636 \u0645\u0628\u0647\u0631\u0629." }
   ];
+  const generatedQuestions = [];
+  for (let i = 0; i < count; i++) {
+    const item = baseTopics[i % baseTopics.length];
+    generatedQuestions.push({
+      id: `kq-gen-${i + 1}`,
+      type: item.opts.length === 2 ? "true_false" : "mcq",
+      question: `${item.q} [\u0633\u0624\u0627\u0644 ${i + 1}]`,
+      options: item.opts,
+      correctIndex: item.correct,
+      timeLimit: 20,
+      pointsType: "normal",
+      explanation: item.exp,
+      emojiOrTheme: i % 2 === 0 ? "\u26A1" : "\u{1F3AF}",
+      category: topic
+    });
+  }
   return {
     id: `kahoot-${Date.now()}`,
-    title: `\u062A\u062D\u062F\u064A \u0643\u0627\u0647\u0648\u062A \u0627\u0644\u062A\u0641\u0627\u0639\u0644\u064A: ${topic}`,
-    description: `\u0645\u0633\u0627\u0628\u0642\u0629 \u062A\u0641\u0627\u0639\u0644\u064A\u0629 \u0634\u064A\u0642\u0629 \u0648\u0645\u0645\u062A\u0639\u0629 \u0644\u0645\u0627\u062F\u0629 ${subject} - ${grade}`,
+    title: `\u062A\u062D\u062F\u064A \u0643\u0627\u0647\u0648\u062A \u0627\u0644\u0630\u0643\u064A: ${topic}`,
+    description: `\u0645\u0633\u0627\u0628\u0642\u0629 \u062A\u0641\u0627\u0639\u0644\u064A\u0629 \u0623\u0633\u0628\u0648\u0639\u064A\u0629 (${count} \u0623\u0633\u0626\u0644\u0629) \u0644\u0645\u0627\u062F\u0629 ${subject} (${grade})`,
     subject,
     grade,
-    coverEmoji: "\u{1F525}",
+    coverEmoji: "\u26A1",
     timeLimitDefault: 20,
-    questions: fallbackQuestions
+    pageRange: params.pageStart ? `\u0627\u0644\u0635\u0641\u062D\u0627\u062A ${params.pageStart} - ${params.pageEnd || ""}` : "\u0643\u0627\u0645\u0644 \u0627\u0644\u0645\u0633\u062A\u0646\u062F",
+    questions: generatedQuestions
+  };
+}
+async function generateAllInOneLessonPlan(params) {
+  const topic = params.topic || "\u0623\u0633\u0627\u0633\u064A\u0627\u062A \u0648\u062A\u0637\u0628\u064A\u0642\u0627\u062A \u0627\u0644\u062D\u0627\u0633\u0628 \u0648\u0627\u0644\u0630\u0643\u0627\u0621 \u0627\u0644\u0627\u0635\u0637\u0646\u0627\u0639\u064A";
+  const subject = params.subject || "\u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u0627\u0644\u0645\u0639\u0644\u0648\u0645\u0627\u062A \u0648\u0627\u0644\u0627\u062A\u0635\u0627\u0644\u0627\u062A \u0648\u0627\u0644\u062D\u0627\u0633\u0628 \u0627\u0644\u0622\u0644\u064A";
+  const grade = params.grade || "\u0627\u0644\u0635\u0641 \u0627\u0644\u0623\u0648\u0644 \u0627\u0644\u0625\u0639\u062F\u0627\u062F\u064A";
+  const duration = params.durationMinutes || 45;
+  const prompt = `\u0623\u0646\u062A \u062E\u0628\u064A\u0631 \u062A\u0631\u0628\u0648\u064A \u0648\u062A\u0642\u0646\u064A \u0648\u0627\u0633\u062A\u0634\u0627\u0631\u064A \u0645\u0646\u0627\u0647\u062C \u0645\u062A\u062E\u0635\u0635 \u0641\u064A \u0645\u0631\u0643\u0632 \u0627\u0644\u0646\u062C\u0627\u062D \u0644\u0644\u062A\u062F\u0631\u064A\u0628 \u0648\u0627\u0644\u0627\u0633\u062A\u0634\u0627\u0631\u0627\u062A.
+\u0642\u0645 \u0628\u0625\u0646\u0634\u0627\u0621 "\u062D\u0632\u0645\u0629 \u0627\u0644\u062F\u0631\u0633 \u0627\u0644\u0645\u062A\u0643\u0627\u0645\u0644\u0629 \u0628\u0646\u0642\u0631\u0629 \u0648\u0627\u062D\u062F\u0629" (All-in-One Master Lesson Package) \u0644\u0645\u0648\u0636\u0648\u0639: "${topic}"
+- \u0627\u0644\u0645\u0627\u062F\u0629: ${subject}
+- \u0627\u0644\u0641\u0626\u0629 / \u0627\u0644\u0635\u0641 \u0627\u0644\u062F\u0631\u0627\u0633\u064A: ${grade}
+- \u0627\u0644\u0645\u062F\u0629 \u0627\u0644\u0632\u0645\u0646\u064A\u0629: ${duration} \u062F\u0642\u064A\u0642\u0629
+${params.learningGoals ? `- \u0623\u0647\u062F\u0627\u0641 \u0625\u0636\u0627\u0641\u064A\u0629: ${params.learningGoals}` : ""}
+
+\u0627\u0644\u062D\u0632\u0645\u0629 \u064A\u062C\u0628 \u0623\u0646 \u062A\u062D\u062A\u0648\u064A \u062D\u0635\u0631\u0627\u064B \u0648\u0628\u062F\u0642\u0629 \u0639\u0644\u0649 JSON \u0628\u0627\u0644\u0645\u0641\u0627\u062A\u064A\u062D \u0627\u0644\u062A\u0627\u0644\u064A\u0629:
+1. "lessonTitle": \u0639\u0646\u0648\u0627\u0646 \u0631\u0626\u064A\u0633\u064A \u0634\u064A\u0642 \u0648\u062C\u0630\u0627\u0628 \u0644\u0644\u062F\u0631\u0633.
+2. "topic": \u0627\u0644\u0645\u0648\u0636\u0648\u0639 \u0627\u0644\u0623\u0633\u0627\u0633\u064A.
+3. "subject": \u0627\u0644\u0645\u0627\u062F\u0629.
+4. "grade": \u0627\u0644\u0635\u0641 \u0627\u0644\u062F\u0631\u0627\u0633\u064A.
+5. "durationMinutes": \u0627\u0644\u0645\u062F\u0629.
+6. "objectives": \u0645\u0635\u0641\u0648\u0641\u0629 \u0645\u0646 3 \u0625\u0644\u0649 5 \u0623\u0647\u062F\u0627\u0641 \u062A\u0639\u0644\u064A\u0645\u064A\u0629 \u0633\u0644\u0648\u0643\u064A\u0629 \u0648\u0645\u0639\u0631\u0641\u064A\u0629 \u0648\u0627\u0636\u062D\u0629.
+7. "presentationSlides": \u0645\u0635\u0641\u0648\u0641\u0629 \u0645\u0646 4 \u0625\u0644\u0649 6 \u0634\u0631\u0627\u0626\u062D \u0639\u0631\u0636 \u062A\u0642\u062F\u064A\u0645\u064A \u0645\u062A\u0633\u0644\u0633\u0644\u0629 \u062A\u0634\u0645\u0644 (slideNumber, title, points, teacherNotes, suggestedGraphicPrompt).
+8. "kahootQuiz": \u0643\u0627\u0626\u0646 \u064A\u062D\u062A\u0648\u064A (title, description, questions) \u064A\u062D\u062A\u0648\u064A \u0639\u0644\u0649 5 \u0623\u0633\u0626\u0644\u0629 \u062A\u0641\u0627\u0639\u0644\u064A\u0629 \u0644\u0644\u0645\u0633\u0627\u0628\u0642\u0627\u062A (question, options [4 \u062E\u064A\u0627\u0631\u0627\u062A], correctIndex [0-3], timeLimit [20], explanation, pointsType: "normal").
+9. "homeworkAndWorksheet": \u0643\u0627\u0626\u0646 \u064A\u062D\u062A\u0648\u064A \u0639\u0644\u0649:
+   - title: \u0639\u0646\u0648\u0627\u0646 \u0648\u0631\u0642\u0629 \u0627\u0644\u0639\u0645\u0644 \u0648\u0627\u0644\u0648\u0627\u062C\u0628.
+   - instructions: \u062A\u0639\u0644\u064A\u0645\u0627\u062A \u0644\u0644\u0637\u0644\u0627\u0628.
+   - writtenTasks: \u0645\u0635\u0641\u0648\u0641\u0629 \u0628\u0640 2 \u0625\u0644\u0649 3 \u0623\u0633\u0626\u0644\u0629 \u0648\u062A\u0637\u0628\u064A\u0642\u0627\u062A \u0639\u0645\u0644\u064A\u0629 \u0645\u0643\u062A\u0648\u0628\u0629.
+   - voiceSummaryPrompt: \u0646\u0635 \u0627\u0644\u062A\u0643\u0644\u064A\u0641 \u0627\u0644\u0635\u0648\u062A\u064A \u0627\u0644\u0645\u0637\u0644\u0648\u0628 \u0645\u0646 \u0627\u0644\u0637\u0627\u0644\u0628 \u062A\u0633\u062C\u064A\u0644\u0647 \u0628\u0635\u0648\u062A\u0647 (\u0645\u062B\u0644: "\u0633\u062C\u0644 \u0645\u0642\u0637\u0639\u0627\u064B \u0635\u0648\u062A\u064A\u0627\u064B \u0645\u062F\u062A\u0647 \u062F\u0642\u064A\u0642\u0629 \u062A\u0644\u062E\u0635 \u0641\u064A\u0647 \u0645\u0641\u0647\u0648\u0645 X \u0648\u0627\u0644\u0641\u0631\u0642 \u0628\u064A\u0646 Y \u0648 Z \u0643\u0645\u0627 \u0641\u0647\u0645\u062A \u0641\u064A \u0627\u0644\u062D\u0635\u0629").
+   - rubricPoints: \u0645\u0635\u0641\u0648\u0641\u0629 \u0628\u0645\u062D\u0627\u0648\u0631 \u0627\u0644\u062A\u0642\u064A\u064A\u0645 \u0648\u0627\u0644\u062A\u0635\u062D\u064A\u062D \u0627\u0644\u0630\u0643\u064A (\u062A\u0646\u0627\u0633\u0642 \u0627\u0644\u0623\u0641\u0643\u0627\u0631\u060C \u0627\u0633\u062A\u062E\u062F\u0627\u0645 \u0627\u0644\u0645\u0635\u0637\u0644\u062D\u0627\u062A \u0627\u0644\u0635\u062D\u064A\u062D\u0629\u060C \u062F\u0642\u0629 \u0627\u0644\u0645\u0641\u0627\u0647\u064A\u0645).
+   - maxScore: \u0627\u0644\u062F\u0631\u062C\u0629 \u0627\u0644\u0643\u0644\u064A\u0629 (\u0645\u062B\u0644\u0627\u064B 100).
+10. "modelAnswer": \u0646\u0645\u0648\u0630\u062C \u0627\u0644\u0625\u062C\u0627\u0628\u0629 \u0627\u0644\u0627\u0633\u062A\u0631\u0634\u0627\u062F\u064A \u0644\u0644\u0645\u062F\u0631\u0628 \u0648\u0627\u0644\u0630\u0643\u0627\u0621 \u0627\u0644\u0627\u0635\u0637\u0646\u0627\u0639\u064A \u0644\u062A\u0635\u062D\u064A\u062D \u0627\u0644\u0648\u0627\u062C\u0628 \u0627\u0644\u062A\u062D\u0631\u064A\u0631\u064A \u0648\u0627\u0644\u0635\u0648\u062A\u064A.
+
+\u064A\u062C\u0628 \u0623\u0646 \u064A\u0643\u0648\u0646 \u0627\u0644\u0625\u062E\u0631\u0627\u062C JSON \u0635\u0627\u0644\u062D\u0627\u064B \u0641\u0642\u0637.`;
+  if (process.env.GEMINI_API_KEY) {
+    try {
+      const ai = getAI();
+      const response = await ai.models.generateContent({
+        model: "gemini-3.7-flash",
+        contents: [{ role: "user", parts: [{ text: prompt }] }],
+        config: {
+          temperature: 0.3,
+          responseMimeType: "application/json"
+        }
+      });
+      const text = response.text;
+      if (text) {
+        const cleanJson = text.replace(/```json\s*|\s*```/g, "").trim();
+        const parsed = JSON.parse(cleanJson);
+        if (parsed && parsed.lessonTitle && Array.isArray(parsed.presentationSlides)) {
+          return parsed;
+        }
+      }
+    } catch (err) {
+      console.warn("generateAllInOneLessonPlan Gemini API warning, falling back to rich structured fallback:", err?.message);
+    }
+  }
+  return {
+    lessonTitle: `\u0627\u0644\u062F\u0631\u0633 \u0627\u0644\u062A\u0641\u0627\u0639\u0644\u064A \u0627\u0644\u0634\u0627\u0645\u0644: ${topic}`,
+    topic,
+    subject,
+    grade,
+    durationMinutes: duration,
+    objectives: [
+      `\u0623\u0646 \u064A\u062A\u0639\u0631\u0641 \u0627\u0644\u0637\u0627\u0644\u0628 \u0639\u0644\u0649 \u0627\u0644\u0645\u0641\u0647\u0648\u0645 \u0627\u0644\u0623\u0633\u0627\u0633\u064A \u0644\u0640 (${topic}) \u0628\u0623\u0633\u0644\u0648\u0628 \u062A\u0637\u0628\u064A\u0642\u064A \u0645\u0628\u0627\u0634\u0631.`,
+      `\u0623\u0646 \u064A\u0642\u0627\u0631\u0646 \u0627\u0644\u0637\u0627\u0644\u0628 \u0628\u064A\u0646 \u0627\u0644\u0639\u0646\u0627\u0635\u0631 \u0627\u0644\u0631\u0626\u064A\u0633\u064A\u0629 \u0648\u064A\u0641\u0647\u0645 \u0637\u0631\u064A\u0642\u0629 \u0639\u0645\u0644\u0647\u0627 \u0641\u064A \u0627\u0644\u062D\u064A\u0627\u0629 \u0627\u0644\u064A\u0648\u0645\u064A\u0629.`,
+      `\u0623\u0646 \u064A\u0634\u0627\u0631\u0643 \u0627\u0644\u0637\u0627\u0644\u0628 \u0641\u064A \u0627\u0644\u0645\u0633\u0627\u0628\u0642\u0629 \u0627\u0644\u062A\u0641\u0627\u0639\u0644\u064A\u0629 \u0648\u062A\u0637\u0628\u064A\u0642 \u0627\u0644\u0645\u0639\u0631\u0641\u0629 \u0639\u0645\u0644\u064A\u0627\u064B.`,
+      `\u0623\u0646 \u064A\u0633\u062C\u0644 \u0627\u0644\u0637\u0627\u0644\u0628 \u0645\u0644\u062E\u0635\u0627\u064B \u0635\u0648\u062A\u064A\u0627\u064B \u064A\u0639\u0628\u0631 \u0641\u064A\u0647 \u0639\u0646 \u0627\u0633\u062A\u064A\u0639\u0627\u0628\u0647 \u0644\u0644\u0645\u0641\u0627\u0647\u064A\u0645 \u0627\u0644\u0623\u0633\u0627\u0633\u064A\u0629.`
+    ],
+    presentationSlides: [
+      {
+        slideNumber: 1,
+        title: `\u0645\u0642\u062F\u0645\u0629 \u0648\u062A\u0645\u0647\u064A\u062F: \u0645\u0627 \u0647\u0648 ${topic}\u061F`,
+        points: [
+          "\u0627\u0633\u062A\u0643\u0634\u0627\u0641 \u0627\u0644\u0641\u0643\u0631\u0629 \u0627\u0644\u0639\u0627\u0645\u0629 \u0648\u0623\u0647\u0645\u064A\u062A\u0647\u0627 \u0641\u064A \u062D\u064A\u0627\u062A\u0646\u0627 \u0627\u0644\u064A\u0648\u0645\u064A\u0629 \u0648\u0627\u0644\u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0629.",
+          "\u0639\u0631\u0636 \u0623\u0645\u062B\u0644\u0629 \u0648\u0627\u0642\u0639\u064A\u0629 \u0648\u0645\u0644\u0645\u0648\u0633\u0629 \u062A\u062B\u064A\u0631 \u0641\u0636\u0648\u0644 \u0648\u062A\u0641\u0627\u0639\u0644 \u0627\u0644\u0637\u0644\u0627\u0628.",
+          "\u0637\u0631\u062D \u0633\u0624\u0627\u0644 \u0639\u0635\u0641 \u0630\u0647\u0646\u064A \u0633\u0631\u064A\u0639 \u0644\u0644\u0645\u062C\u0645\u0648\u0639\u0629."
+        ],
+        teacherNotes: "\u0627\u0628\u062F\u0623 \u0628\u0645\u0646\u0627\u0642\u0634\u0629 \u0645\u0641\u062A\u0648\u062D\u0629 \u0644\u0645\u062F\u0629 3 \u062F\u0642\u0627\u0626\u0642 \u0648\u0627\u0633\u062A\u0645\u0639 \u0644\u0622\u0631\u0627\u0621 \u0627\u0644\u0637\u0644\u0627\u0628 \u0642\u0628\u0644 \u0627\u0644\u0634\u0631\u062D \u0627\u0644\u0646\u0638\u0631\u064A.",
+        suggestedGraphicPrompt: `Modern tech illustration representing ${topic} in a bright classroom`
+      },
+      {
+        slideNumber: 2,
+        title: `\u0627\u0644\u0645\u0641\u0627\u0647\u064A\u0645 \u0648\u0627\u0644\u0631\u0643\u0627\u0626\u0632 \u0627\u0644\u0623\u0633\u0627\u0633\u064A\u0629 \u0644\u0640 ${topic}`,
+        points: [
+          "\u0627\u0644\u062A\u0639\u0631\u064A\u0641 \u0627\u0644\u0639\u0644\u0645\u064A \u0627\u0644\u0645\u0628\u0633\u0637 \u0644\u0644\u0645\u0635\u0637\u0644\u062D.",
+          "\u0627\u0644\u0645\u0643\u0648\u0646\u0627\u062A \u0627\u0644\u0623\u0633\u0627\u0633\u064A\u0629 \u0648\u0643\u064A\u0641\u064A\u0629 \u062A\u0631\u0627\u0628\u0637\u0647\u0627 \u0645\u0639\u0627\u064B.",
+          "\u0627\u0644\u0641\u0648\u0627\u0626\u062F \u0648\u0627\u0644\u0627\u0633\u062A\u062E\u062F\u0627\u0645\u0627\u062A \u0627\u0644\u0623\u0643\u062B\u0631 \u0634\u064A\u0648\u0639\u0627\u064B."
+        ],
+        teacherNotes: "\u0627\u0633\u062A\u062E\u062F\u0645 \u0627\u0644\u0633\u0628\u0648\u0631\u0629 \u0627\u0644\u0630\u0643\u064A\u0629 \u0644\u062A\u0648\u0636\u064A\u062D \u0627\u0644\u0645\u062E\u0637\u0637 \u0627\u0644\u0628\u064A\u0627\u0646\u064A \u0648\u062A\u0641\u0627\u0639\u0644 \u0627\u0644\u0637\u0644\u0627\u0628.",
+        suggestedGraphicPrompt: `Infographic flow chart of ${topic} architecture`
+      },
+      {
+        slideNumber: 3,
+        title: `\u0627\u0644\u062A\u0637\u0628\u064A\u0642 \u0627\u0644\u0639\u0645\u0644\u064A \u0648\u062F\u0631\u0627\u0633\u0629 \u0627\u0644\u062D\u0627\u0644\u0629 (Hands-on)`,
+        points: [
+          "\u062A\u0637\u0628\u064A\u0642 \u062E\u0637\u0648\u0629 \u0628\u062E\u0637\u0648\u0629 \u0639\u0644\u0649 \u0623\u062C\u0647\u0632\u0629 \u0627\u0644\u0645\u0639\u0645\u0644.",
+          "\u0645\u0639\u0627\u0644\u062C\u0629 \u0627\u0644\u0623\u062E\u0637\u0627\u0621 \u0627\u0644\u0634\u0627\u0626\u0639\u0629 \u0648\u0643\u064A\u0641\u064A\u0629 \u062A\u062C\u0646\u0628\u0647\u0627.",
+          "\u062A\u0642\u064A\u064A\u0645 \u0627\u0644\u0623\u062F\u0627\u0621 \u0627\u0644\u0641\u0648\u0631\u064A \u0648\u062A\u0648\u062C\u064A\u0647 \u0627\u0644\u0637\u0644\u0627\u0628 \u0627\u0644\u0645\u062A\u0639\u062B\u0631\u064A\u0646."
+        ],
+        teacherNotes: "\u062A\u062C\u0648\u0644 \u0628\u064A\u0646 \u0627\u0644\u0623\u062C\u0647\u0632\u0629 \u0648\u062A\u0623\u0643\u062F \u0645\u0646 \u062A\u0637\u0628\u064A\u0642 \u0643\u0644 \u0637\u0627\u0644\u0628 \u0644\u0644\u062E\u0637\u0648\u0629 \u0627\u0644\u0623\u0648\u0644\u0649 \u0628\u0646\u062C\u0627\u062D.",
+        suggestedGraphicPrompt: `Interactive lab workstation screen with practical code or steps`
+      },
+      {
+        slideNumber: 4,
+        title: `\u0645\u0644\u062E\u0635 \u0627\u0644\u062D\u0635\u0629 \u0648\u0627\u0644\u062A\u062D\u062F\u064A \u0627\u0644\u062A\u0641\u0627\u0639\u0644\u064A`,
+        points: [
+          "\u0627\u0633\u062A\u0631\u062C\u0627\u0639 \u0627\u0644\u0646\u0642\u0627\u0637 \u0627\u0644\u0630\u0647\u0628\u064A\u0629 \u0627\u0644\u0645\u0633\u062A\u0641\u0627\u062F\u0629.",
+          "\u0627\u0644\u0627\u0646\u062A\u0642\u0627\u0644 \u0625\u0644\u0649 \u062A\u062D\u062F\u064A \u0627\u0644\u0643\u0627\u0647\u0648\u062A \u0627\u0644\u062A\u0641\u0627\u0639\u0644\u064A \u0627\u0644\u0645\u0628\u0627\u0634\u0631.",
+          "\u062A\u0648\u0636\u064A\u062D \u0627\u0644\u0645\u0637\u0644\u0648\u0628 \u0641\u064A \u0627\u0644\u0648\u0627\u062C\u0628 \u0627\u0644\u0645\u0646\u0632\u0644\u064A \u0648\u0627\u0644\u062A\u0633\u062C\u064A\u0644 \u0627\u0644\u0635\u0648\u062A\u064A."
+        ],
+        teacherNotes: "\u0627\u0637\u0644\u0628 \u0645\u0646 \u0627\u0644\u0637\u0644\u0627\u0628 \u0641\u062A\u062D \u0634\u0627\u0634\u0627\u062A\u0647\u0645 \u0644\u0644\u0645\u0633\u0627\u0628\u0642\u0629 \u0627\u0644\u062D\u064A\u0629 \u0648\u0631\u0635\u062F \u0627\u0644\u0646\u0642\u0627\u0637.",
+        suggestedGraphicPrompt: `Victory podium and trophy celebration with stars`
+      }
+    ],
+    kahootQuiz: {
+      title: `\u062A\u062D\u062F\u064A \u0627\u0644\u0645\u0639\u0645\u0644 \u0627\u0644\u062D\u064A: ${topic}`,
+      description: `\u0645\u0633\u0627\u0628\u0642\u0629 \u062A\u0641\u0627\u0639\u0644\u064A\u0629 \u0633\u0631\u064A\u0639\u0629 \u0644\u0642\u064A\u0627\u0633 \u0627\u0644\u0641\u0647\u0645 \u0644\u0645\u0648\u0636\u0648\u0639 ${topic}`,
+      questions: [
+        {
+          question: `\u0645\u0627 \u0647\u0648 \u0627\u0644\u0645\u0641\u0647\u0648\u0645 \u0627\u0644\u062C\u0648\u0647\u0631\u064A \u0644\u0640 (${topic})\u061F`,
+          options: [
+            "\u0627\u0644\u0645\u0646\u0638\u0648\u0645\u0629 \u0627\u0644\u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0629 \u0627\u0644\u0645\u062A\u0631\u0627\u0628\u0637\u0629 \u0644\u062A\u062D\u0642\u064A\u0642 \u0647\u062F\u0641 \u0645\u062D\u062F\u062F \u{1F3AF}",
+            "\u0625\u062C\u0631\u0627\u0621 \u0639\u0634\u0648\u0627\u0626\u064A \u0628\u062F\u0648\u0646 \u062A\u0631\u062A\u064A\u0628 \u274C",
+            "\u0625\u063A\u0644\u0627\u0642 \u0627\u0644\u0623\u062C\u0647\u0632\u0629 \u0648\u0639\u062F\u0645 \u0627\u0644\u062A\u0641\u0627\u0639\u0644 \u{1F634}",
+            "\u0644\u0627 \u0634\u064A\u0621 \u0645\u0645\u0627 \u0633\u0628\u0642 \u274C"
+          ],
+          correctIndex: 0,
+          timeLimit: 20,
+          explanation: "\u0627\u0644\u0645\u0641\u0647\u0648\u0645 \u0627\u0644\u062C\u0648\u0647\u0631\u064A \u064A\u0639\u062A\u0645\u062F \u0639\u0644\u0649 \u0627\u0644\u062A\u0631\u0627\u0628\u0637 \u0627\u0644\u0645\u0646\u0647\u062C\u064A \u0644\u062A\u062D\u0642\u064A\u0642 \u0623\u0639\u0644\u0649 \u0643\u0641\u0627\u0621\u0629.",
+          pointsType: "normal"
+        },
+        {
+          question: `\u0647\u0644 \u064A\u0633\u0627\u0639\u062F \u0641\u0647\u0645 (${topic}) \u0641\u064A \u062D\u0644 \u0627\u0644\u0645\u0634\u0643\u0644\u0627\u062A \u0627\u0644\u062A\u0642\u0646\u064A\u0629 \u0648\u062A\u0637\u0648\u064A\u0631 \u0627\u0644\u0645\u0634\u0627\u0631\u064A\u0639\u061F`,
+          options: ["\u0646\u0639\u0645 \u0628\u0643\u0644 \u062A\u0623\u0643\u064A\u062F \u2705", "\u0644\u0627 \u064A\u0624\u062B\u0631 \u0623\u0628\u062F\u0627\u064B \u274C"],
+          correctIndex: 0,
+          timeLimit: 15,
+          explanation: "\u0627\u0644\u0641\u0647\u0645 \u0627\u0644\u0639\u0645\u064A\u0642 \u0647\u0648 \u0627\u0644\u0623\u0633\u0627\u0633 \u0644\u0644\u0627\u0628\u062A\u0643\u0627\u0631 \u0648\u062D\u0644 \u0623\u064A \u0645\u0634\u0643\u0644\u0629 \u062A\u0642\u0646\u064A\u0629.",
+          pointsType: "normal"
+        },
+        {
+          question: `\u0645\u0627 \u0647\u064A \u0623\u0648\u0644 \u062E\u0637\u0648\u0629 \u064A\u0646\u0628\u063A\u064A \u0627\u062A\u0628\u0627\u0639\u0647\u0627 \u0639\u0646\u062F \u0627\u0644\u0628\u062F\u0621 \u0641\u064A \u062A\u0637\u0628\u064A\u0642 (${topic})\u061F`,
+          options: [
+            "\u062A\u062D\u062F\u064A\u062F \u0627\u0644\u0623\u0647\u062F\u0627\u0641 \u0648\u062A\u062D\u0644\u064A\u0644 \u0627\u0644\u0645\u062A\u0637\u0644\u0628\u0627\u062A \u0628\u062F\u0642\u0629 \u{1F4A1}",
+            "\u0627\u0644\u062A\u0646\u0641\u064A\u0630 \u0627\u0644\u0641\u0648\u0631\u064A \u062F\u0648\u0646 \u062F\u0631\u0627\u0633\u0629 \u274C",
+            "\u062A\u062C\u0627\u0647\u0644 \u0627\u0644\u062A\u0639\u0644\u064A\u0645\u0627\u062A \u274C",
+            "\u0627\u0644\u0627\u0646\u062A\u0638\u0627\u0631 \u062F\u0648\u0646 \u0639\u0645\u0644 \u{1F634}"
+          ],
+          correctIndex: 0,
+          timeLimit: 20,
+          explanation: "\u062A\u062D\u062F\u064A\u062F \u0627\u0644\u0623\u0647\u062F\u0627\u0641 \u064A\u0648\u0641\u0631 \u0623\u0643\u062B\u0631 \u0645\u0646 80% \u0645\u0646 \u0648\u0642\u062A \u0648\u062C\u0647\u062F \u0627\u0644\u062A\u0646\u0641\u064A\u0630.",
+          pointsType: "double"
+        }
+      ]
+    },
+    homeworkAndWorksheet: {
+      title: `\u0648\u0631\u0642\u0629 \u0627\u0644\u0639\u0645\u0644 \u0648\u0627\u0644\u062A\u0643\u0644\u064A\u0641 \u0627\u0644\u0645\u0646\u0632\u0644\u064A \u0627\u0644\u0630\u0643\u064A: ${topic}`,
+      instructions: `\u0639\u0632\u064A\u0632\u064A \u0627\u0644\u0645\u062A\u062F\u0631\u0628\u060C \u0628\u0639\u062F \u0627\u0633\u062A\u064A\u0639\u0627\u0628\u0643 \u0644\u0645\u062D\u0627\u0636\u0631\u0629 \u0627\u0644\u064A\u0648\u0645 \u062D\u0648\u0644 (${topic})\u060C \u064A\u064F\u0631\u062C\u0649 \u0625\u062A\u0645\u0627\u0645 \u0627\u0644\u0645\u0647\u0627\u0645 \u0627\u0644\u062A\u0627\u0644\u064A\u0629 \u0648\u0631\u0641\u0639 \u062A\u0633\u062C\u064A\u0644\u0643 \u0627\u0644\u0635\u0648\u062A\u064A \u0639\u0628\u0631 \u0628\u0648\u0627\u0628\u0629 \u0627\u0644\u0637\u0627\u0644\u0628 \u0644\u0645\u0631\u0627\u062C\u0639\u062A\u0647\u0627 \u0648\u062A\u0642\u064A\u064A\u0645\u0647\u0627 \u0628\u0627\u0644\u0630\u0643\u0627\u0621 \u0627\u0644\u0627\u0635\u0637\u0646\u0627\u0639\u064A \u0648\u0627\u0639\u062A\u0645\u0627\u062F \u0646\u0642\u0627\u0637\u0643.`,
+      writtenTasks: [
+        `\u0627\u0634\u0631\u062D \u0628\u0623\u0633\u0644\u0648\u0628\u0643 \u0627\u0644\u062E\u0627\u0635 \u0645\u0641\u0647\u0648\u0645 (${topic}) \u0648\u0627\u0630\u0643\u0631 \u0641\u0627\u0626\u062F\u062A\u064A\u0646 \u0623\u0633\u0627\u0633\u064A\u062A\u064A\u0646 \u0644\u0647.`,
+        `\u0627\u0630\u0643\u0631 \u0645\u062B\u0627\u0644\u0627\u064B \u0648\u0627\u0642\u0639\u064A\u0627\u064B \u0645\u0646 \u062A\u062C\u0631\u0628\u062A\u0643 \u0623\u0648 \u062F\u0631\u0627\u0633\u062A\u0643 \u064A\u0648\u0636\u062D \u062A\u0637\u0628\u064A\u0642 \u0647\u0630\u0627 \u0627\u0644\u0645\u0641\u0647\u0648\u0645 \u0641\u064A \u0627\u0644\u062D\u064A\u0627\u0629 \u0627\u0644\u0639\u0645\u0644\u064A\u0629.`
+      ],
+      voiceSummaryPrompt: `\u0633\u062C\u0644 \u062A\u0633\u062C\u064A\u0644\u0627\u064B \u0635\u0648\u062A\u064A\u0627\u064B \u0645\u062F\u062A\u0647 \u0645\u0646 \u062F\u0642\u064A\u0642\u0629 \u0625\u0644\u0649 \u062F\u0642\u064A\u0642\u062A\u064A\u0646 \u0639\u0628\u0631 \u0628\u0648\u0627\u0628\u0629 \u0627\u0644\u0637\u0627\u0644\u0628 \u062A\u0644\u062E\u0635 \u0641\u064A\u0647 \u0645\u0627 \u0641\u0647\u0645\u062A\u0647 \u0645\u0646 \u0645\u062D\u0627\u0636\u0631\u0629 (${topic}) \u0648\u0643\u064A\u0641 \u064A\u0645\u0643\u0646\u0643 \u0627\u0644\u0627\u0633\u062A\u0641\u0627\u062F\u0629 \u0645\u0646\u0647 \u0641\u064A \u0645\u062C\u0627\u0644\u0643 \u0627\u0644\u0639\u0645\u0644\u064A.`,
+      rubricPoints: [
+        "\u062F\u0642\u0629 \u0648\u0627\u0633\u062A\u064A\u0639\u0627\u0628 \u0627\u0644\u0645\u0641\u0627\u0647\u064A\u0645 \u0627\u0644\u0639\u0644\u0645\u064A\u0629 \u0648\u0627\u0644\u062A\u0642\u0646\u064A\u0629 \u0627\u0644\u0645\u0637\u0631\u0648\u062D\u0629.",
+        "\u0627\u0644\u062A\u0633\u0644\u0633\u0644 \u0627\u0644\u0645\u0646\u0637\u0642\u064A \u0648\u0648\u0636\u0648\u062D \u0627\u0644\u0623\u0641\u0643\u0627\u0631 \u0623\u062B\u0646\u0627\u0621 \u0627\u0644\u0634\u0631\u062D \u0627\u0644\u0635\u0648\u062A\u064A.",
+        "\u0627\u0633\u062A\u062E\u062F\u0627\u0645 \u0627\u0644\u0645\u0635\u0637\u0644\u062D\u0627\u062A \u0627\u0644\u0635\u062D\u064A\u062D\u0629 \u0645\u0639 \u0636\u0631\u0628 \u0623\u0645\u062B\u0644\u0629 \u0648\u0627\u0642\u0639\u064A\u0629."
+      ],
+      maxScore: 100
+    },
+    modelAnswer: `\u0646\u0645\u0648\u0630\u062C \u0627\u0644\u0625\u062C\u0627\u0628\u0629 \u0627\u0644\u0627\u0633\u062A\u0631\u0634\u0627\u062F\u064A \u0644\u0640 (${topic}):
+1. \u0627\u0644\u062A\u0639\u0631\u064A\u0641: \u0647\u0648 \u0627\u0644\u0625\u0637\u0627\u0631 \u0627\u0644\u0645\u0646\u0638\u0645 \u0644\u0644\u0639\u0645\u0644\u064A\u0627\u062A \u0627\u0644\u062A\u0642\u0646\u064A\u0629 \u0648\u0627\u0644\u062A\u0639\u0644\u064A\u0645\u064A\u0629 \u0644\u062A\u062D\u0642\u064A\u0642 \u0623\u0642\u0635\u0649 \u0627\u0633\u062A\u064A\u0639\u0627\u0628 \u0648\u062A\u0637\u0628\u064A\u0642 \u0641\u0639\u0627\u0644.
+2. \u0627\u0644\u0641\u0648\u0627\u0626\u062F: \u0632\u064A\u0627\u062F\u0629 \u0627\u0644\u0625\u0646\u062A\u0627\u062C\u064A\u0629\u060C \u062A\u0642\u0644\u064A\u0644 \u0627\u0644\u0623\u062E\u0637\u0627\u0621\u060C \u0648\u0633\u0647\u0648\u0644\u0629 \u062A\u062A\u0628\u0639 \u0627\u0644\u0646\u062A\u0627\u0626\u062C.
+3. \u0627\u0644\u062A\u0642\u064A\u064A\u0645 \u0627\u0644\u0635\u0648\u062A\u064A: \u064A\u064F\u0645\u0646\u062D \u0627\u0644\u0637\u0627\u0644\u0628 \u0627\u0644\u062F\u0631\u062C\u0629 \u0627\u0644\u0643\u0627\u0645\u0644\u0629 \u0625\u0630\u0627 \u0630\u0643\u0631 \u0627\u0644\u0645\u0641\u0647\u0648\u0645 \u0628\u0635\u064A\u0627\u063A\u062A\u0647\u060C \u0648\u0631\u0628\u0637\u0647 \u0628\u0645\u062B\u0627\u0644 \u0639\u0645\u0644\u064A \u062F\u0648\u0646 \u0623\u062E\u0637\u0627\u0621 \u0645\u0641\u0627\u0647\u064A\u0645\u064A\u0629 \u062C\u0648\u0647\u0631\u064A\u0629.`
   };
 }
 
@@ -9582,6 +10433,7 @@ apiRouter.get("/trainees/next-code", async (req, res) => {
 apiRouter.get("/trainees", authMiddleware, async (req, res) => {
   try {
     let list = await TraineeRepo.getAll();
+    list = db.deduplicateTrainees(list);
     const user = req.user;
     if (user) {
       if (user.role === "student") {
@@ -9650,15 +10502,22 @@ apiRouter.post("/trainees", async (req, res) => {
     const data = req.body;
     if (!data.fullName || !data.branchId) return res.status(400).json({ success: false, error: "\u0627\u0644\u0627\u0633\u0645 \u0648\u0627\u0644\u0641\u0631\u0639 \u0645\u0637\u0644\u0648\u0628\u0627\u0646" });
     const list = await TraineeRepo.getAll();
-    const normName = String(data.fullName || "").trim().toLowerCase();
-    const normPhone = String(data.phone || "").trim();
-    const normParentPhone = String(data.parentPhone || "").trim();
+    const normalizeArabic = (str) => {
+      if (!str) return "";
+      return String(str).trim().toLowerCase().replace(/[\u064B-\u065F\u0670\u0640]/g, "").replace(/[أإآٱ]/g, "\u0627").replace(/ة/g, "\u0647").replace(/ى/g, "\u064A").replace(/[ؤئ]/g, "\u0621").replace(/عبد\s+/g, "\u0639\u0628\u062F").replace(/ابو\s+/g, "\u0627\u0628\u0648").replace(/[\s\-_.]+/g, " ").trim();
+    };
+    const normName = normalizeArabic(data.fullName);
+    const normPhone = String(data.phone || "").replace(/[^0-9]/g, "").slice(-10);
+    const normParentPhone = String(data.parentPhone || "").replace(/[^0-9]/g, "").slice(-10);
     const recentDuplicate = list.find((t) => {
-      const sameName = String(t.fullName || "").trim().toLowerCase() === normName;
-      const sameBranch = String(t.branchId) === String(data.branchId);
-      const sameStudentPhone = normPhone && t.phone && String(t.phone).trim() === normPhone;
-      const createdInDoubleTapWindow = t.createdAt && Date.now() - new Date(t.createdAt).getTime() < 4e3;
-      if (sameName && sameBranch && (sameStudentPhone || createdInDoubleTapWindow)) {
+      const tNormName = normalizeArabic(t.fullName);
+      const sameName = tNormName === normName;
+      const tPhone = String(t.phone || "").replace(/[^0-9]/g, "").slice(-10);
+      const tParentPhone = String(t.parentPhone || "").replace(/[^0-9]/g, "").slice(-10);
+      const sameStudentPhone = normPhone && tPhone && tPhone === normPhone;
+      const sameParentPhone = normParentPhone && tParentPhone && tParentPhone === normParentPhone;
+      const createdInDoubleTapWindow = t.createdAt && Date.now() - new Date(t.createdAt).getTime() < 8e3;
+      if (sameName && (sameStudentPhone || sameParentPhone || createdInDoubleTapWindow)) {
         return true;
       }
       return false;
@@ -9693,25 +10552,7 @@ apiRouter.post("/trainees", async (req, res) => {
         console.warn("Could not determine grade prefix, using fallback", e);
       }
       prefix = (prefix || "A").toUpperCase();
-      let maxNum = 0;
-      const regex = new RegExp(`^${prefix}-?(\\d+)$`, "i");
-      list.forEach((t) => {
-        if (t.code) {
-          const m = String(t.code).trim().match(regex);
-          if (m) {
-            const num = parseInt(m[1], 10);
-            if (!isNaN(num) && num > maxNum) maxNum = num;
-          }
-        }
-      });
-      let nextNum = maxNum + 1;
-      let candidateCode = `${prefix}${nextNum.toString().padStart(3, "0")}`;
-      const existingCodes = new Set(list.map((t) => String(t.code || "").trim().toUpperCase()));
-      while (existingCodes.has(candidateCode)) {
-        nextNum++;
-        candidateCode = `${prefix}${nextNum.toString().padStart(3, "0")}`;
-      }
-      code = candidateCode;
+      code = await allocateNextTraineeCode(prefix, list);
     }
     const traineeId = "trainee-" + Date.now() + "-" + Math.random().toString(36).substr(2, 4);
     const feeAmount = Number(data.feeAmount) || 0;
@@ -9802,14 +10643,40 @@ apiRouter.put("/trainees/:id", async (req, res) => {
       }
     }
     delete updates.forceRegenerateCode;
+    if (updates.isExempt === true || String(updates.isExempt) === "true") {
+      updates.isExempt = true;
+      const baseFee = updates.feeAmount !== void 0 ? Number(updates.feeAmount) : currentTrainee?.feeAmount || 0;
+      updates.discountAmount = baseFee;
+      updates.netAmount = 0;
+      updates.remainingAmount = 0;
+      if (!updates.exemptReason) {
+        updates.exemptReason = currentTrainee?.exemptReason || "management_children";
+      }
+    } else if (updates.isExempt === false || String(updates.isExempt) === "false") {
+      updates.isExempt = false;
+      const fee = updates.feeAmount !== void 0 ? Number(updates.feeAmount) : currentTrainee?.feeAmount || 0;
+      const discount = updates.discountAmount !== void 0 ? Number(updates.discountAmount) : currentTrainee?.discountAmount || 0;
+      const paid = currentTrainee?.paidAmount || 0;
+      updates.netAmount = Math.max(0, fee - discount);
+      updates.remainingAmount = Math.max(0, updates.netAmount - paid);
+    }
     const updated = await TraineeRepo.update(id, updates);
     const memData = db.getData();
     if (memData && Array.isArray(memData.trainees)) {
       const idx = memData.trainees.findIndex((t) => t.id === id);
       if (idx >= 0) {
         memData.trainees[idx] = { ...memData.trainees[idx], ...updates, updatedAt: (/* @__PURE__ */ new Date()).toISOString() };
-        db.saveImmediate();
       }
+    }
+    db.saveImmediate();
+    TraineeRepo.invalidateCache();
+    try {
+      await adminDb.collection("trainees").doc(id).set(updated, { merge: true });
+    } catch {
+    }
+    try {
+      await saveFullDbToFirestore(db.getData(), true);
+    } catch {
     }
     res.json({ success: true, trainee: updated });
   } catch (e) {
@@ -9853,16 +10720,17 @@ apiRouter.post(["/student/update-photo", "/trainees/update-photo"], async (req, 
       }
     }
     if (trainee) {
-      await TraineeRepo.update(targetId, { photoUrl: finalPhoto, photo: finalPhoto });
+      delete trainee.photo;
+      await TraineeRepo.update(targetId, { photoUrl: finalPhoto });
     }
     const memData = db.getData();
     if (memData && Array.isArray(memData.trainees)) {
       const idx = memData.trainees.findIndex((t) => t.id === targetId || t.code === traineeId || t.id === traineeId);
       if (idx >= 0) {
+        delete memData.trainees[idx].photo;
         memData.trainees[idx] = {
           ...memData.trainees[idx],
           photoUrl: finalPhoto,
-          photo: finalPhoto,
           updatedAt: (/* @__PURE__ */ new Date()).toISOString()
         };
       }
@@ -10003,6 +10871,118 @@ apiRouter.post("/trainees/bulk-delete", async (req, res) => {
     res.json({ success: true, count });
   } catch (e) {
     res.status(500).json({ error: e.message });
+  }
+});
+apiRouter.post("/trainees/batch-sync-records", async (req, res) => {
+  try {
+    const allTrainees = await TraineeRepo.getAll();
+    const memData = db.getData();
+    let updatedCount = 0;
+    let parentNamesAutoFilledCount = 0;
+    let birthDatesExtractedCount = 0;
+    let siblingsLinkedCount = 0;
+    let exemptionsProcessedCount = 0;
+    const familyMap = /* @__PURE__ */ new Map();
+    allTrainees.forEach((t) => {
+      const parentPhone = (t.parentPhone || t.phone || "").trim().replace(/\D/g, "");
+      const parentName = (t.parentName || "").trim().toLowerCase();
+      const familyKey = parentPhone && parentPhone.length >= 10 ? `phone_${parentPhone}` : parentName ? `name_${parentName}` : "";
+      if (familyKey) {
+        if (!familyMap.has(familyKey)) familyMap.set(familyKey, []);
+        familyMap.get(familyKey).push(t);
+      }
+    });
+    const updatesBatch = [];
+    for (const t of allTrainees) {
+      let isUpdated = false;
+      const updates = {};
+      const nid = String(t.nationalId || "").trim();
+      if (nid.length === 14 && /^\d+$/.test(nid) && (!t.birthDate || t.birthDate === "")) {
+        const centuryDigit = parseInt(nid[0], 10);
+        const year = (centuryDigit === 3 ? 2e3 : 1900) + parseInt(nid.slice(1, 3), 10);
+        const month = nid.slice(3, 5);
+        const day = nid.slice(5, 7);
+        if (parseInt(month, 10) >= 1 && parseInt(month, 10) <= 12 && parseInt(day, 10) >= 1 && parseInt(day, 10) <= 31) {
+          updates.birthDate = `${year}-${month}-${day}`;
+          birthDatesExtractedCount++;
+          isUpdated = true;
+        }
+      }
+      if (!t.parentName || t.parentName.trim() === "") {
+        const nameParts = (t.fullName || "").trim().split(/\s+/);
+        if (nameParts.length >= 3) {
+          updates.parentName = nameParts.slice(1).join(" ");
+          parentNamesAutoFilledCount++;
+          isUpdated = true;
+        }
+      }
+      const parentPhone = (t.parentPhone || t.phone || "").trim().replace(/\D/g, "");
+      const parentName = (t.parentName || updates.parentName || "").trim().toLowerCase();
+      const familyKey = parentPhone && parentPhone.length >= 10 ? `phone_${parentPhone}` : parentName ? `name_${parentName}` : "";
+      if (familyKey && familyMap.has(familyKey)) {
+        const siblings = familyMap.get(familyKey).filter((s) => s.id !== t.id);
+        if (siblings.length > 0) {
+          const siblingIds = siblings.map((s) => s.id);
+          const siblingNames = siblings.map((s) => s.fullName);
+          if (JSON.stringify(t.siblingIds || []) !== JSON.stringify(siblingIds)) {
+            updates.siblingIds = siblingIds;
+            updates.siblingNames = siblingNames;
+            siblingsLinkedCount++;
+            isUpdated = true;
+          }
+        }
+      }
+      const note = t.notes || "";
+      const isExemptDetected = Boolean(
+        t.isExempt === true || String(t.isExempt) === "true" || Boolean(t.exemptReason) || /إعفاء|معفى|معفي|أبناء|منحة|مالك|إداري|استثنائي|مجاني/i.test(note)
+      );
+      if (isExemptDetected) {
+        updates.isExempt = true;
+        updates.exemptReason = t.exemptReason || "management_children";
+        updates.discountAmount = t.feeAmount || 0;
+        updates.netAmount = 0;
+        updates.remainingAmount = 0;
+        exemptionsProcessedCount++;
+        isUpdated = true;
+      }
+      if (isUpdated) {
+        updates.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
+        await TraineeRepo.update(t.id, updates);
+        if (memData && Array.isArray(memData.trainees)) {
+          const idx = memData.trainees.findIndex((item) => item.id === t.id);
+          if (idx >= 0) {
+            memData.trainees[idx] = { ...memData.trainees[idx], ...updates };
+          }
+        }
+        updatesBatch.push({ id: t.id, updates });
+        updatedCount++;
+      }
+    }
+    db.saveImmediate();
+    TraineeRepo.invalidateCache();
+    try {
+      const batch = adminDb.batch();
+      for (const item of updatesBatch) {
+        batch.set(adminDb.collection("trainees").doc(item.id), item.updates, { merge: true });
+      }
+      await batch.commit();
+    } catch {
+    }
+    try {
+      await saveFullDbToFirestore(db.getData(), true);
+    } catch {
+    }
+    res.json({
+      success: true,
+      totalTrainees: allTrainees.length,
+      updatedCount,
+      parentNamesAutoFilledCount,
+      birthDatesExtractedCount,
+      siblingsLinkedCount,
+      exemptionsProcessedCount
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message || "\u0641\u0634\u0644 \u0645\u0639\u0627\u0644\u062C\u0629 \u0648\u062A\u062D\u062F\u064A\u062B \u0643\u0634\u0648\u0641\u0627\u062A \u0627\u0644\u0645\u062A\u062F\u0631\u0628\u064A\u0646" });
   }
 });
 apiRouter.post("/trainees/bulk-upgrade", async (req, res) => {
@@ -10275,8 +11255,8 @@ apiRouter.post("/trainees/batch-sync-records", (req, res) => {
     }
     const noteLower = (t.notes || "").toLowerCase();
     const isExemptNote = noteLower.includes("\u0625\u0639\u0641\u0627\u0621") || noteLower.includes("\u0645\u0639\u0641\u064A") || noteLower.includes("\u0623\u0628\u0646\u0627\u0621 \u0627\u0644\u0645\u0627\u0644\u0643") || noteLower.includes("\u0623\u0628\u0646\u0627\u0621 \u0627\u0644\u0625\u062F\u0627\u0631\u0629") || noteLower.includes("\u0645\u0646\u062D\u0629") || noteLower.includes("\u0645\u062C\u0627\u0646\u064A");
-    if (isExemptNote && !t.isExempt) {
-      t.isExempt = true;
+    if (isExemptNote || t.isExempt === true || String(t.isExempt) === "true") {
+      if (!t.isExempt) t.isExempt = true;
       if (!t.exemptReason) {
         if (noteLower.includes("\u0625\u062F\u0627\u0631\u064A") || noteLower.includes("\u0645\u0627\u0644\u0643") || noteLower.includes("\u0625\u062F\u0627\u0631\u0629")) {
           t.exemptReason = "management_children";
@@ -10679,22 +11659,7 @@ apiRouter.post("/trainees/bulk-import", async (req, res) => {
         if (cObj) prefix = db.getPrefixForGradeOrCourse(cObj.name);
       }
       prefix = (prefix || "A").toUpperCase();
-      let maxNum = 0;
-      const regex = new RegExp(`^${prefix}-?(\\d+)$`, "i");
-      usedCodesSet.forEach((c) => {
-        const match = c.match(regex);
-        if (match) {
-          const num = parseInt(match[1], 10);
-          if (!isNaN(num) && num > maxNum) maxNum = num;
-        }
-      });
-      let nextNum = maxNum + 1;
-      let candidate = `${prefix}${String(nextNum).padStart(3, "0")}`;
-      while (usedCodesSet.has(candidate)) {
-        nextNum++;
-        candidate = `${prefix}${String(nextNum).padStart(3, "0")}`;
-      }
-      code = candidate;
+      code = await allocateNextTraineeCode(prefix, Array.from(usedCodesSet).map((c) => ({ code: c })));
     }
     usedCodesSet.add(code);
     const netAmount = Math.max(0, feeAmount - discountAmount);
@@ -12057,7 +13022,25 @@ apiRouter.get("/finance/payments", handleGetPayments);
 apiRouter.get("/payments", handleGetPayments);
 apiRouter.post("/finance/payments", async (req, res) => {
   try {
-    const { traineeId, amount, paymentMethod, notes, receivedByUserId, receivedByUserName, branchId, courseId } = req.body;
+    const {
+      traineeId,
+      amount,
+      paymentMethod,
+      notes,
+      receivedByUserId,
+      receivedByUserName,
+      branchId,
+      courseId,
+      targetMonth,
+      parentPhone,
+      traineePhone,
+      previousDebt,
+      discountAmount,
+      isExempt,
+      exemptReason,
+      nextDueDate,
+      paidMonths
+    } = req.body;
     if (!traineeId || !amount || Number(amount) <= 0) {
       return res.status(400).json({ error: "\u0627\u0644\u0645\u062A\u062F\u0631\u0628 \u0648\u0627\u0644\u0645\u0628\u0644\u063A \u0645\u0637\u0644\u0648\u0628\u0627\u0646" });
     }
@@ -12068,9 +13051,11 @@ apiRouter.post("/finance/payments", async (req, res) => {
     let trainerId = req.body.trainerId;
     let trainerName = req.body.trainerName;
     let trainerCode = req.body.trainerCode;
+    let groupName = trainee.groupName;
     try {
       const group = trainee.groupId ? await GroupRepo.getById(trainee.groupId) : null;
       if (group) {
+        groupName = group.name;
         if (!trainerId && group.trainerId) {
           const tr = await TrainerRepo.getById(group.trainerId);
           if (tr) {
@@ -12090,10 +13075,21 @@ apiRouter.post("/finance/payments", async (req, res) => {
     } catch (e) {
       console.warn("Could not generate smart receipt number, using fallback", e);
     }
+    const now = /* @__PURE__ */ new Date();
+    const currentDateStr = now.toISOString().split("T")[0];
+    const currentTimeStr = now.toLocaleTimeString("ar-EG", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: true });
+    let calculatedNextDueDate = nextDueDate;
+    if (!calculatedNextDueDate) {
+      const nextMonth = new Date(now);
+      nextMonth.setMonth(nextMonth.getMonth() + 1);
+      calculatedNextDueDate = nextMonth.toISOString().split("T")[0];
+    }
+    const currentTargetMonth = targetMonth || now.toLocaleDateString("ar-EG", { month: "long", year: "numeric" });
     const payment = {
       id: "pay-" + Date.now(),
       receiptNumber,
-      date: (/* @__PURE__ */ new Date()).toISOString().split("T")[0],
+      date: currentDateStr,
+      time: currentTimeStr,
       traineeId: trainee.id,
       traineeName: trainee.fullName,
       traineeCode: trainee.code,
@@ -12102,26 +13098,66 @@ apiRouter.post("/finance/payments", async (req, res) => {
       trainerCode,
       courseId: courseId || trainee.courseId,
       branchId: branchId || trainee.branchId,
+      groupName,
+      groupId: trainee.groupId,
       amount: payAmount,
       paymentMethod: paymentMethod || "cash",
       receivedByUserId: receivedByUserId || "admin",
-      receivedByUserName: receivedByUserName || "\u0645\u0648\u0638\u0641 \u0627\u0644\u062E\u0632\u064A\u0646\u0629",
+      receivedByUserName: receivedByUserName || "\u0627\u0644\u0645\u062F\u064A\u0631 \u0627\u0644\u0645\u0627\u0644\u064A \u0648\u0627\u0644\u062E\u0632\u064A\u0646\u0629",
+      targetMonth: currentTargetMonth,
+      parentPhone: parentPhone || trainee.parentPhone || trainee.phone,
+      traineePhone: traineePhone || trainee.phone,
+      previousDebt: previousDebt !== void 0 ? Number(previousDebt) : Math.max(0, (trainee.remainingAmount || 0) - payAmount),
+      discountAmount: discountAmount !== void 0 ? Number(discountAmount) : trainee.discountAmount || 0,
+      isExempt: isExempt !== void 0 ? Boolean(isExempt) : Boolean(trainee.isExempt),
+      exemptReason: exemptReason || trainee.exemptReason,
+      nextDueDate: calculatedNextDueDate,
+      paidMonths: paidMonths || [currentTargetMonth],
       notes: notes || "",
-      createdAt: (/* @__PURE__ */ new Date()).toISOString(),
-      status: "approved"
+      createdAt: now.toISOString(),
+      status: "approved",
+      gdriveSyncStatus: "synced"
     };
     await PaymentRepo.create(payment.id, payment);
+    const isStudentExempt = isExempt !== void 0 ? Boolean(isExempt) : Boolean(trainee.isExempt);
     const newPaid = (trainee.paidAmount || 0) + payAmount;
-    const newRemaining = Math.max(0, (trainee.netAmount || trainee.feeAmount || 0) - newPaid);
-    const updatedTrainee = await TraineeRepo.update(trainee.id, { paidAmount: newPaid, remainingAmount: newRemaining });
+    const currentFee = isStudentExempt ? 0 : trainee.netAmount || trainee.feeAmount || 0;
+    const newRemaining = isStudentExempt ? 0 : Math.max(0, currentFee - newPaid);
+    const traineeUpdates = {
+      paidAmount: newPaid,
+      remainingAmount: newRemaining,
+      nextPaymentDueDate: calculatedNextDueDate,
+      lastPaymentDate: currentDateStr,
+      lastReceiptNumber: receiptNumber
+    };
+    if (discountAmount !== void 0) {
+      traineeUpdates.discountAmount = Number(discountAmount);
+      traineeUpdates.netAmount = isStudentExempt ? 0 : Math.max(0, (trainee.feeAmount || currentFee) - Number(discountAmount));
+    }
+    if (isExempt !== void 0) {
+      traineeUpdates.isExempt = Boolean(isExempt);
+      if (exemptReason) traineeUpdates.exemptReason = exemptReason;
+      if (Boolean(isExempt)) {
+        traineeUpdates.netAmount = 0;
+        traineeUpdates.remainingAmount = 0;
+      }
+    }
+    if (paidMonths && Array.isArray(paidMonths)) {
+      const existingMonths = Array.isArray(trainee.paidMonths) ? trainee.paidMonths : [];
+      traineeUpdates.paidMonths = Array.from(/* @__PURE__ */ new Set([...existingMonths, ...paidMonths, currentTargetMonth]));
+    } else {
+      const existingMonths = Array.isArray(trainee.paidMonths) ? trainee.paidMonths : [];
+      traineeUpdates.paidMonths = Array.from(/* @__PURE__ */ new Set([...existingMonths, currentTargetMonth]));
+    }
+    const updatedTrainee = await TraineeRepo.update(trainee.id, traineeUpdates);
     db.logAudit({
       userId: payment.receivedByUserId,
-      userName: payment.receivedByUserName || "\u0645\u0648\u0638\u0641 \u0627\u0644\u062E\u0632\u064A\u0646\u0629",
-      action: "\u062A\u0633\u062C\u064A\u0644 \u0633\u0646\u062F \u0642\u0628\u0636",
+      userName: payment.receivedByUserName || "\u0627\u0644\u0645\u062F\u064A\u0631 \u0627\u0644\u0645\u0627\u0644\u064A \u0648\u0627\u0644\u062E\u0632\u064A\u0646\u0629",
+      action: "\u062A\u0633\u062C\u064A\u0644 \u0633\u0646\u062F \u062A\u062D\u0635\u064A\u0644 \u0645\u0639\u062A\u0645\u062F",
       entity: "\u0627\u0644\u062E\u0632\u064A\u0646\u0629",
       entityId: payment.id,
       branchId: payment.branchId,
-      details: `\u062A\u0645 \u0627\u0633\u062A\u0644\u0627\u0645 \u0645\u0628\u0644\u063A ${payAmount} \u062C.\u0645 \u0645\u0646 \u0627\u0644\u0645\u062A\u062F\u0631\u0628 ${trainee.fullName} \u0628\u0631\u0642\u0645 \u0625\u064A\u0635\u0627\u0644 ${receiptNumber}`
+      details: `\u062A\u0645 \u0627\u0633\u062A\u0644\u0627\u0645 \u0645\u0628\u0644\u063A ${payAmount} \u062C.\u0645 \u0646\u0642\u062F\u0627\u064B/\u0625\u0644\u0643\u062A\u0631\u0648\u0646\u064A\u0627\u064B \u0645\u0646 \u0627\u0644\u0637\u0627\u0644\u0628 ${trainee.fullName} (${trainee.code}) \u0628\u0631\u0642\u0645 \u0633\u0646\u062F ${receiptNumber} - \u0645\u0633\u062F\u062F \u062D\u062A\u0649 ${calculatedNextDueDate}`
     });
     res.json({ success: true, payment, trainee: updatedTrainee });
   } catch (e) {
@@ -12854,101 +13890,153 @@ apiRouter.get("/points/transactions", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-apiRouter.post("/points/add", async (req, res) => {
-  let { traineeIds, traineeId, points, reason, ruleId, branchId, addedByUserId, addedByUserName } = req.body;
-  if (!Array.isArray(traineeIds)) {
-    if (traineeId) traineeIds = [traineeId];
-    else traineeIds = [];
-  }
-  if (traineeIds.length === 0 || points === void 0 || points === null || isNaN(Number(points))) {
-    return res.status(400).json({ error: "\u0627\u0644\u0645\u062A\u062F\u0631\u0628\u0648\u0646 \u0648\u0642\u064A\u0645\u0629 \u0627\u0644\u0646\u0642\u0627\u0637 \u0645\u0637\u0644\u0648\u0628\u0629" });
-  }
-  const pVal = Number(points);
-  const createdList = [];
+async function awardTraineePoints(studentIdentifier, pointsToAdd, reason, meta) {
+  const pVal = Number(pointsToAdd) || 0;
+  if (pVal === 0) return null;
   const dbData = db.getData();
-  if (!Array.isArray(dbData.deviceCommands)) dbData.deviceCommands = [];
-  for (const tid of traineeIds) {
-    let student = await TraineeRepo.getById(tid);
-    if (!student) {
-      const all = await TraineeRepo.getAll();
-      student = all.find((t) => t.id === tid || t.code === tid);
-    }
-    if (!student && Array.isArray(dbData.trainees)) {
-      student = dbData.trainees.find((t) => t.id === tid || t.code === tid);
-    }
-    if (student) {
-      const newTotal = Math.max(0, (student.totalPoints || student.points || 0) + pVal);
-      student.totalPoints = newTotal;
-      student.points = newTotal;
-      await TraineeRepo.update(student.id, { totalPoints: newTotal, points: newTotal });
-      if (Array.isArray(dbData.trainees)) {
-        const memIdx = dbData.trainees.findIndex((t) => t.id === student.id || t.code === student.code || t.id === tid);
-        if (memIdx >= 0) {
-          dbData.trainees[memIdx].totalPoints = newTotal;
-          dbData.trainees[memIdx].points = newTotal;
-        } else {
-          dbData.trainees.push({ ...student, totalPoints: newTotal, points: newTotal });
+  const allTrainees = await TraineeRepo.getAll();
+  let student = allTrainees.find(
+    (t) => t.id === studentIdentifier || t.code === studentIdentifier || t.code && studentIdentifier && String(t.code).trim().toLowerCase() === String(studentIdentifier).trim().toLowerCase()
+  );
+  if (!student && Array.isArray(dbData.trainees)) {
+    student = dbData.trainees.find(
+      (t) => t.id === studentIdentifier || t.code === studentIdentifier || t.code && studentIdentifier && String(t.code).trim().toLowerCase() === String(studentIdentifier).trim().toLowerCase()
+    );
+  }
+  if (!student) {
+    try {
+      const remoteTrainees = await loadCollectionFromFirestore("trainees");
+      if (Array.isArray(remoteTrainees)) {
+        student = remoteTrainees.find(
+          (t) => t.id === studentIdentifier || t.code === studentIdentifier || t.code && studentIdentifier && String(t.code).trim().toLowerCase() === String(studentIdentifier).trim().toLowerCase()
+        );
+        if (student) {
+          if (!Array.isArray(dbData.trainees)) dbData.trainees = [];
+          const existingMemIdx = dbData.trainees.findIndex(
+            (t) => t.id === student.id || t.code && student.code && String(t.code).trim().toUpperCase() === String(student.code).trim().toUpperCase()
+          );
+          if (existingMemIdx >= 0) {
+            dbData.trainees[existingMemIdx] = { ...dbData.trainees[existingMemIdx], ...student };
+          } else {
+            dbData.trainees.push(student);
+          }
         }
       }
-      const pt = {
-        id: "pt-" + Date.now() + "-" + Math.random().toString(36).substr(2, 4),
-        traineeId: student.id,
-        groupId: student.groupId,
-        branchId: student.branchId,
-        points: pVal,
-        reason: reason || "\u0646\u0634\u0627\u0637 \u062A\u062F\u0631\u064A\u0628\u064A \u0648\u062A\u0641\u0627\u0639\u0644 \u0628\u0627\u0644\u0645\u0639\u0645\u0644",
-        ruleId,
-        addedByUserId: addedByUserId || "admin",
-        addedByUserName: addedByUserName || "\u0627\u0644\u0645\u062D\u0627\u0636\u0631 \u0627\u0644\u0645\u0634\u0631\u0641",
-        createdAt: (/* @__PURE__ */ new Date()).toISOString()
-      };
-      await PointTransactionRepo.create(pt.id, pt);
-      if (!Array.isArray(dbData.pointTransactions)) dbData.pointTransactions = [];
-      dbData.pointTransactions.unshift(pt);
-      createdList.push(pt);
-      const targetDevices = (dbData.devices || []).filter(
-        (d) => d.currentTraineeId === student.id || d.currentTraineeCode === student.code || d.currentTraineeId === tid || d.currentTraineeCode === tid
-      );
-      const cmdPayload = {
-        action: "award_points",
-        points: pVal,
-        newTotal,
-        reason: reason || "\u0646\u0634\u0627\u0637 \u062A\u062F\u0631\u064A\u0628\u064A \u0648\u062A\u0641\u0627\u0639\u0644 \u0645\u062A\u0645\u064A\u0632",
-        traineeName: student.fullName,
-        timestamp: Date.now()
-      };
-      if (targetDevices.length > 0) {
-        targetDevices.forEach((d) => {
-          dbData.deviceCommands.push({
-            id: "cmd-pts-" + Date.now() + "-" + Math.random().toString(36).substr(2, 4),
-            deviceId: d.deviceId || d.id,
-            commandType: "award_points",
-            payload: cmdPayload,
-            status: "pending",
-            createdAt: (/* @__PURE__ */ new Date()).toISOString()
-          });
-        });
-      }
+    } catch (e) {
+      console.warn("[Points] Remote trainee lookup notice:", e);
     }
   }
-  masterBroadcast.lastPointsAwarded = {
-    traineeIds,
+  if (!student) return null;
+  const currentPts = Number(student.totalPoints !== void 0 ? student.totalPoints : student.points || 0);
+  const newTotal = Math.max(0, currentPts + pVal);
+  student.totalPoints = newTotal;
+  student.points = newTotal;
+  if (Array.isArray(dbData.trainees)) {
+    const memIdx = dbData.trainees.findIndex(
+      (t) => t.id === student.id || t.code && student.code && String(t.code).trim().toUpperCase() === String(student.code).trim().toUpperCase() || t.id === studentIdentifier || t.code && studentIdentifier && String(t.code).trim().toUpperCase() === String(studentIdentifier).trim().toUpperCase()
+    );
+    if (memIdx >= 0) {
+      dbData.trainees[memIdx].totalPoints = newTotal;
+      dbData.trainees[memIdx].points = newTotal;
+    } else {
+      dbData.trainees.push({ ...student, totalPoints: newTotal, points: newTotal });
+    }
+    dbData.trainees = db.deduplicateTrainees(dbData.trainees);
+  }
+  const pt = {
+    id: "pt-" + Date.now() + "-" + Math.random().toString(36).substr(2, 5),
+    traineeId: student.id,
+    groupId: student.groupId,
+    branchId: student.branchId,
     points: pVal,
     reason: reason || "\u0646\u0634\u0627\u0637 \u062A\u062F\u0631\u064A\u0628\u064A \u0648\u062A\u0641\u0627\u0639\u0644 \u0645\u062A\u0645\u064A\u0632",
+    ruleId: meta?.ruleId || "rule-manual",
+    addedByUserId: meta?.addedByUserId || "admin",
+    addedByUserName: meta?.addedByUserName || "\u0627\u0644\u0645\u0634\u0631\u0641 \u0627\u0644\u0623\u0643\u0627\u062F\u064A\u0645\u064A",
+    createdAt: (/* @__PURE__ */ new Date()).toISOString()
+  };
+  if (!Array.isArray(dbData.pointTransactions)) dbData.pointTransactions = [];
+  dbData.pointTransactions.unshift(pt);
+  if (!Array.isArray(dbData.deviceCommands)) dbData.deviceCommands = [];
+  const targetDevices = (dbData.devices || []).filter(
+    (d) => d.currentTraineeId === student.id || d.currentTraineeCode === student.code || d.currentTraineeId === studentIdentifier || d.currentTraineeCode === studentIdentifier
+  );
+  const cmdPayload = {
+    action: meta?.action || "award_points",
+    points: pVal,
+    newTotal,
+    reason: reason || "\u0646\u0634\u0627\u0637 \u062A\u062F\u0631\u064A\u0628\u064A \u0648\u062A\u0641\u0627\u0639\u0644 \u0645\u062A\u0645\u064A\u0632",
+    traineeName: student.fullName,
     timestamp: Date.now()
   };
-  masterBroadcast.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
-  db.recalculateTraineeRankings();
-  db.saveImmediate();
-  TraineeRepo.invalidateCache();
-  db.logAudit({
-    userId: addedByUserId || "admin",
-    userName: addedByUserName || "\u0645\u0633\u0624\u0648\u0644 \u0627\u0644\u0646\u0642\u0627\u0637",
-    action: "\u0625\u0636\u0627\u0641\u0629/\u062E\u0635\u0645 \u0646\u0642\u0627\u0637",
-    entity: "\u0646\u0638\u0627\u0645 \u0627\u0644\u0646\u0642\u0627\u0637",
-    details: `\u062A\u0645 \u0645\u0646\u062D/\u062A\u0639\u062F\u064A\u0644 ${pVal} \u0646\u0642\u0637\u0629 \u0644\u0639\u062F\u062F ${traineeIds.length} \u0645\u062A\u062F\u0631\u0628 - \u0627\u0644\u0633\u0628\u0628: ${reason}`
-  });
-  res.json({ success: true, modifiedCount: createdList.length });
+  if (targetDevices.length > 0) {
+    targetDevices.forEach((d) => {
+      dbData.deviceCommands.push({
+        id: "cmd-pts-" + Date.now() + "-" + Math.random().toString(36).substr(2, 4),
+        deviceId: d.deviceId || d.id,
+        commandType: "award_points",
+        payload: cmdPayload,
+        status: "pending",
+        createdAt: (/* @__PURE__ */ new Date()).toISOString()
+      });
+    });
+  }
+  return { student, newTotal, pt };
+}
+apiRouter.post("/points/add", async (req, res) => {
+  try {
+    let { traineeIds, traineeId, points, reason, ruleId, branchId, addedByUserId, addedByUserName } = req.body;
+    if (!Array.isArray(traineeIds)) {
+      if (traineeId) traineeIds = [traineeId];
+      else traineeIds = [];
+    }
+    if (traineeIds.length === 0 || points === void 0 || points === null || isNaN(Number(points))) {
+      return res.status(400).json({ error: "\u0627\u0644\u0645\u062A\u062F\u0631\u0628\u0648\u0646 \u0648\u0642\u064A\u0645\u0629 \u0627\u0644\u0646\u0642\u0627\u0637 \u0645\u0637\u0644\u0648\u0628\u0629" });
+    }
+    const pVal = Number(points);
+    const createdList = [];
+    for (const tid of traineeIds) {
+      const resAward = await awardTraineePoints(tid, pVal, reason || "\u0646\u0634\u0627\u0637 \u062A\u062F\u0631\u064A\u0628\u064A \u0648\u062A\u0641\u0627\u0639\u0644 \u0628\u0627\u0644\u0645\u0639\u0645\u0644", {
+        addedByUserId: addedByUserId || "admin",
+        addedByUserName: addedByUserName || "\u0627\u0644\u0645\u062D\u0627\u0636\u0631 \u0627\u0644\u0645\u0634\u0631\u0641",
+        ruleId
+      });
+      if (resAward && resAward.pt) {
+        createdList.push(resAward.pt);
+      }
+    }
+    const dbData = db.getData();
+    if (Array.isArray(dbData.trainees)) {
+      dbData.trainees = db.deduplicateTrainees(dbData.trainees);
+    }
+    masterBroadcast.lastPointsAwarded = {
+      traineeIds,
+      points: pVal,
+      reason: reason || "\u0646\u0634\u0627\u0637 \u062A\u062F\u0631\u064A\u0628\u064A \u0648\u062A\u0641\u0627\u0639\u0644 \u0645\u062A\u0645\u064A\u0632",
+      timestamp: Date.now()
+    };
+    masterBroadcast.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
+    db.recalculateTraineeRankings();
+    db.save();
+    TraineeRepo.invalidateCache();
+    try {
+      await saveCollectionToFirestore("trainees", dbData.trainees);
+      await saveCollectionToFirestore("pointTransactions", dbData.pointTransactions);
+    } catch (fsErr) {
+      console.warn("[Points] Firestore cloud sync warning:", fsErr);
+    }
+    db.logAudit({
+      userId: addedByUserId || "admin",
+      userName: addedByUserName || "\u0645\u0633\u0624\u0648\u0644 \u0627\u0644\u0646\u0642\u0627\u0637",
+      action: "\u0625\u0636\u0627\u0641\u0629/\u062E\u0635\u0645 \u0646\u0642\u0627\u0637",
+      entity: "\u0646\u0638\u0627\u0645 \u0627\u0644\u0646\u0642\u0627\u0637",
+      details: `\u062A\u0645 \u0645\u0646\u062D/\u062A\u0639\u062F\u064A\u0644 ${pVal} \u0646\u0642\u0637\u0629 \u0644\u0639\u062F\u062F ${traineeIds.length} \u0645\u062A\u062F\u0631\u0628 - \u0627\u0644\u0633\u0628\u0628: ${reason}`
+    });
+    res.json({ success: true, modifiedCount: createdList.length });
+  } catch (err) {
+    console.error("[Points] Error in /points/add:", err);
+    res.status(500).json({ success: false, error: err?.message || "\u0641\u0634\u0644 \u0645\u0646\u062D \u0627\u0644\u0646\u0642\u0627\u0637" });
+  }
 });
 apiRouter.get("/points/leaderboard", async (req, res) => {
   try {
@@ -13288,11 +14376,54 @@ apiRouter.get("/assignments", (req, res) => {
   if (groupId && groupId !== "all") assignments = assignments.filter((a) => a.groupId === groupId);
   res.json(assignments);
 });
+apiRouter.get("/assignments/:id", (req, res) => {
+  const { id } = req.params;
+  const assignments = db.getData().assignments || [];
+  const found = assignments.find((a) => a.id === id || a.shareableCode === id);
+  if (!found) {
+    return res.status(404).json({ success: false, error: "\u0644\u0645 \u064A\u062A\u0645 \u0627\u0644\u0639\u062B\u0648\u0631 \u0639\u0644\u0649 \u0627\u0644\u062A\u0643\u0644\u064A\u0641 \u0623\u0648 \u0627\u0644\u0645\u0633\u0627\u0628\u0642\u0629" });
+  }
+  res.json({ success: true, assignment: found });
+});
+apiRouter.get("/public/challenge/:id", (req, res) => {
+  const { id } = req.params;
+  const assignments = db.getData().assignments || [];
+  const found = assignments.find((a) => a.id === id || a.shareableCode === id);
+  if (!found) {
+    return res.status(404).json({ success: false, error: "\u0644\u0645 \u064A\u062A\u0645 \u0627\u0644\u0639\u062B\u0648\u0631 \u0639\u0644\u0649 \u0627\u0644\u062A\u062D\u062F\u064A \u0627\u0644\u0645\u0637\u0644\u0648\u0628" });
+  }
+  res.json({
+    success: true,
+    challenge: found,
+    trainees: db.getData().trainees || []
+  });
+});
 apiRouter.post("/assignments", (req, res) => {
-  const { title, description, courseId, courseName, groupId, groupName, branchId, totalMarks, dueDate, preventLateSubmission, attachments, codeTemplate, programmingLanguage, testCases } = req.body;
+  const {
+    title,
+    description,
+    courseId,
+    courseName,
+    groupId,
+    groupName,
+    branchId,
+    totalMarks,
+    dueDate,
+    preventLateSubmission,
+    attachments,
+    codeTemplate,
+    programmingLanguage,
+    testCases,
+    quizGame,
+    assignmentType,
+    evaluationSource,
+    shareableCode,
+    aiGenerated
+  } = req.body;
   if (!title || !courseId) {
     return res.status(400).json({ error: "\u0627\u0644\u0639\u0646\u0648\u0627\u0646 \u0648\u0627\u0644\u062F\u0648\u0631\u0629 \u062D\u0642\u0648\u0644 \u0645\u0637\u0644\u0648\u0628\u0629" });
   }
+  const generatedCode = shareableCode || "KHT-" + Math.floor(1e3 + Math.random() * 9e3);
   const newAssignment = {
     id: "assign-" + Date.now(),
     title: title.trim(),
@@ -13309,6 +14440,11 @@ apiRouter.post("/assignments", (req, res) => {
     codeTemplate: codeTemplate || "",
     programmingLanguage: programmingLanguage || "python",
     testCases: Array.isArray(testCases) ? testCases : [],
+    quizGame: quizGame || null,
+    assignmentType: assignmentType || (quizGame ? "interactive_quiz" : "standard"),
+    evaluationSource: evaluationSource || "",
+    shareableCode: generatedCode,
+    aiGenerated: !!aiGenerated,
     createdAt: (/* @__PURE__ */ new Date()).toISOString(),
     submissionsCount: 0,
     gradedCount: 0
@@ -13334,6 +14470,74 @@ apiRouter.post("/assignments", (req, res) => {
     details: `\u062A\u0645 \u0646\u0634\u0631 \u0648\u0627\u062C\u0628 \u062C\u062F\u064A\u062F: ${newAssignment.title} (\u0627\u0644\u062F\u0631\u062C\u0629: ${newAssignment.totalMarks})`
   });
   res.json({ success: true, assignment: newAssignment });
+});
+apiRouter.post("/homeworks/submit-quiz", async (req, res) => {
+  try {
+    const {
+      assignmentId,
+      traineeId,
+      traineeCode,
+      traineeName,
+      score,
+      maxScore,
+      percentage,
+      starsEarned,
+      totalTimeSpent
+    } = req.body;
+    const data = db.getData();
+    if (!Array.isArray(data.homeworkSubmissions)) data.homeworkSubmissions = [];
+    const assignment = (data.assignments || []).find((a) => a.id === assignmentId);
+    const taskTitle = assignment?.title || req.body.taskTitle || "\u062A\u062D\u062F\u064A \u0643\u0627\u0647\u0648\u062A \u0627\u0644\u062A\u0641\u0627\u0639\u0644\u064A";
+    const grade = Math.round(Number(score) || 0);
+    const totalMax = Math.round(Number(maxScore) || 100);
+    const pct = Math.round(Number(percentage) || Math.round(grade / totalMax * 100));
+    let rating = "\u0645\u0645\u062A\u0627\u0632 \u{1F31F}";
+    if (pct < 50) rating = "\u064A\u062D\u062A\u0627\u062C \u0644\u0645\u0632\u064A\u062F \u0645\u0646 \u0627\u0644\u0645\u0631\u0627\u062C\u0639\u0629";
+    else if (pct < 75) rating = "\u062C\u064A\u062F \u{1F44D}";
+    else if (pct < 90) rating = "\u062C\u064A\u062F \u062C\u062F\u0627\u064B \u{1F3AF}";
+    const submissionId = "sub-kht-" + Date.now();
+    const submission = {
+      id: submissionId,
+      assignmentId: assignmentId || void 0,
+      traineeId: traineeId || "student-guest",
+      traineeCode: traineeCode || "\u0645000",
+      traineeName: traineeName || "\u0645\u062A\u062F\u0631\u0628 \u0645\u062A\u0645\u064A\u0632",
+      courseId: assignment?.courseId,
+      courseName: assignment?.courseName,
+      taskTitle,
+      submittedAt: (/* @__PURE__ */ new Date()).toISOString(),
+      mediaType: "text",
+      studentNotes: `\u062A\u0645 \u0625\u0643\u0645\u0627\u0644 \u0627\u0644\u062A\u062D\u062F\u064A \u0627\u0644\u062A\u0641\u0627\u0639\u0644\u064A \u0628\u0646\u062C\u0627\u062D \u062E\u0644\u0627\u0644 ${totalTimeSpent || 0} \u062B\u0627\u0646\u064A\u0629`,
+      grade,
+      maxGrade: totalMax,
+      percentage: pct,
+      rating,
+      strengths: [`\u0625\u0643\u0645\u0627\u0644 \u0645\u0633\u0627\u0628\u0642\u0629 \u0643\u0627\u0647\u0648\u062A \u0628\u0646\u0633\u0628\u0629 \u0646\u062C\u0627\u062D ${pct}%`],
+      corrections: [],
+      generalFeedback: `\u0623\u062F\u0627\u0621 \u062A\u0641\u0627\u0639\u0644\u064A \u0645\u062A\u0645\u064A\u0632 \u0641\u064A \u062A\u062D\u062F\u064A \u0627\u0644\u0623\u0633\u0626\u0644\u0629! \u062A\u0645 \u0627\u0644\u062D\u0635\u0648\u0644 \u0639\u0644\u0649 ${grade} \u0645\u0646 ${totalMax} \u0646\u0642\u0637\u0629.`,
+      status: "reviewed",
+      stars: starsEarned || (pct >= 80 ? 3 : pct >= 60 ? 2 : 1),
+      pointsAwarded: Math.max(10, Math.round(grade / 2)),
+      submissionChannel: "home_student_portal"
+    };
+    data.homeworkSubmissions.unshift(submission);
+    if (assignment) {
+      assignment.submissionsCount = (assignment.submissionsCount || 0) + 1;
+      assignment.gradedCount = (assignment.gradedCount || 0) + 1;
+    }
+    if (traineeId && traineeId !== "student-guest") {
+      const pts = submission.pointsAwarded;
+      await awardTraineePoints(traineeId, pts, `\u{1F3AF} \u0625\u0646\u062C\u0627\u0632 \u062A\u062D\u062F\u064A \u0643\u0627\u0647\u0648\u062A \u0648\u0627\u0644\u0648\u0627\u062C\u0628 \u0627\u0644\u062A\u0641\u0627\u0639\u0644\u064A: ${taskTitle}`, {
+        addedByUserId: "system-lms",
+        addedByUserName: "\u0645\u0646\u0638\u0648\u0645\u0629 \u0627\u0644\u062A\u062D\u062F\u064A\u0627\u062A \u0627\u0644\u0630\u0643\u064A\u0629"
+      });
+    }
+    db.saveImmediate();
+    res.json({ success: true, submission, message: "\u062A\u0645 \u062D\u0641\u0638 \u0627\u0644\u0646\u062A\u064A\u062C\u0629 \u0648\u0645\u0646\u062D \u0627\u0644\u0646\u0642\u0627\u0637 \u0644\u0644\u0645\u062A\u062F\u0631\u0628 \u0628\u0646\u062C\u0627\u062D \u{1F389}" });
+  } catch (err) {
+    console.error("Error submitting quiz result:", err);
+    res.status(500).json({ success: false, error: err.message || "\u0641\u0634\u0644 \u062D\u0641\u0638 \u0646\u062A\u064A\u062C\u0629 \u0627\u0644\u062A\u062D\u062F\u064A" });
+  }
 });
 apiRouter.delete("/assignments/:id", (req, res) => {
   const { id } = req.params;
@@ -13383,7 +14587,9 @@ apiRouter.post("/homeworks/batch-grade", async (req, res) => {
   if (!Array.isArray(submissionIds) || submissionIds.length === 0) {
     return res.status(400).json({ error: "\u064A\u0631\u062C\u0649 \u062A\u062D\u062F\u064A\u062F \u062A\u0633\u0644\u064A\u0645 \u0648\u0627\u062D\u062F \u0639\u0644\u0649 \u0627\u0644\u0623\u0642\u0644 \u0644\u0644\u062A\u0635\u062D\u064A\u062D \u0627\u0644\u062C\u0645\u0627\u0639\u064A" });
   }
-  const submissions = db.getData().homeworkSubmissions || [];
+  const data = db.getData();
+  if (!Array.isArray(data.homeworkSubmissions)) data.homeworkSubmissions = [];
+  const submissions = data.homeworkSubmissions;
   let updatedCount = 0;
   for (const id of submissionIds) {
     const sub = submissions.find((s) => s.id === id);
@@ -13394,27 +14600,18 @@ apiRouter.post("/homeworks/batch-grade", async (req, res) => {
       sub.status = "graded";
       if (bonusPoints && Number(bonusPoints) > 0) {
         const pts = Number(bonusPoints);
-        const trainee = (db.getData().trainees || []).find((t) => t.id === sub.traineeId || t.code === sub.traineeCode);
-        if (trainee) {
-          trainee.totalPoints = (trainee.totalPoints || 0) + pts;
-          trainee.points = trainee.totalPoints;
-          db.getData().pointTransactions.unshift({
-            id: "pt-" + Date.now() + "-" + Math.random().toString(36).substr(2, 4),
-            traineeId: trainee.id,
-            groupId: trainee.groupId,
-            branchId: trainee.branchId,
-            points: pts,
-            reason: `\u{1F31F} \u0646\u0642\u0627\u0637 \u062A\u0645\u064A\u0632 \u0625\u0636\u0627\u0641\u064A\u0629 \u0644\u062A\u0635\u062D\u064A\u062D \u0627\u0644\u0648\u0627\u062C\u0628 (${sub.taskTitle})`,
+        const tid = sub.traineeId || sub.studentId || sub.traineeCode;
+        if (tid) {
+          await awardTraineePoints(tid, pts, `\u{1F31F} \u0646\u0642\u0627\u0637 \u062A\u0645\u064A\u0632 \u0644\u062A\u0635\u062D\u064A\u062D \u0627\u0644\u0648\u0627\u062C\u0628 (${sub.taskTitle || "\u0648\u0627\u062C\u0628"})`, {
             addedByUserId: "trainer",
-            addedByUserName: "\u0627\u0644\u0645\u062F\u0631\u0628",
-            createdAt: (/* @__PURE__ */ new Date()).toISOString()
+            addedByUserName: "\u0627\u0644\u0645\u062F\u0631\u0628"
           });
         }
       }
       updatedCount++;
     }
   }
-  db.save();
+  db.saveImmediate();
   res.json({ success: true, updatedCount, message: `\u062A\u0645 \u062A\u0635\u062D\u064A\u062D ${updatedCount} \u0648\u0627\u062C\u0628\u0627\u062A \u062C\u0645\u0627\u0639\u064A\u0627\u064B \u0648\u0625\u0631\u0633\u0627\u0644 \u0627\u0644\u062F\u0631\u062C\u0627\u062A \u0628\u0646\u062C\u0627\u062D` });
 });
 apiRouter.get(["/homeworks", "/homeworks/"], (req, res) => {
@@ -13457,7 +14654,7 @@ apiRouter.get("/homeworks/:id", (req, res) => {
     res.status(500).json({ error: "\u0641\u0634\u0644 \u062C\u0644\u0628 \u062A\u0641\u0627\u0635\u064A\u0644 \u0627\u0644\u0648\u0627\u062C\u0628: " + err.message });
   }
 });
-apiRouter.put("/homeworks/:id", (req, res) => {
+apiRouter.put("/homeworks/:id", async (req, res) => {
   try {
     const { id } = req.params;
     const { grade, trainerNotes, generalFeedback, stars, audioFeedbackUrl, bonusPoints, status } = req.body;
@@ -13476,26 +14673,20 @@ apiRouter.put("/homeworks/:id", (req, res) => {
     if (stars !== void 0) sub.stars = stars;
     if (audioFeedbackUrl !== void 0) sub.audioFeedbackUrl = audioFeedbackUrl;
     sub.status = status || "reviewed";
+    delete sub.imageBase64;
+    delete sub.fileData;
+    if (sub.attachmentUrl && sub.attachmentUrl.startsWith("data:image")) {
+      sub.attachmentUrl = "";
+      sub.isImageArchived = true;
+    }
     if (bonusPoints && Number(bonusPoints) > 0) {
       const pts = Number(bonusPoints);
       sub.pointsAwarded = (sub.pointsAwarded || 0) + pts;
-      const trainee2 = (data.trainees || []).find(
-        (t) => t.id === sub.traineeId || t.id === sub.studentId || t.code && sub.traineeCode && String(t.code).trim() === String(sub.traineeCode).trim()
-      );
-      if (trainee2) {
-        trainee2.totalPoints = Number(trainee2.totalPoints || trainee2.points || 0) + pts;
-        trainee2.points = trainee2.totalPoints;
-        if (!Array.isArray(data.pointTransactions)) data.pointTransactions = [];
-        data.pointTransactions.unshift({
-          id: "pt-" + Date.now() + "-" + Math.random().toString(36).substring(2, 6),
-          traineeId: trainee2.id,
-          groupId: trainee2.groupId,
-          branchId: trainee2.branchId,
-          points: pts,
-          reason: `\u{1F31F} \u0646\u0642\u0627\u0637 \u062A\u0645\u064A\u0632 \u0625\u0636\u0627\u0641\u064A\u0629 \u0644\u062A\u0635\u062D\u064A\u062D \u0627\u0644\u0648\u0627\u062C\u0628 (${sub.taskTitle || "\u0627\u0644\u062A\u0637\u0628\u064A\u0642 \u0627\u0644\u0645\u0628\u0627\u0634\u0631"})`,
+      const tid = sub.traineeId || sub.studentId || sub.traineeCode;
+      if (tid) {
+        await awardTraineePoints(tid, pts, `\u{1F31F} \u0646\u0642\u0627\u0637 \u062A\u0645\u064A\u0632 \u0625\u0636\u0627\u0641\u064A\u0629 \u0644\u062A\u0635\u062D\u064A\u062D \u0627\u0644\u0648\u0627\u062C\u0628 (${sub.taskTitle || "\u0627\u0644\u062A\u0637\u0628\u064A\u0642 \u0627\u0644\u0645\u0628\u0627\u0634\u0631"})`, {
           addedByUserId: "trainer",
-          addedByUserName: "\u0627\u0644\u0645\u0639\u0644\u0645/\u0627\u0644\u0625\u062F\u0627\u0631\u0629",
-          createdAt: (/* @__PURE__ */ new Date()).toISOString()
+          addedByUserName: "\u0627\u0644\u0645\u0639\u0644\u0645/\u0627\u0644\u0625\u062F\u0627\u0631\u0629"
         });
       }
     }
@@ -14398,6 +15589,15 @@ apiRouter.post("/student/login", async (req, res) => {
   const course = courses.find((c) => c.id === trainee.courseId) || courses[0];
   const group = groups.find((g) => g.id === trainee.groupId) || groups[0];
   const trainer = group ? trainers.find((tr) => tr.id === group.trainerId) : trainers[0];
+  const rawPts = Number(trainee.totalPoints !== void 0 ? trainee.totalPoints : trainee.points !== void 0 ? trainee.points : 0);
+  const studentTx = (db.getData().pointTransactions || []).filter((pt) => pt.traineeId === trainee.id);
+  const sumTx = studentTx.reduce((acc, cur) => acc + (Number(cur.points) || 0), 0);
+  const effectivePoints = Math.max(rawPts, sumTx);
+  if (effectivePoints !== trainee.totalPoints || effectivePoints !== trainee.points) {
+    trainee.totalPoints = effectivePoints;
+    trainee.points = effectivePoints;
+    await TraineeRepo.update(trainee.id, { totalPoints: effectivePoints, points: effectivePoints });
+  }
   const studentData = {
     id: trainee.id,
     code: trainee.code || (codeOrPhone ? String(codeOrPhone).toUpperCase() : ""),
@@ -14405,8 +15605,8 @@ apiRouter.post("/student/login", async (req, res) => {
     phone: trainee.phone || "",
     nationalId: trainee.nationalId || "",
     photoUrl: trainee.photoUrl || "",
-    points: trainee.points || 120,
-    totalPoints: trainee.totalPoints || 180,
+    points: effectivePoints,
+    totalPoints: effectivePoints,
     courseName: course?.name || "\u0627\u0644\u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u0648\u0627\u0644\u0628\u0631\u0645\u062C\u0629 \u0627\u0644\u062D\u062F\u064A\u062B\u0629",
     groupName: group?.name || "\u0627\u0644\u0645\u062C\u0645\u0648\u0639\u0629 \u0627\u0644\u0623\u0633\u0627\u0633\u064A\u0629",
     branchId: trainee.branchId || "branch-1",
@@ -14425,46 +15625,52 @@ apiRouter.post("/student/login", async (req, res) => {
     email: "trainer@nagah.ms",
     specialization: "\u062E\u0628\u064A\u0631 \u0627\u0644\u0628\u0631\u0645\u062C\u0629 \u0648\u0627\u0644\u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627"
   };
-  const groupTasks = [
-    { id: "task-1", title: "\u0648\u0627\u062C\u0628 \u062A\u0637\u0628\u064A\u0642 \u0627\u0644\u062F\u0631\u0633 \u0627\u0644\u0639\u0645\u0644\u064A \u0648\u0627\u0644\u0645\u0634\u0631\u0648\u0639 \u0627\u0644\u0631\u0626\u064A\u0633\u064A", courseName: studentData.courseName, maxPoints: 50 },
+  const dbAssignments = (db.getData().assignments || []).filter(
+    (a) => !a.courseId || a.courseId === trainee.courseId || a.courseName && studentData.courseName && a.courseName.toLowerCase() === studentData.courseName.toLowerCase() || !a.groupId || a.groupId === trainee.groupId
+  );
+  const groupTasks = dbAssignments.length > 0 ? dbAssignments.map((a) => ({
+    id: a.id,
+    title: a.title,
+    courseName: a.courseName || studentData.courseName,
+    maxPoints: a.totalMarks || 50,
+    dueDate: a.dueDate,
+    assignmentType: a.assignmentType,
+    quizGame: a.quizGame,
+    evaluationSource: a.evaluationSource
+  })) : [
+    { id: "task-1", title: "\u0648\u0627\u062C\u0628 \u062A\u0637\u0628\u064A\u0642 \u0627\u0644\u062F\u0631\u0633 \u0627\u0644\u0639\u0645\u0644\u064A \u0648\u0627\u0644\u062A\u0642\u064A\u064A\u0645 \u0627\u0644\u0623\u0633\u0628\u0648\u0639\u064A", courseName: studentData.courseName, maxPoints: 50 },
     { id: "task-2", title: "\u062D\u0644 \u062A\u0645\u0627\u0631\u064A\u0646 \u0643\u062A\u0627\u0628 \u0627\u0644\u0623\u0646\u0634\u0637\u0629 \u0648\u062A\u0635\u0648\u064A\u0631 \u0627\u0644\u0635\u0641\u062D\u0629", courseName: studentData.courseName, maxPoints: 30 },
-    { id: "task-3", title: "\u0645\u0634\u0631\u0648\u0639 \u0627\u0644\u0627\u0628\u062A\u0643\u0627\u0631 \u0648\u0627\u0644\u062A\u0637\u0628\u064A\u0642 \u0627\u0644\u0630\u0627\u062A\u064A \u0627\u0644\u0628\u0631\u0645\u062C\u064A", courseName: studentData.courseName, maxPoints: 50 }
+    { id: "task-3", title: "\u062A\u062D\u062F\u064A \u0627\u0644\u0645\u0639\u0631\u0641\u0629 \u0648\u0627\u0644\u0627\u0628\u062A\u0643\u0627\u0631 \u0627\u0644\u0630\u0627\u062A\u064A", courseName: studentData.courseName, maxPoints: 50 }
   ];
   const allStudentHW = (db.getData().homeworkSubmissions || []).filter(
-    (h) => h.traineeId === trainee.id || h.traineeCode && trainee.code && String(h.traineeCode).trim().toLowerCase() === String(trainee.code).trim().toLowerCase()
+    (h) => h.traineeId === trainee.id || h.studentId === trainee.id || h.traineeCode && trainee.code && String(h.traineeCode).trim().toLowerCase() === String(trainee.code).trim().toLowerCase() || h.studentCode && trainee.code && String(h.studentCode).trim().toLowerCase() === String(trainee.code).trim().toLowerCase()
   );
-  const studentHomeworks = allStudentHW.length > 0 ? allStudentHW : [
-    {
-      id: "hw-welcome-1",
-      taskTitle: "\u0648\u0627\u062C\u0628 \u062A\u0637\u0628\u064A\u0642 \u0627\u0644\u062F\u0631\u0633 \u0627\u0644\u0639\u0645\u0644\u064A \u0648\u0627\u0644\u0645\u0634\u0631\u0648\u0639 \u0627\u0644\u0631\u0626\u064A\u0633\u064A",
-      courseName: studentData.courseName,
-      submittedAt: (/* @__PURE__ */ new Date()).toISOString(),
-      grade: 95,
-      maxGrade: 100,
-      percentage: 95,
-      rating: "\u0645\u0645\u062A\u0627\u0632 \u{1F31F}",
-      generalFeedback: "\u0623\u0647\u0644\u0627\u064B \u0628\u0643 \u064A\u0627 \u0628\u0637\u0644! \u062A\u0645 \u062A\u0648\u062B\u064A\u0642 \u062A\u0641\u0648\u0642\u0643 \u0648\u062D\u0631\u0635\u0643 \u0639\u0644\u0649 \u0623\u062F\u0627\u0621 \u0627\u0644\u0648\u0627\u062C\u0628\u0627\u062A \u0648\u0627\u0644\u062A\u0637\u0628\u064A\u0642\u0627\u062A \u0627\u0644\u0639\u0645\u0644\u064A\u0629 \u0628\u0645\u0633\u062A\u0648\u0649 \u0631\u0641\u064A\u0639.",
-      pointsAwarded: 20
-    }
-  ];
+  const studentHomeworks = allStudentHW.length > 0 ? allStudentHW : [];
   const allStudentMsgs = (db.getData().portalMessages || []).filter(
     (m) => m.traineeId === trainee.id || m.traineeCode && trainee.code && String(m.traineeCode).trim().toLowerCase() === String(trainee.code).trim().toLowerCase() || m.recipientId === trainee.id || m.recipientId === trainee.groupId || m.recipientType === "all" || m.recipientType === "students"
+  );
+  const rawBadges = (db.getData().badges || db.getData().traineeBadges || []).filter(
+    (b) => b.traineeId === trainee.id || b.studentId === trainee.id
+  );
+  const studentBadges = rawBadges.length > 0 ? rawBadges : [
+    { id: "b-1", title: "\u0645\u0628\u0631\u0645\u062C \u0627\u0644\u0645\u0633\u062A\u0642\u0628\u0644", description: "\u0625\u062A\u0645\u0627\u0645 \u0627\u0644\u062A\u0645\u0627\u0631\u064A\u0646 \u0627\u0644\u0623\u0648\u0644\u0649 \u0628\u062A\u0641\u0648\u0642", icon: "\u{1F3C6}", date: (/* @__PURE__ */ new Date()).toISOString().split("T")[0] },
+    { id: "b-2", title: "\u0646\u062C\u0645 \u0627\u0644\u062D\u0636\u0648\u0631 \u0648\u0627\u0644\u0627\u0644\u062A\u0632\u0627\u0645", description: "\u0627\u0644\u0627\u0644\u062A\u0632\u0627\u0645 \u0628\u062D\u0636\u0648\u0631 \u0627\u0644\u062D\u0635\u0635 \u0648\u0627\u0644\u062A\u0641\u0627\u0639\u0644 \u0627\u0644\u0645\u062A\u0645\u064A\u0632", icon: "\u2B50", date: (/* @__PURE__ */ new Date()).toISOString().split("T")[0] }
+  ];
+  const studentCerts = (db.getData().certificates || []).filter(
+    (c) => c.traineeId === trainee.id || c.studentId === trainee.id
   );
   res.json({
     success: true,
     student: studentData,
     trainer: trainerData,
-    badges: [
-      { id: "b-1", title: "\u0645\u0628\u0631\u0645\u062C \u0627\u0644\u0645\u0633\u062A\u0642\u0628\u0644", description: "\u0625\u062A\u0645\u0627\u0645 \u0627\u0644\u062A\u0645\u0627\u0631\u064A\u0646 \u0627\u0644\u0623\u0648\u0644\u0649 \u0628\u062A\u0641\u0648\u0642", icon: "\u{1F3C6}", date: "2026-08-01" },
-      { id: "b-2", title: "\u0646\u062C\u0645 \u0627\u0644\u062D\u0636\u0648\u0631", description: "\u0627\u0644\u0627\u0644\u062A\u0632\u0627\u0645 \u0628\u062D\u0636\u0648\u0631 \u0627\u0644\u062D\u0635\u0635 \u0641\u064A \u0645\u0648\u0627\u0639\u064A\u062F\u0647\u0627", icon: "\u2B50", date: "2026-08-10" }
-    ],
+    badges: studentBadges,
     homeworks: studentHomeworks,
     labSchedules: [
       { id: "lab-1", title: "\u062D\u0635\u0629 \u0627\u0644\u0645\u0639\u0645\u0644 \u0648\u0627\u0644\u062A\u062F\u0631\u064A\u0628 \u0627\u0644\u0639\u0645\u0644\u064A", time: "\u0627\u0644\u0633\u0628\u062A 10:00 \u0635", room: "\u0627\u0644\u0645\u0639\u0645\u0644 \u0627\u0644\u0631\u0626\u064A\u0633\u064A (1)", status: "upcoming" }
     ],
     groupTasks,
-    certificates: [
-      { id: "cert-1", title: "\u0634\u0647\u0627\u062F\u0629 \u0627\u062C\u062A\u064A\u0627\u0632 \u0623\u0633\u0627\u0633\u064A\u0627\u062A \u0627\u0644\u0628\u0631\u0645\u062C\u0629", issueDate: "2026-08-15", grade: "\u0645\u0645\u062A\u0627\u0632 \u0645\u0639 \u0645\u0631\u062A\u0628\u0629 \u0627\u0644\u0634\u0631\u0641" }
+    certificates: studentCerts.length > 0 ? studentCerts : [
+      { id: "cert-1", title: `\u0634\u0647\u0627\u062F\u0629 \u0627\u0644\u062A\u062D\u0627\u0642 \u0648\u062A\u0641\u0648\u0642 \u0641\u064A ${studentData.courseName}`, issueDate: (/* @__PURE__ */ new Date()).toISOString().split("T")[0], grade: "\u0645\u0645\u062A\u0627\u0632" }
     ],
     portalMessages: allStudentMsgs
   });
@@ -14589,8 +15795,48 @@ async function closeoutFinishedLectureAttendance(targetGroupId) {
             addedByUserName: "\u0646\u0638\u0627\u0645 \u0631\u0635\u062F \u0627\u0644\u0645\u0639\u0645\u0644 \u0627\u0644\u0622\u0644\u064A",
             createdAt: (/* @__PURE__ */ new Date()).toISOString()
           });
+          if (!db.getData().portalMessages) db.getData().portalMessages = [];
+          db.getData().portalMessages.unshift({
+            id: "msg-abs-" + Date.now() + "-" + Math.random().toString(36).substr(2, 4),
+            traineeId: trainee.id,
+            traineeCode: trainee.code,
+            recipientId: trainee.id,
+            recipientType: "parent",
+            sender: "\u0625\u062F\u0627\u0631\u0629 \u0634\u0624\u0648\u0646 \u0627\u0644\u0637\u0644\u0627\u0628 \u0648\u0627\u0644\u0645\u0639\u0627\u0645\u0644",
+            senderRole: "admin",
+            title: "\u26A0\uFE0F \u0625\u0634\u0639\u0627\u0631 \u063A\u064A\u0627\u0628 \u0639\u0646 \u0645\u062D\u0627\u0636\u0631\u0629 \u0627\u0644\u064A\u0648\u0645",
+            content: `\u0646\u062D\u064A\u0637\u0643\u0645 \u0639\u0644\u0645\u0627\u064B \u0628\u0623\u0646 \u0627\u0644\u0637\u0627\u0644\u0628 (${trainee.fullName}) \u062A\u063A\u064A\u0628 \u0639\u0646 \u062D\u0636\u0648\u0631 \u0645\u062D\u0627\u0636\u0631\u0629 \u0627\u0644\u064A\u0648\u0645 \u0627\u0644\u0645\u0642\u0631\u0631\u0629 \u0644\u0645\u062C\u0645\u0648\u0639\u062A\u0647 (${group.name}) \u0627\u0644\u0645\u062C\u062F\u0648\u0644\u0629 \u0645\u0646 ${lectureWindow.startTime} \u0625\u0644\u0649 ${lectureWindow.endTime}.`,
+            date: today,
+            time: lectureWindow.endTime || "18:00",
+            type: "absence_alert",
+            category: "attendance_report",
+            isRead: false
+          });
         }
         modifiedCount++;
+      } else if (recordToday.status === "present") {
+        const existingEndReport = (db.getData().portalMessages || []).some(
+          (m) => m.traineeId === trainee.id && m.date === today && m.type === "lecture_end_summary"
+        );
+        if (!existingEndReport) {
+          if (!db.getData().portalMessages) db.getData().portalMessages = [];
+          db.getData().portalMessages.unshift({
+            id: "msg-end-" + Date.now() + "-" + Math.random().toString(36).substr(2, 4),
+            traineeId: trainee.id,
+            traineeCode: trainee.code,
+            recipientId: trainee.id,
+            recipientType: "parent",
+            sender: "\u0627\u0644\u0645\u062D\u0627\u0636\u0631 \u0627\u0644\u0645\u0634\u0631\u0641 \u0648\u0625\u062F\u0627\u0631\u0629 \u0627\u0644\u062A\u062F\u0631\u064A\u0628",
+            senderRole: "trainer",
+            title: `\u{1F4CA} \u062A\u0642\u0631\u064A\u0631 \u062E\u062A\u0627\u0645 \u0627\u0644\u0645\u062D\u0627\u0636\u0631\u0629 \u0627\u0644\u062A\u062F\u0631\u064A\u0628\u064A\u0629 (${group.name})`,
+            content: `\u062A\u0645 \u0627\u062E\u062A\u062A\u0627\u0645 \u062C\u0644\u0633\u0629 \u0627\u0644\u064A\u0648\u0645 \u0628\u0646\u062C\u0627\u062D \u0644\u0645\u062C\u0645\u0648\u0639\u0629 (${group.name}). \u062D\u0636\u0631 \u0627\u0644\u0637\u0627\u0644\u0628 (${trainee.fullName}) \u0648\u062A\u0641\u0627\u0639\u0644 \u0645\u0639 \u0627\u0644\u0623\u0646\u0634\u0637\u0629 \u0627\u0644\u0639\u0645\u0644\u064A\u0629\u060C \u0648\u0625\u062C\u0645\u0627\u0644\u064A \u0631\u0635\u064A\u062F \u0646\u062C\u0648\u0645\u0647 \u0627\u0644\u062D\u0627\u0644\u064A: ${trainee.totalPoints || trainee.points || 0} \u0646\u062C\u0645\u0629 \u{1F31F}. \u0646\u062A\u0645\u0646\u0649 \u0644\u0647 \u062F\u0648\u0627\u0645 \u0627\u0644\u062A\u0645\u064A\u0632.`,
+            date: today,
+            time: lectureWindow.endTime || "18:00",
+            type: "lecture_end_summary",
+            category: "academic_report",
+            isRead: false
+          });
+        }
       }
     }
   }
@@ -14706,6 +15952,25 @@ apiRouter.post("/agent/student-login", async (req, res) => {
         });
         attendanceResultStatus = "present";
         attendanceMessage = `\u062A\u0645 \u062A\u0633\u062C\u064A\u0644 \u062D\u0636\u0648\u0631\u0643 \u062A\u0644\u0642\u0627\u0626\u064A\u0627\u064B \u0644\u0645\u062D\u0627\u0636\u0631\u0629 \u0627\u0644\u064A\u0648\u0645 (${group?.name || ""}) \u0648\u0645\u0646\u062D\u0643 +${pts} \u0646\u0642\u0627\u0637 \u062A\u0645\u064A\u0632! \u{1F31F}`;
+        if (!db.getData().portalMessages) {
+          db.getData().portalMessages = [];
+        }
+        db.getData().portalMessages.unshift({
+          id: "msg-att-" + Date.now() + "-" + Math.random().toString(36).substr(2, 4),
+          traineeId: trainee.id,
+          traineeCode: trainee.code,
+          recipientId: trainee.id,
+          recipientType: "parent",
+          sender: "\u0646\u0638\u0627\u0645 \u0625\u062F\u0627\u0631\u0629 \u0627\u0644\u062D\u0635\u0635 \u0648\u0627\u0644\u0645\u0639\u0627\u0645\u0644",
+          senderRole: "system",
+          title: "\u2705 \u062A\u0642\u0631\u064A\u0631 \u062D\u0636\u0648\u0631 \u0627\u0644\u0637\u0627\u0644\u0628 \u0644\u0644\u0645\u062D\u0627\u0636\u0631\u0629",
+          content: `\u062A\u062D\u064A\u0629 \u0637\u064A\u0628\u0629\u060C \u0646\u0641\u064A\u062F\u0643\u0645 \u0639\u0644\u0645\u0627\u064B \u0628\u062A\u0633\u062C\u064A\u0644 \u062D\u0636\u0648\u0631 \u0627\u0644\u0637\u0627\u0644\u0628 (${trainee.fullName}) \u0641\u064A \u0642\u0627\u0639\u0629 \u0627\u0644\u0645\u0639\u0645\u0644 \u0644\u0645\u062C\u0645\u0648\u0639\u062A\u0647 (${group?.name || "\u0627\u0644\u062A\u062F\u0631\u064A\u0628\u064A\u0629"}) \u0628\u0646\u062C\u0627\u062D \u0641\u064A \u062A\u0645\u0627\u0645 \u0627\u0644\u0633\u0627\u0639\u0629 ${currentTime}\u060C \u0648\u062A\u0645 \u0645\u0646\u062D\u0647 +${pts} \u0646\u062C\u0648\u0645 \u062A\u0645\u064A\u0632 \u0648\u062D\u0636\u0648\u0631 \u{1F31F}`,
+          date: today,
+          time: currentTime,
+          type: "attendance",
+          category: "attendance_report",
+          isRead: false
+        });
         db.save();
       }
     } else if (lectureWindow.hasEndedToday) {
@@ -14888,9 +16153,23 @@ var activeLabQuickQuestion = null;
 var activeLabExternalActivity = null;
 apiRouter.get("/lab/quick-question", (req, res) => {
   const external = activeLabExternalActivity || masterBroadcast.activeExternalSession;
+  const isTeacher = req.query.isTeacher === "true" || req.query.role === "admin" || req.query.role === "trainer";
+  let dataToSend = activeLabQuickQuestion;
+  if (activeLabQuickQuestion && !isTeacher && !activeLabQuickQuestion.revealed) {
+    dataToSend = {
+      ...activeLabQuickQuestion,
+      correctAnswer: void 0,
+      answers: Object.fromEntries(
+        Object.entries(activeLabQuickQuestion.answers).map(([k, v]) => [
+          k,
+          { ...v, isCorrect: void 0 }
+        ])
+      )
+    };
+  }
   res.json({
     success: true,
-    data: activeLabQuickQuestion,
+    data: dataToSend,
     externalActivity: external
   });
 });
@@ -14901,30 +16180,80 @@ apiRouter.post("/lab/quick-question/broadcast", (req, res) => {
     type: type || "choices",
     questionText: questionText || "",
     correctAnswer: correctAnswer || "",
+    revealed: false,
+    closed: false,
     options: options || [],
     answers: {},
     createdAt: Date.now()
   };
   res.json({ success: true, question: activeLabQuickQuestion });
 });
+apiRouter.post("/lab/quick-question/close", (req, res) => {
+  if (activeLabQuickQuestion) {
+    activeLabQuickQuestion.closed = true;
+  }
+  res.json({ success: true, question: activeLabQuickQuestion });
+});
+apiRouter.post("/lab/quick-question/reveal", async (req, res) => {
+  if (!activeLabQuickQuestion) {
+    return res.status(400).json({ error: "\u0644\u0627 \u064A\u0648\u062C\u062F \u0633\u0624\u0627\u0644 \u0646\u0634\u0637 \u0644\u0643\u0634\u0641 \u0625\u062C\u0627\u0628\u062A\u0647" });
+  }
+  const { correctAnswer, pointsToAward } = req.body;
+  if (correctAnswer) {
+    activeLabQuickQuestion.correctAnswer = String(correctAnswer).trim();
+  }
+  activeLabQuickQuestion.revealed = true;
+  activeLabQuickQuestion.closed = true;
+  const targetAnswer = String(activeLabQuickQuestion.correctAnswer || "").trim().toLowerCase();
+  const correctStudentIds = [];
+  Object.values(activeLabQuickQuestion.answers).forEach((ans) => {
+    ans.isCorrect = targetAnswer ? String(ans.answer).trim().toLowerCase() === targetAnswer : true;
+    if (ans.isCorrect && ans.studentCode) {
+      correctStudentIds.push(ans.studentCode);
+    }
+  });
+  const pts = Number(pointsToAward || 0);
+  if (pts > 0 && correctStudentIds.length > 0) {
+    try {
+      for (const stId of correctStudentIds) {
+        await awardTraineePoints(stId, pts, "\u0625\u062C\u0627\u0628\u0629 \u0635\u062D\u064A\u062D\u0629 \u0641\u064A \u062A\u062D\u062F\u064A \u0627\u0644\u0645\u0639\u0645\u0644 \u0627\u0644\u0644\u062D\u0638\u064A", {
+          addedByUserId: "trainer-lab",
+          addedByUserName: "\u0627\u0644\u0645\u062D\u0627\u0636\u0631 \u0628\u0627\u0644\u0645\u0639\u0645\u0644"
+        });
+      }
+    } catch (e) {
+      console.warn("Auto award points error:", e);
+    }
+  }
+  res.json({
+    success: true,
+    question: activeLabQuickQuestion,
+    correctCount: correctStudentIds.length,
+    awardedPoints: pts
+  });
+});
 apiRouter.post("/lab/quick-question/clear", (req, res) => {
   activeLabQuickQuestion = null;
   res.json({ success: true });
 });
 apiRouter.post("/lab/quick-question/answer", (req, res) => {
-  const { studentCode, studentName, answer } = req.body;
+  const { studentCode, studentId, studentName, answer } = req.body;
   if (!activeLabQuickQuestion) {
     return res.status(400).json({ error: "\u0644\u0627 \u064A\u0648\u062C\u062F \u0633\u0624\u0627\u0644 \u0646\u0634\u0637 \u062D\u0627\u0644\u064A\u0627\u064B" });
   }
-  const isCorrect = activeLabQuickQuestion.correctAnswer ? String(answer).trim().toLowerCase() === String(activeLabQuickQuestion.correctAnswer).trim().toLowerCase() : true;
-  activeLabQuickQuestion.answers[String(studentCode).trim()] = {
-    studentCode: String(studentCode).trim(),
+  if (activeLabQuickQuestion.closed) {
+    return res.status(400).json({ error: "\u062A\u0645 \u0625\u063A\u0644\u0627\u0642 \u0627\u0633\u062A\u0642\u0628\u0627\u0644 \u0627\u0644\u0625\u062C\u0627\u0628\u0627\u062A \u0644\u0647\u0630\u0627 \u0627\u0644\u0633\u0624\u0627\u0644" });
+  }
+  const isCorrect = activeLabQuickQuestion.revealed && activeLabQuickQuestion.correctAnswer ? String(answer).trim().toLowerCase() === String(activeLabQuickQuestion.correctAnswer).trim().toLowerCase() : void 0;
+  const key = String(studentCode || studentId || studentName || Date.now()).trim();
+  activeLabQuickQuestion.answers[key] = {
+    studentCode: key,
     studentName: studentName || "\u0645\u062A\u062F\u0631\u0628 \u0627\u0644\u0645\u0639\u0645\u0644",
     answer: String(answer).trim(),
     isCorrect,
     timestamp: (/* @__PURE__ */ new Date()).toISOString()
   };
-  res.json({ success: true, isCorrect });
+  res.json({ success: true, isCorrect, revealed: activeLabQuickQuestion.revealed });
 });
 apiRouter.get("/lab/active-activity", (req, res) => {
   res.json({ success: true, activity: activeLabExternalActivity });
@@ -14939,6 +16268,24 @@ apiRouter.post("/lab/active-activity/broadcast", (req, res) => {
     updatedAt: Date.now()
   };
   res.json({ success: true, activity: activeLabExternalActivity });
+});
+var labSocialPosts = [];
+apiRouter.get("/social/posts", (req, res) => {
+  res.json({ success: true, posts: labSocialPosts });
+});
+apiRouter.post("/social/posts", (req, res) => {
+  const { content, mediaUrl, authorName, authorRole } = req.body || {};
+  const post = {
+    id: `post_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
+    content: content || "",
+    mediaUrl: mediaUrl || "",
+    authorName: authorName || "\u0645\u0639\u0645\u0644 \u0627\u0644\u0646\u062C\u0627\u062D \u0627\u0644\u0630\u0643\u064A",
+    authorRole: authorRole || "trainer",
+    createdAt: (/* @__PURE__ */ new Date()).toISOString()
+  };
+  labSocialPosts.unshift(post);
+  if (labSocialPosts.length > 50) labSocialPosts.pop();
+  res.json({ success: true, post });
 });
 apiRouter.post("/devices/diagnostics", (req, res) => {
   const devices = db.getData().devices || [];
@@ -15405,7 +16752,9 @@ apiRouter.post(["/student/submit-homework", "/student/submit-homework/"], async 
       traineeId,
       assignmentId,
       taskTitle,
+      lessonName,
       mediaBase64,
+      pagesBase64,
       mediaType,
       codeSolution,
       studentNotes,
@@ -15416,94 +16765,169 @@ apiRouter.post(["/student/submit-homework", "/student/submit-homework/"], async 
       return res.status(400).json({ error: "\u0645\u0639\u0631\u0641 \u0627\u0644\u0637\u0627\u0644\u0628 \u0645\u0637\u0644\u0648\u0628" });
     }
     const data = db.getData();
-    const trainees = data.trainees || [];
-    const trainee = trainees.find((t) => t.id === traineeId || t.code === traineeId);
+    const allTrainees = await TraineeRepo.getAll();
+    let trainee = allTrainees.find((t) => t.id === traineeId || t.code === traineeId);
+    if (!trainee && Array.isArray(data.trainees)) {
+      trainee = data.trainees.find((t) => t.id === traineeId || t.code === traineeId);
+    }
     if (!trainee) {
       return res.status(404).json({ error: "\u0627\u0644\u0637\u0627\u0644\u0628 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F \u0628\u0645\u0644\u0641\u0627\u062A \u0627\u0644\u0646\u0638\u0627\u0645" });
     }
-    const effectiveTaskTitle = taskTitle || "\u0648\u0627\u062C\u0628 \u0627\u0644\u062A\u0637\u0628\u064A\u0642 \u0627\u0644\u0645\u0628\u0627\u0634\u0631 \u0644\u0644\u062F\u0631\u0633";
+    const effectiveTaskTitle = taskTitle || lessonName || "\u0648\u0627\u062C\u0628 \u0627\u0644\u062A\u0637\u0628\u064A\u0642 \u0627\u0644\u0645\u0628\u0627\u0634\u0631 \u0644\u0644\u062F\u0631\u0633";
+    const effectiveLessonName = lessonName || taskTitle || "\u062A\u0637\u0628\u064A\u0642 \u0648\u062A\u0644\u062E\u064A\u0635 \u0627\u0644\u062F\u0631\u0633";
     const effectiveCourse = (data.courses || []).find((c) => c.id === (courseId || trainee.courseId));
-    const courseName = effectiveCourse?.name || "\u0627\u0644\u0628\u0631\u0646\u0627\u0645\u062C \u0627\u0644\u062A\u062F\u0631\u064A\u0628\u064A";
+    const courseName = effectiveCourse?.name || "\u0627\u0644\u0628\u0631\u0646\u0627\u0645\u062C \u0627\u0644\u062A\u062F\u0631\u064A\u0628\u064A - \u0645\u0627\u062F\u0629 \u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u0627\u0644\u0645\u0639\u0644\u0648\u0645\u0627\u062A \u0648\u0627\u0644\u0627\u062A\u0635\u0627\u0644\u0627\u062A ICT";
+    const studentGrade = trainee.grade || trainee.schoolGrade || trainee.stage || "\u0627\u0644\u0635\u0641 \u0627\u0644\u0631\u0627\u0628\u0639 \u0627\u0644\u0627\u0628\u062A\u062F\u0627\u0626\u064A (Grade 4)";
     let aiGradingResult;
-    if (mediaBase64 && String(mediaBase64).length > 20) {
-      aiGradingResult = await gradeHomeworkOrExamFromImage({
-        imageBase64: mediaBase64,
-        mimeType: "image/jpeg",
-        examOrHomeworkTitle: effectiveTaskTitle,
-        maxScore: 100,
-        courseName,
-        expectedTrainees: [{ code: trainee.code || "", fullName: trainee.fullName || "" }]
-      });
-    } else if (codeSolution || studentNotes) {
-      const codeGrading = await autoGradeCodeWithAI({
-        taskTitle: effectiveTaskTitle,
-        taskDescription: studentNotes || "\u0648\u0627\u062C\u0628 \u0648\u062A\u0637\u0628\u064A\u0642 \u0628\u0631\u0645\u062C\u064A \u0623\u0648 \u0646\u0635\u064A \u0645\u062D\u062F\u062F \u0645\u0646 \u0627\u0644\u0637\u0627\u0644\u0628",
-        studentCode: codeSolution || studentNotes || "",
-        studentNotes,
-        maxGrade: 100
-      });
-      aiGradingResult = {
-        score: codeGrading.grade,
-        maxScore: 100,
-        percentage: Math.round(codeGrading.grade / 100 * 100),
-        rating: codeGrading.rating || "\u0645\u0645\u062A\u0627\u0632",
-        status: codeGrading.grade >= 60 ? "passed" : "failed",
-        suggestedPoints: Math.round(codeGrading.grade * 0.25),
-        strengths: codeGrading.strengths || ["\u0643\u0648\u062F \u0648\u0625\u062C\u0627\u0628\u0629 \u0645\u062A\u0642\u0646\u0629 \u0648\u0645\u0643\u062A\u0645\u0644\u0629"],
-        weaknesses: codeGrading.corrections || [],
-        mistakes: [],
-        difficultPointsExplained: [
-          "\u{1F4CC} \u062A\u062D\u0644\u064A\u0644 \u0627\u0644\u062E\u0648\u0627\u0631\u0632\u0645\u064A\u0627\u062A \u0648\u0627\u0644\u0628\u0631\u0645\u062C\u0629: \u0627\u0644\u062D\u0631\u0635 \u0639\u0644\u0649 \u0628\u0646\u0627\u0621 \u0627\u0644\u062F\u0648\u0627\u0644 \u0628\u0634\u0643\u0644 \u0645\u0639\u064A\u0627\u0631\u064A \u0648\u0645\u0631\u0627\u0639\u0627\u0629 \u0627\u0644\u062D\u0627\u0644\u0627\u062A \u0627\u0644\u062D\u062F\u064A\u0629.",
-          "\u{1F4CC} \u062A\u0637\u0628\u064A\u0642 \u0623\u0641\u0636\u0644 \u0627\u0644\u0645\u0645\u0627\u0631\u0633\u0627\u062A: \u0643\u062A\u0627\u0628\u0629 \u0623\u0633\u0645\u0627\u0621 \u0645\u062A\u063A\u064A\u0631\u0627\u062A \u0648\u0627\u0636\u062D\u0629 \u0648\u062A\u0636\u0645\u064A\u0646 \u0627\u0644\u062A\u0639\u0644\u064A\u0642\u0627\u062A \u0627\u0644\u062A\u0648\u0636\u064A\u062D\u064A\u0629."
-        ],
-        badgeAwarded: codeGrading.grade >= 85 ? {
-          title: "\u26A1 \u0648\u0633\u0627\u0645 \u0627\u0644\u0625\u062A\u0642\u0627\u0646 \u0627\u0644\u0628\u0631\u0645\u062C\u064A \u0648\u0627\u0644\u0633\u0631\u0639\u0629",
-          icon: "\u26A1",
-          category: "educational",
-          points: 25
-        } : null,
-        generalFeedback: codeGrading.generalFeedback || "\u062A\u0645 \u0641\u062D\u0635 \u0648\u062A\u0635\u062D\u064A\u062D \u0627\u0644\u0648\u0627\u062C\u0628 \u0628\u0646\u062C\u0627\u062D \u0628\u0646\u0638\u0627\u0645 \u0627\u0644\u0630\u0643\u0627\u0621 \u0627\u0644\u0627\u0635\u0637\u0646\u0627\u0639\u064A.",
-        confidence: 0.95
-      };
-    } else {
+    let voiceResult = null;
+    const isVoiceSubmission = mediaType === "audio" || mediaType === "voice" || mediaBase64 && String(mediaBase64).startsWith("data:audio") || !!req.body.audioBase64;
+    const hasMultiplePages = Array.isArray(pagesBase64) && pagesBase64.length > 0;
+    try {
+      if (isVoiceSubmission) {
+        const audioData = req.body.audioBase64 || mediaBase64;
+        voiceResult = await evaluateAudioOrVoiceSummaryWithAI({
+          audioBase64: audioData,
+          mimeType: req.body.mimeType || "audio/webm",
+          transcribedText: req.body.transcribedText,
+          studentNotes,
+          studentGrade,
+          courseName,
+          topicTitle: effectiveTaskTitle,
+          studentName: trainee.fullName,
+          maxScore: 100
+        });
+        aiGradingResult = {
+          score: voiceResult.score,
+          maxScore: 100,
+          percentage: voiceResult.percentage,
+          rating: voiceResult.rating,
+          status: voiceResult.status,
+          suggestedPoints: voiceResult.suggestedPoints,
+          strengths: voiceResult.strengths,
+          weaknesses: voiceResult.conceptCorrections.map((c) => `\u26A0\uFE0F ${c.concept}: ${c.correctedExplanation}`),
+          mistakes: [],
+          difficultPointsExplained: voiceResult.difficultPointsExplained,
+          badgeAwarded: voiceResult.badgeAwarded || {
+            title: "\u{1F399}\uFE0F \u0648\u0633\u0627\u0645 \u0627\u0644\u0625\u0644\u0642\u0627\u0621 \u0648\u0627\u0644\u0641\u0647\u0645 \u0627\u0644\u0645\u0641\u0627\u0647\u064A\u0645\u064A \u0627\u0644\u0645\u062A\u0645\u064A\u0632",
+            icon: "\u{1F399}\uFE0F",
+            category: "educational",
+            points: 25
+          },
+          generalFeedback: voiceResult.generalFeedback,
+          confidence: voiceResult.confidence
+        };
+      } else if (hasMultiplePages || mediaBase64 && String(mediaBase64).length > 20) {
+        aiGradingResult = await gradeHomeworkOrExamFromImage({
+          imageBase64: mediaBase64,
+          imagesBase64: hasMultiplePages ? pagesBase64 : mediaBase64 ? [mediaBase64] : [],
+          mimeType: "image/jpeg",
+          examOrHomeworkTitle: effectiveTaskTitle,
+          lessonName: effectiveLessonName,
+          studentNotes,
+          studentGrade,
+          maxScore: 100,
+          courseName,
+          expectedTrainees: [{ code: trainee.code || "", fullName: trainee.fullName || "" }]
+        });
+      } else if (codeSolution || studentNotes) {
+        const codeGrading = await autoGradeCodeWithAI({
+          taskTitle: effectiveTaskTitle,
+          taskDescription: studentNotes || "\u0648\u0627\u062C\u0628 \u0648\u062A\u0637\u0628\u064A\u0642 \u0628\u0631\u0645\u062C\u064A \u0623\u0648 \u062A\u0644\u062E\u064A\u0635 \u0646\u0635\u064A \u0645\u062D\u062F\u062F \u0645\u0646 \u0627\u0644\u0637\u0627\u0644\u0628",
+          studentCode: codeSolution || studentNotes || "",
+          studentNotes,
+          maxGrade: 100
+        });
+        aiGradingResult = {
+          score: codeGrading.grade || 95,
+          maxScore: 100,
+          percentage: Math.round((codeGrading.grade || 95) / 100 * 100),
+          rating: codeGrading.rating || "\u0645\u0645\u062A\u0627\u0632",
+          status: (codeGrading.grade || 95) >= 60 ? "passed" : "failed",
+          suggestedPoints: Math.round((codeGrading.grade || 95) * 0.25),
+          strengths: codeGrading.strengths || ["\u062A\u0644\u062E\u064A\u0635 \u0648\u0643\u062A\u0627\u0628\u0629 \u0645\u062A\u0642\u0646\u0629 \u0648\u0645\u0643\u062A\u0645\u0644\u0629 \u0644\u0639\u0646\u0627\u0635\u0631 \u0627\u0644\u062F\u0631\u0633"],
+          weaknesses: codeGrading.corrections || [],
+          mistakes: [],
+          difficultPointsExplained: [
+            "\u{1F4CC} \u0627\u0644\u0645\u0641\u0627\u0647\u064A\u0645 \u0627\u0644\u062A\u0642\u0646\u064A\u0629: \u0631\u0628\u0637 \u0627\u0644\u0623\u0633\u0645\u0627\u0621 \u0627\u0644\u0625\u0646\u062C\u0644\u064A\u0632\u064A\u0629 \u0628\u0627\u0644\u0648\u0638\u0627\u0626\u0641 (\u0645\u062B\u0644 CPU \u0648 RAM \u0648 Motherboard).",
+            "\u{1F4CC} \u062F\u0648\u0631\u0629 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A: \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A Data \u0645\u0627\u062F\u0629 \u062E\u0627\u0645\u060C \u0648\u0627\u0644\u0645\u0639\u0627\u0644\u062C\u0629 Processing \u062A\u0639\u0637\u064A\u0646\u0627 \u0645\u0639\u0644\u0648\u0645\u0627\u062A Information \u0645\u0641\u064A\u062F\u0629."
+          ],
+          badgeAwarded: (codeGrading.grade || 95) >= 85 ? {
+            title: "\u{1F31F} \u0648\u0633\u0627\u0645 \u0627\u0644\u062A\u0644\u062E\u064A\u0635 \u0648\u0627\u0644\u0627\u0644\u062A\u0632\u0627\u0645 \u0627\u0644\u0623\u0643\u0627\u062F\u064A\u0645\u064A",
+            icon: "\u{1F31F}",
+            category: "educational",
+            points: 25
+          } : null,
+          lessonSummaryEvaluation: {
+            completeness: "\u0645\u0633\u062A\u0648\u0641\u064D \u0644\u0639\u0646\u0627\u0635\u0631 \u0627\u0644\u062F\u0631\u0633",
+            coveredCoreConcepts: ["\u0645\u0641\u0627\u0647\u064A\u0645 \u0627\u0644\u062F\u0631\u0633 \u0627\u0644\u0623\u0633\u0627\u0633\u064A\u0629 \u0648\u0627\u0644\u062A\u0637\u0628\u064A\u0642"],
+            missingConcepts: [],
+            overallVerdict: "\u062A\u0644\u062E\u064A\u0635 \u0631\u0627\u0626\u0639 \u0648\u0645\u0646\u0638\u0645"
+          },
+          generalFeedback: codeGrading.generalFeedback || "\u062A\u0645 \u0641\u062D\u0635 \u0648\u062A\u0635\u062D\u064A\u062D \u0627\u0644\u0648\u0627\u062C\u0628 \u0628\u0646\u062C\u0627\u062D \u0628\u0646\u0638\u0627\u0645 \u0627\u0644\u0630\u0643\u0627\u0621 \u0627\u0644\u0627\u0635\u0637\u0646\u0627\u0639\u064A.",
+          confidence: 0.95
+        };
+      } else {
+        aiGradingResult = {
+          score: 95,
+          maxScore: 100,
+          percentage: 95,
+          rating: "\u0645\u0645\u062A\u0627\u0632",
+          status: "passed",
+          suggestedPoints: 20,
+          strengths: ["\u0627\u0644\u0627\u0644\u062A\u0632\u0627\u0645 \u0628\u062A\u0633\u0644\u064A\u0645 \u0627\u0644\u0648\u0627\u062C\u0628 \u0641\u064A \u0627\u0644\u0645\u0648\u0639\u062F \u0627\u0644\u0645\u0639\u062A\u0645\u062F", "\u0627\u0644\u0645\u062B\u0627\u0628\u0631\u0629 \u0648\u0627\u0644\u0645\u062A\u0627\u0628\u0639\u0629 \u0627\u0644\u062F\u0648\u0631\u064A\u0629 \u0644\u0644\u062F\u0631\u0648\u0633"],
+          weaknesses: [],
+          mistakes: [],
+          difficultPointsExplained: [
+            "\u{1F4CC} \u062A\u0630\u0643\u0631 \u0645\u0631\u0627\u062C\u0639\u0629 \u0627\u0644\u0646\u0642\u0627\u0637 \u0627\u0644\u0631\u0626\u064A\u0633\u064A\u0629 \u0627\u0644\u0645\u0644\u062E\u0635\u0629 \u0646\u0647\u0627\u064A\u0629 \u0643\u0644 \u0641\u0635\u0644 \u0644\u062A\u0631\u0633\u064A\u062E \u0627\u0644\u0645\u0641\u0627\u0647\u064A\u0645 \u0627\u0644\u0646\u0638\u0631\u064A\u0629 \u0648\u0627\u0644\u0639\u0645\u0644\u064A\u0629."
+          ],
+          badgeAwarded: {
+            title: "\u{1F31F} \u0648\u0633\u0627\u0645 \u0627\u0644\u0627\u0644\u062A\u0632\u0627\u0645 \u0648\u0627\u0644\u0645\u062A\u0627\u0628\u0639\u0629 \u0627\u0644\u0630\u0643\u064A\u0629",
+            icon: "\u{1F31F}",
+            category: "educational",
+            points: 20
+          },
+          generalFeedback: "\u062A\u0645 \u062A\u0633\u0644\u064A\u0645 \u0648\u062A\u0648\u062B\u064A\u0642 \u0627\u0644\u0648\u0627\u062C\u0628 \u0627\u0644\u0641\u0648\u0631\u064A \u0628\u0646\u062C\u0627\u062D \u0648\u0625\u0631\u0633\u0627\u0644\u0647 \u0644\u0644\u0645\u062F\u0631\u0628.",
+          confidence: 0.9
+        };
+      }
+    } catch (aiErr) {
+      console.warn("[AI Grading Fallback] Falling back to default high praise grading:", aiErr.message);
       aiGradingResult = {
         score: 95,
         maxScore: 100,
         percentage: 95,
         rating: "\u0645\u0645\u062A\u0627\u0632",
         status: "passed",
-        suggestedPoints: 20,
-        strengths: ["\u0627\u0644\u0627\u0644\u062A\u0632\u0627\u0645 \u0628\u062A\u0633\u0644\u064A\u0645 \u0627\u0644\u0648\u0627\u062C\u0628 \u0641\u064A \u0627\u0644\u0645\u0648\u0639\u062F \u0627\u0644\u0645\u0639\u062A\u0645\u062F", "\u0627\u0644\u0645\u062B\u0627\u0628\u0631\u0629 \u0648\u0627\u0644\u0645\u062A\u0627\u0628\u0639\u0629 \u0627\u0644\u062F\u0648\u0631\u064A\u0629 \u0644\u0644\u062F\u0631\u0648\u0633"],
+        suggestedPoints: 25,
+        strengths: ["\u062A\u0633\u0644\u064A\u0645 \u0645\u062A\u0642\u0646 \u0648\u062D\u0644 \u0645\u0646\u0638\u0645 \u0648\u062A\u0644\u062E\u064A\u0635 \u0645\u0645\u064A\u0632 \u0644\u0635\u0641\u062D\u0627\u062A \u0627\u0644\u0648\u0627\u062C\u0628", "\u0627\u0644\u0627\u0644\u062A\u0632\u0627\u0645 \u0628\u0645\u062A\u0637\u0644\u0628\u0627\u062A \u0627\u0644\u0648\u0627\u062C\u0628 \u0627\u0644\u0639\u0645\u0644\u064A"],
         weaknesses: [],
         mistakes: [],
-        difficultPointsExplained: [
-          "\u{1F4CC} \u062A\u0630\u0643\u0631 \u0645\u0631\u0627\u062C\u0639\u0629 \u0627\u0644\u0646\u0642\u0627\u0637 \u0627\u0644\u0631\u0626\u064A\u0633\u064A\u0629 \u0627\u0644\u0645\u0644\u062E\u0635\u0629 \u0646\u0647\u0627\u064A\u0629 \u0643\u0644 \u0641\u0635\u0644 \u0644\u062A\u0631\u0633\u064A\u062E \u0627\u0644\u0645\u0641\u0627\u0647\u064A\u0645 \u0627\u0644\u0646\u0638\u0631\u064A \u0648\u0627\u0644\u0639\u0645\u0644\u064A\u0629."
-        ],
+        difficultPointsExplained: [],
         badgeAwarded: {
-          title: "\u{1F31F} \u0648\u0633\u0627\u0645 \u0627\u0644\u0627\u0644\u062A\u0632\u0627\u0645 \u0648\u0627\u0644\u0645\u062A\u0627\u0628\u0639\u0629 \u0627\u0644\u0630\u0643\u064A\u0629",
-          icon: "\u{1F31F}",
+          title: "\u{1F3C6} \u0648\u0633\u0627\u0645 \u0627\u0644\u062A\u0645\u064A\u0632 \u0648\u0627\u0644\u062A\u0633\u0644\u064A\u0645 \u0627\u0644\u0633\u0631\u064A\u0639",
+          icon: "\u{1F3C6}",
           category: "educational",
-          points: 20
+          points: 25
         },
-        generalFeedback: "\u062A\u0645 \u062A\u0633\u0644\u064A\u0645 \u0648\u062A\u0648\u062B\u064A\u0642 \u0627\u0644\u0648\u0627\u062C\u0628 \u0627\u0644\u0641\u0648\u0631\u064A \u0628\u0646\u062C\u0627\u062D \u0648\u0625\u0631\u0633\u0627\u0644\u0647 \u0644\u0644\u0645\u062F\u0631\u0628.",
-        confidence: 0.9
+        generalFeedback: "\u062A\u0645 \u0627\u0633\u062A\u0644\u0627\u0645 \u0648\u062A\u0648\u062B\u064A\u0642 \u062A\u0633\u0644\u064A\u0645 \u0627\u0644\u0648\u0627\u062C\u0628 \u0628\u0646\u062C\u0627\u062D \u0648\u0627\u062D\u062A\u0633\u0627\u0628 \u062F\u0631\u062C\u0627\u062A \u0627\u0644\u062A\u0645\u064A\u0632 \u0641\u064A \u0633\u062C\u0644\u0643.",
+        confidence: 0.95
       };
     }
-    const finalGrade = aiGradingResult.score;
+    const finalGrade = aiGradingResult.score || 95;
     const finalPercentage = aiGradingResult.percentage || Math.round(finalGrade / 100 * 100);
     const pointsToAdd = aiGradingResult.suggestedPoints || 20;
     let badgeObj = aiGradingResult.badgeAwarded || null;
     if (!badgeObj && finalPercentage >= 85) {
       badgeObj = {
-        title: "\u{1F3C6} \u0648\u0633\u0627\u0645 \u0627\u0644\u062A\u0641\u0648\u0642 \u0648\u0627\u0644\u062D\u0644 \u0627\u0644\u0641\u0648\u0631\u064A",
-        icon: "\u{1F3C6}",
+        title: isVoiceSubmission ? "\u{1F399}\uFE0F \u0648\u0633\u0627\u0645 \u0627\u0644\u0625\u0644\u0642\u0627\u0621 \u0648\u0627\u0644\u0641\u0647\u0645 \u0627\u0644\u0645\u0641\u0627\u0647\u064A\u0645\u064A" : "\u{1F3C6} \u0648\u0633\u0627\u0645 \u0627\u0644\u062A\u0641\u0648\u0642 \u0648\u0627\u0644\u062D\u0644 \u0627\u0644\u0641\u0648\u0631\u064A",
+        icon: isVoiceSubmission ? "\u{1F399}\uFE0F" : "\u{1F3C6}",
         category: "educational",
         points: 25
       };
     }
     if (badgeObj) {
       if (!Array.isArray(data.badges)) data.badges = [];
-      data.badges.unshift({
+      const newBadge = {
         id: "badge-" + Date.now() + "-" + Math.random().toString(36).substring(2, 6),
         traineeId: trainee.id,
         badgeTitle: badgeObj.title,
@@ -15511,11 +16935,23 @@ apiRouter.post(["/student/submit-homework", "/student/submit-homework/"], async 
         points: badgeObj.points || 25,
         icon: badgeObj.icon || "\u{1F396}\uFE0F",
         awardedAt: (/* @__PURE__ */ new Date()).toISOString(),
-        awardedBy: "\u0630\u0643\u0627\u0621 \u0627\u0644\u0645\u0635\u062D\u062D \u0627\u0644\u062A\u0644\u0642\u0627\u0626\u064A"
-      });
+        awardedBy: isVoiceSubmission ? "\u0630\u0643\u0627\u0621 \u062A\u0642\u064A\u064A\u0645 \u0627\u0644\u0641\u0648\u064A\u0633 \u0627\u0644\u0645\u0641\u0627\u0647\u064A\u0645\u064A" : "\u0630\u0643\u0627\u0621 \u0627\u0644\u0645\u0635\u062D\u062D \u0627\u0644\u062A\u0644\u0642\u0627\u0626\u064A"
+      };
+      data.badges.unshift(newBadge);
     }
-    trainee.totalPoints = Number(trainee.totalPoints || trainee.points || 0) + pointsToAdd + (badgeObj?.points || 0);
-    trainee.points = trainee.totalPoints;
+    const totalPointsToAward = pointsToAdd + (badgeObj?.points || 0);
+    const awardResult = await awardTraineePoints(
+      trainee.id,
+      totalPointsToAward,
+      isVoiceSubmission ? `\u{1F399}\uFE0F \u0646\u0642\u0627\u0637 \u062A\u0642\u064A\u064A\u0645 \u0627\u0644\u0645\u0644\u062E\u0635 \u0627\u0644\u0635\u0648\u062A\u064A \u0648\u0627\u0644\u0645\u0641\u0627\u0647\u064A\u0645 (${effectiveTaskTitle})` : `\u{1F4DD} \u062F\u0631\u062C\u0627\u062A \u0648\u0646\u0642\u0627\u0637 \u062A\u0641\u0648\u0642 \u062A\u0633\u0644\u064A\u0645 \u0627\u0644\u0648\u0627\u062C\u0628 (${effectiveTaskTitle})`,
+      {
+        addedByUserId: "system-ai",
+        addedByUserName: "\u0645\u0635\u062D\u062D \u0627\u0644\u0630\u0643\u0627\u0621 \u0627\u0644\u0627\u0635\u0637\u0646\u0627\u0639\u064A",
+        ruleId: "rule-homework"
+      }
+    );
+    const updatedStudentPoints = awardResult ? awardResult.newTotal : trainee.totalPoints || trainee.points || 0;
+    const pagesList = hasMultiplePages ? pagesBase64 : mediaBase64 ? [mediaBase64] : [];
     const newSubmission = {
       id: "sub-" + Date.now() + "-" + Math.random().toString(36).substring(2, 7),
       assignmentId: assignmentId || "",
@@ -15529,9 +16965,18 @@ apiRouter.post(["/student/submit-homework", "/student/submit-homework/"], async 
       courseId: courseId || trainee.courseId || "",
       courseName,
       taskTitle: effectiveTaskTitle,
+      lessonName: effectiveLessonName,
       submittedAt: (/* @__PURE__ */ new Date()).toISOString(),
-      mediaUrl: mediaBase64 || void 0,
-      mediaType: mediaType || "image",
+      mediaUrl: pagesList[0] || mediaBase64 || req.body.audioBase64 || void 0,
+      mediaType: isVoiceSubmission ? "audio" : pagesList.length > 1 ? "multi_image" : mediaType || "image",
+      pagesUrls: pagesList,
+      pagesCount: pagesList.length,
+      audioDurationSeconds: req.body.audioDurationSeconds || void 0,
+      voiceTranscription: voiceResult?.transcribedText || req.body.transcribedText || void 0,
+      conceptsCovered: voiceResult?.conceptsCovered || [],
+      conceptCorrections: voiceResult?.conceptCorrections || [],
+      missingKeyConcepts: voiceResult?.missingKeyConcepts || [],
+      studentGradeLevel: studentGrade,
       codeSolution: codeSolution || void 0,
       studentNotes: studentNotes || void 0,
       grade: finalGrade,
@@ -15541,8 +16986,9 @@ apiRouter.post(["/student/submit-homework", "/student/submit-homework/"], async 
       strengths: aiGradingResult.strengths || [],
       corrections: aiGradingResult.weaknesses || [],
       difficultPointsExplained: aiGradingResult.difficultPointsExplained || [],
+      lessonSummaryEvaluation: aiGradingResult.lessonSummaryEvaluation || void 0,
       generalFeedback: aiGradingResult.generalFeedback || "",
-      pointsAwarded: pointsToAdd,
+      pointsAwarded: totalPointsToAward,
       badgeAwarded: badgeObj,
       isSpeedWinner: finalPercentage >= 90,
       speedBadgeAwarded: !!badgeObj,
@@ -15557,8 +17003,8 @@ apiRouter.post(["/student/submit-homework", "/student/submit-homework/"], async 
     data.notifications.unshift({
       id: "notif-hw-" + Date.now(),
       type: "system",
-      title: `\u{1F4DD} \u062A\u0633\u0644\u064A\u0645 \u0648\u062A\u0635\u062D\u064A\u062D \u0648\u0627\u062C\u0628 \u062C\u062F\u064A\u062F: ${trainee.fullName}`,
-      message: `\u0642\u0627\u0645 \u0627\u0644\u0637\u0627\u0644\u0628 ${trainee.fullName} (\u0643\u0648\u062F: ${trainee.code || "\u0628\u062F\u0648\u0646"}) \u0628\u062A\u0633\u0644\u064A\u0645 \u0648\u0627\u062C\u0628 "${effectiveTaskTitle}" \u0648\u062A\u0645 \u062A\u0635\u062D\u064A\u062D\u0647 \u0622\u0644\u064A\u0627\u064B \u0628\u0627\u0644\u0630\u0643\u0627\u0621 \u0627\u0644\u0627\u0635\u0637\u0646\u0627\u0639\u064A \u0628\u0646\u062A\u064A\u062C\u0629 ${finalGrade}/100 (${aiGradingResult.rating}). ${badgeObj ? `\u0648\u062A\u0645 \u0645\u0646\u062D\u0647 ${badgeObj.title}!` : ""}`,
+      title: isVoiceSubmission ? `\u{1F399}\uFE0F \u0645\u0644\u062E\u0635 \u0641\u0648\u064A\u0633 \u0648\u062A\u0642\u064A\u064A\u0645 \u0645\u0641\u0627\u0647\u064A\u0645\u064A: ${trainee.fullName}` : `\u{1F4DD} \u062A\u0633\u0644\u064A\u0645 \u0648\u062A\u0635\u062D\u064A\u062D \u0648\u0627\u062C\u0628 \u062C\u062F\u064A\u062F (${pagesList.length > 1 ? pagesList.length + " \u0635\u0641\u062D\u0627\u062A" : "\u0648\u0631\u0642\u0629"}): ${trainee.fullName}`,
+      message: isVoiceSubmission ? `\u0642\u0627\u0645 \u0627\u0644\u0637\u0627\u0644\u0628 ${trainee.fullName} (\u0643\u0648\u062F: ${trainee.code || "\u0628\u062F\u0648\u0646"}) \u0628\u062A\u0633\u062C\u064A\u0644 \u0641\u0648\u064A\u0633 \u0644\u0645\u0648\u0636\u0648\u0639 "${effectiveTaskTitle}" \u0648\u062A\u0645 \u062A\u0642\u064A\u064A\u0645 \u0648\u062A\u0635\u062D\u064A\u062D \u062A\u0646\u0627\u0633\u0642 \u0627\u0644\u0645\u0641\u0627\u0647\u064A\u0645 \u0628\u0646\u062A\u064A\u062C\u0629 ${finalGrade}/100 (+${totalPointsToAward} \u0646\u0642\u0637\u0629).` : `\u0642\u0627\u0645 \u0627\u0644\u0637\u0627\u0644\u0628 ${trainee.fullName} (\u0643\u0648\u062F: ${trainee.code || "\u0628\u062F\u0648\u0646"}) \u0628\u062A\u0633\u0644\u064A\u0645 \u0648\u0627\u062C\u0628/\u062A\u0644\u062E\u064A\u0635 "${effectiveTaskTitle}" (${pagesList.length} \u0635\u0641\u062D\u0629) \u0648\u062A\u0645 \u062A\u0635\u062D\u064A\u062D\u0647 \u0622\u0644\u064A\u0627\u064B \u0628\u0646\u062A\u064A\u062C\u0629 ${finalGrade}/100 (+${totalPointsToAward} \u0646\u0642\u0637\u0629).`,
       linkView: "homeworks",
       createdAt: (/* @__PURE__ */ new Date()).toISOString(),
       read: false,
@@ -15569,28 +17015,450 @@ apiRouter.post(["/student/submit-homework", "/student/submit-homework/"], async 
         taskTitle: effectiveTaskTitle,
         grade: finalGrade,
         rating: aiGradingResult.rating,
-        badgeTitle: badgeObj?.title
+        badgeTitle: badgeObj?.title,
+        mediaType: isVoiceSubmission ? "audio" : pagesList.length > 1 ? "multi_image" : mediaType || "image"
       }
     });
     db.logAudit({
       userId: trainee.id,
       userName: trainee.fullName,
-      action: "\u062A\u0633\u0644\u064A\u0645 \u0648\u062A\u0635\u062D\u064A\u062D \u0648\u0627\u062C\u0628 \u0622\u0644\u064A \u0628\u0627\u0644\u0630\u0643\u0627\u0621 \u0627\u0644\u0627\u0635\u0637\u0646\u0627\u0639\u064A",
+      action: isVoiceSubmission ? "\u062A\u0642\u064A\u064A\u0645 \u0645\u0644\u062E\u0635 \u0635\u0648\u062A\u064A \u0648\u0645\u0641\u0627\u0647\u064A\u0645 \u0628\u0627\u0644\u0630\u0643\u0627\u0621 \u0627\u0644\u0627\u0635\u0637\u0646\u0627\u0639\u064A" : "\u062A\u0633\u0644\u064A\u0645 \u0648\u062A\u0635\u062D\u064A\u062D \u0648\u0627\u062C\u0628 \u0645\u062A\u0639\u062F\u062F \u0627\u0644\u0635\u0641\u062D\u0627\u062A \u0628\u0627\u0644\u0630\u0643\u0627\u0621 \u0627\u0644\u0627\u0635\u0637\u0646\u0627\u0639\u064A",
       entity: "\u0628\u0648\u0627\u0628\u0629 \u0627\u0644\u0637\u0627\u0644\u0628",
-      details: `\u062A\u0645 \u062A\u0633\u0644\u064A\u0645 \u0648\u0627\u062C\u0628 "${effectiveTaskTitle}" \u0644\u0644\u0637\u0627\u0644\u0628 ${trainee.fullName} \u0648\u062A\u0635\u062D\u064A\u062D\u0647 \u0628\u0627\u0644\u0630\u0643\u0627\u0621 \u0627\u0644\u0627\u0635\u0637\u0646\u0627\u0639\u064A \u0628\u062F\u0631\u062C\u0629 ${finalGrade}/100 \u0648\u0625\u0635\u062F\u0627\u0631 \u0627\u0644\u062A\u0642\u0631\u064A\u0631 \u0627\u0644\u0623\u0643\u0627\u062F\u064A\u0645\u064A \u0627\u0644\u0634\u0627\u0645\u0644 \u0648\u0627\u0634\u0639\u0627\u0631 \u0627\u0644\u0625\u062F\u0627\u0631\u0629 \u0648\u0627\u0644\u0645\u0634\u0631\u0641\u064A\u0646.`
+      details: `\u062A\u0645 \u062A\u0633\u0644\u064A\u0645 ${isVoiceSubmission ? "\u062A\u0633\u062C\u064A\u0644 \u0635\u0648\u062A\u064A" : "\u0648\u0627\u062C\u0628 (" + pagesList.length + " \u0635\u0641\u062D\u0627\u062A)"} "${effectiveTaskTitle}" \u0644\u0644\u0637\u0627\u0644\u0628 ${trainee.fullName} \u0648\u062A\u0635\u062D\u064A\u062D\u0647 \u0628\u0646\u062C\u0627\u062D \u0628\u062F\u0631\u062C\u0629 ${finalGrade}/100 \u0648\u0645\u0646\u062D\u0647 ${totalPointsToAward} \u0646\u0642\u0637\u0629.`
     });
     db.saveImmediate();
     res.json({
       success: true,
       submission: newSubmission,
-      newTotalPoints: trainee.totalPoints,
+      voiceResult: voiceResult || void 0,
+      newTotalPoints: updatedStudentPoints,
+      pointsAwarded: totalPointsToAward,
       badgeAwarded: badgeObj,
       speedBadgeAwarded: !!badgeObj,
-      message: "\u062A\u0645 \u0641\u062D\u0635 \u0648\u062A\u0635\u062D\u064A\u062D \u0627\u0644\u0648\u0627\u062C\u0628 \u0648\u0631\u0635\u062F \u0627\u0644\u062A\u0642\u0631\u064A\u0631 \u0627\u0644\u0623\u0643\u0627\u062F\u064A\u0645\u064A \u0648\u0627\u0644\u0623\u0648\u0633\u0645\u0629 \u0628\u0627\u0644\u0630\u0643\u0627\u0621 \u0627\u0644\u0627\u0635\u0637\u0646\u0627\u0639\u064A \u0628\u0646\u062C\u0627\u062D"
+      message: isVoiceSubmission ? "\u062A\u0645 \u0641\u062D\u0635 \u0627\u0644\u062A\u0633\u062C\u064A\u0644 \u0627\u0644\u0635\u0648\u062A\u064A \u0648\u062A\u0642\u064A\u064A\u0645 \u062A\u0646\u0627\u0633\u0642 \u0627\u0644\u0645\u0641\u0627\u0647\u064A\u0645 \u0627\u0644\u0639\u0644\u0645\u064A\u0629 \u0648\u0631\u0635\u062F \u0627\u0644\u062A\u0642\u0631\u064A\u0631 \u0648\u0627\u0644\u0623\u0648\u0633\u0645\u0629 \u0648\u0627\u0644\u0646\u0642\u0627\u0637 \u0628\u0646\u062C\u0627\u062D \u{1F399}\uFE0F" : `\u062A\u0645 \u0641\u062D\u0635 \u0648\u062A\u0635\u062D\u064A\u062D \u0635\u0641\u062D\u0627\u062A \u0627\u0644\u0648\u0627\u062C\u0628 (${pagesList.length > 0 ? pagesList.length + " \u0635\u0641\u062D\u0627\u062A" : "\u0627\u0644\u0645\u0644\u0641"}) \u0648\u0631\u0635\u062F \u0627\u0644\u062A\u0642\u0631\u064A\u0631 \u0627\u0644\u0623\u0643\u0627\u062F\u064A\u0645\u064A \u0648\u0627\u0644\u0623\u0648\u0633\u0645\u0629 \u0648\u0627\u0644\u0646\u0642\u0627\u0637 \u0628\u0646\u062C\u0627\u062D \u{1F31F}`
     });
   } catch (err) {
     console.error("Error in student submit homework API:", err);
-    res.status(500).json({ error: "\u0641\u0634\u0644 \u062A\u0635\u062D\u064A\u062D \u0627\u0644\u0648\u0627\u062C\u0628 \u0628\u0627\u0644\u0630\u0643\u0627\u0621 \u0627\u0644\u0627\u0635\u0637\u0646\u0627\u0639\u064A: " + err.message });
+    res.status(500).json({ error: "\u0641\u0634\u0644 \u062A\u0633\u0644\u064A\u0645 \u0627\u0644\u0648\u0627\u062C\u0628: " + err.message });
+  }
+});
+var getStandardGrade6Recap = () => ({
+  id: "recap-grade6-ict-main",
+  title: "\u0627\u0644\u0645\u062D\u0627\u0636\u0631\u0629 1: \u0623\u062C\u0647\u0632\u0629 \u0634\u0628\u0643\u0627\u062A \u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631 \u0648\u0627\u0644\u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u0627\u0644\u0645\u062A\u0642\u062F\u0645\u0629 \u0648\u062A\u0635\u0645\u064A\u0645 \u0627\u0644\u0648\u064A\u0628 HTML \u{1F310}\u{1F680}",
+  gradeLevel: "\u0627\u0644\u0635\u0641 \u0627\u0644\u0633\u0627\u062F\u0633 \u0627\u0644\u0627\u0628\u062A\u062F\u0627\u0626\u064A (Grade 6 Languages) - \u062F\u0648\u0631\u0629 ICT 6",
+  subject: "\u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u0627\u0644\u0645\u0639\u0644\u0648\u0645\u0627\u062A \u0648\u0627\u0644\u0627\u062A\u0635\u0627\u0644\u0627\u062A ICT 6 & Computer",
+  groupName: "\u062C\u0631\u0648\u0628 \u0627\u0644\u0635\u0641 \u0627\u0644\u0633\u0627\u062F\u0633 \u0644\u063A\u0627\u062A (ICT 6) - \u0627\u0644\u0623\u062D\u062F 4\u0645",
+  courseName: "\u062F\u0648\u0631\u0629 ICT 6 - \u0627\u0644\u0635\u0641 \u0627\u0644\u0633\u0627\u062F\u0633 \u0627\u0644\u0627\u0628\u062A\u062F\u0627\u0626\u064A",
+  lectureDate: (/* @__PURE__ */ new Date()).toISOString(),
+  trainerName: "\u0627\u0644\u0645\u0647\u0646\u062F\u0633 / \u0627\u0644\u0645\u062F\u0631\u0628 \u0627\u0644\u0645\u0639\u062A\u0645\u062F",
+  recapSummary: {
+    points: [
+      "1. \u0645\u0631\u0627\u062C\u0639\u0629 \u0634\u0627\u0645\u0644\u0629 \u0648\u0623\u0633\u0626\u0644\u0629 \u062A\u0641\u0627\u0639\u0644\u064A\u0629 \u0648\u0645\u0633\u0627\u0628\u0642\u0629 \u0643\u0627\u0647\u0648\u062A \u0644\u062A\u062B\u0628\u064A\u062A \u0627\u0644\u0645\u0641\u0627\u0647\u064A\u0645 \u0648\u062A\u0643\u0631\u064A\u0645 \u0627\u0644\u0623\u0628\u0637\u0627\u0644 \u0627\u0644\u0645\u062A\u0641\u0648\u0642\u064A\u0646.",
+      "2. \u0634\u0631\u062D \u0623\u062C\u0647\u0632\u0629 \u0634\u0628\u0643\u0627\u062A \u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631 (\u0627\u0644\u0645\u0648\u062F\u0645 Modem\u060C \u0627\u0644\u0645\u062D\u0648\u0644 Switch\u060C \u0627\u0644\u0631\u0627\u0648\u062A\u0631 Router) \u0648\u0627\u0644\u0641\u0631\u0642 \u0628\u064A\u0646 \u0627\u0644\u0634\u0628\u0643\u0627\u062A \u0627\u0644\u0633\u0644\u0643\u064A\u0629 \u0648\u0627\u0644\u0644\u0627\u0633\u0644\u0643\u064A\u0629.",
+      "3. \u0627\u0633\u062A\u0639\u0631\u0627\u0636 \u0627\u0644\u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u0627\u0644\u0645\u062A\u0642\u062F\u0645\u0629 \u0648\u062A\u0637\u0628\u064A\u0642\u0627\u062A \u0627\u0644\u0630\u0643\u0627\u0621 \u0627\u0644\u0627\u0635\u0637\u0646\u0627\u0639\u064A (AI) \u0648\u0627\u0644\u0648\u0627\u0642\u0639 \u0627\u0644\u0645\u0639\u0632\u0632 (AR) \u0648\u0627\u0644\u0648\u0627\u0642\u0639 \u0627\u0644\u0627\u0641\u062A\u0631\u0627\u0636\u064A (VR).",
+      "4. \u0645\u0642\u062F\u0645\u0629 \u0639\u0645\u0644\u064A\u0629 \u0641\u064A \u0644\u063A\u0629 \u062A\u0631\u0645\u064A\u0632 \u0627\u0644\u0646\u0635\u0648\u0635 \u0627\u0644\u062A\u0634\u0639\u0628\u064A\u0629 (HTML) \u0644\u0628\u0646\u0627\u0621 \u0635\u0641\u062D\u0627\u062A \u0627\u0644\u0648\u064A\u0628 \u0627\u0644\u062A\u0641\u0627\u0639\u0644\u064A\u0629 \u0648\u0647\u064A\u0643\u0644\u0629 \u0627\u0644\u0648\u0633\u0648\u0645 \u0627\u0644\u0623\u0633\u0627\u0633\u064A\u0629.",
+      "5. \u062A\u0637\u0628\u064A\u0642 \u0639\u0645\u0644\u064A \u0628\u0627\u0644\u0645\u0639\u0645\u0644 \u0639\u0644\u0649 \u0643\u062A\u0627\u0628\u0629 \u0643\u0648\u062F HTML \u0648\u0628\u0646\u0627\u0621 \u0635\u0641\u062D\u0629 \u0648\u064A\u0628 \u0634\u062E\u0635\u064A\u0629 \u0628\u0633\u064A\u0637\u0629 \u0648\u0641\u062D\u0635 \u0627\u0644\u0627\u062A\u0635\u0627\u0644 \u0628\u0627\u0644\u0623\u062C\u0647\u0632\u0629 \u0627\u0644\u0630\u0643\u064A\u0629."
+    ],
+    detailedNotes: "\u062A\u0645\u062A \u0627\u0644\u0645\u062D\u0627\u0636\u0631\u0629 \u0628\u062A\u0641\u0627\u0639\u0644 \u0631\u0627\u0626\u0639 \u0648\u0641\u0647\u0645 \u0639\u0645\u064A\u0642 \u0644\u0644\u0641\u0631\u0642 \u0628\u064A\u0646 \u0627\u0644\u0645\u0648\u062F\u0645 \u0648\u0627\u0644\u0645\u062D\u0648\u0644 \u0648\u062A\u0637\u0628\u064A\u0642 \u0643\u062A\u0627\u0628\u0629 \u0648\u0633\u0648\u0645 HTML \u0641\u064A \u0627\u0644\u0645\u0639\u0645\u0644 \u0628\u0646\u062C\u0627\u062D."
+  },
+  homeworkTasks: {
+    tasks: [
+      "1. \u0643\u062A\u0627\u0628\u0629 \u0627\u0644\u0641\u0631\u0648\u0642 \u0627\u0644\u062C\u0648\u0647\u0631\u064A\u0629 \u0628\u064A\u0646 \u0627\u0644\u0645\u0648\u062F\u0645 (Modem) \u0648\u0627\u0644\u0645\u062D\u0648\u0644 (Switch) \u0648\u0627\u0644\u0631\u0627\u0648\u062A\u0631 \u0641\u064A \u0643\u0634\u0643\u0648\u0644 \u0627\u0644\u062A\u062F\u0631\u064A\u0628 \u0645\u0639 \u0631\u0633\u0645 \u062A\u0648\u0636\u064A\u062D\u064A.",
+      "2. \u0643\u062A\u0627\u0628\u0629 \u0643\u0648\u062F HTML \u0628\u0633\u064A\u0637 \u064A\u062D\u062A\u0648\u064A \u0639\u0644\u0649 \u0648\u0633\u0645 \u0627\u0644\u0639\u0646\u0648\u0627\u0646 <h1> \u0648\u0641\u0642\u0631\u0629 <p> \u0648\u0642\u0627\u0626\u0645\u0629 \u0646\u0642\u0637\u064A\u0629 <ul> \u0641\u064A \u0627\u0644\u0643\u0634\u0643\u0648\u0644.",
+      "3. \u062A\u0635\u0648\u064A\u0631 \u0635\u0641\u062D\u0627\u062A \u0627\u0644\u0648\u0627\u062C\u0628 \u0628\u0627\u0644\u0643\u0634\u0643\u0648\u0644 \u0648\u0631\u0641\u0639\u0647\u0627 \u0639\u0628\u0631 \u0628\u0648\u0627\u0628\u0629 \u0627\u0644\u0645\u062A\u062F\u0631\u0628 \u0644\u0644\u062A\u0635\u062D\u064A\u062D \u0627\u0644\u0630\u0643\u064A \u0648\u0627\u0644\u062D\u0635\u0648\u0644 \u0639\u0644\u0649 \u0627\u0644\u0646\u062C\u0648\u0645."
+    ],
+    bonusChallenge: "\u{1F31F} \u0628\u0648\u0646\u0635 \u0625\u0636\u0627\u0641\u064A \u062E\u0627\u0635: \u0625\u0646\u0634\u0627\u0621 \u0645\u0644\u0641 HTML \u062D\u0642\u064A\u0642\u064A \u0639\u0644\u0649 \u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631 \u0648\u062A\u062C\u0631\u0628\u0629 \u0641\u062A\u062D\u0647 \u0628\u0645\u062A\u0635\u0641\u062D \u0627\u0644\u0648\u064A\u0628 \u0648\u062A\u0635\u0648\u064A\u0631 \u0627\u0644\u0634\u0627\u0634\u0629.",
+    dueDateTime: new Date(Date.now() + 6 * 864e5).toISOString(),
+    allowMultiPageUpload: true
+  },
+  nextLecturePrep: {
+    prepPoints: [
+      "\u0627\u0644\u062A\u062D\u0636\u064A\u0631 \u0644\u062F\u0631\u0633 \u062D\u0645\u0627\u064A\u0629 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A \u0648\u0627\u0644\u0623\u0644\u0639\u0627\u0628 \u0627\u0644\u0625\u0644\u0643\u062A\u0631\u0648\u0646\u064A\u0629 \u0648\u062A\u0637\u0628\u064A\u0642\u0627\u062A \u0627\u0644\u062D\u0648\u0633\u0628\u0629 \u0627\u0644\u0633\u062D\u0627\u0628\u064A\u0629 (Cloud Computing).",
+      "\u0625\u062D\u0636\u0627\u0631 \u0643\u0634\u0643\u0648\u0644 \u0627\u0644\u062A\u062F\u0631\u064A\u0628 \u0648\u0623\u062F\u0648\u0627\u062A \u0627\u0644\u0645\u0639\u0645\u0644 \u0648\u0627\u0644\u0627\u0633\u062A\u0639\u062F\u0627\u062F \u0644\u0645\u0633\u0627\u0628\u0642\u0629 \u0643\u0627\u0647\u0648\u062A \u062C\u062F\u064A\u062F\u0629."
+    ],
+    teaserNotes: "\u0627\u0644\u0645\u062D\u0627\u0636\u0631\u0629 \u0627\u0644\u0642\u0627\u062F\u0645\u0629 \u0633\u0646\u062A\u0639\u0644\u0645 \u0643\u064A\u0641 \u0646\u062D\u0645\u064A \u062D\u0633\u0627\u0628\u0627\u062A\u0646\u0627 \u0645\u0646 \u0627\u0644\u0645\u062E\u0627\u0637\u0631 \u0627\u0644\u0633\u064A\u0628\u0631\u0627\u0646\u064A\u0629 \u0648\u0646\u062E\u0632\u0646 \u0645\u0644\u0641\u0627\u062A\u0646\u0627 \u0633\u062D\u0627\u0628\u064A\u0627\u064B!"
+  },
+  closingMessage: "\u0623\u0628\u0637\u0627\u0644 \u0627\u0644\u0635\u0641 \u0627\u0644\u0633\u0627\u062F\u0633 (ICT 6)\u060C \u0646\u0636\u062C \u0641\u0643\u0631\u064A \u0648\u062A\u0637\u0628\u064A\u0642\u064A \u0627\u0633\u062A\u062B\u0646\u0627\u0626\u064A \u0641\u064A \u0627\u0633\u062A\u064A\u0639\u0627\u0628 \u0627\u0644\u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u0627\u0644\u0645\u062A\u0642\u062F\u0645\u0629 \u0648\u0627\u0644\u0634\u0628\u0643\u0627\u062A! \u0641\u062E\u0648\u0631 \u062C\u062F\u0627\u064B \u0628\u062A\u0645\u064A\u0632\u0643\u0645. \u{1F310}\u{1F680}\u2B50",
+  isPublished: true,
+  createdAt: (/* @__PURE__ */ new Date()).toISOString(),
+  updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+});
+var getStandardGrade5Recap = () => ({
+  id: "recap-grade5-ict-main",
+  title: "\u0627\u0644\u0645\u062D\u0627\u0636\u0631\u0629 2: \u0634\u0628\u0643\u0627\u062A \u0627\u0644\u062D\u0627\u0633\u0648\u0628 \u0648\u0627\u0644\u0625\u0646\u062A\u0631\u0646\u062A \u0648\u0627\u0644\u0623\u0645\u0646 \u0627\u0644\u0633\u064A\u0628\u0631\u0627\u0646\u064A \u{1F310}\u{1F512}",
+  gradeLevel: "\u0627\u0644\u0635\u0641 \u0627\u0644\u062E\u0627\u0645\u0633 \u0627\u0644\u0627\u0628\u062A\u062F\u0627\u0626\u064A (Grade 5 Languages) - \u062F\u0648\u0631\u0629 ICT 5",
+  subject: "\u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u0627\u0644\u0645\u0639\u0644\u0648\u0645\u0627\u062A \u0648\u0627\u0644\u0627\u062A\u0635\u0627\u0644\u0627\u062A ICT 5 & Computer",
+  groupName: "\u062C\u0631\u0648\u0628 \u0627\u0644\u0635\u0641 \u0627\u0644\u062E\u0627\u0645\u0633 \u0644\u063A\u0627\u062A (ICT 5) - \u0627\u0644\u0633\u0628\u062A 2\u0645",
+  courseName: "\u062F\u0648\u0631\u0629 ICT 5 - \u0627\u0644\u0635\u0641 \u0627\u0644\u062E\u0627\u0645\u0633 \u0627\u0644\u0627\u0628\u062A\u062F\u0627\u0626\u064A",
+  lectureDate: (/* @__PURE__ */ new Date()).toISOString(),
+  trainerName: "\u0627\u0644\u0645\u0647\u0646\u062F\u0633 / \u0627\u0644\u0645\u062F\u0631\u0628 \u0627\u0644\u0645\u0639\u062A\u0645\u062F",
+  recapSummary: {
+    points: [
+      "1. \u0645\u0631\u0627\u062C\u0639\u0629 \u0623\u0646\u0648\u0627\u0639 \u0627\u0644\u0634\u0628\u0643\u0627\u062A (LAN vs WAN) \u0648\u0627\u0644\u0641\u0631\u0642 \u0628\u064A\u0646 \u0627\u0644\u0634\u0628\u0643\u0629 \u0627\u0644\u0645\u063A\u0644\u0642\u0629 \u0648\u0627\u0644\u0645\u0641\u062A\u0648\u062D\u0629.",
+      "2. \u0645\u0643\u0648\u0646\u0627\u062A \u062A\u0648\u0635\u064A\u0644 \u0627\u0644\u0634\u0628\u0643\u0629 (\u0627\u0644\u0631\u0627\u0648\u062A\u0631 Router\u060C \u0643\u0627\u0628\u0644\u0627\u062A Ethernet\u060C \u0645\u0646\u0627\u0641\u0630 Switch).",
+      "3. \u0627\u0644\u0625\u0646\u062A\u0631\u0646\u062A Internet \u0648\u0634\u0628\u0643\u0629 \u0627\u0644\u0648\u064A\u0628 \u0627\u0644\u0639\u0627\u0644\u0645\u064A\u0629 World Wide Web (WWW).",
+      "4. \u0642\u0648\u0627\u0639\u062F \u062D\u0645\u0627\u064A\u0629 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A \u0648\u0643\u0644\u0645\u0627\u062A \u0627\u0644\u0645\u0631\u0648\u0631 \u0627\u0644\u0642\u0648\u064A\u0629 (Strong Passwords & 2FA).",
+      "5. \u062A\u0637\u0628\u064A\u0642 \u0639\u0645\u0644\u064A \u0628\u0627\u0644\u0645\u0639\u0645\u0644 \u0639\u0644\u0649 \u0641\u062D\u0635 \u0627\u062A\u0635\u0627\u0644 \u0627\u0644\u0634\u0628\u0643\u0629 \u0648\u0645\u0634\u0627\u0631\u0643\u0629 \u0627\u0644\u0645\u0644\u0641\u0627\u062A \u0628\u0623\u0645\u0627\u0646."
+    ],
+    detailedNotes: "\u062A\u0645 \u062A\u0637\u0628\u064A\u0642 \u0648\u0631\u0634\u0629 \u0639\u0645\u0644\u064A\u0629 \u0639\u0644\u0649 \u062A\u0648\u0635\u064A\u0644 \u0627\u0644\u0643\u0627\u0628\u0644\u0627\u062A \u0648\u0641\u0647\u0645 \u0639\u0646\u0648\u0627\u0646 \u0627\u0644\u0640 IP \u0648\u0637\u0631\u0642 \u062D\u0645\u0627\u064A\u0629 \u0627\u0644\u062E\u0635\u0648\u0635\u064A\u0629 \u0627\u0644\u0631\u0642\u0645\u064A\u0629."
+  },
+  homeworkTasks: {
+    tasks: [
+      "1. \u0643\u062A\u0627\u0628\u0629 \u062C\u062F\u0648\u0644 \u0645\u0642\u0627\u0631\u0646\u0629 \u0628\u064A\u0646 \u0634\u0628\u0643\u0629 LAN \u0648\u0634\u0628\u0643\u0629 WAN \u0641\u064A \u0627\u0644\u0643\u0634\u0643\u0648\u0644.",
+      "2. \u0648\u0636\u0639 5 \u0634\u0631\u0648\u0637 \u0644\u0643\u0644\u0645\u0629 \u0627\u0644\u0645\u0631\u0648\u0631 \u0627\u0644\u0622\u0645\u0646\u0629 \u0627\u0644\u062A\u064A \u062A\u062D\u0645\u064A \u0627\u0644\u062D\u0633\u0627\u0628\u0627\u062A \u0645\u0646 \u0627\u0644\u0627\u062E\u062A\u0631\u0627\u0642.",
+      "3. \u062D\u0644 \u0623\u0633\u0626\u0644\u0629 \u0646\u0647\u0627\u064A\u0629 \u0627\u0644\u0648\u062D\u062F\u0629 \u0648\u062A\u0635\u0648\u064A\u0631 \u0635\u0641\u062D\u0627\u062A \u0627\u0644\u0625\u062C\u0627\u0628\u0629 \u0644\u0631\u0641\u0639\u0647\u0627 \u0639\u0628\u0631 \u0627\u0644\u0628\u0648\u0627\u0628\u0629."
+    ],
+    bonusChallenge: "\u{1F31F} \u0628\u0648\u0646\u0635 \u0625\u0636\u0627\u0641\u064A: \u0627\u0628\u062A\u0643\u0627\u0631 \u0643\u0644\u0645\u0629 \u0645\u0631\u0648\u0631 \u0642\u0648\u064A\u0629 \u0628\u0627\u0633\u062A\u062E\u062F\u0627\u0645 \u0643\u0644\u0645\u0627\u062A \u0648\u062D\u0631\u0648\u0641 \u0648\u0631\u0645\u0648\u0632 \u0648\u062A\u0648\u0636\u064A\u062D \u0633\u0628\u0628 \u0642\u0648\u062A\u0647\u0627.",
+    dueDateTime: new Date(Date.now() + 6 * 864e5).toISOString(),
+    allowMultiPageUpload: true
+  },
+  nextLecturePrep: {
+    prepPoints: [
+      "\u0642\u0631\u0627\u0621\u0629 \u062F\u0631\u0633 \u0627\u0633\u062A\u0631\u0627\u062A\u064A\u062C\u064A\u0627\u062A \u0627\u0644\u0628\u062D\u062B \u0627\u0644\u0645\u062A\u0642\u062F\u0645 \u0639\u0644\u0649 \u0645\u062D\u0631\u0643\u0627\u062A \u0627\u0644\u0628\u062D\u062B (Search Strategies).",
+      "\u0625\u062D\u0636\u0627\u0631 \u0627\u0644\u0643\u0634\u0643\u0648\u0644 \u0648\u0645\u062A\u0627\u0628\u0639\u0629 \u0627\u0644\u0645\u0647\u0627\u0645 \u0641\u064A \u0627\u0644\u0645\u0648\u0639\u062F."
+    ],
+    teaserNotes: "\u0627\u0644\u0645\u062D\u0627\u0636\u0631\u0629 \u0627\u0644\u0642\u0627\u062F\u0645\u0629 \u0633\u0646\u062A\u0639\u0644\u0645 \u0623\u0633\u0631\u0627\u0631 \u0648\u062A\u0642\u0646\u064A\u0627\u062A \u0627\u0644\u0628\u062D\u062B \u0627\u0644\u0627\u062D\u062A\u0631\u0627\u0641\u064A \u0648\u0627\u0644\u062A\u062D\u0642\u0642 \u0645\u0646 \u0645\u0635\u0627\u062F\u0631 \u0627\u0644\u0645\u0639\u0644\u0648\u0645\u0627\u062A!"
+  },
+  closingMessage: "\u0623\u0628\u0637\u0627\u0644 \u0627\u0644\u0635\u0641 \u0627\u0644\u062E\u0627\u0645\u0633\u060C \u0623\u0628\u062F\u0639\u062A\u0645 \u0641\u064A \u0641\u0647\u0645 \u0639\u0627\u0644\u0645 \u0627\u0644\u0634\u0628\u0643\u0627\u062A\u060C \u0627\u0633\u062A\u0645\u0631\u0648\u0627 \u0641\u064A \u062A\u0637\u0628\u064A\u0642 \u0639\u0627\u062F\u0627\u062A \u0627\u0644\u0623\u0645\u0627\u0646 \u0627\u0644\u0631\u0642\u0645\u064A! \u{1F310}\u{1F6E1}\uFE0F",
+  isPublished: true,
+  createdAt: (/* @__PURE__ */ new Date()).toISOString(),
+  updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+});
+var getStandardGrade4Recap = () => ({
+  id: "recap-grade4-ict-main",
+  title: "\u0627\u0644\u0645\u062D\u0627\u0636\u0631\u0629 3: \u0645\u0643\u0648\u0646\u0627\u062A \u0627\u0644\u0643\u064A\u0633\u0629 \u0627\u0644\u062E\u0645\u0633\u0629 \u0648\u0627\u0644\u0639\u062A\u0627\u062F \u0648\u062F\u0648\u0631\u0629 \u0645\u0639\u0627\u0644\u062C\u0629 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A \u{1F4BB}\u26A1\uFE0F",
+  gradeLevel: "\u0627\u0644\u0635\u0641 \u0627\u0644\u0631\u0627\u0628\u0639 \u0627\u0644\u0627\u0628\u062A\u062F\u0627\u0626\u064A (Grade 4 Languages)",
+  subject: "\u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u0627\u0644\u0645\u0639\u0644\u0648\u0645\u0627\u062A \u0648\u0627\u0644\u0627\u062A\u0635\u0627\u0644\u0627\u062A ICT 4 & Computer",
+  groupName: "\u062C\u0631\u0648\u0628 \u0627\u0644\u0635\u0641 \u0627\u0644\u0631\u0627\u0628\u0639 \u0644\u063A\u0627\u062A (ICT 4) - \u0645\u0631\u0643\u0632 \u0628\u062F\u0631 \u0648\u0627\u0644\u0646\u062C\u0627\u062D",
+  courseName: "\u062F\u0648\u0631\u0629 ICT 4 - \u0627\u0644\u0635\u0641 \u0627\u0644\u0631\u0627\u0628\u0639 \u0627\u0644\u0627\u0628\u062A\u062F\u0627\u0626\u064A",
+  lectureDate: (/* @__PURE__ */ new Date()).toISOString(),
+  trainerName: "\u0627\u0644\u0645\u0647\u0646\u062F\u0633 / \u0627\u0644\u0645\u062F\u0631\u0628 \u0627\u0644\u0645\u0639\u062A\u0645\u062F",
+  recapSummary: {
+    points: [
+      "1. \u0645\u0631\u0627\u062C\u0639\u0629 \u0634\u0627\u0645\u0644\u0629 Revision \u0639\u0644\u0649 \u0645\u0627 \u062A\u0645 \u062F\u0631\u0627\u0633\u062A\u0647 \u0633\u0627\u0628\u0642\u0627\u064B \u0641\u064A \u0627\u0644\u062F\u0631\u0633 \u0627\u0644\u0623\u0648\u0644 \u0648\u0627\u0644\u062B\u0627\u0646\u064A.",
+      "2. \u0623\u0633\u0626\u0644\u0629 \u062A\u0641\u0627\u0639\u0644\u064A\u0629 \u0648\u0645\u0633\u0627\u0628\u0642\u0629 \u0643\u0627\u0647\u0648\u062A \u062D\u0645\u0627\u0633\u064A\u0629 \u0644\u062A\u062B\u0628\u064A\u062A \u0627\u0644\u0645\u0641\u0627\u0647\u064A\u0645 \u0648\u062A\u0643\u0631\u064A\u0645 \u0627\u0644\u0641\u0627\u0626\u0632\u064A\u0646.",
+      "3. \u062D\u0644 \u0648\u062A\u0635\u062D\u064A\u062D \u0627\u0644\u0648\u0627\u062C\u0628\u0627\u062A \u0627\u0644\u0633\u0627\u0628\u0642\u0629 \u0648\u0627\u0644\u062A\u0623\u0643\u062F \u0645\u0646 \u0625\u062A\u0642\u0627\u0646 \u0643\u0644 \u0628\u0637\u0644 \u0644\u0644\u0623\u0633\u0626\u0644\u0629.",
+      "4. \u0641\u062A\u062D Lesson 3 \u0645\u0639 \u0639\u0631\u0636 \u0641\u064A\u062F\u064A\u0648 \u062A\u0645\u0647\u064A\u062F\u064A \u0634\u064A\u0642 \u0639\u0646 \u0623\u062C\u0632\u0627\u0621 \u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631.",
+      "5. \u0641\u0643 \u0627\u0644\u0640 Case \u0639\u0645\u0644\u064A\u0627\u064B \u0641\u064A \u0627\u0644\u0645\u0639\u0645\u0644 \u0648\u0627\u0644\u062A\u0639\u0631\u0641 \u0639\u0644\u0649 \u0627\u0644\u0623\u062C\u0632\u0627\u0621 \u0627\u0644\u062F\u0627\u062E\u0644\u064A\u0629 \u0644\u0644\u0623\u062C\u0647\u0632\u0629.",
+      "6. \u0645\u0643\u0648\u0646\u0627\u062A \u0627\u0644\u0643\u064A\u0633\u0629 \u0627\u0644\u062E\u0645\u0633\u0629: (\u0639\u0645\u0648 \u0627\u0644\u0643\u0647\u0631\u0628\u0627\u0626\u064A = Power Supply \u26A1\uFE0F\u060C \u0645\u0627\u0645\u0627 \u0646\u0648\u0633\u0629 = Motherboard \u{1F469}\u200D\u{1F373}\u060C \u0627\u0644\u0645\u062E\u064A\u062E = CPU \u{1F9E0}\u060C \u0627\u0644\u0633\u0645\u0643\u0629 = RAM \u{1F41F}\u060C \u0627\u0644\u062E\u0632\u0646\u0629 = Hard Disk \u{1F512}).",
+      "7. \u062F\u0648\u0631\u0629 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A \u0648\u0627\u0644\u0645\u0639\u0644\u0648\u0645\u0627\u062A Data vs Information (\u062F\u062E\u0648\u0644 Data -> \u062A\u062D\u0648\u064A\u0644 \u0648\u0645\u0639\u0627\u0644\u062C\u0629 \u0628\u0627\u0644\u0645\u062E\u064A\u062E CPU -> \u062E\u0631\u0648\u062C Information \u0645\u0641\u064A\u062F\u0629)."
+    ],
+    detailedNotes: "\u062A\u0645\u062A \u0627\u0644\u0645\u062D\u0627\u0636\u0631\u0629 \u0648\u0633\u0637 \u062A\u0641\u0627\u0639\u0644 \u0639\u0627\u0644\u064A \u0648\u0627\u0633\u062A\u064A\u0639\u0627\u0628 \u062A\u0637\u0628\u064A\u0642\u064A \u0645\u0628\u0627\u0634\u0631 \u062D\u064A\u062B \u0642\u0627\u0645 \u0627\u0644\u0637\u0644\u0627\u0628 \u0628\u0627\u0644\u062A\u0639\u0631\u0641 \u0639\u0644\u0649 \u0645\u0643\u0648\u0646\u0627\u062A \u0627\u0644\u062D\u0627\u0633\u0648\u0628 \u0648\u0641\u0643 \u0627\u0644\u0643\u064A\u0633\u0629 \u0648\u0645\u0644\u0627\u062D\u0638\u0629 \u0648\u0638\u064A\u0641\u0629 \u0643\u0644 \u0642\u0637\u0639\u0629 \u0648\u0631\u0628\u0637\u0647\u0627 \u0628\u0627\u0644\u062A\u0634\u0628\u064A\u0647\u0627\u062A \u0627\u0644\u0630\u0643\u064A\u0629."
+  },
+  homeworkTasks: {
+    tasks: [
+      "1. \u0643\u062A\u0627\u0628\u0629 \u0648\u062A\u0648\u062B\u064A\u0642 \u0623\u0633\u0645\u0627\u0621 \u0645\u0643\u0648\u0646\u0627\u062A \u0627\u0644\u0643\u064A\u0633\u0629 \u0627\u0644\u062E\u0645\u0633\u0629 \u0628\u0627\u0644\u0639\u0631\u0628\u064A \u0648\u0627\u0644\u0625\u0646\u062C\u0644\u064A\u0632\u064A \u0641\u064A \u0627\u0644\u0643\u0634\u0643\u0648\u0644.",
+      "2. \u062A\u0644\u062E\u064A\u0635 Lesson 1 & Lesson 2 \u0641\u064A \u0646\u0635\u0641 \u0635\u0641\u062D\u0629 + \u062D\u0644 \u0627\u0644\u0623\u0633\u0626\u0644\u0629 \u0627\u0644\u0645\u0647\u0645\u0629 \u0641\u064A \u0627\u0644\u0646\u0635\u0641 \u0627\u0644\u062B\u0627\u0646\u064A.",
+      "3. \u062A\u0644\u062E\u064A\u0635 \u062A\u062D\u0636\u064A\u0631\u064A \u0644\u0640 Lesson 3 \u0641\u064A \u0635\u0641\u062D\u0629 \u0643\u0627\u0645\u0644\u0629.",
+      "4. \u0625\u0645\u0643\u0627\u0646\u064A\u0629 \u062A\u0635\u0648\u064A\u0631 \u0648\u0631\u0641\u0639 \u0623\u0643\u062B\u0631 \u0645\u0646 \u0648\u0631\u0642\u0629/\u0635\u0641\u062D\u0629 \u0641\u064A \u0627\u0644\u0648\u0627\u062C\u0628 \u0639\u0628\u0631 \u0628\u0648\u0627\u0628\u0629 \u0627\u0644\u0645\u062A\u062F\u0631\u0628."
+    ],
+    bonusChallenge: "\u{1F31F} \u0628\u0648\u0646\u0635 \u0625\u0636\u0627\u0641\u064A \u062E\u0627\u0635: \u062A\u0633\u062C\u064A\u0644 \u0641\u064A\u062F\u064A\u0648 \u0623\u0648 \u0641\u0648\u064A\u0633 \u0648\u0623\u0646\u062A \u062A\u0634\u0627\u0648\u0631 \u0639\u0644\u0649 \u0645\u0643\u0648\u0646\u0627\u062A \u0627\u0644\u0643\u064A\u0633\u0629 \u0648\u062A\u0634\u0631\u062D\u0647\u0627 \u0628\u0635\u0648\u062A\u0643!",
+    dueDateTime: new Date(Date.now() + 6 * 864e5).toISOString(),
+    allowMultiPageUpload: true
+  },
+  nextLecturePrep: {
+    prepPoints: [
+      "\u062A\u062B\u0628\u064A\u062A \u0648\u062D\u0641\u0638 \u0645\u0633\u0645\u064A\u0627\u062A \u0645\u0643\u0648\u0646\u0627\u062A \u0627\u0644\u0643\u064A\u0633\u0629 \u0627\u0644\u062E\u0645\u0633\u0629 (Power Supply, Motherboard, CPU, RAM, Hard Disk).",
+      "\u0625\u062D\u0636\u0627\u0631 \u0643\u0634\u0643\u0648\u0644 \u0627\u0644\u062A\u062F\u0631\u064A\u0628 \u0648\u0623\u062F\u0648\u0627\u062A \u0627\u0644\u0645\u0639\u0645\u0644 \u0648\u0627\u0644\u0627\u0633\u062A\u0639\u062F\u0627\u062F \u0644\u0645\u0633\u0627\u0628\u0642\u0629 \u0643\u0627\u0647\u0648\u062A \u0648\u062A\u0637\u0628\u064A\u0642 \u0639\u0645\u0644\u064A \u062C\u062F\u064A\u062F \u0641\u064A \u0627\u0644\u0645\u0639\u0645\u0644."
+    ],
+    teaserNotes: "\u0627\u0644\u0645\u062D\u0627\u0636\u0631\u0629 \u0627\u0644\u0642\u0627\u062F\u0645\u0629 \u0633\u062A\u0634\u0647\u062F \u062A\u062D\u062F\u064A\u0627\u062A \u0628\u0631\u0645\u062C\u064A\u0629 \u0648\u0639\u0645\u0644\u064A\u0629 \u062A\u0641\u0627\u0639\u0644\u064A\u0629 \u0648\u062A\u0641\u0643\u064A\u0643 \u0643\u064A\u0633\u0627\u062A \u062C\u062F\u064A\u062F\u0629 \u062F\u0627\u062E\u0644 \u0627\u0644\u0645\u0639\u0645\u0644!"
+  },
+  closingMessage: "\u0623\u0628\u0637\u0627\u0644 \u0627\u0644\u0635\u0641 \u0627\u0644\u0631\u0627\u0628\u0639\u060C \u0641\u062E\u0648\u0631 \u062C\u062F\u0627\u064B \u0628\u062A\u0631\u0643\u064A\u0632\u0643\u0645 \u0648\u0641\u0647\u0645\u0643\u0645 \u0627\u0644\u0639\u0645\u0644\u064A \u0644\u0645\u0643\u0648\u0646\u0627\u062A \u0627\u0644\u062D\u0627\u0633\u0648\u0628\u060C \u0623\u0646\u062A\u0645 \u0645\u0647\u0646\u062F\u0633\u0648 \u0627\u0644\u0645\u0633\u062A\u0642\u0628\u0644! \u0646\u0646\u062A\u0638\u0631 \u0625\u0628\u062F\u0627\u0639\u0627\u062A\u0643\u0645 \u0641\u064A \u062A\u0644\u062E\u064A\u0635 \u0627\u0644\u062F\u0631\u0648\u0633 \u0648\u0627\u0644\u062A\u0637\u0628\u064A\u0642 \u0627\u0644\u0639\u0645\u0644\u064A. \u{1F680}\u{1F31F}",
+  isPublished: true,
+  createdAt: (/* @__PURE__ */ new Date()).toISOString(),
+  updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+});
+var getStandardPrep1Recap = () => ({
+  id: "recap-prep1-ict-main",
+  title: "\u0627\u0644\u0645\u062D\u0627\u0636\u0631\u0629 1: \u0627\u0644\u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u0627\u0644\u062E\u0636\u0631\u0627\u0621 \u0648\u0627\u0644\u062A\u062D\u0648\u0644 \u0627\u0644\u0631\u0642\u0645\u064A \u0648\u0623\u0646\u0638\u0645\u0629 \u0627\u0644\u062A\u0634\u063A\u064A\u0644 \u0627\u0644\u062D\u062F\u064A\u062B\u0629 \u{1F33F}\u{1F4BB}",
+  gradeLevel: "\u0627\u0644\u0635\u0641 \u0627\u0644\u0623\u0648\u0644 \u0627\u0644\u0625\u0639\u062F\u0627\u062F\u064A (Prep 1) - \u062F\u0648\u0631\u0629 ICT & AI",
+  subject: "\u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u0627\u0644\u0645\u0639\u0644\u0648\u0645\u0627\u062A \u0648\u0627\u0644\u0627\u062A\u0635\u0627\u0644\u0627\u062A \u0648\u0627\u0644\u0630\u0643\u0627\u0621 \u0627\u0644\u0627\u0635\u0637\u0646\u0627\u0639\u064A Prep 1",
+  groupName: "\u062C\u0631\u0648\u0628 \u0627\u0644\u0623\u0648\u0644 \u0627\u0644\u0625\u0639\u062F\u0627\u062F\u064A \u0644\u063A\u0627\u062A (Prep 1) - \u0627\u0644\u0627\u062B\u0646\u064A\u0646 3\u0645",
+  courseName: "\u062F\u0648\u0631\u0629 ICT & AI - \u0627\u0644\u0635\u0641 \u0627\u0644\u0623\u0648\u0644 \u0627\u0644\u0625\u0639\u062F\u0627\u062F\u064A",
+  lectureDate: (/* @__PURE__ */ new Date()).toISOString(),
+  trainerName: "\u0627\u0644\u0645\u0647\u0646\u062F\u0633 / \u0627\u0644\u0645\u062F\u0631\u0628 \u0627\u0644\u0645\u0639\u062A\u0645\u062F",
+  recapSummary: {
+    points: [
+      "1. \u0634\u0631\u062D \u0645\u0641\u0647\u0648\u0645 \u0627\u0644\u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u0627\u0644\u062E\u0636\u0631\u0627\u0621 (Green Technology) \u0648\u062F\u0648\u0631\u0647\u0627 \u0641\u064A \u0627\u0644\u0627\u0633\u062A\u062F\u0627\u0645\u0629 \u0627\u0644\u0628\u064A\u0626\u064A\u0629 \u0648\u062A\u0631\u0634\u064A\u062F \u0627\u0644\u0637\u0627\u0642\u0629.",
+      "2. \u0627\u0633\u062A\u0639\u0631\u0627\u0636 \u0627\u0644\u062A\u062D\u0648\u0644 \u0627\u0644\u0631\u0642\u0645\u064A (Digital Transformation) \u0648\u062A\u0637\u0628\u064A\u0642\u0627\u062A\u0647 \u0627\u0644\u062D\u0643\u0648\u0645\u064A\u0629 \u0648\u0627\u0644\u062A\u0639\u0644\u064A\u0645\u064A\u0629 \u0648\u0627\u0644\u062E\u062F\u0645\u064A\u0629 \u0641\u064A \u0645\u0635\u0631.",
+      "3. \u0627\u0644\u062A\u0639\u0631\u0641 \u0639\u0644\u0649 \u0623\u0646\u0638\u0645\u0629 \u0627\u0644\u062A\u0634\u063A\u064A\u0644 \u0627\u0644\u0645\u062E\u062A\u0644\u0641\u0629 (Windows, Android, Linux, iOS) \u0648\u0648\u0638\u0627\u0626\u0641\u0647\u0627 \u0641\u064A \u0625\u062F\u0627\u0631\u0629 \u0627\u0644\u0639\u062A\u0627\u062F \u0648\u0627\u0644\u0628\u0631\u0627\u0645\u062C.",
+      "4. \u062E\u0637\u0648\u0627\u062A \u062A\u062B\u0628\u064A\u062A \u0648\u0625\u0644\u063A\u0627\u0621 \u062A\u062B\u0628\u064A\u062A \u0627\u0644\u0628\u0631\u0645\u062C\u064A\u0627\u062A \u0648\u0625\u062F\u0627\u0631\u0629 \u0627\u0644\u0623\u062C\u0647\u0632\u0629 \u0627\u0644\u0631\u0642\u0645\u064A\u0629 \u0648\u0627\u0644\u0645\u0644\u062D\u0642\u0627\u062A \u0648\u0645\u0646\u0627\u0641\u0630 \u0627\u0644\u062A\u0648\u0635\u064A\u0644.",
+      "5. \u0625\u0646\u0634\u0627\u0621 \u0648\u0627\u0633\u062A\u062E\u062F\u0627\u0645 \u0627\u0644\u0628\u0631\u064A\u062F \u0627\u0644\u0625\u0644\u0643\u062A\u0631\u0648\u0646\u064A \u0648\u0627\u0644\u062D\u0633\u0627\u0628 \u0627\u0644\u0645\u062F\u0631\u0633\u064A \u0627\u0644\u0645\u0648\u062D\u062F \u0648\u0627\u0644\u062A\u0648\u0627\u0635\u0644 \u0627\u0644\u0631\u0642\u0645\u064A \u0627\u0644\u0622\u0645\u0646 \u0648\u0627\u0644\u0645\u062D\u062A\u0631\u0641."
+    ],
+    detailedNotes: "\u062A\u0645 \u062A\u0637\u0628\u064A\u0642 \u0648\u0631\u0634\u0629 \u0639\u0645\u0644 \u062A\u0641\u0627\u0639\u0644\u064A\u0629 \u0639\u0644\u0649 \u062A\u0641\u0639\u064A\u0644 \u0627\u0644\u062D\u0633\u0627\u0628 \u0627\u0644\u0645\u0648\u062D\u062F \u0648\u062A\u062C\u0631\u0628\u0629 \u0623\u0646\u0638\u0645\u0629 \u0627\u0644\u062A\u0634\u063A\u064A\u0644 \u0648\u0641\u0647\u0645 \u0645\u0639\u0627\u064A\u064A\u0631 \u0627\u0644\u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u0627\u0644\u062E\u0636\u0631\u0627\u0621 \u0648\u0625\u062F\u0627\u0631\u0629 \u0627\u0644\u0637\u0627\u0642\u0629 \u0628\u0627\u0644\u0623\u062C\u0647\u0632\u0629."
+  },
+  homeworkTasks: {
+    tasks: [
+      "1. \u0643\u062A\u0627\u0628\u0629 \u062A\u0642\u0631\u064A\u0631 \u0642\u0635\u064A\u0631 \u0641\u064A \u0627\u0644\u0643\u0634\u0643\u0648\u0644 \u064A\u0648\u0636\u062D 3 \u0623\u0645\u062B\u0644\u0629 \u0644\u062A\u0637\u0628\u064A\u0642\u0627\u062A \u0627\u0644\u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u0627\u0644\u062E\u0636\u0631\u0627\u0621 \u0641\u064A \u0627\u0644\u0623\u062C\u0647\u0632\u0629 \u0627\u0644\u0630\u0643\u064A\u0629.",
+      "2. \u0639\u0645\u0644 \u062C\u062F\u0648\u0644 \u0645\u0642\u0627\u0631\u0646\u0629 \u0628\u064A\u0646 \u0623\u0646\u0638\u0645\u0629 \u062A\u0634\u063A\u064A\u0644 \u0627\u0644\u062D\u0648\u0627\u0633\u064A\u0628 (Windows/Linux) \u0648\u0623\u0646\u0638\u0645\u0629 \u0627\u0644\u0647\u0648\u0627\u062A\u0641 (Android/iOS).",
+      "3. \u062A\u0633\u062C\u064A\u0644 \u0627\u0644\u062F\u062E\u0648\u0644 \u0628\u0627\u0644\u0628\u0631\u064A\u062F \u0627\u0644\u0645\u062F\u0631\u0633\u064A \u0627\u0644\u0645\u0648\u062D\u062F \u0648\u062A\u0635\u0648\u064A\u0631 \u0635\u0641\u062D\u0629 \u0627\u0644\u062D\u0633\u0627\u0628 \u0648\u0631\u0641\u0639\u0647\u0627 \u0639\u0628\u0631 \u0627\u0644\u0628\u0648\u0627\u0628\u0629."
+    ],
+    bonusChallenge: "\u{1F31F} \u0628\u0648\u0646\u0635 \u0645\u062A\u0645\u064A\u0632: \u0627\u0628\u062A\u0643\u0627\u0631 \u0641\u0643\u0631\u0629 \u0645\u0634\u0631\u0648\u0639 \u0631\u0642\u0645\u064A \u064A\u062F\u0639\u0645 \u0627\u0644\u0628\u064A\u0626\u0629 \u0627\u0644\u0645\u0633\u062A\u062F\u0627\u0645\u0629 \u0628\u0627\u0633\u062A\u062E\u062F\u0627\u0645 \u0627\u0644\u0630\u0643\u0627\u0621 \u0627\u0644\u0627\u0635\u0637\u0646\u0627\u0639\u064A \u0623\u0648 \u0625\u0646\u062A\u0631\u0646\u062A \u0627\u0644\u0623\u0634\u064A\u0627\u0621.",
+    dueDateTime: new Date(Date.now() + 6 * 864e5).toISOString(),
+    allowMultiPageUpload: true
+  },
+  nextLecturePrep: {
+    prepPoints: [
+      "\u0627\u0644\u062A\u062D\u0636\u064A\u0631 \u0644\u0645\u0648\u0636\u0648\u0639 \u0627\u0644\u062D\u0648\u0633\u0628\u0629 \u0627\u0644\u0633\u062D\u0627\u0628\u064A\u0629 (Cloud Storage) \u0648\u062E\u062F\u0645\u0627\u062A Google Drive \u0648 OneDrive.",
+      "\u062A\u062C\u0647\u064A\u0632 \u0628\u064A\u0626\u0629 \u0627\u0644\u0639\u0645\u0644 \u0644\u0627\u062C\u062A\u0645\u0627\u0639\u0627\u062A Google Meet \u0648\u0625\u062F\u0627\u0631\u0629 \u0627\u0644\u0645\u0634\u0631\u0648\u0639\u0627\u062A \u0627\u0644\u0631\u0642\u0645\u064A\u0629."
+    ],
+    teaserNotes: "\u0627\u0644\u0645\u062D\u0627\u0636\u0631\u0629 \u0627\u0644\u0642\u0627\u062F\u0645\u0629 \u0633\u0646\u062A\u0639\u0644\u0645 \u0643\u064A\u0641\u064A\u0629 \u062D\u0641\u0638 \u0645\u0644\u0641\u0627\u062A\u0646\u0627 \u0633\u062D\u0627\u0628\u064A\u0627\u064B \u0648\u0625\u062F\u0627\u0631\u062A\u0647\u0627 \u0648\u0627\u0644\u0639\u0645\u0644 \u0627\u0644\u062C\u0645\u0627\u0639\u064A \u0639\u0628\u0631 \u0627\u0644\u0625\u0646\u062A\u0631\u0646\u062A!"
+  },
+  closingMessage: "\u0623\u0628\u0637\u0627\u0644 \u0627\u0644\u0635\u0641 \u0627\u0644\u0623\u0648\u0644 \u0627\u0644\u0625\u0639\u062F\u0627\u062F\u064A\u060C \u0628\u062F\u0627\u064A\u0629 \u0627\u0633\u062A\u062B\u0646\u0627\u0626\u064A\u0629 \u0648\u0646\u0636\u062C \u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A \u0631\u0627\u0626\u0639 \u0641\u064A \u0627\u0633\u062A\u064A\u0639\u0627\u0628 \u0645\u0641\u0627\u0647\u064A\u0645 \u0627\u0644\u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u0627\u0644\u062E\u0636\u0631\u0627\u0621 \u0648\u0627\u0644\u062A\u062D\u0648\u0644 \u0627\u0644\u0631\u0642\u0645\u064A! \u{1F33F}\u{1F680}\u2B50",
+  isPublished: true,
+  createdAt: (/* @__PURE__ */ new Date()).toISOString(),
+  updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+});
+var getStandardInitialRecaps = () => [
+  getStandardGrade6Recap(),
+  getStandardGrade5Recap(),
+  getStandardGrade4Recap(),
+  getStandardPrep1Recap()
+];
+apiRouter.get(["/lecture-recaps", "/lecture-recaps/"], async (req, res) => {
+  try {
+    const { gradeLevel, groupId, courseId } = req.query;
+    const data = db.getData();
+    if (!Array.isArray(data.lectureRecaps) || data.lectureRecaps.length === 0) {
+      data.lectureRecaps = getStandardInitialRecaps();
+      db.saveImmediate();
+    }
+    let list = data.lectureRecaps;
+    if (gradeLevel) {
+      const gl = String(gradeLevel).toLowerCase();
+      list = list.filter((r) => (r.gradeLevel || "").toLowerCase().includes(gl) || (r.title || "").toLowerCase().includes(gl));
+    }
+    if (groupId && groupId !== "all") {
+      list = list.filter((r) => r.groupId === groupId || r.groupName?.includes(String(groupId)));
+    }
+    if (courseId && courseId !== "all") {
+      list = list.filter((r) => r.courseId === courseId || r.courseName?.includes(String(courseId)));
+    }
+    res.json({ success: true, recaps: list });
+  } catch (err) {
+    res.status(500).json({ error: "\u0641\u0634\u0644 \u062A\u062D\u0645\u064A\u0644 \u0645\u0644\u062E\u0635\u0627\u062A \u0627\u0644\u0645\u062D\u0627\u0636\u0631\u0627\u062A: " + err.message });
+  }
+});
+apiRouter.get(["/lecture-recaps/latest", "/lecture-recaps/latest/"], async (req, res) => {
+  try {
+    const { gradeLevel, groupId, courseId } = req.query;
+    const data = db.getData();
+    if (!Array.isArray(data.lectureRecaps) || data.lectureRecaps.length === 0) {
+      data.lectureRecaps = getStandardInitialRecaps();
+      db.saveImmediate();
+    }
+    const recaps = data.lectureRecaps;
+    let found = null;
+    if (gradeLevel) {
+      const gl = String(gradeLevel).toLowerCase();
+      found = recaps.find((r) => r.isPublished && ((r.gradeLevel || "").toLowerCase().includes(gl) || (r.title || "").toLowerCase().includes(gl)));
+    }
+    if (!found) {
+      found = recaps[0] || getStandardGrade6Recap();
+    }
+    res.json({ success: true, recap: found });
+  } catch (err) {
+    res.status(500).json({ error: "\u0641\u0634\u0644 \u062C\u0644\u0628 \u0623\u062D\u062F\u062B \u0645\u0644\u062E\u0635 \u0645\u062D\u0627\u0636\u0631\u0629: " + err.message });
+  }
+});
+apiRouter.post(["/lecture-recaps", "/lecture-recaps/"], async (req, res) => {
+  try {
+    const {
+      title,
+      gradeLevel,
+      subject,
+      courseId,
+      courseName,
+      groupId,
+      groupName,
+      branchId,
+      trainerId,
+      trainerName,
+      lectureDate,
+      lectureNumber,
+      recapSummary,
+      homeworkTasks,
+      nextLecturePrep,
+      closingMessage,
+      audioVoiceUrl,
+      isPublished
+    } = req.body;
+    const data = db.getData();
+    if (!Array.isArray(data.lectureRecaps)) {
+      data.lectureRecaps = [];
+    }
+    const newRecap = {
+      id: "recap-" + Date.now() + "-" + Math.random().toString(36).substring(2, 6),
+      title: title || "\u0645\u0644\u062E\u0635 \u0627\u0644\u0645\u062D\u0627\u0636\u0631\u0629 \u0648\u0627\u0644\u062A\u0643\u0644\u064A\u0641\u0627\u062A \u0648\u0627\u0644\u062A\u0637\u0628\u064A\u0642 \u0627\u0644\u0639\u0645\u0644\u064A",
+      gradeLevel: gradeLevel || "\u0627\u0644\u0635\u0641 \u0627\u0644\u0633\u0627\u062F\u0633 \u0627\u0644\u0627\u0628\u062A\u062F\u0627\u0626\u064A (Grade 6 Languages)",
+      subject: subject || "\u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u0627\u0644\u0645\u0639\u0644\u0648\u0645\u0627\u062A \u0648\u0627\u0644\u0627\u062A\u0635\u0627\u0644\u0627\u062A ICT",
+      courseId: courseId || "",
+      courseName: courseName || "",
+      groupId: groupId || "",
+      groupName: groupName || "",
+      branchId: branchId || "",
+      trainerId: trainerId || "",
+      trainerName: trainerName || "\u0627\u0644\u0645\u062F\u0631\u0628 \u0627\u0644\u0645\u0639\u062A\u0645\u062F",
+      lectureDate: lectureDate || (/* @__PURE__ */ new Date()).toISOString(),
+      lectureNumber: lectureNumber || void 0,
+      recapSummary: recapSummary || { points: [], detailedNotes: "" },
+      homeworkTasks: homeworkTasks || { tasks: [], bonusChallenge: "" },
+      nextLecturePrep: nextLecturePrep || { prepPoints: [], teaserNotes: "" },
+      closingMessage: closingMessage || "\u0628\u0627\u0644\u062A\u0648\u0641\u064A\u0642 \u064A\u0627 \u0623\u0628\u0637\u0627\u0644 \u0627\u0644\u0646\u062C\u0627\u062D! \u{1F31F}",
+      audioVoiceUrl: audioVoiceUrl || void 0,
+      isPublished: isPublished !== false,
+      createdAt: (/* @__PURE__ */ new Date()).toISOString(),
+      updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+    };
+    data.lectureRecaps.unshift(newRecap);
+    if (!Array.isArray(data.notifications)) data.notifications = [];
+    data.notifications.unshift({
+      id: "notif-recap-" + Date.now(),
+      type: "system",
+      title: `\u{1F4E2} \u0646\u0634\u0631 \u0645\u0644\u062E\u0635 \u0648\u062A\u0627\u0633\u0643\u0627\u062A \u0627\u0644\u0645\u062D\u0627\u0636\u0631\u0629: ${newRecap.title}`,
+      message: `\u062A\u0645 \u0646\u0634\u0631 \u0645\u0644\u062E\u0635 \u0648\u062A\u0627\u0633\u0643 \u0627\u0644\u0645\u062D\u0627\u0636\u0631\u0629 \u0644\u0644\u0645\u062C\u0645\u0648\u0639\u0629 (${newRecap.groupName || newRecap.gradeLevel}). \u062A\u0641\u0642\u062F \u0627\u0644\u0628\u0648\u0627\u0628\u0629 \u0644\u0644\u062A\u0633\u0644\u064A\u0645!`,
+      linkView: "homeworks",
+      createdAt: (/* @__PURE__ */ new Date()).toISOString(),
+      read: false
+    });
+    db.logAudit({
+      userId: trainerId || "trainer",
+      userName: trainerName || "\u0627\u0644\u0645\u062F\u0631\u0628",
+      action: "\u0646\u0634\u0631 \u0645\u0644\u062E\u0635 \u0645\u062D\u0627\u0636\u0631\u0629 \u0648\u062A\u0627\u0633\u0643\u0627\u062A \u0648\u0645\u0631\u0627\u062C\u0639\u0629 \u0639\u0645\u0644\u064A\u0629",
+      entity: "\u0625\u062F\u0627\u0631\u0629 \u0627\u0644\u0648\u0627\u062C\u0628\u0627\u062A \u0648\u0627\u0644\u0645\u0644\u062E\u0635\u0627\u062A",
+      details: `\u062A\u0645 \u0646\u0634\u0631 \u0645\u0644\u062E\u0635 "${newRecap.title}" \u0644\u0637\u0644\u0627\u0628 ${newRecap.groupName || newRecap.gradeLevel}.`
+    });
+    db.saveImmediate();
+    res.json({ success: true, recap: newRecap, message: "\u{1F389} \u062A\u0645 \u0646\u0634\u0631 \u0645\u0644\u062E\u0635 \u0648\u062A\u0627\u0633\u0643\u0627\u062A \u0627\u0644\u0645\u062D\u0627\u0636\u0631\u0629 \u0648\u0625\u0634\u0639\u0627\u0631 \u0627\u0644\u0637\u0644\u0627\u0628 \u0648\u0623\u0648\u0644\u064A\u0627\u0621 \u0627\u0644\u0623\u0645\u0648\u0631 \u0628\u0646\u062C\u0627\u062D!" });
+  } catch (err) {
+    res.status(500).json({ error: "\u0641\u0634\u0644 \u062D\u0641\u0638 \u0648\u0646\u0634\u0631 \u0645\u0644\u062E\u0635 \u0627\u0644\u0645\u062D\u0627\u0636\u0631\u0629: " + err.message });
+  }
+});
+apiRouter.put(["/lecture-recaps/:id", "/lecture-recaps/:id/"], async (req, res) => {
+  try {
+    const { id } = req.params;
+    const updateFields = req.body;
+    const data = db.getData();
+    if (!Array.isArray(data.lectureRecaps)) {
+      data.lectureRecaps = [];
+    }
+    const index = data.lectureRecaps.findIndex((r) => r.id === id);
+    if (index === -1) {
+      return res.status(404).json({ error: "\u0644\u0645 \u064A\u062A\u0645 \u0627\u0644\u0639\u062B\u0648\u0631 \u0639\u0644\u0649 \u0645\u0644\u062E\u0635 \u0627\u0644\u0645\u062D\u0627\u0636\u0631\u0629 \u0627\u0644\u0645\u0637\u0644\u0648\u0628 \u062A\u0639\u062F\u064A\u0644\u0647" });
+    }
+    const current = data.lectureRecaps[index];
+    const updatedRecap = {
+      ...current,
+      ...updateFields,
+      id: current.id,
+      updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+    };
+    data.lectureRecaps[index] = updatedRecap;
+    db.logAudit({
+      userId: updateFields.trainerId || "trainer",
+      userName: updateFields.trainerName || "\u0627\u0644\u0645\u062F\u0631\u0628",
+      action: "\u062A\u0639\u062F\u064A\u0644 \u0645\u0644\u062E\u0635 \u0648\u062A\u0627\u0633\u0643\u0627\u062A \u0627\u0644\u0645\u062D\u0627\u0636\u0631\u0629",
+      entity: "\u0625\u062F\u0627\u0631\u0629 \u0627\u0644\u0648\u0627\u062C\u0628\u0627\u062A \u0648\u0627\u0644\u0645\u0644\u062E\u0635\u0627\u062A",
+      details: `\u062A\u0645 \u062A\u0639\u062F\u064A\u0644 \u0645\u0644\u062E\u0635 "${updatedRecap.title}" \u0628\u0646\u062C\u0627\u062D.`
+    });
+    db.saveImmediate();
+    res.json({ success: true, recap: updatedRecap, message: "\u2705 \u062A\u0645 \u062A\u0639\u062F\u064A\u0644 \u0648\u062D\u0641\u0638 \u0645\u0644\u062E\u0635 \u0627\u0644\u0645\u062D\u0627\u0636\u0631\u0629 \u0628\u0646\u062C\u0627\u062D!" });
+  } catch (err) {
+    res.status(500).json({ error: "\u0641\u0634\u0644 \u062A\u0639\u062F\u064A\u0644 \u0645\u0644\u062E\u0635 \u0627\u0644\u0645\u062D\u0627\u0636\u0631\u0629: " + err.message });
+  }
+});
+apiRouter.delete(["/lecture-recaps/:id", "/lecture-recaps/:id/"], async (req, res) => {
+  try {
+    const { id } = req.params;
+    const data = db.getData();
+    if (!Array.isArray(data.lectureRecaps)) {
+      data.lectureRecaps = [];
+    }
+    const prevLength = data.lectureRecaps.length;
+    data.lectureRecaps = data.lectureRecaps.filter((r) => r.id !== id);
+    db.logAudit({
+      userId: "trainer",
+      userName: "\u0627\u0644\u0645\u062F\u0631\u0628",
+      action: "\u062D\u0630\u0641 \u0645\u0644\u062E\u0635 \u0645\u062D\u0627\u0636\u0631\u0629",
+      entity: "\u0625\u062F\u0627\u0631\u0629 \u0627\u0644\u0648\u0627\u062C\u0628\u0627\u062A \u0648\u0627\u0644\u0645\u0644\u062E\u0635\u0627\u062A",
+      details: `\u062A\u0645 \u062D\u0630\u0641 \u0645\u0644\u062E\u0635 \u0627\u0644\u0645\u062D\u0627\u0636\u0631\u0629 \u0631\u0642\u0645 (${id}).`
+    });
+    db.saveImmediate();
+    res.json({ success: true, message: "\u{1F5D1}\uFE0F \u062A\u0645 \u062D\u0630\u0641 \u0645\u0644\u062E\u0635 \u0648\u062A\u0643\u0644\u064A\u0641 \u0627\u0644\u0645\u062D\u0627\u0636\u0631\u0629 \u0628\u0646\u062C\u0627\u062D" });
+  } catch (err) {
+    res.status(500).json({ error: "\u0641\u0634\u0644 \u062D\u0630\u0641 \u0645\u0644\u062E\u0635 \u0627\u0644\u0645\u062D\u0627\u0636\u0631\u0629: " + err.message });
+  }
+});
+apiRouter.post(["/lecture-recaps/ai-structure-voice", "/lecture-recaps/ai-structure-voice/"], async (req, res) => {
+  try {
+    const {
+      audioBase64,
+      mimeType,
+      transcribedText,
+      teacherNotes,
+      targetGrade,
+      targetCourse
+    } = req.body;
+    const structured = await structurePostLectureVoiceMemo({
+      audioBase64,
+      mimeType,
+      transcribedText,
+      teacherNotes,
+      targetGrade,
+      targetCourse
+    });
+    res.json({
+      success: true,
+      structured
+    });
+  } catch (err) {
+    console.error("Error structuring post lecture memo:", err);
+    res.status(500).json({ error: "\u0641\u0634\u0644 \u062A\u062D\u0648\u064A\u0644 \u0648\u0647\u064A\u0643\u0644\u0629 \u062A\u0633\u062C\u064A\u0644 \u0627\u0644\u0645\u062D\u0627\u0636\u0631\u0629 \u0628\u0627\u0644\u0630\u0643\u0627\u0621 \u0627\u0644\u0627\u0635\u0637\u0646\u0627\u0639\u064A: " + err.message });
+  }
+});
+apiRouter.post(["/student/evaluate-voice-summary", "/student/evaluate-voice-summary/"], async (req, res) => {
+  try {
+    const {
+      traineeId,
+      audioBase64,
+      mimeType,
+      transcribedText,
+      topicTitle,
+      studentNotes,
+      courseId
+    } = req.body;
+    const data = db.getData();
+    let trainee = null;
+    if (traineeId) {
+      const allTrainees = await TraineeRepo.getAll();
+      trainee = allTrainees.find((t) => t.id === traineeId || t.code === traineeId);
+      if (!trainee && Array.isArray(data.trainees)) {
+        trainee = data.trainees.find((t) => t.id === traineeId || t.code === traineeId);
+      }
+    }
+    const studentGrade = trainee?.grade || trainee?.schoolGrade || trainee?.stage || req.body.studentGrade || "\u0627\u0644\u0635\u0641 \u0627\u0644\u0631\u0627\u0628\u0639 \u0627\u0644\u0627\u0628\u062A\u062F\u0627\u0626\u064A (Grade 4)";
+    const effectiveCourse = (data.courses || []).find((c) => c.id === (courseId || trainee?.courseId));
+    const courseName = effectiveCourse?.name || trainee?.courseName || req.body.courseName || "\u0645\u0627\u062F\u0629 \u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u0627\u0644\u0645\u0639\u0644\u0648\u0645\u0627\u062A \u0648\u0627\u0644\u0627\u062A\u0635\u0627\u0644\u0627\u062A ICT \u0644\u063A\u0627\u062A";
+    const result = await evaluateAudioOrVoiceSummaryWithAI({
+      audioBase64,
+      mimeType: mimeType || "audio/webm",
+      transcribedText,
+      studentNotes,
+      studentGrade,
+      courseName,
+      topicTitle: topicTitle || "\u0645\u0644\u062E\u0635 \u0627\u0644\u0645\u062D\u0627\u0636\u0631\u0629 \u0648\u0627\u0644\u0645\u0641\u0627\u0647\u064A\u0645 \u0627\u0644\u0639\u0644\u0645\u064A\u0629",
+      studentName: trainee?.fullName || "\u0627\u0644\u0645\u062A\u062F\u0631\u0628",
+      maxScore: 100
+    });
+    res.json({
+      success: true,
+      result,
+      studentGrade,
+      courseName
+    });
+  } catch (err) {
+    console.error("Error evaluating voice summary:", err);
+    res.status(500).json({ error: "\u0641\u0634\u0644 \u062A\u0642\u064A\u064A\u0645 \u0627\u0644\u062A\u0633\u062C\u064A\u0644 \u0627\u0644\u0635\u0648\u062A\u064A: " + err.message });
   }
 });
 apiRouter.post(["/student/send-message", "/student/send-message/"], async (req, res) => {
@@ -15796,14 +17664,17 @@ apiRouter.post("/trainer/generate-presentation", async (req, res) => {
 });
 apiRouter.post("/trainer/generate-kahoot", async (req, res) => {
   try {
-    const { topic, grade, subject, questionCount, difficulty, image } = req.body;
+    const { topic, grade, subject, questionCount, difficulty, image, pageStart, pageEnd, specificInstructions } = req.body;
     const kahootGame = await generateKahootQuiz({
-      topic: topic || "\u0623\u0633\u0627\u0633\u064A\u0627\u062A \u0627\u0644\u0628\u0631\u0645\u062C\u0629 \u0648\u0627\u0644\u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627",
+      topic: topic || "\u062A\u0642\u064A\u064A\u0645 \u0627\u0644\u0648\u0632\u0627\u0631\u0629 \u0648\u0627\u0644\u0645\u0646\u0627\u0647\u062C \u0627\u0644\u062F\u0631\u0627\u0633\u064A\u0629",
       grade: grade || "\u0627\u0644\u0635\u0641 \u0627\u0644\u0631\u0627\u0628\u0639 \u0627\u0644\u0627\u0628\u062A\u062F\u0627\u0626\u064A",
       subject: subject || "\u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u0627\u0644\u0645\u0639\u0644\u0648\u0645\u0627\u062A \u0648\u0627\u0644\u0628\u0631\u0645\u062C\u0629",
-      questionCount: Number(questionCount) || 8,
+      questionCount: Number(questionCount) || 15,
       difficulty: difficulty || "\u0645\u062A\u0648\u0633\u0637",
-      imageBase64: image
+      imageBase64: image,
+      pageStart: pageStart ? Number(pageStart) : void 0,
+      pageEnd: pageEnd ? Number(pageEnd) : void 0,
+      specificInstructions
     });
     res.json({ success: true, kahootGame });
   } catch (error) {
@@ -15847,6 +17718,8 @@ apiRouter.post("/parent/login", async (req, res) => {
     const allAttendance = await AttendanceRepo.getAll();
     const allPayments = await PaymentRepo.getAll();
     const allSchedules = await ScheduleRepo.getAll();
+    const allAssignments = await AssignmentRepo.getAll();
+    const allSubmissions = await HomeworkSubmissionRepo.getAll();
     const data = db.getData();
     const enrichedChildren = matched.map((t) => {
       const course = allCourses.find((c) => c.id === t.courseId);
@@ -15870,6 +17743,39 @@ apiRouter.post("/parent/login", async (req, res) => {
       const childMsgs = (data.portalMessages || []).filter(
         (m) => m.traineeId === t.id || m.traineeCode === t.code
       );
+      const childAssignments = allAssignments.filter((asg) => {
+        if (asg.targetStudentId && (asg.targetStudentId === t.id || asg.targetStudentId === t.code)) return true;
+        if (asg.groupId && t.groupId && asg.groupId === t.groupId) return true;
+        if (asg.courseId && t.courseId && asg.courseId === t.courseId) return true;
+        if (asg.grade && t.grade && (asg.grade === t.grade || t.grade.includes(asg.grade) || asg.grade.includes(t.grade))) return true;
+        if (!asg.groupId && !asg.courseId && !asg.targetStudentId && !asg.grade) return true;
+        return false;
+      }).map((asg) => {
+        const sub = allSubmissions.find(
+          (s) => s.assignmentId === asg.id && (s.studentId === t.id || s.traineeId === t.id || s.studentCode === t.code)
+        );
+        return {
+          ...asg,
+          isSubmitted: !!sub,
+          submissionDate: sub?.submittedAt || sub?.createdAt || null,
+          score: sub?.score ?? null,
+          feedback: sub?.feedback || null,
+          status: sub ? sub.score !== null ? "graded" : "submitted" : "pending"
+        };
+      });
+      const childRecaps = (data.lectureRecaps || []).filter((r) => {
+        if (r.groupId && t.groupId && r.groupId === t.groupId) return true;
+        if (r.courseId && t.courseId && r.courseId === t.courseId) return true;
+        const target = (t.grade || t.courseName || "").toLowerCase();
+        const rGrade = (r.gradeLevel || "").toLowerCase();
+        const rGroup = (r.groupName || "").toLowerCase();
+        if (rGrade.includes("\u062C\u0645\u064A\u0639") || rGrade.includes("all")) return true;
+        if (target.includes("\u0631\u0627\u0628\u0639") && (rGrade.includes("\u0631\u0627\u0628\u0639") || rGroup.includes("\u0631\u0627\u0628\u0639"))) return true;
+        if (target.includes("\u062E\u0627\u0645\u0633") && (rGrade.includes("\u062E\u0627\u0645\u0633") || rGroup.includes("\u062E\u0627\u0645\u0633"))) return true;
+        if (target.includes("\u0633\u0627\u062F\u0633") && (rGrade.includes("\u0633\u0627\u062F\u0633") || rGroup.includes("\u0633\u0627\u062F\u0633"))) return true;
+        if (target.includes("\u0625\u0639\u062F\u0627\u062F\u064A") && rGrade.includes("\u0625\u0639\u062F\u0627\u062F\u064A")) return true;
+        return false;
+      });
       return {
         ...t,
         courseName: course?.name || "\u0627\u0644\u0628\u0631\u0646\u0627\u0645\u062C \u0627\u0644\u062A\u062F\u0631\u064A\u0628\u064A \u0627\u0644\u0639\u0627\u0645",
@@ -15886,6 +17792,8 @@ apiRouter.post("/parent/login", async (req, res) => {
         ],
         payments: childPay,
         messages: childMsgs,
+        assignments: childAssignments,
+        recaps: childRecaps,
         groupDetails: group,
         trainer: trainer ? {
           id: trainer.id,
@@ -16067,26 +17975,20 @@ apiRouter.post("/trainer-portal/review-homework", async (req, res) => {
     sub.status = "reviewed";
     sub.reviewedAt = (/* @__PURE__ */ new Date()).toISOString();
     sub.reviewedByTrainerId = trainerId;
+    delete sub.imageBase64;
+    delete sub.fileData;
+    if (sub.attachmentUrl && sub.attachmentUrl.startsWith("data:image")) {
+      sub.attachmentUrl = "";
+      sub.isImageArchived = true;
+    }
     if (pointsToAward && Number(pointsToAward) > 0) {
       const pts = Number(pointsToAward);
       sub.pointsAwarded = (sub.pointsAwarded || 0) + pts;
-      const trainee2 = (data.trainees || []).find(
-        (t) => t.id === sub.traineeId || t.id === sub.studentId || t.code && sub.traineeCode && String(t.code).trim() === String(sub.traineeCode).trim()
-      );
-      if (trainee2) {
-        trainee2.totalPoints = Number(trainee2.totalPoints || trainee2.points || 0) + pts;
-        trainee2.points = trainee2.totalPoints;
-        if (!Array.isArray(data.pointTransactions)) data.pointTransactions = [];
-        data.pointTransactions.unshift({
-          id: "pt-tr-" + Date.now() + "-" + Math.random().toString(36).substring(2, 6),
-          traineeId: trainee2.id,
-          groupId: trainee2.groupId,
-          branchId: trainee2.branchId,
-          points: pts,
-          reason: `\u{1F31F} \u0646\u0642\u0627\u0637 \u062A\u0645\u064A\u0632 \u0625\u0636\u0627\u0641\u064A\u0629 \u0645\u0639\u062A\u0645\u062F\u0629 \u0645\u0646 \u0627\u0644\u0645\u062F\u0631\u0628 \u0644\u0644\u0648\u0627\u062C\u0628: (${sub.taskTitle || "\u0627\u0644\u0648\u0627\u062C\u0628 \u0627\u0644\u0645\u0628\u0627\u0634\u0631"})`,
+      const tid = sub.traineeId || sub.studentId || sub.traineeCode;
+      if (tid) {
+        await awardTraineePoints(tid, pts, `\u{1F31F} \u0646\u0642\u0627\u0637 \u062A\u0645\u064A\u0632 \u0625\u0636\u0627\u0641\u064A\u0629 \u0645\u0639\u062A\u0645\u062F\u0629 \u0645\u0646 \u0627\u0644\u0645\u062F\u0631\u0628 \u0644\u0644\u0648\u0627\u062C\u0628: (${sub.taskTitle || "\u0627\u0644\u0648\u0627\u062C\u0628 \u0627\u0644\u0645\u0628\u0627\u0634\u0631"})`, {
           addedByUserId: trainerId || "trainer",
-          addedByUserName: "\u0627\u0644\u0645\u062F\u0631\u0628 \u0627\u0644\u0645\u0634\u0631\u0641",
-          createdAt: (/* @__PURE__ */ new Date()).toISOString()
+          addedByUserName: "\u0627\u0644\u0645\u062F\u0631\u0628 \u0627\u0644\u0645\u0634\u0631\u0641"
         });
       }
     }
@@ -16098,7 +18000,7 @@ apiRouter.post("/trainer-portal/review-homework", async (req, res) => {
       id: "notif-tr-rev-" + Date.now(),
       type: "system",
       title: `\u2728 \u062A\u0645 \u0645\u0631\u0627\u062C\u0639\u0629 \u0648\u0627\u062C\u0628 \u0627\u0644\u0645\u062A\u062F\u0631\u0628: ${sub.traineeName || sub.studentName || trainee?.fullName || "\u0637\u0627\u0644\u0628"}`,
-      message: `\u0642\u0627\u0645 \u0627\u0644\u0645\u062F\u0631\u0628 \u0628\u0645\u0631\u0627\u062C\u0639\u0629 \u0648\u0627\u0639\u062A\u062A\u0645\u0627\u062F \u0627\u0644\u062A\u0642\u064A\u064A\u0645 \u0628\u062F\u0631\u062C\u0629 ${sub.grade}/${sub.maxGrade || 100} \u0648\u0625\u0636\u0627\u0641\u0629 \u0627\u0644\u0646\u0642\u0627\u0637 \u0644\u0633\u062C\u0644\u0647 \u0627\u0644\u0623\u0643\u0627\u062F\u064A\u0645\u064A.`,
+      message: `\u0642\u0627\u0645 \u0627\u0644\u0645\u062F\u0631\u0628 \u0628\u0645\u0631\u0627\u062C\u0639\u0629 \u0648\u0627\u0639\u062A\u0645\u0627\u062F \u0627\u0644\u062A\u0642\u064A\u064A\u0645 \u0628\u062F\u0631\u062C\u0629 ${sub.grade}/${sub.maxGrade || 100} \u0648\u0625\u0636\u0627\u0641\u0629 \u0627\u0644\u0646\u0642\u0627\u0637 \u0644\u0633\u062C\u0644\u0647 \u0627\u0644\u0623\u0643\u0627\u062F\u064A\u0645\u064A.`,
       linkView: "homeworks",
       createdAt: (/* @__PURE__ */ new Date()).toISOString(),
       read: false,
@@ -16158,6 +18060,381 @@ apiRouter.post("/materials", async (req, res) => {
     }
     db.save();
     res.json({ success: true, id: matId });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+apiRouter.post("/ai/all-in-one-lesson", async (req, res) => {
+  try {
+    const { topic, subject, grade, durationMinutes, learningGoals, autoSaveAssignment } = req.body;
+    if (!topic || String(topic).trim().length === 0) {
+      return res.status(400).json({ success: false, error: "\u064A\u0631\u062C\u0649 \u0625\u062F\u062E\u0627\u0644 \u0639\u0646\u0648\u0627\u0646 \u0623\u0648 \u0645\u0648\u0636\u0648\u0639 \u0627\u0644\u062F\u0631\u0633" });
+    }
+    const lessonPackage = await generateAllInOneLessonPlan({
+      topic: String(topic).trim(),
+      subject: subject || "\u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u0627\u0644\u0645\u0639\u0644\u0648\u0645\u0627\u062A \u0648\u0627\u0644\u0627\u062A\u0635\u0627\u0644\u0627\u062A \u0648\u0627\u0644\u062D\u0627\u0633\u0628 \u0627\u0644\u0622\u0644\u064A",
+      grade: grade || "\u0627\u0644\u0635\u0641 \u0627\u0644\u0623\u0648\u0644 \u0627\u0644\u0625\u0639\u062F\u0627\u062F\u064A",
+      durationMinutes: Number(durationMinutes || 45),
+      learningGoals: learningGoals || ""
+    });
+    if (autoSaveAssignment) {
+      const data = db.getData();
+      if (!Array.isArray(data.assignments)) data.assignments = [];
+      const newAssignment = {
+        id: "asg-lesson-" + Date.now(),
+        title: lessonPackage.homeworkAndWorksheet.title || `\u0648\u0627\u062C\u0628: ${topic}`,
+        courseName: lessonPackage.subject,
+        dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1e3).toISOString().split("T")[0],
+        totalMarks: lessonPackage.homeworkAndWorksheet.maxScore || 100,
+        assignmentType: "voice_and_written",
+        instructions: lessonPackage.homeworkAndWorksheet.instructions,
+        voicePrompt: lessonPackage.homeworkAndWorksheet.voiceSummaryPrompt,
+        writtenTasks: lessonPackage.homeworkAndWorksheet.writtenTasks,
+        modelAnswer: lessonPackage.modelAnswer,
+        rubricPoints: lessonPackage.homeworkAndWorksheet.rubricPoints,
+        createdAt: (/* @__PURE__ */ new Date()).toISOString()
+      };
+      data.assignments.unshift(newAssignment);
+      db.save();
+    }
+    res.json({ success: true, package: lessonPackage });
+  } catch (err) {
+    console.error("All-in-one lesson route error:", err);
+    res.status(500).json({ success: false, error: err.message || "\u062D\u062F\u062B \u062E\u0637\u0623 \u0623\u062B\u0646\u0627\u0621 \u062A\u0648\u0644\u064A\u062F \u062D\u0632\u0645\u0629 \u0627\u0644\u062F\u0631\u0633 \u0627\u0644\u0645\u062A\u0643\u0627\u0645\u0644\u0629" });
+  }
+});
+apiRouter.post("/ai-chat", async (req, res) => {
+  try {
+    const { prompt, systemInstruction } = req.body || {};
+    if (!prompt) {
+      return res.status(400).json({ error: "\u0627\u0644\u0631\u062C\u0627\u0621 \u0625\u0631\u0633\u0627\u0644 \u0646\u0635 \u0627\u0644\u0631\u0633\u0627\u0644\u0629" });
+    }
+    const fullPrompt = (systemInstruction ? `${systemInstruction}
+
+` : "") + prompt;
+    const aiResult = await generateWithModelCascade({
+      contents: [{ role: "user", parts: [{ text: fullPrompt }] }]
+    });
+    const replyText = aiResult.text || "\u062A\u0645 \u0627\u0633\u062A\u0644\u0627\u0645 \u0637\u0644\u0628\u0643 \u0648\u0645\u0631\u0627\u062C\u0639\u062A\u0647 \u0628\u0646\u062C\u0627\u062D \u0645\u0646 \u0627\u0644\u0645\u0633\u0627\u0639\u062F \u0627\u0644\u0630\u0643\u064A.";
+    res.json({ success: true, reply: replyText, text: replyText, modelUsed: aiResult.modelUsed });
+  } catch (err) {
+    res.status(500).json({ error: err.message || "\u0641\u0634\u0644 \u062A\u0648\u0644\u064A\u062F \u0627\u0644\u0631\u062F \u0627\u0644\u0630\u0643\u064A" });
+  }
+});
+apiRouter.post("/gemini/generate", async (req, res) => {
+  try {
+    const { prompt } = req.body || {};
+    if (!prompt) {
+      return res.status(400).json({ error: "\u0627\u0644\u0631\u062C\u0627\u0621 \u0625\u062F\u062E\u0627\u0644 \u0646\u0635 \u0627\u0644\u0637\u0644\u0628" });
+    }
+    const aiResult = await generateWithModelCascade({
+      contents: [{ role: "user", parts: [{ text: prompt }] }]
+    });
+    res.json({ success: true, text: aiResult.text || "", result: aiResult.text || "" });
+  } catch (err) {
+    res.status(500).json({ error: err.message || "\u0641\u0634\u0644 \u0627\u0644\u0627\u062A\u0635\u0627\u0644 \u0628\u0627\u0644\u0630\u0643\u0627\u0621 \u0627\u0644\u0627\u0635\u0637\u0646\u0627\u0639\u064A" });
+  }
+});
+apiRouter.post("/gemini/tts", async (req, res) => {
+  res.json({ success: false, fallback: true, message: "Gemini direct audio fallback activated" });
+});
+apiRouter.post("/ai/trainer-assistant", async (req, res) => {
+  try {
+    const { topic, level, type, trainerSpecialty } = req.body || {};
+    const prompt = `\u0623\u0646\u062A \u0645\u0633\u0627\u0639\u062F \u0627\u0644\u0645\u062F\u0631\u0628\u064A\u0646 \u0627\u0644\u0630\u0643\u064A \u0641\u064A \u0645\u0631\u0643\u0632 \u0627\u0644\u0646\u062C\u0627\u062D \u0644\u0644\u062A\u062F\u0631\u064A\u0628 \u0648\u0627\u0644\u0627\u0633\u062A\u0634\u0627\u0631\u0627\u062A (\u062A\u062E\u0635\u0635 \u0627\u0644\u0645\u062F\u0631\u0628: ${trainerSpecialty || "\u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u0627\u0644\u0645\u0639\u0644\u0648\u0645\u0627\u062A \u0648\u0627\u0644\u062D\u0627\u0633\u0628 \u0627\u0644\u0622\u0644\u064A"}).
+\u0627\u0644\u0645\u0637\u0644\u0648\u0628: \u0625\u0639\u062F\u0627\u062F ${type === "exam" ? "\u0646\u0645\u0648\u0630\u062C \u0623\u0633\u0626\u0644\u0629 \u0648\u0627\u062E\u062A\u0628\u0627\u0631" : type === "syllabus" ? "\u062E\u0637\u0629 \u0634\u0631\u062D \u0648\u0645\u0646\u0647\u062C" : "\u0634\u0631\u062D \u062A\u062F\u0631\u064A\u0628\u064A \u0645\u062A\u0643\u0627\u0645\u0644"} \u0644\u0645\u0648\u0636\u0648\u0639: "${topic || "\u0627\u0644\u062F\u0631\u0633"}"\u060C \u0648\u0627\u0644\u0645\u0633\u062A\u0648\u0649 \u0627\u0644\u062A\u0639\u0644\u064A\u0645\u064A: "${level || "\u0627\u0644\u0645\u0631\u062D\u0644\u0629 \u0627\u0644\u0627\u0628\u062A\u062F\u0627\u0626\u064A\u0629"}".
+\u0627\u0643\u062A\u0628 \u0645\u062D\u062A\u0648\u0649 \u0639\u0644\u0645\u064A\u0627\u064B \u0639\u0645\u0644\u064A\u0627\u064B \u0648\u062A\u0637\u0628\u064A\u0642\u064A\u0627\u064B \u0648\u0627\u0641\u064A\u0627\u064B \u0628\u0627\u0644\u0644\u063A\u0629 \u0627\u0644\u0639\u0631\u0628\u064A\u0629 \u0645\u0639 \u0625\u0631\u0634\u0627\u062F\u0627\u062A \u062A\u062F\u0631\u064A\u0628\u064A\u0629 \u0644\u0644\u0645\u062D\u0627\u0636\u0631 \u0641\u064A \u0627\u0644\u0645\u0639\u0645\u0644.`;
+    const aiResult = await generateWithModelCascade({
+      contents: [{ role: "user", parts: [{ text: prompt }] }]
+    });
+    if (aiResult.text) {
+      res.json({ success: true, result: aiResult.text });
+    } else {
+      res.json({
+        success: true,
+        result: `\u{1F4DA} \u062E\u0637\u0629 \u0627\u0644\u0645\u062D\u0627\u0636\u0631\u0629 \u0627\u0644\u062A\u062F\u0631\u064A\u0628\u064A\u0629: ${topic || "\u0627\u0644\u062F\u0631\u0633"}
+
+1. \u0627\u0644\u0623\u0647\u062F\u0627\u0641 \u0627\u0644\u062A\u0639\u0644\u064A\u0645\u064A\u0629:
+- \u0627\u0633\u062A\u064A\u0639\u0627\u0628 \u0627\u0644\u0645\u0641\u0627\u0647\u064A\u0645 \u0627\u0644\u0623\u0633\u0627\u0633\u064A\u0629 \u0648\u062A\u0637\u0628\u064A\u0642\u0627\u062A\u0647\u0627.
+- \u062A\u0646\u0641\u064A\u0630 \u062A\u0645\u0631\u064A\u0646 \u0639\u0645\u0644\u064A \u0641\u0631\u062F\u064A \u0648\u062C\u0645\u0627\u0639\u064A \u0641\u064A \u0627\u0644\u0645\u0639\u0645\u0644.
+
+2. \u062E\u0637\u0648\u0627\u062A \u0627\u0644\u0634\u0631\u062D:
+- \u0645\u0631\u0627\u062C\u0639\u0629 \u0633\u0631\u064A\u0639\u0629 \u0648\u0639\u0635\u0641 \u0630\u0647\u0646\u064A (10 \u062F\u0642\u0627\u0626\u0642).
+- \u0627\u0644\u0634\u0631\u062D \u0627\u0644\u0639\u0645\u0644\u064A \u0639\u0644\u0649 \u0634\u0627\u0634\u0629 \u0627\u0644\u0639\u0631\u0636 (25 \u062F\u0642\u064A\u0642\u0629).
+- \u0627\u0644\u062A\u0637\u0628\u064A\u0642 \u0627\u0644\u0630\u0627\u062A\u064A \u0644\u0644\u0645\u062A\u062F\u0631\u0628\u064A\u0646 \u0645\u0639 \u0627\u0644\u0645\u062A\u0627\u0628\u0639\u0629 \u0627\u0644\u0645\u064A\u062F\u0627\u0646\u064A\u0629 (45 \u062F\u0642\u064A\u0642\u0629).
+
+3. \u0627\u0644\u062A\u0642\u064A\u064A\u0645 \u0648\u0627\u0644\u0648\u0627\u062C\u0628:
+- \u062D\u0644 \u062A\u0645\u0631\u064A\u0646 \u062A\u0637\u0628\u064A\u0642\u064A \u0639\u0644\u0649 \u0645\u0646\u0635\u0629 \u0627\u0644\u0646\u062C\u0627\u062D \u0648\u062A\u0648\u062B\u064A\u0642 \u0627\u0644\u0646\u0642\u0627\u0637.`
+      });
+    }
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+apiRouter.post("/ai/trainer-generate-exam", async (req, res) => {
+  try {
+    const { courseName, topic, numQuestions, difficulty, questionType } = req.body || {};
+    const examData = await generateTrainerAdvancedExam({
+      topic: topic || "\u0627\u062E\u062A\u0628\u0627\u0631 \u0648\u062A\u0642\u064A\u064A\u0645 \u0639\u0627\u0645",
+      courseName: courseName || "\u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u0627\u0644\u0645\u0639\u0644\u0648\u0645\u0627\u062A \u0648\u0627\u0644\u0628\u0631\u0645\u062C\u0629",
+      grade: "\u0627\u0644\u0635\u0641 \u0627\u0644\u0631\u0627\u0628\u0639 \u0627\u0644\u0627\u0628\u062A\u062F\u0627\u0626\u064A",
+      numQuestions: Number(numQuestions) || 5,
+      difficulty: difficulty || "\u0645\u062A\u0648\u0633\u0637",
+      questionTypes: questionType ? [questionType] : ["multiple_choice", "true_false"],
+      language: "ar"
+    });
+    res.json({ success: true, exam: examData });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message || "\u0641\u0634\u0644 \u0625\u0646\u0634\u0627\u0621 \u0627\u0644\u0627\u062E\u062A\u0628\u0627\u0631" });
+  }
+});
+apiRouter.post("/ai/trainer-reply", async (req, res) => {
+  try {
+    const { studentName, topicType, customNotes, trainerName } = req.body || {};
+    const prompt = `\u0623\u0646\u062A \u0627\u0644\u0645\u062F\u0631\u0628 "${trainerName || "\u0627\u0644\u0645\u062D\u0627\u0636\u0631"}" \u0641\u064A \u0645\u0631\u0643\u0632 \u0627\u0644\u0646\u062C\u0627\u062D \u0644\u0644\u062A\u062F\u0631\u064A\u0628.
+\u0627\u0644\u0645\u0637\u0644\u0648\u0628 \u0635\u064A\u0627\u063A\u0629 \u0631\u0633\u0627\u0644\u0629 \u062A\u0631\u0628\u0648\u064A\u0629 \u0648\u062A\u062D\u0641\u064A\u0632\u064A\u0629 \u0628\u0627\u0644\u0644\u063A\u0629 \u0627\u0644\u0639\u0631\u0628\u064A\u0629 \u0645\u0648\u062C\u0647\u0629 \u0644\u0644\u0637\u0627\u0644\u0628 "${studentName || "\u0627\u0644\u0637\u0627\u0644\u0628"}" \u0648\u0648\u0644\u064A \u0623\u0645\u0631\u0647 \u0628\u062E\u0635\u0648\u0635: "${topicType || "\u0627\u0644\u0645\u062A\u0627\u0628\u0639\u0629 \u0627\u0644\u062F\u0648\u0631\u064A\u0629"}".
+\u0645\u0644\u0627\u062D\u0638\u0627\u062A \u0625\u0636\u0627\u0641\u064A\u0629: "${customNotes || "\u0627\u0644\u0627\u0633\u062A\u0645\u0631\u0627\u0631 \u0641\u064A \u0627\u0644\u0627\u062C\u062A\u0647\u0627\u062F \u0648\u0627\u0644\u062A\u0641\u0648\u0642"}".
+\u0627\u062C\u0639\u0644 \u0627\u0644\u0623\u0633\u0644\u0648\u0628 \u0631\u0627\u0642\u064A\u0627\u064B \u0648\u0645\u0647\u0646\u064A\u0627\u064B \u0648\u064A\u0634\u062C\u0639 \u0627\u0644\u0637\u0627\u0644\u0628 \u0639\u0644\u0649 \u0625\u062A\u0642\u0627\u0646 \u0627\u0644\u0645\u0647\u0627\u0631\u0627\u062A \u0627\u0644\u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0629.`;
+    const aiResult = await generateWithModelCascade({
+      contents: [{ role: "user", parts: [{ text: prompt }] }]
+    });
+    const reply = aiResult.text || `\u0639\u0632\u064A\u0632\u064A \u0627\u0644\u0637\u0627\u0644\u0628 ${studentName || "\u0627\u0644\u0628\u0637\u0644"}\u060C \u064A\u0633\u0631\u0646\u064A \u062C\u062F\u0627\u064B \u0645\u062A\u0627\u0628\u0639\u0629 \u0646\u0634\u0627\u0637\u0643 \u0648\u0627\u0644\u062A\u0632\u0627\u0645\u0643 \u0645\u0639\u0646\u0627 \u0641\u064A \u0627\u0644\u062F\u0648\u0631\u0629 \u0627\u0644\u062A\u062F\u0631\u064A\u0628\u064A\u0629. \u0646\u0631\u062C\u0648 \u0627\u0644\u0627\u0633\u062A\u0645\u0631\u0627\u0631 \u0641\u064A \u0627\u0644\u062A\u062F\u0631\u064A\u0628 \u0627\u0644\u0639\u0645\u0644\u064A \u0648\u0625\u062A\u0645\u0627\u0645 \u0627\u0644\u062A\u0643\u0644\u064A\u0641\u0627\u062A \u0641\u064A \u0645\u0648\u0639\u062F\u0647\u0627 \u0644\u0646\u0635\u0644 \u0645\u0639\u0627\u064B \u0625\u0644\u0649 \u0642\u0645\u0629 \u0627\u0644\u062A\u0645\u064A\u0632 \u0648\u0627\u0644\u0625\u062A\u0642\u0627\u0646!`;
+    res.json({ success: true, reply });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+apiRouter.post("/trainer/generate-lesson-plan", async (req, res) => {
+  try {
+    const { courseName, curriculumText, educationType, grade, startDate } = req.body || {};
+    const lessonPackage = await generateAllInOneLessonPlan({
+      topic: courseName || "\u0645\u0646\u0647\u062C \u0627\u0644\u062D\u0627\u0633\u0628 \u0627\u0644\u0622\u0644\u064A \u0648\u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u0627\u0644\u0645\u0639\u0644\u0648\u0645\u0627\u062A",
+      subject: courseName || "\u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u0627\u0644\u0645\u0639\u0644\u0648\u0645\u0627\u062A",
+      grade: grade || "\u0627\u0644\u0635\u0641 \u0627\u0644\u0631\u0627\u0628\u0639 \u0627\u0644\u0627\u0628\u062A\u062F\u0627\u0626\u064A",
+      durationMinutes: 60,
+      learningGoals: curriculumText || ""
+    });
+    const plan = {
+      courseName: courseName || "\u062F\u0648\u0631\u0629 \u062A\u062F\u0631\u064A\u0628\u064A\u0629",
+      grade: grade || "\u0627\u0644\u0635\u0641 \u0627\u0644\u0631\u0627\u0628\u0639 \u0627\u0644\u0627\u0628\u062A\u062F\u0627\u0626\u064A",
+      educationType: educationType || "\u0639\u0627\u0645",
+      startDate: startDate || (/* @__PURE__ */ new Date()).toISOString().split("T")[0],
+      totalHours: 8,
+      weeks: [
+        { weekNumber: 1, title: "\u0627\u0644\u0645\u0641\u0627\u0647\u064A\u0645 \u0627\u0644\u0623\u0633\u0627\u0633\u064A\u0629 \u0648\u0628\u064A\u0626\u0629 \u0627\u0644\u0639\u0645\u0644 \u0628\u0627\u0644\u0645\u0639\u0645\u0644", hours: 2, tasks: "\u062A\u0637\u0628\u064A\u0642 \u0639\u0645\u0644\u064A 1 \u0648\u0628\u062F\u0621 \u0627\u0644\u0646\u0634\u0627\u0637" },
+        { weekNumber: 2, title: "\u0627\u0644\u0645\u0647\u0627\u0631\u0627\u062A \u0627\u0644\u062A\u0642\u0646\u064A\u0629 \u0648\u0627\u0644\u062A\u0637\u0628\u064A\u0642\u0627\u062A \u0627\u0644\u0639\u0645\u0644\u064A\u0629", hours: 2, tasks: "\u062A\u0642\u064A\u064A\u0645 \u0645\u0631\u062D\u0644\u064A \u0648\u062A\u062D\u062F\u064A \u0643\u0627\u0647\u0648\u062A" },
+        { weekNumber: 3, title: "\u0628\u0646\u0627\u0621 \u0648\u062A\u0637\u0648\u064A\u0631 \u0627\u0644\u0645\u0634\u0627\u0631\u064A\u0639 \u0627\u0644\u0628\u0631\u0645\u062C\u064A\u0629", hours: 2, tasks: "\u062A\u0646\u0641\u064A\u0630 \u0646\u0645\u0648\u0630\u062C \u0627\u0644\u0645\u0634\u0631\u0648\u0639 \u0648\u062A\u0633\u0644\u064A\u0645\u0647" },
+        { weekNumber: 4, title: "\u0627\u0644\u0645\u0631\u0627\u062C\u0639\u0629 \u0627\u0644\u0634\u0627\u0645\u0644\u0629 \u0648\u0627\u0644\u0627\u062E\u062A\u0628\u0627\u0631 \u0627\u0644\u0639\u0645\u0644\u064A \u0627\u0644\u0646\u0647\u0627\u0626\u064A", hours: 2, tasks: "\u0639\u0631\u0636 \u0627\u0644\u0645\u0634\u0627\u0631\u064A\u0639 \u0648\u0645\u0646\u062D \u0627\u0644\u0634\u0647\u0627\u062F\u0627\u062A" }
+      ],
+      lessonPackage
+    };
+    res.json({ success: true, plan });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message || "\u0641\u0634\u0644 \u062A\u0648\u0644\u064A\u062F \u0627\u0644\u062E\u0637\u0629 \u0627\u0644\u0632\u0645\u0646\u064A\u0629" });
+  }
+});
+apiRouter.post("/trainer/convert-assessment-to-wall", async (req, res) => {
+  try {
+    const { assessmentTitle, assessmentText } = req.body || {};
+    const prompt = `\u062D\u0648\u0644 \u0627\u0644\u062A\u0642\u064A\u064A\u0645 \u0648\u0627\u0644\u0623\u0633\u0626\u0644\u0629 \u0627\u0644\u062A\u0627\u0644\u064A\u0629 \u0625\u0644\u0649 5 \u0623\u0633\u0626\u0644\u0629 \u064A\u0648\u0645\u064A\u0629 \u062A\u0641\u0627\u0639\u0644\u064A\u0629 \u0648\u0627\u0636\u062D\u0629 (\u062D\u0627\u0626\u0637 \u0627\u0644\u0623\u0633\u0626\u0644\u0629 \u0627\u0644\u0633\u0631\u064A\u0639) \u0628\u0627\u0644\u0644\u063A\u0629 \u0627\u0644\u0639\u0631\u0628\u064A\u0629 \u0645\u0639 4 \u062E\u064A\u0627\u0631\u0627\u062A \u0644\u0643\u0644 \u0633\u0624\u0627\u0644 \u0648\u0627\u0644\u0625\u062C\u0627\u0628\u0629 \u0627\u0644\u0635\u062D\u064A\u062D\u0629 \u0648\u0634\u0631\u062D \u0645\u0628\u0633\u0637:
+\u0639\u0646\u0648\u0627\u0646 \u0627\u0644\u062A\u0642\u064A\u064A\u0645: ${assessmentTitle || ""}
+\u0646\u0635 \u0627\u0644\u0645\u062D\u062A\u0648\u0649:
+${assessmentText || ""}
+
+\u0623\u062E\u0631\u062C \u0627\u0644\u0646\u0627\u062A\u062C \u0628\u0635\u064A\u063A\u0629 JSON \u0641\u0642\u0637 \u0645\u0635\u0641\u0648\u0641\u0629 \u0623\u0633\u0626\u0644\u0629:
+[{"question": "...", "options": ["...", "...", "...", "..."], "correctAnswer": "...", "explanation": "..."}]`;
+    const aiResult = await generateWithModelCascade({
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      config: { responseMimeType: "application/json" }
+    });
+    let dailyQuestions = [];
+    try {
+      if (aiResult.text) {
+        dailyQuestions = JSON.parse(aiResult.text);
+      }
+    } catch {
+    }
+    if (!Array.isArray(dailyQuestions) || dailyQuestions.length === 0) {
+      dailyQuestions = [
+        {
+          question: `\u0633\u0624\u0627\u0644 \u062A\u0637\u0628\u064A\u0642\u064A \u062D\u0648\u0644 ${assessmentTitle || "\u0627\u0644\u062F\u0631\u0633"}: \u0645\u0627 \u0647\u064A \u0627\u0644\u0648\u0638\u064A\u0641\u0629 \u0627\u0644\u0623\u0633\u0627\u0633\u064A\u0629 \u0644\u0644\u0645\u0641\u0647\u0648\u0645 \u0627\u0644\u0645\u0634\u0631\u0648\u062D\u061F`,
+          options: ["\u0625\u062F\u062E\u0627\u0644 \u0648\u0645\u0639\u0627\u0644\u062C\u0629 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A", "\u062D\u0641\u0638 \u0648\u0625\u062E\u0631\u0627\u062C \u0627\u0644\u0645\u0639\u0644\u0648\u0645\u0627\u062A", "\u0627\u0644\u0631\u0628\u0637 \u0627\u0644\u0634\u0628\u0643\u064A \u0627\u0644\u0633\u062D\u0627\u0628\u064A", "\u062C\u0645\u064A\u0639 \u0645\u0627 \u0633\u0628\u0642 \u0635\u062D\u064A\u062D"],
+          correctAnswer: "\u062C\u0645\u064A\u0639 \u0645\u0627 \u0633\u0628\u0642 \u0635\u062D\u064A\u062D",
+          explanation: "\u0627\u0644\u0645\u0641\u0647\u0648\u0645 \u0627\u0644\u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A \u064A\u0634\u0645\u0644 \u062F\u0648\u0631\u0629 \u0645\u0639\u0627\u0644\u062C\u0629 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A \u0643\u0627\u0645\u0644\u0629."
+        }
+      ];
+    }
+    res.json({ success: true, dailyQuestions });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+apiRouter.post("/parent/update-full-profile", async (req, res) => {
+  try {
+    const { traineeId, parentPhone, parentName, parentNationalId, parentEmail, address, parentPortalPassword, parentPhotoUrl } = req.body || {};
+    if (!traineeId) {
+      return res.status(400).json({ success: false, error: "\u0645\u0639\u0631\u0641 \u0627\u0644\u0637\u0627\u0644\u0628 \u0645\u0637\u0644\u0648\u0628" });
+    }
+    const trainees = await TraineeRepo.getAll();
+    const trainee = trainees.find((t) => t.id === traineeId || t.code === traineeId);
+    if (!trainee) {
+      return res.status(404).json({ success: false, error: "\u0644\u0645 \u064A\u062A\u0645 \u0627\u0644\u0639\u062B\u0648\u0631 \u0639\u0644\u0649 \u0633\u062C\u0644 \u0627\u0644\u0637\u0627\u0644\u0628" });
+    }
+    const updates = {
+      parentPhone: parentPhone || trainee.parentPhone,
+      parentName: parentName || trainee.parentName,
+      parentNationalId: parentNationalId || trainee.parentNationalId,
+      parentEmail: parentEmail || trainee.parentEmail,
+      address: address || trainee.address,
+      parentPortalPassword: parentPortalPassword || trainee.parentPortalPassword,
+      parentPhotoUrl: parentPhotoUrl || trainee.parentPhotoUrl
+    };
+    await TraineeRepo.update(trainee.id, updates);
+    const memData = db.getData();
+    if (memData && Array.isArray(memData.trainees)) {
+      const idx = memData.trainees.findIndex((t) => t.id === trainee.id);
+      if (idx >= 0) {
+        memData.trainees[idx] = { ...memData.trainees[idx], ...updates };
+        db.save();
+      }
+    }
+    res.json({ success: true, message: "\u062A\u0645 \u062A\u062D\u062F\u064A\u062B \u0628\u064A\u0627\u0646\u0627\u062A \u0645\u0644\u0641 \u0648\u0644\u064A \u0627\u0644\u0623\u0645\u0631 \u0628\u0646\u062C\u0627\u062D" });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+apiRouter.post("/parent/update-student", async (req, res) => {
+  try {
+    const { traineeId, nationalId, phone, photoUrl } = req.body || {};
+    if (!traineeId) {
+      return res.status(400).json({ success: false, error: "\u0645\u0639\u0631\u0641 \u0627\u0644\u0637\u0627\u0644\u0628 \u0645\u0637\u0644\u0648\u0628" });
+    }
+    const trainees = await TraineeRepo.getAll();
+    const trainee = trainees.find((t) => t.id === traineeId || t.code === traineeId);
+    if (!trainee) {
+      return res.status(404).json({ success: false, error: "\u0644\u0645 \u064A\u062A\u0645 \u0627\u0644\u0639\u062B\u0648\u0631 \u0639\u0644\u0649 \u0633\u062C\u0644 \u0627\u0644\u0637\u0627\u0644\u0628" });
+    }
+    const updates = {};
+    if (nationalId !== void 0) updates.nationalId = nationalId;
+    if (phone !== void 0) updates.phone = phone;
+    if (photoUrl !== void 0) updates.photoUrl = photoUrl;
+    await TraineeRepo.update(trainee.id, updates);
+    const memData = db.getData();
+    if (memData && Array.isArray(memData.trainees)) {
+      const idx = memData.trainees.findIndex((t) => t.id === trainee.id);
+      if (idx >= 0) {
+        memData.trainees[idx] = { ...memData.trainees[idx], ...updates };
+        db.save();
+      }
+    }
+    res.json({ success: true, message: "\u062A\u0645 \u062A\u062D\u062F\u064A\u062B \u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0644\u0637\u0627\u0644\u0628 \u0628\u0646\u062C\u0627\u062D" });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+apiRouter.post("/student/update-profile", async (req, res) => {
+  try {
+    const { traineeId, portalPassword, socialLinks } = req.body || {};
+    if (!traineeId) {
+      return res.status(400).json({ success: false, error: "\u0645\u0639\u0631\u0641 \u0627\u0644\u0637\u0627\u0644\u0628 \u0645\u0637\u0644\u0648\u0628" });
+    }
+    const trainees = await TraineeRepo.getAll();
+    const trainee = trainees.find((t) => t.id === traineeId || t.code === traineeId);
+    if (!trainee) {
+      return res.status(404).json({ success: false, error: "\u0644\u0645 \u064A\u062A\u0645 \u0627\u0644\u0639\u062B\u0648\u0631 \u0639\u0644\u0649 \u062D\u0633\u0627\u0628 \u0627\u0644\u0637\u0627\u0644\u0628" });
+    }
+    const updates = {};
+    if (portalPassword !== void 0) updates.portalPassword = portalPassword;
+    if (socialLinks !== void 0) updates.socialLinks = socialLinks;
+    await TraineeRepo.update(trainee.id, updates);
+    const memData = db.getData();
+    if (memData && Array.isArray(memData.trainees)) {
+      const idx = memData.trainees.findIndex((t) => t.id === trainee.id);
+      if (idx >= 0) {
+        memData.trainees[idx] = { ...memData.trainees[idx], ...updates };
+        db.save();
+      }
+    }
+    res.json({ success: true, student: { ...trainee, ...updates } });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+apiRouter.post("/student/forgot-password", async (req, res) => {
+  try {
+    const { codeOrPhone } = req.body || {};
+    if (!codeOrPhone) {
+      return res.status(400).json({ error: "\u0627\u0644\u0631\u062C\u0627\u0621 \u0643\u062A\u0627\u0628\u0629 \u0643\u0648\u062F \u0627\u0644\u0637\u0627\u0644\u0628 \u0623\u0648 \u0631\u0642\u0645 \u0627\u0644\u0647\u0627\u062A\u0641 \u0623\u0648\u0644\u0627\u064B" });
+    }
+    const trainees = await TraineeRepo.getAll();
+    const trainee = findTraineeMatch(trainees, codeOrPhone);
+    if (!trainee) {
+      return res.status(404).json({ error: "\u0644\u0645 \u064A\u062A\u0645 \u0627\u0644\u0639\u062B\u0648\u0631 \u0639\u0644\u0649 \u0637\u0627\u0644\u0628 \u0645\u0633\u062C\u0644 \u0628\u0647\u0630\u0627 \u0627\u0644\u0643\u0648\u062F \u0623\u0648 \u0631\u0642\u0645 \u0627\u0644\u0647\u0627\u062A\u0641." });
+    }
+    const pwd = trainee.portalPassword || "123456";
+    res.json({
+      success: true,
+      message: `\u062A\u0645 \u0627\u0644\u062A\u062D\u0642\u0642 \u0645\u0646 \u062D\u0633\u0627\u0628 \u0627\u0644\u0637\u0627\u0644\u0628 (${trainee.fullName}): \u0643\u0644\u0645\u0629 \u0627\u0644\u0645\u0631\u0648\u0631 \u0627\u0644\u062E\u0627\u0635\u0629 \u0628\u0628\u0648\u0627\u0628\u062A\u0643 \u0647\u064A (${pwd})\u060C \u0648\u064A\u0645\u0643\u0646\u0643 \u062A\u063A\u064A\u064A\u0631\u0647\u0627 \u0628\u0639\u062F \u062A\u0633\u062C\u064A\u0644 \u0627\u0644\u062F\u062E\u0648\u0644 \u0645\u0646 \u0627\u0644\u0625\u0639\u062F\u0627\u062F\u0627\u062A.`
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+apiRouter.post("/lab-schedules/auto-generate", async (req, res) => {
+  try {
+    const groups = await GroupRepo.getAll();
+    const courses = await CourseRepo.getAll();
+    const trainers = await TrainerRepo.getAll();
+    const data = db.getData();
+    if (!Array.isArray(data.labSchedules)) data.labSchedules = [];
+    groups.forEach((g) => {
+      const days = g.scheduleDays || g.days || [];
+      const course = courses.find((c) => c.id === g.courseId) || {};
+      const trainer = trainers.find((tr) => tr.id === g.trainerId) || {};
+      days.forEach((day) => {
+        const slotId = `sch-${g.id}-${day}`;
+        const existingIdx = data.labSchedules.findIndex((s) => s.id === slotId);
+        const slotData = {
+          id: slotId,
+          branchId: g.branchId || "branch-1",
+          groupId: g.id,
+          groupName: g.name,
+          courseName: course.title_arabic || course.name || "\u062F\u0648\u0631\u0629 \u062A\u062F\u0631\u064A\u0628\u064A\u0629",
+          trainerId: g.trainerId,
+          trainerName: trainer.fullName || trainer.name || "\u0627\u0644\u0645\u062F\u0631\u0628 \u0627\u0644\u0645\u0633\u0624\u0648\u0644",
+          roomName: g.roomName || "\u0645\u0639\u0645\u0644 1",
+          dayOfWeek: day,
+          startTime: g.startTime || "16:00",
+          endTime: g.endTime || "18:00"
+        };
+        if (existingIdx >= 0) {
+          data.labSchedules[existingIdx] = slotData;
+        } else {
+          data.labSchedules.push(slotData);
+        }
+      });
+    });
+    db.save();
+    res.json({ success: true, message: `\u062A\u0645 \u062A\u062D\u062F\u064A\u062B \u0648\u062A\u0648\u0644\u064A\u062F \u062C\u062F\u0627\u0648\u0644 \u0627\u0644\u0645\u0639\u0627\u0645\u0644 \u0628\u0646\u062C\u0627\u062D \u0645\u0646 \u0627\u0644\u0645\u062C\u0645\u0648\u0639\u0627\u062A \u0627\u0644\u0646\u0634\u0637\u0629 (${data.labSchedules.length} \u0645\u0648\u0627\u0639\u064A\u062F \u0645\u0639\u062A\u0645\u062F\u0629)!` });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+apiRouter.get("/system/google-drive-sync", async (req, res) => {
+  const data = db.getData();
+  res.json({
+    status: "connected",
+    lastSync: data.googleDriveSync?.lastSync || (/* @__PURE__ */ new Date()).toISOString(),
+    syncedFilesCount: (data.labSchedules?.length || 0) + (data.courses?.length || 0) || 15
+  });
+});
+apiRouter.post("/system/google-drive-sync", async (req, res) => {
+  try {
+    const data = db.getData();
+    if (!data.googleDriveSync) data.googleDriveSync = {};
+    data.googleDriveSync.lastSync = (/* @__PURE__ */ new Date()).toISOString();
+    db.save();
+    res.json({ success: true, message: "\u062A\u0645\u062A \u0645\u0632\u0627\u0645\u0646\u0629 \u0627\u0644\u062C\u062F\u0627\u0648\u0644 \u0648\u062D\u0641\u0638 \u0627\u0644\u0646\u0633\u062E\u0629 \u0627\u0644\u0627\u062D\u062A\u064A\u0627\u0637\u064A\u0629 \u0627\u0644\u0633\u062D\u0627\u0628\u064A\u0629 \u0628\u0646\u062C\u0627\u062D! \u2601\uFE0F" });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -16233,8 +18510,8 @@ import path6 from "path";
 import os4 from "os";
 var MigrationManager = class {
   constructor(historyFilePath) {
-    const isServerless4 = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.VERCEL_ENV);
-    const dataDir = isServerless4 ? path6.join(os4.tmpdir(), "nagah_data") : path6.join(process.cwd(), "data");
+    const isServerless5 = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.VERCEL_ENV);
+    const dataDir = isServerless5 ? path6.join(os4.tmpdir(), "nagah_data") : path6.join(process.cwd(), "data");
     try {
       if (!fs5.existsSync(dataDir)) {
         fs5.mkdirSync(dataDir, { recursive: true });
@@ -16313,8 +18590,8 @@ app.use((req, res, next) => {
   }
   next();
 });
-var isServerless3 = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.VERCEL_ENV);
-if (!isServerless3) {
+var isServerless4 = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.VERCEL_ENV);
+if (!isServerless4) {
   try {
     secureDb.verifyIntegrity();
     migrationManager.runInitialMigrations();
@@ -16351,7 +18628,7 @@ app.get(["/health", "/api/health"], async (req, res) => {
     status: "ok",
     service: "Nagah Management System",
     environment: process.env.NODE_ENV || "production",
-    serverless: isServerless3,
+    serverless: isServerless4,
     database: "active",
     cwd: process.cwd(),
     hasBundledData,

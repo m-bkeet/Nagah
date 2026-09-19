@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 import os from 'os';
-import { saveFullDbToFirestore, loadFullDbFromFirestore } from './firestoreStorage.js';
+import { saveFullDbToFirestore, loadFullDbFromFirestore, loadCollectionFromFirestore, getSyncMeta } from './firestoreStorage.ts';
 import {
   User,
   Branch,
@@ -3617,6 +3617,7 @@ class DatabaseManager {
   private isFirestoreHydrated = false;
   private lastHydrationTime = 0;
   private lastHydrationAttemptTime = 0;
+  private lastRemoteSyncMetaTime = 0;
   private hydrationPromise: Promise<void> | null = null;
 
   public deduplicateTrainees(list: any[]): any[] {
@@ -3655,8 +3656,6 @@ class DatabaseManager {
       let existing: any = null;
       if (id && byId.has(id)) {
         existing = byId.get(id);
-      } else if (code && byCode.has(code)) {
-        existing = byCode.get(code);
       } else if (normName && byNormName.has(normName)) {
         const candidate = byNormName.get(normName);
         const cPhone = cleanPhone(candidate.phone);
@@ -3666,6 +3665,15 @@ class DatabaseManager {
         const sameGroupOrCourse = (t.groupId && candidate.groupId && t.groupId === candidate.groupId) ||
                                   (t.courseId && candidate.courseId && t.courseId === candidate.courseId);
         if (samePhone || sameGroupOrCourse || (!phone && !parentPhone && !cPhone && !cParentPhone)) {
+          existing = candidate;
+        }
+      } else if (code && byCode.has(code)) {
+        const candidate = byCode.get(code);
+        const candNorm = normArabic(candidate.fullName || candidate.name);
+        // Only merge by code if it is truly the same student (same normalized name or same national ID)
+        const sameName = candNorm && normName && candNorm === normName;
+        const sameNatId = t.nationalId && candidate.nationalId && String(t.nationalId).trim() === String(candidate.nationalId).trim();
+        if (sameName || sameNatId) {
           existing = candidate;
         }
       }
@@ -3694,9 +3702,14 @@ class DatabaseManager {
         });
       } else {
         const record = { ...t };
+        // If code collided with a different student, guarantee unique code so student is preserved
+        if (code && byCode.has(code)) {
+          const suffix = Math.random().toString(36).substring(2, 5).toUpperCase();
+          record.code = `${code}-${suffix}`;
+        }
         result.push(record);
         if (id) byId.set(id, record);
-        if (code) byCode.set(code, record);
+        if (record.code) byCode.set(record.code, record);
         if (normName) byNormName.set(normName, record);
       }
     }
@@ -3713,15 +3726,11 @@ class DatabaseManager {
 
   public async ensureHydrated(force = false): Promise<void> {
     const now = Date.now();
-    // Anti-hammering guard: If an attempt was made in the last 15 minutes, do not re-request Firestore
-    if (!force && (now - this.lastHydrationAttemptTime < 15 * 60 * 1000)) {
+    const CACHE_TTL_MS = 2500;
+    if (!force && this.isFirestoreHydrated && (now - this.lastHydrationTime < CACHE_TTL_MS)) {
       return;
     }
-    // If successfully hydrated, cache for 1 hour
-    if (!force && this.isFirestoreHydrated && (now - this.lastHydrationTime < 60 * 60 * 1000)) {
-      return;
-    }
-    if (this.hydrationPromise && !force) {
+    if (this.hydrationPromise) {
       return this.hydrationPromise;
     }
 
@@ -3729,22 +3738,51 @@ class DatabaseManager {
     this.hydrationPromise = (async () => {
       this.lastHydrationTime = Date.now();
       try {
+        // Fast sync: check sync_meta heartbeat first
+        const meta = await getSyncMeta();
+        const remoteTime = meta?.updatedAt || 0;
+
+        if (this.isFirestoreHydrated && remoteTime > 0 && remoteTime <= this.lastRemoteSyncMetaTime && !force) {
+          return;
+        }
+
+        // Fast collection sync: if only trainees were touched remotely, sync just trainees
+        if (this.isFirestoreHydrated && meta?.lastCollection === 'trainees' && remoteTime > this.lastRemoteSyncMetaTime) {
+          const remoteTrainees = await loadCollectionFromFirestore('trainees');
+          if (Array.isArray(remoteTrainees) && remoteTrainees.length > 0) {
+            console.log('[DB] Fast-hydrated trainees from Firestore! Count:', remoteTrainees.length);
+            const current = this.data || {} as any;
+            const coursesList = Array.isArray(current.courses) ? current.courses : [];
+            const deduplicated = this.deduplicateTrainees(remoteTrainees);
+            current.trainees = deduplicated.map((t: any) => ({
+              ...t,
+              ...calculateTraineeFeeAndFinancials(t, coursesList)
+            }));
+            this.lastRemoteSyncMetaTime = remoteTime;
+            return;
+          }
+        }
+
         const remoteData = await loadFullDbFromFirestore();
         if (remoteData && Object.keys(remoteData).length > 0) {
-          console.log('[DB] Hydrated from Firestore! Collections loaded:', Object.keys(remoteData));
-          // Smart merge: preserve any locally created/updated items that may not yet be in remote snapshot
+          console.log('[DB] Hydrated from Firestore! Collections loaded:', Object.keys(remoteData).length);
+          // Authoritative remote merge: Cloud Firestore is the shared source of truth
           const current = this.data || {} as any;
           const merged: any = { ...current };
 
           for (const [key, val] of Object.entries(remoteData)) {
             if (Array.isArray(val)) {
               if (key === 'trainees') {
-                // Strict deduplication when merging remote and local trainees
-                const combined = [...val, ...(Array.isArray(merged[key]) ? merged[key] : [])];
-                merged[key] = this.deduplicateTrainees(combined);
+                // Remote Firestore is canonical for trainees
+                const remoteList = Array.isArray(val) ? val : [];
+                const localList = Array.isArray(merged[key]) ? merged[key] : [];
+                const remoteIdSet = new Set(remoteList.map((t: any) => t.id || t.code).filter(Boolean));
+                // Only keep local items that do not exist remotely yet
+                const localOnly = localList.filter((t: any) => t && t.id && !remoteIdSet.has(t.id) && (!t.code || !remoteIdSet.has(t.code)));
+                merged[key] = this.deduplicateTrainees([...remoteList, ...localOnly]);
               } else if (Array.isArray(merged[key]) && merged[key].length > 0) {
                 const remoteMap = new Map((val as any[]).map(item => [item.id, item]));
-                // Retain recently added local items
+                // Retain recently added local items not yet synced
                 for (const localItem of merged[key]) {
                   if (localItem && localItem.id && !remoteMap.has(localItem.id)) {
                     remoteMap.set(localItem.id, localItem);
@@ -3767,16 +3805,14 @@ class DatabaseManager {
           if (Array.isArray(merged.trainees)) {
             const coursesList = Array.isArray(merged.courses) ? merged.courses : [];
             const deduplicated = this.deduplicateTrainees(merged.trainees);
-            merged.trainees = deduplicated.map((t: any) => {
-              const fin = calculateTraineeFeeAndFinancials(t, coursesList);
-              return {
-                ...t,
-                ...fin
-              };
-            });
+            merged.trainees = deduplicated.map((t: any) => ({
+              ...t,
+              ...calculateTraineeFeeAndFinancials(t, coursesList)
+            }));
           }
 
           this.data = merged;
+          this.lastRemoteSyncMetaTime = remoteTime || Date.now();
         }
       } catch (err) {
         console.warn('[DB] Firestore hydration notice:', err);

@@ -29,6 +29,9 @@ data/backups/
 !dist/**/*
 !build/
 !build/**/*
+!server.cjs
+!api/
+!api/**/*
 
 
 

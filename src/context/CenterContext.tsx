@@ -3,6 +3,8 @@ import { Branch, CenterSettings, SystemNotification, Trainee, Trainer, Course, G
 import { api } from '../services/api';
 import { isTrainerSessionActive, setTrainerLabSessionState } from '../utils/labSecurity';
 import { normalizeArabicFull } from '../utils/arabicUtils';
+import { db } from '../lib/firebase';
+import { doc, onSnapshot } from 'firebase/firestore';
 
 export interface ToastMessage {
   id: string;
@@ -89,8 +91,6 @@ export function deduplicateTraineeList(list: Trainee[]): Trainee[] {
     let existing: Trainee | null = null;
     if (id && byId.has(id)) {
       existing = byId.get(id)!;
-    } else if (code && byCode.has(code)) {
-      existing = byCode.get(code)!;
     } else if (normName && byNormName.has(normName)) {
       const candidate = byNormName.get(normName)!;
       const cPhone = cleanPhone(candidate.phone);
@@ -100,6 +100,15 @@ export function deduplicateTraineeList(list: Trainee[]): Trainee[] {
       const sameGroupOrCourse = (t.groupId && candidate.groupId && t.groupId === candidate.groupId) ||
                                 (t.courseId && candidate.courseId && t.courseId === candidate.courseId);
       if (samePhone || sameGroupOrCourse || (!phone && !parentPhone && !cPhone && !cParentPhone)) {
+        existing = candidate;
+      }
+    } else if (code && byCode.has(code)) {
+      const candidate = byCode.get(code)!;
+      const candNorm = normArabic(candidate.fullName || candidate.name);
+      // Only merge by code if it is truly the same student (same normalized name or same national ID)
+      const sameName = candNorm && normName && candNorm === normName;
+      const sameNatId = t.nationalId && candidate.nationalId && String(t.nationalId).trim() === String(candidate.nationalId).trim();
+      if (sameName || sameNatId) {
         existing = candidate;
       }
     }
@@ -128,9 +137,14 @@ export function deduplicateTraineeList(list: Trainee[]): Trainee[] {
       });
     } else {
       const record = { ...t };
+      // If code collided with a different student, guarantee unique code so student is preserved
+      if (code && byCode.has(code)) {
+        const suffix = Math.random().toString(36).substring(2, 5).toUpperCase();
+        record.code = `${code}-${suffix}`;
+      }
       result.push(record);
       if (id) byId.set(id, record);
-      if (code) byCode.set(code, record);
+      if (record.code) byCode.set(record.code, record);
       if (normName) byNormName.set(normName, record);
     }
   }
@@ -194,6 +208,33 @@ export const CenterProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
   });
   const [isLoadingData, setIsLoadingData] = useState(false);
+
+  // Automatic LocalStorage sync when core entities change
+  useEffect(() => {
+    if (trainees && trainees.length > 0) {
+      try {
+        localStorage.setItem('nagah_trainees', JSON.stringify(trainees));
+      } catch {}
+    }
+  }, [trainees]);
+
+  useEffect(() => {
+    if (courses && courses.length > 0) {
+      try { localStorage.setItem('nagah_courses', JSON.stringify(courses)); } catch {}
+    }
+  }, [courses]);
+
+  useEffect(() => {
+    if (groups && groups.length > 0) {
+      try { localStorage.setItem('nagah_groups', JSON.stringify(groups)); } catch {}
+    }
+  }, [groups]);
+
+  useEffect(() => {
+    if (trainers && trainers.length > 0) {
+      try { localStorage.setItem('nagah_trainers', JSON.stringify(trainers)); } catch {}
+    }
+  }, [trainers]);
 
   // Ref tracking pending optimistic updates to avoid being overwritten by incoming listeners
   const pendingUpdatesRef = useRef<Set<string>>(new Set());
@@ -495,8 +536,9 @@ export const CenterProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     setIsLoadingData(trainees.length === 0);
     try {
+      const traineeParams = force ? { fresh: 'true' } : undefined;
       const [traineesRes, coursesRes, groupsRes, trainersRes] = await Promise.all([
-        api.getTrainees().catch((e) => { console.warn('getTrainees failed:', e); return null; }),
+        api.getTrainees(traineeParams).catch((e) => { console.warn('getTrainees failed:', e); return null; }),
         api.getCourses().catch((e) => { console.warn('getCourses failed:', e); return null; }),
         api.getGroups().catch((e) => { console.warn('getGroups failed:', e); return null; }),
         api.getTrainers().catch((e) => { console.warn('getTrainers failed:', e); return null; })
@@ -651,9 +693,86 @@ export const CenterProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     return () => window.removeEventListener('storage', handleStorage);
   }, []);
 
+  // Automatic fresh sync when user returns to tab / window focus
+  useEffect(() => {
+    const handleFocus = () => {
+      refreshCoreData(true);
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        refreshCoreData(true);
+      }
+    };
+
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    // Periodic heartbeat sync every 30s to keep Vercel and AI Studio in lockstep
+    const interval = setInterval(() => {
+      refreshCoreData(false);
+    }, 30000);
+
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      clearInterval(interval);
+    };
+  }, [refreshCoreData]);
+
+  // Direct Cloud Firestore Real-time Listener (Syncs AI Studio <-> Vercel instantaneously)
+  useEffect(() => {
+    if (!db) return;
+    let unsubMeta: (() => void) | null = null;
+    let unsubTrainees: (() => void) | null = null;
+
+    try {
+      // 1. Listen for global metadata changes across any environment (Vercel <-> AI Studio)
+      unsubMeta = onSnapshot(doc(db, 'nagah_store', 'sync_meta'), (snap) => {
+        if (snap.exists()) {
+          const meta = snap.data();
+          console.log('[Firestore Realtime] Cloud sync_meta update detected:', meta?.lastCollection);
+          refreshCoreData(true);
+        }
+      }, (err) => {
+        console.warn('[Firestore Realtime] sync_meta listener note:', err);
+      });
+
+      // 2. Direct listener on trainees document in case meta is skipped
+      unsubTrainees = onSnapshot(doc(db, 'nagah_store', 'trainees'), (snap) => {
+        if (snap.exists()) {
+          const data = snap.data();
+          if (data && !data.isSplit && data.payload) {
+            try {
+              const remoteTrainees = JSON.parse(data.payload);
+              if (Array.isArray(remoteTrainees) && remoteTrainees.length > 0) {
+                setTrainees(prev => {
+                  const deduped = deduplicateTraineeList(remoteTrainees);
+                  try { localStorage.setItem('nagah_trainees', JSON.stringify(deduped)); } catch {}
+                  return deduped;
+                });
+              }
+            } catch {}
+          } else {
+            refreshCoreData(true);
+          }
+        }
+      }, (err) => {
+        console.warn('[Firestore Realtime] Trainees listener note:', err);
+      });
+    } catch (e) {
+      console.warn('[Firestore Realtime] Setup notice:', e);
+    }
+
+    return () => {
+      if (unsubMeta) unsubMeta();
+      if (unsubTrainees) unsubTrainees();
+    };
+  }, [refreshCoreData]);
+
   useEffect(() => {
     refreshAll();
-    refreshCoreData(false);
+    refreshCoreData(true);
   }, []);
 
   // Keyboard shortcut Ctrl+K for search

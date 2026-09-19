@@ -196,16 +196,30 @@ export async function handlePublicRegister(req: Request, res: Response) {
     const allGroups = await GroupRepo.getAll();
     const allBranches = await BranchRepo.getAll();
 
-    // Sibling-aware duplicate check:
-    // Match duplicate ONLY if same student (matching student's own phone or normalized student full name)
+    // Sibling-safe duplicate check:
+    // SIBLINGS share the same parent phone number! They must NOT be blocked!
+    // A duplicate ONLY exists if:
+    // 1) Same student name (normalized) AND (same phone OR same parent phone OR same course/grade)
+    // OR 2) Exact National ID match (if provided and valid)
+    const cleanNationalId = String(data.nationalId || '').trim();
     const existingTrainee = allTrainees.find(t => {
       const tPhoneDigits = String(t.phone || '').replace(/\D/g, '').slice(-10);
+      const tParentPhoneDigits = String(t.parentPhone || '').replace(/\D/g, '').slice(-10);
       const normExistingName = normalizeArabicFull(t.fullName || '');
 
-      const sameStudentPhone = phoneDigits && phoneDigits.length >= 8 && tPhoneDigits && tPhoneDigits === phoneDigits;
-      const sameNormalizedName = normInputName && normExistingName && normInputName === normExistingName;
+      // Check National ID if available (at least 10 digits)
+      if (cleanNationalId && cleanNationalId.length >= 10 && t.nationalId && String(t.nationalId).trim() === cleanNationalId) {
+        return true;
+      }
 
-      return sameStudentPhone || sameNormalizedName;
+      const sameName = normInputName && normExistingName && normInputName === normExistingName;
+      if (!sameName) return false;
+
+      const samePhone = (phoneDigits && phoneDigits.length >= 8 && (phoneDigits === tPhoneDigits || phoneDigits === tParentPhoneDigits)) ||
+                        (parentPhoneDigits && parentPhoneDigits.length >= 8 && (parentPhoneDigits === tPhoneDigits || parentPhoneDigits === tParentPhoneDigits));
+      const sameGrade = grade && t.grade && String(t.grade).trim().toLowerCase() === grade.toLowerCase();
+
+      return samePhone || sameGrade;
     });
 
     if (existingTrainee) {

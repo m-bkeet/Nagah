@@ -3,6 +3,7 @@ import cors from "cors";
 import { versionRouter } from './versionRouter';
 import { secureDb } from './secureDbConnection';
 import { migrationManager } from './migrationManager';
+import { db } from './db';
 
 const app = express();
 
@@ -105,8 +106,8 @@ app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 // Ensure database state is hydrated from cloud Firestore on request
 app.use(async (req, res, next) => {
   try {
-    const { db } = await import('./db.js');
-    await db.ensureHydrated();
+    const isFresh = req.query?.fresh === 'true' || req.headers?.['x-fresh'] === 'true';
+    await db.ensureHydrated(isFresh);
   } catch (e) {
     console.warn('[Hydration Middleware Notice]', e);
   }

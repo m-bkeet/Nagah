@@ -111,7 +111,8 @@ export const TraineesView: React.FC = () => {
     trainers,
     setTrainers,
     isLoadingData: isGlobalLoading,
-    refreshCoreData
+    refreshCoreData,
+    addPointsOptimistic
   } = useCenter();
   const { user } = useAuth();
 
@@ -927,26 +928,12 @@ export const TraineesView: React.FC = () => {
     const reason = defaultReason || (stars === 1 ? 'مشاركة ممتازة في الحصة ⭐' : stars === 2 ? 'إتمام الواجب والتطبيق العملي ⭐⭐' : stars === 3 ? 'إجابة نموذجية وسرعة بديهة ⭐⭐⭐' : `مكافأة ${stars} نجوم تميز 🌟`);
     
     try {
-      const res = await api.addPoints({
-        traineeId: t.id,
-        points: pts,
-        reason,
+      const ok = await addPointsOptimistic([t.id], pts, reason, {
         addedByUserId: user?.id,
         addedByUserName: user?.fullName || 'المعلم / الإدارة'
       });
 
-      if (res.success) {
-        showToast(`🎉 تم منح المتدرب (${t.fullName}) ${stars} نجوم بنجاح (+${pts} نقطة)!`, 'success');
-        
-        // Update local trainees state immediately
-        setTrainees(prev => prev.map(item => {
-          if (item.id === t.id) {
-            const newTotal = Math.max(0, (item.totalPoints || 0) + pts);
-            return { ...item, totalPoints: newTotal, points: newTotal };
-          }
-          return item;
-        }));
-
+      if (ok) {
         // If profile modal is open for this trainee, update it in real-time
         if (activeTrainee && activeTrainee.id === t.id) {
           const newTotal = Math.max(0, (activeTrainee.totalPoints || 0) + pts);
@@ -980,29 +967,13 @@ export const TraineesView: React.FC = () => {
     setIsSubmittingStars(true);
     try {
       const finalReason = starReason === 'custom' ? (starCustomReason || 'نشاط تدريبي مميز') : starReason;
-      const res = await api.addPoints({
-        traineeIds: starTargetTrainees.map(t => t.id),
-        points: starPoints,
-        reason: finalReason,
+      const targetIds = starTargetTrainees.map(t => t.id);
+      const ok = await addPointsOptimistic(targetIds, starPoints, finalReason, {
         addedByUserId: user?.id,
         addedByUserName: user?.fullName || 'المعلم / الإدارة'
       });
 
-      if (res.success) {
-        showToast(
-          `🎉 تم منح ${starPoints > 0 ? '+' : ''}${starPoints} نقطة (${starCount} نجوم) لعدد ${starTargetTrainees.length} متدرب بنجاح!`,
-          'success'
-        );
-
-        // Update local trainees list
-        setTrainees(prev => prev.map(t => {
-          if (starTargetTrainees.some(st => st.id === t.id)) {
-            const newTotal = Math.max(0, (t.totalPoints || 0) + starPoints);
-            return { ...t, totalPoints: newTotal, points: newTotal };
-          }
-          return t;
-        }));
-
+      if (ok) {
         // If profile is open
         if (activeTrainee && starTargetTrainees.some(st => st.id === activeTrainee.id)) {
           const newTotal = Math.max(0, (activeTrainee.totalPoints || 0) + starPoints);

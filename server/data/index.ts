@@ -29,8 +29,8 @@ import {
 
 function createRepo<T extends { id: string }>(key: string) {
   return {
-    async getAll(): Promise<T[]> {
-      await db.ensureHydrated();
+    async getAll(forceFresh = false): Promise<T[]> {
+      await db.ensureHydrated(forceFresh);
       const memData = db.getData() as any;
       if (!memData || !Array.isArray(memData[key])) {
         return [];
