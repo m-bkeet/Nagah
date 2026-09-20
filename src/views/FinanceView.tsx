@@ -403,13 +403,13 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ initialTab }) => {
   return (
     <div className="space-y-5">
       {/* Header */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-slate-800/60 border border-slate-700/70 p-4 rounded-2xl backdrop-blur-md">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-gradient-to-r from-emerald-50/90 via-white to-teal-50/70 dark:from-slate-900 dark:via-slate-850 dark:to-slate-900 border border-emerald-200/90 dark:border-slate-700/70 p-5 rounded-3xl shadow-sm dark:shadow-xl backdrop-blur-md">
         <div>
-          <h2 className="text-lg font-black text-slate-100 flex items-center gap-2">
-            <Wallet className="w-5 h-5 text-emerald-400" />
+          <h2 className="text-lg font-black text-slate-900 dark:text-slate-100 flex items-center gap-2">
+            <Wallet className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
             إدارة الحسابات والخزينة الرئيسية
           </h2>
-          <p className="text-xs text-slate-400 mt-0.5">
+          <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5 font-medium">
             متابعة سندات القبض، العمولات التدريبية، وصافي الخزينة الفعلي
           </p>
         </div>
@@ -417,16 +417,16 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ initialTab }) => {
         <div className="flex items-center gap-2 flex-wrap">
           <button
             onClick={() => setIsGoogleSheetsModalOpen(true)}
-            className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600/30 hover:bg-emerald-600/60 border border-emerald-500/40 text-emerald-300 font-bold text-xs rounded-xl shadow-lg transition-all active:scale-95"
+            className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-100 hover:bg-emerald-200 text-emerald-900 border border-emerald-300 dark:bg-emerald-600/30 dark:hover:bg-emerald-600/60 dark:border-emerald-500/40 dark:text-emerald-300 font-bold text-xs rounded-xl shadow-xs transition-all active:scale-95 cursor-pointer"
             title="تصدير ومزامنة سجل الخزينة والحسابات مع جداول Google Sheets"
           >
-            <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
+            <FileSpreadsheet className="w-4 h-4 text-emerald-700 dark:text-emerald-400" />
             <span>Google Sheets 📊</span>
           </button>
 
           <button
             onClick={() => openAiModal('manager')}
-            className="flex items-center gap-1.5 px-3.5 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs rounded-xl shadow-md transition-all active:scale-95"
+            className="flex items-center gap-1.5 px-3.5 py-2 bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs rounded-xl shadow-sm transition-all active:scale-95 border border-amber-500/40 cursor-pointer"
             title="مساعد المدير الذكي للتحليلات المالية وقرارات الخزينة"
           >
             <Bot className="w-4 h-4 text-slate-950" />
@@ -439,7 +439,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ initialTab }) => {
               setResetPin('');
               setIsResetModalOpen(true);
             }}
-            className="flex items-center gap-1.5 px-3.5 py-2 bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs rounded-xl shadow-lg shadow-rose-600/30 transition-all active:scale-95"
+            className="flex items-center gap-1.5 px-3.5 py-2 bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs rounded-xl shadow-md shadow-rose-600/20 transition-all active:scale-95 cursor-pointer"
             title="تصفير الإيرادات، الخزينة، المستحقات، والحصص مع حفظ أرشيف سري"
           >
             <Lock className="w-4 h-4" />
@@ -452,7 +452,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ initialTab }) => {
               setResetPin('');
               setIsResetModalOpen(true);
             }}
-            className="flex items-center gap-1.5 px-3.5 py-2 bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs rounded-xl shadow-lg transition-all active:scale-95"
+            className="flex items-center gap-1.5 px-3.5 py-2 bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs rounded-xl shadow-md shadow-amber-600/20 transition-all active:scale-95 cursor-pointer"
             title="تصفير الخزنة من أي مبالغ افتراضية أو تجريبية للبدء على نظافة تماماً"
           >
             <Zap className="w-4 h-4" />
@@ -467,7 +467,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ initialTab }) => {
               setSelectedArchiveDetail(null);
               setIsSecretArchivesModalOpen(true);
             }}
-            className="flex items-center gap-1.5 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs rounded-xl shadow-lg shadow-indigo-600/30 transition-all active:scale-95"
+            className="flex items-center gap-1.5 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs rounded-xl shadow-md shadow-indigo-600/20 transition-all active:scale-95 cursor-pointer"
             title="السجل المالي السري للمدير للإحصائيات السابقة بعد التصفير"
           >
             <ShieldCheck className="w-4 h-4" />
@@ -481,162 +481,185 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ initialTab }) => {
               placeholder="بحث برقم الإيصال أو اسم الطالب..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="bg-slate-900 border border-slate-700 rounded-xl pr-9 pl-3 py-2 text-xs text-slate-100 placeholder-slate-400 focus:outline-none"
+              className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl pr-9 pl-3 py-2 text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500 shadow-xs"
             />
           </div>
         </div>
       </div>
 
-      {/* Financial Summary Cards */}
+      {/* Financial Summary Cards - 3D Luminous Jewel Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3.5">
-        <div className="p-4 rounded-2xl bg-slate-800/80 border border-slate-700/80">
-          <span className="text-xs text-slate-400 font-bold block mb-1">إجمالي المقبوضات</span>
-          <span className="text-2xl font-black text-emerald-400 font-mono">
-            {(summary?.totalRevenue || 0).toLocaleString()} <span className="text-xs font-bold">ج.م</span>
+        {/* Card 1: إجمالي المقبوضات */}
+        <div className="p-4 rounded-2xl bg-gradient-to-br from-emerald-50 via-white to-emerald-50/40 dark:from-emerald-950/40 dark:via-slate-900 dark:to-slate-900 border border-emerald-200/90 dark:border-emerald-500/40 shadow-sm hover:shadow-md transition-all relative overflow-hidden group">
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-xs text-emerald-800 dark:text-emerald-300 font-bold block">إجمالي المقبوضات</span>
+            <div className="p-1.5 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+              <TrendingUp className="w-4 h-4" />
+            </div>
+          </div>
+          <span className="text-2xl font-black text-emerald-700 dark:text-emerald-400 font-mono tracking-tight">
+            {(summary?.totalRevenue || 0).toLocaleString()} <span className="text-xs font-bold font-sans">ج.م</span>
           </span>
-          <div className="text-[11px] text-slate-400 mt-1">سندات قبض محصلة</div>
+          <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 font-medium">سندات قبض محصلة</div>
         </div>
 
-        <div className="p-4 rounded-2xl bg-slate-800/80 border border-slate-700/80">
-          <span className="text-xs text-slate-400 font-bold block mb-1">المصروفات والمنصرف</span>
-          <span className="text-2xl font-black text-rose-400 font-mono">
-            {(summary?.totalExpenses || 0).toLocaleString()} <span className="text-xs font-bold">ج.م</span>
+        {/* Card 2: المصروفات والمنصرف */}
+        <div className="p-4 rounded-2xl bg-gradient-to-br from-rose-50 via-white to-rose-50/40 dark:from-rose-950/40 dark:via-slate-900 dark:to-slate-900 border border-rose-200/90 dark:border-rose-500/40 shadow-sm hover:shadow-md transition-all relative overflow-hidden group">
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-xs text-rose-800 dark:text-rose-300 font-bold block">المصروفات والمنصرف</span>
+            <div className="p-1.5 rounded-xl bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20">
+              <Receipt className="w-4 h-4" />
+            </div>
+          </div>
+          <span className="text-2xl font-black text-rose-700 dark:text-rose-400 font-mono tracking-tight">
+            {(summary?.totalExpenses || 0).toLocaleString()} <span className="text-xs font-bold font-sans">ج.م</span>
           </span>
-          <div className="text-[11px] text-slate-400 mt-1">مصاريف تشغيلية</div>
+          <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 font-medium">مصاريف تشغيلية</div>
         </div>
 
-        <div className="p-4 rounded-2xl bg-slate-800/80 border border-slate-700/80">
-          <span className="text-xs text-slate-400 font-bold block mb-1">حصة المركز الصافية</span>
-          <span className="text-2xl font-black text-cyan-400 font-mono">
-            {(summary?.totalCenterShare || 0).toLocaleString()} <span className="text-xs font-bold">ج.م</span>
+        {/* Card 3: حصة المركز الصافية */}
+        <div className="p-4 rounded-2xl bg-gradient-to-br from-cyan-50 via-white to-cyan-50/40 dark:from-cyan-950/40 dark:via-slate-900 dark:to-slate-900 border border-cyan-200/90 dark:border-cyan-500/40 shadow-sm hover:shadow-md transition-all relative overflow-hidden group">
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-xs text-cyan-800 dark:text-cyan-300 font-bold block">حصة المركز الصافية</span>
+            <div className="p-1.5 rounded-xl bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border border-cyan-500/20">
+              <DollarSign className="w-4 h-4" />
+            </div>
+          </div>
+          <span className="text-2xl font-black text-cyan-700 dark:text-cyan-400 font-mono tracking-tight">
+            {(summary?.totalCenterShare || 0).toLocaleString()} <span className="text-xs font-bold font-sans">ج.م</span>
           </span>
-          <div className="text-[11px] text-slate-400 mt-1">أرباح المكان</div>
+          <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 font-medium">أرباح المكان</div>
         </div>
 
-        <div className="p-4 rounded-2xl bg-gradient-to-br from-amber-500/10 via-slate-800 to-slate-800 border border-amber-500/40">
-          <span className="text-xs text-amber-300 font-bold block mb-1">صافي الخزينة الفعلي</span>
-          <span className="text-2xl font-black text-amber-300 font-mono">
-            {(summary?.netTreasury || 0).toLocaleString()} <span className="text-xs font-bold">ج.م</span>
+        {/* Card 4: صافي الخزينة الفعلي */}
+        <div className="p-4 rounded-2xl bg-gradient-to-br from-amber-50 via-white to-amber-100/40 dark:from-amber-950/40 dark:via-slate-900 dark:to-slate-900 border-2 border-amber-400/80 dark:border-amber-500/60 shadow-md hover:shadow-lg transition-all relative overflow-hidden group ring-1 ring-amber-400/30">
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-xs text-amber-800 dark:text-amber-300 font-black block">صافي الخزينة الفعلي</span>
+            <div className="p-1.5 rounded-xl bg-amber-500/20 text-amber-600 dark:text-amber-300 border border-amber-400/40">
+              <Zap className="w-4 h-4" />
+            </div>
+          </div>
+          <span className="text-2xl font-black text-amber-700 dark:text-amber-300 font-mono tracking-tight">
+            {(summary?.netTreasury || 0).toLocaleString()} <span className="text-xs font-bold font-sans">ج.م</span>
           </span>
-          <div className="text-[11px] text-amber-400/80 mt-1">النقدية المتاحة</div>
+          <div className="text-[11px] text-amber-800 dark:text-amber-400/90 mt-1 font-bold">النقدية المتاحة</div>
         </div>
       </div>
 
       {/* AI Financial Forecasting & Insights */}
-      <div className="bg-slate-900 border border-amber-500/30 rounded-2xl p-5 mb-8 shadow-xl relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-2 h-full bg-gradient-to-b from-amber-500 to-emerald-500"></div>
-        <div className="flex items-center justify-between mb-6">
+      <div className="bg-white dark:bg-slate-900/90 border border-amber-500/30 dark:border-amber-500/40 rounded-3xl p-5 sm:p-6 mb-8 shadow-xl relative overflow-hidden backdrop-blur-xl">
+        <div className="absolute top-0 right-0 w-2.5 h-full bg-gradient-to-b from-amber-500 via-emerald-500 to-indigo-500"></div>
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-6">
           <div className="flex items-center gap-3">
-            <div className="p-2 bg-amber-500/20 text-amber-400 rounded-xl">
+            <div className="p-2.5 bg-gradient-to-br from-amber-500 to-amber-600 text-white rounded-2xl shadow-md shadow-amber-500/25">
               <Bot className="w-6 h-6" />
             </div>
             <div>
-              <h3 className="font-bold text-slate-100">الذكاء المالي الاستراتيجي (AI Insights)</h3>
-              <p className="text-xs text-slate-400 mt-1">تحليلات وتنبؤات مبنية على قراءة السجلات المالية وحركة الخزينة</p>
+              <h3 className="font-black text-slate-900 dark:text-slate-100 text-base">الذكاء المالي الاستراتيجي (AI Insights)</h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 font-medium">تحليلات وتنبؤات مبنية على قراءة السجلات المالية وحركة الخزينة</p>
             </div>
           </div>
           <button
             onClick={() => showToast('جاري توليد تقرير الذكاء الاصطناعي المالي المفصل...', 'info')}
-            className="flex items-center gap-2 px-3 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-500 rounded-lg text-xs font-bold transition-colors border border-amber-500/30"
+            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white rounded-xl text-xs font-black transition-all shadow-md shadow-amber-500/25 active:scale-95 shrink-0"
           >
-            <Sparkles className="w-3.5 h-3.5" />
-            توليد تقرير شامل
+            <Sparkles className="w-4 h-4" />
+            <span>توليد تقرير شامل</span>
           </button>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Chart 1: Revenue vs Expenses (Tailwind CSS Bar Chart) */}
-          <div className="bg-slate-950/50 p-4 rounded-xl border border-slate-800">
-            <h4 className="text-xs font-bold text-slate-300 mb-4 flex items-center gap-2">
-              <TrendingUp className="w-4 h-4 text-emerald-400" />
+          {/* Chart 1: Revenue vs Expenses (Tailwind CSS 3D Bar Chart) */}
+          <div className="bg-slate-50 dark:bg-slate-950/70 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
+            <h4 className="text-xs font-black text-slate-800 dark:text-slate-200 mb-4 flex items-center gap-2">
+              <TrendingUp className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
               مؤشر الإيرادات مقابل المنصرف
             </h4>
-            <div className="flex items-end justify-between h-32 gap-4 pb-2 border-b border-slate-800">
+            <div className="flex items-end justify-between h-36 gap-4 pb-2 border-b border-slate-200 dark:border-slate-800">
               <div className="flex flex-col items-center justify-end w-1/3 h-full gap-2 relative group">
-                <span className="text-[10px] text-emerald-400 absolute -top-5 opacity-0 group-hover:opacity-100 transition-opacity">{(summary?.totalRevenue || 0)} ج.م</span>
-                <div className="w-full bg-emerald-500/20 border border-emerald-500/50 rounded-t-md transition-all duration-1000 ease-out" style={{ height: `${Math.min(100, ((summary?.totalRevenue || 1) / (summary?.totalRevenue + summary?.totalExpenses || 1)) * 100)}%` }}></div>
-                <span className="text-xs text-slate-400 mt-2">الإيرادات</span>
+                <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-300 absolute -top-5 opacity-0 group-hover:opacity-100 transition-opacity bg-white dark:bg-slate-900 px-2 py-0.5 rounded shadow">{(summary?.totalRevenue || 0)} ج.م</span>
+                <div className="w-full bg-gradient-to-t from-emerald-500 to-emerald-400 border border-emerald-400 rounded-t-xl shadow-md shadow-emerald-500/20 transition-all duration-1000 ease-out" style={{ height: `${Math.max(14, Math.min(100, ((summary?.totalRevenue || 1) / ((summary?.totalRevenue || 0) + (summary?.totalExpenses || 0) || 1)) * 100))}%` }}></div>
+                <span className="text-xs font-bold text-slate-700 dark:text-slate-300 mt-2">الإيرادات</span>
               </div>
               <div className="flex flex-col items-center justify-end w-1/3 h-full gap-2 relative group">
-                <span className="text-[10px] text-rose-400 absolute -top-5 opacity-0 group-hover:opacity-100 transition-opacity">{(summary?.totalExpenses || 0)} ج.م</span>
-                <div className="w-full bg-rose-500/20 border border-rose-500/50 rounded-t-md transition-all duration-1000 ease-out" style={{ height: `${Math.min(100, ((summary?.totalExpenses || 1) / (summary?.totalRevenue + summary?.totalExpenses || 1)) * 100)}%` }}></div>
-                <span className="text-xs text-slate-400 mt-2">المصروفات</span>
+                <span className="text-[10px] font-bold text-rose-700 dark:text-rose-300 absolute -top-5 opacity-0 group-hover:opacity-100 transition-opacity bg-white dark:bg-slate-900 px-2 py-0.5 rounded shadow">{(summary?.totalExpenses || 0)} ج.م</span>
+                <div className="w-full bg-gradient-to-t from-rose-500 to-rose-400 border border-rose-400 rounded-t-xl shadow-md shadow-rose-500/20 transition-all duration-1000 ease-out" style={{ height: `${Math.max(14, Math.min(100, ((summary?.totalExpenses || 1) / ((summary?.totalRevenue || 0) + (summary?.totalExpenses || 0) || 1)) * 100))}%` }}></div>
+                <span className="text-xs font-bold text-slate-700 dark:text-slate-300 mt-2">المصروفات</span>
               </div>
               <div className="flex flex-col items-center justify-end w-1/3 h-full gap-2 relative group">
-                <span className="text-[10px] text-amber-400 absolute -top-5 opacity-0 group-hover:opacity-100 transition-opacity">{(summary?.netTreasury || 0)} ج.م</span>
-                <div className="w-full bg-amber-500/20 border border-amber-500/50 rounded-t-md transition-all duration-1000 ease-out" style={{ height: `${Math.min(100, ((summary?.netTreasury || 1) / (summary?.totalRevenue || 1)) * 100)}%` }}></div>
-                <span className="text-xs text-slate-400 mt-2">الصافي</span>
+                <span className="text-[10px] font-bold text-amber-700 dark:text-amber-300 absolute -top-5 opacity-0 group-hover:opacity-100 transition-opacity bg-white dark:bg-slate-900 px-2 py-0.5 rounded shadow">{(summary?.netTreasury || 0)} ج.م</span>
+                <div className="w-full bg-gradient-to-t from-amber-500 to-amber-400 border border-amber-400 rounded-t-xl shadow-md shadow-amber-500/20 transition-all duration-1000 ease-out" style={{ height: `${Math.max(14, Math.min(100, ((summary?.netTreasury || 1) / (summary?.totalRevenue || 1)) * 100))}%` }}></div>
+                <span className="text-xs font-bold text-slate-700 dark:text-slate-300 mt-2">الصافي</span>
               </div>
             </div>
           </div>
 
           {/* AI Predictive Recommendations */}
-          <div className="space-y-3">
-            <div className="bg-emerald-500/10 border border-emerald-500/30 p-3 rounded-xl flex items-start gap-3">
-              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+          <div className="space-y-3 flex flex-col justify-center">
+            <div className="bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-500/30 p-4 rounded-2xl flex items-start gap-3 shadow-xs">
+              <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
               <div>
-                <p className="text-xs font-bold text-emerald-300">معدل التحصيل ممتاز</p>
-                <p className="text-[10px] text-slate-400 mt-1">استناداً لحركة الخزينة، معدل تسديد الطلاب يقترب من 85%. يوصى بتشغيل حملات إعلانية للدورات القادمة لاستغلال التدفق النقدي.</p>
+                <p className="text-xs font-black text-emerald-900 dark:text-emerald-300">معدل التحصيل ممتاز</p>
+                <p className="text-[11px] text-slate-600 dark:text-slate-300 mt-1 leading-relaxed">استناداً لحركة الخزينة، معدل تسديد الطلاب يقترب من 85%. يوصى بتشغيل حملات إعلانية للدورات القادمة لاستغلال التدفق النقدي.</p>
               </div>
             </div>
-            <div className="bg-amber-500/10 border border-amber-500/30 p-3 rounded-xl flex items-start gap-3">
-              <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+            <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-500/30 p-4 rounded-2xl flex items-start gap-3 shadow-xs">
+              <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
               <div>
-                <p className="text-xs font-bold text-amber-300">مستحقات معلقة للمدربين</p>
-                <p className="text-[10px] text-slate-400 mt-1">يوجد {(summary?.totalTrainerDues || 0).toLocaleString()} ج.م قيد الانتظار كحصة للمدربين. يفضل جدولة صرفها الأسبوع القادم للحفاظ على استقرار السيولة.</p>
+                <p className="text-xs font-black text-amber-900 dark:text-amber-300">مستحقات معلقة للمدربين</p>
+                <p className="text-[11px] text-slate-600 dark:text-slate-300 mt-1 leading-relaxed">يوجد {(summary?.totalTrainerDues || 0).toLocaleString()} ج.م قيد الانتظار كحصة للمدربين. يفضل جدولة صرفها الأسبوع القادم للحفاظ على استقرار السيولة.</p>
               </div>
             </div>
           </div>
         </div>
       </div>
 
-
       {/* Tabs Switcher */}
-      <div className="flex flex-wrap items-center gap-2 border-b border-slate-700 pb-2">
+      <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 dark:border-slate-700 pb-3">
         <button
           onClick={() => setActiveTab('groupCollection')}
-          className={`px-4 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 shadow-md ${
+          className={`px-4 py-2.5 rounded-xl text-xs font-black transition-all flex items-center gap-2 shadow-sm active:scale-95 ${
             activeTab === 'groupCollection'
-              ? 'bg-gradient-to-r from-emerald-500 to-emerald-600 text-slate-950 font-black shadow-emerald-500/20 ring-2 ring-emerald-400'
-              : 'text-emerald-300 hover:text-white bg-emerald-950/40 border border-emerald-500/40'
+              ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-md shadow-emerald-600/30 ring-2 ring-emerald-400'
+              : 'text-emerald-800 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 bg-white dark:bg-slate-900 border border-emerald-300 dark:border-emerald-500/40'
           }`}
         >
-          <Zap className="w-3.5 h-3.5 text-emerald-400" />
+          <Zap className="w-4 h-4 text-emerald-500 dark:text-emerald-400" />
           <span>⚡ تحصيل المجموعات الفوري والإيصالات</span>
         </button>
 
         <button
           onClick={() => setActiveTab('payments')}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+          className={`px-4 py-2.5 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 shadow-sm active:scale-95 ${
             activeTab === 'payments'
-              ? 'bg-amber-500 text-slate-950 shadow'
-              : 'text-slate-400 hover:text-white bg-slate-800/60'
+              ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 shadow-md shadow-amber-500/30 ring-2 ring-amber-400'
+              : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/80 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700'
           }`}
         >
-          سندات القبض والأرشيف ({payments.length})
+          <span>سندات القبض والأرشيف ({payments.length})</span>
         </button>
 
         <button
           onClick={() => setActiveTab('expenses')}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+          className={`px-4 py-2.5 rounded-xl text-xs font-black transition-all flex items-center gap-2 shadow-sm active:scale-95 ${
             activeTab === 'expenses'
-              ? 'bg-rose-600 text-white shadow-lg shadow-rose-600/30'
-              : 'text-rose-300 hover:text-white bg-rose-950/40 border border-rose-500/40'
+              ? 'bg-gradient-to-r from-rose-600 to-rose-700 text-white shadow-md shadow-rose-600/30 ring-2 ring-rose-400'
+              : 'text-rose-800 dark:text-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/40 bg-white dark:bg-slate-900 border border-rose-300 dark:border-rose-500/40'
           }`}
         >
-          <Receipt className="w-3.5 h-3.5 text-rose-400" />
+          <Receipt className="w-4 h-4 text-rose-500 dark:text-rose-400" />
           <span>إدارة المصروفات والنفقات</span>
         </button>
 
         <button
           onClick={() => setActiveTab('pendingProofs')}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
+          className={`px-4 py-2.5 rounded-xl text-xs font-black transition-all flex items-center gap-2 shadow-sm active:scale-95 ${
             activeTab === 'pendingProofs'
-              ? 'bg-amber-500 text-slate-950 shadow'
-              : 'text-amber-300 hover:text-white bg-slate-800/60 border border-amber-500/30'
+              ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 shadow-md shadow-amber-500/30 ring-2 ring-amber-400'
+              : 'text-amber-800 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-950/40 bg-white dark:bg-slate-900 border border-amber-300 dark:border-amber-500/40'
           }`}
         >
-          <Camera className="w-3.5 h-3.5" />
+          <Camera className="w-4 h-4 text-amber-600 dark:text-amber-400" />
           <span>طلبات السداد بانتظار التحقق</span>
           {pendingProofs.length > 0 && (
             <span className="py-0.5 px-2 rounded-full bg-rose-500 text-white font-mono text-[10px] font-black animate-pulse">
@@ -647,26 +670,26 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ initialTab }) => {
 
         <button
           onClick={() => setActiveTab('settlements')}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+          className={`px-4 py-2.5 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 shadow-sm active:scale-95 ${
             activeTab === 'settlements'
-              ? 'bg-amber-500 text-slate-950 shadow'
-              : 'text-slate-400 hover:text-white bg-slate-800/60'
+              ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 shadow-md shadow-amber-500/30 ring-2 ring-amber-400'
+              : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/80 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700'
           }`}
         >
-          سندات صرف مستحقات المدربين ({settlements.length})
+          <span>سندات صرف مستحقات المدربين ({settlements.length})</span>
         </button>
 
         {isManagerOrAccountant && (
           <button
             onClick={() => setActiveTab('exemptions')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+            className={`px-4 py-2.5 rounded-xl text-xs font-black transition-all flex items-center gap-2 shadow-sm active:scale-95 ${
               activeTab === 'exemptions'
-                ? 'bg-purple-600 text-white shadow-lg ring-2 ring-purple-400'
-                : 'text-purple-300 hover:text-white bg-purple-950/40 border border-purple-500/40'
+                ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-md shadow-purple-600/30 ring-2 ring-purple-400'
+                : 'text-purple-800 dark:text-purple-300 hover:bg-purple-50 dark:hover:bg-purple-950/40 bg-white dark:bg-slate-900 border border-purple-300 dark:border-purple-500/40'
             }`}
           >
-            <Lock className="w-3.5 h-3.5 text-purple-400" />
-            إحصائية الإعفاءات والخصومات السرية ({exemptTrainees.length})
+            <Lock className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+            <span>إحصائية الإعفاءات والخصومات السرية ({exemptTrainees.length})</span>
           </button>
         )}
       </div>
@@ -683,26 +706,26 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ initialTab }) => {
 
       {/* Pending Proofs Review View */}
       {activeTab === 'pendingProofs' && (
-        <div className="bg-slate-800/80 border border-slate-700/80 rounded-2xl shadow-xl p-5 space-y-4 backdrop-blur-md">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-slate-700 pb-3">
+        <div className="bg-white dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 rounded-3xl shadow-sm dark:shadow-xl p-5 space-y-4 backdrop-blur-md">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-700 pb-3">
             <div>
-              <h3 className="text-sm font-black text-white flex items-center gap-2">
-                <Camera className="w-4 h-4 text-amber-400" />
+              <h3 className="text-sm font-black text-slate-900 dark:text-white flex items-center gap-2">
+                <Camera className="w-4 h-4 text-amber-500 dark:text-amber-400" />
                 <span>إيصالات ولقطات الشاشة المرفوعة بانتظار الاعتماد ⏳</span>
               </h3>
-              <p className="text-xs text-slate-400 mt-0.5">
+              <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
                 مراجعة التحويلات المالية على فودافون كاش / انستا باي / الحساب البنكي، وتأكيد السداد للطالب
               </p>
             </div>
-            <span className="py-1 px-3 rounded-xl bg-amber-500/20 text-amber-300 border border-amber-500/30 font-bold text-xs">
+            <span className="py-1 px-3 rounded-xl bg-amber-100 text-amber-900 dark:bg-amber-500/20 dark:text-amber-300 border border-amber-300 dark:border-amber-500/30 font-bold text-xs">
               عدد الطلبات المعلقة: {pendingProofs.length}
             </span>
           </div>
 
           {pendingProofs.length === 0 ? (
-            <div className="text-center py-12 text-slate-400 space-y-2">
-              <CheckCircle2 className="w-12 h-12 text-emerald-400 mx-auto opacity-80" />
-              <p className="font-bold text-sm text-slate-200">لا توجد أي طلبات سداد إلكترونية معلقة حالياً!</p>
+            <div className="text-center py-12 text-slate-500 dark:text-slate-400 space-y-2">
+              <CheckCircle2 className="w-12 h-12 text-emerald-500 dark:text-emerald-400 mx-auto opacity-80" />
+              <p className="font-bold text-sm text-slate-800 dark:text-slate-200">لا توجد أي طلبات سداد إلكترونية معلقة حالياً!</p>
               <p className="text-xs text-slate-500">تمت مراجعة جميع الإيصالات المرفوعة من أولياء الأمور.</p>
             </div>
           ) : (
@@ -710,11 +733,11 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ initialTab }) => {
               {pendingProofs.map((proof) => (
                 <div
                   key={proof.id}
-                  className="p-4 rounded-2xl bg-slate-900 border border-slate-700/80 hover:border-amber-500/50 transition-all space-y-3"
+                  className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700/80 hover:border-amber-500/50 transition-all space-y-3"
                 >
-                  <div className="flex items-start justify-between gap-2 border-b border-slate-800 pb-2">
+                  <div className="flex items-start justify-between gap-2 border-b border-slate-200 dark:border-slate-800 pb-2">
                     <div>
-                      <span className="text-xs font-black text-white block">{proof.traineeName || 'طالب غير محدد'}</span>
+                      <span className="text-xs font-black text-slate-900 dark:text-white block">{proof.traineeName || 'طالب غير محدد'}</span>
                       <span className="text-[11px] font-mono font-bold text-amber-400">كود: {proof.traineeCode || '—'}</span>
                     </div>
                     <div className="text-left">
@@ -791,10 +814,10 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ initialTab }) => {
 
       {/* Table: Receipts / Payments */}
       {activeTab === 'payments' && (
-        <div className="bg-slate-800/80 border border-slate-700/80 rounded-2xl shadow-xl overflow-hidden backdrop-blur-md">
+        <div className="bg-white dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 rounded-3xl shadow-sm dark:shadow-xl overflow-hidden backdrop-blur-md">
           <div className="overflow-x-auto">
             <table className="w-full text-right text-xs">
-              <thead className="bg-slate-900/90 text-slate-300 font-bold border-b border-slate-700 select-none">
+              <thead className="bg-slate-50 dark:bg-slate-900/90 text-slate-700 dark:text-slate-300 font-bold border-b border-slate-200 dark:border-slate-700 select-none">
                 <tr>
                   <th className="p-3.5">رقم الإيصال</th>
                   <th className="p-3.5">التاريخ والوقت</th>
@@ -807,7 +830,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ initialTab }) => {
                   <th className="p-3.5 text-center">أصل المبلغ (منين؟) / طباعة</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-700/60 text-slate-200">
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-700/60 text-slate-800 dark:text-slate-200">
                 {isLoading ? (
                   <tr>
                     <td colSpan={9} className="py-12 text-center text-slate-400">
@@ -816,32 +839,32 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ initialTab }) => {
                   </tr>
                 ) : filteredPayments.length === 0 ? (
                   <tr>
-                    <td colSpan={9} className="py-12 text-center text-slate-400">
+                    <td colSpan={9} className="py-12 text-center text-slate-500">
                       لا توجد سندات قبض مسجلة.
                     </td>
                   </tr>
                 ) : (
                   filteredPayments.map((p) => (
-                    <tr key={p.id} className="hover:bg-slate-700/40 transition-colors">
-                      <td className="p-3.5 font-mono font-bold text-amber-400">{p.receiptNumber}</td>
-                      <td className="p-3.5 text-slate-400 font-mono">{p.date}</td>
-                      <td className="p-3.5 font-bold text-slate-100">
+                    <tr key={p.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-700/40 transition-colors">
+                      <td className="p-3.5 font-mono font-bold text-amber-600 dark:text-amber-400">{p.receiptNumber}</td>
+                      <td className="p-3.5 text-slate-500 dark:text-slate-400 font-mono">{p.date}</td>
+                      <td className="p-3.5 font-bold text-slate-900 dark:text-slate-100">
                         {p.traineeName || 'متدرب'}
                         {p.traineeCode && (
-                          <span className="mr-1 text-[10px] text-slate-400 font-mono">
+                          <span className="mr-1 text-[10px] text-slate-500 dark:text-slate-400 font-mono">
                             ({p.traineeCode})
                           </span>
                         )}
                       </td>
-                      <td className="p-3.5 text-slate-300">{p.courseName || '-'}</td>
-                      <td className="p-3.5 text-slate-300 font-bold text-xs">
+                      <td className="p-3.5 text-slate-600 dark:text-slate-300">{p.courseName || '-'}</td>
+                      <td className="p-3.5 text-slate-700 dark:text-slate-300 font-bold text-xs">
                         {p.submittedByParentName || p.traineeName || 'ولي الأمر / الطالب'}
                       </td>
-                      <td className="p-3.5 font-mono font-black text-emerald-400 text-sm">
+                      <td className="p-3.5 font-mono font-black text-emerald-700 dark:text-emerald-400 text-sm">
                         {p.amount} ج.م
                       </td>
                       <td className="p-3.5">
-                        <span className="text-[11px] bg-slate-900 px-2 py-0.5 rounded border border-slate-700">
+                        <span className="text-[11px] bg-slate-100 dark:bg-slate-900 text-slate-700 dark:text-slate-300 px-2 py-0.5 rounded border border-slate-200 dark:border-slate-700">
                           {p.paymentMethod === 'cash'
                             ? 'نقداً'
                             : p.paymentMethod === 'vodafone_cash'
@@ -851,26 +874,26 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ initialTab }) => {
                             : 'تحويل'}
                         </span>
                       </td>
-                      <td className="p-3.5 text-slate-300 font-bold">{p.receivedByUserName || 'مسؤول الخزينة'}</td>
+                      <td className="p-3.5 text-slate-600 dark:text-slate-300 font-bold">{p.receivedByUserName || 'مسؤول الخزينة'}</td>
                       <td className="p-3.5 text-center flex items-center justify-center gap-1.5">
                         <button
                           onClick={() => setSelectedAuditPayment(p)}
-                          className="px-2 py-1 bg-indigo-950/80 hover:bg-indigo-900 border border-indigo-500/40 text-indigo-300 rounded-lg text-[10px] font-bold flex items-center gap-1"
+                          className="px-2 py-1 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/80 dark:hover:bg-indigo-900 border border-indigo-200 dark:border-indigo-500/40 text-indigo-700 dark:text-indigo-300 rounded-lg text-[10px] font-bold flex items-center gap-1 shadow-xs transition-colors"
                           title="تتبع أصل ومصدر المبلغ (عايز اعرف الفلوس دي جات منين)"
                         >
-                          <ShieldCheck className="w-3 h-3 text-indigo-400" />
+                          <ShieldCheck className="w-3 h-3 text-indigo-500 dark:text-indigo-400" />
                           <span>منين؟</span>
                         </button>
                         <button
                           onClick={() => setSelectedOfficialReceipt(p)}
-                          className="p-1.5 bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-500/40 text-emerald-300 rounded-lg transition-colors"
+                          className="p-1.5 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/80 dark:hover:bg-emerald-900 border border-emerald-200 dark:border-emerald-500/40 text-emerald-700 dark:text-emerald-300 rounded-lg transition-colors shadow-xs"
                           title="عرض الإيصال الرسمي الشامل القابل للحفظ والمشاركة"
                         >
                           <Receipt className="w-3.5 h-3.5" />
                         </button>
                         <button
                           onClick={() => handlePrintReceipt(p)}
-                          className="p-1.5 bg-slate-700 hover:bg-slate-600 text-amber-300 rounded-lg transition-colors"
+                          className="p-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-amber-700 dark:text-amber-300 rounded-lg transition-colors shadow-xs"
                           title="طباعة سند القبض السريع"
                         >
                           <Printer className="w-3.5 h-3.5" />
@@ -887,10 +910,10 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ initialTab }) => {
 
       {/* Table: Settlements */}
       {activeTab === 'settlements' && (
-        <div className="bg-slate-800/80 border border-slate-700/80 rounded-2xl shadow-xl overflow-hidden backdrop-blur-md">
+        <div className="bg-white dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 rounded-3xl shadow-sm dark:shadow-xl overflow-hidden backdrop-blur-md">
           <div className="overflow-x-auto">
             <table className="w-full text-right text-xs">
-              <thead className="bg-slate-900/90 text-slate-300 font-bold border-b border-slate-700 select-none">
+              <thead className="bg-slate-50 dark:bg-slate-900/90 text-slate-700 dark:text-slate-300 font-bold border-b border-slate-200 dark:border-slate-700 select-none">
                 <tr>
                   <th className="p-3.5">رقم السند</th>
                   <th className="p-3.5">التاريخ</th>
@@ -901,25 +924,25 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ initialTab }) => {
                   <th className="p-3.5">المسؤول</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-700/60 text-slate-200">
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-700/60 text-slate-800 dark:text-slate-200">
                 {settlements.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="py-12 text-center text-slate-400">
+                    <td colSpan={7} className="py-12 text-center text-slate-500">
                       لا توجد تسويات منصرفة للمدربين حتى الآن.
                     </td>
                   </tr>
                 ) : (
                   settlements.map((s) => (
-                    <tr key={s.id} className="hover:bg-slate-700/40 transition-colors">
-                      <td className="p-3.5 font-mono font-bold text-amber-400">{s.settlementNumber}</td>
-                      <td className="p-3.5 font-mono text-slate-400">{s.date}</td>
-                      <td className="p-3.5 font-bold text-slate-100">{s.trainerName || 'المدرب'}</td>
-                      <td className="p-3.5 font-mono font-black text-rose-400 text-sm">
+                    <tr key={s.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-700/40 transition-colors">
+                      <td className="p-3.5 font-mono font-bold text-amber-600 dark:text-amber-400">{s.settlementNumber}</td>
+                      <td className="p-3.5 font-mono text-slate-500 dark:text-slate-400">{s.date}</td>
+                      <td className="p-3.5 font-bold text-slate-900 dark:text-slate-100">{s.trainerName || 'المدرب'}</td>
+                      <td className="p-3.5 font-mono font-black text-rose-600 dark:text-rose-400 text-sm">
                         {s.amount} ج.م
                       </td>
-                      <td className="p-3.5 text-slate-300">{s.paymentMethod}</td>
-                      <td className="p-3.5 text-slate-300">{s.notes}</td>
-                      <td className="p-3.5 text-slate-400">{s.paidByUserName || 'المدير المالي'}</td>
+                      <td className="p-3.5 text-slate-600 dark:text-slate-300">{s.paymentMethod}</td>
+                      <td className="p-3.5 text-slate-600 dark:text-slate-300">{s.notes}</td>
+                      <td className="p-3.5 text-slate-500 dark:text-slate-400">{s.paidByUserName || 'المدير المالي'}</td>
                     </tr>
                   ))
                 )}
@@ -933,16 +956,16 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ initialTab }) => {
       {activeTab === 'exemptions' && isManagerOrAccountant && (
         <div className="space-y-4 animate-fadeIn">
           {/* Secret Alert Banner */}
-          <div className="bg-purple-950/80 border border-purple-500/60 p-4 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-2xl">
+          <div className="bg-gradient-to-r from-purple-50 via-white to-purple-50/40 dark:from-purple-950/80 dark:via-purple-950 dark:to-purple-900/60 border border-purple-200 dark:border-purple-500/60 p-4 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-sm dark:shadow-2xl">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-purple-900/90 border border-purple-400 flex items-center justify-center shrink-0">
-                <Lock className="w-5 h-5 text-purple-300" />
+              <div className="w-10 h-10 rounded-xl bg-purple-100 dark:bg-purple-900/90 border border-purple-300 dark:border-purple-400 flex items-center justify-center shrink-0">
+                <Lock className="w-5 h-5 text-purple-700 dark:text-purple-300" />
               </div>
               <div>
-                <h3 className="font-black text-sm text-purple-100 flex items-center gap-2">
+                <h3 className="font-black text-sm text-purple-950 dark:text-purple-100 flex items-center gap-2">
                   تقرير إحصائي خاص ومحمي: الخصومات الإجمالية والإعفاءات الكاملة
                 </h3>
-                <p className="text-xs text-purple-300/80 mt-0.5">
+                <p className="text-xs text-purple-800 dark:text-purple-300/80 mt-0.5">
                   بيانات سرية ومحسوبة بدقة لمدير النظام والمدير المالي، تشمل إعفاءات أبناء المالك، المنح، وخصومات الأخوات (20%).
                 </p>
               </div>
@@ -952,13 +975,13 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ initialTab }) => {
               <button
                 onClick={handleBatchSyncRecords}
                 disabled={isSyncingTrainees}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-800 hover:bg-purple-700 text-purple-100 text-xs font-bold rounded-xl border border-purple-500/50 shadow transition-all active:scale-95 disabled:opacity-50"
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-700 hover:bg-purple-600 text-white text-xs font-bold rounded-xl border border-purple-500 shadow-sm transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
                 title="إعادة فحص ومزامنة كشوفات الأخوات والإعفاءات تلقائياً"
               >
                 <RefreshCw className={`w-3.5 h-3.5 ${isSyncingTrainees ? 'animate-spin' : ''}`} />
                 <span>{isSyncingTrainees ? 'جاري التدقيق...' : '🔄 تدقيق وتطوير الكشوف تلقائياً'}</span>
               </button>
-              <span className="text-xs font-bold text-purple-300 bg-purple-900/80 px-3 py-1.5 rounded-xl border border-purple-500/40 shrink-0">
+              <span className="text-xs font-bold text-purple-900 dark:text-purple-300 bg-purple-100 dark:bg-purple-900/80 px-3 py-1.5 rounded-xl border border-purple-300 dark:border-purple-500/40 shrink-0">
                 🔒 سري للغاية
               </span>
             </div>
@@ -966,42 +989,42 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ initialTab }) => {
 
           {/* Stats Summary Grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3.5">
-            <div className="p-4 rounded-2xl bg-slate-800/90 border border-amber-500/40 space-y-1">
-              <span className="text-xs text-slate-400 font-bold block">إجمالي المستفيدين (خصومات وإعفاءات)</span>
-              <span className="text-2xl font-black text-amber-400 font-mono">
-                {allDiscountAndExemptTrainees.length} <span className="text-xs font-bold">طالب</span>
+            <div className="p-4 rounded-2xl bg-amber-50/70 dark:bg-slate-800/90 border border-amber-200 dark:border-amber-500/40 space-y-1 shadow-xs">
+              <span className="text-xs text-amber-900 dark:text-slate-400 font-bold block">إجمالي المستفيدين (خصومات وإعفاءات)</span>
+              <span className="text-2xl font-black text-amber-700 dark:text-amber-400 font-mono">
+                {allDiscountAndExemptTrainees.length} <span className="text-xs font-bold font-sans">طالب</span>
               </span>
-              <div className="text-[11px] text-amber-300 font-mono font-bold">
+              <div className="text-[11px] text-amber-900 dark:text-amber-300 font-mono font-bold">
                 الوفر الإجمالي: {totalAllDiscountsAndExemptionsValue.toLocaleString()} ج.م
               </div>
             </div>
 
-            <div className="p-4 rounded-2xl bg-slate-800/90 border border-purple-500/40 space-y-1">
-              <span className="text-xs text-slate-400 font-bold block">الإعفاءات الكلية (100%)</span>
-              <span className="text-2xl font-black text-purple-300 font-mono">
-                {exemptTrainees.length} <span className="text-xs font-bold">طالب</span>
+            <div className="p-4 rounded-2xl bg-purple-50/70 dark:bg-slate-800/90 border border-purple-200 dark:border-purple-500/40 space-y-1 shadow-xs">
+              <span className="text-xs text-purple-900 dark:text-slate-400 font-bold block">الإعفاءات الكلية (100%)</span>
+              <span className="text-2xl font-black text-purple-700 dark:text-purple-300 font-mono">
+                {exemptTrainees.length} <span className="text-xs font-bold font-sans">طالب</span>
               </span>
-              <div className="text-[11px] text-purple-200 font-mono font-bold">
+              <div className="text-[11px] text-purple-900 dark:text-purple-200 font-mono font-bold">
                 القيمة: {totalExemptValue.toLocaleString()} ج.م
               </div>
             </div>
 
-            <div className="p-4 rounded-2xl bg-slate-800/90 border border-cyan-500/40 space-y-1">
-              <span className="text-xs text-slate-400 font-bold block">خصم الأخوات المسجل (20%)</span>
-              <span className="text-2xl font-black text-cyan-400 font-mono">
-                {siblingDiscountTrainees.length} <span className="text-xs font-bold">طالب</span>
+            <div className="p-4 rounded-2xl bg-cyan-50/70 dark:bg-slate-800/90 border border-cyan-200 dark:border-cyan-500/40 space-y-1 shadow-xs">
+              <span className="text-xs text-cyan-900 dark:text-slate-400 font-bold block">خصم الأخوات المسجل (20%)</span>
+              <span className="text-2xl font-black text-cyan-700 dark:text-cyan-400 font-mono">
+                {siblingDiscountTrainees.length} <span className="text-xs font-bold font-sans">طالب</span>
               </span>
-              <div className="text-[11px] text-cyan-200 font-mono font-bold">
+              <div className="text-[11px] text-cyan-900 dark:text-cyan-200 font-mono font-bold">
                 الوفر: {totalSiblingDiscountValue.toLocaleString()} ج.م
               </div>
             </div>
 
-            <div className="p-4 rounded-2xl bg-slate-800/90 border border-emerald-500/40 space-y-1">
-              <span className="text-xs text-slate-400 font-bold block">أبناء المالك والإدارة والمنح</span>
-              <span className="text-2xl font-black text-emerald-400 font-mono">
-                {mgmtChildrenCount + friendChildrenCount + scholarshipCount} <span className="text-xs font-bold">طالب</span>
+            <div className="p-4 rounded-2xl bg-emerald-50/70 dark:bg-slate-800/90 border border-emerald-200 dark:border-emerald-500/40 space-y-1 shadow-xs">
+              <span className="text-xs text-emerald-900 dark:text-slate-400 font-bold block">أبناء المالك والإدارة والمنح</span>
+              <span className="text-2xl font-black text-emerald-700 dark:text-emerald-400 font-mono">
+                {mgmtChildrenCount + friendChildrenCount + scholarshipCount} <span className="text-xs font-bold font-sans">طالب</span>
               </span>
-              <div className="text-[11px] text-slate-400">
+              <div className="text-[11px] text-emerald-800 dark:text-slate-400 font-medium">
                 إدارة: {mgmtChildrenCount} | أصدقاء ومنح: {friendChildrenCount + scholarshipCount}
               </div>
             </div>
@@ -1011,42 +1034,42 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ initialTab }) => {
           <div className="flex items-center gap-2 overflow-x-auto pb-1 select-none">
             <button
               onClick={() => setExemptionSubTab('all')}
-              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 ${
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 cursor-pointer ${
                 exemptionSubTab === 'all'
-                  ? 'bg-amber-500 text-slate-950 shadow-md'
-                  : 'bg-slate-800 text-slate-300 hover:bg-slate-700 border border-slate-700'
+                  ? 'bg-amber-500 text-slate-950 shadow-md font-black'
+                  : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700 dark:border-slate-700'
               }`}
             >
               <span>كل الخصومات والإعفاءات</span>
-              <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-slate-900/30 font-mono">
+              <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-slate-200 dark:bg-slate-900/40 font-mono">
                 {allDiscountAndExemptTrainees.length}
               </span>
             </button>
 
             <button
               onClick={() => setExemptionSubTab('exempt')}
-              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 ${
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 cursor-pointer ${
                 exemptionSubTab === 'exempt'
                   ? 'bg-purple-600 text-white shadow-md shadow-purple-600/30'
-                  : 'bg-slate-800 text-slate-300 hover:bg-slate-700 border border-slate-700'
+                  : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700 dark:border-slate-700'
               }`}
             >
               <span>👑 الإعفاءات الكاملة (100%)</span>
-              <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-purple-950/60 font-mono text-purple-200">
+              <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-purple-100 text-purple-900 dark:bg-purple-950/60 dark:text-purple-200 font-mono">
                 {exemptTrainees.length}
               </span>
             </button>
 
             <button
               onClick={() => setExemptionSubTab('sibling')}
-              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 ${
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 cursor-pointer ${
                 exemptionSubTab === 'sibling'
                   ? 'bg-cyan-600 text-white shadow-md shadow-cyan-600/30'
-                  : 'bg-slate-800 text-slate-300 hover:bg-slate-700 border border-slate-700'
+                  : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700 dark:border-slate-700'
               }`}
             >
               <span>👨‍👩‍👧‍👦 خصم الأخوات (20%)</span>
-              <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-cyan-950/60 font-mono text-cyan-200">
+              <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-cyan-100 text-cyan-900 dark:bg-cyan-950/60 dark:text-cyan-200 font-mono">
                 {siblingDiscountTrainees.length}
               </span>
             </button>
@@ -1054,14 +1077,14 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ initialTab }) => {
             {customDiscountTrainees.length > 0 && (
               <button
                 onClick={() => setExemptionSubTab('custom')}
-                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 ${
+                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 cursor-pointer ${
                   exemptionSubTab === 'custom'
                     ? 'bg-emerald-600 text-white shadow-md'
-                    : 'bg-slate-800 text-slate-300 hover:bg-slate-700 border border-slate-700'
+                    : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700 dark:border-slate-700'
                 }`}
               >
                 <span>🏷️ خصومات استثنائية</span>
-                <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-emerald-950/60 font-mono text-emerald-200">
+                <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-emerald-100 text-emerald-900 dark:bg-emerald-950/60 dark:text-emerald-200 font-mono">
                   {customDiscountTrainees.length}
                 </span>
               </button>
@@ -1069,20 +1092,20 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ initialTab }) => {
           </div>
 
           {/* Detailed Confidential Table */}
-          <div className="bg-slate-800/90 border border-slate-700/80 rounded-2xl shadow-xl overflow-hidden">
-            <div className="p-3.5 bg-slate-900 border-b border-slate-700 flex items-center justify-between">
-              <h4 className="font-bold text-xs text-slate-200 flex items-center gap-2">
-                <ShieldCheck className="w-4 h-4 text-amber-400" />
+          <div className="bg-white dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700/80 rounded-3xl shadow-sm dark:shadow-xl overflow-hidden">
+            <div className="p-3.5 bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+              <h4 className="font-bold text-xs text-slate-800 dark:text-slate-200 flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 text-amber-500" />
                 كشف تفصيلي بالطلاب المستفيدين من الخصومات والإعفاءات (خاص بالإدارة)
               </h4>
-              <span className="text-[11px] text-slate-400 font-mono font-bold">
+              <span className="text-[11px] text-slate-500 dark:text-slate-400 font-mono font-bold">
                 عدد السجلات: {displayedExemptTrainees.length}
               </span>
             </div>
 
             <div className="overflow-x-auto">
               <table className="w-full text-right text-xs">
-                <thead className="bg-slate-950/80 text-slate-300 font-bold border-b border-slate-700 select-none">
+                <thead className="bg-slate-100/80 dark:bg-slate-950/80 text-slate-700 dark:text-slate-300 font-bold border-b border-slate-200 dark:border-slate-700 select-none">
                   <tr>
                     <th className="p-3.5">الكود</th>
                     <th className="p-3.5">اسم المتدرب</th>
@@ -1094,10 +1117,10 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ initialTab }) => {
                     <th className="p-3.5">ملاحظات وقيد السرية</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-700/60 text-slate-200">
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-700/60 text-slate-800 dark:text-slate-200">
                   {displayedExemptTrainees.length === 0 ? (
                     <tr>
-                      <td colSpan={8} className="py-12 text-center text-slate-400">
+                      <td colSpan={8} className="py-12 text-center text-slate-500">
                         لا توجد سجلات مطابقة للتصنيف المحدد حالياً.
                       </td>
                     </tr>
@@ -1105,35 +1128,35 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ initialTab }) => {
                     displayedExemptTrainees.map((t) => {
                       const course = courses.find((c) => c.id === t.courseId || c.name === t.courseName);
                       return (
-                        <tr key={t.id} className="hover:bg-slate-700/40 transition-colors">
-                          <td className="p-3.5 font-mono font-bold text-amber-400">{t.code}</td>
-                          <td className="p-3.5 font-bold text-slate-100">{t.fullName}</td>
-                          <td className="p-3.5 text-slate-300">
+                        <tr key={t.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-700/40 transition-colors">
+                          <td className="p-3.5 font-mono font-bold text-amber-600 dark:text-amber-400">{t.code}</td>
+                          <td className="p-3.5 font-bold text-slate-900 dark:text-slate-100">{t.fullName}</td>
+                          <td className="p-3.5 text-slate-600 dark:text-slate-300">
                             <div>{t.parentName || 'غير مدون'}</div>
-                            <div className="text-[10px] text-slate-400 font-mono">{t.parentPhone || t.phone}</div>
+                            <div className="text-[10px] text-slate-500 dark:text-slate-400 font-mono">{t.parentPhone || t.phone}</div>
                           </td>
-                          <td className="p-3.5 text-slate-300">
+                          <td className="p-3.5 text-slate-600 dark:text-slate-300">
                             <div className="font-semibold">{course?.name || t.courseName || 'دورة تدريبية'}</div>
-                            <div className="text-[10px] text-slate-400 font-mono">السعر: {t.computedFee} ج.م</div>
+                            <div className="text-[10px] text-slate-500 dark:text-slate-400 font-mono">السعر: {t.computedFee} ج.م</div>
                           </td>
                           <td className="p-3.5">
                             <span className={`px-2.5 py-1 rounded-xl text-[10px] font-bold border ${
                               t.categoryType === 'exempt'
-                                ? 'bg-purple-900/70 border-purple-500/50 text-purple-200'
+                                ? 'bg-purple-100 text-purple-900 border-purple-300 dark:bg-purple-900/70 dark:border-purple-500/50 dark:text-purple-200'
                                 : t.categoryType === 'sibling_discount'
-                                ? 'bg-cyan-900/70 border-cyan-500/50 text-cyan-200'
-                                : 'bg-emerald-900/70 border-emerald-500/50 text-emerald-200'
+                                ? 'bg-cyan-100 text-cyan-900 border-cyan-300 dark:bg-cyan-900/70 dark:border-cyan-500/50 dark:text-cyan-200'
+                                : 'bg-emerald-100 text-emerald-900 border-emerald-300 dark:bg-emerald-900/70 dark:border-emerald-500/50 dark:text-emerald-200'
                             }`}>
                               {t.discountLabel}
                             </span>
                           </td>
-                          <td className="p-3.5 font-mono font-black text-amber-400 text-sm">
+                          <td className="p-3.5 font-mono font-black text-amber-600 dark:text-amber-400 text-sm">
                             {t.computedDiscount} ج.م
                           </td>
-                          <td className="p-3.5 font-mono font-bold text-emerald-400 text-sm">
+                          <td className="p-3.5 font-mono font-bold text-emerald-600 dark:text-emerald-400 text-sm">
                             {t.computedNet} ج.م
                           </td>
-                          <td className="p-3.5 text-slate-400 text-[11px] max-w-xs truncate">
+                          <td className="p-3.5 text-slate-500 dark:text-slate-400 text-[11px] max-w-xs truncate">
                             {t.notes || 'مسجل بالنظام المالي'}
                           </td>
                         </tr>

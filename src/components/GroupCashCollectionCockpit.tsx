@@ -351,31 +351,31 @@ export const GroupCashCollectionCockpit: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Header Banner */}
-      <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-indigo-950 border border-slate-700/80 rounded-3xl p-5 sm:p-6 shadow-2xl relative overflow-hidden">
-        <div className="absolute -top-10 -left-10 w-48 h-48 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute -bottom-10 -right-10 w-48 h-48 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
+      <div className="bg-gradient-to-r from-emerald-50/90 via-teal-50/70 to-indigo-50/80 dark:from-slate-900 dark:via-indigo-950 dark:to-slate-900 border border-emerald-200/90 dark:border-indigo-500/40 rounded-3xl p-5 sm:p-6 shadow-sm dark:shadow-2xl relative overflow-hidden text-slate-900 dark:text-white">
+        <div className="absolute -top-10 -left-10 w-48 h-48 bg-amber-500/10 dark:bg-amber-500/15 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute -bottom-10 -right-10 w-48 h-48 bg-emerald-500/10 dark:bg-emerald-500/15 rounded-full blur-3xl pointer-events-none" />
 
         <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 relative z-10">
           <div>
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-black mb-2">
-              <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-100 text-amber-900 dark:bg-amber-500/20 dark:text-amber-300 border border-amber-300 dark:border-amber-500/30 text-xs font-black mb-2">
+              <Sparkles className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
               <span>لوحة التحصيل المالي المباشر للمجموعات</span>
             </div>
-            <h1 className="text-xl sm:text-2xl font-black text-white flex items-center gap-2.5">
-              <DollarSign className="w-7 h-7 text-emerald-400 p-1 bg-emerald-950/60 border border-emerald-500/40 rounded-xl" />
+            <h1 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white flex items-center gap-2.5">
+              <DollarSign className="w-7 h-7 text-emerald-700 dark:text-emerald-400 p-1 bg-emerald-100 dark:bg-emerald-950/80 border border-emerald-300 dark:border-emerald-500/50 rounded-xl" />
               تحصيل المجموعات الفوري وإصدار الإيصالات المعتمدة
             </h1>
-            <p className="text-xs sm:text-sm text-slate-300 mt-1 max-w-2xl">
+            <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-200 mt-1 max-w-2xl font-medium">
               اختر المجموعة والفرع، واستلم المبالغ نقدياً بنقرة واحدة، مع إصدار فوري للإيصال الرسمي، والتحديث التلقائي لحالة السداد حتى الشهر المقبل، مع الإرسال المباشر عبر واتساب والأرشفة السحابية.
             </p>
           </div>
 
           <div className="flex items-center gap-2 shrink-0 flex-wrap">
-            <div className="bg-slate-950/70 border border-slate-700 px-3.5 py-2 rounded-2xl flex items-center gap-2.5">
-              <HardDrive className="w-4 h-4 text-emerald-400" />
+            <div className="bg-white/80 dark:bg-white/10 backdrop-blur-md border border-slate-200 dark:border-white/20 px-3.5 py-2 rounded-2xl flex items-center gap-2.5 shadow-xs dark:shadow-lg">
+              <HardDrive className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
               <div className="text-right">
-                <span className="text-[10px] text-slate-400 block">الأرشفة السحابية</span>
-                <span className="text-xs font-bold text-emerald-300">Google Drive موثق ✅</span>
+                <span className="text-[10px] text-slate-500 dark:text-slate-300 block">الأرشفة السحابية</span>
+                <span className="text-xs font-bold text-emerald-700 dark:text-emerald-300">Google Drive موثق ✅</span>
               </div>
             </div>
           </div>
@@ -396,11 +396,11 @@ export const GroupCashCollectionCockpit: React.FC = () => {
       )}
 
       {/* Group & Branch Selector Toolbar */}
-      <div className="bg-slate-800/80 border border-slate-700/80 rounded-2xl p-4 shadow-xl backdrop-blur-md grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 shadow-lg backdrop-blur-md grid grid-cols-1 md:grid-cols-3 gap-4">
         {/* Branch Selector */}
         <div>
-          <label className="block text-xs font-bold text-slate-300 mb-1.5 flex items-center gap-1.5">
-            <Building2 className="w-3.5 h-3.5 text-amber-400" />
+          <label className="block text-xs font-black text-slate-800 dark:text-slate-200 mb-1.5 flex items-center gap-1.5">
+            <Building2 className="w-3.5 h-3.5 text-amber-500 dark:text-amber-400" />
             <span>تصفية حسب الفرع:</span>
           </label>
           <select
@@ -409,7 +409,7 @@ export const GroupCashCollectionCockpit: React.FC = () => {
               setSelectedBranchId(e.target.value);
               setSelectedGroupId('');
             }}
-            className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:ring-2 focus:ring-amber-500 focus:outline-none"
+            className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-white font-bold focus:ring-2 focus:ring-amber-500 focus:outline-none shadow-xs"
           >
             <option value="all">🏢 جميع الفروع المركزية</option>
             {branches.map(b => (
@@ -420,14 +420,14 @@ export const GroupCashCollectionCockpit: React.FC = () => {
 
         {/* Group Selector */}
         <div>
-          <label className="block text-xs font-bold text-slate-300 mb-1.5 flex items-center gap-1.5">
-            <Users className="w-3.5 h-3.5 text-indigo-400" />
+          <label className="block text-xs font-black text-slate-800 dark:text-slate-200 mb-1.5 flex items-center gap-1.5">
+            <Users className="w-3.5 h-3.5 text-indigo-500 dark:text-indigo-400" />
             <span>اختر المجموعة التدريبية:</span>
           </label>
           <select
             value={selectedGroupId}
             onChange={(e) => setSelectedGroupId(e.target.value)}
-            className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-amber-300 font-bold focus:ring-2 focus:ring-amber-500 focus:outline-none"
+            className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs text-amber-700 dark:text-amber-300 font-bold focus:ring-2 focus:ring-amber-500 focus:outline-none shadow-xs"
           >
             <option value="all">🌟 جميع المجموعات والطلاب (عرض شامل لكافة المتدربين)</option>
             {filteredGroups.map(g => (
@@ -440,8 +440,8 @@ export const GroupCashCollectionCockpit: React.FC = () => {
 
         {/* Search & Filter */}
         <div>
-          <label className="block text-xs font-bold text-slate-300 mb-1.5 flex items-center gap-1.5">
-            <Search className="w-3.5 h-3.5 text-emerald-400" />
+          <label className="block text-xs font-black text-slate-800 dark:text-slate-200 mb-1.5 flex items-center gap-1.5">
+            <Search className="w-3.5 h-3.5 text-emerald-500 dark:text-emerald-400" />
             <span>بحث فوري في الطلاب (اسم، كود، هاتف):</span>
           </label>
           <div className="relative">
@@ -450,7 +450,7 @@ export const GroupCashCollectionCockpit: React.FC = () => {
               placeholder="اسم الطالب، الكود، أو رقم الهاتف..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 pr-8 text-xs text-white placeholder-slate-500 focus:ring-2 focus:ring-amber-500 focus:outline-none"
+              className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 pr-8 text-xs text-slate-900 dark:text-white placeholder-slate-400 focus:ring-2 focus:ring-amber-500 focus:outline-none shadow-xs"
             />
             <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
           </div>
@@ -460,67 +460,67 @@ export const GroupCashCollectionCockpit: React.FC = () => {
       {/* Group Quick Analytics Stats */}
       {currentGroup && (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-          <div className="bg-slate-800/80 border border-slate-700/80 p-3.5 rounded-2xl flex items-center gap-3">
-            <div className="p-2.5 rounded-xl bg-indigo-500/20 border border-indigo-500/30 text-indigo-400">
+          <div className="bg-white dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 p-3.5 rounded-2xl flex items-center gap-3 shadow-xs">
+            <div className="p-2.5 rounded-xl bg-indigo-500/10 dark:bg-indigo-500/20 border border-indigo-200 dark:border-indigo-500/30 text-indigo-600 dark:text-indigo-400">
               <Users className="w-5 h-5" />
             </div>
             <div>
-              <span className="text-[11px] text-slate-400 block font-bold">إجمالي طلاب المجموعة</span>
-              <span className="text-lg font-black text-white font-mono">{groupSummary.totalStudents}</span>
+              <span className="text-[11px] text-slate-500 dark:text-slate-400 block font-bold">إجمالي طلاب المجموعة</span>
+              <span className="text-lg font-black text-slate-900 dark:text-white font-mono">{groupSummary.totalStudents}</span>
             </div>
           </div>
 
-          <div className="bg-slate-800/80 border border-emerald-500/30 p-3.5 rounded-2xl flex items-center gap-3">
-            <div className="p-2.5 rounded-xl bg-emerald-500/20 border border-emerald-500/30 text-emerald-400">
+          <div className="bg-white dark:bg-slate-800/80 border border-emerald-200 dark:border-emerald-500/30 p-3.5 rounded-2xl flex items-center gap-3 shadow-xs">
+            <div className="p-2.5 rounded-xl bg-emerald-500/10 dark:bg-emerald-500/20 border border-emerald-200 dark:border-emerald-500/30 text-emerald-600 dark:text-emerald-400">
               <CheckCircle2 className="w-5 h-5" />
             </div>
             <div>
-              <span className="text-[11px] text-emerald-400 block font-bold">مسدد حتى الشهر المقبل</span>
-              <span className="text-lg font-black text-emerald-400 font-mono">{groupSummary.paidCount}</span>
+              <span className="text-[11px] text-emerald-700 dark:text-emerald-400 block font-bold">مسدد حتى الشهر المقبل</span>
+              <span className="text-lg font-black text-emerald-600 dark:text-emerald-400 font-mono">{groupSummary.paidCount}</span>
             </div>
           </div>
 
-          <div className="bg-slate-800/80 border border-amber-500/30 p-3.5 rounded-2xl flex items-center gap-3">
-            <div className="p-2.5 rounded-xl bg-amber-500/20 border border-amber-500/30 text-amber-400">
+          <div className="bg-white dark:bg-slate-800/80 border border-amber-200 dark:border-amber-500/30 p-3.5 rounded-2xl flex items-center gap-3 shadow-xs">
+            <div className="p-2.5 rounded-xl bg-amber-500/10 dark:bg-amber-500/20 border border-amber-200 dark:border-amber-500/30 text-amber-600 dark:text-amber-400">
               <Clock className="w-5 h-5" />
             </div>
             <div>
-              <span className="text-[11px] text-amber-400 block font-bold">مستحق السداد حالياً</span>
-              <span className="text-lg font-black text-amber-400 font-mono">{groupSummary.dueCount}</span>
+              <span className="text-[11px] text-amber-700 dark:text-amber-400 block font-bold">مستحق السداد حالياً</span>
+              <span className="text-lg font-black text-amber-600 dark:text-amber-400 font-mono">{groupSummary.dueCount}</span>
             </div>
           </div>
 
-          <div className="bg-slate-800/80 border border-purple-500/30 p-3.5 rounded-2xl flex items-center gap-3">
-            <div className="p-2.5 rounded-xl bg-purple-500/20 border border-purple-500/30 text-purple-400">
+          <div className="bg-white dark:bg-slate-800/80 border border-purple-200 dark:border-purple-500/30 p-3.5 rounded-2xl flex items-center gap-3 shadow-xs">
+            <div className="p-2.5 rounded-xl bg-purple-500/10 dark:bg-purple-500/20 border border-purple-200 dark:border-purple-500/30 text-purple-600 dark:text-purple-400">
               <Percent className="w-5 h-5" />
             </div>
             <div>
-              <span className="text-[11px] text-purple-400 block font-bold">معفى / خصومات خاصة</span>
-              <span className="text-lg font-black text-purple-400 font-mono">{groupSummary.exemptCount}</span>
+              <span className="text-[11px] text-purple-700 dark:text-purple-400 block font-bold">معفى / خصومات خاصة</span>
+              <span className="text-lg font-black text-purple-600 dark:text-purple-400 font-mono">{groupSummary.exemptCount}</span>
             </div>
           </div>
 
-          <div className="bg-slate-800/80 border border-emerald-500/40 p-3.5 rounded-2xl flex items-center gap-3 col-span-2 sm:col-span-1">
-            <div className="p-2.5 rounded-xl bg-emerald-500/20 border border-emerald-500/30 text-emerald-400">
+          <div className="bg-gradient-to-br from-emerald-50 via-white to-emerald-50/60 dark:from-emerald-950/40 dark:via-slate-800 dark:to-slate-800 border border-emerald-300 dark:border-emerald-500/40 p-3.5 rounded-2xl flex items-center gap-3 col-span-2 sm:col-span-1 shadow-sm">
+            <div className="p-2.5 rounded-xl bg-emerald-500/20 border border-emerald-400/40 text-emerald-600 dark:text-emerald-400">
               <DollarSign className="w-5 h-5" />
             </div>
             <div>
-              <span className="text-[11px] text-slate-400 block font-bold">المحصل الفعلي (ج.م)</span>
-              <span className="text-lg font-black text-emerald-300 font-mono">{groupSummary.totalCollectedInGroup.toLocaleString()}</span>
+              <span className="text-[11px] text-emerald-800 dark:text-slate-300 block font-bold">المحصل الفعلي (ج.م)</span>
+              <span className="text-lg font-black text-emerald-700 dark:text-emerald-300 font-mono">{groupSummary.totalCollectedInGroup.toLocaleString()}</span>
             </div>
           </div>
         </div>
       )}
 
       {/* Filter Tabs */}
-      <div className="flex items-center justify-between flex-wrap gap-2 border-b border-slate-700/80 pb-3">
-        <div className="flex items-center gap-2">
+      <div className="flex items-center justify-between flex-wrap gap-2 border-b border-slate-200 dark:border-slate-700/80 pb-3">
+        <div className="flex items-center gap-2 flex-wrap">
           <button
             onClick={() => setStatusFilter('all')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+            className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all active:scale-95 ${
               statusFilter === 'all'
-                ? 'bg-amber-500 text-slate-950 font-black shadow'
-                : 'bg-slate-800/60 text-slate-400 hover:text-white'
+                ? 'bg-amber-500 text-slate-950 font-black shadow-md shadow-amber-500/20 ring-2 ring-amber-400'
+                : 'bg-white dark:bg-slate-800/60 text-slate-700 dark:text-slate-400 border border-slate-200 dark:border-slate-700 hover:text-slate-900 dark:hover:text-white'
             }`}
           >
             جميع الطلاب ({groupTrainees.length})
@@ -528,10 +528,10 @@ export const GroupCashCollectionCockpit: React.FC = () => {
 
           <button
             onClick={() => setStatusFilter('due')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+            className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 active:scale-95 ${
               statusFilter === 'due'
-                ? 'bg-amber-500 text-slate-950 font-black shadow'
-                : 'bg-amber-950/40 border border-amber-500/30 text-amber-400 hover:text-white'
+                ? 'bg-amber-500 text-slate-950 font-black shadow-md shadow-amber-500/20 ring-2 ring-amber-400'
+                : 'bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-500/30 text-amber-800 dark:text-amber-400 hover:text-amber-900 dark:hover:text-white'
             }`}
           >
             <AlertTriangle className="w-3.5 h-3.5" />
@@ -540,10 +540,10 @@ export const GroupCashCollectionCockpit: React.FC = () => {
 
           <button
             onClick={() => setStatusFilter('paid')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+            className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 active:scale-95 ${
               statusFilter === 'paid'
-                ? 'bg-emerald-600 text-white font-black shadow'
-                : 'bg-emerald-950/40 border border-emerald-500/30 text-emerald-400 hover:text-white'
+                ? 'bg-emerald-600 text-white font-black shadow-md shadow-emerald-600/30 ring-2 ring-emerald-400'
+                : 'bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-500/30 text-emerald-800 dark:text-emerald-400 hover:text-emerald-900 dark:hover:text-white'
             }`}
           >
             <CheckCircle2 className="w-3.5 h-3.5" />
@@ -552,10 +552,10 @@ export const GroupCashCollectionCockpit: React.FC = () => {
 
           <button
             onClick={() => setStatusFilter('exempt')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+            className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 active:scale-95 ${
               statusFilter === 'exempt'
-                ? 'bg-purple-600 text-white font-black shadow'
-                : 'bg-purple-950/40 border border-purple-500/30 text-purple-400 hover:text-white'
+                ? 'bg-purple-600 text-white font-black shadow-md shadow-purple-600/30 ring-2 ring-purple-400'
+                : 'bg-purple-50 dark:bg-purple-950/40 border border-purple-300 dark:border-purple-500/30 text-purple-800 dark:text-purple-400 hover:text-purple-900 dark:hover:text-white'
             }`}
           >
             <ShieldCheck className="w-3.5 h-3.5" />
@@ -563,16 +563,16 @@ export const GroupCashCollectionCockpit: React.FC = () => {
           </button>
         </div>
 
-        <span className="text-xs text-slate-400 font-bold">
+        <span className="text-xs text-slate-500 dark:text-slate-400 font-bold">
           المعروض: {displayedTrainees.length} طالب
         </span>
       </div>
 
       {/* Trainees Table / Roster */}
-      <div className="bg-slate-800/80 border border-slate-700/80 rounded-2xl overflow-hidden shadow-2xl backdrop-blur-md">
+      <div className="bg-white dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 rounded-3xl overflow-hidden shadow-xl backdrop-blur-xl">
         <div className="overflow-x-auto custom-scrollbar">
           <table className="w-full text-right text-xs">
-            <thead className="bg-slate-950/80 text-slate-400 uppercase border-b border-slate-700 font-black">
+            <thead className="bg-slate-50 dark:bg-slate-950/80 text-slate-700 dark:text-slate-400 uppercase border-b border-slate-200 dark:border-slate-700 font-black">
               <tr>
                 <th className="p-3.5">الطالب / الكود</th>
                 <th className="p-3.5">بيانات التواصل والواتساب</th>
@@ -582,12 +582,12 @@ export const GroupCashCollectionCockpit: React.FC = () => {
                 <th className="p-3.5 text-center">إجراءات التحصيل المالي</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-700/60">
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-700/60">
               {displayedTrainees.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="p-8 text-center text-slate-400">
-                    <Users className="w-10 h-10 text-slate-600 mx-auto mb-2" />
-                    <p className="font-bold text-sm">لا يوجد طلاب يطابقون خيارات البحث أو التصفية في هذه المجموعة</p>
+                    <Users className="w-10 h-10 text-slate-400 dark:text-slate-600 mx-auto mb-2" />
+                    <p className="font-bold text-sm text-slate-600 dark:text-slate-300">لا يوجد طلاب يطابقون خيارات البحث أو التصفية في هذه المجموعة</p>
                   </td>
                 </tr>
               ) : (
@@ -596,25 +596,25 @@ export const GroupCashCollectionCockpit: React.FC = () => {
                   const hasParentPhone = Boolean(trainee.parentPhone || trainee.phone);
 
                   return (
-                    <tr key={trainee.id} className="hover:bg-slate-700/30 transition-colors">
+                    <tr key={trainee.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-700/30 transition-colors">
                       {/* Student Info */}
                       <td className="p-3.5">
                         <div className="flex items-center gap-3">
-                          <div className="w-9 h-9 rounded-xl bg-slate-700/70 border border-slate-600 flex items-center justify-center overflow-hidden shrink-0">
+                          <div className="w-9 h-9 rounded-xl bg-slate-100 dark:bg-slate-700/70 border border-slate-200 dark:border-slate-600 flex items-center justify-center overflow-hidden shrink-0">
                             {trainee.photoUrl ? (
                               <img src={trainee.photoUrl} alt={trainee.fullName} className="w-full h-full object-cover" />
                             ) : (
-                              <span className="font-black text-amber-400">{trainee.fullName.charAt(0)}</span>
+                              <span className="font-black text-amber-600 dark:text-amber-400">{trainee.fullName.charAt(0)}</span>
                             )}
                           </div>
                           <div>
-                            <span className="font-black text-white block text-sm">{trainee.fullName}</span>
+                            <span className="font-black text-slate-900 dark:text-white block text-sm">{trainee.fullName}</span>
                             <div className="flex items-center gap-1.5 mt-0.5">
-                              <span className="font-mono text-[10px] text-amber-400 font-bold bg-amber-500/10 px-1.5 py-0.2 rounded border border-amber-500/20">
+                              <span className="font-mono text-[10px] text-amber-700 dark:text-amber-400 font-bold bg-amber-50 dark:bg-amber-500/10 px-1.5 py-0.2 rounded border border-amber-200 dark:border-amber-500/20">
                                 {trainee.code || 'بدون كود'}
                               </span>
                               {info.isExempt && (
-                                <span className="text-[10px] text-purple-400 bg-purple-500/10 px-1.5 py-0.2 rounded border border-purple-500/20 font-bold">
+                                <span className="text-[10px] text-purple-700 dark:text-purple-400 bg-purple-50 dark:bg-purple-500/10 px-1.5 py-0.2 rounded border border-purple-200 dark:border-purple-500/20 font-bold">
                                   معفى
                                 </span>
                               )}
@@ -626,14 +626,14 @@ export const GroupCashCollectionCockpit: React.FC = () => {
                       {/* Contacts & WhatsApp */}
                       <td className="p-3.5">
                         <div className="space-y-1">
-                          <div className="flex items-center gap-1.5 text-slate-300">
-                            <Phone className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                            <span className="font-mono dir-ltr">{trainee.parentPhone || trainee.phone || 'غير مسجل'}</span>
+                          <div className="flex items-center gap-1.5 text-slate-700 dark:text-slate-300">
+                            <Phone className="w-3.5 h-3.5 text-emerald-500 dark:text-emerald-400 shrink-0" />
+                            <span className="font-mono dir-ltr font-medium">{trainee.parentPhone || trainee.phone || 'غير مسجل'}</span>
                           </div>
                           {hasParentPhone && (
                             <button
                               onClick={() => handleDirectWhatsApp(trainee)}
-                              className="text-[10px] text-emerald-400 hover:text-emerald-300 font-bold flex items-center gap-1 transition-all"
+                              className="text-[10px] text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 font-bold flex items-center gap-1 transition-all"
                               title="إرسال رسالة تذكير أو إيصال عبر واتساب"
                             >
                               <Share2 className="w-3 h-3" />
@@ -647,30 +647,30 @@ export const GroupCashCollectionCockpit: React.FC = () => {
                       <td className="p-3.5">
                         {info.isExempt ? (
                           <div className="space-y-0.5">
-                            <div className="font-black text-purple-300">
-                              المطلوب: <span className="font-mono text-emerald-400">0 ج.م</span>
+                            <div className="font-black text-purple-800 dark:text-purple-300">
+                              المطلوب: <span className="font-mono text-emerald-600 dark:text-emerald-400">0 ج.م</span>
                             </div>
-                            <div className="text-[10px] text-purple-400 font-bold">
+                            <div className="text-[10px] text-purple-700 dark:text-purple-400 font-bold">
                               (إعفاء كامل 100%)
                             </div>
-                            <div className="text-[10px] text-slate-400">
+                            <div className="text-[10px] text-slate-500 dark:text-slate-400">
                               المتبقي: 0 ج.م
                             </div>
                           </div>
                         ) : (
                           <div className="space-y-0.5">
-                            <div className="font-bold text-white">
-                              الصافي: <span className="font-mono text-emerald-400">{info.net} ج.م</span>
+                            <div className="font-bold text-slate-900 dark:text-white">
+                              الصافي: <span className="font-mono text-emerald-600 dark:text-emerald-400">{info.net} ج.م</span>
                             </div>
                             {info.discount > 0 && (
-                              <div className="text-[10px] text-purple-400">
+                              <div className="text-[10px] text-purple-700 dark:text-purple-400 font-bold">
                                 (خصم: {info.discount} ج.م)
                               </div>
                             )}
-                            <div className="text-[10px] text-slate-400">
+                            <div className="text-[10px] text-slate-500 dark:text-slate-400">
                               المدفوع: {info.paid} ج.م
                             </div>
-                            <div className="text-[10px] text-amber-400 font-bold">
+                            <div className="text-[10px] text-amber-700 dark:text-amber-400 font-bold">
                               المتبقي: {info.remaining} ج.م
                             </div>
                           </div>
@@ -681,31 +681,31 @@ export const GroupCashCollectionCockpit: React.FC = () => {
                       <td className="p-3.5">
                         {info.isExempt ? (
                           <div className="space-y-1">
-                            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-purple-950/70 border border-purple-500/50 text-purple-300 text-[11px] font-black shadow-sm">
-                              <ShieldCheck className="w-3.5 h-3.5 text-purple-400 shrink-0" />
+                            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-purple-50 dark:bg-purple-950/70 border border-purple-200 dark:border-purple-500/50 text-purple-800 dark:text-purple-300 text-[11px] font-black shadow-xs">
+                              <ShieldCheck className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400 shrink-0" />
                               <span>معفى رسمياً (0 ج.م)</span>
                             </div>
-                            <span className="block text-[10px] text-purple-400 font-bold">
+                            <span className="block text-[10px] text-purple-700 dark:text-purple-400 font-bold">
                               {info.reasonLabel}
                             </span>
                           </div>
                         ) : info.isPaidUntilNextMonth ? (
                           <div>
-                            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-950/60 border border-emerald-500/40 text-emerald-300 text-[11px] font-bold">
-                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-500/40 text-emerald-800 dark:text-emerald-300 text-[11px] font-bold shadow-xs">
+                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
                               <span>مسدد بالكامل 🟢</span>
                             </div>
-                            <span className="block text-[10px] text-emerald-400/90 font-bold mt-1 dir-ltr">
+                            <span className="block text-[10px] text-emerald-700 dark:text-emerald-400/90 font-bold mt-1 dir-ltr">
                               حتى: {info.nextPaymentDueDate || 'الشهر المقبل'}
                             </span>
                           </div>
                         ) : (
                           <div>
-                            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-950/60 border border-amber-500/40 text-amber-300 text-[11px] font-bold">
-                              <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
+                            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-50 dark:bg-amber-950/60 border border-amber-200 dark:border-amber-500/40 text-amber-800 dark:text-amber-300 text-[11px] font-bold shadow-xs">
+                              <AlertTriangle className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
                               <span>مستحق السداد ({info.remaining || info.net} ج.م)</span>
                             </div>
-                            <span className="block text-[10px] text-amber-400/80 mt-1">
+                            <span className="block text-[10px] text-amber-700 dark:text-amber-400/80 mt-1 font-bold">
                               الشهر الحالي
                             </span>
                           </div>
@@ -721,16 +721,16 @@ export const GroupCashCollectionCockpit: React.FC = () => {
                                 setActiveReceiptPayment(info.latestPayment);
                                 setIsReceiptModalOpen(true);
                               }}
-                              className="text-amber-400 hover:text-amber-300 font-mono font-bold text-xs flex items-center gap-1 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20 transition-all"
+                              className="text-amber-700 dark:text-amber-400 hover:text-amber-800 dark:hover:text-amber-300 font-mono font-bold text-xs flex items-center gap-1 bg-amber-50 dark:bg-amber-500/10 px-2 py-0.5 rounded border border-amber-200 dark:border-amber-500/20 transition-all shadow-xs"
                               title="عرض وطباعة وإرسال سند القبض"
                             >
                               <Receipt className="w-3 h-3" />
                               <span>#{info.latestPayment.receiptNumber || info.latestPayment.id}</span>
                             </button>
-                            <span className="text-[10px] text-slate-400 block">{info.latestPayment.date}</span>
+                            <span className="text-[10px] text-slate-500 dark:text-slate-400 block">{info.latestPayment.date}</span>
                           </div>
                         ) : (
-                          <span className="text-slate-500 text-[11px] italic">
+                          <span className="text-slate-400 dark:text-slate-500 text-[11px] italic">
                             {info.isExempt ? 'إعفاء بدون سند نقدي' : 'لا يوجد سند سابق'}
                           </span>
                         )}
@@ -742,16 +742,16 @@ export const GroupCashCollectionCockpit: React.FC = () => {
                           {info.isExempt ? (
                             <button
                               onClick={() => handleOpenCollection(trainee)}
-                              className="px-2.5 py-1.5 bg-purple-950/70 hover:bg-purple-900 border border-purple-500/40 text-purple-200 font-bold text-xs rounded-xl shadow flex items-center gap-1.5 transition-all"
+                              className="px-2.5 py-1.5 bg-purple-100 hover:bg-purple-200 dark:bg-purple-950/70 dark:hover:bg-purple-900 border border-purple-200 dark:border-purple-500/40 text-purple-800 dark:text-purple-200 font-bold text-xs rounded-xl shadow-xs flex items-center gap-1.5 transition-all"
                               title="فحص أو تعديل الإعفاء المالي"
                             >
-                              <ShieldCheck className="w-3.5 h-3.5 text-purple-400" />
+                              <ShieldCheck className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
                               <span>فحص الإعفاء (0 ج.م) 🛡️</span>
                             </button>
                           ) : (
                             <button
                               onClick={() => handleOpenCollection(trainee)}
-                              className="px-3 py-1.5 bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white font-black text-xs rounded-xl shadow-lg shadow-emerald-600/30 flex items-center gap-1.5 transition-all active:scale-95"
+                              className="px-3.5 py-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-xs rounded-xl shadow-md shadow-emerald-600/30 flex items-center gap-1.5 transition-all active:scale-95"
                               title="تحصيل نقدي بالخزينة وإصدار إيصال معتمد"
                             >
                               <DollarSign className="w-3.5 h-3.5" />
@@ -765,10 +765,10 @@ export const GroupCashCollectionCockpit: React.FC = () => {
                                 setActiveReceiptPayment(info.latestPayment);
                                 setIsReceiptModalOpen(true);
                               }}
-                              className="p-1.5 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-xl transition-all"
+                              className="p-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-600 rounded-xl transition-all shadow-xs"
                               title="طباعة / واتساب الإيصال"
                             >
-                              <Printer className="w-3.5 h-3.5 text-amber-400" />
+                              <Printer className="w-3.5 h-3.5 text-amber-500 dark:text-amber-400" />
                             </button>
                           )}
                         </div>

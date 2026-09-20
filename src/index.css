@@ -119,8 +119,8 @@
 }
 
 /* =========================================================================
-   CLEAN, COHESIVE DAY / LIGHT MODE ARCHITECTURE
-   Ensures complete visual harmony without jarring dark patches or conflicting gradients
+   3D LUMINOUS & GLASSMORPHIC DESIGN SYSTEM
+   Supports clean, luminous aesthetic in both Light & Dark modes
    ========================================================================= */
 
 .light,
@@ -129,253 +129,103 @@
 [data-color-mode="light"],
 [data-theme="day_rose_gold"],
 [data-theme="day_ivory_champagne"] {
-  background-color: #ffffff !important;
-  color: #0f172a !important;
-
-  /* 1. Main Backgrounds & Surfaces */
-  .min-h-screen,
-  #app-root-container,
-  #main-content-scrollable,
-  main {
-    background-color: #ffffff !important;
-  }
-
-  /* Map un-migrated dark card containers cleanly to pure white */
-  .bg-slate-950:not([class*="dark:"]):not(.modal-dialog-box):not([class*="fixed"]),
-  .bg-slate-900:not([class*="dark:"]):not(.modal-dialog-box):not([class*="fixed"]),
-  .bg-slate-850:not([class*="dark:"]):not(.modal-dialog-box):not([class*="fixed"]),
-  .bg-slate-800:not([class*="dark:"]):not(.modal-dialog-box):not([class*="fixed"]):not(button),
-  .bg-\[\#070b14\]:not([class*="dark:"]):not([class*="fixed"]),
-  .bg-\[\#0a0f1d\]:not([class*="dark:"]):not([class*="fixed"]),
-  .bg-\[\#0d1424\]:not([class*="dark:"]):not([class*="fixed"]),
-  .bg-\[\#0b101d\]:not([class*="dark:"]):not([class*="fixed"]),
-  .bg-\[\#0f172a\]:not([class*="dark:"]):not([class*="fixed"]),
-  .bg-\[\#111827\]:not([class*="dark:"]):not([class*="fixed"]),
-  .bg-\[\#1a2542\]:not([class*="dark:"]):not([class*="fixed"]) {
-    background-color: #ffffff !important;
-    border-color: #e2e8f0 !important;
-    color: #0f172a !important;
-    box-shadow: 0 1px 3px 0 rgba(15, 23, 42, 0.05) !important;
-  }
-
-  /* 2. Sub-boxes, Metric Cards & Table Rows in Light Mode */
-  .bg-slate-900\/90:not([class*="dark:"]),
-  .bg-slate-900\/80:not([class*="dark:"]),
-  .bg-slate-900\/70:not([class*="dark:"]),
-  .bg-slate-900\/60:not([class*="dark:"]),
-  .bg-slate-900\/50:not([class*="dark:"]),
-  .bg-slate-900\/40:not([class*="dark:"]),
-  .bg-slate-900\/30:not([class*="dark:"]),
-  .bg-slate-900\/20:not([class*="dark:"]),
-  .bg-slate-800\/80:not([class*="dark:"]),
-  .bg-slate-800\/60:not([class*="dark:"]),
-  .bg-slate-800\/40:not([class*="dark:"]) {
-    background-color: #ffffff !important;
-    border-color: #e2e8f0 !important;
-    color: #1e293b !important;
-    box-shadow: 0 1px 2px 0 rgba(15, 23, 42, 0.04) !important;
-  }
-
-  /* 3. Status Badges & Thematic Panels in Light Mode (Soft Pastel Tints) */
-  .bg-indigo-950\/40:not([class*="dark:"]),
-  .bg-indigo-950\/60:not([class*="dark:"]),
-  .bg-blue-950\/40:not([class*="dark:"]),
-  .bg-blue-950\/60:not([class*="dark:"]) {
-    background-color: #eff6ff !important;
-    border-color: #bfdbfe !important;
-    color: #1e40af !important;
-  }
-
-  .bg-emerald-950\/40:not([class*="dark:"]),
-  .bg-emerald-950\/60:not([class*="dark:"]),
-  .bg-green-950\/40:not([class*="dark:"]),
-  .bg-emerald-500\/20:not([class*="dark:"]) {
-    background-color: #ecfdf5 !important;
-    border-color: #a7f3d0 !important;
-    color: #065f46 !important;
-  }
-
-  .bg-rose-950\/40:not([class*="dark:"]),
-  .bg-rose-950\/60:not([class*="dark:"]),
-  .bg-red-950\/40:not([class*="dark:"]),
-  .bg-rose-500\/20:not([class*="dark:"]) {
-    background-color: #fff1f2 !important;
-    border-color: #fecdd3 !important;
-    color: #9f1239 !important;
-  }
-
-  .bg-amber-950\/40:not([class*="dark:"]),
-  .bg-amber-950\/60:not([class*="dark:"]),
-  .bg-amber-500\/10:not([class*="dark:"]),
-  .bg-amber-500\/15:not([class*="dark:"]),
-  .bg-amber-500\/20:not([class*="dark:"]) {
-    background-color: #fffbeb !important;
-    border-color: #fde68a !important;
-    color: #92400e !important;
-  }
-
-  .bg-purple-950\/40:not([class*="dark:"]),
-  .bg-purple-950\/60:not([class*="dark:"]),
-  .bg-violet-950\/40:not([class*="dark:"]),
-  .bg-purple-500\/20:not([class*="dark:"]) {
-    background-color: #faf5ff !important;
-    border-color: #e9d5ff !important;
-    color: #6b21a8 !important;
-  }
-
-  /* 4. Borders & Dividers */
-  .border-slate-800:not([class*="dark:"]),
-  .border-slate-700:not([class*="dark:"]),
-  .border-slate-700\/80:not([class*="dark:"]),
-  .border-slate-700\/60:not([class*="dark:"]),
-  .border-slate-600:not([class*="dark:"]) {
-    border-color: #e2e8f0 !important;
-  }
-
-  /* 5. Typography & High Readability Text in Light Mode */
-  .text-slate-100:not([class*="dark:"]):not(button.bg-indigo-600 *):not(button.bg-emerald-600 *):not(button.bg-rose-600 *):not(button.bg-blue-600 *):not(button.bg-purple-600 *):not([class*="from-purple-600"] *):not(.text-white),
-  .text-slate-200:not([class*="dark:"]):not(button.bg-indigo-600 *):not(button.bg-emerald-600 *):not(button.bg-rose-600 *):not(button.bg-blue-600 *):not(button.bg-purple-600 *):not([class*="from-purple-600"] *) {
-    color: #0f172a !important;
-  }
-
-  .text-slate-300:not([class*="dark:"]):not(button.bg-indigo-600 *):not(button.bg-emerald-600 *):not(button.bg-rose-600 *):not(button.bg-blue-600 *):not(button.bg-purple-600 *):not([class*="from-purple-600"] *) {
-    color: #334155 !important;
-  }
-
-  .text-slate-400:not([class*="dark:"]):not(button.bg-indigo-600 *):not(button.bg-emerald-600 *):not(button.bg-rose-600 *):not(button.bg-blue-600 *):not(button.bg-purple-600 *):not([class*="from-purple-600"] *) {
-    color: #64748b !important;
-  }
-
-  /* Rich, accessible jewel tones for highlights on light backgrounds */
-  .text-amber-400:not([class*="dark:"]):not(button *),
-  .text-amber-300:not([class*="dark:"]):not(button *) {
-    color: #b45309 !important;
-  }
-
-  .text-emerald-400:not([class*="dark:"]):not(button *),
-  .text-emerald-300:not([class*="dark:"]):not(button *) {
-    color: #047857 !important;
-  }
-
-  .text-rose-400:not([class*="dark:"]):not(button *),
-  .text-rose-300:not([class*="dark:"]):not(button *) {
-    color: #be123c !important;
-  }
-
-  .text-blue-400:not([class*="dark:"]):not(button *),
-  .text-blue-300:not([class*="dark:"]):not(button *) {
-    color: #1d4ed8 !important;
-  }
-
-  .text-indigo-400:not([class*="dark:"]):not(button *),
-  .text-indigo-300:not([class*="dark:"]):not(button *) {
-    color: #4338ca !important;
-  }
-
-  .text-purple-400:not([class*="dark:"]):not(button *),
-  .text-purple-300:not([class*="dark:"]):not(button *) {
-    color: #7e22ce !important;
-  }
-
-  /* 6. Form Controls, Inputs & Selects */
-  input:not([type="checkbox"]):not([type="radio"]):not([type="submit"]):not([type="button"]):not([type="file"]):not([class*="dark:"]),
-  select:not([class*="dark:"]),
-  textarea:not([class*="dark:"]) {
-    background-color: #ffffff !important;
-    color: #0f172a !important;
-    border-color: #cbd5e1 !important;
-  }
-
-  option,
-  select option {
-    background-color: #ffffff !important;
-    color: #0f172a !important;
-  }
-
-  input::placeholder,
-  textarea::placeholder {
-    color: #94a3b8 !important;
-  }
-
-  input:focus,
-  select:focus,
-  textarea:focus {
-    border-color: #7c3aed !important;
-    box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.15) !important;
-  }
-
-  /* 7. Tables in Light Mode */
-  table thead:not([class*="dark:"]) {
-    background-color: #f8fafc !important;
-    border-bottom: 2px solid #e2e8f0 !important;
-  }
-
-  table thead th:not([class*="dark:"]) {
-    color: #475569 !important;
-    font-weight: 700 !important;
-  }
-
-  table tbody tr:not([class*="dark:"]) {
-    border-bottom: 1px solid #f1f5f9 !important;
-  }
-
-  table tbody tr:hover:not([class*="dark:"]) {
-    background-color: #f8fafc !important;
-  }
-
-  table tbody td:not([class*="dark:"]) {
-    color: #1e293b !important;
-  }
-
-  /* 8. Light Mode Scrollbar */
-  ::-webkit-scrollbar-track {
-    background: #f1f5f9 !important;
-  }
-
-  ::-webkit-scrollbar-thumb {
-    background: #cbd5e1 !important;
-    border-radius: 9999px !important;
-  }
-
-  ::-webkit-scrollbar-thumb:hover {
-    background: #94a3b8 !important;
-  }
+  background-color: #f8fafc;
+  color: #0f172a;
 }
 
-/* =========================================================================
-   PROTECTED SOLID ACTION BUTTONS & MODALS
-   ========================================================================= */
-
-/* Solid Buttons Always Keep Vibrant Color & Clean White Text */
-button.bg-indigo-600,
-button.bg-indigo-700,
-button.bg-blue-600,
-button.bg-blue-700,
-button.bg-emerald-600,
-button.bg-emerald-700,
-button.bg-rose-600,
-button.bg-rose-700,
-button.bg-purple-600,
-button.bg-purple-700,
-button[class*="from-purple-600"],
-button[class*="from-indigo-600"] {
-  color: #ffffff !important;
+.dark,
+[data-theme="dark"],
+[data-theme="dark_mode"],
+[data-color-mode="dark"] {
+  background-color: #080a14;
+  color: #f8fafc;
 }
 
-button.bg-indigo-600 *,
-button.bg-indigo-700 *,
-button.bg-blue-600 *,
-button.bg-blue-700 *,
-button.bg-emerald-600 *,
-button.bg-emerald-700 *,
-button.bg-rose-600 *,
-button.bg-rose-700 *,
-button.bg-purple-600 *,
-button.bg-purple-700 *,
-button[class*="from-purple-600"] *,
-button[class*="from-indigo-600"] * {
-  color: #ffffff !important;
-  fill: currentColor;
+/* 3D Glass Elevation and Glowing Borders with Stereoscopic Depth */
+.glass-card-3d {
+  position: relative;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.96) 0%, rgba(248, 250, 252, 0.90) 100%);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  box-shadow: 
+    0 1px 2px 0 rgba(0, 0, 0, 0.03),
+    0 8px 24px -4px rgba(30, 41, 59, 0.07),
+    0 16px 36px -8px rgba(245, 158, 11, 0.05),
+    inset 0 1px 1px 0 rgba(255, 255, 255, 1),
+    inset 0 -1px 1px 0 rgba(226, 232, 240, 0.5);
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.dark .glass-card-3d {
+  background: linear-gradient(145deg, rgba(20, 26, 44, 0.92) 0%, rgba(15, 23, 42, 0.96) 60%, rgba(10, 15, 29, 0.98) 100%);
+  border: 1px solid rgba(124, 58, 237, 0.35);
+  box-shadow: 
+    0 4px 6px -1px rgba(0, 0, 0, 0.5),
+    0 14px 38px -6px rgba(0, 0, 0, 0.75),
+    0 0 20px -2px rgba(124, 58, 237, 0.22),
+    inset 0 1px 1px 0 rgba(255, 255, 255, 0.12),
+    inset 0 -1px 2px 0 rgba(124, 58, 237, 0.25);
+}
+
+.glass-card-3d:hover {
+  transform: translateY(-3px) scale(1.002);
+  border-color: rgba(245, 158, 11, 0.4);
+  box-shadow: 
+    0 2px 4px 0 rgba(0, 0, 0, 0.04),
+    0 16px 36px -6px rgba(30, 41, 59, 0.12),
+    0 0 25px -4px rgba(245, 158, 11, 0.16),
+    inset 0 1px 1px 0 rgba(255, 255, 255, 1);
+}
+
+.dark .glass-card-3d:hover {
+  transform: translateY(-3px) scale(1.002);
+  border-color: rgba(245, 158, 11, 0.5);
+  box-shadow: 
+    0 22px 45px -8px rgba(0, 0, 0, 0.85),
+    0 0 35px -2px rgba(124, 58, 237, 0.35),
+    0 0 20px -2px rgba(245, 158, 11, 0.3),
+    inset 0 1px 1px 0 rgba(255, 255, 255, 0.22);
+}
+
+/* 3D Luminous Glow Modifiers */
+.luminous-glow-amber {
+  box-shadow: 
+    0 4px 20px -2px rgba(245, 158, 11, 0.15),
+    0 0 15px -3px rgba(245, 158, 11, 0.2),
+    inset 0 1px 1px 0 rgba(255, 255, 255, 0.8);
+}
+.dark .luminous-glow-amber {
+  box-shadow: 
+    0 6px 25px -2px rgba(0, 0, 0, 0.7),
+    0 0 25px -2px rgba(245, 158, 11, 0.3),
+    inset 0 1px 1px 0 rgba(255, 255, 255, 0.15);
+}
+
+.luminous-glow-purple {
+  box-shadow: 
+    0 4px 20px -2px rgba(124, 58, 237, 0.12),
+    0 0 15px -3px rgba(124, 58, 237, 0.2),
+    inset 0 1px 1px 0 rgba(255, 255, 255, 0.8);
+}
+.dark .luminous-glow-purple {
+  box-shadow: 
+    0 6px 25px -2px rgba(0, 0, 0, 0.7),
+    0 0 25px -2px rgba(124, 58, 237, 0.35),
+    inset 0 1px 1px 0 rgba(255, 255, 255, 0.15);
+}
+
+.luminous-glow-emerald {
+  box-shadow: 
+    0 4px 20px -2px rgba(16, 185, 129, 0.12),
+    0 0 15px -3px rgba(16, 185, 129, 0.2),
+    inset 0 1px 1px 0 rgba(255, 255, 255, 0.8);
+}
+.dark .luminous-glow-emerald {
+  box-shadow: 
+    0 6px 25px -2px rgba(0, 0, 0, 0.7),
+    0 0 25px -2px rgba(16, 185, 129, 0.35),
+    inset 0 1px 1px 0 rgba(255, 255, 255, 0.15);
 }
 
 /* Modals: Dark Backdrop Overlay Scrim */

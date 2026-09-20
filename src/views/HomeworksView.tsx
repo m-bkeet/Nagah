@@ -525,22 +525,22 @@ export const HomeworksView: React.FC = () => {
     : 100;
 
   return (
-    <div className="p-4 md:p-6 lg:p-8 animate-fade-in pb-24 text-slate-100" dir="rtl">
+    <div className="p-4 md:p-6 lg:p-8 animate-fade-in pb-24 text-slate-900 dark:text-slate-100" dir="rtl">
       
       {/* Top Header Banner */}
-      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-8 bg-gradient-to-r from-slate-900 via-slate-950 to-slate-900 border border-slate-800 p-5 rounded-3xl backdrop-blur-md shadow-xl">
+      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-8 bg-gradient-to-r from-amber-50/90 via-white to-amber-50/40 dark:from-slate-900 dark:via-slate-950 dark:to-slate-900 border border-amber-200 dark:border-slate-800 p-5 rounded-3xl backdrop-blur-md shadow-sm dark:shadow-xl">
         <div>
           <div className="flex items-center gap-2">
-            <span className="bg-amber-500/20 text-amber-400 text-xs font-black px-2.5 py-1 rounded-lg border border-amber-500/30">
+            <span className="bg-amber-100 text-amber-900 dark:bg-amber-500/20 dark:text-amber-400 text-xs font-black px-2.5 py-1 rounded-lg border border-amber-300 dark:border-amber-500/30">
               Nagah LMS & AI Quiz Engine
             </span>
-            <span className="text-slate-400 text-xs">• تحويل تقييمات الوزارة والكتب لمسابقات تفاعلية</span>
+            <span className="text-slate-500 dark:text-slate-400 text-xs">• تحويل تقييمات الوزارة والكتب لمسابقات تفاعلية</span>
           </div>
-          <h2 className="text-xl md:text-2xl font-black text-slate-100 flex items-center gap-2 mt-1">
-            <CheckSquare className="w-6 h-6 text-amber-400" />
+          <h2 className="text-xl md:text-2xl font-black text-slate-900 dark:text-slate-100 flex items-center gap-2 mt-1">
+            <CheckSquare className="w-6 h-6 text-amber-500 dark:text-amber-400" />
             منظومة الواجبات والتقييمات التفاعلية الذكية
           </h2>
-          <p className="text-xs md:text-sm text-slate-400 mt-1">
+          <p className="text-xs md:text-sm text-slate-600 dark:text-slate-400 mt-1">
             ارفع ورقة تقييم الوزارة أو صفحة الكتاب ليحولها الذكاء الاصطناعي لأسئلة كاهوت تفاعلية، مع روابط سريعة للواتساب وبوابة المتدرب!
           </p>
         </div>

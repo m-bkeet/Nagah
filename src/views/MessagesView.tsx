@@ -53,6 +53,20 @@ export const MessagesView: React.FC = () => {
 
   const chatEndRef = useRef<HTMLDivElement>(null);
 
+  const formatSafeTime = (dateValue: any) => {
+    if (!dateValue) return '';
+    const d = new Date(dateValue);
+    if (isNaN(d.getTime())) return '';
+    return d.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
+  };
+
+  const formatSafeDateTime = (dateValue: any) => {
+    if (!dateValue) return '';
+    const d = new Date(dateValue);
+    if (isNaN(d.getTime())) return '';
+    return d.toLocaleString('ar-EG', { hour: '2-digit', minute: '2-digit' });
+  };
+
   const templates = [
     {
       title: 'ترحيب بالمتدرب الجديد 🌹',
@@ -330,16 +344,22 @@ export const MessagesView: React.FC = () => {
         groupsMap[keyId].unreadCount += 1;
       }
 
-      const msgTime = new Date(msg.createdAt);
-      if (msgTime > groupsMap[keyId].lastMessageTime) {
-        groupsMap[keyId].lastMessageTime = msgTime;
+      if (msg.createdAt) {
+        const msgTime = new Date(msg.createdAt);
+        if (!isNaN(msgTime.getTime()) && msgTime > groupsMap[keyId].lastMessageTime) {
+          groupsMap[keyId].lastMessageTime = msgTime;
+        }
       }
     });
 
     // Convert map to array, sort messages inside chronologically, and filter group threads
     return Object.values(groupsMap)
       .map((g: any) => {
-        g.messages.sort((a: any, b: any) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+        g.messages.sort((a: any, b: any) => {
+          const tA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+          const tB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+          return (isNaN(tA) ? 0 : tA) - (isNaN(tB) ? 0 : tB);
+        });
         return g;
       })
       .filter((g: any) => {
@@ -369,7 +389,11 @@ export const MessagesView: React.FC = () => {
 
         return true;
       })
-      .sort((a: any, b: any) => b.lastMessageTime.getTime() - a.lastMessageTime.getTime());
+      .sort((a: any, b: any) => {
+        const tA = a.lastMessageTime instanceof Date && !isNaN(a.lastMessageTime.getTime()) ? a.lastMessageTime.getTime() : 0;
+        const tB = b.lastMessageTime instanceof Date && !isNaN(b.lastMessageTime.getTime()) ? b.lastMessageTime.getTime() : 0;
+        return tB - tA;
+      });
   }, [portalMessages, trainees, inboxFilter, inboxSearch]);
 
   const activeChat = useMemo(() => {
@@ -380,31 +404,33 @@ export const MessagesView: React.FC = () => {
   return (
     <div className="space-y-5">
       {/* Header & Tabs */}
-      <div className="bg-slate-800/80 border border-slate-700/80 p-4 rounded-2xl backdrop-blur-md shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="glass-card-3d bg-white/95 dark:bg-slate-900/90 border border-slate-200/90 dark:border-amber-500/30 p-4 sm:p-5 rounded-2xl backdrop-blur-md shadow-lg flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h2 className="text-lg font-black text-slate-100 flex items-center gap-2">
-            <MessageSquare className="w-5 h-5 text-amber-400" />
+          <h2 className="text-lg font-black text-slate-900 dark:text-slate-100 flex items-center gap-2">
+            <div className="p-2 bg-amber-500/10 text-amber-600 dark:text-amber-400 rounded-xl border border-amber-500/20 shadow-xs">
+              <MessageSquare className="w-5 h-5" />
+            </div>
             <span>مركز الرسائل والتواصل المباشر والواتساب</span>
           </h2>
-          <p className="text-xs text-slate-400 mt-0.5">
+          <p className="text-xs text-slate-600 dark:text-slate-400 mt-1 font-medium">
             متابعة استفسارات ورسائل أولياء الأمور والطلاب وإرسال التنبيهات المباشرة عبر البوابة والواتساب
           </p>
         </div>
 
         {/* Sub-tab switcher */}
-        <div className="flex items-center bg-slate-900/90 p-1 rounded-xl border border-slate-700 shrink-0">
+        <div className="flex items-center bg-slate-100 dark:bg-slate-950/80 p-1.5 rounded-xl border border-slate-200 dark:border-slate-800 shadow-inner shrink-0">
           <button
             onClick={() => setActiveSubTab('inbox')}
             className={`px-4 py-2 rounded-lg font-bold text-xs flex items-center gap-2 transition-all ${
               activeSubTab === 'inbox'
-                ? 'bg-amber-500 text-slate-950 shadow-md'
-                : 'text-slate-400 hover:text-slate-200'
+                ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 shadow-md border border-amber-400'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
             }`}
           >
             <Inbox className="w-4 h-4" />
             <span>الوارد الذكي (نظام المحادثات الواتسابي) 📱</span>
             {portalMessages.some(m => !m.read && m.senderRole !== 'admin') && (
-              <span className="px-2 py-0.5 rounded-full bg-rose-500 text-white text-[9px] font-black animate-pulse">
+              <span className="px-2 py-0.5 rounded-full bg-rose-500 text-white text-[9px] font-black animate-pulse shadow-xs">
                 جديد
               </span>
             )}
@@ -414,8 +440,8 @@ export const MessagesView: React.FC = () => {
             onClick={() => setActiveSubTab('send')}
             className={`px-4 py-2 rounded-lg font-bold text-xs flex items-center gap-2 transition-all ${
               activeSubTab === 'send'
-                ? 'bg-amber-500 text-slate-950 shadow-md'
-                : 'text-slate-400 hover:text-slate-200'
+                ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 shadow-md border border-amber-400'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
             }`}
           >
             <Send className="w-4 h-4" />
@@ -426,44 +452,44 @@ export const MessagesView: React.FC = () => {
 
       {/* Subtab 1: WHATSAPP-STYLE INTERACTIVE CHATS */}
       {activeSubTab === 'inbox' && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-5 bg-slate-800/40 p-2 rounded-3xl border border-slate-700/60 h-[680px] overflow-hidden">
+        <div className="glass-card-3d grid grid-cols-1 md:grid-cols-3 gap-4 bg-slate-50/70 dark:bg-slate-900/70 p-3 rounded-3xl border border-slate-200/90 dark:border-slate-800/80 h-[680px] overflow-hidden shadow-xl">
           
           {/* Right Column: Contacts Sidebar */}
-          <div className={`md:col-span-1 bg-slate-900/90 rounded-2xl flex flex-col h-full overflow-hidden border border-slate-700/50 ${activeChatId ? 'hidden md:flex' : 'flex'}`}>
+          <div className={`md:col-span-1 bg-white/95 dark:bg-slate-950/90 rounded-2xl flex flex-col h-full overflow-hidden border border-slate-200/90 dark:border-slate-800/80 shadow-md ${activeChatId ? 'hidden md:flex' : 'flex'}`}>
             
             {/* Search and Filters Header */}
-            <div className="p-3 border-b border-slate-800 space-y-2 bg-slate-950/40">
+            <div className="p-3 border-b border-slate-200 dark:border-slate-800 space-y-2.5 bg-slate-50/90 dark:bg-slate-900/50">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-black text-slate-300">محادثات الطلاب وأولياء الأمور</span>
+                <span className="text-xs font-black text-slate-900 dark:text-slate-100">محادثات الطلاب وأولياء الأمور</span>
                 <button
                   onClick={loadInboxMessages}
-                  className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-all"
+                  className="p-1.5 rounded-lg bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 shadow-xs transition-all active:scale-95"
                   title="تحديث الرسائل"
                 >
-                  <RefreshCw className={`w-3.5 h-3.5 ${isLoadingInbox ? 'animate-spin text-amber-400' : ''}`} />
+                  <RefreshCw className={`w-3.5 h-3.5 ${isLoadingInbox ? 'animate-spin text-amber-500' : ''}`} />
                 </button>
               </div>
 
               {/* Search Box */}
               <div className="relative">
-                <Search className="w-3.5 h-3.5 text-slate-500 absolute right-3 top-2.5" />
+                <Search className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500 absolute right-3 top-2.5" />
                 <input
                   type="text"
                   value={inboxSearch}
                   onChange={(e) => setInboxSearch(e.target.value)}
                   placeholder="بحث باسم الطالب أو محتوى الرسالة..."
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl pr-9 pl-3 py-1.5 text-xs text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-amber-500"
+                  className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700/80 rounded-xl pr-9 pl-3 py-1.5 text-xs text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:border-amber-500 shadow-xs"
                 />
               </div>
 
               {/* Sub-Filters */}
-              <div className="flex gap-1 pt-1">
+              <div className="flex gap-1 pt-0.5">
                 <button
                   onClick={() => setInboxFilter('all')}
                   className={`flex-1 py-1 rounded-lg text-[10px] font-bold transition-all ${
                     inboxFilter === 'all'
-                      ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
-                      : 'bg-slate-800 text-slate-400 hover:text-slate-200'
+                      ? 'bg-amber-500 text-slate-950 font-black shadow-xs'
+                      : 'bg-slate-100 dark:bg-slate-800/80 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 border border-slate-200/80 dark:border-slate-700/50'
                   }`}
                 >
                   الكل
@@ -472,8 +498,8 @@ export const MessagesView: React.FC = () => {
                   onClick={() => setInboxFilter('parent')}
                   className={`flex-1 py-1 rounded-lg text-[10px] font-bold transition-all ${
                     inboxFilter === 'parent'
-                      ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-                      : 'bg-slate-800 text-slate-400 hover:text-slate-200'
+                      ? 'bg-emerald-600 text-white font-black shadow-xs'
+                      : 'bg-slate-100 dark:bg-slate-800/80 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 border border-slate-200/80 dark:border-slate-700/50'
                   }`}
                 >
                   أولياء الأمور
@@ -482,8 +508,8 @@ export const MessagesView: React.FC = () => {
                   onClick={() => setInboxFilter('student')}
                   className={`flex-1 py-1 rounded-lg text-[10px] font-bold transition-all ${
                     inboxFilter === 'student'
-                      ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
-                      : 'bg-slate-800 text-slate-400 hover:text-slate-200'
+                      ? 'bg-blue-600 text-white font-black shadow-xs'
+                      : 'bg-slate-100 dark:bg-slate-800/80 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 border border-slate-200/80 dark:border-slate-700/50'
                   }`}
                 >
                   الطلاب
@@ -492,11 +518,11 @@ export const MessagesView: React.FC = () => {
             </div>
 
             {/* Chat list items */}
-            <div className="flex-1 overflow-y-auto divide-y divide-slate-800/60 p-1 bg-slate-950/20">
+            <div className="flex-1 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800/60 p-1 bg-white/40 dark:bg-slate-950/20">
               {chatGroups.length === 0 ? (
                 <div className="p-8 text-center space-y-2">
-                  <Inbox className="w-10 h-10 text-slate-700 mx-auto" />
-                  <p className="text-xs text-slate-500">لا توجد محادثات تطابق الفلترة حالياً.</p>
+                  <Inbox className="w-10 h-10 text-slate-400 dark:text-slate-600 mx-auto" />
+                  <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">لا توجد محادثات تطابق الفلترة حالياً.</p>
                 </div>
               ) : (
                 chatGroups.map((group) => {
@@ -510,17 +536,17 @@ export const MessagesView: React.FC = () => {
                       onClick={() => handleSelectChat(group.traineeId)}
                       className={`w-full flex items-start gap-2.5 p-3 rounded-xl transition-all text-right ${
                         activeChatId === group.traineeId
-                          ? 'bg-slate-800 border-r-4 border-amber-500'
-                          : 'hover:bg-slate-800/40 bg-transparent'
+                          ? 'bg-amber-50/90 dark:bg-amber-500/15 border-r-4 border-amber-500 shadow-xs'
+                          : 'hover:bg-slate-100/70 dark:hover:bg-slate-800/40 bg-transparent'
                       }`}
                     >
                       {/* Avatar Initials */}
                       <div className="relative shrink-0 mt-0.5">
-                        <div className={`w-10 h-10 rounded-full flex items-center justify-center text-xs font-black text-slate-950 ${group.avatarColor || 'bg-amber-400'}`}>
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center text-xs font-black text-slate-950 shadow-xs ${group.avatarColor || 'bg-amber-400'}`}>
                           {group.traineeName.substring(0, 2)}
                         </div>
                         {group.unreadCount > 0 && (
-                          <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-rose-500 text-white font-mono text-[9px] font-bold flex items-center justify-center animate-bounce border border-slate-900 shadow">
+                          <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-rose-500 text-white font-mono text-[9px] font-bold flex items-center justify-center animate-bounce border border-white dark:border-slate-900 shadow">
                             {group.unreadCount}
                           </span>
                         )}
@@ -529,24 +555,24 @@ export const MessagesView: React.FC = () => {
                       {/* Contact Details & Last Msg snippet */}
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between gap-1.5">
-                          <h4 className="font-bold text-xs text-slate-200 truncate max-w-[130px]">
+                          <h4 className="font-bold text-xs text-slate-900 dark:text-slate-100 truncate max-w-[130px]">
                             {group.parentName || group.traineeName}
                           </h4>
-                          <span className="text-[9px] text-slate-500 font-mono">
-                            {lastMsg ? new Date(lastMsg.createdAt).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }) : ''}
+                          <span className="text-[10px] text-slate-500 dark:text-slate-400 font-mono">
+                            {formatSafeTime(lastMsg?.createdAt)}
                           </span>
                         </div>
-                        <p className="text-[10px] text-amber-400/80 mt-0.5 truncate font-semibold">
+                        <p className="text-[10px] text-amber-700 dark:text-amber-400 mt-0.5 truncate font-bold">
                           طالب: {group.traineeName}
                         </p>
-                        <p className="text-[10px] text-slate-400 mt-1 truncate flex items-center gap-1 font-sans">
+                        <p className="text-[10px] text-slate-600 dark:text-slate-300 mt-1 truncate flex items-center gap-1 font-sans">
                           {isLastMsgAdmin ? (
-                            <span className="text-emerald-400 flex items-center gap-0.5 shrink-0">
+                            <span className="text-emerald-600 dark:text-emerald-400 flex items-center gap-0.5 shrink-0 font-bold">
                               <CheckCheck className="w-3 h-3" />
                               <span>أنت:</span>
                             </span>
                           ) : isLastMsgGreeting ? (
-                            <span className="text-pink-400 shrink-0">🌹 تحية شكر:</span>
+                            <span className="text-pink-600 dark:text-pink-400 shrink-0 font-bold">🌹 تحية شكر:</span>
                           ) : null}
                           <span className="truncate">{lastMsg?.message || 'لا توجد رسائل'}</span>
                         </p>
@@ -559,33 +585,33 @@ export const MessagesView: React.FC = () => {
           </div>
 
           {/* Left Column: Conversation Workspace Panel */}
-          <div className={`md:col-span-2 bg-slate-900/40 rounded-2xl flex flex-col h-full overflow-hidden border border-slate-700/50 ${activeChatId ? 'flex' : 'hidden md:flex'}`}>
+          <div className={`md:col-span-2 bg-white/95 dark:bg-slate-900/60 rounded-2xl flex flex-col h-full overflow-hidden border border-slate-200/90 dark:border-slate-800/80 shadow-md ${activeChatId ? 'flex' : 'hidden md:flex'}`}>
             {activeChat ? (
-              <div className="flex flex-col h-full overflow-hidden bg-slate-950/20">
+              <div className="flex flex-col h-full overflow-hidden bg-slate-50/30 dark:bg-slate-950/20">
                 
                 {/* Active Chat Header */}
-                <div className="p-3 border-b border-slate-800 bg-slate-950/60 flex items-center justify-between gap-2 z-10">
+                <div className="p-3 border-b border-slate-200 dark:border-slate-800 bg-slate-50/90 dark:bg-slate-950/60 flex items-center justify-between gap-2 z-10">
                   <div className="flex items-center gap-2.5">
                     {/* Back Button for Mobile View */}
                     <button
                       onClick={() => setActiveChatId(null)}
-                      className="md:hidden p-1.5 rounded-lg bg-slate-800 text-slate-300 hover:text-white"
+                      className="md:hidden p-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:text-white border border-slate-200 dark:border-slate-700 shadow-xs"
                       title="رجوع للمحادثات"
                     >
                       <ArrowRight className="w-4 h-4" />
                     </button>
 
-                    <div className="w-10 h-10 rounded-full bg-amber-400/20 text-amber-300 flex items-center justify-center font-bold text-xs">
+                    <div className="w-10 h-10 rounded-full bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30 flex items-center justify-center font-black text-xs shadow-xs">
                       {activeChat.traineeName.substring(0, 2)}
                     </div>
                     
                     <div>
-                      <h4 className="font-black text-xs text-slate-100 flex items-center gap-1.5">
+                      <h4 className="font-black text-xs text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
                         <span>{activeChat.parentName}</span>
-                        <span className="text-[9px] bg-emerald-500/10 text-emerald-400 px-1.5 py-0.5 rounded-full">ولي أمر</span>
+                        <span className="text-[9px] bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30 px-1.5 py-0.5 rounded-full font-bold">ولي أمر</span>
                       </h4>
-                      <p className="text-[10px] text-slate-400 mt-0.5">
-                        الولد: <strong className="text-amber-300">{activeChat.traineeName}</strong> ({activeChat.traineeCode})
+                      <p className="text-[10px] text-slate-600 dark:text-slate-400 mt-0.5 font-medium">
+                        الولد: <strong className="text-amber-700 dark:text-amber-300 font-bold">{activeChat.traineeName}</strong> ({activeChat.traineeCode})
                       </p>
                     </div>
                   </div>
@@ -599,7 +625,7 @@ export const MessagesView: React.FC = () => {
                           const fullPhone = cleanPhone.startsWith('2') ? cleanPhone : '2' + cleanPhone;
                           window.open(`https://wa.me/${fullPhone}`, '_blank');
                         }}
-                        className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-emerald-600/20 hover:bg-emerald-600 text-emerald-400 hover:text-white text-[10px] font-bold border border-emerald-500/20 transition-all"
+                        className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-600 dark:bg-emerald-600/20 dark:hover:bg-emerald-600 text-emerald-700 dark:text-emerald-300 hover:text-white text-[10px] font-bold border border-emerald-300 dark:border-emerald-500/30 transition-all shadow-xs active:scale-95"
                         title="فتح دردشة الواتساب المباشرة برقم الهاتف"
                       >
                         <Smartphone className="w-3.5 h-3.5" />
@@ -610,7 +636,7 @@ export const MessagesView: React.FC = () => {
                 </div>
 
                 {/* Messages Body Area (Scroll Container) */}
-                <div className="flex-1 overflow-y-auto p-4 space-y-3.5 bg-slate-900/30">
+                <div className="flex-1 overflow-y-auto p-4 space-y-3.5 bg-slate-100/40 dark:bg-slate-900/30">
                   {activeChat.messages.map((msg: any) => {
                     const isAdmin = msg.senderRole === 'admin';
                     const isGreeting = msg.messageType === 'greeting';
@@ -624,14 +650,14 @@ export const MessagesView: React.FC = () => {
                         <div
                           className={`max-w-[85%] rounded-2xl p-3 shadow-md space-y-1 relative border transition-all ${
                             isAdmin
-                              ? 'bg-amber-500/10 border-amber-500/20 text-slate-100 rounded-tr-none'
+                              ? 'bg-amber-50/90 dark:bg-amber-500/10 border-amber-300 dark:border-amber-500/30 text-slate-900 dark:text-slate-100 rounded-tr-none'
                               : isGreeting
-                              ? 'bg-pink-950/20 border-pink-500/30 text-slate-100 rounded-tl-none'
-                              : 'bg-slate-800/95 border-slate-700 text-slate-100 rounded-tl-none'
+                              ? 'bg-pink-50/90 dark:bg-pink-950/20 border-pink-300 dark:border-pink-500/30 text-slate-900 dark:text-slate-100 rounded-tl-none'
+                              : 'bg-white dark:bg-slate-800/95 border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 rounded-tl-none'
                           }`}
                         >
                           {/* Sender Identity */}
-                          <div className="flex items-center justify-between gap-4 border-b border-slate-700/20 pb-1 text-[9px] text-slate-400 font-semibold">
+                          <div className="flex items-center justify-between gap-4 border-b border-slate-200/80 dark:border-slate-700/40 pb-1 text-[9px] text-slate-500 dark:text-slate-400 font-semibold">
                             <span>
                               {isAdmin
                                 ? `الإدارة: ${msg.senderName || 'المركز العام'}`
@@ -640,25 +666,25 @@ export const MessagesView: React.FC = () => {
                                 : `وارد البوابة: ${msg.portalSource === 'parent' ? 'ولي الأمر' : 'الطالب'}`}
                             </span>
                             <span className="font-mono">
-                              {new Date(msg.createdAt).toLocaleString('ar-EG', { hour: '2-digit', minute: '2-digit' })}
+                              {formatSafeDateTime(msg.createdAt)}
                             </span>
                           </div>
 
                           {/* Message Text */}
-                          <p className="text-xs leading-relaxed whitespace-pre-wrap font-sans text-slate-200">
+                          <p className="text-xs leading-relaxed whitespace-pre-wrap font-sans text-slate-800 dark:text-slate-200">
                             {msg.message}
                           </p>
 
                           {/* Double Checks status indicator */}
                           {isAdmin && (
-                            <div className="flex items-center justify-end text-[9px] text-slate-400 pt-0.5 gap-0.5 font-mono">
+                            <div className="flex items-center justify-end text-[9px] text-slate-500 dark:text-slate-400 pt-0.5 gap-0.5 font-mono">
                               {msg.read ? (
-                                <span className="text-cyan-400 flex items-center gap-0.5 font-bold">
+                                <span className="text-cyan-600 dark:text-cyan-400 flex items-center gap-0.5 font-bold">
                                   <CheckCheck className="w-3.5 h-3.5" />
                                   <span>تمت قراءتها بالبوابة</span>
                                 </span>
                               ) : (
-                                <span className="text-slate-500 flex items-center gap-0.5">
+                                <span className="text-slate-400 dark:text-slate-500 flex items-center gap-0.5">
                                   <Check className="w-3.5 h-3.5" />
                                   <span>مستلمة بالبوابة</span>
                                 </span>
@@ -673,17 +699,17 @@ export const MessagesView: React.FC = () => {
                 </div>
 
                 {/* Quick Reply personalizer Drop-up */}
-                <div className="p-2 border-t border-slate-850 bg-slate-900/50 space-y-1.5">
+                <div className="p-2.5 border-t border-slate-200 dark:border-slate-800 bg-slate-50/90 dark:bg-slate-900/60 space-y-2">
                   <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-thin">
-                    <span className="text-[10px] text-slate-400 font-bold shrink-0 ml-1">قوالب سريعة:</span>
+                    <span className="text-[10px] text-slate-500 dark:text-slate-400 font-bold shrink-0 ml-1">قوالب سريعة:</span>
                     {templates.map((tpl, idx) => (
                       <button
                         key={idx}
                         type="button"
                         onClick={() => applyTemplateToChat(tpl.text)}
-                        className="px-2 py-1 rounded-lg bg-slate-850 hover:bg-slate-700 border border-slate-800 text-slate-300 hover:text-white text-[10px] font-bold shrink-0 transition-all flex items-center gap-1"
+                        className="px-2.5 py-1 rounded-lg bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-[10px] font-bold shrink-0 transition-all flex items-center gap-1 shadow-xs active:scale-95"
                       >
-                        <FileText className="w-3 h-3 text-amber-400" />
+                        <FileText className="w-3 h-3 text-amber-500 dark:text-amber-400" />
                         <span>{tpl.title}</span>
                       </button>
                     ))}
@@ -691,32 +717,32 @@ export const MessagesView: React.FC = () => {
 
                   {/* Inline Message Compose Bar */}
                   <form onSubmit={handleSendChatMessage} className="flex gap-2">
-                    <div className="flex-1 relative flex items-center bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 focus-within:border-amber-500">
+                    <div className="flex-1 relative flex items-center bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl px-3 py-1.5 focus-within:border-amber-500 focus-within:ring-2 focus-within:ring-amber-500/20 shadow-xs">
                       <input
                         type="text"
                         value={chatInput}
                         onChange={(e) => setChatInput(e.target.value)}
                         placeholder={`الرد المباشر بطلب أو رد توضيحي للسيد / ${activeChat.parentName}...`}
-                        className="w-full bg-transparent border-none text-slate-100 text-xs focus:outline-none placeholder:text-slate-500"
+                        className="w-full bg-transparent border-none text-slate-900 dark:text-slate-100 text-xs focus:outline-none placeholder:text-slate-400 dark:placeholder:text-slate-500"
                         disabled={isSendingChat}
                       />
                       
                       {/* WhatsApp toggle option */}
-                      <label className="flex items-center gap-1 px-2 py-1 bg-slate-900 hover:bg-slate-850 rounded-lg text-[9px] font-black text-slate-400 hover:text-white cursor-pointer transition-all border border-slate-800 select-none shrink-0">
+                      <label className="flex items-center gap-1 px-2 py-1 bg-slate-100 dark:bg-slate-900 hover:bg-slate-200 dark:hover:bg-slate-850 rounded-lg text-[9px] font-black text-slate-700 dark:text-slate-300 cursor-pointer transition-all border border-slate-200 dark:border-slate-800 select-none shrink-0">
                         <input
                           type="checkbox"
                           checked={sendWaToo}
                           onChange={(e) => setSendWaToo(e.target.checked)}
-                          className="rounded border-slate-700 text-amber-500 focus:ring-transparent w-3 h-3 cursor-pointer"
+                          className="rounded border-slate-300 dark:border-slate-700 text-amber-500 focus:ring-transparent w-3 h-3 cursor-pointer"
                         />
-                        <span className="text-emerald-400">إرسال واتساب أيضاً</span>
+                        <span className="text-emerald-700 dark:text-emerald-400">إرسال واتساب أيضاً</span>
                       </label>
                     </div>
 
                     <button
                       type="submit"
                       disabled={isSendingChat || !chatInput.trim()}
-                      className="px-4 py-2 bg-amber-500 hover:bg-amber-400 disabled:bg-slate-800 text-slate-950 disabled:text-slate-500 rounded-xl font-black text-xs transition-all shadow-md flex items-center gap-1"
+                      className="px-4 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 disabled:from-slate-200 disabled:to-slate-300 dark:disabled:from-slate-800 dark:disabled:to-slate-800 text-slate-950 disabled:text-slate-400 dark:disabled:text-slate-600 rounded-xl font-black text-xs transition-all shadow-md flex items-center gap-1 border border-amber-400/50 disabled:border-transparent active:scale-95"
                     >
                       {isSendingChat ? (
                         <div className="w-4 h-4 border-2 border-slate-950 border-t-transparent rounded-full animate-spin" />
@@ -730,13 +756,13 @@ export const MessagesView: React.FC = () => {
 
               </div>
             ) : (
-              <div className="flex-1 flex flex-col items-center justify-center text-center p-8 space-y-4 bg-slate-950/10">
-                <div className="w-20 h-20 rounded-full bg-amber-500/10 border border-amber-500/20 flex items-center justify-center animate-pulse">
-                  <MessageSquare className="w-10 h-10 text-amber-400" />
+              <div className="flex-1 flex flex-col items-center justify-center text-center p-8 space-y-4 bg-slate-50/40 dark:bg-slate-950/10">
+                <div className="w-20 h-20 rounded-full bg-amber-500/10 border border-amber-500/30 flex items-center justify-center animate-pulse shadow-sm">
+                  <MessageSquare className="w-10 h-10 text-amber-500 dark:text-amber-400" />
                 </div>
                 <div className="space-y-1.5 max-w-sm">
-                  <h3 className="font-black text-sm text-slate-200">بوابة محادثات ولي الأمر والطالب 💬</h3>
-                  <p className="text-xs text-slate-400 leading-relaxed">
+                  <h3 className="font-black text-sm text-slate-900 dark:text-slate-200">بوابة محادثات ولي الأمر والطالب 💬</h3>
+                  <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed font-medium">
                     انقر على أي اسم من القائمة الجانبية لبدء استعراض الرسائل السابقة، الرد الفوري المباشر عبر البوابة، أو نسخها وإرسالها واتساب وتتبع حالتها!
                   </p>
                 </div>
@@ -752,15 +778,15 @@ export const MessagesView: React.FC = () => {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
           {/* Left 2 Cols: Message Composer */}
           <div className="lg:col-span-2 space-y-4">
-            <div className="bg-slate-800/80 border border-slate-700/80 rounded-2xl p-5 shadow-xl backdrop-blur-md space-y-4">
+            <div className="glass-card-3d bg-white/95 dark:bg-slate-900/80 border border-slate-200/90 dark:border-slate-700/80 rounded-2xl p-5 shadow-xl backdrop-blur-md space-y-4">
               {/* Target & Channel Selectors */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
                 <div>
-                  <label className="block text-slate-300 font-bold mb-1">الجهة المستهدفة:</label>
+                  <label className="block text-slate-800 dark:text-slate-200 font-bold mb-1">الجهة المستهدفة:</label>
                   <select
                     value={selectedTarget}
                     onChange={(e: any) => setSelectedTarget(e.target.value)}
-                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 focus:outline-none"
+                    className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-amber-500 font-bold shadow-xs cursor-pointer"
                   >
                     <option value="single">متدرب محدد (رسالة فردية مباشرة)</option>
                     <option value="group">مجموعة تدريبية كاملة</option>
@@ -769,15 +795,15 @@ export const MessagesView: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-slate-300 font-bold mb-1">قناة الإرسال والتسليم:</label>
+                  <label className="block text-slate-800 dark:text-slate-200 font-bold mb-1">قناة الإرسال والتسليم:</label>
                   <div className="grid grid-cols-3 gap-1.5">
                     <button
                       type="button"
                       onClick={() => setChannel('whatsapp')}
-                      className={`py-2 rounded-xl font-bold text-[11px] flex items-center justify-center gap-1 border transition-all ${
+                      className={`py-2 rounded-xl font-bold text-[11px] flex items-center justify-center gap-1 border transition-all active:scale-95 ${
                         channel === 'whatsapp'
-                          ? 'bg-emerald-600 border-emerald-500 text-white shadow'
-                          : 'bg-slate-900 border-slate-700 text-slate-400 hover:text-white'
+                          ? 'bg-emerald-600 border-emerald-500 text-white shadow-md'
+                          : 'bg-slate-100 dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                       }`}
                     >
                       <Smartphone className="w-3.5 h-3.5" />
@@ -786,10 +812,10 @@ export const MessagesView: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => setChannel('portal')}
-                      className={`py-2 rounded-xl font-bold text-[11px] flex items-center justify-center gap-1 border transition-all ${
+                      className={`py-2 rounded-xl font-bold text-[11px] flex items-center justify-center gap-1 border transition-all active:scale-95 ${
                         channel === 'portal'
-                          ? 'bg-amber-500 border-amber-400 text-slate-950 shadow'
-                          : 'bg-slate-900 border-slate-700 text-slate-400 hover:text-white'
+                          ? 'bg-gradient-to-r from-amber-500 to-amber-600 border-amber-400 text-slate-950 shadow-md font-black'
+                          : 'bg-slate-100 dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                       }`}
                     >
                       <Globe className="w-3.5 h-3.5" />
@@ -798,10 +824,10 @@ export const MessagesView: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => setChannel('sms')}
-                      className={`py-2 rounded-xl font-bold text-[11px] flex items-center justify-center gap-1 border transition-all ${
+                      className={`py-2 rounded-xl font-bold text-[11px] flex items-center justify-center gap-1 border transition-all active:scale-95 ${
                         channel === 'sms'
-                          ? 'bg-blue-600 border-blue-500 text-white shadow'
-                          : 'bg-slate-900 border-slate-700 text-slate-400 hover:text-white'
+                          ? 'bg-blue-600 border-blue-500 text-white shadow-md font-black'
+                          : 'bg-slate-100 dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                       }`}
                     >
                       <MessageSquare className="w-3.5 h-3.5" />
@@ -814,11 +840,11 @@ export const MessagesView: React.FC = () => {
               {/* If Single Trainee */}
               {selectedTarget === 'single' && (
                 <div>
-                  <label className="block text-slate-300 font-bold mb-1 text-xs">اختر المتدرب:</label>
+                  <label className="block text-slate-800 dark:text-slate-200 font-bold mb-1 text-xs">اختر المتدرب:</label>
                   <select
                     value={selectedTraineeId}
                     onChange={(e) => setSelectedTraineeId(e.target.value)}
-                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-100"
+                    className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:border-amber-500 shadow-xs cursor-pointer font-medium"
                   >
                     {trainees.map((t) => (
                       <option key={t.id} value={t.id}>
@@ -832,11 +858,11 @@ export const MessagesView: React.FC = () => {
               {/* If Group */}
               {selectedTarget === 'group' && (
                 <div>
-                  <label className="block text-slate-300 font-bold mb-1 text-xs">اختر المجموعة:</label>
+                  <label className="block text-slate-800 dark:text-slate-200 font-bold mb-1 text-xs">اختر المجموعة:</label>
                   <select
                     value={selectedGroupId}
                     onChange={(e) => setSelectedGroupId(e.target.value)}
-                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-100"
+                    className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:border-amber-500 shadow-xs cursor-pointer font-medium"
                   >
                     {groups.map((g) => (
                       <option key={g.id} value={g.id}>
@@ -850,7 +876,7 @@ export const MessagesView: React.FC = () => {
               {/* Textarea */}
               <div>
                 <div className="flex items-center justify-between mb-1">
-                  <label className="text-slate-300 font-bold text-xs">نص الرسالة:</label>
+                  <label className="text-slate-800 dark:text-slate-200 font-bold text-xs">نص الرسالة:</label>
                   <span className="text-[11px] text-slate-500 font-mono">
                     المتغيرات المتاحة: {'{name}'} , {'{code}'} , {'{course}'}
                   </span>
@@ -860,14 +886,14 @@ export const MessagesView: React.FC = () => {
                   value={messageText}
                   onChange={(e) => setMessageText(e.target.value)}
                   placeholder="اكتب نص الرسالة هنا أو اختر قالباً جاهزاً من القائمة الجانبية..."
-                  className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-xs text-slate-100 focus:outline-none focus:border-amber-500"
+                  className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-3 text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:border-amber-500 shadow-xs"
                 />
               </div>
 
               <div className="flex justify-end pt-2">
                 <button
                   onClick={handleSend}
-                  className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs shadow-lg transition-all"
+                  className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs shadow-lg transition-all border border-amber-400/50 active:scale-95"
                 >
                   <Send className="w-4 h-4" />
                   <span>إرسال الرسالة الآن</span>
@@ -878,24 +904,24 @@ export const MessagesView: React.FC = () => {
 
           {/* Right 1 Col: Ready Templates */}
           <div className="space-y-4">
-            <div className="bg-slate-800/80 border border-slate-700/80 rounded-2xl p-5 shadow-xl backdrop-blur-md space-y-3">
-              <h3 className="font-bold text-sm text-slate-100 flex items-center gap-2">
-                <FileText className="w-4 h-4 text-amber-400" />
+            <div className="glass-card-3d bg-white/95 dark:bg-slate-900/80 border border-slate-200/90 dark:border-slate-700/80 rounded-2xl p-5 shadow-xl backdrop-blur-md space-y-3">
+              <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                <FileText className="w-4 h-4 text-amber-500 dark:text-amber-400" />
                 قوالب ونماذج الرسائل الجاهزة
               </h3>
-              <p className="text-[11px] text-slate-400">انقر على أي نموذج لنسخه فوراً في صندوق الرسالة</p>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">انقر على أي نموذج لنسخه فوراً في صندوق الرسالة</p>
 
               <div className="space-y-2.5">
                 {templates.map((tpl, idx) => (
                   <div
                     key={idx}
                     onClick={() => applyTemplate(tpl.text)}
-                    className="p-3 rounded-xl bg-slate-900/70 border border-slate-700/60 hover:border-amber-500/50 cursor-pointer transition-all space-y-1 group"
+                    className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/70 border border-slate-200 dark:border-slate-700/60 hover:border-amber-500/50 hover:bg-amber-50/40 dark:hover:bg-amber-950/20 cursor-pointer transition-all space-y-1 group shadow-xs active:scale-[0.98]"
                   >
-                    <h4 className="font-bold text-xs text-slate-200 group-hover:text-amber-300">
+                    <h4 className="font-bold text-xs text-slate-900 dark:text-slate-200 group-hover:text-amber-600 dark:group-hover:text-amber-400">
                       {tpl.title}
                     </h4>
-                    <p className="text-[11px] text-slate-400 line-clamp-2">{tpl.text}</p>
+                    <p className="text-[11px] text-slate-600 dark:text-slate-400 line-clamp-2 leading-relaxed">{tpl.text}</p>
                   </div>
                 ))}
               </div>

@@ -105,7 +105,7 @@ export const NagahAiDeveloperView: React.FC = () => {
   return (
     <div className="space-y-6 pb-12" dir="rtl">
       {/* Header Banner */}
-      <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 border border-indigo-500/30 rounded-2xl p-6 shadow-2xl relative overflow-hidden">
+      <div className="bg-gradient-to-r from-indigo-50/90 via-white to-purple-50/60 dark:from-slate-900 dark:via-indigo-950 dark:to-slate-900 border border-indigo-200 dark:border-indigo-500/30 rounded-3xl p-6 shadow-sm dark:shadow-2xl relative overflow-hidden">
         <div className="absolute top-0 left-0 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
         <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 relative z-10">
           <div className="flex items-center gap-4">
@@ -114,25 +114,25 @@ export const NagahAiDeveloperView: React.FC = () => {
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h1 className="text-2xl font-black text-white tracking-tight">
+                <h1 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">
                   🧠 Nagah AI Developer
                 </h1>
-                <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 text-xs font-black border border-emerald-500/30">
+                <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-400 text-xs font-black border border-emerald-300 dark:border-emerald-500/30">
                   AUTONOMOUS V7.2
                 </span>
               </div>
-              <p className="text-xs text-slate-300 mt-1 max-w-xl">
+              <p className="text-xs text-slate-600 dark:text-slate-300 mt-1 max-w-xl">
                 المطور الذكي المتكامل لنظام النجاح للتدريب والاستشارات. يحلل، يراجع، يختبر، يصلح، ويطور المنصة آلياً دون أخطاء أو نجاح وهمي.
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-3 bg-slate-950/60 p-2 rounded-xl border border-slate-800">
-            <span className="text-xs text-slate-400 font-bold px-2">مستوى الحكم الذاتي:</span>
+          <div className="flex items-center gap-3 bg-white/80 dark:bg-slate-950/60 p-2 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xs">
+            <span className="text-xs text-slate-600 dark:text-slate-400 font-bold px-2">مستوى الحكم الذاتي:</span>
             <select
               value={autonomousMode}
               onChange={(e) => setAutonomousMode(Number(e.target.value) as 1 | 2 | 3)}
-              className="bg-slate-900 text-indigo-300 text-xs font-black px-3 py-1.5 rounded-lg border border-indigo-500/40 outline-none cursor-pointer"
+              className="bg-slate-100 dark:bg-slate-900 text-indigo-700 dark:text-indigo-300 text-xs font-black px-3 py-1.5 rounded-lg border border-indigo-300 dark:border-indigo-500/40 outline-none cursor-pointer"
             >
               <option value={1}>مستوى 1: إشراف كامل (Assisted)</option>
               <option value={2}>مستوى 2: إصلاح آمن تلقائي (Safe Auto)</option>
@@ -142,7 +142,7 @@ export const NagahAiDeveloperView: React.FC = () => {
         </div>
 
         {/* Sub-Tabs Navigation */}
-        <div className="flex items-center gap-2 mt-6 overflow-x-auto pb-1 border-t border-indigo-500/20 pt-4">
+        <div className="flex items-center gap-2 mt-6 overflow-x-auto pb-1 border-t border-indigo-200/60 dark:border-indigo-500/20 pt-4">
           {[
             { id: 'command', label: '💬 مركز الأوامر والدردشة', icon: MessageSquare },
             { id: 'intelligence', label: '🗺️ خريطة المشروع (Intelligence)', icon: Layers },
@@ -159,10 +159,10 @@ export const NagahAiDeveloperView: React.FC = () => {
               <button
                 key={tab.id}
                 onClick={() => setActiveSubTab(tab.id as any)}
-                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black transition-all shrink-0 ${
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black transition-all shrink-0 cursor-pointer ${
                   isActive
-                    ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30'
-                    : 'bg-slate-900/80 text-slate-400 hover:text-white hover:bg-slate-800'
+                    ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
+                    : 'bg-white/80 hover:bg-white text-slate-700 border border-slate-200 dark:bg-slate-900/80 dark:text-slate-400 dark:hover:text-white dark:hover:bg-slate-800 dark:border-slate-800'
                 }`}
               >
                 <Icon className="w-4 h-4" />

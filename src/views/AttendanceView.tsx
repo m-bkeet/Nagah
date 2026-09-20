@@ -239,38 +239,40 @@ export const AttendanceView: React.FC = () => {
   return (
     <div className="space-y-5">
       {/* Top Header */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-slate-800/60 border border-slate-700/70 p-4 rounded-2xl backdrop-blur-md">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/70 p-4 rounded-2xl shadow-sm backdrop-blur-md">
         <div>
-          <h2 className="text-lg font-black text-slate-100 flex items-center gap-2">
-            <CalendarCheck2 className="w-5 h-5 text-purple-400" />
+          <h2 className="text-lg font-black text-slate-900 dark:text-slate-100 flex items-center gap-2">
+            <CalendarCheck2 className="w-5 h-5 text-purple-600 dark:text-purple-400" />
             تسجيل الحضور والغياب اليومي
           </h2>
-          <p className="text-xs text-slate-400 mt-0.5">
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 font-medium">
             تسجيل حضور المجموعات، منح نقاط الحضور التلقائية، واحتساب نسبة الالتزام
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={handleMarkAllPresent}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-700 hover:bg-slate-600 text-slate-200 font-bold text-xs transition-all border border-slate-600"
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/50 text-emerald-800 dark:text-emerald-300 font-bold text-xs transition-all border border-emerald-300 dark:border-emerald-800/60 shadow-sm active:scale-95"
+            title="تحضير جميع الطلاب المقيدين في المجموعة كحاضرين دفعة واحدة"
           >
-            <CheckCheck className="w-4 h-4 text-emerald-400" />
+            <CheckCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
             <span>تحضير الكل كحاضر</span>
           </button>
 
           <button
             onClick={handlePrintAttendanceSheet}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-700 hover:bg-slate-600 text-slate-200 font-bold text-xs transition-all border border-slate-600"
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-50 hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 font-bold text-xs transition-all border border-slate-200 dark:border-slate-700 shadow-sm active:scale-95"
+            title="طباعة وتصدير كشف الحضور الرسمي للمجموعة"
           >
-            <Printer className="w-4 h-4 text-amber-400" />
+            <Printer className="w-4 h-4 text-amber-600 dark:text-amber-400" />
             <span>طباعة الكشف</span>
           </button>
 
           <button
             onClick={handleSaveAttendance}
             disabled={isSaving || trainees.length === 0}
-            className="flex items-center gap-1.5 px-5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs shadow-lg transition-all disabled:opacity-50"
+            className="flex items-center gap-1.5 px-5 py-2 rounded-xl bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-slate-950 font-black text-xs shadow-md shadow-amber-500/20 transition-all border border-amber-300 active:scale-95 disabled:opacity-50"
           >
             <Save className="w-4 h-4" />
             <span>{isSaving ? 'جاري الحفظ...' : 'حفظ كشف الحضور'}</span>
@@ -279,13 +281,13 @@ export const AttendanceView: React.FC = () => {
       </div>
 
       {/* Selectors Bar & Attendance Metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-3 bg-slate-800/40 p-3 rounded-2xl border border-slate-700/60">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-3 bg-white dark:bg-slate-800/40 p-3.5 rounded-2xl border border-slate-200 dark:border-slate-700/60 shadow-sm">
         <div>
-          <label className="block text-slate-400 font-bold text-xs mb-1">اختر المجموعة التدريبية:</label>
+          <label className="block text-slate-700 dark:text-slate-300 font-bold text-xs mb-1">اختر المجموعة التدريبية:</label>
           <select
             value={selectedGroupId}
             onChange={(e) => setSelectedGroupId(e.target.value)}
-            className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-amber-500"
+            className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-800 dark:text-slate-100 font-semibold focus:outline-none focus:border-amber-500 shadow-sm"
           >
             {groups.map((g) => (
               <option key={g.id} value={g.id}>
@@ -296,48 +298,48 @@ export const AttendanceView: React.FC = () => {
         </div>
 
         <div>
-          <label className="block text-slate-400 font-bold text-xs mb-1">تاريخ المحاضرة:</label>
+          <label className="block text-slate-700 dark:text-slate-300 font-bold text-xs mb-1">تاريخ المحاضرة:</label>
           <input
             type="date"
             value={selectedDate}
             onChange={(e) => setSelectedDate(e.target.value)}
-            className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-100 font-mono focus:outline-none focus:border-amber-500"
+            className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-800 dark:text-slate-100 font-mono font-semibold focus:outline-none focus:border-amber-500 shadow-sm"
           />
         </div>
 
         {/* Stats Pill */}
-        <div className="md:col-span-2 flex items-center justify-between gap-2 bg-slate-900/60 p-2.5 rounded-xl border border-slate-700/60 text-xs">
+        <div className="md:col-span-2 flex items-center justify-between gap-2 bg-slate-50 dark:bg-slate-900/60 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700/60 text-xs shadow-inner">
           <div className="text-center">
-            <span className="text-[10px] text-slate-400 block">إجمالي الطلاب</span>
-            <span className="font-bold font-mono text-slate-100">{trainees.length}</span>
+            <span className="text-[10px] text-slate-500 dark:text-slate-400 block font-medium">إجمالي الطلاب</span>
+            <span className="font-bold font-mono text-slate-900 dark:text-slate-100">{trainees.length}</span>
           </div>
-          <div className="text-center text-emerald-400">
-            <span className="text-[10px] block">حاضر</span>
+          <div className="text-center text-emerald-700 dark:text-emerald-400">
+            <span className="text-[10px] block font-medium">حاضر</span>
             <span className="font-bold font-mono">{presentCount}</span>
           </div>
-          <div className="text-center text-rose-400">
-            <span className="text-[10px] block">غائب</span>
+          <div className="text-center text-rose-700 dark:text-rose-400">
+            <span className="text-[10px] block font-medium">غائب</span>
             <span className="font-bold font-mono">{absentCount}</span>
           </div>
-          <div className="text-center text-amber-400">
-            <span className="text-[10px] block">متأخر</span>
+          <div className="text-center text-amber-700 dark:text-amber-400">
+            <span className="text-[10px] block font-medium">متأخر</span>
             <span className="font-bold font-mono">{lateCount}</span>
           </div>
-          <div className="text-center text-blue-400">
-            <span className="text-[10px] block">معتذر</span>
+          <div className="text-center text-blue-700 dark:text-blue-400">
+            <span className="text-[10px] block font-medium">معتذر</span>
             <span className="font-bold font-mono">{excusedCount}</span>
           </div>
-          <div className="text-center border-r border-slate-700 pr-3">
-            <span className="text-[10px] text-slate-400 block">نسبة الحضور</span>
-            <span className="font-bold font-mono text-emerald-400">{attendanceRate}%</span>
+          <div className="text-center border-r border-slate-200 dark:border-slate-700 pr-3">
+            <span className="text-[10px] text-slate-500 dark:text-slate-400 block font-medium">نسبة الحضور</span>
+            <span className="font-bold font-mono text-emerald-700 dark:text-emerald-400">{attendanceRate}%</span>
           </div>
         </div>
       </div>
 
       {/* Trainees Attendance Table */}
-      <div className="bg-slate-800/80 border border-slate-700/80 rounded-2xl shadow-xl overflow-hidden backdrop-blur-md">
+      <div className="bg-white dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 rounded-2xl shadow-sm overflow-hidden">
         <table className="w-full text-right text-xs">
-          <thead className="bg-slate-900/90 text-slate-300 font-bold border-b border-slate-700 select-none">
+          <thead className="bg-slate-100 dark:bg-slate-900/90 text-slate-700 dark:text-slate-300 font-bold border-b border-slate-200 dark:border-slate-700 select-none">
             <tr>
               <th className="p-3.5">م</th>
               <th className="p-3.5">الكود</th>
@@ -347,16 +349,16 @@ export const AttendanceView: React.FC = () => {
               <th className="p-3.5">ملاحظات / سبب الغياب</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-700/60 text-slate-200">
+          <tbody className="divide-y divide-slate-100 dark:divide-slate-700/60 text-slate-800 dark:text-slate-200">
             {isLoading ? (
               <tr>
-                <td colSpan={6} className="py-12 text-center text-slate-400">
+                <td colSpan={6} className="py-12 text-center text-slate-500 dark:text-slate-400">
                   جاري تحميل قائمة الطلاب...
                 </td>
               </tr>
             ) : trainees.length === 0 ? (
               <tr>
-                <td colSpan={6} className="py-12 text-center text-slate-400">
+                <td colSpan={6} className="py-12 text-center text-slate-500 dark:text-slate-400">
                   لا يوجد متدربون مسجلون في هذه المجموعة حالياً.
                 </td>
               </tr>
@@ -366,21 +368,21 @@ export const AttendanceView: React.FC = () => {
                 const currentNotes = attendanceMap[t.id]?.notes || '';
 
                 return (
-                  <tr key={t.id} className="hover:bg-slate-700/40 transition-colors">
+                  <tr key={t.id} className="hover:bg-slate-50 dark:hover:bg-slate-700/40 transition-colors">
                     <td className="p-3.5 font-mono text-slate-400">{idx + 1}</td>
-                    <td className="p-3.5 font-mono font-bold text-amber-400">{t.code}</td>
-                    <td className="p-3.5 font-bold text-slate-100">{t.fullName}</td>
-                    <td className="p-3.5 font-mono text-slate-300">{t.phone}</td>
+                    <td className="p-3.5 font-mono font-bold text-amber-600 dark:text-amber-400">{t.code}</td>
+                    <td className="p-3.5 font-bold text-slate-900 dark:text-slate-100">{t.fullName}</td>
+                    <td className="p-3.5 font-mono text-slate-600 dark:text-slate-300">{t.phone}</td>
 
                     {/* Status Buttons */}
                     <td className="p-3.5 text-center">
-                      <div className="inline-flex items-center gap-1 bg-slate-900/80 p-1 rounded-xl border border-slate-700">
+                      <div className="inline-flex items-center gap-1 bg-slate-100 dark:bg-slate-900/80 p-1 rounded-xl border border-slate-200 dark:border-slate-700 shadow-inner">
                         <button
                           onClick={() => handleStatusChange(t.id, 'present')}
                           className={`px-2.5 py-1 rounded-lg font-bold text-[11px] transition-all ${
                             currentStatus === 'present'
-                              ? 'bg-emerald-600 text-white shadow'
-                              : 'text-slate-400 hover:text-emerald-300'
+                              ? 'bg-emerald-600 text-white shadow-sm'
+                              : 'text-slate-600 hover:text-emerald-700 dark:text-slate-400 dark:hover:text-emerald-300'
                           }`}
                         >
                           حاضر
@@ -389,8 +391,8 @@ export const AttendanceView: React.FC = () => {
                           onClick={() => handleStatusChange(t.id, 'absent')}
                           className={`px-2.5 py-1 rounded-lg font-bold text-[11px] transition-all ${
                             currentStatus === 'absent'
-                              ? 'bg-rose-600 text-white shadow'
-                              : 'text-slate-400 hover:text-rose-300'
+                              ? 'bg-rose-600 text-white shadow-sm'
+                              : 'text-slate-600 hover:text-rose-700 dark:text-slate-400 dark:hover:text-rose-300'
                           }`}
                         >
                           غائب
@@ -399,8 +401,8 @@ export const AttendanceView: React.FC = () => {
                           onClick={() => handleStatusChange(t.id, 'late')}
                           className={`px-2.5 py-1 rounded-lg font-bold text-[11px] transition-all ${
                             currentStatus === 'late'
-                              ? 'bg-amber-600 text-white shadow'
-                              : 'text-slate-400 hover:text-amber-300'
+                              ? 'bg-amber-500 text-slate-950 font-black shadow-sm'
+                              : 'text-slate-600 hover:text-amber-700 dark:text-slate-400 dark:hover:text-amber-300'
                           }`}
                         >
                           متأخر
@@ -409,8 +411,8 @@ export const AttendanceView: React.FC = () => {
                           onClick={() => handleStatusChange(t.id, 'excused')}
                           className={`px-2.5 py-1 rounded-lg font-bold text-[11px] transition-all ${
                             currentStatus === 'excused'
-                              ? 'bg-blue-600 text-white shadow'
-                              : 'text-slate-400 hover:text-blue-300'
+                              ? 'bg-blue-600 text-white shadow-sm'
+                              : 'text-slate-600 hover:text-blue-700 dark:text-slate-400 dark:hover:text-blue-300'
                           }`}
                         >
                           معتذر
@@ -425,7 +427,7 @@ export const AttendanceView: React.FC = () => {
                         placeholder="ملاحظات..."
                         value={currentNotes}
                         onChange={(e) => handleNotesChange(t.id, e.target.value)}
-                        className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1 text-xs text-slate-200 focus:outline-none focus:border-amber-500"
+                        className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1 text-xs text-slate-800 dark:text-slate-200 focus:outline-none focus:border-amber-500 shadow-sm"
                       />
                     </td>
                   </tr>

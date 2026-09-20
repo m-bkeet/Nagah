@@ -875,32 +875,32 @@ export const TraineesView: React.FC = () => {
       return {
         name: 'متألق أسطوري 🌟',
         stars: 5,
-        badgeColor: 'bg-gradient-to-r from-amber-500/20 to-purple-500/20 text-amber-300 border-amber-500/50',
-        badgeBg: 'bg-amber-500/20 text-amber-300 border-amber-500/50',
+        badgeColor: 'bg-gradient-to-r from-amber-100 to-purple-100 text-purple-950 border-purple-300 dark:from-amber-500/20 dark:to-purple-500/20 dark:text-amber-300 dark:border-amber-500/50 shadow-xs',
+        badgeBg: 'bg-amber-100 text-amber-900 border-amber-300 dark:bg-amber-500/20 dark:text-amber-300 dark:border-amber-500/50',
         icon: '🌟'
       };
     } else if (points >= 80) {
       return {
         name: 'متقدم ذهبي 🏆',
         stars: 4,
-        badgeColor: 'bg-amber-500/20 text-amber-300 border-amber-500/50',
-        badgeBg: 'bg-amber-500/10 text-amber-300 border-amber-500/40',
+        badgeColor: 'bg-amber-100 text-amber-950 border-amber-300 dark:bg-amber-500/20 dark:text-amber-300 dark:border-amber-500/50 shadow-xs',
+        badgeBg: 'bg-amber-50 text-amber-900 border-amber-200 dark:bg-amber-500/10 dark:text-amber-300 dark:border-amber-500/40',
         icon: '🏆'
       };
     } else if (points >= 30) {
       return {
         name: 'نشط فضي 🥈',
         stars: 3,
-        badgeColor: 'bg-indigo-500/20 text-indigo-300 border-indigo-500/50',
-        badgeBg: 'bg-indigo-500/10 text-indigo-300 border-indigo-500/40',
+        badgeColor: 'bg-sky-100 text-sky-950 border-sky-300 dark:bg-indigo-500/20 dark:text-indigo-300 dark:border-indigo-500/50 shadow-xs',
+        badgeBg: 'bg-sky-50 text-sky-900 border-sky-200 dark:bg-indigo-500/10 dark:text-indigo-300 dark:border-indigo-500/40',
         icon: '🥈'
       };
     } else {
       return {
         name: 'مبتدئ صاعد ⭐',
         stars: 1,
-        badgeColor: 'bg-slate-700/60 text-slate-300 border-slate-600',
-        badgeBg: 'bg-slate-800 text-slate-300 border-slate-700',
+        badgeColor: 'bg-amber-50/90 text-amber-900 border-amber-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700 shadow-xs',
+        badgeBg: 'bg-amber-50/70 text-amber-900 border-amber-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700',
         icon: '⭐'
       };
     }
@@ -2431,11 +2431,11 @@ export const TraineesView: React.FC = () => {
                         <td className="p-3.5 font-mono font-bold">
                           <div className="flex flex-col gap-1 items-start">
                             {t.remainingAmount > 0 ? (
-                              <span className="text-rose-400 bg-rose-950/40 px-2 py-0.5 rounded border border-rose-800/50">
+                              <span className="text-rose-700 bg-rose-50 dark:bg-rose-950/40 dark:text-rose-400 px-2 py-0.5 rounded border border-rose-200 dark:border-rose-800/50">
                                 {t.remainingAmount} ج.م
                               </span>
                             ) : (
-                              <span className="text-emerald-400 text-[11px]">مسدد بالكامل ✓</span>
+                              <span className="text-emerald-700 dark:text-emerald-400 font-bold text-[11px]">مسدد بالكامل ✓</span>
                             )}
                             <span className={`text-[10px] px-1.5 py-0.5 rounded border ${payInfo.statusBadgeClass}`}>
                               {payInfo.shortLabel}
@@ -2445,14 +2445,14 @@ export const TraineesView: React.FC = () => {
 
                         {/* Points & Stars (Interactive) */}
                         <td className="p-3.5 text-center">
-                          <div className="inline-flex items-center gap-1 bg-amber-950/40 border border-amber-600/40 px-2.5 py-1 rounded-full group/star">
-                            <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
-                            <span className="font-mono font-black text-amber-300 text-xs">
+                          <div className="inline-flex items-center gap-1 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-600/40 px-2.5 py-1 rounded-full group/star">
+                            <Star className="w-3.5 h-3.5 fill-amber-500 text-amber-500" />
+                            <span className="font-mono font-black text-amber-900 dark:text-amber-300 text-xs">
                               {t.totalPoints || t.points || 0}
                             </span>
                             <button
                               onClick={() => handleQuickAward(t, 1, 'مشاركة وتفاعل إيجابي ⭐')}
-                              className="ml-1 px-1.5 py-0.2 bg-amber-500/20 hover:bg-amber-500 text-amber-300 hover:text-slate-950 rounded text-[10px] font-bold transition-all"
+                              className="ml-1 px-1.5 py-0.2 bg-amber-100 hover:bg-amber-500 text-amber-900 hover:text-slate-950 dark:bg-amber-500/20 dark:text-amber-300 rounded text-[10px] font-bold transition-all shadow-xs"
                               title="إضافة 1 نجمة سريعة (+10)"
                             >
                               +⭐

@@ -186,16 +186,16 @@ export const LabScheduleView: React.FC = () => {
   };
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-6 text-slate-100" dir="rtl">
+    <div className="p-6 max-w-7xl mx-auto space-y-6 text-slate-900 dark:text-slate-100" dir="rtl">
       {/* Top Banner */}
-      <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-indigo-950 p-6 rounded-2xl border border-slate-700/80 shadow-xl flex flex-col md:flex-row items-center justify-between gap-4">
+      <div className="bg-gradient-to-r from-blue-50/90 via-white to-indigo-50/70 dark:from-slate-900 dark:via-slate-800 dark:to-indigo-950 p-6 rounded-3xl border border-blue-200 dark:border-slate-700/80 shadow-sm dark:shadow-xl flex flex-col md:flex-row items-center justify-between gap-4">
         <div className="flex items-center gap-4">
-          <div className="w-12 h-12 rounded-2xl bg-indigo-600/20 border border-indigo-500/40 flex items-center justify-center text-indigo-400">
+          <div className="w-12 h-12 rounded-2xl bg-indigo-100 text-indigo-700 dark:bg-indigo-600/20 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-500/40 flex items-center justify-center">
             <Calendar className="w-6 h-6" />
           </div>
           <div>
-            <h1 className="text-xl font-black text-slate-100">الجدول الزمني والخريطة الزمنية للمعامل والفرع</h1>
-            <p className="text-xs text-slate-400 mt-1">
+            <h1 className="text-xl font-black text-slate-900 dark:text-slate-100">الجدول الزمني والخريطة الزمنية للمعامل والفرع</h1>
+            <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">
               نظام المحاضرات (ساعة واحدة لكل محاضرة، يومان أسبوعياً) مع إمكانية التوليد التلقائي والطباعة ومزامنة Google Drive.
             </p>
           </div>
@@ -204,7 +204,7 @@ export const LabScheduleView: React.FC = () => {
         <div className="flex flex-wrap items-center gap-3">
           <button
             onClick={fetchSchedules}
-            className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-700 font-bold text-xs shadow-lg transition-all"
+            className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-amber-700 dark:text-amber-300 border border-slate-200 dark:border-slate-700 font-bold text-xs shadow-xs transition-all cursor-pointer"
             title="تحديث ومزامنة الجدول الزمني"
           >
             <RefreshCw className="w-4 h-4" />
@@ -213,7 +213,7 @@ export const LabScheduleView: React.FC = () => {
 
           <button
             onClick={handleAutoGenerate}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-lg transition-all"
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-md shadow-indigo-600/20 transition-all cursor-pointer"
             title="توليد واستعادة المجموعات الافتراضية"
           >
             <RefreshCw className="w-4 h-4" />
@@ -222,7 +222,7 @@ export const LabScheduleView: React.FC = () => {
 
           <button
             onClick={() => setIsAddModalOpen(true)}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-lg transition-all"
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-md shadow-emerald-600/20 transition-all cursor-pointer"
           >
             <Plus className="w-4 h-4" />
             <span>إضافة موعد جديد</span>
@@ -230,32 +230,32 @@ export const LabScheduleView: React.FC = () => {
 
           <button
             onClick={handlePrint}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-bold text-xs transition-all"
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700 font-bold text-xs transition-all cursor-pointer shadow-xs"
           >
-            <Printer className="w-4 h-4 text-amber-400" />
+            <Printer className="w-4 h-4 text-amber-500 dark:text-amber-400" />
             <span>طباعة الجدول</span>
           </button>
 
           <button
             onClick={handleCloudSync}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-cyan-950/60 hover:bg-cyan-900/60 text-cyan-300 border border-cyan-500/30 font-bold text-xs transition-all"
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-cyan-100 hover:bg-cyan-200 dark:bg-cyan-950/60 dark:hover:bg-cyan-900/60 text-cyan-900 dark:text-cyan-300 border border-cyan-300 dark:border-cyan-500/30 font-bold text-xs transition-all cursor-pointer shadow-xs"
             title="مزامنة فورية مع Google Drive"
           >
-            <CloudSyncIcon className="w-4 h-4 text-cyan-400" />
+            <CloudSyncIcon className="w-4 h-4 text-cyan-700 dark:text-cyan-400" />
             <span>نسخ Google Drive (محدث)</span>
           </button>
         </div>
       </div>
 
       {/* Filter Bar */}
-      <div className="bg-slate-900/80 p-4 rounded-xl border border-slate-800 flex items-center justify-between flex-wrap gap-4">
+      <div className="bg-white dark:bg-slate-900/80 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 flex items-center justify-between flex-wrap gap-4 shadow-xs">
         <div className="flex items-center gap-3">
-          <Building className="w-4 h-4 text-indigo-400" />
-          <span className="text-xs font-bold text-slate-300">تصفية حسب الفرع:</span>
+          <Building className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+          <span className="text-xs font-bold text-slate-700 dark:text-slate-300">تصفية حسب الفرع:</span>
           <select
             value={selectedBranchId}
             onChange={(e) => setSelectedBranchId(e.target.value)}
-            className="bg-slate-800 border border-slate-700 text-slate-200 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:border-indigo-500"
+            className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:border-indigo-500 cursor-pointer shadow-xs"
           >
             <option value="all">جميع فروع مركز النجاح</option>
               {(branches || []).map(b => (
@@ -268,35 +268,35 @@ export const LabScheduleView: React.FC = () => {
         <div className="flex items-center gap-2 flex-wrap">
           <button
             onClick={() => setIsReportModalOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 border border-amber-500/30 font-bold text-xs transition-all"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 dark:bg-amber-600/20 dark:hover:bg-amber-600/30 text-amber-900 dark:text-amber-300 border border-amber-200 dark:border-amber-500/30 font-bold text-xs transition-all cursor-pointer shadow-xs"
           >
-            <BarChart2 className="w-3.5 h-3.5" />
+            <BarChart2 className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
             <span>تقرير تحليل المعامل والأوقات الشاغرة</span>
           </button>
           <button
             onClick={() => setIsPosterModalOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 font-bold text-xs transition-all"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-600/20 dark:hover:bg-indigo-600/30 text-indigo-900 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-500/30 font-bold text-xs transition-all cursor-pointer shadow-xs"
           >
-            <Share2 className="w-3.5 h-3.5" />
+            <Share2 className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
             <span>بوستر النشر الاحترافي (فيس بوك وعرض)</span>
           </button>
-          <div className="flex items-center gap-2 bg-slate-800/80 p-1 rounded-xl border border-slate-700">
+          <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800/80 p-1 rounded-xl border border-slate-200 dark:border-slate-700">
             <button
               onClick={() => setViewMode('cards')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${viewMode === 'cards' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'}`}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${viewMode === 'cards' ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'}`}
             >
               عرض البطاقات (الأيام)
             </button>
             <button
               onClick={() => setViewMode('timetable')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${viewMode === 'timetable' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'}`}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${viewMode === 'timetable' ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'}`}
             >
               جدول الحصص والتقويم (شبكة أسبوعية)
             </button>
           </div>
         </div>
 
-        <div className="flex items-center gap-2 text-xs text-slate-400">
+        <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
           <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
           <span>آخر مزامنة سحابية: {syncStatus.lastSyncTime ? new Date(syncStatus.lastSyncTime).toLocaleTimeString('ar-EG') : 'الآن'}</span>
         </div>

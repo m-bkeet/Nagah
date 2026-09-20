@@ -515,17 +515,19 @@ export const CoursesView: React.FC = () => {
       </datalist>
 
       {/* Top Controls & Filters */}
-      <div className="space-y-3 bg-slate-800/60 border border-slate-700/70 p-4 rounded-2xl backdrop-blur-md">
+      <div className="glass-card-3d space-y-3 bg-white/95 dark:bg-slate-900/80 border border-slate-200/90 dark:border-slate-700/70 p-4 sm:p-5 rounded-2xl shadow-lg backdrop-blur-md">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
           <div>
-            <h2 className="text-lg font-black text-slate-100 flex items-center gap-2">
-              <BookOpen className="w-5 h-5 text-amber-400" />
-              الدورات التدريبية المعتمدة
-              <span className="text-xs bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded-full font-mono font-bold">
+            <h2 className="text-lg font-black text-slate-900 dark:text-slate-100 flex items-center gap-2">
+              <div className="p-2 bg-amber-500/10 text-amber-600 dark:text-amber-400 rounded-xl border border-amber-500/20 shadow-xs">
+                <BookOpen className="w-5 h-5" />
+              </div>
+              <span>الدورات التدريبية المعتمدة</span>
+              <span className="text-xs bg-amber-500/10 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300 px-2.5 py-0.5 rounded-full font-mono font-bold border border-amber-300/50 dark:border-amber-500/30">
                 {courses.length} دورة
               </span>
             </h2>
-            <p className="text-xs text-slate-400 mt-0.5">
+            <p className="text-xs text-slate-600 dark:text-slate-400 mt-1 font-medium">
               البرامج التدريبية، الصفوف الدراسية المرتبطة، الساعات، التسعير، والمزامنة الفورية مع المجموعات
             </p>
           </div>
@@ -538,19 +540,19 @@ export const CoursesView: React.FC = () => {
                 }
                 setIsFbModalOpen(true);
               }}
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-black text-xs shadow-lg shadow-blue-600/20 transition-all"
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-black text-xs shadow-md shadow-blue-600/20 transition-all active:scale-95"
             >
               <span>📘 النشر والرد الآلي على فيسبوك</span>
             </button>
             <button
               onClick={() => setIsClassroomModalOpen(true)}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs shadow-lg shadow-emerald-500/20 transition-all active:scale-95"
+              className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs shadow-md shadow-emerald-500/20 transition-all active:scale-95"
             >
               <span>📥 استيراد من Classroom</span>
             </button>
             <button
               onClick={handleOpenAdd}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs shadow-lg shadow-amber-500/20 transition-all active:scale-95"
+              className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 hover:to-yellow-400 text-slate-950 font-black text-xs shadow-md shadow-amber-500/20 transition-all border border-amber-300 active:scale-95"
             >
               <Plus className="w-4 h-4" />
               <span>إضافة دورة جديدة</span>
@@ -559,7 +561,7 @@ export const CoursesView: React.FC = () => {
         </div>
 
         {/* Search, Grade Filter & Sorting Row */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-2 border-t border-slate-700/50">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-2 border-t border-slate-200 dark:border-slate-700/50">
           {/* Search Input */}
           <div className="relative">
             <Search className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -568,12 +570,12 @@ export const CoursesView: React.FC = () => {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="بحث باسم الدورة أو الكود أو المجال أو الصف..."
-              className="w-full bg-slate-900 border border-slate-700/80 rounded-xl pr-9 pl-3 py-2 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-amber-500"
+              className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700/80 rounded-xl pr-9 pl-3 py-2 text-xs text-slate-800 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-amber-500 shadow-sm"
             />
             {searchQuery && (
               <button
                 onClick={() => setSearchQuery('')}
-                className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200"
+                className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
@@ -582,11 +584,11 @@ export const CoursesView: React.FC = () => {
 
           {/* Filter by Grade */}
           <div className="relative">
-            <GraduationCap className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 text-amber-400 pointer-events-none" />
+            <GraduationCap className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 text-amber-500 dark:text-amber-400 pointer-events-none" />
             <select
               value={selectedGradeFilter}
               onChange={(e) => setSelectedGradeFilter(e.target.value)}
-              className="w-full bg-slate-900 border border-amber-500/40 rounded-xl pr-9 pl-3 py-2 text-xs text-amber-300 font-bold focus:outline-none focus:border-amber-500 cursor-pointer"
+              className="w-full bg-slate-50 dark:bg-slate-900 border border-amber-400/40 dark:border-amber-500/40 rounded-xl pr-9 pl-3 py-2 text-xs text-amber-800 dark:text-amber-300 font-bold focus:outline-none focus:border-amber-500 cursor-pointer shadow-sm"
             >
               <option value="all">🎓 تصفية حسب الصف (الكل - {courses.length})</option>
               <option value="none">بدون تحديد صف ({courses.filter(c => !c?.grade).length})</option>
@@ -605,7 +607,7 @@ export const CoursesView: React.FC = () => {
           <select
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value as any)}
-            className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-amber-500 font-bold cursor-pointer"
+            className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-800 dark:text-slate-200 focus:outline-none focus:border-amber-500 font-bold cursor-pointer shadow-sm"
             title="ترتيب الدورات"
           >
             <option value="createdAt">ترتيب: تاريخ الإنشاء</option>
@@ -622,9 +624,9 @@ export const CoursesView: React.FC = () => {
         {isLoading ? (
           <div className="col-span-full py-12 text-center text-slate-400">جاري التحميل...</div>
         ) : sortedCourses.length === 0 ? (
-          <div className="col-span-full py-12 text-center text-slate-400 bg-slate-800/40 rounded-2xl border border-slate-700/60 p-8">
-            <BookOpen className="w-12 h-12 text-slate-600 mx-auto mb-3" />
-            <p className="font-bold text-slate-300">
+          <div className="col-span-full py-12 text-center text-slate-500 dark:text-slate-400 bg-white dark:bg-slate-800/40 rounded-2xl border border-slate-200 dark:border-slate-700/60 p-8 shadow-sm">
+            <BookOpen className="w-12 h-12 text-slate-400 dark:text-slate-600 mx-auto mb-3" />
+            <p className="font-bold text-slate-700 dark:text-slate-300">
               {searchQuery || selectedGradeFilter !== 'all'
                 ? 'لا توجد دورات تطابق معايير البحث والتصفية المحددة'
                 : 'لا توجد دورات تدريبية مضافة'}
@@ -635,14 +637,14 @@ export const CoursesView: React.FC = () => {
                   setSearchQuery('');
                   setSelectedGradeFilter('all');
                 }}
-                className="mt-4 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 font-bold text-xs rounded-xl inline-flex items-center gap-1.5"
+                className="mt-4 px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 font-bold text-xs rounded-xl inline-flex items-center gap-1.5 transition-colors border border-slate-200 dark:border-slate-600"
               >
                 إلغاء التصفية
               </button>
             ) : (
               <button
                 onClick={handleOpenAdd}
-                className="mt-4 px-4 py-2 bg-amber-500 text-slate-950 font-bold text-xs rounded-xl inline-flex items-center gap-1.5"
+                className="mt-4 px-4 py-2 bg-gradient-to-r from-amber-500 to-amber-400 text-slate-950 font-bold text-xs rounded-xl inline-flex items-center gap-1.5 shadow-md active:scale-95"
               >
                 <Plus className="w-4 h-4" /> إضافة أول دورة
               </button>
@@ -656,32 +658,32 @@ export const CoursesView: React.FC = () => {
             return (
               <div
                 key={c.id}
-                className="bg-slate-800/80 border border-slate-700/80 rounded-2xl p-5 shadow-lg backdrop-blur-md flex flex-col justify-between hover:border-amber-500/40 transition-all group"
+                className="glass-card-3d bg-white/95 dark:bg-slate-900/80 border border-slate-200/90 dark:border-slate-700/80 rounded-2xl p-5 shadow-md hover:shadow-xl hover:border-amber-500/50 transition-all flex flex-col justify-between group"
               >
                 <div>
                   <div className="flex items-start justify-between gap-2 mb-2">
                     <div>
                       <div className="flex items-center flex-wrap gap-1.5">
-                        <span className="text-[10px] font-bold text-slate-400 bg-slate-900 px-2 py-0.5 rounded border border-slate-700 font-mono">
+                        <span className="text-[10px] font-bold text-slate-700 dark:text-slate-400 bg-slate-100 dark:bg-slate-900 px-2 py-0.5 rounded border border-slate-200 dark:border-slate-700 font-mono">
                           {c.code}
                         </span>
-                        <span className="text-[10px] font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
+                        <span className="text-[10px] font-bold text-amber-700 dark:text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
                           {c.category}
                         </span>
                         {c.grade && (
-                          <span className="text-[10px] font-bold text-emerald-300 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/30 flex items-center gap-1">
-                            <GraduationCap className="w-3 h-3 text-emerald-400" />
+                          <span className="text-[10px] font-bold text-emerald-800 dark:text-emerald-300 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/30 flex items-center gap-1">
+                            <GraduationCap className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
                             {c.grade}
                           </span>
                         )}
                       </div>
-                      <h3 className="font-bold text-base text-slate-100 mt-2">{c.name}</h3>
+                      <h3 className="font-bold text-base text-slate-900 dark:text-slate-100 mt-2">{c.name}</h3>
                     </div>
                     <span
                       className={`text-[10px] font-bold px-2 py-0.5 rounded-full border shrink-0 ${
                         c.status === 'active'
-                          ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
-                          : 'bg-slate-700 text-slate-400 border-slate-600'
+                          ? 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border-emerald-500/40'
+                          : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-600'
                       }`}
                     >
                       {c.status === 'active' ? 'نشطة' : 'متوقفة'}
@@ -689,14 +691,14 @@ export const CoursesView: React.FC = () => {
                   </div>
 
                   {/* Interactive Grade Card Selector with Auto Sync */}
-                  <div className="my-2.5 p-2.5 rounded-xl bg-slate-900/90 border border-slate-700/80 hover:border-amber-500/50 transition-all">
+                  <div className="my-2.5 p-2.5 rounded-xl bg-slate-50 dark:bg-slate-900/90 border border-slate-200 dark:border-slate-700/80 hover:border-amber-500/50 transition-all">
                     <div className="flex items-center justify-between gap-2 mb-1.5">
-                      <span className="text-[11px] font-bold text-amber-300 flex items-center gap-1.5">
-                        <GraduationCap className="w-4 h-4 text-amber-400" />
+                      <span className="text-[11px] font-bold text-amber-700 dark:text-amber-300 flex items-center gap-1.5">
+                        <GraduationCap className="w-4 h-4 text-amber-600 dark:text-amber-400" />
                         <span>الصف الدراسي للدورة:</span>
                       </span>
                       {linkedGroups.length > 0 && (
-                        <span className="text-[10px] text-blue-400 font-bold bg-blue-500/10 px-2 py-0.5 rounded border border-blue-500/20">
+                        <span className="text-[10px] text-blue-700 dark:text-blue-400 font-bold bg-blue-500/10 px-2 py-0.5 rounded border border-blue-500/20">
                           {linkedGroups.length} مجموعات مرتبطة
                         </span>
                       )}
@@ -704,7 +706,7 @@ export const CoursesView: React.FC = () => {
                     <select
                       value={c.grade || ''}
                       onChange={(e) => handleQuickUpdateGrade(c, e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-700 hover:border-amber-500/70 focus:border-amber-500 rounded-lg px-2.5 py-1.5 text-xs text-amber-200 font-bold focus:outline-none cursor-pointer transition-colors"
+                      className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-700 hover:border-amber-500/70 focus:border-amber-500 rounded-lg px-2.5 py-1.5 text-xs text-amber-800 dark:text-amber-200 font-bold focus:outline-none cursor-pointer transition-colors shadow-sm"
                       title="اختر الصف الدراسي وسيتم تحديث المجموعات المرتبطة تلقائياً"
                     >
                       <option value="">-- اختر الصف (لتحديث المجموعات تلقائياً) --</option>
@@ -714,37 +716,37 @@ export const CoursesView: React.FC = () => {
                         </option>
                       ))}
                     </select>
-                    <div className="text-[10px] text-slate-400 mt-1 flex items-center gap-1">
-                      <Sparkles className="w-3 h-3 text-amber-400 shrink-0" />
+                    <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 flex items-center gap-1 font-medium">
+                      <Sparkles className="w-3 h-3 text-amber-500 dark:text-amber-400 shrink-0" />
                       <span>تحديث الصف هنا ينعكس تلقائياً وفوراً على مجموعات هذه الدورة.</span>
                     </div>
                   </div>
 
-                  <p className="text-xs text-slate-400 line-clamp-2 my-2 min-h-[32px]">
+                  <p className="text-xs text-slate-600 dark:text-slate-400 line-clamp-2 my-2 min-h-[32px]">
                     {c.description || 'دورة تدريبية معتمدة وفق أعلى معايير الجودة والتدريب العملي.'}
                   </p>
 
-                  <div className="grid grid-cols-3 gap-2 text-center my-3 bg-slate-900/60 p-2.5 rounded-xl border border-slate-700/60">
+                  <div className="grid grid-cols-3 gap-2 text-center my-3 bg-slate-50 dark:bg-slate-900/80 p-2.5 rounded-2xl border border-slate-200 dark:border-slate-700/60 shadow-xs">
                     <div>
-                      <span className="text-[10px] text-slate-400 block">السعر</span>
-                      <span className="font-mono font-bold text-emerald-400 text-xs">
-                        {(c.feeAmount || 0).toLocaleString()} ج.م {c.billingType === 'monthly' && <span className="text-xs text-amber-500 font-bold block">/ شهرياً</span>}
+                      <span className="text-[10px] text-slate-500 dark:text-slate-400 block font-bold">السعر</span>
+                      <span className="font-mono font-black text-emerald-600 dark:text-emerald-400 text-xs">
+                        {(c.feeAmount || 0).toLocaleString()} ج.م {c.billingType === 'monthly' && <span className="text-xs text-amber-600 dark:text-amber-500 font-bold block">/ شهرياً</span>}
                       </span>
                     </div>
                     <div>
-                      <span className="text-[10px] text-slate-400 block">الساعات</span>
-                      <span className="font-mono font-bold text-slate-200 text-xs">{c.hoursCount} س</span>
+                      <span className="text-[10px] text-slate-500 dark:text-slate-400 block font-bold">الساعات</span>
+                      <span className="font-mono font-bold text-slate-800 dark:text-slate-200 text-xs">{c.hoursCount} س</span>
                     </div>
                     <div>
-                      <span className="text-[10px] text-slate-400 block">المحاضرات</span>
-                      <span className="font-mono font-bold text-slate-200 text-xs">{c.lecturesCount} ل</span>
+                      <span className="text-[10px] text-slate-500 dark:text-slate-400 block font-bold">المحاضرات</span>
+                      <span className="font-mono font-bold text-slate-800 dark:text-slate-200 text-xs">{c.lecturesCount} ل</span>
                     </div>
                   </div>
                 </div>
 
-                <div className="pt-3 border-t border-slate-700/60 flex items-center justify-between">
-                  <div className="text-[11px] text-slate-400">
-                    نسبة المركز: <span className="font-mono text-slate-200 font-bold">{c.centerSharePercentage}%</span>
+                <div className="pt-3 border-t border-slate-200 dark:border-slate-700/60 flex items-center justify-between">
+                  <div className="text-[11px] text-slate-600 dark:text-slate-400 font-medium">
+                    نسبة المركز: <span className="font-mono text-slate-900 dark:text-slate-200 font-black">{c.centerSharePercentage}%</span>
                   </div>
 
                   <div className="flex items-center gap-1.5 flex-wrap justify-end">
@@ -754,16 +756,16 @@ export const CoursesView: React.FC = () => {
                         setSelectedCourseForMaterials(c);
                         setIsMaterialsModalOpen(true);
                       }}
-                      className="p-1.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-600 text-emerald-300 hover:text-white border border-emerald-500/40 transition-all flex items-center gap-1.5 text-[11px] font-bold px-2.5 shadow-sm cursor-pointer"
+                      className="p-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-500/20 dark:hover:bg-emerald-600 text-emerald-800 hover:text-emerald-950 dark:text-emerald-300 dark:hover:text-white border border-emerald-200 dark:border-emerald-500/40 transition-all flex items-center gap-1.5 text-[11px] font-black px-2.5 shadow-xs cursor-pointer active:scale-95"
                       title="إدارة مناهج ومذكرات الدورة (Google Drive - عربي ولغات)"
                     >
-                      <BookOpen className="w-3.5 h-3.5 text-emerald-400" />
+                      <BookOpen className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
                       <span>المناهج و Drive</span>
                       {(c.arabicMaterial || c.materials?.some(m => m.track === 'arabic' || m.track === 'عربي' || m.educationType === 'arabic')) && (
-                        <span className="bg-emerald-700 text-emerald-100 text-[9px] px-1 rounded font-bold" title="منهج عربي مربوط">عربي</span>
+                        <span className="bg-emerald-700 text-white text-[9px] px-1 rounded font-bold" title="منهج عربي مربوط">عربي</span>
                       )}
                       {(c.languagesMaterial || c.materials?.some(m => m.track === 'languages' || m.track === 'لغات' || m.educationType === 'languages')) && (
-                        <span className="bg-blue-700 text-blue-100 text-[9px] px-1 rounded font-bold" title="منهج لغات مربوط">لغات</span>
+                        <span className="bg-blue-700 text-white text-[9px] px-1 rounded font-bold" title="منهج لغات مربوط">لغات</span>
                       )}
                       {(c.materials?.length || 0) > 0 && (
                         <span className="bg-emerald-600 text-white text-[10px] px-1.5 rounded-full font-mono font-bold">
@@ -778,10 +780,10 @@ export const CoursesView: React.FC = () => {
                         setSelectedCourseForAssessments(c);
                         setIsAssessmentsModalOpen(true);
                       }}
-                      className="p-1.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-600 text-emerald-300 hover:text-white border border-emerald-500/40 transition-colors flex items-center gap-1 text-[11px] font-bold px-2"
+                      className="p-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-500/20 dark:hover:bg-emerald-600 text-emerald-800 hover:text-emerald-950 dark:text-emerald-300 dark:hover:text-white border border-emerald-200 dark:border-emerald-500/40 transition-colors flex items-center gap-1 text-[11px] font-bold px-2 shadow-xs active:scale-95"
                       title="رفع / إظهار التقييمات الأسبوعية والاختبارات الورقية PDF"
                     >
-                      <FileCheck className="w-3.5 h-3.5" />
+                      <FileCheck className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
                       <span className="hidden sm:inline">التقييمات الورقية</span>
                       {(c.assessments?.length || 0) > 0 && (
                         <span className="bg-emerald-600 text-white text-[10px] px-1.5 rounded-full font-mono font-bold">
@@ -793,16 +795,16 @@ export const CoursesView: React.FC = () => {
                     {/* AI Syllabus Generator */}
                     <button
                       onClick={() => handleGenerateAiSyllabus(c)}
-                      className="p-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500 text-amber-300 hover:text-slate-950 border border-amber-500/40 transition-colors"
+                      className="p-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 dark:bg-amber-500/20 dark:hover:bg-amber-500 text-amber-800 hover:text-amber-950 dark:text-amber-300 dark:hover:text-slate-950 border border-amber-200 dark:border-amber-500/40 transition-colors shadow-xs active:scale-95"
                       title="توليد المنهج والفرع المنهجي بالذكاء الاصطناعي"
                     >
-                      <Sparkles className="w-3.5 h-3.5" />
+                      <Sparkles className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
                     </button>
 
                     {/* Duplicate Course */}
                     <button
                       onClick={() => handleDuplicateCourse(c)}
-                      className="p-1.5 rounded-lg bg-slate-800 hover:bg-amber-500/20 text-slate-300 hover:text-amber-400 border border-slate-700 transition-colors"
+                      className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 hover:text-slate-900 dark:text-slate-300 dark:hover:text-amber-400 border border-slate-200 dark:border-slate-700 transition-colors shadow-xs active:scale-95"
                       title="نسخ وتكرار الدورة"
                     >
                       <Copy className="w-3.5 h-3.5" />
@@ -811,19 +813,19 @@ export const CoursesView: React.FC = () => {
                     {/* Edit Course */}
                     <button
                       onClick={() => handleOpenEdit(c)}
-                      className="p-1.5 rounded-lg bg-blue-950/60 hover:bg-blue-900 text-blue-300 border border-blue-800 transition-colors"
+                      className="p-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/60 dark:hover:bg-blue-900 text-blue-700 hover:text-blue-950 dark:text-blue-300 border border-blue-200 dark:border-blue-800 transition-colors shadow-xs active:scale-95"
                       title="تعديل بيانات الدورة"
                     >
-                      <Edit className="w-3.5 h-3.5" />
+                      <Edit className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
                     </button>
 
                     {/* Delete Course */}
                     <button
                       onClick={() => setCourseToDelete(c)}
-                      className="p-1.5 rounded-lg bg-rose-950/60 hover:bg-rose-900 text-rose-300 border border-rose-800 transition-colors"
+                      className="p-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/60 dark:hover:bg-rose-900 text-rose-700 hover:text-rose-950 dark:text-rose-300 border border-rose-200 dark:border-rose-800 transition-colors shadow-xs active:scale-95"
                       title="حذف الدورة"
                     >
-                      <Trash2 className="w-3.5 h-3.5" />
+                      <Trash2 className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400" />
                     </button>
                   </div>
                 </div>
