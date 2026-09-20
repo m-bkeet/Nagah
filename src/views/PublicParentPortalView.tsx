@@ -797,10 +797,10 @@ export const PublicParentPortalView: React.FC<PublicParentPortalViewProps> = ({ 
   };
 
   return (
-    <div className="fixed inset-0 w-full h-[100dvh] max-h-[100dvh] flex flex-col overflow-hidden bg-slate-950 text-slate-100 font-sans antialiased dir-rtl select-none">
+    <div className="fixed inset-0 w-full h-[100dvh] max-h-[100dvh] flex flex-col overflow-hidden bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-sans antialiased dir-rtl select-none">
       
       {/* Simplified Header with App Share Option - Fixed Top */}
-      <header className="shrink-0 z-40 bg-slate-900 border-b border-slate-800 px-4 py-2 shadow-md w-full safe-top">
+      <header className="shrink-0 z-40 bg-white/90 dark:bg-slate-900/95 border-b border-slate-200 dark:border-slate-800 px-4 py-2 shadow-xs dark:shadow-md w-full safe-top backdrop-blur-md">
         <div className="max-w-4xl mx-auto flex items-center justify-between gap-3">
           
           {/* Brand Logo & Name */}
@@ -809,7 +809,7 @@ export const PublicParentPortalView: React.FC<PublicParentPortalViewProps> = ({ 
               <button
                 type="button"
                 onClick={onBack}
-                className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-amber-300 font-bold text-xs flex items-center gap-1 transition-colors border border-amber-500/30"
+                className="px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-amber-700 dark:text-amber-300 font-bold text-xs flex items-center gap-1 transition-colors border border-amber-300/40 dark:border-amber-500/30"
                 title="الرجوع للرئيسية"
               >
                 <ArrowRight className="w-3.5 h-3.5" />
@@ -820,8 +820,8 @@ export const PublicParentPortalView: React.FC<PublicParentPortalViewProps> = ({ 
               ن
             </div>
             <div>
-              <h1 className="text-xs font-bold text-white leading-tight">مركز النجاح للتدريب</h1>
-              <p className="text-[9px] text-indigo-400 font-bold">بوابة ولي الأمر الذكية</p>
+              <h1 className="text-xs font-bold text-slate-900 dark:text-white leading-tight">مركز النجاح للتدريب</h1>
+              <p className="text-[9px] text-indigo-600 dark:text-indigo-400 font-bold">بوابة ولي الأمر الذكية</p>
             </div>
           </div>
 
@@ -830,7 +830,7 @@ export const PublicParentPortalView: React.FC<PublicParentPortalViewProps> = ({ 
             <ThemeQuickSwitcher />
             <button
               onClick={handleShareApp}
-              className="p-1.5 rounded-lg bg-slate-800 text-amber-400 hover:bg-slate-700 hover:text-amber-300 transition-colors flex items-center gap-1 text-[10px] font-bold"
+              className="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-amber-700 dark:text-amber-400 hover:bg-slate-200 dark:hover:bg-slate-700 hover:text-amber-800 dark:hover:text-amber-300 transition-colors flex items-center gap-1 text-[10px] font-bold border border-slate-200 dark:border-transparent"
               title="مشاركة تطبيق الطالب"
             >
               <Share2 className="w-3.5 h-3.5" />
@@ -841,16 +841,16 @@ export const PublicParentPortalView: React.FC<PublicParentPortalViewProps> = ({ 
               <>
                 <button
                   onClick={() => setIsChatOpen(true)}
-                  className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-emerald-400 border border-slate-700 relative transition-all active:scale-95"
+                  className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-emerald-600 dark:text-emerald-400 border border-slate-200 dark:border-slate-700 relative transition-all active:scale-95"
                   title="مراسلة الإدارة والمدرب"
                 >
                   <MessageSquare className="w-3.5 h-3.5" />
-                  <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-emerald-500 rounded-full border border-slate-900 animate-pulse"></span>
+                  <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-emerald-500 rounded-full border border-white dark:border-slate-900 animate-pulse"></span>
                 </button>
 
                 <button
                   onClick={() => setIsNotificationsOpen(true)}
-                  className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-amber-400 border border-slate-700 relative transition-all active:scale-95"
+                  className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-amber-600 dark:text-amber-400 border border-slate-200 dark:border-slate-700 relative transition-all active:scale-95"
                   title="التنبيهات والإشعارات"
                 >
                   <Bell className="w-3.5 h-3.5" />
@@ -858,16 +858,16 @@ export const PublicParentPortalView: React.FC<PublicParentPortalViewProps> = ({ 
 
                 <button
                   onClick={handleOpenParentProfile}
-                  className="p-1.5 rounded-lg bg-slate-800 hover:bg-indigo-900/50 text-indigo-300 border border-indigo-500/30 transition-all active:scale-95 flex items-center gap-1"
+                  className="p-1.5 rounded-lg bg-slate-100 hover:bg-indigo-50 dark:bg-slate-800 dark:hover:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-500/30 transition-all active:scale-95 flex items-center gap-1"
                   title="الملف الشخصي لولي الأمر"
                 >
-                  <User className="w-3.5 h-3.5 text-indigo-400" />
+                  <User className="w-3.5 h-3.5 text-indigo-500 dark:text-indigo-400" />
                   <span className="hidden sm:inline text-[10px] font-bold">حسابي</span>
                 </button>
 
                 <button
                   onClick={handleLogout}
-                  className="p-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 transition-all active:scale-95"
+                  className="p-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 dark:bg-rose-500/10 dark:hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-500/30 transition-all active:scale-95"
                   title="تسجيل الخروج"
                 >
                   <LogOut className="w-3.5 h-3.5" />
@@ -895,59 +895,59 @@ export const PublicParentPortalView: React.FC<PublicParentPortalViewProps> = ({ 
 
         {/* LOGIN SCREEN (If not logged in) */}
         {children.length === 0 ? (
-          <div className="max-w-md mx-auto my-8 p-6 sm:p-8 rounded-3xl bg-slate-900 border border-slate-800 shadow-2xl space-y-6">
+          <div className="max-w-md mx-auto my-8 p-6 sm:p-8 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xl dark:shadow-2xl space-y-6">
             <div className="text-center space-y-2">
-              <div className="w-16 h-16 rounded-3xl bg-indigo-600/20 border border-indigo-500/30 text-indigo-400 mx-auto flex items-center justify-center">
+              <div className="w-16 h-16 rounded-3xl bg-indigo-50 dark:bg-indigo-600/20 border border-indigo-200 dark:border-indigo-500/30 text-indigo-600 dark:text-indigo-400 mx-auto flex items-center justify-center shadow-xs">
                 <Users className="w-8 h-8" />
               </div>
-              <h2 className="text-xl font-black text-white">تسجيل دخول بوابة ولي الأمر</h2>
-              <p className="text-xs text-slate-400">أدخل كود الطالب أو رقم هاتف ولي الأمر المسجل للوصول لتقارير الأبناء مباشرة</p>
+              <h2 className="text-xl font-black text-slate-900 dark:text-white">تسجيل دخول بوابة ولي الأمر</h2>
+              <p className="text-xs text-slate-600 dark:text-slate-400">أدخل كود الطالب أو رقم هاتف ولي الأمر المسجل للوصول لتقارير الأبناء مباشرة</p>
             </div>
 
             <form onSubmit={handleLogin} className="space-y-4">
               <div>
-                <label className="block text-xs font-bold text-slate-300 mb-1.5">كود الطالب أو رقم الهاتف المسجل</label>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">كود الطالب أو رقم الهاتف المسجل</label>
                 <input
                   type="text"
                   required
                   value={codeOrPhone}
                   onChange={(e) => setCodeOrPhone(e.target.value)}
                   placeholder="مثال: A001 أو 01001500686"
-                  className="w-full px-4 py-3 rounded-2xl bg-slate-950 border border-slate-700 text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 text-sm font-mono text-center"
+                  className="w-full px-4 py-3 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-indigo-500 text-sm font-mono text-center shadow-xs"
                 />
               </div>
 
               {requiresPassword && (
                 <div>
-                  <label className="block text-xs font-bold text-slate-300 mb-1.5">كلمة مرور البوابة</label>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">كلمة مرور البوابة</label>
                   <input
                     type="password"
                     required
                     value={parentPasswordInput}
                     onChange={(e) => setParentPasswordInput(e.target.value)}
                     placeholder="أدخل كلمة المرور..."
-                    className="w-full px-4 py-3 rounded-2xl bg-slate-950 border border-slate-700 text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 text-sm font-mono text-center"
+                    className="w-full px-4 py-3 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-indigo-500 text-sm font-mono text-center shadow-xs"
                   />
                 </div>
               )}
 
               {error && (
-                <div className="p-3 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex items-center gap-2">
-                  <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
+                <div className="p-3 rounded-2xl bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/30 text-rose-700 dark:text-rose-300 text-xs flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0 text-rose-500" />
                   <span>{error}</span>
                 </div>
               )}
 
               {/* Keep login persistent notice */}
-              <div className="flex items-center gap-2 py-2 px-3 bg-slate-950/40 rounded-xl border border-slate-800/60">
+              <div className="flex items-center gap-2 py-2 px-3 bg-slate-50 dark:bg-slate-950/40 rounded-xl border border-slate-200 dark:border-slate-800/60">
                 <input
                   type="checkbox"
                   id="remember_parent_login"
                   defaultChecked
                   disabled
-                  className="rounded border-slate-700 bg-slate-900 text-emerald-500 focus:ring-emerald-500/30 w-4.5 h-4.5 cursor-not-allowed"
+                  className="rounded border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-emerald-600 dark:text-emerald-500 focus:ring-emerald-500/30 w-4.5 h-4.5 cursor-not-allowed"
                 />
-                <label htmlFor="remember_parent_login" className="text-[10px] text-slate-300 font-bold cursor-not-allowed select-none">
+                <label htmlFor="remember_parent_login" className="text-[10px] text-slate-600 dark:text-slate-300 font-bold cursor-not-allowed select-none">
                   حفظ بيانات تسجيل الدخول تلقائياً على هذا الجهاز
                 </label>
               </div>
@@ -955,17 +955,17 @@ export const PublicParentPortalView: React.FC<PublicParentPortalViewProps> = ({ 
               <button
                 type="submit"
                 disabled={isLoading}
-                className="w-full py-3.5 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm shadow-lg shadow-indigo-600/30 transition-all flex items-center justify-center gap-2"
+                className="w-full py-3.5 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm shadow-lg shadow-indigo-600/30 transition-all flex items-center justify-center gap-2 active:scale-98"
               >
                 {isLoading ? 'جاري التحقق من سجلات الأبناء...' : 'دخول ومتابعة الأبناء 🔍'}
               </button>
             </form>
 
-            <div className="p-4 rounded-2xl bg-slate-950/60 border border-slate-800 text-center space-y-2">
+            <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 text-center space-y-2">
               <button
                 type="button"
                 onClick={handleInstallPwa}
-                className="inline-flex items-center gap-2 text-xs font-bold text-amber-400 hover:text-amber-300"
+                className="inline-flex items-center gap-2 text-xs font-bold text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300 transition-colors"
               >
                 <Smartphone className="w-4 h-4" />
                 <span>تثبيت البوابة كتطبيق على هاتفك PWA</span>
@@ -1871,25 +1871,25 @@ export const PublicParentPortalView: React.FC<PublicParentPortalViewProps> = ({ 
 
       {/* 8. NOTIFICATIONS DRAWER */}
       {isNotificationsOpen && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 w-full max-w-md space-y-4 shadow-2xl dir-rtl">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <h3 className="text-sm font-black text-white flex items-center gap-2">
-                <Bell className="w-4 h-4 text-amber-400" />
+        <div className="fixed inset-0 z-50 bg-black/60 dark:bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 w-full max-w-md space-y-4 shadow-2xl dir-rtl">
+            <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
+              <h3 className="text-sm font-black text-slate-900 dark:text-white flex items-center gap-2">
+                <Bell className="w-4 h-4 text-amber-500 dark:text-amber-400" />
                 <span>مركز الإشعارات والتنبيهات</span>
               </h3>
               <button
                 onClick={() => setIsNotificationsOpen(false)}
-                className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800"
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             <div className="space-y-2.5 max-h-80 overflow-y-auto">
-              <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-1 text-xs">
-                <p className="font-bold text-amber-400">🎉 أهلاً بك في بوابة ولي الأمر الرسمية</p>
-                <p className="text-slate-300">يمكنك الآن متابعة نسبة حضور الأبناء، الدرجات، والمصروفات أولاً بأول.</p>
+              <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 space-y-1 text-xs">
+                <p className="font-bold text-amber-600 dark:text-amber-400">🎉 أهلاً بك في بوابة ولي الأمر الرسمية</p>
+                <p className="text-slate-600 dark:text-slate-300">يمكنك الآن متابعة نسبة حضور الأبناء، الدرجات، والمصروفات أولاً بأول.</p>
               </div>
             </div>
           </div>
@@ -1898,10 +1898,10 @@ export const PublicParentPortalView: React.FC<PublicParentPortalViewProps> = ({ 
 
       {/* UPLOAD PAYMENT PROOF MODAL */}
       {isUploadProofModalOpen && selectedChild && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 w-full max-w-lg space-y-5 shadow-2xl dir-rtl">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <div className="flex items-center gap-2 text-emerald-400 font-bold text-sm">
+        <div className="fixed inset-0 z-50 bg-black/60 dark:bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 w-full max-w-lg space-y-5 shadow-2xl dir-rtl">
+            <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
+              <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400 font-bold text-sm">
                 <Camera className="w-5 h-5" />
                 <span>رفع صورة إيصال الدفع / لقطة الشاشة</span>
               </div>
@@ -1911,7 +1911,7 @@ export const PublicParentPortalView: React.FC<PublicParentPortalViewProps> = ({ 
                   setProofImageBase64('');
                   setProofNoticeMsg('');
                 }}
-                className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800"
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -1919,18 +1919,18 @@ export const PublicParentPortalView: React.FC<PublicParentPortalViewProps> = ({ 
 
             <form onSubmit={handleSubmitPaymentProof} className="space-y-4 text-xs">
               <div>
-                <label className="block font-bold text-slate-300 mb-1">اسم الطالب:</label>
+                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">اسم الطالب:</label>
                 <input
                   type="text"
                   disabled
                   value={`${selectedChild.fullName} (${selectedChild.code || ''})`}
-                  className="w-full p-2.5 rounded-xl bg-slate-950 border border-slate-800 text-slate-400 font-bold"
+                  className="w-full p-2.5 rounded-xl bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 font-bold"
                 />
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-bold text-slate-300 mb-1">المبلغ المسدد (ج.م): *</label>
+                  <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">المبلغ المسدد (ج.م): *</label>
                   <input
                     type="number"
                     required
@@ -1938,16 +1938,16 @@ export const PublicParentPortalView: React.FC<PublicParentPortalViewProps> = ({ 
                     value={proofAmount || ''}
                     onChange={(e) => setProofAmount(Number(e.target.value))}
                     placeholder="مثال: 350"
-                    className="w-full p-2.5 rounded-xl bg-slate-950 border border-slate-800 text-amber-400 font-black font-mono focus:border-emerald-500 outline-none text-base"
+                    className="w-full p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-amber-600 dark:text-amber-400 font-black font-mono focus:border-emerald-500 outline-none text-base"
                   />
                 </div>
 
                 <div>
-                  <label className="block font-bold text-slate-300 mb-1">الشهر / القسط المسدد عنه: *</label>
+                  <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">الشهر / القسط المسدد عنه: *</label>
                   <select
                     value={proofMonth}
                     onChange={(e) => setProofMonth(e.target.value)}
-                    className="w-full p-2.5 rounded-xl bg-slate-950 border border-slate-800 text-slate-200 font-bold focus:border-emerald-500 outline-none"
+                    className="w-full p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-200 font-bold focus:border-emerald-500 outline-none"
                   >
                     <option value="أغسطس 2026">أغسطس 2026</option>
                     <option value="سبتمبر 2026">سبتمبر 2026</option>
@@ -1962,11 +1962,11 @@ export const PublicParentPortalView: React.FC<PublicParentPortalViewProps> = ({ 
               </div>
 
               <div>
-                <label className="block font-bold text-slate-300 mb-1">طريقة السداد المستخدمة: *</label>
+                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">طريقة السداد المستخدمة: *</label>
                 <select
                   value={proofMethod}
                   onChange={(e) => setProofMethod(e.target.value)}
-                  className="w-full p-2.5 rounded-xl bg-slate-950 border border-slate-800 text-slate-200 font-bold focus:border-emerald-500 outline-none"
+                  className="w-full p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-200 font-bold focus:border-emerald-500 outline-none"
                 >
                   <option value="vodafone_cash">📱 فودافون كاش (Vodafone Cash)</option>
                   <option value="instapay">⚡ انستا باي (InstaPay)</option>
@@ -1976,7 +1976,7 @@ export const PublicParentPortalView: React.FC<PublicParentPortalViewProps> = ({ 
               </div>
 
               <div>
-                <label className="block font-bold text-slate-300 mb-1">إرفاق صورة الإيصال أو لقطة الشاشة: *</label>
+                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">إرفاق صورة الإيصال أو لقطة الشاشة: *</label>
                 <input
                   type="file"
                   accept="image/*"
@@ -1986,17 +1986,17 @@ export const PublicParentPortalView: React.FC<PublicParentPortalViewProps> = ({ 
                 />
                 <label
                   htmlFor="receipt-proof-file-input"
-                  className="w-full p-4 rounded-xl border-2 border-dashed border-slate-700 hover:border-emerald-500 bg-slate-950 flex flex-col items-center justify-center cursor-pointer transition-all text-center"
+                  className="w-full p-4 rounded-xl border-2 border-dashed border-slate-300 dark:border-slate-700 hover:border-emerald-500 bg-slate-50 dark:bg-slate-950 flex flex-col items-center justify-center cursor-pointer transition-all text-center"
                 >
                   {proofImageBase64 ? (
                     <div className="space-y-2">
                       <img src={proofImageBase64} alt="إيصال الدفع" className="h-32 object-contain rounded-lg mx-auto border border-emerald-500" />
-                      <span className="text-emerald-400 font-bold block text-[11px]">✓ تم اختيار صورة الإيصال بنجاح (انقر لتغييرها)</span>
+                      <span className="text-emerald-600 dark:text-emerald-400 font-bold block text-[11px]">✓ تم اختيار صورة الإيصال بنجاح (انقر لتغييرها)</span>
                     </div>
                   ) : (
                     <div className="space-y-1">
-                      <Camera className="w-8 h-8 text-amber-400 mx-auto" />
-                      <span className="text-slate-300 font-bold block text-xs">اختر صورة الإيصال أو لقطة الشاشة</span>
+                      <Camera className="w-8 h-8 text-amber-500 dark:text-amber-400 mx-auto" />
+                      <span className="text-slate-700 dark:text-slate-300 font-bold block text-xs">اختر صورة الإيصال أو لقطة الشاشة</span>
                       <span className="text-slate-500 text-[10px]">يدعم الصور بصيغة PNG أو JPG</span>
                     </div>
                   )}
@@ -2004,18 +2004,18 @@ export const PublicParentPortalView: React.FC<PublicParentPortalViewProps> = ({ 
               </div>
 
               <div>
-                <label className="block font-bold text-slate-300 mb-1">ملاحظات ولي الأمر (اختياري):</label>
+                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">ملاحظات ولي الأمر (اختياري):</label>
                 <input
                   type="text"
                   value={proofNotes}
                   onChange={(e) => setProofNotes(e.target.value)}
                   placeholder="مثال: تم التحويل من رقم الهاتف 01012345678 باسم..."
-                  className="w-full p-2.5 rounded-xl bg-slate-950 border border-slate-800 text-slate-200 outline-none focus:border-emerald-500"
+                  className="w-full p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-200 outline-none focus:border-emerald-500"
                 />
               </div>
 
               {proofNoticeMsg && (
-                <div className="p-3 rounded-xl bg-emerald-950/80 border border-emerald-500/50 text-emerald-300 font-bold text-center">
+                <div className="p-3 rounded-xl bg-emerald-100 dark:bg-emerald-950/80 border border-emerald-300 dark:border-emerald-500/50 text-emerald-800 dark:text-emerald-300 font-bold text-center">
                   {proofNoticeMsg}
                 </div>
               )}
@@ -2023,7 +2023,7 @@ export const PublicParentPortalView: React.FC<PublicParentPortalViewProps> = ({ 
               <button
                 type="submit"
                 disabled={isSubmittingProof || !proofImageBase64 || !proofAmount}
-                className="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-800 text-white font-bold transition-all shadow-lg flex items-center justify-center gap-2"
+                className="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-300 dark:disabled:bg-slate-800 text-white font-bold transition-all shadow-lg flex items-center justify-center gap-2"
               >
                 {isSubmittingProof ? (
                   <span>جاري رفع الإيصال...</span>

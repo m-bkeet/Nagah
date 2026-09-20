@@ -249,35 +249,35 @@ export const StudentCardsBroadcastModal: React.FC<StudentCardsBroadcastModalProp
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="bg-white dark:bg-slate-900 w-full max-w-4xl rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 flex flex-col max-h-[90vh] overflow-hidden">
+    <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 animate-fadeIn" dir="rtl">
+      <div className="bg-white dark:bg-slate-900 w-full max-w-4xl rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 flex flex-col max-h-[90vh] overflow-hidden text-slate-900 dark:text-slate-100">
         {/* Header */}
-        <div className="px-6 py-4 bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+        <div className="px-6 py-4 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="p-2 bg-blue-500/10 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 rounded-xl">
-              <Award className="w-6 h-6" />
+            <div className="w-10 h-10 bg-blue-50 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 rounded-2xl flex items-center justify-center shadow-xs">
+              <Award className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="text-lg font-bold text-slate-800 dark:text-white">إدارة بطاقات المتدربين وإرسال الرسائل</h3>
+              <h3 className="text-base font-black text-slate-900 dark:text-white">إدارة بطاقات المتدربين وإرسال الرسائل</h3>
               <p className="text-xs text-slate-500 dark:text-slate-400">طباعة الهويات والبطاقات وإرسال الإشعارات عبر واتساب</p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+            className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:hover:text-slate-200 dark:hover:bg-slate-800 rounded-xl transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Tabs */}
-        <div className="flex border-b border-slate-200 dark:border-slate-700 px-6 bg-slate-50/50 dark:bg-slate-800/50">
+        <div className="flex border-b border-slate-200 dark:border-slate-800 px-6 bg-slate-50/70 dark:bg-slate-950/40 gap-2 pt-2">
           <button
             onClick={() => setActiveTab('cards')}
-            className={`py-3 px-6 font-bold text-sm border-b-2 transition-all flex items-center gap-2 ${
+            className={`py-2.5 px-4 font-bold text-xs rounded-t-xl border-b-2 transition-all flex items-center gap-2 cursor-pointer ${
               activeTab === 'cards'
-                ? 'border-blue-600 text-blue-600 dark:text-blue-400'
-                : 'border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400'
+                ? 'border-blue-600 text-blue-600 dark:text-blue-400 bg-white dark:bg-slate-900 shadow-xs'
+                : 'border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'
             }`}
           >
             <Printer className="w-4 h-4" />
@@ -285,10 +285,10 @@ export const StudentCardsBroadcastModal: React.FC<StudentCardsBroadcastModalProp
           </button>
           <button
             onClick={() => setActiveTab('broadcast')}
-            className={`py-3 px-6 font-bold text-sm border-b-2 transition-all flex items-center gap-2 ${
+            className={`py-2.5 px-4 font-bold text-xs rounded-t-xl border-b-2 transition-all flex items-center gap-2 cursor-pointer ${
               activeTab === 'broadcast'
-                ? 'border-blue-600 text-blue-600 dark:text-blue-400'
-                : 'border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400'
+                ? 'border-blue-600 text-blue-600 dark:text-blue-400 bg-white dark:bg-slate-900 shadow-xs'
+                : 'border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'
             }`}
           >
             <MessageCircle className="w-4 h-4" />
@@ -297,15 +297,15 @@ export const StudentCardsBroadcastModal: React.FC<StudentCardsBroadcastModalProp
         </div>
 
         {/* Body Content */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-6">
+        <div className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-5 custom-scrollbar">
           {/* Filters */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 bg-slate-50 dark:bg-slate-800/60 p-4 rounded-xl border border-slate-200 dark:border-slate-700">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-slate-50 dark:bg-slate-950/40 p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800">
             <div>
               <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">الفرع</label>
               <select
                 value={selectedBranchId}
                 onChange={(e) => setSelectedBranchId(e.target.value)}
-                className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-sm"
+                className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-slate-100 font-semibold focus:outline-none focus:border-blue-500"
               >
                 <option value="all">جميع الفروع</option>
                 {branches.map(b => (
@@ -318,7 +318,7 @@ export const StudentCardsBroadcastModal: React.FC<StudentCardsBroadcastModalProp
               <select
                 value={selectedCourseId}
                 onChange={(e) => setSelectedCourseId(e.target.value)}
-                className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-sm"
+                className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-slate-100 font-semibold focus:outline-none focus:border-blue-500"
               >
                 <option value="all">جميع الدورات</option>
                 {courses.map(c => (
@@ -331,7 +331,7 @@ export const StudentCardsBroadcastModal: React.FC<StudentCardsBroadcastModalProp
               <select
                 value={selectedGroupId}
                 onChange={(e) => setSelectedGroupId(e.target.value)}
-                className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-sm"
+                className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-slate-100 font-semibold focus:outline-none focus:border-blue-500"
               >
                 <option value="all">جميع المجموعات</option>
                 {groups.map(g => (
@@ -344,31 +344,31 @@ export const StudentCardsBroadcastModal: React.FC<StudentCardsBroadcastModalProp
           {activeTab === 'cards' ? (
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <span className="text-sm font-bold text-slate-700 dark:text-slate-300">
-                  عدد المتدربين المحددين للطباعة: {filteredTrainees.length}
+                <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                  عدد المتدربين المحددين للطباعة: <strong className="text-blue-600 dark:text-blue-400 font-mono text-sm">{filteredTrainees.length}</strong> متدرب
                 </span>
                 <button
                   onClick={handlePrintCards}
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-sm flex items-center gap-2 shadow-lg shadow-blue-500/20 transition-all"
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-bold text-xs flex items-center gap-2 shadow-lg shadow-blue-500/20 transition-all cursor-pointer"
                 >
                   <Printer className="w-4 h-4" />
                   <span>طباعة البطاقات الآن</span>
                 </button>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-[380px] overflow-y-auto custom-scrollbar p-1">
                 {filteredTrainees.map(t => (
-                  <div key={t.id} className="p-4 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex items-center justify-between">
+                  <div key={t.id} className="p-3.5 bg-white dark:bg-slate-800/80 rounded-2xl border border-slate-200 dark:border-slate-750 shadow-xs flex items-center justify-between hover:border-blue-300 dark:hover:border-blue-700 transition-all">
                     <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 font-bold flex items-center justify-center text-lg">
+                      <div className="w-11 h-11 rounded-2xl bg-blue-50 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 font-black flex items-center justify-center text-base border border-blue-200 dark:border-blue-800 shrink-0">
                         {t.fullName.charAt(0)}
                       </div>
                       <div>
-                        <h4 className="font-bold text-slate-800 dark:text-white">{t.fullName}</h4>
-                        <p className="text-xs text-slate-500 dark:text-slate-400">الكود: {t.code} | الهاتف: {t.phone || 'غير متوفر'}</p>
+                        <h4 className="font-black text-xs text-slate-900 dark:text-white">{t.fullName}</h4>
+                        <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">الكود: <span className="font-mono font-bold text-blue-600 dark:text-blue-400">{t.code}</span> | الهاتف: <span className="font-mono" dir="ltr">{t.phone || 'غير متوفر'}</span></p>
                       </div>
                     </div>
-                    <span className="px-2.5 py-1 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-xs font-bold rounded-lg">
+                    <span className="px-2.5 py-1 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 text-[10px] font-black rounded-lg border border-emerald-200 dark:border-emerald-800">
                       نشط
                     </span>
                   </div>
@@ -378,40 +378,40 @@ export const StudentCardsBroadcastModal: React.FC<StudentCardsBroadcastModalProp
           ) : (
             <div className="space-y-4">
               <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-2">نص الرسالة</label>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">نص الرسالة</label>
                 <textarea
                   value={broadcastMessage}
                   onChange={(e) => setBroadcastMessage(e.target.value)}
                   rows={4}
-                  className="w-full p-3 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-sm focus:ring-2 focus:ring-blue-500"
+                  className="w-full p-3 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 focus:outline-none"
                   placeholder="اكتب نص الرسالة هنا..."
                 ></textarea>
               </div>
 
-              <div className="flex items-center justify-between pt-2">
+              <div className="flex items-center justify-between pt-1">
                 <button
                   onClick={handleToggleSelectAll}
-                  className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline"
+                  className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
                 >
                   {selectedTraineeIds.length === filteredTrainees.length ? 'إلغاء تحديد الكل' : 'تحديد الكل'} ({selectedTraineeIds.length})
                 </button>
                 <button
                   onClick={handleSendBroadcast}
-                  className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-sm flex items-center gap-2 shadow-lg shadow-emerald-500/20 transition-all"
+                  className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold text-xs flex items-center gap-2 shadow-lg shadow-emerald-500/20 transition-all cursor-pointer"
                 >
                   <Send className="w-4 h-4" />
-                  <span>إرسال عبر واتساب</span>
+                  <span>إرسال عبر واتساب ({selectedTraineeIds.length})</span>
                 </button>
               </div>
 
-              <div className="max-h-60 overflow-y-auto space-y-2 border border-slate-200 dark:border-slate-700 rounded-xl p-3">
+              <div className="max-h-60 overflow-y-auto space-y-2 border border-slate-200 dark:border-slate-700 rounded-2xl p-3 bg-slate-50/50 dark:bg-slate-950/30 custom-scrollbar">
                 {filteredTrainees.map(t => (
                   <div
                     key={t.id}
                     onClick={() => handleToggleTrainee(t.id)}
-                    className={`p-3 rounded-lg border cursor-pointer flex items-center justify-between transition-all ${
+                    className={`p-3 rounded-xl border cursor-pointer flex items-center justify-between transition-all ${
                       selectedTraineeIds.includes(t.id)
-                        ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-700'
+                        ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-400 dark:border-blue-600 shadow-xs'
                         : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-750'
                     }`}
                   >
@@ -420,11 +420,11 @@ export const StudentCardsBroadcastModal: React.FC<StudentCardsBroadcastModalProp
                         type="checkbox"
                         checked={selectedTraineeIds.includes(t.id)}
                         onChange={() => {}}
-                        className="rounded text-blue-600"
+                        className="rounded text-blue-600 cursor-pointer"
                       />
                       <div>
-                        <p className="font-bold text-sm text-slate-800 dark:text-white">{t.fullName}</p>
-                        <p className="text-xs text-slate-500">{t.phone || 'بدون هاتف'}</p>
+                        <p className="font-bold text-xs text-slate-900 dark:text-white">{t.fullName}</p>
+                        <p className="text-[10px] text-slate-500 font-mono" dir="ltr">{t.phone || 'بدون هاتف'}</p>
                       </div>
                     </div>
                     {selectedTraineeIds.includes(t.id) && (
@@ -438,10 +438,10 @@ export const StudentCardsBroadcastModal: React.FC<StudentCardsBroadcastModalProp
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 bg-slate-50 dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 flex justify-end">
+        <div className="px-6 py-3.5 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 flex justify-end">
           <button
             onClick={onClose}
-            className="px-5 py-2 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-800 dark:text-white font-bold text-sm rounded-xl transition-colors"
+            className="px-5 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs rounded-xl transition-colors cursor-pointer"
           >
             إغلاق
           </button>

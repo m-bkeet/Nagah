@@ -21,7 +21,7 @@ export const ALL_PERMISSIONS: PermissionItem[] = [
   { id: 'points', label: '⭐ نظام النقاط والمكافآت والتحفيز', category: 'الأنشطة', description: 'منح وخصم النقاط ولوحة الأوائل' },
   { id: 'exams', label: '📝 الاختبارات والدرجات والنتائج', category: 'الأكاديميا', description: 'إنشاء بنوك الأسئلة ورصد التقييمات' },
   { id: 'homeworks', label: '✅ الواجبات والتقييمات المباشرة', category: 'الأكاديميا', description: 'متابعة الواجبات وتصحيحها' },
-  { id: 'interactive', label: '🔗 الجلسات التفاعلية والسبورة', category: 'التشغيل', description: 'إدارة البث المباشر للشاشات المعملية' },
+  { id: 'interactive', label: 'الجلسات التفاعلية', category: 'التشغيل', description: 'إدارة البث المباشر للشاشات المعملية' },
   { id: 'messages', label: '💬 مركز الرسائل والواتساب', category: 'التواصل', description: 'إرسال التنبيهات والرسائل الجماعية' },
   { id: 'reports', label: '📊 مركز التقارير والإحصائيات', category: 'التقارير', description: 'عرض وتصدير تقارير الأداء والمالية' },
   { id: 'certificates', label: '🎓 الشهادات المعتمدة وطباعتها', category: 'الشهادات', description: 'إصدار وتوثيق الشهادات للطلاب' },

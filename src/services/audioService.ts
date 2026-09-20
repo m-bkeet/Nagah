@@ -670,6 +670,65 @@ export class AudioController {
   }
 
   /**
+   * Play delightful star success sound when awarding points or saving attendance
+   */
+  public playStarSuccess(): void {
+    this.unlockAudio();
+    const ctx = this.getAudioContext();
+    if (!ctx) return;
+
+    try {
+      const now = ctx.currentTime;
+      // Ascending twinkling star frequencies: D5, F#5, A5, D6, F#6
+      const freqs = [587.33, 739.99, 880, 1174.66, 1479.98];
+      freqs.forEach((freq, idx) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, now + idx * 0.07);
+        gain.gain.setValueAtTime(0.25, now + idx * 0.07);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.07 + 0.35);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now + idx * 0.07);
+        osc.stop(now + idx * 0.07 + 0.35);
+        this.activeOscillators.add(osc);
+      });
+    } catch (e) {
+      console.warn('[AudioController] playStarSuccess error:', e);
+    }
+  }
+
+  /**
+   * Play triumphant fanfare
+   */
+  public playFanfare(): void {
+    this.unlockAudio();
+    const ctx = this.getAudioContext();
+    if (!ctx) return;
+
+    try {
+      const melody = [523.25, 659.25, 783.99, 1046.50, 1318.51, 1567.98];
+      const now = ctx.currentTime;
+      melody.forEach((freq, idx) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(freq, now + idx * 0.1);
+        gain.gain.setValueAtTime(0.25, now + idx * 0.1);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.1 + 0.35);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now + idx * 0.1);
+        osc.stop(now + idx * 0.1 + 0.35);
+        this.activeOscillators.add(osc);
+      });
+    } catch (e) {
+      console.warn('[AudioController] playFanfare error:', e);
+    }
+  }
+
+  /**
    * Play comprehensive grand celebration (Fanfare + Clapping + Star Chimes)
    */
   public playCelebrationCheer(): void {
@@ -680,15 +739,16 @@ export class AudioController {
   }
 
   /**
-   * Custom chime frequencies
+   * Custom chime frequencies with safe default
    */
-  public playChime(freqs: number[]): void {
+  public playChime(freqs: number[] = [523.25, 659.25, 783.99]): void {
     this.unlockAudio();
     const ctx = this.getAudioContext();
     if (!ctx) return;
 
     try {
-      freqs.forEach((f, idx) => {
+      const targetFreqs = Array.isArray(freqs) && freqs.length > 0 ? freqs : [523.25, 659.25, 783.99];
+      targetFreqs.forEach((f, idx) => {
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
         osc.type = 'triangle';

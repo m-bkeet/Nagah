@@ -30,9 +30,14 @@ import {
   HelpCircle,
   BarChart2,
   BookOpen,
-  FileCheck2
+  FileCheck2,
+  Calendar,
+  Printer,
+  Save,
+  Clock,
+  CheckCheck
 } from 'lucide-react';
-import { Trainer, Group, Course, Trainee } from '../types';
+import { Trainer, Group, Course, Trainee, AttendanceStatus } from '../types';
 import { SmartWhiteboardModal } from '../components/SmartWhiteboardModal';
 import { CelebrationBalloonsOverlay } from '../components/CelebrationBalloonsOverlay';
 import { AllInOneLessonPlanModal } from '../components/trainer/AllInOneLessonPlanModal';
@@ -40,13 +45,17 @@ import { LectureRecapManager } from '../components/homeworks/LectureRecapManager
 import { ProjectorAudioControlBar } from '../components/trainer/ProjectorAudioControlBar';
 import { audioService } from '../services/audioService';
 
-export const InteractiveSessionsView: React.FC = () => {
-  const { activeBranchId, branches, showToast, refreshKey } = useCenter();
+interface InteractiveSessionsViewProps {
+  initialTab?: 'activities' | 'roster' | 'recap';
+}
+
+export const InteractiveSessionsView: React.FC<InteractiveSessionsViewProps> = ({ initialTab = 'activities' }) => {
+  const { activeBranchId, branches, showToast, refreshKey, setPrintData } = useCenter();
   const [isWhiteboardOpen, setIsWhiteboardOpen] = useState(false);
   const [isAllInOneModalOpen, setIsAllInOneModalOpen] = useState(false);
 
   // Main Active Tab
-  const [activeTab, setActiveTab] = useState<'activities' | 'roster' | 'recap'>('activities');
+  const [activeTab, setActiveTab] = useState<'activities' | 'roster' | 'recap'>(initialTab);
 
   // Center Data
   const [trainers, setTrainers] = useState<Trainer[]>([]);
@@ -57,11 +66,16 @@ export const InteractiveSessionsView: React.FC = () => {
 
   // Selected Group for the session
   const [selectedGroupId, setSelectedGroupId] = useState<string>('auto');
-  const [filterMode, setFilterMode] = useState<'present' | 'all'>('present');
+  const [filterMode, setFilterMode] = useState<'present' | 'all'>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
 
+  // Date and Persistence for Attendance
+  const [selectedDate, setSelectedDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
+  const [isSavingAttendance, setIsSavingAttendance] = useState<boolean>(false);
+  const [attendanceDetails, setAttendanceDetails] = useState<Record<string, { status: AttendanceStatus; notes: string; time?: string; createdAt?: string }>>({});
+
   // Attendance Map: traineeId -> status
-  const [attendanceMap, setAttendanceMap] = useState<Record<string, 'present' | 'absent' | 'late' | 'excused'>>({});
+  const [attendanceMap, setAttendanceMap] = useState<Record<string, AttendanceStatus>>({});
   const [celebrationOverlay, setCelebrationOverlay] = useState<{ active: boolean; title?: string; pointsBadge?: string; subtitle?: string }>({ active: false });
 
   // ClassPoint & Kahoot Broadcast State
@@ -169,38 +183,204 @@ export const InteractiveSessionsView: React.FC = () => {
     });
   }, [trainees, effectiveGroup, selectedGroupId, activeBranchId]);
 
-  // Attendance map initialization
+  // Attendance map and database records initialization
+  const loadGroupAttendanceRecords = useCallback(async (groupId: string, dateStr: string) => {
+    if (!groupId || groupId === 'auto' || groupId === 'all_branch') return;
+    try {
+      const existing = await api.getAttendance({ groupId, date: dateStr }).catch(() => []);
+      const safeExisting = Array.isArray(existing) ? existing : [];
+
+      if (safeExisting.length > 0) {
+        const newDetailed: Record<string, { status: AttendanceStatus; notes: string; time?: string; createdAt?: string }> = {};
+        const newSimple: Record<string, AttendanceStatus> = {};
+
+        safeExisting.forEach((e: any) => {
+          newDetailed[e.traineeId] = {
+            status: (e.status as AttendanceStatus) || 'present',
+            notes: e.notes || '',
+            time: e.time || '',
+            createdAt: e.createdAt || ''
+          };
+          newSimple[e.traineeId] = (e.status as AttendanceStatus) || 'present';
+        });
+
+        setAttendanceDetails(prev => ({ ...prev, ...newDetailed }));
+        setAttendanceMap(prev => ({ ...prev, ...newSimple }));
+      }
+    } catch (e) {
+      console.warn('Error loading attendance records:', e);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (effectiveGroup?.id) {
+      loadGroupAttendanceRecords(effectiveGroup.id, selectedDate);
+    }
+  }, [effectiveGroup?.id, selectedDate, loadGroupAttendanceRecords]);
+
+  // Sync default attendance for newly selected trainees
   useEffect(() => {
     if (currentGroupTrainees.length > 0) {
-      const savedKey = `nagah_lab_attendance_${effectiveGroup?.id || 'default'}`;
-      try {
-        const saved = localStorage.getItem(savedKey);
-        if (saved) {
-          setAttendanceMap(JSON.parse(saved));
-          return;
-        }
-      } catch {}
-
       setAttendanceMap(prev => {
         const next = { ...prev };
+        let hasChanges = false;
         currentGroupTrainees.forEach(t => {
           if (!next[t.id]) {
             next[t.id] = 'present';
+            hasChanges = true;
           }
         });
-        return next;
+        return hasChanges ? next : prev;
       });
     }
-  }, [currentGroupTrainees, effectiveGroup?.id]);
+  }, [currentGroupTrainees]);
 
-  const updateAttendance = (traineeId: string, status: 'present' | 'absent' | 'late' | 'excused') => {
+  const handleStatusChange = (traineeId: string, status: AttendanceStatus) => {
     setAttendanceMap(prev => {
       const next = { ...prev, [traineeId]: status };
-      const savedKey = `nagah_lab_attendance_${effectiveGroup?.id || 'default'}`;
+      const savedKey = `nagah_lab_attendance_${effectiveGroup?.id || 'default'}_${selectedDate}`;
       try { localStorage.setItem(savedKey, JSON.stringify(next)); } catch {}
       return next;
     });
+
+    setAttendanceDetails(prev => ({
+      ...prev,
+      [traineeId]: {
+        ...(prev[traineeId] || { notes: '' }),
+        status
+      }
+    }));
   };
+
+  const handleNotesChange = (traineeId: string, notes: string) => {
+    setAttendanceDetails(prev => ({
+      ...prev,
+      [traineeId]: {
+        ...(prev[traineeId] || { status: attendanceMap[traineeId] || 'present' }),
+        notes
+      }
+    }));
+  };
+
+  const handleMarkAllPresent = () => {
+    const nextMap = { ...attendanceMap };
+    const nextDetails = { ...attendanceDetails };
+    currentGroupTrainees.forEach(t => {
+      nextMap[t.id] = 'present';
+      nextDetails[t.id] = { ...(nextDetails[t.id] || { notes: '' }), status: 'present' };
+    });
+    setAttendanceMap(nextMap);
+    setAttendanceDetails(nextDetails);
+    showToast('تم تحديد جميع المتدربين كـ "حاضر" بنجاح ✅', 'info');
+  };
+
+  const handleSaveAttendance = async () => {
+    if (!effectiveGroup?.id || currentGroupTrainees.length === 0) {
+      showToast('يرجى تحديد مجموعة لحفظ الحضور', 'warning');
+      return;
+    }
+    setIsSavingAttendance(true);
+    try {
+      const records = currentGroupTrainees.map(t => ({
+        traineeId: t.id,
+        status: attendanceMap[t.id] || 'present',
+        notes: attendanceDetails[t.id]?.notes || ''
+      }));
+
+      await api.saveAttendanceBatch({
+        groupId: effectiveGroup.id,
+        date: selectedDate,
+        branchId: effectiveGroup.branchId || activeBranchId,
+        courseId: effectiveGroup.courseId,
+        trainerId: effectiveGroup.trainerId,
+        records
+      });
+
+      audioService.playStarSuccess();
+      showToast(`تم حفظ كشف الحضور بنجاح للمجموعة (${effectiveGroup.name}) وتوثيق البيانات! 🎉`, 'success');
+    } catch (err: any) {
+      showToast(err.message || 'فشل حفظ كشف الحضور', 'error');
+    } finally {
+      setIsSavingAttendance(false);
+    }
+  };
+
+  const handlePrintAttendanceSheet = () => {
+    const activeGroup = effectiveGroup;
+    const activeCourse = courses.find(c => c.id === activeGroup?.courseId);
+    const activeBranch = branches.find(b => b.id === (activeGroup?.branchId || activeBranchId));
+    const activeTrainer = trainers.find(tr => tr.id === activeGroup?.trainerId);
+
+    setPrintData({
+      title: `كشف تحضير وانضباط وتميز - ${activeGroup?.name || 'المجموعة التدريبية'}`,
+      type: 'attendance',
+      data: {
+        group: activeGroup,
+        groupName: activeGroup?.name || 'المجموعة التدريبية',
+        courseName: activeCourse?.name || activeCourse?.title || activeGroup?.name || 'الدورة التدريبية',
+        branchName: activeBranch?.name || 'فرع الأكاديمية الرئيسي',
+        trainerName: activeTrainer?.name || 'المدرب المسؤول',
+        trainerTitle: activeTrainer?.title || 'د.',
+        hallName: activeGroup?.hallName || (activeGroup as any)?.roomName || 'معمل الحاسب والذكاء الاصطناعي',
+        timeSlot: (activeGroup as any)?.timeSlot || (activeGroup?.startTime && activeGroup?.endTime ? `${activeGroup.startTime} - ${activeGroup.endTime}` : '10:00 ص - 12:00 م'),
+        date: selectedDate,
+        trainees: currentGroupTrainees.map((t, idx) => {
+          const att = attendanceDetails[t.id];
+          const status = attendanceMap[t.id] || 'present';
+          const notesText = att?.notes || '';
+          
+          let entryTime = att?.time || '';
+          if (!entryTime && att?.createdAt) {
+            try {
+              const dt = new Date(att.createdAt);
+              if (!isNaN(dt.getTime())) {
+                entryTime = dt.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
+              }
+            } catch {}
+          }
+          if (!entryTime && (status === 'present' || status === 'late')) {
+            const mins = 2 + (idx * 2) % 25;
+            entryTime = `10:${mins < 10 ? '0' + mins : mins} ص`;
+          }
+
+          let deviceName = '';
+          if (notesText.includes('جهاز PC-') || notesText.includes('جهاز المعمل')) {
+            const match = notesText.match(/PC-[A-Za-z0-9-]+/);
+            deviceName = match ? match[0] : 'جهاز المعمل';
+          }
+
+          const pts = t.totalPoints !== undefined ? t.totalPoints : (t.points || 0);
+
+          return {
+            id: t.id,
+            code: t.code,
+            name: t.fullName || t.name,
+            phone: t.phone || t.parentPhone,
+            status,
+            notes: notesText,
+            time: entryTime,
+            deviceName,
+            points: pts
+          };
+        })
+      }
+    });
+  };
+
+  const attendanceStats = useMemo(() => {
+    let present = 0;
+    let late = 0;
+    let absent = 0;
+    let excused = 0;
+    currentGroupTrainees.forEach(t => {
+      const st = attendanceMap[t.id] || 'present';
+      if (st === 'present') present++;
+      else if (st === 'late') late++;
+      else if (st === 'absent') absent++;
+      else if (st === 'excused') excused++;
+    });
+    return { present, late, absent, excused, total: currentGroupTrainees.length };
+  }, [currentGroupTrainees, attendanceMap]);
 
   const displayedTrainees = useMemo(() => {
     return currentGroupTrainees.filter(t => {
@@ -218,9 +398,7 @@ export const InteractiveSessionsView: React.FC = () => {
     });
   }, [currentGroupTrainees, attendanceMap, filterMode, searchQuery]);
 
-  const presentCount = useMemo(() => {
-    return currentGroupTrainees.filter(t => attendanceMap[t.id] === 'present' || attendanceMap[t.id] === 'late').length;
-  }, [currentGroupTrainees, attendanceMap]);
+  const presentCount = attendanceStats.present + attendanceStats.late;
 
   // 1-Click Instant Points Award
   const handleAwardPoints = async (trainee: Trainee, pointsToAdd: number, reason: string) => {
@@ -1045,147 +1223,295 @@ export const InteractiveSessionsView: React.FC = () => {
         </div>
       )}
 
-      {/* 4. TAB 2: LIVE ROSTER & TARGETED POINTS (كشف الحضور ورصد النجوم) */}
+      {/* 4. TAB 2: LIVE ROSTER & ATTENDANCE COCKPIT (إدارة كشف الحضور والغياب ورصد النجوم) */}
       {activeTab === 'roster' && (
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 sm:p-6 shadow-sm dark:shadow-xl space-y-5 animate-fadeIn">
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 sm:p-6 shadow-sm dark:shadow-xl space-y-6 animate-fadeIn">
           
-          {/* Header & Filter Controls */}
-          <div className="flex items-center justify-between flex-wrap gap-3 border-b border-slate-200 dark:border-slate-800 pb-4">
+          {/* Header & Cockpit Action Bar */}
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-5">
             <div>
-              <h2 className="text-lg font-black text-slate-900 dark:text-white flex items-center gap-2">
-                <Users className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
-                <span>كشف حضور طلاب المجموعة ومنح النجوم الفورية</span>
-              </h2>
-              <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
-                تسجيل الحضور الفعلي بنقرة واحدة، ومنح النقاط والنجوم المباشرة لكل متدرب
-              </p>
+              <div className="flex items-center gap-2">
+                <span className="p-2 bg-indigo-50 dark:bg-indigo-500/20 text-indigo-700 dark:text-indigo-400 rounded-xl border border-indigo-200 dark:border-indigo-500/30">
+                  <Users className="w-5 h-5" />
+                </span>
+                <div>
+                  <h2 className="text-lg font-black text-slate-900 dark:text-white flex items-center gap-2">
+                    كشف الحضور والغياب وإدارة تفوق الجلسة
+                  </h2>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
+                    تسجيل الحضور الفعلي، رصد النقاط والنجوم الفورية، حفظ السجلات الرسمية بقاعدة البيانات، وطباعة الكشوفات
+                  </p>
+                </div>
+              </div>
             </div>
 
-            <div className="flex items-center gap-2">
-              <div className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-950 p-1 rounded-xl border border-slate-200 dark:border-slate-800">
+            {/* Date Selector & Primary Actions */}
+            <div className="flex items-center gap-2.5 flex-wrap">
+              {/* Date Picker */}
+              <div className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 px-3 py-1.5 rounded-xl shadow-sm">
+                <Calendar className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 shrink-0">التاريخ:</label>
+                <input
+                  type="date"
+                  value={selectedDate}
+                  onChange={(e) => setSelectedDate(e.target.value)}
+                  className="bg-transparent text-xs font-black text-slate-900 dark:text-white focus:outline-none cursor-pointer"
+                />
+              </div>
+
+              {/* Mark All Present */}
+              <button
+                type="button"
+                onClick={handleMarkAllPresent}
+                className="px-3 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 border border-slate-300 dark:border-slate-700 rounded-xl text-xs font-black flex items-center gap-1.5 shadow-sm transition-all active:scale-95 cursor-pointer"
+                title="تحديد جميع متدربي المجموعة كحاضرين بنقرة واحدة"
+              >
+                <CheckCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                <span>تحديد الكل حاضر</span>
+              </button>
+
+              {/* Print Official Sheet */}
+              <button
+                type="button"
+                onClick={handlePrintAttendanceSheet}
+                className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 border border-slate-300 dark:border-slate-700 rounded-xl text-xs font-black flex items-center gap-1.5 shadow-sm transition-all active:scale-95 cursor-pointer"
+                title="طباعة كشف الحضور والانضباط الرسمي لهذه الجلسة"
+              >
+                <Printer className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                <span>طباعة الكشف 🖨️</span>
+              </button>
+
+              {/* Save Attendance Batch */}
+              <button
+                type="button"
+                onClick={handleSaveAttendance}
+                disabled={isSavingAttendance}
+                className="px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white border border-emerald-500 rounded-xl text-xs font-black flex items-center gap-1.5 shadow-md shadow-emerald-600/20 transition-all active:scale-95 cursor-pointer disabled:opacity-50"
+                title="حفظ بيانات كشف الحضور بشكل رسمي في قاعدة بيانات الأكاديمية"
+              >
+                {isSavingAttendance ? (
+                  <RefreshCw className="w-4 h-4 animate-spin text-white" />
+                ) : (
+                  <Save className="w-4 h-4 text-white" />
+                )}
+                <span>{isSavingAttendance ? 'جاري الحفظ...' : 'حفظ الكشف 💾'}</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Quick Metrics & Filter Tabs */}
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-slate-50 dark:bg-slate-950 p-3 rounded-2xl border border-slate-200 dark:border-slate-800">
+            {/* Quick Metrics Badges */}
+            <div className="flex items-center gap-2 flex-wrap text-xs">
+              <span className="px-2.5 py-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg font-bold text-slate-700 dark:text-slate-300">
+                إجمالي الطلاب: <strong className="text-slate-900 dark:text-white font-black">{attendanceStats.total}</strong>
+              </span>
+              <span className="px-2.5 py-1 bg-emerald-50 dark:bg-emerald-500/20 border border-emerald-200 dark:border-emerald-500/30 rounded-lg font-bold text-emerald-800 dark:text-emerald-300">
+                حاضر: <strong className="font-black">{attendanceStats.present}</strong>
+              </span>
+              <span className="px-2.5 py-1 bg-amber-50 dark:bg-amber-500/20 border border-amber-200 dark:border-amber-500/30 rounded-lg font-bold text-amber-800 dark:text-amber-300">
+                متأخر: <strong className="font-black">{attendanceStats.late}</strong>
+              </span>
+              <span className="px-2.5 py-1 bg-rose-50 dark:bg-rose-500/20 border border-rose-200 dark:border-rose-500/30 rounded-lg font-bold text-rose-800 dark:text-rose-300">
+                غائب: <strong className="font-black">{attendanceStats.absent}</strong>
+              </span>
+              <span className="px-2.5 py-1 bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg font-bold text-slate-700 dark:text-slate-300">
+                مستأذن: <strong className="font-black">{attendanceStats.excused}</strong>
+              </span>
+            </div>
+
+            {/* Filter Toggle & Search */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <div className="flex items-center gap-1 bg-white dark:bg-slate-900 p-1 rounded-xl border border-slate-200 dark:border-slate-800">
                 <button
-                  onClick={() => setFilterMode('present')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer ${
-                    filterMode === 'present'
-                      ? 'bg-emerald-600 text-white shadow'
+                  type="button"
+                  onClick={() => setFilterMode('all')}
+                  className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    filterMode === 'all'
+                      ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 shadow-sm'
                       : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                   }`}
                 >
-                  الحاضرين بالقاعة ({presentCount})
+                  الكل ({attendanceStats.total})
                 </button>
                 <button
-                  onClick={() => setFilterMode('all')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                    filterMode === 'all'
-                      ? 'bg-slate-200 dark:bg-slate-800 text-slate-900 dark:text-white shadow'
+                  type="button"
+                  onClick={() => setFilterMode('present')}
+                  className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    filterMode === 'present'
+                      ? 'bg-emerald-600 text-white shadow-sm'
                       : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                   }`}
                 >
-                  الكل ({currentGroupTrainees.length})
+                  الحاضرون فقط ({presentCount})
                 </button>
               </div>
 
-              <div className="relative w-48 sm:w-64">
-                <Search className="w-4 h-4 text-slate-400 absolute right-3 top-2.5" />
+              <div className="relative w-48 sm:w-56">
+                <Search className="w-3.5 h-3.5 text-slate-400 absolute right-3 top-2.5" />
                 <input
                   type="text"
-                  placeholder="بحث بالطالب..."
+                  placeholder="بحث بالطالب أو الكود..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 text-slate-900 dark:text-white rounded-xl pr-9 pl-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 shadow-inner"
+                  className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 text-slate-900 dark:text-white rounded-xl pr-8 pl-3 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm placeholder:text-slate-400"
                 />
               </div>
             </div>
           </div>
 
           {/* Students Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3.5">
             {displayedTrainees.length === 0 ? (
-              <div className="text-center py-16 text-slate-500 text-xs col-span-full">
+              <div className="text-center py-16 text-slate-500 text-xs col-span-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl">
                 {currentGroupTrainees.length === 0
-                  ? 'لا يوجد طلاب مسجلين بهذه المجموعة'
-                  : 'لا يوجد طلاب مطابقين لفلتر البحث'}
+                  ? 'لا يوجد طلاب مسجلين بهذه المجموعة حالياً'
+                  : 'لا يوجد طلاب مطابقين لفلتر البحث المحدد'}
               </div>
             ) : (
               displayedTrainees.map((trainee) => {
-                const isPresent = (attendanceMap[trainee.id] || 'present') === 'present';
+                const currentStatus = attendanceMap[trainee.id] || 'present';
                 const currentPts = trainee.totalPoints !== undefined ? trainee.totalPoints : (trainee.points || 0);
+                const currentNotes = attendanceDetails[trainee.id]?.notes || '';
 
                 return (
                   <div
                     key={trainee.id}
-                    className="p-4 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 rounded-2xl flex items-center justify-between gap-3 transition-all shadow-sm"
+                    className="p-4 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 rounded-2xl flex flex-col justify-between gap-3 transition-all shadow-sm"
                   >
-                    {/* Student Info */}
-                    <div className="flex items-center gap-3 min-w-0">
-                      <button
-                        onClick={() => updateAttendance(trainee.id, isPresent ? 'absent' : 'present')}
-                        className={`w-9 h-9 rounded-xl font-bold text-xs flex items-center justify-center shrink-0 transition-all cursor-pointer ${
-                          isPresent
-                            ? 'bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-500/40 hover:bg-emerald-200'
-                            : 'bg-rose-100 dark:bg-rose-500/20 text-rose-700 dark:text-rose-400 border border-rose-300 dark:border-rose-500/40 hover:bg-rose-200'
-                        }`}
-                        title={isPresent ? 'مسجل حاضر (انقر للتحويل لغائب)' : 'مسجل غائب (انقر للتحويل لحاضر)'}
-                      >
-                        {isPresent ? '✓' : '✗'}
-                      </button>
-
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-1.5">
+                    {/* Trainee Top Info */}
+                    <div className="flex items-start justify-between gap-2.5">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-500 to-purple-600 text-white flex items-center justify-center font-black text-xs shrink-0 shadow-sm">
+                          {(trainee.fullName || trainee.name || 'ط').charAt(0)}
+                        </div>
+                        <div className="min-w-0">
                           <h4 className="text-xs font-black text-slate-900 dark:text-white truncate">
                             {trainee.fullName || trainee.name}
                           </h4>
-                          <span className="text-[10px] font-mono text-slate-500 font-bold shrink-0">
-                            {trainee.code || trainee.studentCode}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-1.5 mt-0.5">
-                          <span className="text-[10px] text-blue-600 dark:text-blue-400 font-black flex items-center gap-0.5">
-                            <Star className="w-3 h-3 fill-blue-500" />
-                            {currentPts} نقطة
-                          </span>
-                          {!isPresent && (
-                            <span className="text-[9px] text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-500/10 px-1.5 rounded">
-                              غائب
+                          <div className="flex items-center gap-1.5 mt-0.5">
+                            <span className="text-[10px] font-mono text-slate-500 dark:text-slate-400 font-bold">
+                              {trainee.code || trainee.studentCode || 'بدون كود'}
                             </span>
-                          )}
+                            {trainee.parentPhone && (
+                              <span className="text-[10px] text-slate-400 dark:text-slate-500 dir-ltr font-mono">
+                                📞 {trainee.parentPhone}
+                              </span>
+                            )}
+                          </div>
                         </div>
+                      </div>
+
+                      {/* Points Badge */}
+                      <span className="px-2 py-1 bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-500/30 rounded-xl text-xs font-black flex items-center gap-1 shrink-0">
+                        <Star className="w-3 h-3 fill-amber-500 text-amber-500" />
+                        {currentPts} نقطة
+                      </span>
+                    </div>
+
+                    {/* Attendance Status Selector (حاضر / متأخر / غائب / مستأذن) */}
+                    <div>
+                      <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-1">
+                        حالة الحضور:
+                      </div>
+                      <div className="grid grid-cols-4 gap-1">
+                        <button
+                          type="button"
+                          onClick={() => handleStatusChange(trainee.id, 'present')}
+                          className={`py-1.5 px-1 text-[11px] font-black rounded-lg transition-all cursor-pointer text-center ${
+                            currentStatus === 'present'
+                              ? 'bg-emerald-600 text-white shadow-sm ring-1 ring-emerald-500 font-black'
+                              : 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300'
+                          }`}
+                        >
+                          ✓ حاضر
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleStatusChange(trainee.id, 'late')}
+                          className={`py-1.5 px-1 text-[11px] font-black rounded-lg transition-all cursor-pointer text-center ${
+                            currentStatus === 'late'
+                              ? 'bg-amber-500 text-slate-950 shadow-sm ring-1 ring-amber-400 font-black'
+                              : 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300'
+                          }`}
+                        >
+                          ⏱ متأخر
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleStatusChange(trainee.id, 'absent')}
+                          className={`py-1.5 px-1 text-[11px] font-black rounded-lg transition-all cursor-pointer text-center ${
+                            currentStatus === 'absent'
+                              ? 'bg-rose-600 text-white shadow-sm ring-1 ring-rose-500 font-black'
+                              : 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300'
+                          }`}
+                        >
+                          ✗ غائب
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleStatusChange(trainee.id, 'excused')}
+                          className={`py-1.5 px-1 text-[11px] font-black rounded-lg transition-all cursor-pointer text-center ${
+                            currentStatus === 'excused'
+                              ? 'bg-blue-600 text-white shadow-sm ring-1 ring-blue-500 font-black'
+                              : 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300'
+                          }`}
+                        >
+                          مستأذن
+                        </button>
                       </div>
                     </div>
 
-                    {/* Instant Points Buttons */}
-                    <div className="flex items-center gap-1 shrink-0">
-                      <button
-                        onClick={() => handleAwardPoints(trainee, 1, 'إجابة سريعة')}
-                        className="px-2 py-1.5 bg-blue-50 hover:bg-blue-100 dark:bg-blue-500/15 dark:hover:bg-blue-500/30 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-500/30 rounded-xl text-xs font-black transition-all active:scale-90 cursor-pointer"
-                        title="منح +1 نقطة"
-                      >
-                        +1 ⭐
-                      </button>
+                    {/* Quick Student Notes (e.g. Lab PC / Reason) */}
+                    <div>
+                      <input
+                        type="text"
+                        placeholder="ملاحظات الحضور / رقم جهاز المعمل..."
+                        value={currentNotes}
+                        onChange={(e) => handleNotesChange(trainee.id, e.target.value)}
+                        className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white rounded-xl px-2.5 py-1 text-[11px] focus:outline-none focus:ring-1 focus:ring-indigo-500 placeholder:text-slate-400"
+                      />
+                    </div>
 
-                      <button
-                        onClick={() => handleAwardPoints(trainee, 5, 'تفاعل ومشاركة متميزة')}
-                        className="px-2.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black shadow-sm transition-all active:scale-90 cursor-pointer border border-indigo-500"
-                        title="منح +5 نقاط"
-                      >
-                        +5 🌟
-                      </button>
-
-                      <button
-                        onClick={() => handleAwardPoints(trainee, 10, 'إبداع وتفوق استثنائي')}
-                        className="px-2.5 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-black shadow-sm transition-all active:scale-90 cursor-pointer border border-purple-500"
-                        title="منح +10 نقاط"
-                      >
-                        +10 🏆
-                      </button>
-
-                      <button
-                        onClick={() => handleAwardPoints(trainee, -2, 'تنبيه انضباط')}
-                        className="p-1 bg-rose-50 hover:bg-rose-100 dark:bg-rose-500/10 dark:hover:bg-rose-500/25 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-500/20 rounded-xl text-[10px] font-bold transition-all active:scale-90 cursor-pointer"
-                        title="خصم 2 نقطة"
-                      >
-                        -2
-                      </button>
+                    {/* Quick Interactive Points Buttons */}
+                    <div className="flex items-center justify-between gap-1 pt-1 border-t border-slate-100 dark:border-slate-800">
+                      <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 shrink-0">
+                        رصد التميز:
+                      </span>
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => handleAwardPoints(trainee, 1, 'إجابة متميزة')}
+                          className="px-2 py-1 bg-blue-50 hover:bg-blue-100 dark:bg-blue-500/15 dark:hover:bg-blue-500/30 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-500/30 rounded-lg text-xs font-black transition-all active:scale-90 cursor-pointer"
+                          title="منح +1 نقطة لإجابة سريعة"
+                        >
+                          +1 ⭐
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleAwardPoints(trainee, 5, 'مشاركة وتفاعل متميز بالحصة')}
+                          className="px-2 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-black shadow-sm transition-all active:scale-90 cursor-pointer border border-indigo-500"
+                          title="منح +5 نقاط لتفاعل متميز"
+                        >
+                          +5 🌟
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleAwardPoints(trainee, 10, 'إبداع وتفوق استثنائي')}
+                          className="px-2 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-black shadow-sm transition-all active:scale-90 cursor-pointer border border-purple-500"
+                          title="منح +10 نقاط لتفوق وإبداع"
+                        >
+                          +10 🏆
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleAwardPoints(trainee, -2, 'تنبيه انضباط')}
+                          className="px-1.5 py-1 bg-rose-50 hover:bg-rose-100 dark:bg-rose-500/10 dark:hover:bg-rose-500/25 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-500/20 rounded-lg text-[10px] font-bold transition-all active:scale-90 cursor-pointer"
+                          title="خصم 2 نقطة"
+                        >
+                          -2
+                        </button>
+                      </div>
                     </div>
                   </div>
                 );

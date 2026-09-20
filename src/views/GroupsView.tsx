@@ -1267,19 +1267,22 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ onNavigate }) => {
       {/* BATCH CREATE GROUPS MODAL                                                */}
       {/* ========================================================================= */}
       {isBatchModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/80 backdrop-blur-md animate-fadeIn overflow-hidden">
-          <div className="bg-slate-900 border border-slate-700 rounded-3xl shadow-2xl max-w-lg w-full text-slate-100 max-h-[90vh] flex flex-col overflow-hidden">
-            <div className="shrink-0 p-4 sm:p-5 flex items-center justify-between border-b border-slate-800 bg-slate-900/90">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/70 backdrop-blur-md animate-fadeIn overflow-hidden" dir="rtl">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-3xl shadow-2xl max-w-lg w-full text-slate-900 dark:text-slate-100 max-h-[90vh] flex flex-col overflow-hidden">
+            <div className="shrink-0 p-4 sm:p-5 flex items-center justify-between border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/90">
               <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-purple-500/20 border border-purple-500/40 flex items-center justify-center text-purple-400">
+                <div className="w-8 h-8 rounded-xl bg-purple-100 dark:bg-purple-500/20 border border-purple-200 dark:border-purple-500/40 flex items-center justify-center text-purple-700 dark:text-purple-400 shadow-xs">
                   <Layers className="w-4 h-4" />
                 </div>
                 <div>
-                  <h3 className="font-black text-sm text-slate-100">إنشاء مجموعات بالجملة دفعة واحدة</h3>
-                  <p className="text-[11px] text-slate-400">إنشاء عدة مجموعات بنفس الدورة والفرع وتحديد رسوم فرع معينة</p>
+                  <h3 className="font-black text-sm text-slate-900 dark:text-slate-100">إنشاء مجموعات بالجملة دفعة واحدة</h3>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400">إنشاء عدة مجموعات بنفس الدورة والفرع وتحديد رسوم فرع معينة</p>
                 </div>
               </div>
-              <button onClick={() => setIsBatchModalOpen(false)} className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800">
+              <button 
+                onClick={() => setIsBatchModalOpen(false)} 
+                className="p-1.5 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:hover:text-white dark:hover:bg-slate-800 transition-colors cursor-pointer"
+              >
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -1287,11 +1290,11 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ onNavigate }) => {
             <form onSubmit={handleSaveBatch} className="flex-1 flex flex-col min-h-0">
               <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 text-xs custom-scrollbar">
                 <div>
-                  <label className="block text-slate-300 font-bold mb-1">الدورة التدريبية *</label>
+                  <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">الدورة التدريبية *</label>
                   <select
                     value={batchFormData.courseId ?? ''}
                     onChange={(e) => setBatchFormData({ ...batchFormData, courseId: e.target.value })}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 focus:outline-none focus:border-amber-500"
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-amber-500"
                   >
                     {courses.map((c) => (
                       <option key={c.id} value={c.id}>
@@ -1303,11 +1306,11 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ onNavigate }) => {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-slate-300 font-bold mb-1">الفرع *</label>
+                    <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">الفرع *</label>
                     <select
                       value={batchFormData.branchId ?? ''}
                       onChange={(e) => setBatchFormData({ ...batchFormData, branchId: e.target.value })}
-                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 focus:outline-none focus:border-amber-500"
+                      className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-amber-500"
                     >
                       {branches.map((b) => (
                         <option key={b.id} value={b.id}>
@@ -1318,67 +1321,67 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ onNavigate }) => {
                   </div>
 
                   <div>
-                    <label className="block text-slate-300 font-bold mb-1">عدد المجموعات المراد إنشاؤها *</label>
+                    <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">عدد المجموعات المراد إنشاؤها *</label>
                     <input
                       type="number"
                       min="1"
                       max="10"
                       value={batchFormData.count}
                       onChange={(e) => setBatchFormData({ ...batchFormData, count: Number(e.target.value) })}
-                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 font-mono font-bold"
+                      className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 font-mono font-bold"
                     />
                   </div>
                 </div>
 
                 {/* Fee Amount Override */}
                 <div>
-                  <label className="block text-amber-300 font-bold mb-1">رسوم الدورة لهذه المجموعات (اختياري)</label>
+                  <label className="block text-amber-800 dark:text-amber-300 font-bold mb-1">رسوم الدورة لهذه المجموعات (اختياري)</label>
                   <input
                     type="number"
                     value={batchFormData.feeAmount ?? ''}
                     onChange={(e) => setBatchFormData({ ...batchFormData, feeAmount: e.target.value })}
                     placeholder="مثال: 250 لفرع بدر أو 200 لفرع النجاح"
-                    className="w-full bg-slate-800 border border-amber-500/50 rounded-xl px-3.5 py-2.5 text-amber-300 font-mono font-bold"
+                    className="w-full bg-amber-50/50 dark:bg-slate-800 border border-amber-300 dark:border-amber-500/50 rounded-xl px-3.5 py-2.5 text-amber-900 dark:text-amber-300 font-mono font-bold"
                   />
-                  <p className="text-[10px] text-slate-400 mt-1">تحديد سعر خاص للفرع (يترك فارغاً للاستعانة بالسعر الأساسي للدورة)</p>
+                  <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1">تحديد سعر خاص للفرع (يترك فارغاً للاستعانة بالسعر الأساسي للدورة)</p>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-slate-300 font-bold mb-1">المسار / الشعبة</label>
+                    <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">المسار / الشعبة</label>
                     <input
                       type="text"
                       value={batchFormData.track}
                       onChange={(e) => setBatchFormData({ ...batchFormData, track: e.target.value })}
                       placeholder="عربي / إنجليزي"
-                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100"
+                      className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100"
                     />
                   </div>
                   <div>
-                    <label className="block text-slate-300 font-bold mb-1">بادئة اسم المجموعة (اختياري)</label>
+                    <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">بادئة اسم المجموعة (اختياري)</label>
                     <input
                       type="text"
                       value={batchFormData.prefixName}
                       onChange={(e) => setBatchFormData({ ...batchFormData, prefixName: e.target.value })}
                       placeholder="مثال: مجموعة الذكاء الاصطناعي"
-                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100"
+                      className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100"
                     />
                   </div>
                 </div>
               </div>
 
-              <div className="shrink-0 p-4 border-t border-slate-800 flex items-center justify-end gap-2.5 bg-slate-900/95">
+              <div className="shrink-0 p-4 border-t border-slate-200 dark:border-slate-800 flex items-center justify-end gap-2.5 bg-slate-50 dark:bg-slate-900/95">
                 <button
                   type="button"
                   onClick={() => setIsBatchModalOpen(false)}
-                  className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold cursor-pointer"
+                  className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-transparent font-bold cursor-pointer transition-all"
                 >
                   إلغاء
                 </button>
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="px-5 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-black shadow-lg shadow-purple-600/30 flex items-center gap-2 cursor-pointer"
+                  className="px-5 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-black shadow-lg shadow-purple-600/30 flex items-center gap-2 cursor-pointer transition-all"
                 >
                   {isSubmitting ? 'جاري الإنشاء...' : 'إنشاء المجموعات الآن 🚀'}
                 </button>
@@ -1392,31 +1395,34 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ onNavigate }) => {
       {/* 1. ADD GROUP MODAL                                                       */}
       {/* ========================================================================= */}
       {isAddModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/80 backdrop-blur-md animate-fadeIn overflow-hidden">
-          <div className="bg-slate-900 border border-slate-700 rounded-3xl shadow-2xl max-w-2xl w-full text-slate-100 max-h-[90vh] flex flex-col overflow-hidden">
-            <div className="shrink-0 p-4 sm:p-5 flex items-center justify-between border-b border-slate-800 bg-slate-900/90">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/70 backdrop-blur-md animate-fadeIn overflow-hidden" dir="rtl">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-3xl shadow-2xl max-w-2xl w-full text-slate-900 dark:text-slate-100 max-h-[90vh] flex flex-col overflow-hidden">
+            <div className="shrink-0 p-4 sm:p-5 flex items-center justify-between border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/90">
               <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400">
+                <div className="w-8 h-8 rounded-xl bg-amber-100 dark:bg-amber-500/20 border border-amber-200 dark:border-amber-500/40 flex items-center justify-center text-amber-700 dark:text-amber-400 shadow-xs">
                   <Plus className="w-4 h-4" />
                 </div>
                 <div>
-                  <h3 className="font-black text-sm text-slate-100">إنشاء مجموعة تدريبية جديدة</h3>
-                  <p className="text-[11px] text-slate-400">حدد بيانات وتوقيت وأيام القاعة للمجموعة</p>
+                  <h3 className="font-black text-sm text-slate-900 dark:text-slate-100">إنشاء مجموعة تدريبية جديدة</h3>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400">حدد بيانات وتوقيت وأيام القاعة للمجموعة</p>
                 </div>
               </div>
-              <button onClick={() => setIsAddModalOpen(false)} className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 cursor-pointer">
+              <button 
+                onClick={() => setIsAddModalOpen(false)} 
+                className="p-1.5 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:hover:text-white dark:hover:bg-slate-800 transition-colors cursor-pointer"
+              >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             <form onSubmit={handleSaveAdd} className="flex-1 flex flex-col min-h-0">
               <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 text-xs custom-scrollbar">
-                <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 flex items-center gap-2">
-                  <Clock className="w-4 h-4 shrink-0 text-amber-400" />
+                <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 text-amber-900 dark:text-amber-300 flex items-center gap-2">
+                  <Clock className="w-4 h-4 shrink-0 text-amber-600 dark:text-amber-400" />
                   <span>نظام المنهج المقرر: <strong>محاضرة لمدة ساعة واحدة فقط</strong>، بواقع <strong>يومان أسبوعياً</strong> (إجمالي ساعتين أسبوعياً).</span>
                 </div>
                 <div>
-                  <label className="block text-slate-300 font-bold mb-1">اسم المجموعة التدريبية *</label>
+                  <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">اسم المجموعة التدريبية *</label>
                   <input
                     type="text"
                     required
@@ -1424,19 +1430,19 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ onNavigate }) => {
                     value={formData.name ?? ''}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                     placeholder="مثال: مجموعة البرمجة والذكاء الاصطناعي - فوج المساء"
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2.5 text-slate-100 focus:outline-none focus:border-amber-500 font-bold text-sm"
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3.5 py-2.5 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-amber-500 font-bold text-sm"
                   />
                 </div>
 
                 {/* Arabic Grade Dropdown */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-slate-300 font-bold mb-1">الصف الدراسي (لتوزيع الطلاب تلقائياً) *</label>
+                    <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">الصف الدراسي (لتوزيع الطلاب تلقائياً) *</label>
                     <select
                       required
                       value={formData.grade ?? ''}
                       onChange={(e) => setFormData({ ...formData, grade: e.target.value })}
-                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 text-slate-100 focus:outline-none focus:border-amber-500 font-bold"
+                      className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2.5 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-amber-500 font-bold"
                     >
                       <option value="">-- اختر الصف الدراسي --</option>
                       <option value="الصف الرابع الابتدائي">الصف الرابع الابتدائي</option>
@@ -1452,12 +1458,12 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ onNavigate }) => {
                   </div>
 
                   <div>
-                    <label className="block text-slate-300 font-bold mb-1">المسار / نوع التعليم *</label>
+                    <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">المسار / نوع التعليم *</label>
                     <select
                       required
                       value={formData.track ?? 'عربي'}
                       onChange={(e) => setFormData({ ...formData, track: e.target.value })}
-                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 text-slate-100 focus:outline-none focus:border-amber-500 font-bold"
+                      className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2.5 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-amber-500 font-bold"
                     >
                       <option value="عربي">عربي (الدراسة باللغة العربية)</option>
                       <option value="لغات">لغات (الدراسة باللغة الإنجليزية/الفرنسية)</option>
@@ -1470,11 +1476,11 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ onNavigate }) => {
                 {/* Branch + Course */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-slate-300 font-bold mb-1">الفرع *</label>
+                    <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">الفرع *</label>
                     <select
                       value={formData.branchId ?? ''}
                       onChange={(e) => setFormData({ ...formData, branchId: e.target.value })}
-                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 focus:outline-none focus:border-amber-500"
+                      className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-amber-500"
                     >
                       {branches.map((b) => (
                         <option key={b.id} value={b.id}>
@@ -1485,11 +1491,11 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ onNavigate }) => {
                   </div>
 
                   <div>
-                    <label className="block text-slate-300 font-bold mb-1">الدورة التدريبية *</label>
+                    <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">الدورة التدريبية *</label>
                     <select
                       value={formData.courseId ?? ''}
                       onChange={(e) => setFormData({ ...formData, courseId: e.target.value })}
-                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 focus:outline-none focus:border-amber-500"
+                      className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-amber-500"
                     >
                       {courses.map((c) => (
                         <option key={c.id} value={c.id}>
@@ -1502,16 +1508,16 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ onNavigate }) => {
 
                 {/* Linked Curriculum & Google Drive Status */}
                 {formData.courseId && (
-                  <div className="bg-emerald-950/40 border border-emerald-500/30 rounded-2xl p-3 flex items-center justify-between gap-2">
+                  <div className="bg-emerald-50/80 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-500/30 rounded-2xl p-3 flex items-center justify-between gap-2 shadow-xs">
                     <div className="flex items-center gap-2">
-                      <div className="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
+                      <div className="w-8 h-8 rounded-xl bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 flex items-center justify-center shrink-0">
                         <BookOpen className="w-4 h-4" />
                       </div>
                       <div>
-                        <p className="text-xs font-bold text-emerald-300">
+                        <p className="text-xs font-bold text-emerald-800 dark:text-emerald-300">
                           منهج مسار ({formData.track === 'لغات' ? 'اللغات' : 'العربي'}):
                         </p>
-                        <p className="text-[11px] text-slate-300">
+                        <p className="text-[11px] text-slate-600 dark:text-slate-300">
                           {(() => {
                             const crs = courses.find(c => c.id === formData.courseId);
                             const isLang = formData.track === 'لغات';
@@ -1529,25 +1535,25 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ onNavigate }) => {
 
                 {/* Fee Amount Override per Group */}
                 <div>
-                  <label className="block text-amber-300 font-bold mb-1">رسوم الدورة لهذه المجموعة (اختياري)</label>
+                  <label className="block text-amber-800 dark:text-amber-300 font-bold mb-1">رسوم الدورة لهذه المجموعة (اختياري)</label>
                   <input
                     type="number"
                     value={formData.feeAmount ?? ''}
                     onChange={(e) => setFormData({ ...formData, feeAmount: e.target.value !== '' ? Number(e.target.value) : '' })}
                     placeholder="يترك فارغاً لاستخدام السعر الافتراضي للدورة"
-                    className="w-full bg-slate-800 border border-amber-500/50 rounded-xl px-3 py-2 text-amber-300 font-mono font-bold"
+                    className="w-full bg-amber-50/50 dark:bg-slate-800 border border-amber-300 dark:border-amber-500/50 rounded-xl px-3 py-2 text-amber-900 dark:text-amber-300 font-mono font-bold"
                   />
-                  <p className="text-[10px] text-slate-400 mt-1">مثال: فرع بدر 250، فرع النجاح 200 (يتطبق تلقائياً للمتدربين بهذه المجموعة)</p>
+                  <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1">مثال: فرع بدر 250، فرع النجاح 200 (يتطبق تلقائياً للمتدربين بهذه المجموعة)</p>
                 </div>
 
                 {/* Trainer + Room / Lab */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-slate-300 font-bold mb-1">المدرب المشرف</label>
+                    <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">المدرب المشرف</label>
                     <select
                       value={formData.trainerId ?? ''}
                       onChange={(e) => setFormData({ ...formData, trainerId: e.target.value })}
-                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 focus:outline-none focus:border-amber-500"
+                      className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-amber-500"
                     >
                       <option value="">-- بدون تحديد مدرب حالياً --</option>
                       {trainers.map((tr) => (
@@ -1559,23 +1565,23 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ onNavigate }) => {
                   </div>
 
                   <div>
-                    <label className="block text-slate-300 font-bold mb-1">المعمل / القاعة</label>
+                    <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">المعمل / القاعة</label>
                     <input
                       type="text"
                       list="room-name-suggestions"
                       value={formData.roomName ?? ''}
                       onChange={(e) => setFormData({ ...formData, roomName: e.target.value })}
                       placeholder="معمل الحاسب الرئيسي (Lab 1)"
-                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 focus:outline-none focus:border-amber-500"
+                      className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-amber-500"
                     />
                   </div>
                 </div>
 
                 {/* Days Selection with Quick Presets */}
-                <div className="bg-slate-950/60 p-3.5 rounded-2xl border border-slate-800 space-y-2">
+                <div className="bg-slate-50 dark:bg-slate-950/60 p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-2">
                   <div className="flex items-center justify-between">
-                    <label className="text-slate-300 font-bold">أيام المحاضرات الأسبوعية</label>
-                    <div className="text-[10px] text-slate-400">نماذج سريعة:</div>
+                    <label className="text-slate-700 dark:text-slate-300 font-bold">أيام المحاضرات الأسبوعية</label>
+                    <div className="text-[10px] text-slate-500 dark:text-slate-400">نماذج سريعة:</div>
                   </div>
 
                   {/* Day Presets */}
@@ -1585,7 +1591,7 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ onNavigate }) => {
                         type="button"
                         key={idx}
                         onClick={() => applyDayPreset(preset.days)}
-                        className="px-2.5 py-1 rounded-lg bg-slate-850 hover:bg-slate-800 border border-slate-700 text-slate-300 text-[10px] font-bold transition-all cursor-pointer"
+                        className="px-2.5 py-1 rounded-lg bg-white hover:bg-slate-100 dark:bg-slate-850 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 text-[10px] font-bold transition-all cursor-pointer shadow-xs"
                       >
                         {preset.label}
                       </button>
@@ -1604,7 +1610,7 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ onNavigate }) => {
                           className={`px-3 py-1.5 rounded-xl border font-bold text-xs transition-all cursor-pointer ${
                             isSel
                               ? 'bg-amber-500 text-slate-950 border-amber-500 shadow-md font-black'
-                              : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-white'
+                              : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-300 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700 dark:hover:text-white'
                           }`}
                         >
                           {day}
@@ -1615,10 +1621,10 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ onNavigate }) => {
                 </div>
 
                 {/* Timing Selection with Presets */}
-                <div className="bg-slate-950/60 p-3.5 rounded-2xl border border-slate-800 space-y-2">
+                <div className="bg-slate-50 dark:bg-slate-950/60 p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-2">
                   <div className="flex items-center justify-between">
-                    <label className="text-slate-300 font-bold">توقيت المحاضرات</label>
-                    <div className="text-[10px] text-slate-400">أوقات شائعة:</div>
+                    <label className="text-slate-700 dark:text-slate-300 font-bold">توقيت المحاضرات</label>
+                    <div className="text-[10px] text-slate-500 dark:text-slate-400">أوقات شائعة:</div>
                   </div>
 
                   {/* Time Slot Presets */}
@@ -1628,7 +1634,7 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ onNavigate }) => {
                         type="button"
                         key={idx}
                         onClick={() => applyTimePreset(preset.start, preset.end)}
-                        className="px-2 py-0.5 rounded-lg bg-slate-850 hover:bg-slate-800 border border-slate-700 text-slate-300 text-[10px] font-mono font-semibold cursor-pointer"
+                        className="px-2 py-0.5 rounded-lg bg-white hover:bg-slate-100 dark:bg-slate-850 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 text-[10px] font-mono font-semibold cursor-pointer shadow-xs"
                       >
                         {preset.label} ({preset.start}-{preset.end})
                       </button>
@@ -1637,21 +1643,21 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ onNavigate }) => {
 
                   <div className="grid grid-cols-2 gap-3 pt-1">
                     <div>
-                      <label className="block text-slate-400 mb-1">وقت البدء</label>
+                      <label className="block text-slate-500 dark:text-slate-400 mb-1">وقت البدء</label>
                       <input
                         type="time"
                         value={formData.startTime ?? ''}
                         onChange={(e) => setFormData({ ...formData, startTime: e.target.value })}
-                        className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 font-mono text-center font-bold"
+                        className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 font-mono text-center font-bold"
                       />
                     </div>
                     <div>
-                      <label className="block text-slate-400 mb-1">وقت الانتهاء</label>
+                      <label className="block text-slate-500 dark:text-slate-400 mb-1">وقت الانتهاء</label>
                       <input
                         type="time"
                         value={formData.endTime ?? ''}
                         onChange={(e) => setFormData({ ...formData, endTime: e.target.value })}
-                        className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 font-mono text-center font-bold"
+                        className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 font-mono text-center font-bold"
                       />
                     </div>
                   </div>
@@ -1660,43 +1666,43 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ onNavigate }) => {
                 {/* Dates + Capacity + Status */}
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                   <div>
-                    <label className="block text-slate-300 font-bold mb-1">تاريخ البدء</label>
+                    <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">تاريخ البدء</label>
                     <input
                       type="date"
                       value={formData.startDate ?? ''}
                       onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
-                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 font-mono"
+                      className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 font-mono"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-slate-300 font-bold mb-1">تاريخ الانتهاء</label>
+                    <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">تاريخ الانتهاء</label>
                     <input
                       type="date"
                       value={formData.endDate ?? ''}
                       onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
-                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 font-mono"
+                      className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 font-mono"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-slate-300 font-bold mb-1">سعة المقاعد</label>
+                    <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">سعة المقاعد</label>
                     <input
                       type="number"
                       min="1"
                       max="100"
                       value={formData.maxCapacity ?? ''}
                       onChange={(e) => setFormData({ ...formData, maxCapacity: Number(e.target.value) })}
-                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 font-mono text-center font-bold"
+                      className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 font-mono text-center font-bold"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-slate-300 font-bold mb-1">الحالة</label>
+                    <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">الحالة</label>
                     <select
                       value={formData.status ?? ''}
                       onChange={(e) => setFormData({ ...formData, status: e.target.value })}
-                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100"
+                      className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100"
                     >
                       <option value="active">جارية (نشطة)</option>
                       <option value="upcoming">قادمة (مجدولة)</option>
@@ -1709,41 +1715,41 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ onNavigate }) => {
                 {/* WhatsApp Link + Notes */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-slate-300 font-bold mb-1">رابط قروب WhatsApp للمجموعة</label>
+                    <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">رابط قروب WhatsApp للمجموعة</label>
                     <input
                       type="url"
                       value={formData.whatsappGroupLink ?? ''}
                       onChange={(e) => setFormData({ ...formData, whatsappGroupLink: e.target.value })}
                       placeholder="https://chat.whatsapp.com/..."
-                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 font-mono text-xs focus:outline-none focus:border-amber-500"
+                      className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 font-mono text-xs focus:outline-none focus:border-amber-500"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-slate-300 font-bold mb-1">ملاحظات وتعليمات</label>
+                    <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">ملاحظات وتعليمات</label>
                     <input
                       type="text"
                       value={formData.notes ?? ''}
                       onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
                       placeholder="مثال: يرجى إحضار اللابتوب في المعمل"
-                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 focus:outline-none focus:border-amber-500"
+                      className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-amber-500"
                     />
                   </div>
                 </div>
               </div>
 
-              <div className="shrink-0 p-4 border-t border-slate-800 flex items-center justify-end gap-2.5 bg-slate-900/95">
+              <div className="shrink-0 p-4 border-t border-slate-200 dark:border-slate-800 flex items-center justify-end gap-2.5 bg-slate-50 dark:bg-slate-900/95">
                 <button
                   type="button"
                   onClick={() => setIsAddModalOpen(false)}
-                  className="px-4 py-2 bg-slate-800 text-slate-300 rounded-xl hover:bg-slate-700 font-bold cursor-pointer"
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-transparent rounded-xl font-bold cursor-pointer transition-all"
                 >
                   إلغاء
                 </button>
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="px-6 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black rounded-xl shadow-lg shadow-amber-500/25 flex items-center gap-2 cursor-pointer"
+                  className="px-6 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black rounded-xl shadow-lg shadow-amber-500/25 flex items-center gap-2 cursor-pointer transition-all"
                 >
                   {isSubmitting ? 'جاري الحفظ...' : 'حفظ وإنشاء المجموعة'}
                 </button>
@@ -1757,20 +1763,23 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ onNavigate }) => {
       {/* 2. COMPREHENSIVE EDIT GROUP MODAL                                        */}
       {/* ========================================================================= */}
       {isEditModalOpen && activeGroup && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/80 backdrop-blur-md animate-fadeIn overflow-hidden">
-          <div className="bg-slate-900 border border-slate-700 rounded-3xl shadow-2xl max-w-2xl w-full text-slate-100 max-h-[90vh] flex flex-col overflow-hidden">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/70 backdrop-blur-md animate-fadeIn overflow-hidden" dir="rtl">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-3xl shadow-2xl max-w-2xl w-full text-slate-900 dark:text-slate-100 max-h-[90vh] flex flex-col overflow-hidden">
             {/* Modal Header */}
-            <div className="shrink-0 p-4 sm:p-5 flex items-center justify-between border-b border-slate-800 bg-slate-900/90">
+            <div className="shrink-0 p-4 sm:p-5 flex items-center justify-between border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/90">
               <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-xl bg-blue-500/20 border border-blue-500/40 flex items-center justify-center text-blue-400">
+                <div className="w-9 h-9 rounded-xl bg-blue-100 dark:bg-blue-500/20 border border-blue-200 dark:border-blue-500/40 flex items-center justify-center text-blue-700 dark:text-blue-400 shadow-xs">
                   <Edit3 className="w-4.5 h-4.5" />
                 </div>
                 <div>
-                  <h3 className="font-black text-sm text-slate-100">تعديل كافة بيانات المجموعة: {activeGroup.name}</h3>
-                  <p className="text-[11px] text-slate-400">يمكنك تعديل الاسم، المواعيد، الأيام، المدرب، والقاعة</p>
+                  <h3 className="font-black text-sm text-slate-900 dark:text-slate-100">تعديل كافة بيانات المجموعة: {activeGroup.name}</h3>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400">يمكنك تعديل الاسم، المواعيد، الأيام، المدرب، والقاعة</p>
                 </div>
               </div>
-              <button onClick={() => setIsEditModalOpen(false)} className="text-slate-400 hover:text-white p-1.5 rounded-xl hover:bg-slate-800 cursor-pointer">
+              <button 
+                onClick={() => setIsEditModalOpen(false)} 
+                className="p-1.5 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:hover:text-white dark:hover:bg-slate-800 transition-colors cursor-pointer"
+              >
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -1780,26 +1789,26 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ onNavigate }) => {
               <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 text-xs custom-scrollbar">
                 {/* Group Name */}
                 <div>
-                  <label className="block text-slate-300 font-bold mb-1">اسم المجموعة التدريبية *</label>
+                  <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">اسم المجموعة التدريبية *</label>
                   <input
                     type="text"
                     required
                     list="group-name-suggestions"
                     value={formData.name ?? ''}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2.5 text-slate-100 focus:outline-none focus:border-blue-500 font-bold text-sm"
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3.5 py-2.5 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-blue-500 font-bold text-sm"
                   />
                 </div>
 
                 {/* Arabic Grade Dropdown */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-slate-300 font-bold mb-1">الصف الدراسي (لتوزيع الطلاب تلقائياً) *</label>
+                    <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">الصف الدراسي (لتوزيع الطلاب تلقائياً) *</label>
                     <select
                       required
                       value={formData.grade ?? ''}
                       onChange={(e) => setFormData({ ...formData, grade: e.target.value })}
-                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 text-slate-100 focus:outline-none focus:border-blue-500 font-bold"
+                      className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2.5 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-blue-500 font-bold"
                     >
                       <option value="">-- اختر الصف الدراسي العربي --</option>
                       <option value="الصف الرابع الابتدائي">الصف الرابع الابتدائي</option>
@@ -1815,12 +1824,12 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ onNavigate }) => {
                   </div>
 
                   <div>
-                    <label className="block text-slate-300 font-bold mb-1">المسار / نوع التعليم *</label>
+                    <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">المسار / نوع التعليم *</label>
                     <select
                       required
                       value={formData.track ?? 'عربي'}
                       onChange={(e) => setFormData({ ...formData, track: e.target.value })}
-                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 text-slate-100 focus:outline-none focus:border-blue-500 font-bold"
+                      className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2.5 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-blue-500 font-bold"
                     >
                       <option value="عربي">عربي (الدراسة باللغة العربية)</option>
                       <option value="لغات">لغات (الدراسة باللغة الإنجليزية/الفرنسية)</option>
@@ -1833,11 +1842,11 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ onNavigate }) => {
                 {/* Branch + Course */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-slate-300 font-bold mb-1">الفرع *</label>
+                    <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">الفرع *</label>
                     <select
                       value={formData.branchId ?? ''}
                       onChange={(e) => setFormData({ ...formData, branchId: e.target.value })}
-                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 focus:outline-none focus:border-blue-500"
+                      className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-blue-500"
                     >
                       {branches.map((b) => (
                         <option key={b.id} value={b.id}>
@@ -1848,11 +1857,11 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ onNavigate }) => {
                   </div>
 
                   <div>
-                    <label className="block text-slate-300 font-bold mb-1">الدورة التدريبية *</label>
+                    <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">الدورة التدريبية *</label>
                     <select
                       value={formData.courseId ?? ''}
                       onChange={(e) => setFormData({ ...formData, courseId: e.target.value })}
-                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 focus:outline-none focus:border-blue-500"
+                      className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-blue-500"
                     >
                       {courses.map((c) => (
                         <option key={c.id} value={c.id}>
@@ -1865,16 +1874,16 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ onNavigate }) => {
 
                 {/* Linked Curriculum & Google Drive Status and Manage Button */}
                 {formData.courseId && (
-                  <div className="bg-emerald-950/40 border border-emerald-500/30 rounded-2xl p-3 flex items-center justify-between gap-3">
+                  <div className="bg-emerald-50/80 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-500/30 rounded-2xl p-3 flex items-center justify-between gap-3 shadow-xs">
                     <div className="flex items-center gap-2.5">
-                      <div className="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
+                      <div className="w-8 h-8 rounded-xl bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 flex items-center justify-center shrink-0">
                         <BookOpen className="w-4 h-4" />
                       </div>
                       <div>
-                        <p className="text-xs font-bold text-emerald-300">
+                        <p className="text-xs font-bold text-emerald-800 dark:text-emerald-300">
                           منهج مسار ({formData.track === 'لغات' ? 'اللغات' : 'العربي'}):
                         </p>
-                        <p className="text-[11px] text-slate-300">
+                        <p className="text-[11px] text-slate-600 dark:text-slate-300">
                           {(() => {
                             const crs = courses.find(c => c.id === formData.courseId);
                             const isLang = formData.track === 'لغات';
@@ -1898,7 +1907,7 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ onNavigate }) => {
                           setSelectedGroupForMaterials(activeGroup);
                           setIsMaterialsModalOpen(true);
                         }}
-                        className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold shrink-0 flex items-center gap-1.5 shadow cursor-pointer"
+                        className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shrink-0 flex items-center gap-1.5 shadow cursor-pointer transition-colors"
                       >
                         <BookOpen className="w-3.5 h-3.5" />
                         <span>إدارة المنهج و Drive</span>
@@ -1909,25 +1918,25 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ onNavigate }) => {
 
                 {/* Fee Amount Override per Group */}
                 <div>
-                  <label className="block text-blue-300 font-bold mb-1">رسوم الدورة لهذه المجموعة (اختياري)</label>
+                  <label className="block text-blue-800 dark:text-blue-300 font-bold mb-1">رسوم الدورة لهذه المجموعة (اختياري)</label>
                   <input
                     type="number"
                     value={formData.feeAmount ?? ''}
                     onChange={(e) => setFormData({ ...formData, feeAmount: e.target.value !== '' ? Number(e.target.value) : '' })}
                     placeholder="يترك فارغاً لاستخدام السعر الافتراضي للدورة"
-                    className="w-full bg-slate-800 border border-blue-500/50 rounded-xl px-3 py-2 text-blue-300 font-mono font-bold"
+                    className="w-full bg-blue-50/50 dark:bg-slate-800 border border-blue-300 dark:border-blue-500/50 rounded-xl px-3 py-2 text-blue-900 dark:text-blue-300 font-mono font-bold"
                   />
-                  <p className="text-[10px] text-slate-400 mt-1">مثال: فرع بدر 250، فرع النجاح 200</p>
+                  <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1">مثال: فرع بدر 250، فرع النجاح 200</p>
                 </div>
 
                 {/* Trainer + Room / Lab */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-slate-300 font-bold mb-1">المدرب المشرف</label>
+                    <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">المدرب المشرف</label>
                     <select
                       value={formData.trainerId ?? ''}
                       onChange={(e) => setFormData({ ...formData, trainerId: e.target.value })}
-                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 focus:outline-none focus:border-blue-500"
+                      className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-blue-500"
                     >
                       <option value="">-- بدون تحديد مدرب --</option>
                       {trainers.map((tr) => (
@@ -1939,22 +1948,22 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ onNavigate }) => {
                   </div>
 
                   <div>
-                    <label className="block text-slate-300 font-bold mb-1">المعمل / القاعة</label>
+                    <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">المعمل / القاعة</label>
                     <input
                       type="text"
                       list="room-name-suggestions"
                       value={formData.roomName ?? ''}
                       onChange={(e) => setFormData({ ...formData, roomName: e.target.value })}
-                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 focus:outline-none focus:border-blue-500"
+                      className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-blue-500"
                     />
                   </div>
                 </div>
 
                 {/* Days Selection */}
-                <div className="bg-slate-950/60 p-3.5 rounded-2xl border border-slate-800 space-y-2">
+                <div className="bg-slate-50 dark:bg-slate-950/60 p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-2">
                   <div className="flex items-center justify-between">
-                    <label className="text-slate-300 font-bold">أيام المحاضرات</label>
-                    <div className="text-[10px] text-slate-400">نماذج سريعة:</div>
+                    <label className="text-slate-700 dark:text-slate-300 font-bold">أيام المحاضرات</label>
+                    <div className="text-[10px] text-slate-500 dark:text-slate-400">نماذج سريعة:</div>
                   </div>
 
                   <div className="flex flex-wrap gap-1.5 pb-1">
@@ -1963,7 +1972,7 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ onNavigate }) => {
                         type="button"
                         key={idx}
                         onClick={() => applyDayPreset(preset.days)}
-                        className="px-2.5 py-1 rounded-lg bg-slate-850 hover:bg-slate-800 border border-slate-700 text-slate-300 text-[10px] font-bold"
+                        className="px-2.5 py-1 rounded-lg bg-white hover:bg-slate-100 dark:bg-slate-850 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 text-[10px] font-bold shadow-xs cursor-pointer transition-all"
                       >
                         {preset.label}
                       </button>
@@ -1978,10 +1987,10 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ onNavigate }) => {
                           type="button"
                           key={day}
                           onClick={() => toggleDay(day)}
-                          className={`px-3 py-1.5 rounded-xl border font-bold text-xs transition-all ${
+                          className={`px-3 py-1.5 rounded-xl border font-bold text-xs transition-all cursor-pointer ${
                             isSel
                               ? 'bg-blue-600 text-white border-blue-500 shadow-md font-black'
-                              : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-white'
+                              : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-300 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700 dark:hover:text-white'
                           }`}
                         >
                           {day}
@@ -1992,10 +2001,10 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ onNavigate }) => {
                 </div>
 
                 {/* Timing Selection */}
-                <div className="bg-slate-950/60 p-3.5 rounded-2xl border border-slate-800 space-y-2">
+                <div className="bg-slate-50 dark:bg-slate-950/60 p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-2">
                   <div className="flex items-center justify-between">
-                    <label className="text-slate-300 font-bold">التوقيت</label>
-                    <div className="text-[10px] text-slate-400">أوقات شائعة:</div>
+                    <label className="text-slate-700 dark:text-slate-300 font-bold">التوقيت</label>
+                    <div className="text-[10px] text-slate-500 dark:text-slate-400">أوقات شائعة:</div>
                   </div>
 
                   <div className="flex flex-wrap gap-1.5 pb-1">
@@ -2004,7 +2013,7 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ onNavigate }) => {
                         type="button"
                         key={idx}
                         onClick={() => applyTimePreset(preset.start, preset.end)}
-                        className="px-2 py-0.5 rounded-lg bg-slate-850 hover:bg-slate-800 border border-slate-700 text-slate-300 text-[10px] font-mono"
+                        className="px-2 py-0.5 rounded-lg bg-white hover:bg-slate-100 dark:bg-slate-850 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 text-[10px] font-mono shadow-xs cursor-pointer transition-all"
                       >
                         {preset.label} ({preset.start}-{preset.end})
                       </button>
@@ -2013,21 +2022,21 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ onNavigate }) => {
 
                   <div className="grid grid-cols-2 gap-3 pt-1">
                     <div>
-                      <label className="block text-slate-400 mb-1">وقت البدء</label>
+                      <label className="block text-slate-500 dark:text-slate-400 mb-1">وقت البدء</label>
                       <input
                         type="time"
                         value={formData.startTime ?? ''}
                         onChange={(e) => setFormData({ ...formData, startTime: e.target.value })}
-                        className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 font-mono text-center font-bold"
+                        className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 font-mono text-center font-bold"
                       />
                     </div>
                     <div>
-                      <label className="block text-slate-400 mb-1">وقت الانتهاء</label>
+                      <label className="block text-slate-500 dark:text-slate-400 mb-1">وقت الانتهاء</label>
                       <input
                         type="time"
                         value={formData.endTime ?? ''}
                         onChange={(e) => setFormData({ ...formData, endTime: e.target.value })}
-                        className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 font-mono text-center font-bold"
+                        className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 font-mono text-center font-bold"
                       />
                     </div>
                   </div>
@@ -2036,41 +2045,41 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ onNavigate }) => {
                 {/* Dates + Capacity + Status */}
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                   <div>
-                    <label className="block text-slate-300 font-bold mb-1">تاريخ البدء</label>
+                    <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">تاريخ البدء</label>
                     <input
                       type="date"
                       value={formData.startDate ?? ''}
                       onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
-                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 font-mono"
+                      className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 font-mono"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-slate-300 font-bold mb-1">تاريخ الانتهاء</label>
+                    <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">تاريخ الانتهاء</label>
                     <input
                       type="date"
                       value={formData.endDate ?? ''}
                       onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
-                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 font-mono"
+                      className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 font-mono"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-slate-300 font-bold mb-1">سعة المقاعد</label>
+                    <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">سعة المقاعد</label>
                     <input
                       type="number"
                       value={formData.maxCapacity ?? ''}
                       onChange={(e) => setFormData({ ...formData, maxCapacity: Number(e.target.value) })}
-                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 font-mono text-center font-bold"
+                      className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 font-mono text-center font-bold"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-slate-300 font-bold mb-1">الحالة</label>
+                    <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">الحالة</label>
                     <select
                       value={formData.status ?? ''}
                       onChange={(e) => setFormData({ ...formData, status: e.target.value })}
-                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100"
+                      className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100"
                     >
                       <option value="active">جارية (نشطة)</option>
                       <option value="upcoming">قادمة (مجدولة)</option>
@@ -2083,36 +2092,36 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ onNavigate }) => {
                 {/* WhatsApp Link + Notes */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-slate-300 font-bold mb-1">رابط قروب WhatsApp</label>
+                    <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">رابط قروب WhatsApp</label>
                     <input
                       type="url"
                       value={formData.whatsappGroupLink ?? ''}
                       onChange={(e) => setFormData({ ...formData, whatsappGroupLink: e.target.value })}
                       placeholder="https://chat.whatsapp.com/..."
-                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 font-mono text-xs focus:outline-none focus:border-blue-500"
+                      className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 font-mono text-xs focus:outline-none focus:border-blue-500"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-slate-300 font-bold mb-1">ملاحظات وتعليمات</label>
+                    <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">ملاحظات وتعليمات</label>
                     <input
                       type="text"
                       value={formData.notes ?? ''}
                       onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 focus:outline-none focus:border-blue-500"
+                      className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-blue-500"
                     />
                   </div>
                 </div>
               </div>
 
               {/* Fixed Footer */}
-              <div className="shrink-0 p-4 border-t border-slate-800 flex items-center justify-between bg-slate-900/95">
+              <div className="shrink-0 p-4 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-900/95">
                 <button
                   type="button"
                   onClick={() => {
                     setGroupToDelete(activeGroup);
                   }}
-                  className="px-3.5 py-2 bg-gradient-to-r from-rose-500 to-red-600 hover:from-rose-600 hover:to-red-700 text-white border border-rose-400/40 rounded-xl inline-flex items-center gap-2 font-black shadow-lg shadow-rose-500/20 active:scale-95 cursor-pointer"
+                  className="px-3.5 py-2 bg-gradient-to-r from-rose-500 to-red-600 hover:from-rose-600 hover:to-red-700 text-white border border-rose-400/40 rounded-xl inline-flex items-center gap-2 font-black shadow-lg shadow-rose-500/20 active:scale-95 cursor-pointer transition-all"
                 >
                   <Trash2 className="w-4 h-4" />
                   <span>حذف المجموعة</span>
@@ -2122,14 +2131,14 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ onNavigate }) => {
                   <button
                     type="button"
                     onClick={() => setIsEditModalOpen(false)}
-                    className="px-4 py-2 bg-slate-800 text-slate-300 rounded-xl hover:bg-slate-700 font-bold cursor-pointer"
+                    className="px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-transparent rounded-xl font-bold cursor-pointer transition-all"
                   >
                     إلغاء
                   </button>
                   <button
                     type="submit"
                     disabled={isSubmitting}
-                    className="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-black rounded-xl shadow-lg shadow-blue-600/25 flex items-center gap-2 cursor-pointer"
+                    className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-black rounded-xl shadow-lg shadow-blue-600/25 flex items-center gap-2 cursor-pointer transition-all"
                   >
                     {isSubmitting ? 'جاري الحفظ...' : 'حفظ التعديلات'}
                   </button>
@@ -2144,19 +2153,22 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ onNavigate }) => {
       {/* 3. QUICK SCHEDULE MODAL                                                  */}
       {/* ========================================================================= */}
       {isQuickScheduleModalOpen && activeGroup && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-fadeIn">
-          <div className="bg-slate-900 border border-amber-500/50 rounded-3xl shadow-2xl max-w-lg w-full p-6 text-slate-100">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-800 mb-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/70 backdrop-blur-md animate-fadeIn" dir="rtl">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-amber-500/50 rounded-3xl shadow-2xl max-w-lg w-full p-5 sm:p-6 text-slate-900 dark:text-slate-100">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800 mb-4">
               <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400">
+                <div className="w-8 h-8 rounded-xl bg-amber-100 dark:bg-amber-500/20 border border-amber-200 dark:border-amber-500/40 flex items-center justify-center text-amber-700 dark:text-amber-400 shadow-xs">
                   <Clock className="w-4 h-4" />
                 </div>
                 <div>
-                  <h3 className="font-black text-sm text-slate-100">تعديل سريع للموعد والأيام: {activeGroup.name}</h3>
-                  <p className="text-[11px] text-slate-400">تغيير سريع لمواعيد المحاضرات والقاعة</p>
+                  <h3 className="font-black text-sm text-slate-900 dark:text-slate-100">تعديل سريع للموعد والأيام: {activeGroup.name}</h3>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400">تغيير سريع لمواعيد المحاضرات والقاعة</p>
                 </div>
               </div>
-              <button onClick={() => setIsQuickScheduleModalOpen(false)} className="text-slate-400 hover:text-white p-1">
+              <button 
+                onClick={() => setIsQuickScheduleModalOpen(false)} 
+                className="p-1.5 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:hover:text-white dark:hover:bg-slate-800 transition-colors cursor-pointer"
+              >
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -2164,26 +2176,26 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ onNavigate }) => {
             <form onSubmit={handleSaveQuickSchedule} className="space-y-4 text-xs">
               {/* Room / Lab */}
               <div>
-                <label className="block text-slate-300 font-bold mb-1">المعمل / القاعة</label>
+                <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">المعمل / القاعة</label>
                 <input
                   type="text"
                   list="room-name-suggestions"
                   value={formData.roomName ?? ''}
                   onChange={(e) => setFormData({ ...formData, roomName: e.target.value })}
-                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 focus:outline-none focus:border-amber-500 font-bold"
+                  className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-amber-500 font-bold"
                 />
               </div>
 
               {/* Days selection */}
               <div>
-                <label className="block text-slate-300 font-bold mb-1.5">أيام المحاضرات</label>
+                <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1.5">أيام المحاضرات</label>
                 <div className="flex flex-wrap gap-1.5 mb-2">
                   {dayPresets.map((preset, idx) => (
                     <button
                       type="button"
                       key={idx}
                       onClick={() => applyDayPreset(preset.days)}
-                      className="px-2 py-0.5 rounded-lg bg-slate-850 hover:bg-slate-800 border border-slate-700 text-slate-300 text-[10px] font-bold"
+                      className="px-2 py-0.5 rounded-lg bg-white hover:bg-slate-100 dark:bg-slate-850 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 text-[10px] font-bold shadow-xs cursor-pointer transition-all"
                     >
                       {preset.label}
                     </button>
@@ -2198,10 +2210,10 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ onNavigate }) => {
                         type="button"
                         key={day}
                         onClick={() => toggleDay(day)}
-                        className={`px-3 py-1.5 rounded-xl border font-bold text-xs transition-all ${
+                        className={`px-3 py-1.5 rounded-xl border font-bold text-xs transition-all cursor-pointer ${
                           isSel
                             ? 'bg-amber-500 text-slate-950 border-amber-500 shadow-md font-black'
-                            : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-white'
+                            : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-300 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700 dark:hover:text-white'
                         }`}
                       >
                         {day}
@@ -2213,14 +2225,14 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ onNavigate }) => {
 
               {/* Times selection */}
               <div>
-                <label className="block text-slate-300 font-bold mb-1.5">وقت المحاضرة</label>
+                <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1.5">وقت المحاضرة</label>
                 <div className="flex flex-wrap gap-1.5 mb-2">
                   {timePresets.map((preset, idx) => (
                     <button
                       type="button"
                       key={idx}
                       onClick={() => applyTimePreset(preset.start, preset.end)}
-                      className="px-2 py-0.5 rounded-lg bg-slate-850 hover:bg-slate-800 border border-slate-700 text-slate-300 text-[10px] font-mono"
+                      className="px-2 py-0.5 rounded-lg bg-white hover:bg-slate-100 dark:bg-slate-850 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 text-[10px] font-mono shadow-xs cursor-pointer transition-all"
                     >
                       {preset.label} ({preset.start}-{preset.end})
                     </button>
@@ -2229,38 +2241,38 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ onNavigate }) => {
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-slate-400 mb-1">وقت البدء</label>
+                    <label className="block text-slate-500 dark:text-slate-400 mb-1">وقت البدء</label>
                     <input
                       type="time"
                       value={formData.startTime ?? ''}
                       onChange={(e) => setFormData({ ...formData, startTime: e.target.value })}
-                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 font-mono text-center font-bold text-sm"
+                      className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 font-mono text-center font-bold text-sm"
                     />
                   </div>
                   <div>
-                    <label className="block text-slate-400 mb-1">وقت الانتهاء</label>
+                    <label className="block text-slate-500 dark:text-slate-400 mb-1">وقت الانتهاء</label>
                     <input
                       type="time"
                       value={formData.endTime ?? ''}
                       onChange={(e) => setFormData({ ...formData, endTime: e.target.value })}
-                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 font-mono text-center font-bold text-sm"
+                      className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 font-mono text-center font-bold text-sm"
                     />
                   </div>
                 </div>
               </div>
 
-              <div className="pt-3 border-t border-slate-800 flex justify-end gap-2">
+              <div className="pt-3 border-t border-slate-200 dark:border-slate-800 flex justify-end gap-2">
                 <button
                   type="button"
                   onClick={() => setIsQuickScheduleModalOpen(false)}
-                  className="px-4 py-2 bg-slate-800 text-slate-300 rounded-xl hover:bg-slate-700 font-bold"
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-transparent rounded-xl font-bold cursor-pointer transition-all"
                 >
                   إلغاء
                 </button>
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="px-5 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black rounded-xl shadow-lg shadow-amber-500/25"
+                  className="px-5 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black rounded-xl shadow-lg shadow-amber-500/25 cursor-pointer transition-all"
                 >
                   {isSubmitting ? 'جاري الحفظ...' : 'تأكيد وحفظ الموعد'}
                 </button>
@@ -2274,19 +2286,22 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ onNavigate }) => {
       {/* 4. DUPLICATE GROUP MODAL                                                 */}
       {/* ========================================================================= */}
       {isDuplicateModalOpen && activeGroup && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-fadeIn">
-          <div className="bg-slate-900 border border-amber-500/50 rounded-3xl shadow-2xl max-w-xl w-full p-6 text-slate-100 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-800 mb-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/70 backdrop-blur-md animate-fadeIn" dir="rtl">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-amber-500/50 rounded-3xl shadow-2xl max-w-xl w-full p-5 sm:p-6 text-slate-900 dark:text-slate-100 max-h-[90vh] overflow-y-auto custom-scrollbar">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800 mb-4">
               <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-yellow-500/20 border border-yellow-500/40 flex items-center justify-center text-yellow-400">
+                <div className="w-8 h-8 rounded-xl bg-yellow-100 dark:bg-yellow-500/20 border border-yellow-200 dark:border-yellow-500/40 flex items-center justify-center text-yellow-700 dark:text-yellow-400 shadow-xs">
                   <Copy className="w-4 h-4" />
                 </div>
                 <div>
-                  <h3 className="font-black text-sm text-slate-100">نسخ وتكرار المجموعة التدريبية</h3>
-                  <p className="text-[11px] text-slate-400">إنشاء فوج أو دورة جديدة مطابقة من: {activeGroup.name}</p>
+                  <h3 className="font-black text-sm text-slate-900 dark:text-slate-100">نسخ وتكرار المجموعة التدريبية</h3>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400">إنشاء فوج أو دورة جديدة مطابقة من: {activeGroup.name}</p>
                 </div>
               </div>
-              <button onClick={() => setIsDuplicateModalOpen(false)} className="text-slate-400 hover:text-white p-1">
+              <button 
+                onClick={() => setIsDuplicateModalOpen(false)} 
+                className="p-1.5 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:hover:text-white dark:hover:bg-slate-800 transition-colors cursor-pointer"
+              >
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -2294,25 +2309,25 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ onNavigate }) => {
             <form onSubmit={handleSaveDuplicate} className="space-y-4 text-xs">
               {/* Cloned Group Name */}
               <div>
-                <label className="block text-slate-300 font-bold mb-1">اسم المجموعة الجديدة *</label>
+                <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">اسم المجموعة الجديدة *</label>
                 <input
                   type="text"
                   required
                   value={duplicateFormData.name}
                   onChange={(e) => setDuplicateFormData({ ...duplicateFormData, name: e.target.value })}
                   placeholder="مثال: مجموعة الجرافيك - فوج 2"
-                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2.5 text-slate-100 focus:outline-none focus:border-amber-500 font-bold text-sm"
+                  className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3.5 py-2.5 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-amber-500 font-bold text-sm"
                 />
               </div>
 
               {/* Arabic Grade Dropdown */}
               <div>
-                <label className="block text-slate-300 font-bold mb-1">الصف الدراسي للمجموعة الجديدة *</label>
+                <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">الصف الدراسي للمجموعة الجديدة *</label>
                 <select
                   required
                   value={duplicateFormData.grade ?? ''}
                   onChange={(e) => setDuplicateFormData({ ...duplicateFormData, grade: e.target.value })}
-                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 text-slate-100 focus:outline-none focus:border-amber-500 font-bold"
+                  className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2.5 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-amber-500 font-bold"
                 >
                   <option value="">-- اختر الصف الدراسي العربي --</option>
                   <option value="الصف الرابع الابتدائي">الصف الرابع الابتدائي</option>
@@ -2330,11 +2345,11 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ onNavigate }) => {
               {/* Branch + Trainer */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-slate-300 font-bold mb-1">الفرع</label>
+                  <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">الفرع</label>
                   <select
                     value={duplicateFormData.branchId}
                     onChange={(e) => setDuplicateFormData({ ...duplicateFormData, branchId: e.target.value })}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100"
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100"
                   >
                     {branches.map((b) => (
                       <option key={b.id} value={b.id}>
@@ -2345,11 +2360,11 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ onNavigate }) => {
                 </div>
 
                 <div>
-                  <label className="block text-slate-300 font-bold mb-1">المدرب المشرف</label>
+                  <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">المدرب المشرف</label>
                   <select
                     value={duplicateFormData.trainerId}
                     onChange={(e) => setDuplicateFormData({ ...duplicateFormData, trainerId: e.target.value })}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100"
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100"
                   >
                     <option value="">-- نفس المدرب --</option>
                     {trainers.map((tr) => (
@@ -2362,8 +2377,8 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ onNavigate }) => {
               </div>
 
               {/* Days selection */}
-              <div className="bg-slate-950/60 p-3 rounded-2xl border border-slate-800">
-                <label className="block text-slate-300 font-bold mb-1.5">الأيام</label>
+              <div className="bg-slate-50 dark:bg-slate-950/60 p-3 rounded-2xl border border-slate-200 dark:border-slate-800">
+                <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1.5">الأيام</label>
                 <div className="flex flex-wrap gap-1.5">
                   {daysList.map((day) => {
                     const isSel = (duplicateFormData.scheduleDays || []).includes(day);
@@ -2372,10 +2387,10 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ onNavigate }) => {
                         type="button"
                         key={day}
                         onClick={() => toggleDay(day, true)}
-                        className={`px-3 py-1 rounded-xl border font-bold text-xs transition-all ${
+                        className={`px-3 py-1 rounded-xl border font-bold text-xs transition-all cursor-pointer ${
                           isSel
                             ? 'bg-yellow-500 text-slate-950 border-yellow-500 font-black'
-                            : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-white'
+                            : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-300 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700 dark:hover:text-white'
                         }`}
                       >
                         {day}
@@ -2388,49 +2403,49 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ onNavigate }) => {
               {/* Times */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-slate-400 mb-1">وقت البدء</label>
+                  <label className="block text-slate-500 dark:text-slate-400 mb-1">وقت البدء</label>
                   <input
                     type="time"
                     value={duplicateFormData.startTime}
                     onChange={(e) => setDuplicateFormData({ ...duplicateFormData, startTime: e.target.value })}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 font-mono text-center font-bold"
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 font-mono text-center font-bold"
                   />
                 </div>
                 <div>
-                  <label className="block text-slate-400 mb-1">وقت الانتهاء</label>
+                  <label className="block text-slate-500 dark:text-slate-400 mb-1">وقت الانتهاء</label>
                   <input
                     type="time"
                     value={duplicateFormData.endTime}
                     onChange={(e) => setDuplicateFormData({ ...duplicateFormData, endTime: e.target.value })}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 font-mono text-center font-bold"
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 font-mono text-center font-bold"
                   />
                 </div>
               </div>
 
               {/* Room */}
               <div>
-                <label className="block text-slate-300 font-bold mb-1">المعمل / القاعة</label>
+                <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">المعمل / القاعة</label>
                 <input
                   type="text"
                   list="room-name-suggestions"
                   value={duplicateFormData.roomName}
                   onChange={(e) => setDuplicateFormData({ ...duplicateFormData, roomName: e.target.value })}
-                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100"
+                  className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100"
                 />
               </div>
 
-              <div className="pt-3 border-t border-slate-800 flex justify-end gap-2">
+              <div className="pt-3 border-t border-slate-200 dark:border-slate-800 flex justify-end gap-2">
                 <button
                   type="button"
                   onClick={() => setIsDuplicateModalOpen(false)}
-                  className="px-4 py-2 bg-slate-800 text-slate-300 rounded-xl hover:bg-slate-700 font-bold"
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-transparent rounded-xl font-bold cursor-pointer transition-all"
                 >
                   إلغاء
                 </button>
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="px-5 py-2 bg-yellow-500 hover:bg-yellow-400 text-slate-950 font-black rounded-xl shadow-lg shadow-yellow-500/25 flex items-center gap-1.5"
+                  className="px-5 py-2 bg-yellow-500 hover:bg-yellow-400 text-slate-950 font-black rounded-xl shadow-lg shadow-yellow-500/25 flex items-center gap-1.5 cursor-pointer transition-all"
                 >
                   <Copy className="w-4 h-4" />
                   <span>{isSubmitting ? 'جاري النسخ...' : 'تأكيد النسخ والتكرار'}</span>
@@ -2445,32 +2460,35 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ onNavigate }) => {
       {/* 5. GROUP TRAINEES MODAL / DRAWER                                         */}
       {/* ========================================================================= */}
       {isTraineesModalOpen && activeGroup && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-fadeIn">
-          <div className="bg-slate-900 border border-slate-700 rounded-3xl shadow-2xl max-w-2xl w-full p-6 text-slate-100 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-800 mb-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-md animate-fadeIn" dir="rtl">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-3xl shadow-2xl max-w-2xl w-full p-6 text-slate-900 dark:text-slate-100 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800 mb-4">
               <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-xl bg-purple-500/20 border border-purple-500/40 flex items-center justify-center text-purple-400 font-bold">
+                <div className="w-9 h-9 rounded-xl bg-purple-100 dark:bg-purple-500/20 border border-purple-200 dark:border-purple-500/40 flex items-center justify-center text-purple-700 dark:text-purple-400 font-bold shadow-xs">
                   <Users className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="font-black text-base text-slate-100">
+                  <h3 className="font-black text-base text-slate-900 dark:text-slate-100">
                     متدربو المجموعة: {activeGroup.name}
                   </h3>
-                  <p className="text-xs text-slate-400">
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
                     عدد الطلاب: {getTraineesForGroup(activeGroup.id).length} من أصل {activeGroup.maxCapacity || 15} مقعد
                   </p>
                 </div>
               </div>
-              <button onClick={() => setIsTraineesModalOpen(false)} className="text-slate-400 hover:text-white p-1">
+              <button 
+                onClick={() => setIsTraineesModalOpen(false)} 
+                className="p-1.5 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:hover:text-white dark:hover:bg-slate-800 transition-colors cursor-pointer"
+              >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             {getTraineesForGroup(activeGroup.id).length === 0 ? (
-              <div className="py-12 text-center text-slate-400 bg-slate-950/40 rounded-2xl border border-slate-800 p-6">
-                <Users className="w-12 h-12 text-slate-600 mx-auto mb-2" />
-                <p className="font-bold text-slate-300 text-sm">لا يوجد متدربون مسجلون في هذه المجموعة بعد</p>
-                <p className="text-xs text-slate-500 mt-1">
+              <div className="py-12 text-center text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-slate-950/40 rounded-2xl border border-slate-200 dark:border-slate-800 p-6">
+                <Users className="w-12 h-12 text-slate-400 dark:text-slate-600 mx-auto mb-2" />
+                <p className="font-bold text-slate-800 dark:text-slate-300 text-sm">لا يوجد متدربون مسجلون في هذه المجموعة بعد</p>
+                <p className="text-xs text-slate-500 dark:text-slate-500 mt-1">
                   يمكنك تعيين متدربين لهذه المجموعة من شاشة (المتدربون) أو عند تسجيل متدرب جديد
                 </p>
                 {onNavigate && (
@@ -2479,7 +2497,7 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ onNavigate }) => {
                       setIsTraineesModalOpen(false);
                       onNavigate('trainees');
                     }}
-                    className="mt-4 px-4 py-2 bg-amber-500 text-slate-950 font-bold text-xs rounded-xl inline-flex items-center gap-1.5"
+                    className="mt-4 px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs rounded-xl inline-flex items-center gap-1.5 shadow-md transition-all cursor-pointer"
                   >
                     الانتقال لشاشة المتدربين
                   </button>
@@ -2490,24 +2508,24 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ onNavigate }) => {
                 {getTraineesForGroup(activeGroup.id).map((t, idx) => (
                   <div
                     key={t.id}
-                    className="bg-slate-800/80 border border-slate-700/80 p-3 rounded-2xl flex items-center justify-between gap-3 hover:border-purple-500/50 transition-colors"
+                    className="bg-white dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 p-3 rounded-2xl flex items-center justify-between gap-3 shadow-xs hover:border-purple-300 dark:hover:border-purple-500/50 transition-all"
                   >
                     <div className="flex items-center gap-3">
-                      <span className="w-6 h-6 rounded-full bg-slate-900 text-slate-400 font-mono text-[11px] font-bold flex items-center justify-center">
+                      <span className="w-6 h-6 rounded-full bg-slate-100 dark:bg-slate-900 text-slate-700 dark:text-slate-400 font-mono text-[11px] font-bold flex items-center justify-center border border-slate-200 dark:border-transparent shrink-0">
                         {idx + 1}
                       </span>
                       {t.photoUrl ? (
-                        <img src={t.photoUrl} alt={t.fullName} className="w-9 h-9 rounded-full object-cover border border-amber-500/50" />
+                        <img src={t.photoUrl} alt={t.fullName} className="w-9 h-9 rounded-full object-cover border border-amber-500/50 shrink-0" />
                       ) : (
-                        <div className="w-9 h-9 rounded-full bg-slate-700 text-amber-400 font-bold text-xs flex items-center justify-center">
+                        <div className="w-9 h-9 rounded-full bg-amber-100 dark:bg-slate-700 text-amber-800 dark:text-amber-400 font-bold text-xs flex items-center justify-center border border-amber-200 dark:border-transparent shrink-0">
                           {t.fullName?.charAt(0) || '?'}
                         </div>
                       )}
                       <div>
-                        <h4 className="font-bold text-xs text-slate-100">{t.fullName}</h4>
-                        <div className="flex items-center gap-2 text-[10px] text-slate-400 mt-0.5">
-                          <span className="font-mono bg-slate-900 px-1.5 py-0.2 rounded">{t.code}</span>
-                          <span>{t.phone}</span>
+                        <h4 className="font-black text-xs text-slate-900 dark:text-slate-100">{t.fullName}</h4>
+                        <div className="flex items-center gap-2 text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">
+                          <span className="font-mono bg-slate-100 dark:bg-slate-900 text-slate-700 dark:text-slate-300 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-800">{t.code}</span>
+                          <span className="font-mono">{t.phone}</span>
                         </div>
                       </div>
                     </div>
@@ -2516,8 +2534,8 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ onNavigate }) => {
                       <span
                         className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
                           t.remainingAmount && t.remainingAmount > 0
-                            ? 'bg-rose-500/20 text-rose-300 border-rose-500/40'
-                            : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                            ? 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-500/20 dark:text-rose-300 dark:border-rose-500/40'
+                            : 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/20 dark:text-emerald-300 dark:border-emerald-500/40'
                         }`}
                       >
                         {t.remainingAmount && t.remainingAmount > 0
@@ -2530,7 +2548,7 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ onNavigate }) => {
                           href={`https://wa.me/2${t.phone.replace(/[^0-9]/g, '')}`}
                           target="_blank"
                           rel="noreferrer"
-                          className="p-1.5 rounded-lg bg-emerald-950/60 hover:bg-emerald-900 text-emerald-300 border border-emerald-800"
+                          className="p-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/60 dark:hover:bg-emerald-900 dark:text-emerald-300 dark:border-emerald-800 transition-all shadow-xs"
                           title="محادثة واتساب"
                         >
                           <MessageCircle className="w-3.5 h-3.5" />
@@ -2542,13 +2560,13 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ onNavigate }) => {
               </div>
             )}
 
-            <div className="pt-4 border-t border-slate-800 flex justify-between items-center mt-4">
+            <div className="pt-4 border-t border-slate-200 dark:border-slate-800 flex justify-between items-center mt-4">
               <button
                 onClick={() => {
                   setIsTraineesModalOpen(false);
                   setIsPrintRosterModalOpen(true);
                 }}
-                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-bold flex items-center gap-1.5"
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer"
               >
                 <Printer className="w-3.5 h-3.5" />
                 <span>طباعة كشف الحضور</span>
@@ -2557,7 +2575,7 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ onNavigate }) => {
               <button
                 type="button"
                 onClick={() => setIsTraineesModalOpen(false)}
-                className="px-5 py-2 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded-xl text-xs"
+                className="px-5 py-2 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl text-xs shadow-md shadow-purple-600/20 transition-all cursor-pointer"
               >
                 إغلاق
               </button>
@@ -2570,29 +2588,34 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ onNavigate }) => {
       {/* 6. PRINT ATTENDANCE ROSTER SHEET MODAL                                    */}
       {/* ========================================================================= */}
       {isPrintRosterModalOpen && activeGroup && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md animate-fadeIn">
-          <div className="bg-slate-900 border border-slate-700 rounded-3xl shadow-2xl max-w-4xl w-full p-6 text-slate-100 max-h-[95vh] overflow-y-auto">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-800 mb-4 print:hidden">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/70 backdrop-blur-md animate-fadeIn" dir="rtl">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-3xl shadow-2xl max-w-4xl w-full p-5 sm:p-6 text-slate-900 dark:text-slate-100 max-h-[95vh] overflow-y-auto custom-scrollbar">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800 mb-4 print:hidden">
               <div className="flex items-center gap-2">
-                <Printer className="w-5 h-5 text-amber-400" />
-                <h3 className="font-black text-sm">معاينة وطباعة كشف الحضور للمجموعة: {activeGroup.name}</h3>
+                <div className="w-8 h-8 rounded-xl bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-400 flex items-center justify-center shadow-xs">
+                  <Printer className="w-4.5 h-4.5" />
+                </div>
+                <h3 className="font-black text-sm text-slate-900 dark:text-slate-100">معاينة وطباعة كشف الحضور للمجموعة: {activeGroup.name}</h3>
               </div>
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => window.print()}
-                  className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black rounded-xl text-xs flex items-center gap-1.5 shadow-lg"
+                  className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black rounded-xl text-xs flex items-center gap-1.5 shadow-lg shadow-amber-500/20 cursor-pointer transition-all"
                 >
                   <Printer className="w-4 h-4" />
                   <span>طباعة الكشف الآن</span>
                 </button>
-                <button onClick={() => setIsPrintRosterModalOpen(false)} className="text-slate-400 hover:text-white p-1">
+                <button 
+                  onClick={() => setIsPrintRosterModalOpen(false)} 
+                  className="p-1.5 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:hover:text-white dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                >
                   <X className="w-5 h-5" />
                 </button>
               </div>
             </div>
 
             {/* Printable Sheet */}
-            <div className="bg-white text-slate-900 p-8 rounded-2xl border border-slate-300 shadow-inner font-sans text-xs">
+            <div className="bg-white text-slate-900 p-6 sm:p-8 rounded-2xl border border-slate-200 shadow-xs font-sans text-xs">
               {/* Sheet Header */}
               <div className="flex items-center justify-between border-b-2 border-slate-800 pb-4 mb-4">
                 <div className="text-right">
@@ -2610,7 +2633,7 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ onNavigate }) => {
               </div>
 
               {/* Group Info Grid */}
-              <div className="grid grid-cols-4 gap-2 bg-slate-50 p-3 rounded-xl border border-slate-200 mb-4 text-[11px]">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 bg-slate-50 p-3 rounded-xl border border-slate-200 mb-4 text-[11px]">
                 <div>
                   <span className="text-slate-500 block">المجموعة:</span>
                   <strong className="text-slate-900 font-black">{activeGroup.name}</strong>
@@ -2630,47 +2653,49 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ onNavigate }) => {
               </div>
 
               {/* Trainees Attendance Table */}
-              <table className="w-full text-right border-collapse border border-slate-300 text-[10px]">
-                <thead>
-                  <tr className="bg-slate-100 text-slate-800 font-black">
-                    <th className="border border-slate-300 p-2 w-8 text-center">م</th>
-                    <th className="border border-slate-300 p-2">كود المتدرب</th>
-                    <th className="border border-slate-300 p-2">اسم المتدرب رباعياً</th>
-                    <th className="border border-slate-300 p-2">رقم الهاتف</th>
-                    {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(n => (
-                      <th key={n} className="border border-slate-300 p-1 w-6 text-center">ح{n}</th>
+              <div className="overflow-x-auto">
+                <table className="w-full text-right border-collapse border border-slate-300 text-[10px]">
+                  <thead>
+                    <tr className="bg-slate-100 text-slate-800 font-black">
+                      <th className="border border-slate-300 p-2 w-8 text-center">م</th>
+                      <th className="border border-slate-300 p-2">كود المتدرب</th>
+                      <th className="border border-slate-300 p-2">اسم المتدرب رباعياً</th>
+                      <th className="border border-slate-300 p-2">رقم الهاتف</th>
+                      {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(n => (
+                        <th key={n} className="border border-slate-300 p-1 w-6 text-center">ح{n}</th>
+                      ))}
+                      <th className="border border-slate-300 p-2">ملاحظات المدرب</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {getTraineesForGroup(activeGroup.id).map((t, idx) => (
+                      <tr key={t.id} className="hover:bg-slate-50">
+                        <td className="border border-slate-300 p-1.5 text-center font-bold">{idx + 1}</td>
+                        <td className="border border-slate-300 p-1.5 font-mono font-bold">{t.code}</td>
+                        <td className="border border-slate-300 p-1.5 font-bold text-slate-900">{t.fullName}</td>
+                        <td className="border border-slate-300 p-1.5 font-mono">{t.phone}</td>
+                        {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(n => (
+                          <td key={n} className="border border-slate-300 p-1 text-center"></td>
+                        ))}
+                        <td className="border border-slate-300 p-1.5"></td>
+                      </tr>
                     ))}
-                    <th className="border border-slate-300 p-2">ملاحظات المدرب</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {getTraineesForGroup(activeGroup.id).map((t, idx) => (
-                    <tr key={t.id} className="hover:bg-slate-50">
-                      <td className="border border-slate-300 p-1.5 text-center font-bold">{idx + 1}</td>
-                      <td className="border border-slate-300 p-1.5 font-mono font-bold">{t.code}</td>
-                      <td className="border border-slate-300 p-1.5 font-bold text-slate-900">{t.fullName}</td>
-                      <td className="border border-slate-300 p-1.5 font-mono">{t.phone}</td>
-                      {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(n => (
-                        <td key={n} className="border border-slate-300 p-1 text-center"></td>
-                      ))}
-                      <td className="border border-slate-300 p-1.5"></td>
-                    </tr>
-                  ))}
-                  {/* Empty rows for late walk-ins */}
-                  {[1, 2, 3].map(extra => (
-                    <tr key={`extra-${extra}`} className="h-6">
-                      <td className="border border-slate-300 p-1 text-center text-slate-400">{getTraineesForGroup(activeGroup.id).length + extra}</td>
-                      <td className="border border-slate-300 p-1"></td>
-                      <td className="border border-slate-300 p-1"></td>
-                      <td className="border border-slate-300 p-1"></td>
-                      {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(n => (
-                        <td key={n} className="border border-slate-300 p-1"></td>
-                      ))}
-                      <td className="border border-slate-300 p-1"></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                    {/* Empty rows for late walk-ins */}
+                    {[1, 2, 3].map(extra => (
+                      <tr key={`extra-${extra}`} className="h-6">
+                        <td className="border border-slate-300 p-1 text-center text-slate-400">{getTraineesForGroup(activeGroup.id).length + extra}</td>
+                        <td className="border border-slate-300 p-1"></td>
+                        <td className="border border-slate-300 p-1"></td>
+                        <td className="border border-slate-300 p-1"></td>
+                        {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(n => (
+                          <td key={n} className="border border-slate-300 p-1"></td>
+                        ))}
+                        <td className="border border-slate-300 p-1"></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
 
               {/* Signatures */}
               <div className="grid grid-cols-2 pt-6 mt-6 border-t border-slate-300 text-xs">
@@ -2692,29 +2717,29 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ onNavigate }) => {
       {/* 7. DELETE CONFIRMATION MODAL                                             */}
       {/* ========================================================================= */}
       {groupToDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-fadeIn">
-          <div className="bg-slate-900 border border-rose-900/60 rounded-3xl shadow-2xl max-w-md w-full p-6 text-slate-100">
-            <div className="flex items-center gap-3 text-rose-400 mb-3">
-              <div className="w-10 h-10 rounded-2xl bg-rose-950/80 border border-rose-800 flex items-center justify-center">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-md animate-fadeIn" dir="rtl">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-rose-900/60 rounded-3xl shadow-2xl max-w-md w-full p-6 text-slate-900 dark:text-slate-100">
+            <div className="flex items-center gap-3 text-rose-600 dark:text-rose-400 mb-3">
+              <div className="w-10 h-10 rounded-2xl bg-rose-100 dark:bg-rose-950/80 border border-rose-200 dark:border-rose-800 flex items-center justify-center shrink-0 shadow-xs">
                 <AlertTriangle className="w-5 h-5" />
               </div>
               <div>
-                <h3 className="font-bold text-base">تأكيد حذف المجموعة التدريبية</h3>
-                <p className="text-xs text-slate-400">سيتم إزالة المجموعة من النظام وقوائم التدريب</p>
+                <h3 className="font-bold text-base text-slate-900 dark:text-slate-100">تأكيد حذف المجموعة التدريبية</h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400">سيتم إزالة المجموعة من النظام وقوائم التدريب</p>
               </div>
             </div>
 
-            <div className="bg-slate-950/70 p-3.5 rounded-2xl border border-slate-800 text-xs text-slate-300 my-4 space-y-1.5">
+            <div className="bg-slate-50 dark:bg-slate-950/70 p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800 text-xs text-slate-700 dark:text-slate-300 my-4 space-y-1.5">
               <p>
-                <strong className="text-slate-200">المجموعة:</strong> {groupToDelete.name}
+                <strong className="text-slate-900 dark:text-slate-200">المجموعة:</strong> {groupToDelete.name}
               </p>
               <p>
-                <strong className="text-slate-200">القاعة / المعمل:</strong> {groupToDelete.roomName || groupToDelete.hallName}
+                <strong className="text-slate-900 dark:text-slate-200">القاعة / المعمل:</strong> {groupToDelete.roomName || groupToDelete.hallName}
               </p>
               <p>
-                <strong className="text-slate-200">الطلاب المسجلين:</strong> {getTraineesForGroup(groupToDelete.id).length} متدرب
+                <strong className="text-slate-900 dark:text-slate-200">الطلاب المسجلين:</strong> {getTraineesForGroup(groupToDelete.id).length} متدرب
               </p>
-              <p className="text-amber-400/90 text-[11px] pt-1">
+              <p className="text-amber-700 dark:text-amber-400/90 text-[11px] pt-1">
                 نصيحة: يمكنك أيضاً تعديل الموعد أو تكرار المجموعة بدلاً من حذفها.
               </p>
             </div>
@@ -2723,14 +2748,14 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ onNavigate }) => {
               <button
                 type="button"
                 onClick={() => setGroupToDelete(null)}
-                className="px-4 py-2 bg-slate-800 text-slate-300 rounded-xl hover:bg-slate-700 text-xs font-bold"
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-transparent rounded-xl text-xs font-bold cursor-pointer transition-all"
               >
                 تراجع
               </button>
               <button
                 type="button"
                 onClick={() => handleDeleteGroup(groupToDelete)}
-                className="px-5 py-2 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-rose-600/30 flex items-center gap-1.5"
+                className="px-5 py-2 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-rose-600/30 flex items-center gap-1.5 cursor-pointer transition-all"
               >
                 <Trash2 className="w-4 h-4" />
                 <span>تأكيد الحذف النهائي</span>

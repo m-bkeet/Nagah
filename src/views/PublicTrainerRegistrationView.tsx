@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { User, Phone, MapPin, Briefcase, Mail, Send, CheckCircle2, Sparkles, Building, ArrowRight, Activity, Percent } from 'lucide-react';
 import { api } from '../services/api';
 import { Branch } from '../types';
+import { ThemeQuickSwitcher } from '../components/ThemeQuickSwitcher';
 
 interface PublicTrainerRegistrationViewProps {
   onBack?: () => void;
@@ -75,22 +76,22 @@ export const PublicTrainerRegistrationView: React.FC<PublicTrainerRegistrationVi
 
   if (step === 2) {
     return (
-      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4">
-        <div className="bg-slate-900 border border-slate-800 rounded-3xl p-8 max-w-md w-full text-center shadow-2xl relative overflow-hidden">
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col items-center justify-center p-4 transition-colors">
+        <div className="glass-card-3d bg-white/95 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-8 max-w-md w-full text-center shadow-2xl relative overflow-hidden">
           <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-amber-400 to-amber-600"></div>
           
-          <div className="w-20 h-20 bg-emerald-500/20 text-emerald-400 rounded-full flex items-center justify-center mx-auto mb-6">
+          <div className="w-20 h-20 bg-emerald-500/15 text-emerald-500 rounded-full flex items-center justify-center mx-auto mb-6">
             <CheckCircle2 className="w-10 h-10" />
           </div>
           
-          <h2 className="text-2xl font-bold text-slate-100 mb-2">تم التسجيل بنجاح!</h2>
-          <p className="text-slate-400 mb-8">
+          <h2 className="text-2xl font-bold text-slate-900 dark:text-slate-100 mb-2">تم التسجيل بنجاح!</h2>
+          <p className="text-slate-600 dark:text-slate-400 mb-8">
             أهلاً بك أ. {formData.name} في فريق المدربين لمركز النجاح للتدريب. سيتم مراجعة طلبك والتواصل معك قريباً.
           </p>
           
           <button
             onClick={onBack}
-            className="w-full bg-slate-800 hover:bg-slate-700 text-slate-100 font-bold py-3 px-4 rounded-xl transition-all"
+            className="w-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-900 dark:text-slate-100 font-bold py-3 px-4 rounded-xl transition-all"
           >
             العودة للصفحة الرئيسية
           </button>
@@ -100,29 +101,42 @@ export const PublicTrainerRegistrationView: React.FC<PublicTrainerRegistrationVi
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4 relative overflow-hidden">
-      <div className="absolute -top-40 -right-40 w-96 h-96 bg-amber-500/10 rounded-full blur-3xl"></div>
-      <div className="absolute -bottom-40 -left-40 w-96 h-96 bg-emerald-500/10 rounded-full blur-3xl"></div>
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col items-center justify-center p-4 relative overflow-hidden transition-colors" dir="rtl">
+      <div className="absolute -top-40 -right-40 w-96 h-96 bg-amber-500/10 rounded-full blur-3xl pointer-events-none"></div>
+      <div className="absolute -bottom-40 -left-40 w-96 h-96 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none"></div>
+
+      <div className="w-full max-w-xl flex items-center justify-between mb-4 z-20">
+        {onBack ? (
+          <button
+            onClick={onBack}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:text-slate-950 dark:hover:text-white text-xs font-bold transition-colors shadow-xs"
+          >
+            <ArrowRight className="w-4 h-4" />
+            <span>العودة للرئيسية</span>
+          </button>
+        ) : <div />}
+        <ThemeQuickSwitcher />
+      </div>
       
       <div className="w-full max-w-xl z-10">
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center p-3 bg-amber-500/20 text-amber-400 rounded-2xl mb-4">
+          <div className="inline-flex items-center justify-center p-3 bg-amber-500/15 text-amber-500 dark:text-amber-400 rounded-2xl mb-4 shadow-sm">
             <Sparkles className="w-8 h-8" />
           </div>
-          <h1 className="text-3xl font-bold text-slate-100 mb-2">انضم كمدرب معتمد</h1>
-          <p className="text-slate-400">مركز النجاح للتدريب والاستشارات</p>
+          <h1 className="text-3xl font-bold text-slate-900 dark:text-slate-100 mb-2">انضم كمدرب معتمد</h1>
+          <p className="text-slate-600 dark:text-slate-400">مركز النجاح للتدريب والاستشارات</p>
         </div>
 
-        <form onSubmit={handleSubmit} className="bg-slate-900/80 backdrop-blur-xl border border-slate-700/50 rounded-3xl p-6 md:p-8 shadow-2xl">
+        <form onSubmit={handleSubmit} className="glass-card-3d bg-white/95 dark:bg-slate-900/80 backdrop-blur-xl border border-slate-200 dark:border-slate-700/50 rounded-3xl p-6 md:p-8 shadow-2xl">
           {error && (
-            <div className="bg-red-500/10 border border-red-500/50 text-red-400 p-4 rounded-xl mb-6 text-sm font-bold">
+            <div className="bg-red-500/10 border border-red-500/50 text-red-600 dark:text-red-400 p-4 rounded-xl mb-6 text-sm font-bold">
               {error}
             </div>
           )}
 
           <div className="space-y-5">
             <div>
-              <label className="block text-slate-300 font-bold mb-2">الاسم الرباعي *</label>
+              <label className="block text-slate-700 dark:text-slate-300 font-bold mb-2 text-sm">الاسم الرباعي *</label>
               <div className="relative">
                 <User className="w-5 h-5 text-slate-400 absolute right-3 top-3.5" />
                 <input
@@ -130,7 +144,7 @@ export const PublicTrainerRegistrationView: React.FC<PublicTrainerRegistrationVi
                   required
                   value={formData.name}
                   onChange={(e) => setFormData({...formData, name: e.target.value})}
-                  className="w-full bg-slate-800/50 border border-slate-700 focus:border-amber-500 rounded-xl pr-11 pl-4 py-3 text-slate-100 placeholder-slate-500 transition-colors"
+                  className="w-full bg-slate-50 dark:bg-slate-800/50 border border-slate-300 dark:border-slate-700 focus:border-amber-500 rounded-xl pr-11 pl-4 py-3 text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 transition-colors"
                   placeholder="الاسم الرباعي للمدرب"
                 />
               </div>
@@ -138,7 +152,7 @@ export const PublicTrainerRegistrationView: React.FC<PublicTrainerRegistrationVi
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
               <div>
-                <label className="block text-slate-300 font-bold mb-2">رقم الجوال (واتساب) *</label>
+                <label className="block text-slate-700 dark:text-slate-300 font-bold mb-2 text-sm">رقم الجوال (واتساب) *</label>
                 <div className="relative">
                   <Phone className="w-5 h-5 text-slate-400 absolute right-3 top-3.5" />
                   <input
@@ -146,7 +160,7 @@ export const PublicTrainerRegistrationView: React.FC<PublicTrainerRegistrationVi
                     required
                     value={formData.phone}
                     onChange={(e) => setFormData({...formData, phone: e.target.value})}
-                    className="w-full bg-slate-800/50 border border-slate-700 focus:border-amber-500 rounded-xl pr-11 pl-4 py-3 text-slate-100 placeholder-slate-500 transition-colors text-left"
+                    className="w-full bg-slate-50 dark:bg-slate-800/50 border border-slate-300 dark:border-slate-700 focus:border-amber-500 rounded-xl pr-11 pl-4 py-3 text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 transition-colors text-left"
                     placeholder="05xxxxxxxx"
                     dir="ltr"
                   />
@@ -154,14 +168,14 @@ export const PublicTrainerRegistrationView: React.FC<PublicTrainerRegistrationVi
               </div>
 
               <div>
-                <label className="block text-slate-300 font-bold mb-2">البريد الإلكتروني</label>
+                <label className="block text-slate-700 dark:text-slate-300 font-bold mb-2 text-sm">البريد الإلكتروني</label>
                 <div className="relative">
                   <Mail className="w-5 h-5 text-slate-400 absolute right-3 top-3.5" />
                   <input
                     type="email"
                     value={formData.email}
                     onChange={(e) => setFormData({...formData, email: e.target.value})}
-                    className="w-full bg-slate-800/50 border border-slate-700 focus:border-amber-500 rounded-xl pr-11 pl-4 py-3 text-slate-100 placeholder-slate-500 transition-colors text-left"
+                    className="w-full bg-slate-50 dark:bg-slate-800/50 border border-slate-300 dark:border-slate-700 focus:border-amber-500 rounded-xl pr-11 pl-4 py-3 text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 transition-colors text-left"
                     placeholder="email@example.com"
                     dir="ltr"
                   />
@@ -170,7 +184,7 @@ export const PublicTrainerRegistrationView: React.FC<PublicTrainerRegistrationVi
             </div>
 
             <div>
-              <label className="block text-slate-300 font-bold mb-2">التخصص ومجال التدريب *</label>
+              <label className="block text-slate-700 dark:text-slate-300 font-bold mb-2 text-sm">التخصص ومجال التدريب *</label>
               <div className="relative">
                 <Briefcase className="w-5 h-5 text-slate-400 absolute right-3 top-3.5" />
                 <input
@@ -178,7 +192,7 @@ export const PublicTrainerRegistrationView: React.FC<PublicTrainerRegistrationVi
                   required
                   value={formData.specialty}
                   onChange={(e) => setFormData({...formData, specialty: e.target.value})}
-                  className="w-full bg-slate-800/50 border border-slate-700 focus:border-amber-500 rounded-xl pr-11 pl-4 py-3 text-slate-100 placeholder-slate-500 transition-colors"
+                  className="w-full bg-slate-50 dark:bg-slate-800/50 border border-slate-300 dark:border-slate-700 focus:border-amber-500 rounded-xl pr-11 pl-4 py-3 text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 transition-colors"
                   placeholder="مثال: مدرب حاسب آلي، برمجة، لغات..."
                 />
               </div>
@@ -186,14 +200,14 @@ export const PublicTrainerRegistrationView: React.FC<PublicTrainerRegistrationVi
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
               <div>
-                <label className="block text-slate-300 font-bold mb-2">الفرع المفضل *</label>
+                <label className="block text-slate-700 dark:text-slate-300 font-bold mb-2 text-sm">الفرع المفضل *</label>
                 <div className="relative">
                   <Building className="w-5 h-5 text-slate-400 absolute right-3 top-3.5" />
                   <select
                     required
                     value={formData.branchId}
                     onChange={(e) => setFormData({...formData, branchId: e.target.value})}
-                    className="w-full bg-slate-800/50 border border-slate-700 focus:border-amber-500 rounded-xl pr-11 pl-4 py-3 text-slate-100 transition-colors appearance-none"
+                    className="w-full bg-slate-50 dark:bg-slate-800/50 border border-slate-300 dark:border-slate-700 focus:border-amber-500 rounded-xl pr-11 pl-4 py-3 text-slate-900 dark:text-slate-100 transition-colors appearance-none"
                   >
                     <option value="" disabled>اختر الفرع...</option>
                     {branches.map(b => (
@@ -204,7 +218,7 @@ export const PublicTrainerRegistrationView: React.FC<PublicTrainerRegistrationVi
               </div>
 
               <div>
-                <label className="block text-slate-300 font-bold mb-2">النسبة المتوقعة للتدريب (%)</label>
+                <label className="block text-slate-700 dark:text-slate-300 font-bold mb-2 text-sm">النسبة المتوقعة للتدريب (%)</label>
                 <div className="relative">
                   <Percent className="w-5 h-5 text-slate-400 absolute right-3 top-3.5" />
                   <input
@@ -213,7 +227,7 @@ export const PublicTrainerRegistrationView: React.FC<PublicTrainerRegistrationVi
                     max="100"
                     value={formData.percentage}
                     onChange={(e) => setFormData({...formData, percentage: Number(e.target.value)})}
-                    className="w-full bg-slate-800/50 border border-slate-700 focus:border-amber-500 rounded-xl pr-11 pl-4 py-3 text-slate-100 placeholder-slate-500 transition-colors text-left"
+                    className="w-full bg-slate-50 dark:bg-slate-800/50 border border-slate-300 dark:border-slate-700 focus:border-amber-500 rounded-xl pr-11 pl-4 py-3 text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 transition-colors text-left"
                     dir="ltr"
                   />
                 </div>
@@ -221,11 +235,11 @@ export const PublicTrainerRegistrationView: React.FC<PublicTrainerRegistrationVi
             </div>
             
             <div>
-              <label className="block text-slate-300 font-bold mb-2">ملاحظات إضافية (أوقات التفرغ)</label>
+              <label className="block text-slate-700 dark:text-slate-300 font-bold mb-2 text-sm">ملاحظات إضافية (أوقات التفرغ)</label>
               <textarea
                 value={formData.notes}
                 onChange={(e) => setFormData({...formData, notes: e.target.value})}
-                className="w-full bg-slate-800/50 border border-slate-700 focus:border-amber-500 rounded-xl p-4 text-slate-100 placeholder-slate-500 transition-colors min-h-[100px]"
+                className="w-full bg-slate-50 dark:bg-slate-800/50 border border-slate-300 dark:border-slate-700 focus:border-amber-500 rounded-xl p-4 text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 transition-colors min-h-[100px]"
                 placeholder="أضف أي ملاحظات أو أوقات تفرغ تفضلها..."
               ></textarea>
             </div>
@@ -250,7 +264,7 @@ export const PublicTrainerRegistrationView: React.FC<PublicTrainerRegistrationVi
         </form>
         
         <div className="text-center mt-6">
-          <button onClick={onBack} className="text-slate-400 hover:text-white flex items-center gap-2 justify-center mx-auto text-sm transition-colors">
+          <button onClick={onBack} className="text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white flex items-center gap-2 justify-center mx-auto text-sm transition-colors">
             <ArrowRight className="w-4 h-4" />
             العودة للمركز
           </button>

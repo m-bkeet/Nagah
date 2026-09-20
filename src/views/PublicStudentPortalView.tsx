@@ -1383,7 +1383,7 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
   };
 
   return (
-    <div className="fixed inset-0 w-full h-[100dvh] max-h-[100dvh] bg-slate-100 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col font-sans overflow-hidden" dir="rtl">
+    <div className="fixed inset-0 w-full h-[100dvh] max-h-[100dvh] bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col font-sans overflow-hidden" dir="rtl">
       {/* UNIFIED PROFESSIONAL TOP HEADER */}
       <header className="bg-white/80 dark:bg-slate-900/95 backdrop-blur-xl border-b border-slate-200/90 dark:border-slate-800 px-4 py-2.5 shrink-0 z-40 shadow-sm dark:shadow-xl safe-top">
         <div className="max-w-6xl mx-auto flex items-center justify-between gap-3">
@@ -1515,7 +1515,7 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
           </div>
           <div className="flex items-center gap-3 shrink-0">
             {queueCount > 0 && (
-              <span className="bg-slate-950 text-amber-400 px-2.5 py-0.5 rounded-full text-[10px] font-black animate-pulse">
+              <span className="bg-amber-100 dark:bg-slate-950 text-amber-800 dark:text-amber-400 border border-amber-300 dark:border-amber-500/30 px-2.5 py-0.5 rounded-full text-[10px] font-black animate-pulse">
                 طابور المزامنة: {queueCount} عمليات معلقة
               </span>
             )}
@@ -1526,7 +1526,7 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
                   alert(`🔄 تم محاولة مزامنة العمليات المعلقة. المتبقي: ${resilientOfflineService.getQueue().length}`);
                 });
               }}
-              className="bg-slate-950 hover:bg-slate-900 text-white px-2.5 py-1 rounded-lg text-[9px] font-black transition-colors"
+              className="bg-amber-500 hover:bg-amber-600 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-950 dark:text-white px-2.5 py-1 rounded-lg text-[9px] font-black transition-colors"
             >
               مزامنة الآن 🔄
             </button>
@@ -1665,7 +1665,7 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
                   alt="Cover" 
                   className="w-full h-full object-cover mix-blend-overlay opacity-60"
                 />
-                <div className="absolute top-4 right-4 bg-slate-950/80 text-amber-400 font-mono text-[10px] font-black px-3 py-1 rounded-full border border-amber-500/30 backdrop-blur-md">
+                <div className="absolute top-4 right-4 bg-white/90 dark:bg-slate-950/80 text-amber-800 dark:text-amber-400 font-mono text-[10px] font-black px-3 py-1 rounded-full border border-amber-400/40 shadow-sm backdrop-blur-md">
                   بوابة التعلم والابتكار البرمجي
                 </div>
               </div>
@@ -1694,7 +1694,7 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
                         type="button"
                         onClick={() => setIsPhotoStudioOpen(true)}
                         title="استوديو تعديل وتجميل الصورة بالذكاء الاصطناعي"
-                        className="absolute bottom-1 right-1 w-8 h-8 rounded-full bg-slate-950 border-2 border-amber-500 text-amber-400 hover:text-white hover:bg-amber-500 flex items-center justify-center transition-all shadow-lg cursor-pointer"
+                        className="absolute bottom-1 right-1 w-8 h-8 rounded-full bg-white dark:bg-slate-950 border-2 border-amber-500 text-amber-600 dark:text-amber-400 hover:text-white hover:bg-amber-500 flex items-center justify-center transition-all shadow-lg cursor-pointer"
                       >
                         <Camera className="w-4 h-4" />
                       </button>
@@ -1832,32 +1832,32 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
 
             {/* Profile Settings Modal */}
             {isProfileSettingsOpen && (
-              <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
-                <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-lg p-6 shadow-2xl relative space-y-4 my-8">
+              <div className="fixed inset-0 bg-slate-900/60 dark:bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
+                <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl w-full max-w-lg p-6 shadow-2xl relative space-y-4 my-8">
                   <button
                     type="button"
                     onClick={() => setIsProfileSettingsOpen(false)}
-                    className="absolute top-4 left-4 w-8 h-8 rounded-full bg-slate-950 border border-slate-800 text-slate-400 hover:text-white flex items-center justify-center transition-all"
+                    className="absolute top-4 left-4 w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 dark:bg-slate-950 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white flex items-center justify-center transition-all"
                   >
                     <X className="w-4 h-4" />
                   </button>
 
-                  <div className="flex items-center gap-2 pb-3 border-b border-slate-800">
-                    <Settings className="w-5 h-5 text-amber-400" />
+                  <div className="flex items-center gap-2 pb-3 border-b border-slate-200 dark:border-slate-800">
+                    <Settings className="w-5 h-5 text-amber-500 dark:text-amber-400" />
                     <div>
-                      <h3 className="font-black text-sm text-slate-100">تأمين البوابة وتحديث ملفك الشخصي</h3>
-                      <p className="text-[10px] text-slate-400">تحكم بكلمة المرور الخاصة بك واربط حسابات السوشيال الخاصة بك لعرضها في ملفك</p>
+                      <h3 className="font-black text-sm text-slate-900 dark:text-slate-100">تأمين البوابة وتحديث ملفك الشخصي</h3>
+                      <p className="text-[10px] text-slate-500 dark:text-slate-400">تحكم بكلمة المرور الخاصة بك واربط حسابات السوشيال الخاصة بك لعرضها في ملفك</p>
                     </div>
                   </div>
 
                   <form onSubmit={handleUpdateProfile} className="space-y-4 text-xs">
                     {/* Password */}
-                    <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-2.5">
-                      <span className="text-[11px] font-bold text-amber-400 flex items-center gap-1">
+                    <div className="bg-amber-50/40 dark:bg-slate-950 p-4 rounded-2xl border border-amber-200/80 dark:border-slate-800 space-y-2.5">
+                      <span className="text-[11px] font-bold text-amber-800 dark:text-amber-400 flex items-center gap-1">
                         <Lock className="w-3.5 h-3.5" />
                         تأمين الدخول (كلمة مرور خاصة بك):
                       </span>
-                      <p className="text-[10px] text-slate-500">
+                      <p className="text-[10px] text-slate-600 dark:text-slate-400">
                         إذا قمت بكتابة كلمة مرور هنا، سيطلبها النظام منك في كل مرة تقوم فيها بتسجيل الدخول بدلاً من الدخول المفتوح، وذلك لحماية حسابك ونقاطك وإنجازاتك من الآخرين.
                       </p>
                       <input
@@ -1865,73 +1865,73 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
                         placeholder="أدخل كلمة مرور قوية لتأمين الحساب..."
                         value={portalPasswordForm}
                         onChange={(e) => setPortalPasswordForm(e.target.value)}
-                        className="w-full bg-slate-900 border border-slate-750 rounded-xl px-3 py-2 text-slate-200 placeholder-slate-500 focus:outline-none focus:border-amber-500 font-mono"
+                        className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-amber-500 font-mono shadow-xs"
                       />
                     </div>
 
                     {/* Social links */}
                     <div className="space-y-3">
-                      <span className="text-[11px] font-bold text-slate-300 block">روابط حسابات التواصل الاجتماعي (الربط والتوثيق):</span>
+                      <span className="text-[11px] font-bold text-slate-800 dark:text-slate-300 block">روابط حسابات التواصل الاجتماعي (الربط والتوثيق):</span>
                       
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                         <div>
-                          <label className="block text-slate-400 mb-1">رابط Facebook</label>
+                          <label className="block text-slate-600 dark:text-slate-400 mb-1 font-medium">رابط Facebook</label>
                           <input
                             type="url"
                             placeholder="https://facebook.com/username"
                             value={facebookUrl}
                             onChange={(e) => setFacebookUrl(e.target.value)}
-                            className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-200 placeholder-slate-600 focus:outline-none focus:border-amber-500 font-mono text-[11px]"
+                            className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-600 focus:outline-none focus:border-amber-500 font-mono text-[11px]"
                           />
                         </div>
 
                         <div>
-                          <label className="block text-slate-400 mb-1">رابط LinkedIn</label>
+                          <label className="block text-slate-600 dark:text-slate-400 mb-1 font-medium">رابط LinkedIn</label>
                           <input
                             type="url"
                             placeholder="https://linkedin.com/in/username"
                             value={linkedinUrl}
                             onChange={(e) => setLinkedinUrl(e.target.value)}
-                            className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-200 placeholder-slate-600 focus:outline-none focus:border-amber-500 font-mono text-[11px]"
+                            className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-600 focus:outline-none focus:border-amber-500 font-mono text-[11px]"
                           />
                         </div>
 
                         <div>
-                          <label className="block text-slate-400 mb-1">رابط GitHub</label>
+                          <label className="block text-slate-600 dark:text-slate-400 mb-1 font-medium">رابط GitHub</label>
                           <input
                             type="url"
                             placeholder="https://github.com/username"
                             value={githubUrl}
                             onChange={(e) => setGithubUrl(e.target.value)}
-                            className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-200 placeholder-slate-600 focus:outline-none focus:border-amber-500 font-mono text-[11px]"
+                            className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-600 focus:outline-none focus:border-amber-500 font-mono text-[11px]"
                           />
                         </div>
 
                         <div>
-                          <label className="block text-slate-400 mb-1">رابط Instagram</label>
+                          <label className="block text-slate-600 dark:text-slate-400 mb-1 font-medium">رابط Instagram</label>
                           <input
                             type="url"
                             placeholder="https://instagram.com/username"
                             value={instagramUrl}
                             onChange={(e) => setInstagramUrl(e.target.value)}
-                            className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-200 placeholder-slate-600 focus:outline-none focus:border-amber-500 font-mono text-[11px]"
+                            className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-600 focus:outline-none focus:border-amber-500 font-mono text-[11px]"
                           />
                         </div>
                       </div>
                     </div>
 
-                    <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
+                    <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-200 dark:border-slate-800">
                       <button
                         type="button"
                         onClick={() => setIsProfileSettingsOpen(false)}
-                        className="px-4 py-2 rounded-xl bg-slate-950 hover:bg-slate-850 text-slate-400 font-bold"
+                        className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-950 dark:hover:bg-slate-850 text-slate-600 dark:text-slate-400 font-bold transition-colors"
                       >
                         إلغاء
                       </button>
                       <button
                         type="submit"
                         disabled={saveProfileLoading}
-                        className="px-5 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-400 text-slate-950 font-black flex items-center gap-1 shadow-md shadow-amber-500/10"
+                        className="px-5 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 hover:to-amber-300 text-slate-950 font-black flex items-center gap-1 shadow-md shadow-amber-500/20 active:scale-95 transition-all"
                       >
                         {saveProfileLoading ? 'جاري الحفظ والتوثيق...' : 'حفظ التغييرات والتأمين'}
                       </button>
@@ -2201,7 +2201,7 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
                 {speedBadgeWonAlert && (
                   <div className="bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500 text-slate-950 p-4 rounded-3xl shadow-2xl flex items-center justify-between animate-bounce">
                     <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 rounded-2xl bg-slate-950 text-amber-400 flex items-center justify-center text-2xl font-black shadow-lg">
+                      <div className="w-12 h-12 rounded-2xl bg-amber-600 dark:bg-slate-950 text-white dark:text-amber-400 flex items-center justify-center text-2xl font-black shadow-lg">
                         ⚡
                       </div>
                       <div>
@@ -3589,39 +3589,39 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
 
       {/* Notifications Panel */}
       {isNotificationsOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm" onClick={() => setIsNotificationsOpen(false)}>
-          <div className="bg-white rounded-3xl w-full max-w-sm shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
-            <div className="bg-slate-900 p-4 flex items-center justify-between text-white">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 dark:bg-slate-950/80 backdrop-blur-sm" onClick={() => setIsNotificationsOpen(false)}>
+          <div className="bg-white dark:bg-slate-900 rounded-3xl w-full max-w-sm shadow-2xl overflow-hidden border border-slate-200 dark:border-slate-800" onClick={e => e.stopPropagation()}>
+            <div className="bg-slate-50 dark:bg-slate-900 p-4 flex items-center justify-between text-slate-900 dark:text-white border-b border-slate-200 dark:border-slate-800">
               <div className="flex items-center gap-2">
-                <Bell className="w-5 h-5 text-amber-400" />
+                <Bell className="w-5 h-5 text-amber-500 dark:text-amber-400" />
                 <h3 className="font-bold">الإشعارات</h3>
               </div>
-              <button onClick={() => setIsNotificationsOpen(false)} className="text-slate-400 hover:text-white">
+              <button onClick={() => setIsNotificationsOpen(false)} className="text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white p-1 rounded-lg">
                 <X className="w-5 h-5" />
               </button>
             </div>
-            <div className="p-4 max-h-[400px] overflow-y-auto space-y-3 bg-slate-50">
-              <div className="bg-white p-3 rounded-xl border border-slate-100 shadow-sm">
+            <div className="p-4 max-h-[400px] overflow-y-auto space-y-3 bg-slate-50 dark:bg-slate-950/60">
+              <div className="bg-white dark:bg-slate-900 p-3 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xs">
                 <div className="flex items-start gap-3">
-                  <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center shrink-0">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                  <div className="w-8 h-8 rounded-full bg-emerald-100 dark:bg-emerald-950/50 flex items-center justify-center shrink-0">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
                   </div>
                   <div>
-                    <h4 className="text-sm font-bold text-slate-800">تم تقييم الواجب</h4>
-                    <p className="text-xs text-slate-600 mt-1">حصلت على 95 نقطة في واجب "مقدمة البرمجة"</p>
-                    <span className="text-[10px] text-slate-400 mt-2 block">منذ ساعتين</span>
+                    <h4 className="text-sm font-bold text-slate-900 dark:text-slate-100">تم تقييم الواجب</h4>
+                    <p className="text-xs text-slate-600 dark:text-slate-300 mt-1">حصلت على 95 نقطة في واجب "مقدمة البرمجة"</p>
+                    <span className="text-[10px] text-slate-400 dark:text-slate-500 mt-2 block">منذ ساعتين</span>
                   </div>
                 </div>
               </div>
-              <div className="bg-white p-3 rounded-xl border border-slate-100 shadow-sm">
+              <div className="bg-white dark:bg-slate-900 p-3 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xs">
                 <div className="flex items-start gap-3">
-                  <div className="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
-                    <Award className="w-4 h-4 text-amber-600" />
+                  <div className="w-8 h-8 rounded-full bg-amber-100 dark:bg-amber-950/50 flex items-center justify-center shrink-0">
+                    <Award className="w-4 h-4 text-amber-600 dark:text-amber-400" />
                   </div>
                   <div>
-                    <h4 className="text-sm font-bold text-slate-800">نقاط جديدة</h4>
-                    <p className="text-xs text-slate-600 mt-1">حصلت على 5 نجوم تميز من المدرب أحمد</p>
-                    <span className="text-[10px] text-slate-400 mt-2 block">منذ يومين</span>
+                    <h4 className="text-sm font-bold text-slate-900 dark:text-slate-100">نقاط جديدة</h4>
+                    <p className="text-xs text-slate-600 dark:text-slate-300 mt-1">حصلت على 5 نجوم تميز من المدرب أحمد</p>
+                    <span className="text-[10px] text-slate-400 dark:text-slate-500 mt-2 block">منذ يومين</span>
                   </div>
                 </div>
               </div>
@@ -3637,17 +3637,17 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
         title="المساعد الذكي والدعم الفوري"
       >
         <MessageSquare className="w-7 h-7" />
-        <span className="absolute -top-1 -right-1 w-4 h-4 bg-amber-500 rounded-full border-2 border-slate-950 flex items-center justify-center text-[9px] font-black animate-pulse">1</span>
-        <span className="absolute right-16 bg-slate-900 text-slate-100 text-xs px-3 py-1 rounded-xl shadow-lg whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none border border-slate-700">
+        <span className="absolute -top-1 -right-1 w-4 h-4 bg-amber-500 rounded-full border-2 border-white dark:border-slate-950 flex items-center justify-center text-[9px] font-black text-slate-950 animate-pulse">1</span>
+        <span className="absolute right-16 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 text-xs px-3 py-1 rounded-xl shadow-lg whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none border border-slate-200 dark:border-slate-700">
           المساعد الذكي والدعم الفوري 🤖
         </span>
       </button>
 
       {/* WhatsApp-like Chat Widget */}
       {isChatOpen && (
-        <div className="fixed bottom-4 left-4 z-50 w-80 sm:w-96 bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col h-[500px] max-h-[80vh]">
+        <div className="fixed bottom-4 left-4 z-50 w-80 sm:w-96 bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden flex flex-col h-[500px] max-h-[80vh]">
           {/* Header */}
-          <div className="bg-emerald-600 p-3 flex flex-col gap-2 text-white shrink-0">
+          <div className="bg-gradient-to-r from-emerald-600 to-teal-600 p-3 flex flex-col gap-2 text-white shrink-0 shadow-md">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center overflow-hidden">
@@ -3684,17 +3684,17 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
           </div>
           
           {/* Messages Area */}
-          <div className="flex-1 overflow-y-auto p-4 bg-[#efeae2] space-y-3" style={{ backgroundImage: 'url("https://w0.peakpx.com/wallpaper/818/148/HD-wallpaper-whatsapp-background-solid-color-thumbnail.jpg")', backgroundBlendMode: 'soft-light' }}>
+          <div className="flex-1 overflow-y-auto p-4 bg-[#efeae2] dark:bg-slate-950 space-y-3" style={{ backgroundImage: 'url("https://w0.peakpx.com/wallpaper/818/148/HD-wallpaper-whatsapp-background-solid-color-thumbnail.jpg")', backgroundBlendMode: 'soft-light' }}>
             <div className="flex justify-center">
-              <span className="bg-emerald-100 text-emerald-800 text-[10px] px-2 py-1 rounded-lg shadow-sm">اليوم - الدعم الفوري</span>
+              <span className="bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-200 text-[10px] px-2 py-1 rounded-lg shadow-sm border border-emerald-200 dark:border-emerald-800">اليوم - الدعم الفوري</span>
             </div>
             
             {/* Welcome Bot Message */}
             <div className="flex items-start gap-2 max-w-[85%]">
               <div className="w-7 h-7 rounded-full bg-emerald-600 text-white flex items-center justify-center shrink-0 text-xs font-bold">🤖</div>
-              <div className="bg-white text-slate-800 p-2.5 rounded-2xl rounded-tr-none shadow-sm text-sm relative">
+              <div className="bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 p-2.5 rounded-2xl rounded-tr-none shadow-sm text-sm relative border border-slate-200/50 dark:border-slate-700">
                 مرحباً بك يا بطل! أنا المساعد الذكي لمركز النجاح للتدريب والاستشارات. اطرح أي استفسار بخصوص جدولك، واجباتك، أو دوراتك وسأقوم بمساعدتك فوراً أو تحويله للإدارة!
-                <div className="text-left text-[9px] text-slate-400 mt-1">الآن</div>
+                <div className="text-left text-[9px] text-slate-400 dark:text-slate-500 mt-1">الآن</div>
               </div>
             </div>
 
@@ -3706,10 +3706,10 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
                   {!isOutgoing && (
                     <div className="w-7 h-7 rounded-full bg-amber-500 text-white flex items-center justify-center shrink-0 text-xs font-bold">🎯</div>
                   )}
-                  <div className={`p-2.5 rounded-2xl shadow-sm text-sm relative ${isOutgoing ? 'bg-[#dcf8c6] text-slate-800 rounded-tl-none' : 'bg-white text-slate-800 rounded-tr-none'}`}>
-                    <div className="font-bold text-[10px] text-amber-600 mb-0.5">{m.senderName || m.parentName}</div>
+                  <div className={`p-2.5 rounded-2xl shadow-sm text-sm relative ${isOutgoing ? 'bg-[#dcf8c6] dark:bg-emerald-950/80 text-slate-800 dark:text-emerald-100 rounded-tl-none border border-emerald-300 dark:border-emerald-800' : 'bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 rounded-tr-none border border-slate-200 dark:border-slate-700'}`}>
+                    <div className="font-bold text-[10px] text-amber-600 dark:text-amber-400 mb-0.5">{m.senderName || m.parentName}</div>
                     {m.message}
-                    <div className={`text-left text-[9px] mt-1 flex items-center gap-1 ${isOutgoing ? 'text-emerald-600 justify-end' : 'text-slate-400'}`}>
+                    <div className={`text-left text-[9px] mt-1 flex items-center gap-1 ${isOutgoing ? 'text-emerald-600 dark:text-emerald-400 justify-end' : 'text-slate-400 dark:text-slate-500'}`}>
                       {new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                       {isOutgoing && <Check className="w-3 h-3 text-blue-500" />}
                     </div>
@@ -3721,11 +3721,11 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
           </div>
           
           {/* Input Area */}
-          <div className="bg-slate-100 p-3 shrink-0 flex items-end gap-2">
+          <div className="bg-slate-100 dark:bg-slate-900 p-3 shrink-0 flex items-end gap-2 border-t border-slate-200 dark:border-slate-800">
             <textarea
               rows={1}
               placeholder="اكتب رسالتك هنا..."
-              className="chat-textarea flex-1 resize-none rounded-2xl border border-slate-200 focus:ring-1 focus:ring-emerald-500 py-2.5 px-4 text-sm shadow-sm text-slate-800 bg-white"
+              className="chat-textarea flex-1 resize-none rounded-2xl border border-slate-200 dark:border-slate-700 focus:ring-1 focus:ring-emerald-500 py-2.5 px-4 text-sm shadow-sm text-slate-800 dark:text-slate-100 bg-white dark:bg-slate-800 placeholder-slate-400 dark:placeholder-slate-500"
               style={{ maxHeight: '100px' }}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && !e.shiftKey) {
@@ -3873,10 +3873,10 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
       {/* Full Page Zoom Modal for Uploaded Pages */}
       {previewZoomImage && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="relative max-w-4xl max-h-[90vh] bg-slate-900 p-2 rounded-2xl border border-slate-700 shadow-2xl flex flex-col items-center">
+          <div className="relative max-w-4xl max-h-[90vh] bg-white dark:bg-slate-900 p-3 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-2xl flex flex-col items-center">
             <button
               onClick={() => setPreviewZoomImage(null)}
-              className="absolute top-3 left-3 bg-white/20 hover:bg-white/40 text-white p-2 rounded-xl backdrop-blur-md z-10 cursor-pointer"
+              className="absolute top-3 left-3 bg-slate-900/60 hover:bg-slate-900 text-white p-2 rounded-xl backdrop-blur-md z-10 cursor-pointer transition-colors"
             >
               <X className="w-5 h-5" />
             </button>

@@ -846,51 +846,51 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
           <div className="relative max-w-md w-full">
 
             {/* Main Compact Trainee Card */}
-            <div className="bg-gradient-to-b from-slate-900 via-purple-950 to-slate-900 border-2 border-amber-400 rounded-3xl w-full p-6 shadow-[0_0_50px_rgba(245,158,11,0.5)] relative text-right z-10">
+            <div className="bg-white dark:bg-slate-900 border-2 border-amber-400 rounded-3xl w-full p-6 shadow-2xl relative text-right z-10">
 
               <button 
                 type="button"
                 onClick={() => setSelectedTrainee(null)}
-                className="absolute top-4 left-4 p-2 text-slate-400 hover:text-white bg-slate-800/80 hover:bg-slate-700 rounded-full transition-colors cursor-pointer z-20"
+                className="absolute top-4 left-4 p-2 text-slate-400 hover:text-slate-600 dark:hover:text-white bg-slate-100 dark:bg-slate-800/80 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-full transition-colors cursor-pointer z-20"
               >
                 <X className="w-5 h-5" />
               </button>
 
               <div className="flex flex-col items-center text-center mb-6 pt-3">
                 <div className="relative mb-3">
-                  <div className="absolute -inset-3 rounded-full bg-gradient-to-tr from-amber-400 via-purple-500 to-cyan-400 blur-md animate-spin duration-1000"></div>
+                  <div className="absolute -inset-3 rounded-full bg-gradient-to-tr from-amber-400 via-purple-500 to-cyan-400 blur-md opacity-40 dark:opacity-70 animate-spin duration-1000"></div>
                   {selectedTrainee.avatar ? (
                     <img 
                       src={selectedTrainee.avatar} 
                       alt={selectedTrainee.name} 
-                      className="relative w-24 h-24 rounded-full object-cover border-4 border-amber-400 shadow-2xl"
+                      className="relative w-24 h-24 rounded-full object-cover border-4 border-amber-400 shadow-xl"
                     />
                   ) : (
-                    <div className="relative w-24 h-24 rounded-full bg-gradient-to-tr from-amber-500/90 via-purple-600/90 to-slate-900 text-white border-4 border-amber-300 flex flex-col items-center justify-center font-black shadow-2xl">
+                    <div className="relative w-24 h-24 rounded-full bg-gradient-to-tr from-amber-400 to-amber-600 text-white border-4 border-amber-300 flex flex-col items-center justify-center font-black shadow-xl">
                       <span className="text-2xl mb-0.5">{selectedTrainee.gender === 'female' ? '👩‍🎓' : '👨‍🎓'}</span>
-                      <span className="text-xs text-amber-300 font-bold">{selectedTrainee.initial}</span>
+                      <span className="text-xs text-white font-bold">{selectedTrainee.initial}</span>
                     </div>
                   )}
                 </div>
 
-                <h3 className="text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-amber-300 via-yellow-200 to-amber-400 mb-1 flex items-center gap-2 justify-center drop-shadow-sm">
+                <h3 className="text-2xl font-black text-slate-900 dark:text-transparent dark:bg-clip-text dark:bg-gradient-to-r dark:from-amber-300 dark:via-yellow-200 dark:to-amber-400 mb-1 flex items-center gap-2 justify-center drop-shadow-xs">
                   <span>👑</span>
                   <span>{selectedTrainee.name}</span>
                 </h3>
-                <p className="text-xs text-amber-300/90 font-bold mb-2">{selectedTrainee.course} {selectedTrainee.group ? `• ${selectedTrainee.group}` : ''}</p>
-                <span className="text-xs bg-gradient-to-r from-amber-500/20 to-purple-500/20 text-amber-300 font-black px-4 py-1.5 rounded-full border border-amber-400/60 shadow-lg">
+                <p className="text-xs text-amber-700 dark:text-amber-300/90 font-bold mb-2">{selectedTrainee.course} {selectedTrainee.group ? `• ${selectedTrainee.group}` : ''}</p>
+                <span className="text-xs bg-amber-50 dark:bg-gradient-to-r dark:from-amber-500/20 dark:to-purple-500/20 text-amber-800 dark:text-amber-300 font-black px-4 py-1.5 rounded-full border border-amber-300 dark:border-amber-400/60 shadow-xs">
                   {selectedTrainee.badge}
                 </span>
               </div>
 
               <div className="grid grid-cols-2 gap-3 mb-6">
-                <div className="bg-slate-950/80 p-3.5 rounded-2xl border border-amber-500/30 text-center shadow-inner">
-                  <span className="text-[10px] text-slate-400 block mb-1">رصيد النقاط والنجوم</span>
-                  <span className="text-lg font-black text-amber-400 font-mono">⭐ {selectedTrainee.points} نقطة</span>
+                <div className="bg-slate-50 dark:bg-slate-950/80 p-3.5 rounded-2xl border border-slate-200 dark:border-amber-500/30 text-center shadow-xs">
+                  <span className="text-[10px] text-slate-500 dark:text-slate-400 block mb-1">رصيد النقاط والنجوم</span>
+                  <span className="text-lg font-black text-amber-600 dark:text-amber-400 font-mono">⭐ {selectedTrainee.points} نقطة</span>
                 </div>
-                <div className="bg-slate-950/80 p-3.5 rounded-2xl border border-emerald-500/30 text-center shadow-inner">
-                  <span className="text-[10px] text-slate-400 block mb-1">مستوى الأداء والتقدير</span>
-                  <span className="text-xs font-black text-emerald-400 font-mono">{selectedTrainee?.grade || 'ممتاز'}</span>
+                <div className="bg-slate-50 dark:bg-slate-950/80 p-3.5 rounded-2xl border border-slate-200 dark:border-emerald-500/30 text-center shadow-xs">
+                  <span className="text-[10px] text-slate-500 dark:text-slate-400 block mb-1">مستوى الأداء والتقدير</span>
+                  <span className="text-xs font-black text-emerald-600 dark:text-emerald-400 font-mono">{selectedTrainee?.grade || 'ممتاز'}</span>
                 </div>
               </div>
 
@@ -898,7 +898,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
                 <button
                   type="button"
                   onClick={() => setSelectedTrainee(null)}
-                  className="w-full bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black py-3 rounded-2xl text-xs transition-all shadow-[0_0_25px_rgba(245,158,11,0.6)] cursor-pointer"
+                  className="w-full bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black py-3 rounded-2xl text-xs transition-all shadow-md shadow-amber-500/20 cursor-pointer"
                 >
                   إغلاق بطاقة المتدرب المتميز
                 </button>

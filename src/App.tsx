@@ -28,7 +28,6 @@ import { ProgramsView } from './views/ProgramsView';
 import { CoursesView } from './views/CoursesView';
 import { GroupsView } from './views/GroupsView';
 import { LabScheduleView } from './views/LabScheduleView';
-import { AttendanceView } from './views/AttendanceView';
 import { FinanceView } from './views/FinanceView';
 import { ExpensesView } from './views/ExpensesView';
 import { PointsView } from './views/PointsView';
@@ -245,7 +244,7 @@ const AppContent: React.FC = () => {
       case 'lab_schedule':
         return guard('lab_schedule', <LabScheduleView />);
       case 'attendance':
-        return guard('attendance', <AttendanceView />);
+        return guard('interactive', <InteractiveSessionsView initialTab="roster" />);
       case 'finance':
         return guard('finance', <FinanceView />);
       case 'expenses':

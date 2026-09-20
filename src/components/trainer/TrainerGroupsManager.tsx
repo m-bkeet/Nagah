@@ -160,27 +160,27 @@ export const TrainerGroupsManager: React.FC<TrainerGroupsManagerProps> = ({
   return (
     <div className="space-y-6 animate-fadeIn">
       {/* Header & Stats Bar */}
-      <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 shadow-sm dark:shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
-          <div className="w-12 h-12 rounded-2xl bg-indigo-600/30 border border-indigo-500/40 flex items-center justify-center text-indigo-300">
+          <div className="w-12 h-12 rounded-2xl bg-indigo-50 dark:bg-indigo-600/30 border border-indigo-200 dark:border-indigo-500/40 flex items-center justify-center text-indigo-600 dark:text-indigo-300">
             <Users className="w-6 h-6" />
           </div>
           <div>
-            <h2 className="text-base font-black text-white">إدارة المجموعات المخصصة والطلاب</h2>
-            <p className="text-xs text-slate-400">
+            <h2 className="text-base font-black text-slate-900 dark:text-white">إدارة المجموعات المخصصة والطلاب</h2>
+            <p className="text-xs text-slate-600 dark:text-slate-400">
               عرض مجموعاتك التدريبية، تعديل القاعة والواتساب، ونقل الطلاب بين المجموعات المتاحة للدورة.
             </p>
           </div>
         </div>
 
         <div className="flex items-center gap-3 text-xs">
-          <div className="px-3 py-2 rounded-2xl bg-slate-950 border border-slate-800 text-center">
-            <span className="text-slate-400 block text-[10px]">مجموعاتك النشطة</span>
-            <span className="text-indigo-400 font-mono font-black text-sm">{trainerGroups.length} مجموعة</span>
+          <div className="px-3 py-2 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-center shadow-xs">
+            <span className="text-slate-500 dark:text-slate-400 block text-[10px]">مجموعاتك النشطة</span>
+            <span className="text-indigo-600 dark:text-indigo-400 font-mono font-black text-sm">{trainerGroups.length} مجموعة</span>
           </div>
-          <div className="px-3 py-2 rounded-2xl bg-slate-950 border border-slate-800 text-center">
-            <span className="text-slate-400 block text-[10px]">إجمالي الطلاب</span>
-            <span className="text-emerald-400 font-mono font-black text-sm">{trainees.length} طالب</span>
+          <div className="px-3 py-2 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-center shadow-xs">
+            <span className="text-slate-500 dark:text-slate-400 block text-[10px]">إجمالي الطلاب</span>
+            <span className="text-emerald-600 dark:text-emerald-400 font-mono font-black text-sm">{trainees.length} طالب</span>
           </div>
         </div>
       </div>
@@ -189,10 +189,10 @@ export const TrainerGroupsManager: React.FC<TrainerGroupsManagerProps> = ({
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Column 1: Groups List Cards */}
         <div className="space-y-3">
-          <h3 className="text-xs font-bold text-slate-400 px-1">المجموعات التدريبية المتاحة ({trainerGroups.length}):</h3>
+          <h3 className="text-xs font-bold text-slate-600 dark:text-slate-400 px-1">المجموعات التدريبية المتاحة ({trainerGroups.length}):</h3>
 
           {trainerGroups.length === 0 ? (
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 text-center text-slate-400 text-xs font-bold">
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 text-center text-slate-500 dark:text-slate-400 text-xs font-bold">
               لا توجد مجموعات مسندة لك حالياً.
             </div>
           ) : (
@@ -207,48 +207,48 @@ export const TrainerGroupsManager: React.FC<TrainerGroupsManagerProps> = ({
                   onClick={() => setSelectedGroupId(g.id)}
                   className={`p-4 rounded-2xl border transition-all cursor-pointer space-y-3 ${
                     isSelected
-                      ? 'bg-indigo-950/60 border-indigo-500 shadow-lg shadow-indigo-600/20 scale-[1.01]'
-                      : 'bg-slate-900/80 border-slate-800 hover:border-slate-700'
+                      ? 'bg-indigo-50/80 dark:bg-indigo-950/60 border-indigo-500 shadow-md shadow-indigo-600/10 scale-[1.01]'
+                      : 'bg-white dark:bg-slate-900/80 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 shadow-xs'
                   }`}
                 >
                   <div className="flex items-center justify-between">
-                    <h4 className="font-black text-sm text-white">{g.name}</h4>
-                    <span className="px-2.5 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 text-[10px] font-mono font-bold border border-indigo-500/30">
+                    <h4 className="font-black text-sm text-slate-900 dark:text-white">{g.name}</h4>
+                    <span className="px-2.5 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 text-[10px] font-mono font-bold border border-indigo-200 dark:border-indigo-500/30">
                       {gTraineesCount} طالب
                     </span>
                   </div>
 
-                  <div className="space-y-1 text-xs text-slate-300">
-                    <div className="flex items-center gap-1.5 text-indigo-300 font-bold">
+                  <div className="space-y-1 text-xs text-slate-600 dark:text-slate-300">
+                    <div className="flex items-center gap-1.5 text-indigo-700 dark:text-indigo-300 font-bold">
                       <BookOpen className="w-3.5 h-3.5 shrink-0" />
                       <span>{crs?.name || 'الدورة التدريبية'}</span>
                     </div>
 
-                    <div className="flex items-center gap-1.5 text-slate-400 text-[11px]">
+                    <div className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400 text-[11px]">
                       <Clock className="w-3.5 h-3.5 shrink-0" />
                       <span>{g.days?.join('، ') || 'أيام المحاضرات'} ({formatTimeAMPM(g.startTime || '16:00')} - {formatTimeAMPM(g.endTime || '18:00')})</span>
                     </div>
 
-                    <div className="flex items-center gap-1.5 text-slate-400 text-[11px]">
+                    <div className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400 text-[11px]">
                       <MapPin className="w-3.5 h-3.5 shrink-0" />
                       <span>القاعة/المعمل: {g.roomName || g.hallName || 'معمل الحاسب الرئيسي'}</span>
                     </div>
                   </div>
 
-                  <div className="pt-2 border-t border-slate-800 flex items-center justify-between text-[11px]">
+                  <div className="pt-2 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between text-[11px]">
                     {g.whatsappGroupLink ? (
                       <a
                         href={g.whatsappGroupLink}
                         target="_blank"
                         rel="noreferrer"
                         onClick={(e) => e.stopPropagation()}
-                        className="text-emerald-400 font-bold hover:underline flex items-center gap-1"
+                        className="text-emerald-600 dark:text-emerald-400 font-bold hover:underline flex items-center gap-1"
                       >
                         <MessageCircle className="w-3.5 h-3.5" />
                         <span>جروب الواتساب</span>
                       </a>
                     ) : (
-                      <span className="text-slate-500">لا يوجد رابط واتساب</span>
+                      <span className="text-slate-400 dark:text-slate-500">لا يوجد رابط واتساب</span>
                     )}
 
                     <button
@@ -256,9 +256,9 @@ export const TrainerGroupsManager: React.FC<TrainerGroupsManagerProps> = ({
                         e.stopPropagation();
                         handleOpenEditGroup(g);
                       }}
-                      className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-[11px] font-bold flex items-center gap-1 transition-colors"
+                      className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-[11px] font-bold flex items-center gap-1 transition-colors cursor-pointer"
                     >
-                      <Edit3 className="w-3 h-3 text-amber-300" />
+                      <Edit3 className="w-3 h-3 text-amber-500 dark:text-amber-300" />
                       <span>تعديل</span>
                     </button>
                   </div>
@@ -271,35 +271,35 @@ export const TrainerGroupsManager: React.FC<TrainerGroupsManagerProps> = ({
         {/* Column 2 & 3: Selected Group Roster & Student Transfer Controls */}
         <div className="lg:col-span-2 space-y-4">
           {activeGroup ? (
-            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-xl space-y-4">
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 shadow-sm dark:shadow-xl space-y-4">
               {/* Active Group Header */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-800 pb-4">
                 <div>
                   <div className="flex items-center gap-2">
-                    <h3 className="text-base font-black text-white">{activeGroup.name}</h3>
-                    <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-xs font-mono font-bold border border-emerald-500/30">
+                    <h3 className="text-base font-black text-slate-900 dark:text-white">{activeGroup.name}</h3>
+                    <span className="px-2.5 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 text-xs font-mono font-bold border border-emerald-200 dark:border-emerald-500/30">
                       {filteredTrainees.length} طالب مسجل
                     </span>
                   </div>
-                  <p className="text-xs text-slate-400 mt-1">
-                    دورة: <span className="text-indigo-300 font-bold">{activeCourse?.name}</span> | المعمل: {activeGroup.roomName || activeGroup.hallName || 'المعمل الرئيسي'}
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                    دورة: <span className="text-indigo-600 dark:text-indigo-300 font-bold">{activeCourse?.name}</span> | المعمل: {activeGroup.roomName || activeGroup.hallName || 'المعمل الرئيسي'}
                   </p>
                 </div>
 
                 <div className="flex items-center gap-2">
                   <div className="relative flex-1 sm:w-48">
-                    <Search className="w-3.5 h-3.5 text-slate-500 absolute right-3 top-2.5" />
+                    <Search className="w-3.5 h-3.5 text-slate-400 absolute right-3 top-2.5" />
                     <input
                       type="text"
                       placeholder="بحث عن طالب..."
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-700 rounded-xl pr-8 pl-3 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-indigo-500"
+                      className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl pr-8 pl-3 py-1.5 text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-indigo-500"
                     />
                   </div>
                   <button
                     onClick={() => handleOpenEditGroup(activeGroup)}
-                    className="px-3 py-1.5 bg-indigo-600/30 hover:bg-indigo-600 text-indigo-200 hover:text-white rounded-xl text-xs font-bold border border-indigo-500/40 flex items-center gap-1 transition-all"
+                    className="px-3 py-1.5 bg-indigo-50 dark:bg-indigo-600/30 hover:bg-indigo-100 dark:hover:bg-indigo-600 text-indigo-700 dark:text-indigo-200 hover:text-indigo-900 dark:hover:text-white rounded-xl text-xs font-bold border border-indigo-200 dark:border-indigo-500/40 flex items-center gap-1 transition-all cursor-pointer"
                   >
                     <Edit3 className="w-3.5 h-3.5" />
                     <span>تعديل بيانات القاعة</span>
@@ -309,31 +309,31 @@ export const TrainerGroupsManager: React.FC<TrainerGroupsManagerProps> = ({
 
               {/* Roster Table / List */}
               {filteredTrainees.length === 0 ? (
-                <div className="py-12 text-center text-slate-500 space-y-2">
-                  <Users className="w-10 h-10 mx-auto text-slate-600" />
-                  <p className="text-xs font-bold text-slate-400">لا يوجد طلاب مطابقون للبحث في هذه المجموعة.</p>
+                <div className="py-12 text-center text-slate-400 dark:text-slate-500 space-y-2">
+                  <Users className="w-10 h-10 mx-auto text-slate-300 dark:text-slate-600" />
+                  <p className="text-xs font-bold text-slate-500 dark:text-slate-400">لا يوجد طلاب مطابقون للبحث في هذه المجموعة.</p>
                 </div>
               ) : (
                 <div className="space-y-3">
                   {filteredTrainees.map(st => (
                     <div
                       key={st.id}
-                      className="bg-slate-950/70 border border-slate-800 hover:border-slate-700 rounded-2xl p-3 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-all"
+                      className="bg-slate-50/90 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 rounded-2xl p-3 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-all shadow-xs"
                     >
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-indigo-600/20 border border-indigo-500/30 flex items-center justify-center text-indigo-300 font-black text-sm shrink-0">
+                        <div className="w-10 h-10 rounded-full bg-indigo-100 dark:bg-indigo-600/20 border border-indigo-200 dark:border-indigo-500/30 flex items-center justify-center text-indigo-700 dark:text-indigo-300 font-black text-sm shrink-0">
                           {st.fullName?.slice(0, 1)}
                         </div>
                         <div>
                           <div className="flex items-center gap-2">
-                            <h4 className="font-bold text-sm text-slate-100">{st.fullName}</h4>
-                            <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 font-bold">
+                            <h4 className="font-bold text-sm text-slate-900 dark:text-slate-100">{st.fullName}</h4>
+                            <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold">
                               {st.code}
                             </span>
                           </div>
-                          <div className="flex items-center gap-3 text-[11px] text-slate-400 mt-1">
-                            {st.phone && <span>الهاتف: <span className="font-mono text-slate-200">{st.phone}</span></span>}
-                            {st.parentPhone && <span>ولي الأمر: <span className="font-mono text-slate-200">{st.parentPhone}</span></span>}
+                          <div className="flex items-center gap-3 text-[11px] text-slate-500 dark:text-slate-400 mt-1">
+                            {st.phone && <span>الهاتف: <span className="font-mono text-slate-700 dark:text-slate-200">{st.phone}</span></span>}
+                            {st.parentPhone && <span>ولي الأمر: <span className="font-mono text-slate-700 dark:text-slate-200">{st.parentPhone}</span></span>}
                           </div>
                         </div>
                       </div>
@@ -344,7 +344,7 @@ export const TrainerGroupsManager: React.FC<TrainerGroupsManagerProps> = ({
                           setTransferringStudent(st);
                           setTargetGroupId(availableTargetGroups[0]?.id || '');
                         }}
-                        className="px-3 py-2 rounded-xl bg-amber-500/20 hover:bg-amber-500 text-amber-200 hover:text-slate-950 text-xs font-bold border border-amber-500/30 transition-all flex items-center justify-center gap-1.5 shrink-0 cursor-pointer"
+                        className="px-3 py-2 rounded-xl bg-amber-50 dark:bg-amber-500/20 hover:bg-amber-500 text-amber-700 dark:text-amber-200 hover:text-white dark:hover:text-slate-950 text-xs font-bold border border-amber-200 dark:border-amber-500/30 transition-all flex items-center justify-center gap-1.5 shrink-0 cursor-pointer"
                         title="نقل أو تبديل الطالب إلى مجموعة أخرى نفس الدورة"
                       >
                         <ArrowRightLeft className="w-3.5 h-3.5" />
@@ -356,7 +356,7 @@ export const TrainerGroupsManager: React.FC<TrainerGroupsManagerProps> = ({
               )}
             </div>
           ) : (
-            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-8 text-center text-slate-400 text-xs font-bold">
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-8 text-center text-slate-500 dark:text-slate-400 text-xs font-bold">
               يرجى اختيار مجموعة من القائمة على اليمين لاستعراض طلابها.
             </div>
           )}
@@ -365,16 +365,16 @@ export const TrainerGroupsManager: React.FC<TrainerGroupsManagerProps> = ({
 
       {/* MODAL 1: EDIT GROUP DETAILS */}
       {isEditingGroup && editingGroupData && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-fadeIn">
-          <div className="bg-slate-900 border border-indigo-500/30 rounded-3xl shadow-2xl max-w-md w-full p-6 text-slate-100 space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <h3 className="font-black text-sm text-white flex items-center gap-2">
-                <Edit3 className="w-4 h-4 text-indigo-400" />
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 dark:bg-slate-950/80 backdrop-blur-md animate-fadeIn">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-indigo-500/30 rounded-3xl shadow-2xl max-w-md w-full p-6 text-slate-900 dark:text-slate-100 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
+              <h3 className="font-black text-sm text-slate-900 dark:text-white flex items-center gap-2">
+                <Edit3 className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
                 <span>تعديل معلومات القاعة ورابط الواتساب</span>
               </h3>
               <button
                 onClick={() => setIsEditingGroup(false)}
-                className="p-1 rounded-lg bg-slate-800 text-slate-400 hover:text-white"
+                className="p-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -382,44 +382,44 @@ export const TrainerGroupsManager: React.FC<TrainerGroupsManagerProps> = ({
 
             <div className="space-y-3">
               <div>
-                <label className="block text-xs text-slate-300 font-bold mb-1">اسم القاعة / المعمل:</label>
+                <label className="block text-xs text-slate-700 dark:text-slate-300 font-bold mb-1">اسم القاعة / المعمل:</label>
                 <input
                   type="text"
                   placeholder="مثال: معمل البرمجة الحسابية 2"
                   value={editingGroupData.roomName}
                   onChange={(e) => setEditingGroupData({ ...editingGroupData, roomName: e.target.value })}
-                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-indigo-500"
+                  className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-indigo-500 shadow-xs"
                 />
               </div>
 
               <div>
-                <label className="block text-xs text-slate-300 font-bold mb-1">رابط جروب الواتساب:</label>
+                <label className="block text-xs text-slate-700 dark:text-slate-300 font-bold mb-1">رابط جروب الواتساب:</label>
                 <input
                   type="url"
                   placeholder="https://chat.whatsapp.com/..."
                   value={editingGroupData.whatsappGroupLink}
                   onChange={(e) => setEditingGroupData({ ...editingGroupData, whatsappGroupLink: e.target.value })}
-                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-100 font-mono focus:outline-none focus:border-indigo-500"
+                  className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 font-mono focus:outline-none focus:border-indigo-500 shadow-xs"
                 />
               </div>
 
               <div>
-                <label className="block text-xs text-slate-300 font-bold mb-1">ملاحظات أو تنويهات المجموعة:</label>
+                <label className="block text-xs text-slate-700 dark:text-slate-300 font-bold mb-1">ملاحظات أو تنويهات المجموعة:</label>
                 <textarea
                   rows={2}
                   placeholder="مثال: يرجى حضور الطلاب مع أجهزة اللابتوب الشخصية يوم الأربعاء..."
                   value={editingGroupData.notes}
                   onChange={(e) => setEditingGroupData({ ...editingGroupData, notes: e.target.value })}
-                  className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-xs text-slate-100 focus:outline-none focus:border-indigo-500 resize-none"
+                  className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl p-3 text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-indigo-500 resize-none shadow-xs"
                 />
               </div>
             </div>
 
-            <div className="flex justify-end gap-2 pt-2 border-t border-slate-800">
+            <div className="flex justify-end gap-2 pt-2 border-t border-slate-200 dark:border-slate-800">
               <button
                 type="button"
                 onClick={() => setIsEditingGroup(false)}
-                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-bold"
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-bold cursor-pointer"
               >
                 إلغاء
               </button>
@@ -427,7 +427,7 @@ export const TrainerGroupsManager: React.FC<TrainerGroupsManagerProps> = ({
                 type="button"
                 onClick={handleSaveGroupEdit}
                 disabled={isSavingGroup}
-                className="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-black shadow-lg shadow-indigo-600/30 flex items-center gap-1.5"
+                className="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-black shadow-lg shadow-indigo-600/30 flex items-center gap-1.5 cursor-pointer"
               >
                 {isSavingGroup ? 'جاري الحفظ...' : 'حفظ التغييرات'}
               </button>
@@ -438,39 +438,39 @@ export const TrainerGroupsManager: React.FC<TrainerGroupsManagerProps> = ({
 
       {/* MODAL 2: TRANSFER STUDENT */}
       {transferringStudent && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-fadeIn">
-          <div className="bg-slate-900 border border-amber-500/30 rounded-3xl shadow-2xl max-w-md w-full p-6 text-slate-100 space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <h3 className="font-black text-sm text-white flex items-center gap-2">
-                <ArrowRightLeft className="w-4 h-4 text-amber-400" />
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 dark:bg-slate-950/80 backdrop-blur-md animate-fadeIn">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-amber-500/30 rounded-3xl shadow-2xl max-w-md w-full p-6 text-slate-900 dark:text-slate-100 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
+              <h3 className="font-black text-sm text-slate-900 dark:text-white flex items-center gap-2">
+                <ArrowRightLeft className="w-4 h-4 text-amber-600 dark:text-amber-400" />
                 <span>نقل / تبديل الطالب إلى مجموعة جديدة</span>
               </h3>
               <button
                 onClick={() => setTransferringStudent(null)}
-                className="p-1 rounded-lg bg-slate-800 text-slate-400 hover:text-white"
+                className="p-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <div className="bg-slate-950 p-3 rounded-2xl border border-slate-800 text-xs space-y-1">
-              <div>الطالب: <span className="font-bold text-amber-300">{transferringStudent.fullName}</span> ({transferringStudent.code})</div>
-              <div className="text-slate-400">المجموعة الحالية: <span className="font-semibold text-slate-200">{activeGroup?.name}</span></div>
+            <div className="bg-slate-50 dark:bg-slate-950 p-3 rounded-2xl border border-slate-200 dark:border-slate-800 text-xs space-y-1">
+              <div>الطالب: <span className="font-bold text-amber-600 dark:text-amber-300">{transferringStudent.fullName}</span> ({transferringStudent.code})</div>
+              <div className="text-slate-500 dark:text-slate-400">المجموعة الحالية: <span className="font-semibold text-slate-700 dark:text-slate-200">{activeGroup?.name}</span></div>
             </div>
 
             <div className="space-y-3">
               <div>
-                <label className="block text-xs text-amber-300 font-bold mb-1">اختيار المجموعة المستهدفة للنقل *</label>
+                <label className="block text-xs text-amber-700 dark:text-amber-300 font-bold mb-1">اختيار المجموعة المستهدفة للنقل *</label>
                 {availableTargetGroups.length === 0 ? (
-                  <p className="text-xs text-rose-400 font-bold">لا توجد مجموعات أخرى متاحة لنفس الدورة التدريبية.</p>
+                  <p className="text-xs text-rose-500 font-bold">لا توجد مجموعات أخرى متاحة لنفس الدورة التدريبية.</p>
                 ) : (
                   <select
                     value={targetGroupId}
                     onChange={(e) => setTargetGroupId(e.target.value)}
-                    className="w-full bg-slate-950 border border-amber-500/50 rounded-xl px-3 py-2 text-xs font-bold text-amber-200 focus:outline-none"
+                    className="w-full bg-slate-50 dark:bg-slate-950 border border-amber-300 dark:border-amber-500/50 rounded-xl px-3 py-2 text-xs font-bold text-amber-800 dark:text-amber-200 focus:outline-none shadow-xs"
                   >
                     {availableTargetGroups.map(g => (
-                      <option key={g.id} value={g.id}>
+                      <option key={g.id} value={g.id} className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">
                         {g.name} - ({g.days?.join('، ') || 'مواعيد حرة'})
                       </option>
                     ))}
@@ -479,22 +479,22 @@ export const TrainerGroupsManager: React.FC<TrainerGroupsManagerProps> = ({
               </div>
 
               <div>
-                <label className="block text-xs text-slate-300 font-bold mb-1">سبب النقل / ملاحظات (اختياري):</label>
+                <label className="block text-xs text-slate-700 dark:text-slate-300 font-bold mb-1">سبب النقل / ملاحظات (اختياري):</label>
                 <input
                   type="text"
                   placeholder="مثال: تغيير مواعيد الدروس المدرسية للطالب..."
                   value={transferReason}
                   onChange={(e) => setTransferReason(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-amber-500"
+                  className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-amber-500 shadow-xs"
                 />
               </div>
             </div>
 
-            <div className="flex justify-end gap-2 pt-2 border-t border-slate-800">
+            <div className="flex justify-end gap-2 pt-2 border-t border-slate-200 dark:border-slate-800">
               <button
                 type="button"
                 onClick={() => setTransferringStudent(null)}
-                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-bold"
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-bold cursor-pointer"
               >
                 إلغاء
               </button>
@@ -502,7 +502,7 @@ export const TrainerGroupsManager: React.FC<TrainerGroupsManagerProps> = ({
                 type="button"
                 onClick={handleTransferStudent}
                 disabled={isTransferring || availableTargetGroups.length === 0}
-                className="px-5 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-xl text-xs font-black shadow-lg shadow-amber-500/20 flex items-center gap-1.5 disabled:opacity-50"
+                className="px-5 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-xl text-xs font-black shadow-lg shadow-amber-500/20 flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
               >
                 {isTransferring ? 'جاري النقل...' : 'تأكيد النقل المباشر'}
               </button>

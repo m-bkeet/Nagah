@@ -2019,11 +2019,11 @@ export const HomeworksView: React.FC = () => {
       {/* MODAL 5: FULL LIVE KAHOOT STUDIO HOST MODAL              */}
       {/* ======================================================== */}
       {isLiveKahootStudioOpen && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center p-2 sm:p-4 bg-slate-950/90 backdrop-blur-xl overflow-y-auto">
-          <div className="max-w-6xl w-full bg-slate-900 border border-purple-800/80 rounded-3xl p-4 sm:p-6 my-auto shadow-2xl relative">
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-2 sm:p-4 bg-slate-950/70 backdrop-blur-xl overflow-y-auto">
+          <div className="max-w-6xl w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-purple-800/80 rounded-3xl p-4 sm:p-6 my-auto shadow-2xl relative">
             <button
               onClick={() => setIsLiveKahootStudioOpen(false)}
-              className="absolute top-6 left-6 z-50 w-9 h-9 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center transition-colors"
+              className="absolute top-6 left-6 z-50 w-9 h-9 rounded-full bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 flex items-center justify-center transition-colors cursor-pointer"
             >
               <X className="w-5 h-5" />
             </button>

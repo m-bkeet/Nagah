@@ -270,7 +270,7 @@ export const NextLectureCard: React.FC<NextLectureCardProps> = ({
           <div className="flex flex-col sm:flex-row md:flex-col items-stretch sm:items-center gap-2 shrink-0">
             <button
               onClick={() => onStartLive(nextGroup)}
-              className="flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-slate-950 hover:bg-slate-900 text-amber-400 hover:text-amber-300 border border-amber-500/40 font-black text-sm shadow-lg hover:shadow-amber-500/20 transition-all active:scale-95"
+              className="flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-slate-950/90 hover:bg-slate-900 text-amber-300 hover:text-amber-200 border border-amber-500/40 font-black text-sm shadow-lg hover:shadow-amber-500/20 transition-all active:scale-95 cursor-pointer"
             >
               <Video className="w-4 h-4 text-red-400 animate-pulse" />
               <span>بدء بث المحاضرة لايف (Zoom)</span>
@@ -280,7 +280,7 @@ export const NextLectureCard: React.FC<NextLectureCardProps> = ({
               id="btn-end-session-celebrate"
               onClick={handleOpenConfirm}
               disabled={isEndingSession}
-              className={`flex items-center justify-center gap-2 px-5 py-3 rounded-xl font-black text-sm shadow-lg transition-all active:scale-95 ${
+              className={`flex items-center justify-center gap-2 px-5 py-3 rounded-xl font-black text-sm shadow-lg transition-all active:scale-95 cursor-pointer ${
                 isEndingSession 
                   ? 'bg-emerald-900/50 text-emerald-400 border border-emerald-500/20'
                   : 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white border border-emerald-400/30 shadow-emerald-500/20 hover:shadow-emerald-500/30'
@@ -295,21 +295,21 @@ export const NextLectureCard: React.FC<NextLectureCardProps> = ({
 
       {/* Confirmation Dialog Modal */}
       {showConfirmModal && (
-        <div className="fixed inset-0 z-[99995] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm" dir="rtl">
-          <div className="bg-slate-900 border-2 border-amber-500/50 rounded-3xl p-6 max-w-md w-full text-center space-y-4 shadow-2xl">
-            <div className="w-16 h-16 rounded-2xl bg-amber-500/20 border border-amber-400/40 text-amber-400 flex items-center justify-center mx-auto">
+        <div className="fixed inset-0 z-[99995] flex items-center justify-center p-4 bg-slate-950/70 dark:bg-slate-950/80 backdrop-blur-sm" dir="rtl">
+          <div className="bg-white dark:bg-slate-900 border-2 border-amber-500/50 rounded-3xl p-6 max-w-md w-full text-center space-y-4 shadow-2xl animate-fade-in">
+            <div className="w-16 h-16 rounded-2xl bg-amber-50 dark:bg-amber-500/20 border border-amber-300 dark:border-amber-400/40 text-amber-600 dark:text-amber-400 flex items-center justify-center mx-auto">
               <PartyPopper className="w-8 h-8 animate-bounce" />
             </div>
-            <h3 className="text-lg font-black text-white">
+            <h3 className="text-lg font-black text-slate-900 dark:text-white">
               تأكيد إنهاء المحاضرة والاحتفال بالطلاب 🎉
             </h3>
-            <p className="text-xs text-slate-300 leading-relaxed">
+            <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
               هل أنت متأكد من إنهاء الحصة الآن؟ سيتم إرسال إشعار الاحتفال والتصفيق وإطلاق الألعاب النارية فوراً لجميع الطلاب وأولياء الأمور المرتبطين بهذه المجموعة.
             </p>
 
             {starWinner && (
-              <div className="p-3 bg-amber-950/40 border border-amber-500/30 rounded-xl text-amber-300 text-xs font-bold flex items-center justify-center gap-2">
-                <Sparkles className="w-4 h-4" />
+              <div className="p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-500/30 rounded-xl text-amber-700 dark:text-amber-300 text-xs font-bold flex items-center justify-center gap-2">
+                <Sparkles className="w-4 h-4 text-amber-500" />
                 <span>سيتم إعلان البطل: {starWinner.name} (نجم الجلسة)</span>
               </div>
             )}
@@ -317,13 +317,13 @@ export const NextLectureCard: React.FC<NextLectureCardProps> = ({
             <div className="flex items-center gap-3 pt-2">
               <button
                 onClick={handleConfirmEndSession}
-                className="flex-1 py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white font-black text-xs shadow-lg active:scale-95 transition-all"
+                className="flex-1 py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white font-black text-xs shadow-lg active:scale-95 transition-all cursor-pointer"
               >
                 نعم، إنهاء الحصة والاحتفال 🚀
               </button>
               <button
                 onClick={() => setShowConfirmModal(false)}
-                className="flex-1 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs border border-white/10"
+                className="flex-1 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold text-xs border border-slate-200 dark:border-white/10 cursor-pointer"
               >
                 إلغاء
               </button>

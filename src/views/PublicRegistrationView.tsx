@@ -236,11 +236,11 @@ export const PublicRegistrationView: React.FC<PublicRegistrationViewProps> = ({ 
 
 
     return (
-      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4 font-sans relative overflow-hidden" dir="rtl">
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col items-center justify-center p-4 font-sans relative overflow-hidden transition-colors" dir="rtl">
         {/* Glow effect */}
         <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-amber-500/15 rounded-full blur-3xl pointer-events-none" />
 
-        <div className="bg-slate-900/95 border border-slate-800 rounded-3xl p-6 md:p-8 max-w-lg w-full shadow-2xl space-y-5 relative z-10 backdrop-blur-xl">
+        <div className="glass-card-3d bg-white/95 dark:bg-slate-900/95 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 md:p-8 max-w-lg w-full shadow-2xl space-y-5 relative z-10 backdrop-blur-xl">
           <div className="text-center space-y-1.5">
             {result.alreadyRegistered ? (
               <div className="w-14 h-14 bg-amber-500/20 text-amber-400 rounded-full flex items-center justify-center mx-auto border border-amber-500/40 shadow-lg shadow-amber-500/10">
@@ -251,10 +251,10 @@ export const PublicRegistrationView: React.FC<PublicRegistrationViewProps> = ({ 
                 <CheckCircle2 className="w-8 h-8" />
               </div>
             )}
-            <h2 className="text-xl md:text-2xl font-black text-white">
+            <h2 className="text-xl md:text-2xl font-black text-slate-900 dark:text-white">
               {result.alreadyRegistered ? 'تم التسجيل من قبل مسبقاً!' : 'تم التسجيل وتأكيد العضوية بنجاح!'}
             </h2>
-            <p className="text-slate-300 text-xs">
+            <p className="text-slate-600 dark:text-slate-300 text-xs">
               {result.alreadyRegistered 
                 ? 'أهلاً بك مجدداً! بياناتك وكودك مسجلان بالفعل لدينا بالنظام. يمكنك استخدام بطاقتك أدناه:' 
                 : 'تم إنشاء بطاقتك وتسكينك تلقائياً في المجموعة المناسبة.'}
@@ -442,13 +442,13 @@ export const PublicRegistrationView: React.FC<PublicRegistrationViewProps> = ({ 
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 flex flex-col items-center py-10 px-4 font-sans relative overflow-hidden" dir="rtl">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col items-center py-10 px-4 font-sans relative overflow-hidden transition-colors" dir="rtl">
       {/* Top action controls */}
       <div className="w-full max-w-xl flex items-center justify-between mb-4 z-20">
         {onBack ? (
           <button
             onClick={onBack}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-700 text-slate-300 hover:text-white text-xs font-bold transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:text-slate-950 dark:hover:text-white text-xs font-bold transition-colors shadow-xs"
           >
             <ArrowRight className="w-4 h-4" />
             <span>العودة للرئيسية</span>
@@ -458,7 +458,7 @@ export const PublicRegistrationView: React.FC<PublicRegistrationViewProps> = ({ 
       </div>
 
       {/* Background Glow */}
-      <div className="absolute top-10 left-1/2 -translate-x-1/2 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute top-10 left-1/2 -translate-x-1/2 w-96 h-96 bg-amber-500/10 dark:bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
 
       <div className="max-w-xl w-full space-y-5 relative z-10">
         {/* Top Header */}
@@ -466,21 +466,21 @@ export const PublicRegistrationView: React.FC<PublicRegistrationViewProps> = ({ 
           <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-br from-amber-400 to-amber-600 shadow-xl shadow-amber-500/20 text-slate-950 font-black text-xl mb-1">
             نجاح
           </div>
-          <h1 className="text-2xl md:text-3xl font-black text-transparent bg-clip-text bg-gradient-to-l from-indigo-400 via-amber-300 to-amber-400">
+          <h1 className="text-2xl md:text-3xl font-black text-transparent bg-clip-text bg-gradient-to-l from-amber-600 via-amber-500 to-amber-600 dark:from-indigo-400 dark:via-amber-300 dark:to-amber-400">
             مركز النجاح للتدريب والاستشارات
           </h1>
-          <p className="text-xs text-slate-400 font-medium">نموذج التسجيل الإلكتروني السريع للطلاب والدورات</p>
+          <p className="text-xs text-slate-600 dark:text-slate-400 font-medium">نموذج التسجيل الإلكتروني السريع للطلاب والدورات</p>
         </div>
 
         {/* Form Container */}
         {!isRegistrationOpen ? (
-          <div className="bg-slate-900/90 border border-amber-500/40 shadow-2xl rounded-3xl p-8 backdrop-blur-xl space-y-6 text-center animate-fadeIn">
-            <div className="w-20 h-20 bg-amber-500/10 border border-amber-500/30 rounded-2xl flex items-center justify-center mx-auto text-amber-400 shadow-inner">
+          <div className="glass-card-3d bg-white/95 dark:bg-slate-900/90 border border-amber-500/40 shadow-2xl rounded-3xl p-8 backdrop-blur-xl space-y-6 text-center animate-fadeIn">
+            <div className="w-20 h-20 bg-amber-500/10 border border-amber-500/30 rounded-2xl flex items-center justify-center mx-auto text-amber-500 dark:text-amber-400 shadow-inner">
               <Lock className="w-10 h-10" />
             </div>
             <div className="space-y-2">
-              <h2 className="text-xl font-black text-amber-400">باب التسجيل الخارجي مغلق حالياً</h2>
-              <p className="text-slate-300 text-sm leading-relaxed max-w-md mx-auto font-medium">
+              <h2 className="text-xl font-black text-amber-600 dark:text-amber-400">باب التسجيل الخارجي مغلق حالياً</h2>
+              <p className="text-slate-600 dark:text-slate-300 text-sm leading-relaxed max-w-md mx-auto font-medium">
                 {registrationClosedMessage || 'تعتذر إدارة مركز النجاح للتدريب والاستشارات، تم إغلاق باب التسجيل الخارجي حالياً لاكتمال العدد بجميع المجموعات.'}
               </p>
             </div>
@@ -497,19 +497,19 @@ export const PublicRegistrationView: React.FC<PublicRegistrationViewProps> = ({ 
             </div>
           </div>
         ) : (
-          <div className="bg-slate-900/90 border border-slate-800 shadow-2xl rounded-3xl p-6 md:p-8 backdrop-blur-xl space-y-6">
+          <div className="glass-card-3d bg-white/95 dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 shadow-2xl rounded-3xl p-6 md:p-8 backdrop-blur-xl space-y-6">
           
-          <div className="bg-indigo-950/30 border border-indigo-500/30 rounded-2xl p-3.5 text-center text-xs text-indigo-200 font-medium leading-relaxed">
+          <div className="bg-amber-50 dark:bg-indigo-950/30 border border-amber-200 dark:border-indigo-500/30 rounded-2xl p-3.5 text-center text-xs text-amber-900 dark:text-indigo-200 font-medium leading-relaxed">
             ✨ يرجى تعبئة البيانات بالأسفل، وسيتم توليد كودك التدريبي وتسكينك في دورتك ومجموعتك تلقائياً دون الحاجة لتسجيل دخول.
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-5">
             
             {/* Photo Upload (Optional) */}
-            <div className="flex flex-col items-center gap-2.5 pb-4 border-b border-slate-800">
+            <div className="flex flex-col items-center gap-2.5 pb-4 border-b border-slate-200 dark:border-slate-800">
               <div 
                 onClick={() => fileInputRef.current?.click()}
-                className="w-24 h-24 rounded-2xl border-2 border-dashed border-slate-600 flex flex-col items-center justify-center bg-slate-850 cursor-pointer overflow-hidden hover:border-amber-500 hover:bg-slate-800 transition-all group relative shadow-inner"
+                className="w-24 h-24 rounded-2xl border-2 border-dashed border-slate-300 dark:border-slate-600 flex flex-col items-center justify-center bg-slate-100 dark:bg-slate-850 cursor-pointer overflow-hidden hover:border-amber-500 hover:bg-slate-200 dark:hover:bg-slate-800 transition-all group relative shadow-inner"
               >
                 {photoPreview ? (
                   <>
@@ -520,8 +520,8 @@ export const PublicRegistrationView: React.FC<PublicRegistrationViewProps> = ({ 
                   </>
                 ) : (
                   <>
-                    <Camera className="w-7 h-7 text-slate-400 group-hover:text-amber-400 mb-1" />
-                    <span className="text-[10px] text-slate-400 group-hover:text-amber-300 font-bold">صورة شخصية</span>
+                    <Camera className="w-7 h-7 text-slate-400 group-hover:text-amber-500 dark:group-hover:text-amber-400 mb-1" />
+                    <span className="text-[10px] text-slate-500 group-hover:text-amber-600 dark:text-slate-400 dark:group-hover:text-amber-300 font-bold">صورة شخصية</span>
                   </>
                 )}
               </div>
@@ -533,7 +533,7 @@ export const PublicRegistrationView: React.FC<PublicRegistrationViewProps> = ({ 
                 ref={fileInputRef}
                 onChange={handlePhotoUpload}
               />
-              <p className="text-[11px] text-slate-400 text-center max-w-xs">
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 text-center max-w-xs">
                 اضغط لالتقاط صورتك بالكاميرا أو رفعها من المعرض (اختياري، للشهادات والبطاقة)
               </p>
             </div>
@@ -541,8 +541,8 @@ export const PublicRegistrationView: React.FC<PublicRegistrationViewProps> = ({ 
             <div className="space-y-4">
               {/* Full Name */}
               <div>
-                <label className="flex items-center gap-1.5 text-xs font-bold text-slate-300 mb-1.5">
-                  <User className="w-4 h-4 text-amber-400" />
+                <label className="flex items-center gap-1.5 text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+                  <User className="w-4 h-4 text-amber-500 dark:text-amber-400" />
                   اسم المتدرب (رباعي) *
                 </label>
                 <input 
@@ -568,15 +568,15 @@ export const PublicRegistrationView: React.FC<PublicRegistrationViewProps> = ({ 
                       return { ...prev, fullName: val, parentName: nextParentName };
                     });
                   }}
-                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-all placeholder-slate-400"
+                  className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl px-4 py-3 text-slate-900 dark:text-white text-sm focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-all placeholder-slate-400 dark:placeholder-slate-500"
                   placeholder="مثال: أحمد محمد محمود علي"
                 />
               </div>
 
               {/* Phone */}
               <div>
-                <label className="flex items-center gap-1.5 text-xs font-bold text-slate-300 mb-1.5">
-                  <Phone className="w-4 h-4 text-amber-400" />
+                <label className="flex items-center gap-1.5 text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+                  <Phone className="w-4 h-4 text-amber-500 dark:text-amber-400" />
                   رقم هاتف الطالب (أو ولي الأمر للتواصل) *
                 </label>
                 <input 
@@ -585,7 +585,7 @@ export const PublicRegistrationView: React.FC<PublicRegistrationViewProps> = ({ 
                   dir="ltr"
                   value={formData.phone ?? ''}
                   onChange={e => setFormData(prev => ({ ...prev, phone: e.target.value }))}
-                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-white text-sm text-right focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-all placeholder-slate-400"
+                  className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl px-4 py-3 text-slate-900 dark:text-white text-sm text-right focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-all placeholder-slate-400 dark:placeholder-slate-500"
                   placeholder="01xxxxxxxxx"
                 />
               </div>
@@ -593,23 +593,23 @@ export const PublicRegistrationView: React.FC<PublicRegistrationViewProps> = ({ 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* Parent Name */}
                 <div>
-                  <label className="flex items-center gap-1.5 text-xs font-bold text-slate-300 mb-1.5">
-                    <User className="w-4 h-4 text-amber-400" />
+                  <label className="flex items-center gap-1.5 text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+                    <User className="w-4 h-4 text-amber-500 dark:text-amber-400" />
                     اسم ولي الأمر (اختياري)
                   </label>
                   <input 
                     type="text" 
                     value={formData.parentName ?? ''}
                     onChange={e => setFormData(prev => ({ ...prev, parentName: e.target.value }))}
-                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-all placeholder-slate-400"
+                    className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl px-4 py-3 text-slate-900 dark:text-white text-sm focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-all placeholder-slate-400 dark:placeholder-slate-500"
                     placeholder="مثال: محمد محمود علي"
                   />
                 </div>
 
                 {/* Parent Phone */}
                 <div>
-                  <label className="flex items-center gap-1.5 text-xs font-bold text-slate-300 mb-1.5">
-                    <Phone className="w-4 h-4 text-amber-400" />
+                  <label className="flex items-center gap-1.5 text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+                    <Phone className="w-4 h-4 text-amber-500 dark:text-amber-400" />
                     رقم هاتف ولي الأمر (للمتابعة)
                   </label>
                   <input 
@@ -617,7 +617,7 @@ export const PublicRegistrationView: React.FC<PublicRegistrationViewProps> = ({ 
                     dir="ltr"
                     value={formData.parentPhone ?? ''}
                     onChange={e => setFormData(prev => ({ ...prev, parentPhone: e.target.value }))}
-                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-white text-sm text-right focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-all placeholder-slate-400"
+                    className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl px-4 py-3 text-slate-900 dark:text-white text-sm text-right focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-all placeholder-slate-400 dark:placeholder-slate-500"
                     placeholder="01xxxxxxxxx"
                   />
                 </div>
@@ -627,15 +627,15 @@ export const PublicRegistrationView: React.FC<PublicRegistrationViewProps> = ({ 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* Branch Selection Dropdown */}
                 <div>
-                  <label className="flex items-center gap-1.5 text-xs font-bold text-slate-300 mb-1.5">
-                    <MapPin className="w-4 h-4 text-amber-400" />
+                  <label className="flex items-center gap-1.5 text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+                    <MapPin className="w-4 h-4 text-amber-500 dark:text-amber-400" />
                     الفرع المراد التسجيل به *
                   </label>
                   <select 
                     required
                     value={formData.branchId ?? ''}
                     onChange={e => setFormData(prev => ({ ...prev, branchId: e.target.value }))}
-                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-amber-500 transition-all"
+                    className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl px-4 py-3 text-slate-900 dark:text-white text-sm focus:outline-none focus:border-amber-500 transition-all"
                   >
                     {branches.map(b => (
                       <option key={b.id} value={b.id}>{b.name}</option>
@@ -645,15 +645,15 @@ export const PublicRegistrationView: React.FC<PublicRegistrationViewProps> = ({ 
 
                 {/* Grade / Stage Selection Dropdown */}
                 <div>
-                  <label className="flex items-center gap-1.5 text-xs font-bold text-slate-300 mb-1.5">
-                    <BookOpen className="w-4 h-4 text-amber-400" />
+                  <label className="flex items-center gap-1.5 text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+                    <BookOpen className="w-4 h-4 text-amber-500 dark:text-amber-400" />
                     الصف الدراسي / المرحلة *
                   </label>
                   <select 
                     required
                     value={formData.grade ?? ''}
                     onChange={e => setFormData(prev => ({ ...prev, grade: e.target.value }))}
-                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-amber-500 transition-all mb-2"
+                    className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl px-4 py-3 text-slate-900 dark:text-white text-sm focus:outline-none focus:border-amber-500 transition-all mb-2"
                   >
                     {grades.map(g => (
                       <option key={g} value={g}>{g}</option>
@@ -668,10 +668,10 @@ export const PublicRegistrationView: React.FC<PublicRegistrationViewProps> = ({ 
                         required
                         value={formData.customGrade ?? ''}
                         onChange={e => setFormData(prev => ({ ...prev, customGrade: e.target.value }))}
-                        className="w-full bg-slate-950 border-2 border-indigo-500 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all placeholder-slate-400"
+                        className="w-full bg-slate-50 dark:bg-slate-950 border-2 border-amber-500 dark:border-indigo-500 rounded-xl px-4 py-2.5 text-slate-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 transition-all placeholder-slate-400 dark:placeholder-slate-500"
                         placeholder="اكتب اسم الصف أو المرحلة أو الدورة المطلوبة..."
                       />
-                      <span className="text-[10px] text-indigo-300 mt-1 block">
+                      <span className="text-[10px] text-amber-700 dark:text-indigo-300 mt-1 block">
                         ✨ سيقوم النظام بإنشاء تصنيف ودورة جديدة لك تلقائياً
                       </span>
                     </div>
@@ -681,8 +681,8 @@ export const PublicRegistrationView: React.FC<PublicRegistrationViewProps> = ({ 
 
               {/* Track Selection */}
               <div>
-                <label className="flex items-center gap-1.5 text-xs font-bold text-slate-300 mb-1.5">
-                  <Layers className="w-4 h-4 text-amber-400" />
+                <label className="flex items-center gap-1.5 text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+                  <Layers className="w-4 h-4 text-amber-500 dark:text-amber-400" />
                   نوع المسار / الدراسة *
                 </label>
                 <div className="grid grid-cols-2 gap-3">
@@ -691,8 +691,8 @@ export const PublicRegistrationView: React.FC<PublicRegistrationViewProps> = ({ 
                     onClick={() => setFormData(prev => ({ ...prev, track: 'عربي' }))}
                     className={`py-3 px-4 rounded-xl border text-center font-bold text-sm transition-all ${
                       formData.track === 'عربي' 
-                        ? 'bg-amber-500/20 border-amber-500 text-amber-300 shadow-md shadow-amber-500/10' 
-                        : 'bg-slate-950 border-slate-700 text-slate-400 hover:bg-slate-800'
+                        ? 'bg-amber-500/20 border-amber-500 text-amber-800 dark:text-amber-300 shadow-md shadow-amber-500/10' 
+                        : 'bg-slate-100 dark:bg-slate-950 border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800'
                     }`}
                   >
                     🇪🇬 عربي
@@ -702,8 +702,8 @@ export const PublicRegistrationView: React.FC<PublicRegistrationViewProps> = ({ 
                     onClick={() => setFormData(prev => ({ ...prev, track: 'لغات' }))}
                     className={`py-3 px-4 rounded-xl border text-center font-bold text-sm transition-all ${
                       formData.track === 'لغات' 
-                        ? 'bg-indigo-600/20 border-indigo-500 text-indigo-300 shadow-md shadow-indigo-500/10' 
-                        : 'bg-slate-950 border-slate-700 text-slate-400 hover:bg-slate-800'
+                        ? 'bg-indigo-600/20 border-indigo-500 text-indigo-800 dark:text-indigo-300 shadow-md shadow-indigo-500/10' 
+                        : 'bg-slate-100 dark:bg-slate-950 border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800'
                     }`}
                   >
                     🇬🇧 لغات (Languages)
@@ -733,11 +733,11 @@ export const PublicRegistrationView: React.FC<PublicRegistrationViewProps> = ({ 
           </form>
 
           {onBack && (
-            <div className="pt-3 border-t border-slate-800 text-center">
+            <div className="pt-3 border-t border-slate-200 dark:border-slate-800 text-center">
               <button
                 type="button"
                 onClick={onBack}
-                className="text-xs text-slate-400 hover:text-amber-400 transition-colors inline-flex items-center gap-1 font-bold"
+                className="text-xs text-slate-500 dark:text-slate-400 hover:text-amber-600 dark:hover:text-amber-400 transition-colors inline-flex items-center gap-1 font-bold"
               >
                 <ArrowRight className="w-3.5 h-3.5" />
                 <span>العودة لشاشة الدخول الرئيسية</span>

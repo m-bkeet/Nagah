@@ -1785,16 +1785,16 @@ export const TraineesView: React.FC = () => {
 
       {/* Mobile Tools Bottom Sheet / Drawer */}
       {isMobileToolsDrawerOpen && (
-        <div className="md:hidden fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex flex-col justify-end animate-in fade-in">
-          <div className="bg-slate-900 border-t border-slate-800 rounded-t-3xl p-4 max-h-[85vh] overflow-y-auto space-y-4 shadow-2xl">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+        <div className="md:hidden fixed inset-0 z-50 bg-slate-900/60 dark:bg-slate-950/80 backdrop-blur-sm flex flex-col justify-end animate-in fade-in">
+          <div className="bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 rounded-t-3xl p-4 max-h-[85vh] overflow-y-auto space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
               <div className="flex items-center gap-2">
-                <Sparkles className="w-5 h-5 text-amber-400" />
-                <h3 className="font-bold text-slate-100 text-sm">عمليات وأدوات إدارة المتدربين</h3>
+                <Sparkles className="w-5 h-5 text-amber-500 dark:text-amber-400" />
+                <h3 className="font-bold text-slate-900 dark:text-slate-100 text-sm">عمليات وأدوات إدارة المتدربين</h3>
               </div>
               <button
                 onClick={() => setIsMobileToolsDrawerOpen(false)}
-                className="w-8 h-8 rounded-full bg-slate-800 text-slate-300 flex items-center justify-center"
+                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 flex items-center justify-center transition-colors"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -1802,17 +1802,17 @@ export const TraineesView: React.FC = () => {
 
             {/* Excel Operations Grid */}
             <div className="space-y-2">
-              <h4 className="text-xs font-bold text-slate-400">ملفات وإكسل 📊</h4>
+              <h4 className="text-xs font-bold text-slate-600 dark:text-slate-400">ملفات وإكسل 📊</h4>
               <div className="grid grid-cols-2 gap-2">
                 <button
                   onClick={() => {
                     handleDownloadTemplate('full');
                     setIsMobileToolsDrawerOpen(false);
                   }}
-                  className="p-3 bg-slate-950 border border-slate-800 rounded-xl flex flex-col items-center gap-1.5 text-center active:scale-95"
+                  className="p-3 bg-slate-50 hover:bg-amber-50/50 dark:bg-slate-850 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700/80 rounded-xl flex flex-col items-center gap-1.5 text-center transition-all active:scale-95"
                 >
-                  <Download className="w-5 h-5 text-amber-400" />
-                  <span className="text-xs font-bold text-slate-200">تحميل نموذج Excel</span>
+                  <Download className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+                  <span className="text-xs font-bold text-slate-800 dark:text-slate-200">تحميل نموذج Excel</span>
                 </button>
 
                 <button
@@ -1821,10 +1821,10 @@ export const TraineesView: React.FC = () => {
                     setIsImportModalOpen(true);
                     setIsMobileToolsDrawerOpen(false);
                   }}
-                  className="p-3 bg-slate-950 border border-slate-800 rounded-xl flex flex-col items-center gap-1.5 text-center active:scale-95"
+                  className="p-3 bg-slate-50 hover:bg-emerald-50/50 dark:bg-slate-850 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700/80 rounded-xl flex flex-col items-center gap-1.5 text-center transition-all active:scale-95"
                 >
-                  <Upload className="w-5 h-5 text-emerald-400" />
-                  <span className="text-xs font-bold text-slate-200">استيراد من Excel</span>
+                  <Upload className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+                  <span className="text-xs font-bold text-slate-800 dark:text-slate-200">استيراد من Excel</span>
                 </button>
 
                 <button
@@ -1832,10 +1832,10 @@ export const TraineesView: React.FC = () => {
                     handleExportExcel();
                     setIsMobileToolsDrawerOpen(false);
                   }}
-                  className="p-3 bg-slate-950 border border-slate-800 rounded-xl flex flex-col items-center gap-1.5 text-center active:scale-95"
+                  className="p-3 bg-slate-50 hover:bg-cyan-50/50 dark:bg-slate-850 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700/80 rounded-xl flex flex-col items-center gap-1.5 text-center transition-all active:scale-95"
                 >
-                  <FileSpreadsheet className="w-5 h-5 text-cyan-400" />
-                  <span className="text-xs font-bold text-slate-200">تصدير ملف Excel</span>
+                  <FileSpreadsheet className="w-5 h-5 text-cyan-600 dark:text-cyan-400" />
+                  <span className="text-xs font-bold text-slate-800 dark:text-slate-200">تصدير ملف Excel</span>
                 </button>
 
                 <button
@@ -1843,27 +1843,27 @@ export const TraineesView: React.FC = () => {
                     setIsGoogleSheetsModalOpen(true);
                     setIsMobileToolsDrawerOpen(false);
                   }}
-                  className="p-3 bg-slate-950 border border-emerald-500/30 rounded-xl flex flex-col items-center gap-1.5 text-center active:scale-95"
+                  className="p-3 bg-emerald-50/50 hover:bg-emerald-50 dark:bg-slate-850 dark:hover:bg-slate-800 border border-emerald-300 dark:border-emerald-500/30 rounded-xl flex flex-col items-center gap-1.5 text-center transition-all active:scale-95"
                 >
-                  <FileSpreadsheet className="w-5 h-5 text-emerald-400" />
-                  <span className="text-xs font-bold text-emerald-300">Google Sheets 📊</span>
+                  <FileSpreadsheet className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+                  <span className="text-xs font-bold text-emerald-800 dark:text-emerald-300">Google Sheets 📊</span>
                 </button>
               </div>
             </div>
 
             {/* Smart Portals & Links */}
-            <div className="space-y-2 pt-2 border-t border-slate-800">
-              <h4 className="text-xs font-bold text-slate-400">البوابات والروابط 📱</h4>
+            <div className="space-y-2 pt-2 border-t border-slate-200 dark:border-slate-800">
+              <h4 className="text-xs font-bold text-slate-600 dark:text-slate-400">البوابات والروابط 📱</h4>
               <div className="grid grid-cols-2 gap-2">
                 <button
                   onClick={() => {
                     window.open('/?view=student_portal', '_blank');
                     setIsMobileToolsDrawerOpen(false);
                   }}
-                  className="p-3 bg-slate-950 border border-slate-800 rounded-xl flex flex-col items-center gap-1 text-center active:scale-95"
+                  className="p-3 bg-indigo-50/50 hover:bg-indigo-50 dark:bg-slate-850 dark:hover:bg-slate-800 border border-indigo-200 dark:border-slate-700/80 rounded-xl flex flex-col items-center gap-1 text-center transition-all active:scale-95"
                 >
-                  <GraduationCap className="w-5 h-5 text-indigo-400" />
-                  <span className="text-xs font-bold text-slate-200">بوابة الطالب الذكية</span>
+                  <GraduationCap className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+                  <span className="text-xs font-bold text-indigo-950 dark:text-slate-200">بوابة الطالب الذكية</span>
                 </button>
 
                 <button
@@ -1871,27 +1871,27 @@ export const TraineesView: React.FC = () => {
                     window.open('/?view=parent_portal', '_blank');
                     setIsMobileToolsDrawerOpen(false);
                   }}
-                  className="p-3 bg-slate-950 border border-slate-800 rounded-xl flex flex-col items-center gap-1 text-center active:scale-95"
+                  className="p-3 bg-teal-50/50 hover:bg-teal-50 dark:bg-slate-850 dark:hover:bg-slate-800 border border-teal-200 dark:border-slate-700/80 rounded-xl flex flex-col items-center gap-1 text-center transition-all active:scale-95"
                 >
-                  <UserCheck className="w-5 h-5 text-lime-400" />
-                  <span className="text-xs font-bold text-slate-200">بوابة ولي الأمر</span>
+                  <UserCheck className="w-5 h-5 text-teal-600 dark:text-teal-400" />
+                  <span className="text-xs font-bold text-teal-950 dark:text-slate-200">بوابة ولي الأمر</span>
                 </button>
               </div>
             </div>
 
             {/* Advanced Upgrades & Sync */}
-            <div className="space-y-2 pt-2 border-t border-slate-800">
-              <h4 className="text-xs font-bold text-slate-400">أدوات متقدمة ⚡</h4>
+            <div className="space-y-2 pt-2 border-t border-slate-200 dark:border-slate-800">
+              <h4 className="text-xs font-bold text-slate-600 dark:text-slate-400">أدوات متقدمة ⚡</h4>
               <div className="grid grid-cols-2 gap-2">
                 <button
                   onClick={() => {
                     setIsPromotionModalOpen(true);
                     setIsMobileToolsDrawerOpen(false);
                   }}
-                  className="p-3 bg-slate-950 border border-slate-800 rounded-xl flex flex-col items-center gap-1 text-center active:scale-95"
+                  className="p-3 bg-amber-50/50 hover:bg-amber-50 dark:bg-slate-850 dark:hover:bg-slate-800 border border-amber-200 dark:border-slate-700/80 rounded-xl flex flex-col items-center gap-1 text-center transition-all active:scale-95"
                 >
-                  <Award className="w-5 h-5 text-amber-400" />
-                  <span className="text-xs font-bold text-slate-200">تصعيد وترقية الطلاب</span>
+                  <Award className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+                  <span className="text-xs font-bold text-amber-950 dark:text-slate-200">تصعيد وترقية الطلاب</span>
                 </button>
 
                 <button
@@ -1900,10 +1900,10 @@ export const TraineesView: React.FC = () => {
                     setIsMobileToolsDrawerOpen(false);
                   }}
                   disabled={isSyncingBatch}
-                  className="p-3 bg-slate-950 border border-slate-800 rounded-xl flex flex-col items-center gap-1 text-center active:scale-95 disabled:opacity-50"
+                  className="p-3 bg-slate-50 hover:bg-slate-100 dark:bg-slate-850 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700/80 rounded-xl flex flex-col items-center gap-1 text-center transition-all active:scale-95 disabled:opacity-50"
                 >
-                  <Zap className="w-5 h-5 text-cyan-400" />
-                  <span className="text-xs font-bold text-slate-200">مزامنة الكشوفات</span>
+                  <Zap className="w-5 h-5 text-cyan-600 dark:text-cyan-400" />
+                  <span className="text-xs font-bold text-slate-800 dark:text-slate-200">مزامنة الكشوفات</span>
                 </button>
 
                 <button
@@ -1911,10 +1911,10 @@ export const TraineesView: React.FC = () => {
                     handleOpenCodeAuditModal();
                     setIsMobileToolsDrawerOpen(false);
                   }}
-                  className="col-span-2 p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl flex items-center justify-center gap-2 text-center active:scale-95"
+                  className="col-span-2 p-3 bg-amber-50 hover:bg-amber-100/60 dark:bg-amber-500/10 border border-amber-300 dark:border-amber-500/30 rounded-xl flex items-center justify-center gap-2 text-center transition-all active:scale-95"
                 >
-                  <Sparkles className="w-5 h-5 text-amber-400" />
-                  <span className="text-xs font-bold text-amber-300">فحص وتصحيح أكواد الطلاب حسب الصفوف 🏷️</span>
+                  <Sparkles className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+                  <span className="text-xs font-bold text-amber-900 dark:text-amber-300">فحص وتصحيح أكواد الطلاب حسب الصفوف 🏷️</span>
                 </button>
               </div>
             </div>
@@ -1925,7 +1925,7 @@ export const TraineesView: React.FC = () => {
                 setIsShareModalOpen(true);
                 setIsMobileToolsDrawerOpen(false);
               }}
-              className="w-full p-3 bg-amber-500/10 border border-amber-500/30 text-amber-400 rounded-xl font-bold text-xs flex items-center justify-center gap-2 active:scale-95"
+              className="w-full p-3 bg-amber-500/15 hover:bg-amber-500/25 dark:bg-amber-500/10 border border-amber-400 dark:border-amber-500/30 text-amber-900 dark:text-amber-400 rounded-xl font-bold text-xs flex items-center justify-center gap-2 active:scale-95 transition-all"
             >
               <Share2 className="w-4 h-4" />
               <span>مشاركة رابط التسجيل والباركود QR</span>
@@ -1989,14 +1989,14 @@ export const TraineesView: React.FC = () => {
       {viewMode === 'cards' ? (
         /* ------------------ CARDS GRID VIEW ------------------ */
         isLoading ? (
-          <div className="py-16 text-center text-slate-400 bg-slate-800/40 rounded-2xl border border-slate-700/60">
-            <div className="inline-block w-6 h-6 border-2 border-amber-400 border-t-transparent rounded-full animate-spin mb-3" />
-            <p>جاري تحميل بطاقات المتدربين...</p>
+          <div className="py-16 text-center text-slate-500 dark:text-slate-400 bg-slate-50/80 dark:bg-slate-800/40 rounded-2xl border border-slate-200 dark:border-slate-700/60 shadow-xs">
+            <div className="inline-block w-6 h-6 border-2 border-amber-500 border-t-transparent rounded-full animate-spin mb-3" />
+            <p className="font-bold text-sm text-slate-700 dark:text-slate-300">جاري تحميل بطاقات المتدربين...</p>
           </div>
         ) : filteredTrainees.length === 0 ? (
-          <div className="py-16 text-center text-slate-400 bg-slate-800/40 rounded-2xl border border-slate-700/60 p-6 flex flex-col items-center justify-center gap-3">
-            <Users className="w-10 h-10 text-slate-500 stroke-[1.5]" />
-            <p className="text-slate-300 font-bold text-sm">لا توجد سجلات متدربين مطابقة للبحث أو الفلاتر المحددة.</p>
+          <div className="py-16 text-center text-slate-500 dark:text-slate-400 bg-slate-50/80 dark:bg-slate-800/40 rounded-2xl border border-slate-200 dark:border-slate-700/60 p-6 flex flex-col items-center justify-center gap-3 shadow-xs">
+            <Users className="w-10 h-10 text-slate-400 dark:text-slate-500 stroke-[1.5]" />
+            <p className="text-slate-800 dark:text-slate-200 font-black text-sm">لا توجد سجلات متدربين مطابقة للبحث أو الفلاتر المحددة.</p>
             {(selectedBranch !== 'all' || selectedCourse !== 'all' || selectedGroup !== 'all' || selectedTrainer !== 'all' || selectedStatus !== 'all' || selectedPaymentStatus !== 'all' || searchQuery.trim()) && (
               <button
                 onClick={() => {
@@ -2008,7 +2008,7 @@ export const TraineesView: React.FC = () => {
                   setSelectedPaymentStatus('all');
                   setSearchQuery('');
                 }}
-                className="px-4 py-1.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 rounded-xl text-xs font-bold transition-all"
+                className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-xl text-xs font-black transition-all shadow-sm"
               >
                 إعادة ضبط جميع الفلاتر وعرض كل المتدربين
               </button>
@@ -2295,17 +2295,17 @@ export const TraineesView: React.FC = () => {
               <tbody className="divide-y divide-slate-200 dark:divide-slate-700/60 text-slate-800 dark:text-slate-200">
                 {isLoading ? (
                   <tr>
-                    <td colSpan={12} className="py-12 text-center text-slate-400">
-                      <div className="inline-block w-5 h-5 border-2 border-amber-400 border-t-transparent rounded-full animate-spin ml-2" />
-                      جاري تحميل سجلات المتدربين...
+                    <td colSpan={12} className="py-12 text-center text-slate-500 dark:text-slate-400">
+                      <div className="inline-block w-5 h-5 border-2 border-amber-500 border-t-transparent rounded-full animate-spin ml-2" />
+                      <span className="font-bold text-xs text-slate-700 dark:text-slate-300">جاري تحميل سجلات المتدربين...</span>
                     </td>
                   </tr>
                 ) : filteredTrainees.length === 0 ? (
                   <tr>
-                    <td colSpan={12} className="py-12 text-center text-slate-400">
+                    <td colSpan={12} className="py-12 text-center text-slate-500 dark:text-slate-400">
                       <div className="flex flex-col items-center justify-center gap-2.5">
-                        <Users className="w-8 h-8 text-slate-500 stroke-[1.5]" />
-                        <p className="text-slate-300 font-bold">لا توجد سجلات متدربين مطابقة للبحث أو الفلتر المحدد.</p>
+                        <Users className="w-8 h-8 text-slate-400 dark:text-slate-500 stroke-[1.5]" />
+                        <p className="text-slate-800 dark:text-slate-200 font-black text-sm">لا توجد سجلات متدربين مطابقة للبحث أو الفلتر المحدد.</p>
                         {(selectedBranch !== 'all' || selectedCourse !== 'all' || selectedGroup !== 'all' || selectedTrainer !== 'all' || selectedStatus !== 'all' || selectedPaymentStatus !== 'all' || searchQuery.trim()) && (
                           <button
                             onClick={() => {
@@ -2317,7 +2317,7 @@ export const TraineesView: React.FC = () => {
                               setSelectedPaymentStatus('all');
                               setSearchQuery('');
                             }}
-                            className="px-3.5 py-1.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 rounded-xl text-xs font-bold transition-all mt-1"
+                            className="px-3.5 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-xl text-xs font-black transition-all mt-1 shadow-sm"
                           >
                             إعادة ضبط الفلاتر وعرض الجميع
                           </button>
@@ -2337,8 +2337,8 @@ export const TraineesView: React.FC = () => {
                     return (
                       <tr
                         key={t.id}
-                        className={`hover:bg-slate-700/40 transition-colors ${
-                          isSelected ? 'bg-amber-500/5' : ''
+                        className={`hover:bg-amber-50/50 dark:hover:bg-slate-850/60 transition-colors ${
+                          isSelected ? 'bg-amber-50/80 dark:bg-amber-500/10' : ''
                         }`}
                       >
                         {/* Select checkbox */}
@@ -2349,49 +2349,49 @@ export const TraineesView: React.FC = () => {
                                 isSelected ? prev.filter(id => id !== t.id) : [...prev, t.id]
                               );
                             }}
-                            className="text-slate-400 hover:text-amber-400 transition-colors"
+                            className="text-slate-400 hover:text-amber-500 transition-colors"
                           >
-                            {isSelected ? <CheckSquare className="w-4 h-4 text-amber-400" /> : <Square className="w-4 h-4" />}
+                            {isSelected ? <CheckSquare className="w-4 h-4 text-amber-500" /> : <Square className="w-4 h-4" />}
                           </button>
                         </td>
 
                         {/* Code */}
-                        <td className="p-3.5 font-mono font-bold text-amber-400">
-                          <span className="bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/30">
+                        <td className="p-3.5 font-mono font-bold text-amber-600 dark:text-amber-400">
+                          <span className="bg-amber-50 text-amber-900 dark:bg-amber-500/15 dark:text-amber-300 px-2 py-0.5 rounded-lg border border-amber-300/80 dark:border-amber-500/30 shadow-2xs font-mono">
                             {t.code}
                           </span>
                         </td>
 
                         {/* Name with Photo Avatar */}
                         <td className="p-3.5 min-w-[200px]">
-                          <div className="flex items-center gap-3 bg-slate-900/40 p-2 rounded-2xl border border-slate-700/30 hover:border-amber-500/40 hover:bg-slate-800/60 transition-all duration-300 shadow-sm relative group">
+                          <div className="flex items-center gap-3 bg-slate-50/80 dark:bg-slate-900/60 p-2 rounded-2xl border border-slate-200/90 dark:border-slate-800/80 hover:border-amber-400 dark:hover:border-amber-500/50 hover:bg-amber-50/40 dark:hover:bg-slate-850 transition-all duration-300 shadow-2xs relative group">
                             <div className="relative shrink-0">
                               {t.photoUrl ? (
                                 <img
                                   src={t.photoUrl}
                                   alt={t.fullName}
-                                  className="w-10 h-10 rounded-xl object-cover shadow-md border-2 border-slate-700/50 group-hover:border-amber-500/50 transition-colors"
+                                  className="w-10 h-10 rounded-xl object-cover shadow-2xs border-2 border-slate-200 dark:border-slate-700/50 group-hover:border-amber-400 dark:group-hover:border-amber-500/50 transition-colors"
                                 />
                               ) : (
-                                <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-slate-800 to-slate-700 flex items-center justify-center font-black text-sm text-amber-400 shadow-inner border border-slate-600/50 group-hover:border-amber-500/50 transition-colors">
+                                <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-amber-500/15 via-amber-400/25 to-amber-500/35 dark:from-slate-800 dark:to-slate-700 flex items-center justify-center font-black text-sm text-amber-700 dark:text-amber-400 shadow-2xs border border-amber-300/60 dark:border-slate-600/50 group-hover:border-amber-400 transition-colors">
                                   {t.fullName?.charAt(0) || '?'}
                                 </div>
                               )}
                               {t.status === 'active' && (
-                                <div className="absolute -bottom-1 -left-1 w-3.5 h-3.5 bg-emerald-500 border-2 border-slate-900 rounded-full shadow-sm"></div>
+                                <div className="absolute -bottom-1 -left-1 w-3.5 h-3.5 bg-emerald-500 border-2 border-white dark:border-slate-900 rounded-full shadow-xs"></div>
                               )}
                             </div>
                             <div className="min-w-0 flex-1 relative z-10">
                               <div
-                                className="cursor-pointer font-black text-[13px] text-slate-100 group-hover:text-amber-400 transition-colors truncate block"
+                                className="cursor-pointer font-black text-[13px] text-slate-900 dark:text-slate-100 group-hover:text-amber-600 dark:group-hover:text-amber-400 transition-colors truncate block"
                                 onClick={() => handleOpenProfile(t)}
                                 title={t.fullName}
                               >
                                 {t.fullName}
                               </div>
                               {t.parentName ? (
-                                <div className="text-[10px] text-slate-400 font-normal truncate mt-0.5" title={`ولي الأمر: ${t.parentName}`}>
-                                  ولي الأمر: <span className="text-slate-300">{t.parentName}</span>
+                                <div className="text-[10px] text-slate-600 dark:text-slate-400 font-normal truncate mt-0.5" title={`ولي الأمر: ${t.parentName}`}>
+                                  ولي الأمر: <span className="text-slate-800 dark:text-slate-300 font-medium">{t.parentName}</span>
                                 </div>
                               ) : (
                                 <div className="text-[10px] text-slate-500 font-mono mt-0.5">{t.code}</div>
@@ -2401,31 +2401,31 @@ export const TraineesView: React.FC = () => {
                         </td>
 
                         {/* Branch */}
-                        <td className="p-3.5 text-slate-300">
-                          <span className="text-[11px] bg-slate-900/80 px-2 py-1 rounded border border-slate-700">
+                        <td className="p-3.5 text-slate-700 dark:text-slate-300">
+                          <span className="text-[11px] font-semibold bg-slate-100 dark:bg-slate-850 text-slate-800 dark:text-slate-200 px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700/80 shadow-2xs inline-block">
                             {branch?.name || 'الفرع الرئيسي'}
                           </span>
                         </td>
 
                         {/* Course / Group */}
                         <td className="p-3.5">
-                          <div className="font-semibold text-slate-200">{course?.name || 'دورة عامة'}</div>
-                          <div className="text-[10px] text-slate-400">{group?.name || 'مجموعة 1'}</div>
+                          <div className="font-bold text-slate-900 dark:text-slate-100">{course?.name || 'دورة عامة'}</div>
+                          <div className="text-[10px] text-slate-600 dark:text-slate-400 font-medium mt-0.5">{group?.name || 'مجموعة 1'}</div>
                         </td>
 
                         {/* Phone */}
-                        <td className="p-3.5 font-mono text-slate-300">
-                          <div>{t.phone}</div>
+                        <td className="p-3.5 font-mono text-slate-800 dark:text-slate-300">
+                          <div className="font-semibold">{t.phone}</div>
                           {t.parentPhone && (
-                            <div className="text-[10px] text-slate-400">ولي الأمر: {t.parentPhone}</div>
+                            <div className="text-[10px] text-slate-600 dark:text-slate-400 font-medium">ولي الأمر: {t.parentPhone}</div>
                           )}
                         </td>
 
                         {/* Fee */}
-                        <td className="p-3.5 font-mono font-semibold">{t.netAmount}</td>
+                        <td className="p-3.5 font-mono font-semibold text-slate-800 dark:text-slate-200">{t.netAmount}</td>
 
                         {/* Paid */}
-                        <td className="p-3.5 font-mono font-bold text-emerald-400">{t.paidAmount}</td>
+                        <td className="p-3.5 font-mono font-bold text-emerald-600 dark:text-emerald-400">{t.paidAmount}</td>
 
                         {/* Remaining & Subscription Status */}
                         <td className="p-3.5 font-mono font-bold">
@@ -2445,7 +2445,7 @@ export const TraineesView: React.FC = () => {
 
                         {/* Points & Stars (Interactive) */}
                         <td className="p-3.5 text-center">
-                          <div className="inline-flex items-center gap-1 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-600/40 px-2.5 py-1 rounded-full group/star">
+                          <div className="inline-flex items-center gap-1 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-600/40 px-2.5 py-1 rounded-full group/star shadow-2xs">
                             <Star className="w-3.5 h-3.5 fill-amber-500 text-amber-500" />
                             <span className="font-mono font-black text-amber-900 dark:text-amber-300 text-xs">
                               {t.totalPoints || t.points || 0}
@@ -2463,12 +2463,12 @@ export const TraineesView: React.FC = () => {
                         {/* Status */}
                         <td className="p-3.5 text-center">
                           <span
-                            className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                            className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full border shadow-2xs ${
                               t.status === 'active'
-                                ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                                ? 'bg-emerald-50 text-emerald-700 border-emerald-300 dark:bg-emerald-500/20 dark:text-emerald-300 dark:border-emerald-500/40'
                                 : t.status === 'completed'
-                                ? 'bg-blue-500/20 text-blue-300 border-blue-500/40'
-                                : 'bg-rose-500/20 text-rose-300 border-rose-500/40'
+                                ? 'bg-blue-50 text-blue-700 border-blue-300 dark:bg-blue-500/20 dark:text-blue-300 dark:border-blue-500/40'
+                                : 'bg-rose-50 text-rose-700 border-rose-300 dark:bg-rose-500/20 dark:text-rose-300 dark:border-rose-500/40'
                             }`}
                           >
                             {t.status === 'active' ? 'نشط' : t.status === 'completed' ? 'مكتمل' : 'متوقف'}
@@ -2611,20 +2611,20 @@ export const TraineesView: React.FC = () => {
                 />
                 <div
                   onClick={() => photoInputRef.current?.click()}
-                  className="w-16 h-16 rounded-2xl bg-slate-800 border-2 border-dashed border-slate-600 hover:border-amber-500 flex flex-col items-center justify-center cursor-pointer overflow-hidden transition-all group shrink-0 relative"
+                  className="w-16 h-16 rounded-2xl bg-white dark:bg-slate-800 border-2 border-dashed border-slate-300 dark:border-slate-600 hover:border-amber-500 flex flex-col items-center justify-center cursor-pointer overflow-hidden transition-all group shrink-0 relative shadow-inner"
                 >
                   {formData.photoUrl ? (
                     <img src={formData.photoUrl} alt="صورة الطالب" className="w-full h-full object-cover" />
                   ) : (
                     <div className="text-center p-1">
-                      <Camera className="w-5 h-5 text-slate-400 group-hover:text-amber-400 mx-auto" />
-                      <span className="text-[8px] text-slate-400 block mt-0.5">أضف صورة</span>
+                      <Camera className="w-5 h-5 text-slate-400 group-hover:text-amber-500 dark:group-hover:text-amber-400 mx-auto" />
+                      <span className="text-[8px] text-slate-500 dark:text-slate-400 block mt-0.5 font-bold">أضف صورة</span>
                     </div>
                   )}
                 </div>
                 <div className="flex-1 text-right space-y-1">
-                  <p className="text-xs font-bold text-slate-200">صورة المتدرب الشخصية</p>
-                  <p className="text-[10px] text-slate-400">تظهر الصورة في ملف المتدرب، بطاقة الدخول، وشاشات التحكم والشهادات المعتمدة</p>
+                  <p className="text-xs font-bold text-slate-800 dark:text-slate-200">صورة المتدرب الشخصية</p>
+                  <p className="text-[10px] text-slate-500 dark:text-slate-400">تظهر الصورة في ملف المتدرب، بطاقة الدخول، وشاشات التحكم والشهادات المعتمدة</p>
                   <div className="flex items-center gap-2 pt-1">
                     <button
                       type="button"
@@ -2632,16 +2632,16 @@ export const TraineesView: React.FC = () => {
                         setPhotoStudioTargetMode('add');
                         setIsPhotoStudioOpen(true);
                       }}
-                      className="px-3 py-1.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/50 text-amber-300 font-bold text-[10px] flex items-center gap-1.5 shadow-sm transition-all"
+                      className="px-3 py-1.5 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 text-amber-800 dark:text-amber-300 font-bold text-[10px] flex items-center gap-1.5 shadow-xs transition-all cursor-pointer"
                     >
-                      <Wand2 className="w-3.5 h-3.5 text-amber-400" />
+                      <Wand2 className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
                       <span>فتح استوديو قص وتلبيس الصورة ✨</span>
                     </button>
                     {formData.photoUrl && (
                       <button
                         type="button"
                         onClick={() => setFormData({ ...formData, photoUrl: '' })}
-                        className="text-[10px] text-rose-400 hover:underline font-bold"
+                        className="text-[10px] text-rose-500 dark:text-rose-400 hover:underline font-bold cursor-pointer"
                       >
                         إزالة الصورة
                       </button>
@@ -2654,12 +2654,12 @@ export const TraineesView: React.FC = () => {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <div>
                   <div className="flex items-center justify-between mb-1">
-                    <label className="block text-slate-400 font-semibold text-xs">كود المتدرب (حسب الصف)</label>
+                    <label className="block text-slate-700 dark:text-slate-300 font-bold text-xs">كود المتدرب (حسب الصف)</label>
                     <button
                       type="button"
                       onClick={() => fetchCodeForCourse(formData.courseId)}
                       disabled={isGeneratingCode}
-                      className="text-[10px] text-amber-400 hover:underline flex items-center gap-1"
+                      className="text-[10px] text-amber-600 dark:text-amber-400 hover:underline flex items-center gap-1 font-bold"
                       title="إعادة توليد كود جديد للمرحلة الحالية"
                     >
                       <Sparkles className={`w-3 h-3 ${isGeneratingCode ? 'animate-spin' : ''}`} />
@@ -2671,14 +2671,14 @@ export const TraineesView: React.FC = () => {
                     value={formData.code ?? ''}
                     placeholder="اختر الصف لتحديد الكود..."
                     onChange={(e) => setFormData({ ...formData, code: e.target.value.toUpperCase() })}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-amber-400 font-mono font-bold focus:outline-none focus:border-amber-500 text-sm"
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-amber-300 dark:border-amber-500/40 rounded-xl px-3 py-2 text-amber-800 dark:text-amber-300 font-mono font-bold focus:outline-none focus:border-amber-500 text-sm shadow-xs placeholder-slate-400 dark:placeholder-slate-500"
                   />
-                  <span className="text-[10px] text-slate-400 block mt-0.5">
+                  <span className="text-[10px] text-slate-500 dark:text-slate-400 block mt-0.5 font-medium">
                     💡 يبدأ الكود بحرف الصف تلقائياً (رابع A، خامس B، سادس C، إعدادي D...)
                   </span>
                 </div>
                 <div className="md:col-span-2">
-                  <label className="block text-slate-300 font-bold mb-1">الاسم رباعي *</label>
+                  <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">الاسم رباعي *</label>
                   <input
                     type="text"
                     required
@@ -2697,7 +2697,7 @@ export const TraineesView: React.FC = () => {
                       }
                       setFormData({ ...formData, fullName: val, parentName });
                     }}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 focus:outline-none focus:border-amber-500"
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-colors shadow-xs"
                   />
                 </div>
               </div>
@@ -2705,33 +2705,36 @@ export const TraineesView: React.FC = () => {
               {/* Row 2: Phone + Parent Phone + Parent Name */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <div>
-                  <label className="block text-slate-300 font-bold mb-1">رقم الهاتف *</label>
+                  <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">رقم الهاتف *</label>
                   <input
                     type="text"
                     required
                     placeholder="010XXXXXXXX"
                     value={formData.phone || ''}
                     onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 font-mono focus:outline-none focus:border-amber-500"
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 font-mono focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-colors shadow-xs placeholder-slate-400 dark:placeholder-slate-500 text-right"
+                    dir="ltr"
                   />
                 </div>
                 <div>
-                  <label className="block text-slate-400 font-semibold mb-1">هاتف ولي الأمر</label>
+                  <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">هاتف ولي الأمر</label>
                   <input
                     type="text"
                     placeholder="01XXXXXXXXX"
                     value={formData.parentPhone || ''}
                     onChange={(e) => setFormData({ ...formData, parentPhone: e.target.value })}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 font-mono focus:outline-none focus:border-amber-500"
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 font-mono focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-colors shadow-xs placeholder-slate-400 dark:placeholder-slate-500 text-right"
+                    dir="ltr"
                   />
                 </div>
                 <div>
-                  <label className="block text-slate-400 font-semibold mb-1">اسم ولي الأمر (تلقائي/تعديل)</label>
+                  <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">اسم ولي الأمر (تلقائي/تعديل)</label>
                   <input
                     type="text"
                     value={formData.parentName || ''}
                     onChange={(e) => setFormData({ ...formData, parentName: e.target.value })}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 focus:outline-none focus:border-amber-500"
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-colors shadow-xs placeholder-slate-400 dark:placeholder-slate-500"
+                    placeholder="اسم ولي الأمر"
                   />
                 </div>
               </div>
@@ -2739,38 +2742,38 @@ export const TraineesView: React.FC = () => {
               {/* Password Fields */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
                 <div>
-                  <label className="block text-slate-400 font-semibold mb-1">كلمة مرور الطالب (اختياري)</label>
+                  <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">كلمة مرور الطالب (اختياري)</label>
                   <input
                     type="text"
                     placeholder="لإعادة تعيين المرور أو التعديل"
                     value={formData.portalPassword || ''}
                     onChange={(e) => setFormData({ ...formData, portalPassword: e.target.value })}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 focus:outline-none focus:border-amber-500"
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-colors shadow-xs placeholder-slate-400 dark:placeholder-slate-500"
                   />
-                  <p className="text-[10px] text-slate-500 mt-1">يستخدمها الطالب لدخول البوابة مع رقم هاتفه</p>
+                  <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1">يستخدمها الطالب لدخول البوابة مع رقم هاتفه</p>
                 </div>
                 <div>
-                  <label className="block text-slate-400 font-semibold mb-1">كلمة مرور ولي الأمر (اختياري)</label>
+                  <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">كلمة مرور ولي الأمر (اختياري)</label>
                   <input
                     type="text"
                     placeholder="لإعادة تعيين المرور أو التعديل"
                     value={formData.parentPortalPassword || ''}
                     onChange={(e) => setFormData({ ...formData, parentPortalPassword: e.target.value })}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 focus:outline-none focus:border-amber-500"
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-colors shadow-xs placeholder-slate-400 dark:placeholder-slate-500"
                   />
-                  <p className="text-[10px] text-slate-500 mt-1">يستخدمها ولي الأمر لدخول بوابته مع رقم هاتفه</p>
+                  <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1">يستخدمها ولي الأمر لدخول بوابته مع رقم هاتفه</p>
                 </div>
               </div>
 
               {/* Sibling Detection Banner */}
               {detectedSiblings.length > 0 && (
-                <div className="bg-purple-950/60 border border-purple-500/50 p-3 rounded-xl flex items-center justify-between gap-3 animate-fadeIn shadow-lg">
+                <div className="bg-purple-50 dark:bg-purple-950/60 border border-purple-200 dark:border-purple-500/50 p-3 rounded-xl flex items-center justify-between gap-3 animate-fadeIn shadow-xs">
                   <div>
-                    <p className="text-xs font-bold text-purple-300 flex items-center gap-1.5">
-                      <Users className="w-4 h-4 text-purple-400" />
+                    <p className="text-xs font-bold text-purple-900 dark:text-purple-300 flex items-center gap-1.5">
+                      <Users className="w-4 h-4 text-purple-600 dark:text-purple-400" />
                       تم اكتشاف إخوة مسجلين بالمركز تلقائياً ({detectedSiblings.length}):
                     </p>
-                    <p className="text-[11px] text-purple-200 mt-0.5">
+                    <p className="text-[11px] text-purple-700 dark:text-purple-200 mt-0.5">
                       {detectedSiblings.map((s) => `${s.fullName} (${s.code})`).join(' ، ')}
                     </p>
                   </div>
@@ -2791,7 +2794,7 @@ export const TraineesView: React.FC = () => {
                       }));
                       showToast(isBadr ? 'تم ربط الإخوة وتطبيق خصم 10% (فرع بدر) بنجاح!' : 'تم ربط الإخوة بنجاح (بدون خصم تلقائي لفرع النجاح، يرجى التحديد يدوياً إن لزم)', 'success');
                     }}
-                    className="px-3 py-1.5 bg-purple-600 hover:bg-purple-500 text-white rounded-lg font-bold text-xs shadow-lg transition-all shrink-0 flex items-center gap-1"
+                    className="px-3 py-1.5 bg-purple-600 hover:bg-purple-500 text-white rounded-lg font-bold text-xs shadow-md transition-all shrink-0 flex items-center gap-1 cursor-pointer"
                   >
                     <Zap className="w-3.5 h-3.5 text-amber-300" />
                     ربط الأخوة وتطبيق الخصم
@@ -2802,10 +2805,11 @@ export const TraineesView: React.FC = () => {
               {/* Row 3: National ID + Birthdate + Gender */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <div>
-                  <label className="block text-slate-400 font-semibold mb-1">الرقم القومي إن وجد</label>
+                  <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">الرقم القومي إن وجد</label>
                   <input
                     type="text"
                     value={formData.nationalId || ''}
+                    placeholder="14 رقم"
                     onChange={(e) => {
                       const val = e.target.value;
                       let birthDate = formData.birthDate;
@@ -2829,24 +2833,24 @@ export const TraineesView: React.FC = () => {
                       }
                       setFormData({ ...formData, nationalId: val, birthDate, gender });
                     }}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 font-mono focus:outline-none focus:border-amber-500"
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 font-mono focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-colors shadow-xs placeholder-slate-400 dark:placeholder-slate-500"
                   />
                 </div>
                 <div>
-                  <label className="block text-slate-400 font-semibold mb-1">تاريخ الميلاد</label>
+                  <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">تاريخ الميلاد</label>
                   <input
                     type="date"
                     value={formData.birthDate || ''}
                     onChange={(e) => setFormData({ ...formData, birthDate: e.target.value })}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 focus:outline-none focus:border-amber-500"
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-colors shadow-xs"
                   />
                 </div>
                 <div>
-                  <label className="block text-slate-400 font-semibold mb-1">النوع</label>
+                  <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">النوع</label>
                   <select
                     value={formData.gender || ''}
                     onChange={(e) => setFormData({ ...formData, gender: e.target.value })}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 focus:outline-none focus:border-amber-500"
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-colors shadow-xs"
                   >
                     <option value="male">ذكر</option>
                     <option value="female">أنثى</option>
@@ -2855,9 +2859,9 @@ export const TraineesView: React.FC = () => {
               </div>
 
               {/* Row 4: Grade + Branch + Course + Group + Trainer */}
-              <div className="grid grid-cols-1 md:grid-cols-5 gap-3 bg-slate-950/40 p-3 rounded-xl border border-slate-800">
+              <div className="grid grid-cols-1 md:grid-cols-5 gap-3 bg-slate-50 dark:bg-slate-950/40 p-3 rounded-xl border border-slate-200 dark:border-slate-800">
                 <div>
-                  <label className="block text-slate-300 font-bold mb-1">الصف الدراسي</label>
+                  <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">الصف الدراسي</label>
                   <select
                     value={formData.grade ?? ''}
                     onChange={(e) => {
@@ -2874,7 +2878,7 @@ export const TraineesView: React.FC = () => {
                         feeAmount: matchedCourse ? matchedCourse.feeAmount : formData.feeAmount
                       });
                     }}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 text-xs"
+                    className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 text-xs focus:outline-none focus:border-amber-500 shadow-xs"
                   >
                     <option value="">-- اختر الصف --</option>
                     {GRADE_OPTIONS.map(g => (
@@ -2883,12 +2887,12 @@ export const TraineesView: React.FC = () => {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-slate-300 font-bold mb-1">الفرع *</label>
+                  <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">الفرع *</label>
                   <select
                     required
                     value={formData.branchId ?? ''}
                     onChange={(e) => setFormData({ ...formData, branchId: e.target.value })}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 focus:outline-none focus:border-amber-500 text-xs"
+                    className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-amber-500 text-xs shadow-xs"
                   >
                     {branches.map((b) => (
                       <option key={b.id} value={b.id}>
@@ -2898,7 +2902,7 @@ export const TraineesView: React.FC = () => {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-slate-300 font-bold mb-1">الدورة التدريبية *</label>
+                  <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">الدورة التدريبية *</label>
                   <select
                     value={formData.courseId ?? ''}
                     onChange={(e) => {
@@ -2915,7 +2919,7 @@ export const TraineesView: React.FC = () => {
                         fetchCodeForCourse(cid);
                       }
                     }}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 focus:outline-none focus:border-amber-500 font-bold text-xs"
+                    className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-amber-500 font-bold text-xs shadow-xs"
                   >
                     <option value="">-- اختر الدورة --</option>
                     {(courses || [])
@@ -2933,7 +2937,7 @@ export const TraineesView: React.FC = () => {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-slate-400 font-semibold mb-1">المجموعة</label>
+                  <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">المجموعة</label>
                   <select
                     value={formData.groupId ?? ''}
                     onChange={(e) => {
@@ -2954,7 +2958,7 @@ export const TraineesView: React.FC = () => {
                         setFormData({ ...formData, groupId: gid });
                       }
                     }}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 focus:outline-none focus:border-amber-500 text-xs"
+                    className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-amber-500 text-xs shadow-xs"
                   >
                     <option value="">-- اختر مجموعة --</option>
                     {(groups || [])
@@ -2978,11 +2982,11 @@ export const TraineesView: React.FC = () => {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-slate-400 font-semibold mb-1">المدرب</label>
+                  <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">المدرب</label>
                   <select
                     value={formData.trainerId ?? ''}
                     onChange={(e) => setFormData({ ...formData, trainerId: e.target.value })}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 focus:outline-none focus:border-amber-500 text-xs"
+                    className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-amber-500 text-xs shadow-xs"
                   >
                     <option value="">-- اختر مدرب --</option>
                     {trainers.map((tr) => (
@@ -2995,41 +2999,41 @@ export const TraineesView: React.FC = () => {
               </div>
 
               {/* Row 5: Financials (Fee, Discount, Initial Payment) */}
-              <div className="bg-amber-500/10 p-3 rounded-xl border border-amber-500/30 space-y-3">
+              <div className="bg-amber-50 dark:bg-amber-500/10 p-3 rounded-xl border border-amber-200 dark:border-amber-500/30 space-y-3">
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                   <div>
-                    <label className="block text-amber-300 font-bold mb-1">رسوم الدورة {courses.find(c => c.id === formData.courseId)?.billingType === 'monthly' && <span className="text-xs bg-amber-500 text-slate-900 px-1 rounded ml-1">شهرياً</span>}</label>
+                    <label className="block text-amber-900 dark:text-amber-300 font-bold mb-1">رسوم الدورة {courses.find(c => c.id === formData.courseId)?.billingType === 'monthly' && <span className="text-xs bg-amber-500 text-slate-950 px-1 rounded ml-1">شهرياً</span>}</label>
                     <input
                       type="number"
                       value={formData.feeAmount ?? ""}
                       onChange={(e) => setFormData({ ...formData, feeAmount: Number(e.target.value) })}
-                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 font-mono font-bold"
+                      className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 font-mono font-bold shadow-xs"
                     />
                   </div>
                   <div>
-                    <label className="block text-amber-300 font-bold mb-1">الخصم الممنوح</label>
+                    <label className="block text-amber-900 dark:text-amber-300 font-bold mb-1">الخصم الممنوح</label>
                     <input
                       type="number"
                       value={formData.discountAmount ?? ""}
                       onChange={(e) => setFormData({ ...formData, discountAmount: Number(e.target.value) })}
-                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 font-mono font-bold"
+                      className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 font-mono font-bold shadow-xs"
                     />
                   </div>
                   <div>
-                    <label className="block text-emerald-400 font-bold mb-1">الدفعة المقدمة الآن</label>
+                    <label className="block text-emerald-700 dark:text-emerald-400 font-bold mb-1">الدفعة المقدمة الآن</label>
                     <input
                       type="number"
                       value={formData.initialPayment ?? ""}
                       onChange={(e) => setFormData({ ...formData, initialPayment: Number(e.target.value) })}
-                      className="w-full bg-slate-800 border border-emerald-600 rounded-xl px-3 py-2 text-emerald-300 font-mono font-bold"
+                      className="w-full bg-white dark:bg-slate-800 border-2 border-emerald-500 rounded-xl px-3 py-2 text-emerald-700 dark:text-emerald-300 font-mono font-bold shadow-xs"
                     />
                   </div>
                   <div>
-                    <label className="block text-slate-300 font-bold mb-1">طريقة دفع المقدم</label>
+                    <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">طريقة دفع المقدم</label>
                     <select
                       value={formData.initialPaymentMethod || ''}
                       onChange={(e) => setFormData({ ...formData, initialPaymentMethod: e.target.value })}
-                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100"
+                      className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 shadow-xs"
                     >
                       <option value="cash">نقداً (خزينة المركز)</option>
                       <option value="vodafone_cash">فودافون كاش</option>
@@ -3041,7 +3045,7 @@ export const TraineesView: React.FC = () => {
                 </div>
 
                 {/* Exemption Toggle */}
-                <div className="pt-2 border-t border-amber-500/20 space-y-2">
+                <div className="pt-2 border-t border-amber-200 dark:border-amber-500/20 space-y-2">
                   <div className="flex items-center justify-between">
                     <label className="flex items-center gap-2 cursor-pointer select-none">
                       <input
@@ -3058,10 +3062,10 @@ export const TraineesView: React.FC = () => {
                             initialPayment: checked ? 0 : formData.initialPayment
                           });
                         }}
-                        className="w-4 h-4 rounded text-amber-500 focus:ring-amber-500 bg-slate-800 border-slate-700 cursor-pointer"
+                        className="w-4 h-4 rounded text-amber-500 focus:ring-amber-500 bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-700 cursor-pointer"
                       />
-                      <span className="font-bold text-xs text-amber-300 flex items-center gap-1.5">
-                        <ShieldCheck className="w-4 h-4 text-amber-400" />
+                      <span className="font-bold text-xs text-amber-900 dark:text-amber-300 flex items-center gap-1.5">
+                        <ShieldCheck className="w-4 h-4 text-amber-600 dark:text-amber-400" />
                         إعفاء كلي استثنائي من رسوم الدورة (أبناء إداريين / مالك / أصدقاء)
                       </span>
                     </label>
@@ -3075,11 +3079,11 @@ export const TraineesView: React.FC = () => {
                   {formData.isExempt && (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
                       <div>
-                        <label className="block text-slate-300 font-semibold mb-1 text-xs">سبب الإعفاء الخاص</label>
+                        <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1 text-xs">سبب الإعفاء الخاص</label>
                         <select
                           value={formData.exemptReason || 'management_children'}
                           onChange={(e) => setFormData({ ...formData, exemptReason: e.target.value })}
-                          className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-1.5 text-slate-100 text-xs focus:outline-none focus:border-amber-500"
+                          className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-1.5 text-slate-900 dark:text-slate-100 text-xs focus:outline-none focus:border-amber-500 shadow-xs"
                         >
                           <option value="management_children">👑 أبناء صاحب المركز / إداري بالمركز</option>
                           <option value="friend_children">🤝 أبناء أصدقاء ومعارف إدارة المركز</option>
@@ -3088,13 +3092,13 @@ export const TraineesView: React.FC = () => {
                         </select>
                       </div>
                       <div>
-                        <label className="block text-slate-300 font-semibold mb-1 text-xs">ملاحظة سرية للإدارة</label>
+                        <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1 text-xs">ملاحظة سرية للإدارة</label>
                         <input
                           type="text"
                           placeholder="ملاحظات سرية للإدارة والمالية..."
                           value={formData.notes || ''}
                           onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                          className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-1.5 text-slate-100 text-xs focus:outline-none focus:border-amber-500"
+                          className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-1.5 text-slate-900 dark:text-slate-100 text-xs focus:outline-none focus:border-amber-500 shadow-xs"
                         />
                       </div>
                     </div>
@@ -3105,21 +3109,23 @@ export const TraineesView: React.FC = () => {
               {/* Row 6: Address & Notes */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-slate-400 font-semibold mb-1">العنوان</label>
+                  <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">العنوان</label>
                   <input
                     type="text"
                     value={formData.address || ''}
                     onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 focus:outline-none"
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-amber-500 shadow-xs placeholder-slate-400 dark:placeholder-slate-500"
+                    placeholder="عنوان السكن"
                   />
                 </div>
                 <div>
-                  <label className="block text-slate-400 font-semibold mb-1">ملاحظات إدارية</label>
+                  <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">ملاحظات إدارية</label>
                   <input
                     type="text"
                     value={formData.notes || ''}
                     onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 focus:outline-none"
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-amber-500 shadow-xs placeholder-slate-400 dark:placeholder-slate-500"
+                    placeholder="أي ملاحظات خاصة بالمتدرب..."
                   />
                 </div>
               </div>
@@ -3157,9 +3163,9 @@ export const TraineesView: React.FC = () => {
 
       {/* ----------------- MODAL: Edit Trainee ----------------- */}
       {isEditModalOpen && activeTrainee && typeof document !== 'undefined' && createPortal(
-        <div className="fixed inset-0 z-[99999] flex items-center justify-center p-3 sm:p-4 bg-slate-950/75 backdrop-blur-sm overflow-y-auto">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-3xl shadow-2xl max-w-3xl w-full my-auto max-h-[88vh] flex flex-col overflow-hidden text-slate-900 dark:text-slate-100 modal-dialog-box animate-in fade-in zoom-in-95">
-            <div className="shrink-0 p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-900/90">
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center p-3 sm:p-4 bg-slate-950/75 backdrop-blur-sm overflow-y-auto" dir="rtl">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl max-w-3xl w-full my-auto max-h-[88vh] flex flex-col overflow-hidden text-slate-900 dark:text-slate-100 modal-dialog-box animate-in fade-in zoom-in-95">
+            <div className="shrink-0 p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-white dark:bg-slate-900">
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 rounded-xl bg-blue-500/10 dark:bg-blue-500/20 border border-blue-500/30 flex items-center justify-center text-blue-600 dark:text-blue-400">
                   <Edit className="w-4 h-4" />
@@ -3188,20 +3194,20 @@ export const TraineesView: React.FC = () => {
                 />
                 <div
                   onClick={() => editPhotoInputRef.current?.click()}
-                  className="w-16 h-16 rounded-2xl bg-slate-800 border-2 border-dashed border-slate-600 hover:border-blue-500 flex flex-col items-center justify-center cursor-pointer overflow-hidden transition-all group shrink-0 relative"
+                  className="w-16 h-16 rounded-2xl bg-white dark:bg-slate-800 border-2 border-dashed border-slate-300 dark:border-slate-600 hover:border-blue-500 flex flex-col items-center justify-center cursor-pointer overflow-hidden transition-all group shrink-0 relative"
                 >
                   {formData.photoUrl ? (
                     <img src={formData.photoUrl} alt="صورة الطالب" className="w-full h-full object-cover" />
                   ) : (
                     <div className="text-center p-1">
-                      <Camera className="w-5 h-5 text-slate-400 group-hover:text-blue-400 mx-auto" />
-                      <span className="text-[8px] text-slate-400 block mt-0.5">تغيير الصورة</span>
+                      <Camera className="w-5 h-5 text-slate-400 group-hover:text-blue-500 mx-auto" />
+                      <span className="text-[8px] text-slate-500 dark:text-slate-400 block mt-0.5">تغيير الصورة</span>
                     </div>
                   )}
                 </div>
                 <div className="flex-1 text-right space-y-1">
-                  <p className="text-xs font-bold text-slate-200">الصورة الشخصية للمتدرب</p>
-                  <p className="text-[10px] text-slate-400">اضغط على المربع لتحديث أو استبدال صورة الطالب</p>
+                  <p className="text-xs font-bold text-slate-900 dark:text-slate-100">الصورة الشخصية للمتدرب</p>
+                  <p className="text-[10px] text-slate-500 dark:text-slate-400">اضغط على المربع لتحديث أو استبدال صورة الطالب</p>
                   <div className="flex items-center gap-2 pt-1">
                     <button
                       type="button"
@@ -3209,16 +3215,16 @@ export const TraineesView: React.FC = () => {
                         setPhotoStudioTargetMode('edit');
                         setIsPhotoStudioOpen(true);
                       }}
-                      className="px-3 py-1.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/50 text-amber-300 font-bold text-[10px] flex items-center gap-1.5 shadow-sm transition-all"
+                      className="px-3 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 dark:bg-amber-500/20 dark:hover:bg-amber-500/30 border border-amber-300 dark:border-amber-500/50 text-amber-800 dark:text-amber-300 font-bold text-[10px] flex items-center gap-1.5 shadow-xs transition-all"
                     >
-                      <Wand2 className="w-3.5 h-3.5 text-amber-400" />
+                      <Wand2 className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
                       <span>فتح استوديو قص وتلبيس الصورة ✨</span>
                     </button>
                     {formData.photoUrl && (
                       <button
                         type="button"
                         onClick={() => setFormData({ ...formData, photoUrl: '' })}
-                        className="text-[10px] text-rose-400 hover:underline font-bold"
+                        className="text-[10px] text-rose-600 dark:text-rose-400 hover:underline font-bold"
                       >
                         إزالة الصورة
                       </button>
@@ -3229,15 +3235,15 @@ export const TraineesView: React.FC = () => {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <div>
                   <div className="flex items-center justify-between mb-1">
-                    <label className="block text-slate-400 font-semibold">كود المتدرب (مرتبط بالصف)</label>
+                    <label className="block text-slate-700 dark:text-slate-300 font-semibold">كود المتدرب (مرتبط بالصف)</label>
                     <button
                       type="button"
                       onClick={() => handleGradeChangeInEdit(formData.grade || '')}
                       disabled={isGeneratingCode || !formData.grade}
-                      className="text-[10px] text-amber-400 hover:text-amber-300 flex items-center gap-1 font-bold transition-all disabled:opacity-50"
+                      className="text-[10px] text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300 flex items-center gap-1 font-bold transition-all disabled:opacity-50"
                       title="إعادة توليد الكود التسلسلي الصحيح بناء على الصف المختار"
                     >
-                      <Sparkles className={`w-3 h-3 ${isGeneratingCode ? 'animate-spin text-amber-300' : ''}`} />
+                      <Sparkles className={`w-3 h-3 ${isGeneratingCode ? 'animate-spin text-amber-600 dark:text-amber-300' : ''}`} />
                       تحديث الكود حسب الصف
                     </button>
                   </div>
@@ -3245,52 +3251,52 @@ export const TraineesView: React.FC = () => {
                     type="text"
                     value={formData.code ?? ''}
                     onChange={(e) => setFormData({ ...formData, code: e.target.value.toUpperCase() })}
-                    className="w-full bg-slate-800/90 border border-amber-500/40 rounded-xl px-3 py-2 text-amber-400 font-mono font-black text-sm focus:outline-none focus:ring-1 focus:ring-amber-500"
+                    className="w-full bg-amber-50/50 dark:bg-slate-800/90 border border-amber-300 dark:border-amber-500/40 rounded-xl px-3 py-2 text-amber-800 dark:text-amber-400 font-mono font-black text-sm focus:outline-none focus:ring-1 focus:ring-amber-500"
                   />
                   {codeRegenNotice && (
-                    <p className="text-[10px] text-emerald-400 mt-1 font-bold bg-emerald-950/40 border border-emerald-500/30 p-1.5 rounded-lg">
+                    <p className="text-[10px] text-emerald-700 dark:text-emerald-400 mt-1 font-bold bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-500/30 p-1.5 rounded-lg">
                       ✨ {codeRegenNotice}
                     </p>
                   )}
                 </div>
                 <div className="md:col-span-2">
-                  <label className="block text-slate-300 font-bold mb-1">الاسم رباعي *</label>
+                  <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">الاسم رباعي *</label>
                   <input
                     type="text"
                     required
                     value={formData.fullName ?? ''}
                     onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100"
+                    className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-amber-500"
                   />
                 </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <div>
-                  <label className="block text-slate-300 font-bold mb-1">رقم الهاتف *</label>
+                  <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">رقم الهاتف *</label>
                   <input
                     type="text"
                     required
                     value={formData.phone ?? ''}
                     onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 font-mono"
+                    className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 font-mono focus:outline-none focus:border-amber-500"
                   />
                 </div>
                 <div>
-                  <label className="block text-slate-400 font-semibold mb-1">هاتف ولي الأمر</label>
+                  <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">هاتف ولي الأمر</label>
                   <input
                     type="text"
                     value={formData.parentPhone ?? ''}
                     onChange={(e) => setFormData({ ...formData, parentPhone: e.target.value })}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 font-mono"
+                    className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 font-mono focus:outline-none focus:border-amber-500"
                   />
                 </div>
                 <div>
-                  <label className="block text-slate-400 font-semibold mb-1">الحالة</label>
+                  <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">الحالة</label>
                   <select
                     value={formData.status ?? ''}
                     onChange={(e) => setFormData({ ...formData, status: e.target.value })}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100"
+                    className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-amber-500"
                   >
                     <option value="active">نشط</option>
                     <option value="completed">أتم الدورة</option>
@@ -3301,9 +3307,9 @@ export const TraineesView: React.FC = () => {
               </div>
 
               {/* National ID + Birth Date + Gender in Edit Modal */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 bg-slate-950/30 p-3 rounded-xl border border-slate-800">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 bg-slate-50 dark:bg-slate-950/30 p-3 rounded-xl border border-slate-200 dark:border-slate-800">
                 <div>
-                  <label className="block text-slate-300 font-bold mb-1">الرقم القومي (14 رقم)</label>
+                  <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">الرقم القومي (14 رقم)</label>
                   <input
                     type="text"
                     maxLength={14}
@@ -3331,25 +3337,25 @@ export const TraineesView: React.FC = () => {
                       }
                       setFormData({ ...formData, nationalId: val, birthDate, gender });
                     }}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 font-mono focus:outline-none focus:border-amber-500 text-xs"
+                    className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 font-mono focus:outline-none focus:border-amber-500 text-xs"
                     placeholder="أدخل الرقم القومي لاستخراج ميلاده تلقائياً"
                   />
                 </div>
                 <div>
-                  <label className="block text-slate-300 font-bold mb-1">تاريخ الميلاد</label>
+                  <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">تاريخ الميلاد</label>
                   <input
                     type="date"
                     value={formData.birthDate || ''}
                     onChange={(e) => setFormData({ ...formData, birthDate: e.target.value })}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 focus:outline-none focus:border-amber-500 text-xs"
+                    className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-amber-500 text-xs"
                   />
                 </div>
                 <div>
-                  <label className="block text-slate-300 font-bold mb-1">النوع</label>
+                  <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">النوع</label>
                   <select
                     value={formData.gender || 'male'}
                     onChange={(e) => setFormData({ ...formData, gender: e.target.value })}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 focus:outline-none focus:border-amber-500 text-xs"
+                    className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-amber-500 text-xs"
                   >
                     <option value="male">ذكر</option>
                     <option value="female">أنثى</option>
@@ -3359,13 +3365,13 @@ export const TraineesView: React.FC = () => {
 
               {/* Sibling Detection Alert in Edit Modal */}
               {detectedSiblings.length > 0 && (
-                <div className="bg-purple-950/60 border border-purple-500/50 p-3 rounded-xl flex items-center justify-between gap-3 animate-fadeIn shadow-lg">
+                <div className="bg-purple-50 dark:bg-purple-950/60 border border-purple-200 dark:border-purple-500/50 p-3 rounded-xl flex items-center justify-between gap-3 animate-fadeIn shadow-xs">
                   <div>
-                    <p className="text-xs font-bold text-purple-300 flex items-center gap-1.5">
-                      <Users className="w-4 h-4 text-purple-400" />
+                    <p className="text-xs font-bold text-purple-800 dark:text-purple-300 flex items-center gap-1.5">
+                      <Users className="w-4 h-4 text-purple-600 dark:text-purple-400" />
                       تم اكتشاف إخوة مسجلين بالمركز تلقائياً ({detectedSiblings.length}):
                     </p>
-                    <p className="text-[11px] text-purple-200 mt-0.5">
+                    <p className="text-[11px] text-purple-700 dark:text-purple-200 mt-0.5">
                       {detectedSiblings.map((s) => `${s.fullName} (${s.code})`).join(' ، ')}
                     </p>
                   </div>
@@ -3385,7 +3391,7 @@ export const TraineesView: React.FC = () => {
                       }));
                       showToast('تم ربط الأخوات وتطبيق الخصم 20% بنجاح!', 'success');
                     }}
-                    className="px-3 py-1.5 bg-purple-600 hover:bg-purple-500 text-white rounded-lg font-bold text-xs shadow-lg transition-all shrink-0 flex items-center gap-1"
+                    className="px-3 py-1.5 bg-purple-600 hover:bg-purple-500 text-white rounded-lg font-bold text-xs shadow-md transition-all shrink-0 flex items-center gap-1"
                   >
                     <Zap className="w-3.5 h-3.5 text-amber-300" />
                     ربط الأخوة وتطبيق الخصم
@@ -3393,13 +3399,13 @@ export const TraineesView: React.FC = () => {
                 </div>
               )}
 
-              <div className="grid grid-cols-1 md:grid-cols-5 gap-3 bg-slate-950/40 p-3 rounded-xl border border-slate-800">
+              <div className="grid grid-cols-1 md:grid-cols-5 gap-3 bg-slate-50 dark:bg-slate-950/40 p-3 rounded-xl border border-slate-200 dark:border-slate-800">
                 <div>
-                  <label className="block text-slate-300 font-bold mb-1">الصف الدراسي</label>
+                  <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">الصف الدراسي</label>
                   <select
                     value={formData.grade ?? ''}
                     onChange={(e) => handleGradeChangeInEdit(e.target.value)}
-                    className="w-full bg-slate-800 border border-amber-500/40 rounded-xl px-3 py-2 text-slate-100 text-xs font-bold"
+                    className="w-full bg-white dark:bg-slate-800 border border-amber-300 dark:border-amber-500/40 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 text-xs font-bold focus:outline-none"
                   >
                     <option value="">-- اختر الصف --</option>
                     {GRADE_OPTIONS.map(g => (
@@ -3408,11 +3414,11 @@ export const TraineesView: React.FC = () => {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-slate-300 font-bold mb-1">الفرع</label>
+                  <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">الفرع</label>
                   <select
                     value={formData.branchId ?? ''}
                     onChange={(e) => setFormData({ ...formData, branchId: e.target.value })}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 text-xs"
+                    className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 text-xs focus:outline-none"
                   >
                     {branches.map((b) => (
                       <option key={b.id} value={b.id}>
@@ -3422,7 +3428,7 @@ export const TraineesView: React.FC = () => {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-slate-300 font-bold mb-1">الدورة التدريبية</label>
+                  <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">الدورة التدريبية</label>
                   <select
                     value={formData.courseId ?? ''}
                     onChange={(e) => {
@@ -3434,7 +3440,7 @@ export const TraineesView: React.FC = () => {
                         feeAmount: selCourse ? selCourse.feeAmount : formData.feeAmount
                       });
                     }}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 text-xs"
+                    className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 text-xs focus:outline-none"
                   >
                     <option value="">-- اختر دورة --</option>
                     {courses.map((c) => (
@@ -3445,7 +3451,7 @@ export const TraineesView: React.FC = () => {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-slate-400 font-semibold mb-1">المجموعة</label>
+                  <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">المجموعة</label>
                   <select
                     value={formData.groupId ?? ''}
                     onChange={(e) => {
@@ -3460,7 +3466,7 @@ export const TraineesView: React.FC = () => {
                       }
                       setFormData({ ...formData, groupId: gid, feeAmount: newFee });
                     }}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 text-xs"
+                    className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 text-xs focus:outline-none"
                   >
                     <option value="">-- اختر مجموعة --</option>
                     {groups
@@ -3484,11 +3490,11 @@ export const TraineesView: React.FC = () => {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-slate-400 font-semibold mb-1">المدرب</label>
+                  <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">المدرب</label>
                   <select
                     value={formData.trainerId ?? ''}
                     onChange={(e) => setFormData({ ...formData, trainerId: e.target.value })}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 text-xs"
+                    className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 text-xs focus:outline-none"
                   >
                     <option value="">-- اختر مدرب --</option>
                     {trainers.map((tr) => (
@@ -3500,30 +3506,30 @@ export const TraineesView: React.FC = () => {
                 </div>
               </div>
 
-              <div className="bg-amber-500/10 p-3 rounded-xl border border-amber-500/30 space-y-3">
+              <div className="bg-amber-50/70 dark:bg-amber-500/10 p-3 rounded-xl border border-amber-200 dark:border-amber-500/30 space-y-3">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-amber-300 font-bold mb-1">رسوم الدورة {courses.find(c => c.id === formData.courseId)?.billingType === 'monthly' && <span className="text-xs bg-amber-500 text-slate-900 px-1 rounded ml-1">شهرياً</span>}</label>
+                    <label className="block text-amber-800 dark:text-amber-300 font-bold mb-1">رسوم الدورة {courses.find(c => c.id === formData.courseId)?.billingType === 'monthly' && <span className="text-xs bg-amber-500 text-slate-900 px-1 rounded ml-1">شهرياً</span>}</label>
                     <input
                       type="number"
                       value={formData.feeAmount ?? ""}
                       onChange={(e) => setFormData({ ...formData, feeAmount: Number(e.target.value) })}
-                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 font-mono font-bold"
+                      className="w-full bg-white dark:bg-slate-800 border border-amber-300 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 font-mono font-bold focus:outline-none"
                     />
                   </div>
                   <div>
-                    <label className="block text-amber-300 font-bold mb-1">الخصم الممنوح</label>
+                    <label className="block text-amber-800 dark:text-amber-300 font-bold mb-1">الخصم الممنوح</label>
                     <input
                       type="number"
                       value={formData.discountAmount ?? ""}
                       onChange={(e) => setFormData({ ...formData, discountAmount: Number(e.target.value) })}
-                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 font-mono font-bold"
+                      className="w-full bg-white dark:bg-slate-800 border border-amber-300 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 font-mono font-bold focus:outline-none"
                     />
                   </div>
                 </div>
 
                 {/* Exemption Toggle in Edit Modal */}
-                <div className="pt-2 border-t border-amber-500/20 space-y-2">
+                <div className="pt-2 border-t border-amber-200 dark:border-amber-500/20 space-y-2">
                   <div className="flex items-center justify-between">
                     <label className="flex items-center gap-2 cursor-pointer select-none">
                       <input
@@ -3539,10 +3545,10 @@ export const TraineesView: React.FC = () => {
                             discountAmount: checked ? fee : 0
                           });
                         }}
-                        className="w-4 h-4 rounded text-amber-500 focus:ring-amber-500 bg-slate-800 border-slate-700 cursor-pointer"
+                        className="w-4 h-4 rounded text-amber-500 focus:ring-amber-500 bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-700 cursor-pointer"
                       />
-                      <span className="font-bold text-xs text-amber-300 flex items-center gap-1.5">
-                        <ShieldCheck className="w-4 h-4 text-amber-400" />
+                      <span className="font-bold text-xs text-amber-800 dark:text-amber-300 flex items-center gap-1.5">
+                        <ShieldCheck className="w-4 h-4 text-amber-600 dark:text-amber-400" />
                         إعفاء كلي استثنائي من رسوم الدورة (أبناء إداريين / مالك / أصدقاء)
                       </span>
                     </label>
@@ -3556,11 +3562,11 @@ export const TraineesView: React.FC = () => {
                   {formData.isExempt && (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
                       <div>
-                        <label className="block text-slate-300 font-semibold mb-1 text-xs">سبب الإعفاء الخاص</label>
+                        <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1 text-xs">سبب الإعفاء الخاص</label>
                         <select
                           value={formData.exemptReason || 'management_children'}
                           onChange={(e) => setFormData({ ...formData, exemptReason: e.target.value })}
-                          className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-1.5 text-slate-100 text-xs focus:outline-none focus:border-amber-500"
+                          className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-1.5 text-slate-900 dark:text-slate-100 text-xs focus:outline-none focus:border-amber-500"
                         >
                           <option value="management_children">👑 أبناء صاحب المركز / إداري بالمركز</option>
                           <option value="friend_children">🤝 أبناء أصدقاء ومعارف إدارة المركز</option>
@@ -3569,13 +3575,13 @@ export const TraineesView: React.FC = () => {
                         </select>
                       </div>
                       <div>
-                        <label className="block text-slate-300 font-semibold mb-1 text-xs">ملاحظة سرية للإدارة</label>
+                        <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1 text-xs">ملاحظة سرية للإدارة</label>
                         <input
                           type="text"
                           placeholder="ملاحظات سرية للإدارة والمالية..."
                           value={formData.notes || ''}
                           onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                          className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-1.5 text-slate-100 text-xs focus:outline-none focus:border-amber-500"
+                          className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-1.5 text-slate-900 dark:text-slate-100 text-xs focus:outline-none focus:border-amber-500"
                         />
                       </div>
                     </div>
@@ -3615,8 +3621,8 @@ export const TraineesView: React.FC = () => {
 
       {/* ----------------- MODAL: Payment Voucher ----------------- */}
       {isPaymentModalOpen && activeTrainee && typeof document !== 'undefined' && createPortal(
-        <div className="fixed inset-0 z-[99999] flex items-center justify-center p-3 sm:p-4 bg-slate-950/75 backdrop-blur-sm overflow-y-auto">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-3xl shadow-2xl max-w-lg w-full my-auto max-h-[88vh] p-6 text-slate-900 dark:text-slate-100 modal-dialog-box animate-in fade-in zoom-in-95 overflow-y-auto custom-scrollbar">
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center p-3 sm:p-4 bg-slate-950/75 backdrop-blur-sm overflow-y-auto" dir="rtl">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl max-w-lg w-full my-auto max-h-[88vh] p-6 text-slate-900 dark:text-slate-100 modal-dialog-box animate-in fade-in zoom-in-95 overflow-y-auto custom-scrollbar">
             <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800 mb-4">
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 rounded-xl bg-emerald-500/10 dark:bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
@@ -3626,7 +3632,7 @@ export const TraineesView: React.FC = () => {
               </div>
               <button
                 onClick={() => setIsPaymentModalOpen(false)}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -3743,11 +3749,11 @@ export const TraineesView: React.FC = () => {
 
       {/* ----------------- MODAL: Trainee Full Profile ----------------- */}
       {isProfileModalOpen && activeTrainee && typeof document !== 'undefined' && createPortal(
-        <div className="fixed inset-0 z-[99999] flex items-center justify-center p-2 sm:p-4 bg-slate-950/75 backdrop-blur-md overflow-y-auto">
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center p-2 sm:p-4 bg-slate-950/75 backdrop-blur-md overflow-y-auto" dir="rtl">
           <div className="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-3xl shadow-2xl max-w-4xl w-full my-auto max-h-[90vh] flex flex-col overflow-hidden text-slate-900 dark:text-slate-100 modal-dialog-box">
             
             {/* Modal Header */}
-            <div className="shrink-0 px-5 py-3.5 border-b border-slate-100 dark:border-slate-800/80 flex items-center justify-between bg-slate-50/90 dark:bg-slate-900/90">
+            <div className="shrink-0 px-5 py-3.5 border-b border-slate-100 dark:border-slate-800/80 flex items-center justify-between bg-white dark:bg-slate-900">
               <div className="flex items-center gap-3">
                 <div className="w-8 h-8 rounded-xl bg-amber-500/15 border border-amber-500/25 flex items-center justify-center text-amber-600 dark:text-amber-400">
                   <Eye className="w-4 h-4" />
@@ -3777,7 +3783,7 @@ export const TraineesView: React.FC = () => {
             <div className="flex-1 overflow-y-auto custom-scrollbar p-4 sm:p-6 space-y-4 text-xs">
               
               {/* Profile Card Header (Hero Identity Card) */}
-              <div className="p-4 sm:p-5 rounded-2xl bg-slate-50/80 dark:bg-slate-850/90 border border-slate-200/90 dark:border-slate-800 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 shadow-2xs">
+              <div className="p-4 sm:p-5 rounded-2xl bg-white dark:bg-slate-850/90 border border-slate-200/90 dark:border-slate-800 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 shadow-2xs">
                 <div className="flex items-center gap-4 text-right">
                   {activeTrainee.photoUrl ? (
                     <img
@@ -3919,31 +3925,31 @@ export const TraineesView: React.FC = () => {
 
                 return (
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                    <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-850 border border-slate-200/80 dark:border-slate-800">
+                    <div className="p-3.5 rounded-2xl bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-800 shadow-2xs">
                       <span className="text-slate-500 dark:text-slate-400 text-xs font-medium block mb-1">رسوم الدورة المقررة</span>
                       <span className="text-base sm:text-lg font-black font-mono text-slate-900 dark:text-white">
                         {feeAmount} <span className="text-xs font-bold text-slate-500 dark:text-slate-400">ج.م</span>
                       </span>
                     </div>
 
-                    <div className="p-3.5 rounded-xl bg-amber-50/50 dark:bg-amber-950/20 border border-amber-200/70 dark:border-amber-800/40">
+                    <div className="p-3.5 rounded-2xl bg-amber-50/50 dark:bg-amber-950/20 border border-amber-200/70 dark:border-amber-800/40 shadow-2xs">
                       <span className="text-amber-800 dark:text-amber-400 text-xs font-medium block mb-1">الخصم الممنوح</span>
                       <span className="text-base sm:text-lg font-black font-mono text-amber-700 dark:text-amber-300">
                         {discountAmount} <span className="text-xs font-bold text-amber-700/70 dark:text-amber-400/70">ج.م</span>
                       </span>
                     </div>
 
-                    <div className="p-3.5 rounded-xl bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-200/70 dark:border-emerald-800/40">
+                    <div className="p-3.5 rounded-2xl bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-200/70 dark:border-emerald-800/40 shadow-2xs">
                       <span className="text-emerald-800 dark:text-emerald-400 text-xs font-medium block mb-1">إجمالي المدفوع</span>
                       <span className="text-base sm:text-lg font-black font-mono text-emerald-700 dark:text-emerald-300">
                         {paidAmount} <span className="text-xs font-bold text-emerald-700/70 dark:text-emerald-400/70">ج.م</span>
                       </span>
                     </div>
 
-                    <div className={`p-3.5 rounded-xl border ${
+                    <div className={`p-3.5 rounded-2xl border shadow-2xs ${
                       remainingDebt > 0
                         ? 'bg-rose-50/60 dark:bg-rose-950/20 border-rose-200/70 dark:border-rose-800/40'
-                        : 'bg-slate-50 dark:bg-slate-850 border-slate-200/80 dark:border-slate-800'
+                        : 'bg-white dark:bg-slate-850 border-slate-200 dark:border-slate-800'
                     }`}>
                       <span className={`text-xs font-medium block mb-1 ${remainingDebt > 0 ? 'text-rose-800 dark:text-rose-400' : 'text-slate-500 dark:text-slate-400'}`}>
                         المتبقي المطلوب
@@ -4026,7 +4032,7 @@ export const TraineesView: React.FC = () => {
 
               {/* Tab 1: Financial Receipts */}
               {profileTab === 'finance' && (
-                <div className="bg-slate-50/60 dark:bg-slate-850/60 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 space-y-3">
+                <div className="bg-white dark:bg-slate-850/60 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-3 shadow-2xs">
                   <div className="flex items-center justify-between">
                     <h4 className="font-bold text-slate-900 dark:text-white flex items-center gap-2 text-xs">
                       <CreditCard className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
@@ -4038,13 +4044,13 @@ export const TraineesView: React.FC = () => {
                   </div>
 
                   {traineeProfileData?.payments?.length === 0 ? (
-                    <div className="text-center py-8 bg-white dark:bg-slate-900/60 rounded-xl border border-dashed border-slate-200 dark:border-slate-800 text-slate-400 dark:text-slate-500">
+                    <div className="text-center py-8 bg-slate-50 dark:bg-slate-900/60 rounded-xl border border-dashed border-slate-200 dark:border-slate-800 text-slate-400 dark:text-slate-500">
                       لا توجد سندات قبض مسجلة حتى الآن لهذا المتدرب.
                     </div>
                   ) : (
                     <div className="space-y-2 max-h-56 overflow-y-auto custom-scrollbar">
                       {traineeProfileData?.payments?.map((p: any) => (
-                        <div key={p.id} className="p-3 rounded-xl bg-white dark:bg-slate-900/70 border border-slate-200/80 dark:border-slate-750 flex items-center justify-between shadow-2xs">
+                        <div key={p.id} className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/70 border border-slate-200/80 dark:border-slate-750 flex items-center justify-between shadow-2xs">
                           <div className="flex items-center gap-3">
                             <span className="font-mono font-bold text-amber-700 dark:text-amber-400 bg-amber-500/10 px-2.5 py-0.5 rounded text-xs">
                               {p.receiptNumber}
@@ -4065,19 +4071,19 @@ export const TraineesView: React.FC = () => {
 
               {/* Tab 2: Attendance History */}
               {profileTab === 'attendance' && (
-                <div className="bg-slate-50/60 dark:bg-slate-850/60 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 space-y-3">
+                <div className="bg-white dark:bg-slate-850/60 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-3 shadow-2xs">
                   <h4 className="font-bold text-slate-900 dark:text-white flex items-center gap-2 text-xs">
                     <Clock className="w-4 h-4 text-indigo-500" />
                     سجل الحضور والغياب للمتدرب
                   </h4>
                   {traineeProfileData?.attendance?.length === 0 ? (
-                    <div className="text-center py-8 bg-white dark:bg-slate-900/60 rounded-xl border border-dashed border-slate-200 dark:border-slate-800 text-slate-400 dark:text-slate-500">
+                    <div className="text-center py-8 bg-slate-50 dark:bg-slate-900/60 rounded-xl border border-dashed border-slate-200 dark:border-slate-800 text-slate-400 dark:text-slate-500">
                       لا توجد سجلات حضور مسجلة حتى الآن.
                     </div>
                   ) : (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-56 overflow-y-auto custom-scrollbar">
                       {traineeProfileData?.attendance?.map((a: any) => (
-                        <div key={a.id} className="p-2.5 rounded-xl bg-white dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800 flex justify-between items-center text-xs">
+                        <div key={a.id} className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800 flex justify-between items-center text-xs">
                           <span className="text-slate-700 dark:text-slate-300 font-medium">{a.date}</span>
                           <span className={`font-bold px-2 py-0.5 rounded-md ${
                             a.status === 'present'
@@ -4095,7 +4101,7 @@ export const TraineesView: React.FC = () => {
 
               {/* Tab 3: Points & Star History */}
               {profileTab === 'points' && (
-                <div className="bg-slate-50/60 dark:bg-slate-850/60 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 space-y-3">
+                <div className="bg-white dark:bg-slate-850/60 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-3 shadow-2xs">
                   <div className="flex items-center justify-between">
                     <h4 className="font-bold text-slate-900 dark:text-white flex items-center gap-2 text-xs">
                       <Star className="w-4 h-4 text-amber-500" />
@@ -4109,13 +4115,13 @@ export const TraineesView: React.FC = () => {
                     </button>
                   </div>
                   {traineeProfileData?.points?.length === 0 ? (
-                    <div className="text-center py-8 bg-white dark:bg-slate-900/60 rounded-xl border border-dashed border-slate-200 dark:border-slate-800 text-slate-400 dark:text-slate-500">
+                    <div className="text-center py-8 bg-slate-50 dark:bg-slate-900/60 rounded-xl border border-dashed border-slate-200 dark:border-slate-800 text-slate-400 dark:text-slate-500">
                       لا توجد نقاط مسجلة بعد.
                     </div>
                   ) : (
                     <div className="space-y-2 max-h-56 overflow-y-auto custom-scrollbar">
                       {traineeProfileData?.points?.map((pt: any) => (
-                        <div key={pt.id} className="p-3 rounded-xl bg-white dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800 flex justify-between items-center text-xs">
+                        <div key={pt.id} className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800 flex justify-between items-center text-xs">
                           <div>
                             <span className="text-slate-800 dark:text-slate-200 font-medium">{pt.reason}</span>
                             {pt.createdAt && (
@@ -4157,7 +4163,7 @@ export const TraineesView: React.FC = () => {
                   <div className={`p-4 rounded-2xl border space-y-3 ${
                     warningStatus === 'red' ? 'bg-rose-50/50 border-rose-200/80 dark:bg-rose-950/20 dark:border-rose-900/50' :
                     warningStatus === 'yellow' ? 'bg-amber-50/50 border-amber-200/80 dark:bg-amber-950/20 dark:border-amber-900/50' :
-                    'bg-slate-50/60 border-slate-200/80 dark:bg-slate-850/60 dark:border-slate-800'
+                    'bg-white border-slate-200 dark:bg-slate-850/60 dark:border-slate-800 shadow-2xs'
                   }`}>
                     <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                       <div className="flex items-center gap-2">
@@ -4188,7 +4194,7 @@ export const TraineesView: React.FC = () => {
 
               {/* Tab 5: Confidential Care Vault */}
               {profileTab === 'vault' && (
-                <div className="bg-slate-50/60 dark:bg-slate-850/60 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-4 space-y-3">
+                <div className="bg-white dark:bg-slate-850/60 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 space-y-3 shadow-2xs">
                   <div className="flex items-center justify-between border-b border-slate-200/60 dark:border-slate-800 pb-3">
                     <div className="flex items-center gap-2">
                       <Shield className="w-5 h-5 text-amber-500" />
@@ -4317,9 +4323,9 @@ export const TraineesView: React.FC = () => {
 
       {/* ----------------- MODAL: Star & Reward Award Dialog ----------------- */}
       {isStarModalOpen && typeof document !== 'undefined' && createPortal(
-        <div className="fixed inset-0 z-[99999] flex items-center justify-center p-3 sm:p-4 bg-slate-950/75 backdrop-blur-sm overflow-y-auto">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-3xl shadow-2xl max-w-lg w-full my-auto max-h-[88vh] flex flex-col overflow-hidden text-slate-900 dark:text-slate-100 modal-dialog-box animate-in fade-in zoom-in-95">
-            <div className="shrink-0 p-4 flex items-center justify-between border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/90">
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center p-3 sm:p-4 bg-slate-950/75 backdrop-blur-sm overflow-y-auto" dir="rtl">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl max-w-lg w-full my-auto max-h-[88vh] flex flex-col overflow-hidden text-slate-900 dark:text-slate-100 modal-dialog-box animate-in fade-in zoom-in-95">
+            <div className="shrink-0 p-4 flex items-center justify-between border-b border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900">
               <div className="flex items-center gap-2.5">
                 <div className="w-8 h-8 rounded-xl bg-amber-500/10 dark:bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-500">
                   <Star className="w-4 h-4 fill-amber-400" />
@@ -4353,10 +4359,10 @@ export const TraineesView: React.FC = () => {
                       setStarPoints(10);
                       setStarReason('مشاركة وتفاعل إيجابي في المحاضرة');
                     }}
-                    className={`p-2.5 rounded-xl border text-center transition-all ${
+                    className={`p-2.5 rounded-xl border text-center transition-all cursor-pointer shadow-2xs ${
                       starCount === 1 && starPoints === 10
-                        ? 'bg-amber-500/15 border-amber-500 text-amber-700 dark:text-amber-300 ring-1 ring-amber-500/50 font-bold'
-                        : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-750'
+                        ? 'bg-amber-50 dark:bg-amber-950/30 border-amber-500 text-amber-800 dark:text-amber-300 ring-1 ring-amber-500/50 font-bold'
+                        : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-750'
                     }`}
                   >
                     <div className="text-base mb-0.5">⭐</div>
@@ -4371,10 +4377,10 @@ export const TraineesView: React.FC = () => {
                       setStarPoints(20);
                       setStarReason('إتمام الواجب والتطبيق العملي بنجاح');
                     }}
-                    className={`p-2.5 rounded-xl border text-center transition-all ${
+                    className={`p-2.5 rounded-xl border text-center transition-all cursor-pointer shadow-2xs ${
                       starCount === 2 && starPoints === 20
-                        ? 'bg-amber-500/15 border-amber-500 text-amber-700 dark:text-amber-300 ring-1 ring-amber-500/50 font-bold'
-                        : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-750'
+                        ? 'bg-amber-50 dark:bg-amber-950/30 border-amber-500 text-amber-800 dark:text-amber-300 ring-1 ring-amber-500/50 font-bold'
+                        : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-750'
                     }`}
                   >
                     <div className="text-base mb-0.5">⭐⭐</div>
@@ -4389,10 +4395,10 @@ export const TraineesView: React.FC = () => {
                       setStarPoints(30);
                       setStarReason('إجابة نموذجية وسرعة بديهة');
                     }}
-                    className={`p-2.5 rounded-xl border text-center transition-all ${
+                    className={`p-2.5 rounded-xl border text-center transition-all cursor-pointer shadow-2xs ${
                       starCount === 3 && starPoints === 30
-                        ? 'bg-amber-500/15 border-amber-500 text-amber-700 dark:text-amber-300 ring-1 ring-amber-500/50 font-bold'
-                        : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-750'
+                        ? 'bg-amber-50 dark:bg-amber-950/30 border-amber-500 text-amber-800 dark:text-amber-300 ring-1 ring-amber-500/50 font-bold'
+                        : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-750'
                     }`}
                   >
                     <div className="text-base mb-0.5">⭐⭐⭐</div>
@@ -4407,10 +4413,10 @@ export const TraineesView: React.FC = () => {
                       setStarPoints(50);
                       setStarReason('تفوق كامل في الاختبار والتقييم الدوري');
                     }}
-                    className={`p-2.5 rounded-xl border text-center transition-all ${
+                    className={`p-2.5 rounded-xl border text-center transition-all cursor-pointer shadow-2xs ${
                       starCount === 5 && starPoints === 50
-                        ? 'bg-amber-500/15 border-amber-500 text-amber-700 dark:text-amber-300 ring-1 ring-amber-500/50 font-bold'
-                        : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-750'
+                        ? 'bg-amber-50 dark:bg-amber-950/30 border-amber-500 text-amber-800 dark:text-amber-300 ring-1 ring-amber-500/50 font-bold'
+                        : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-750'
                     }`}
                   >
                     <div className="text-base mb-0.5">🌟</div>
@@ -4425,10 +4431,10 @@ export const TraineesView: React.FC = () => {
                       setStarPoints(100);
                       setStarReason('إنجاز أسطوري وجائزة التميز الكبرى');
                     }}
-                    className={`p-2.5 rounded-xl border text-center transition-all ${
+                    className={`p-2.5 rounded-xl border text-center transition-all cursor-pointer shadow-2xs ${
                       starCount === 10 && starPoints === 100
-                        ? 'bg-amber-500/15 border-amber-500 text-amber-700 dark:text-amber-300 ring-1 ring-amber-500/50 font-bold'
-                        : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-750'
+                        ? 'bg-amber-50 dark:bg-amber-950/30 border-amber-500 text-amber-800 dark:text-amber-300 ring-1 ring-amber-500/50 font-bold'
+                        : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-750'
                     }`}
                   >
                     <div className="text-base mb-0.5">🚀</div>
@@ -4443,10 +4449,10 @@ export const TraineesView: React.FC = () => {
                       setStarPoints(15);
                       setStarReason('custom');
                     }}
-                    className={`p-2.5 rounded-xl border text-center transition-all ${
+                    className={`p-2.5 rounded-xl border text-center transition-all cursor-pointer shadow-2xs ${
                       starReason === 'custom'
-                        ? 'bg-amber-500/15 border-amber-500 text-amber-700 dark:text-amber-300 ring-1 ring-amber-500/50 font-bold'
-                        : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-750'
+                        ? 'bg-amber-50 dark:bg-amber-950/30 border-amber-500 text-amber-800 dark:text-amber-300 ring-1 ring-amber-500/50 font-bold'
+                        : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-750'
                     }`}
                   >
                     <div className="text-base mb-0.5">⚙️</div>
@@ -4457,14 +4463,14 @@ export const TraineesView: React.FC = () => {
               </div>
 
               {/* Star Counter & Points Modifier */}
-              <div className="bg-slate-50 dark:bg-slate-800/80 p-3.5 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-3">
+              <div className="bg-white dark:bg-slate-800/80 p-3.5 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-3 shadow-2xs">
                 <div className="flex items-center justify-between">
                   <span className="text-slate-700 dark:text-slate-300 font-bold">النقاط الممنوحة:</span>
                   <div className="flex items-center gap-2">
                     <button
                       type="button"
                       onClick={() => setStarPoints(prev => Math.max(1, prev - 5))}
-                      className="w-7 h-7 rounded-lg bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 flex items-center justify-center font-bold text-slate-800 dark:text-slate-200 transition-colors"
+                      className="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 flex items-center justify-center font-bold text-slate-800 dark:text-slate-200 transition-colors cursor-pointer"
                     >
                       -
                     </button>
@@ -4477,7 +4483,7 @@ export const TraineesView: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => setStarPoints(prev => prev + 5)}
-                      className="w-7 h-7 rounded-lg bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 flex items-center justify-center font-bold text-slate-800 dark:text-slate-200 transition-colors"
+                      className="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 flex items-center justify-center font-bold text-slate-800 dark:text-slate-200 transition-colors cursor-pointer"
                     >
                       +
                     </button>
@@ -4491,7 +4497,7 @@ export const TraineesView: React.FC = () => {
                 <select
                   value={starReason}
                   onChange={(e) => setStarReason(e.target.value)}
-                  className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 text-xs mb-2 font-medium"
+                  className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 text-xs mb-2 font-medium"
                 >
                   <option value="مشاركة وتفاعل إيجابي في المحاضرة">مشاركة وتفاعل إيجابي في المحاضرة 🌟</option>
                   <option value="إتمام الواجب والتطبيق العملي بنجاح">إتمام الواجب والتطبيق العملي بنجاح 📝</option>
@@ -4559,71 +4565,71 @@ export const TraineesView: React.FC = () => {
 
       {/* ----------------- MODAL: Excel Import Details ----------------- */}
       {syncBatchResultModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
-          <div className="bg-slate-900 border border-purple-500/50 rounded-3xl shadow-2xl max-w-lg w-full p-6 text-slate-100 animate-in fade-in zoom-in-95" dir="rtl">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-800 mb-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/75 backdrop-blur-md">
+          <div className="bg-white dark:bg-slate-900 border border-purple-200 dark:border-purple-500/50 rounded-3xl shadow-2xl max-w-lg w-full p-6 text-slate-900 dark:text-slate-100 animate-in fade-in zoom-in-95" dir="rtl">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800 mb-4">
               <div className="flex items-center gap-2">
-                <Zap className="w-6 h-6 text-amber-400" />
-                <h3 className="font-black text-base text-purple-200">نتائج الفحص والمزامنة الشاملة لكشوفات المتدربين</h3>
+                <Zap className="w-6 h-6 text-amber-500 dark:text-amber-400" />
+                <h3 className="font-black text-base text-purple-900 dark:text-purple-200">نتائج الفحص والمزامنة الشاملة لكشوفات المتدربين</h3>
               </div>
               <button
                 onClick={() => setSyncBatchResultModal(null)}
-                className="p-1 text-slate-400 hover:text-white"
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             <div className="space-y-3 text-xs">
-              <div className="bg-purple-950/40 border border-purple-500/30 p-3.5 rounded-2xl flex items-center justify-between">
-                <span className="font-bold text-slate-300">إجمالي سجلات المتدربين المفحوصة:</span>
-                <span className="font-mono font-black text-amber-400 text-sm">{syncBatchResultModal.totalTrainees} متدرب</span>
+              <div className="bg-purple-50 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-500/30 p-3.5 rounded-2xl flex items-center justify-between">
+                <span className="font-bold text-slate-700 dark:text-slate-300">إجمالي سجلات المتدربين المفحوصة:</span>
+                <span className="font-mono font-black text-amber-600 dark:text-amber-400 text-sm">{syncBatchResultModal.totalTrainees} متدرب</span>
               </div>
 
-              <div className="bg-slate-800/80 border border-slate-700/80 p-4 rounded-2xl space-y-2.5">
+              <div className="bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 p-4 rounded-2xl space-y-2.5">
                 <div className="flex items-center justify-between">
-                  <span className="text-slate-300 flex items-center gap-1.5 font-bold">
-                    <Users className="w-4 h-4 text-purple-400" />
+                  <span className="text-slate-700 dark:text-slate-300 flex items-center gap-1.5 font-bold">
+                    <Users className="w-4 h-4 text-purple-600 dark:text-purple-400" />
                     تحديث وربط الأخوة تلقائياً:
                   </span>
-                  <span className="font-mono font-black text-emerald-400">{syncBatchResultModal.siblingsLinkedCount} متدرب</span>
+                  <span className="font-mono font-black text-emerald-600 dark:text-emerald-400">{syncBatchResultModal.siblingsLinkedCount} متدرب</span>
                 </div>
 
-                <div className="flex items-center justify-between border-t border-slate-700/60 pt-2">
-                  <span className="text-slate-300 flex items-center gap-1.5 font-bold">
-                    <Sparkles className="w-4 h-4 text-cyan-400" />
+                <div className="flex items-center justify-between border-t border-slate-200 dark:border-slate-700/60 pt-2">
+                  <span className="text-slate-700 dark:text-slate-300 flex items-center gap-1.5 font-bold">
+                    <Sparkles className="w-4 h-4 text-sky-600 dark:text-cyan-400" />
                     استخراج تاريخ الميلاد من الرقم القومي:
                   </span>
-                  <span className="font-mono font-black text-cyan-300">{syncBatchResultModal.birthDatesExtractedCount} متدرب</span>
+                  <span className="font-mono font-black text-sky-600 dark:text-cyan-300">{syncBatchResultModal.birthDatesExtractedCount} متدرب</span>
                 </div>
 
-                <div className="flex items-center justify-between border-t border-slate-700/60 pt-2">
-                  <span className="text-slate-300 flex items-center gap-1.5 font-bold">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                <div className="flex items-center justify-between border-t border-slate-200 dark:border-slate-700/60 pt-2">
+                  <span className="text-slate-700 dark:text-slate-300 flex items-center gap-1.5 font-bold">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
                     تعبئة اسم ولي الأمر المفقود تلقائياً:
                   </span>
-                  <span className="font-mono font-black text-amber-300">{syncBatchResultModal.parentNamesAutoFilledCount} متدرب</span>
+                  <span className="font-mono font-black text-amber-600 dark:text-amber-300">{syncBatchResultModal.parentNamesAutoFilledCount} متدرب</span>
                 </div>
 
-                <div className="flex items-center justify-between border-t border-slate-700/60 pt-2">
-                  <span className="text-slate-300 flex items-center gap-1.5 font-bold">
-                    <ShieldCheck className="w-4 h-4 text-rose-400" />
+                <div className="flex items-center justify-between border-t border-slate-200 dark:border-slate-700/60 pt-2">
+                  <span className="text-slate-700 dark:text-slate-300 flex items-center gap-1.5 font-bold">
+                    <ShieldCheck className="w-4 h-4 text-rose-600 dark:text-rose-400" />
                     معالجة الإعفاءات ومنح المنح:
                   </span>
-                  <span className="font-mono font-black text-rose-300">{syncBatchResultModal.exemptionsProcessedCount} متدرب</span>
+                  <span className="font-mono font-black text-rose-600 dark:text-rose-300">{syncBatchResultModal.exemptionsProcessedCount} متدرب</span>
                 </div>
               </div>
 
-              <div className="p-3 bg-emerald-950/40 border border-emerald-500/30 rounded-2xl text-[11px] text-emerald-300 font-bold flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+              <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-500/30 rounded-2xl text-[11px] text-emerald-800 dark:text-emerald-300 font-bold flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
                 <span>تم تحديث القواعد والبيانات بأمان وحفظها في قاعدة البيانات السحابية المركزية للمركز!</span>
               </div>
             </div>
 
-            <div className="mt-5 pt-3 border-t border-slate-800 flex justify-end">
+            <div className="mt-5 pt-3 border-t border-slate-200 dark:border-slate-800 flex justify-end">
               <button
                 onClick={() => setSyncBatchResultModal(null)}
-                className="px-5 py-2 bg-purple-600 hover:bg-purple-500 text-white font-black text-xs rounded-xl shadow-lg"
+                className="px-5 py-2 bg-purple-600 hover:bg-purple-500 text-white font-black text-xs rounded-xl shadow-lg cursor-pointer"
               >
                 موافق
               </button>
@@ -4645,19 +4651,19 @@ export const TraineesView: React.FC = () => {
 
       {/* ----------------- MODAL: Excel Import Details ----------------- */}
       {isImportModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
-          <div className={`bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl transition-all duration-300 w-full p-6 text-slate-100 animate-in fade-in zoom-in-95 ${importPreviewStudents ? 'max-w-4xl' : 'max-w-xl'}`}>
-            <div className="flex items-center justify-between pb-3 border-b border-slate-800 mb-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/75 backdrop-blur-md">
+          <div className={`bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-2xl transition-all duration-300 w-full p-6 text-slate-900 dark:text-slate-100 animate-in fade-in zoom-in-95 ${importPreviewStudents ? 'max-w-4xl' : 'max-w-xl'}`}>
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800 mb-4">
               <div className="flex items-center gap-2">
-                <Upload className="w-5 h-5 text-emerald-400" />
-                <h3 className="font-bold text-sm">استيراد المتدربين من ملف Excel بالذكاء الاصطناعي</h3>
+                <Upload className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+                <h3 className="font-bold text-sm text-slate-900 dark:text-white">استيراد المتدربين من ملف Excel بالذكاء الاصطناعي</h3>
               </div>
               <button
                 onClick={() => {
                   setIsImportModalOpen(false);
                   setImportPreviewStudents(null);
                 }}
-                className="p-1 text-slate-400 hover:text-white"
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -4666,19 +4672,19 @@ export const TraineesView: React.FC = () => {
             <div className="space-y-4 text-xs leading-relaxed">
               {!importPreviewStudents && !isImportPreviewLoading && (
                 <>
-                  <div className="bg-slate-800/80 p-3.5 rounded-xl border border-slate-700 space-y-2">
-                    <div className="flex items-center gap-2 text-amber-300 font-bold">
+                  <div className="bg-slate-50 dark:bg-slate-800/80 p-3.5 rounded-xl border border-slate-200 dark:border-slate-700 space-y-2">
+                    <div className="flex items-center gap-2 text-amber-700 dark:text-amber-300 font-bold">
                       <Sparkles className="w-4 h-4" />
                       <span>تسكين ذكي وتوزيع تلقائي على المجموعات الشغالة بالذكاء الاصطناعي</span>
                     </div>
-                    <p className="text-slate-300 text-[11px] leading-normal">
+                    <p className="text-slate-600 dark:text-slate-300 text-[11px] leading-normal">
                       يمكنك رفع ملف Excel يحتوي على ردود <strong>Google Forms</strong> (الاسم، الفصل، الفرع، لغة التعليم). سيقوم الذكاء الاصطناعي تلقائياً بفحص الأسماء وتوزيعهم على المجموعات المتاحة التي بها <strong>أماكن فارغة</strong> بالفرع، ولن يتم إنشاء أي مجموعة جديدة مالم تطلب أنت ذلك يدوياً في تقرير المراجعة!
                     </p>
                     <div className="flex flex-wrap gap-2 pt-1">
                       <button
                         type="button"
                         onClick={() => handleDownloadTemplate('simple')}
-                        className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-amber-300 font-semibold text-[11px] border border-slate-600"
+                        className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-amber-50 dark:bg-slate-700 hover:bg-amber-100 dark:hover:bg-slate-600 text-amber-800 dark:text-amber-300 font-semibold text-[11px] border border-amber-200 dark:border-slate-600 cursor-pointer"
                       >
                         <Download className="w-3.5 h-3.5" />
                         <span>تحميل نموذج مبسط (اسم وسن)</span>
@@ -4686,7 +4692,7 @@ export const TraineesView: React.FC = () => {
                       <button
                         type="button"
                         onClick={() => handleDownloadTemplate('full')}
-                        className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-emerald-300 font-semibold text-[11px] border border-slate-600"
+                        className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-emerald-50 dark:bg-slate-700 hover:bg-emerald-100 dark:hover:bg-slate-600 text-emerald-800 dark:text-emerald-300 font-semibold text-[11px] border border-emerald-200 dark:border-slate-600 cursor-pointer"
                       >
                         <Download className="w-3.5 h-3.5" />
                         <span>تحميل نموذج شامل (جميع الحقول)</span>
@@ -4694,7 +4700,7 @@ export const TraineesView: React.FC = () => {
                       <button
                         type="button"
                         onClick={() => setIsFormsImportModalOpen(true)}
-                        className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-emerald-900/30 hover:bg-emerald-800/40 text-emerald-400 font-semibold text-[11px] border border-emerald-500/30"
+                        className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-900/30 hover:bg-emerald-100 dark:hover:bg-emerald-800/40 text-emerald-700 dark:text-emerald-400 font-semibold text-[11px] border border-emerald-200 dark:border-emerald-500/30 cursor-pointer"
                       >
                         <span>استيراد المباشر من Google Forms</span>
                       </button>
@@ -4704,11 +4710,11 @@ export const TraineesView: React.FC = () => {
                   {/* Upload Drop Area */}
                   <div
                     onClick={() => fileInputRef.current?.click()}
-                    className="border-2 border-dashed border-slate-600 hover:border-amber-500 bg-slate-800/60 p-7 rounded-2xl text-center cursor-pointer transition-all group"
+                    className="border-2 border-dashed border-slate-300 dark:border-slate-600 hover:border-amber-500 bg-slate-50 dark:bg-slate-800/60 p-7 rounded-2xl text-center cursor-pointer transition-all group"
                   >
-                    <FileSpreadsheet className="w-10 h-10 text-slate-400 group-hover:text-amber-400 mx-auto mb-2 transition-colors" />
-                    <p className="font-bold text-slate-200">اضغط هنا لاختيار ملف Excel من جهازك</p>
-                    <p className="text-slate-400 mt-1">يدعم ملفات .xlsx, .xls, .csv</p>
+                    <FileSpreadsheet className="w-10 h-10 text-slate-400 group-hover:text-amber-500 mx-auto mb-2 transition-colors" />
+                    <p className="font-bold text-slate-800 dark:text-slate-200">اضغط هنا لاختيار ملف Excel من جهازك</p>
+                    <p className="text-slate-500 dark:text-slate-400 mt-1">يدعم ملفات .xlsx, .xls, .csv</p>
                     <input
                       ref={fileInputRef}
                       type="file"
@@ -4722,40 +4728,40 @@ export const TraineesView: React.FC = () => {
 
               {/* Loader during AI mapping */}
               {isImportPreviewLoading && (
-                <div className="flex flex-col items-center justify-center py-12 space-y-3 bg-slate-950/40 rounded-2xl border border-slate-800">
+                <div className="flex flex-col items-center justify-center py-12 space-y-3 bg-slate-50 dark:bg-slate-950/40 rounded-2xl border border-slate-200 dark:border-slate-800">
                   <div className="w-8 h-8 border-4 border-amber-500 border-t-transparent rounded-full animate-spin"></div>
-                  <p className="font-bold text-amber-300">جاري تحليل البيانات وتسكين المتدربين ذكياً بالذكاء الاصطناعي...</p>
-                  <p className="text-[10px] text-slate-400 text-center px-6">نقوم بفحص الفصول واللغات والفروع لتسكين الطلاب مسبقاً دون تكرار المجموعات.</p>
+                  <p className="font-bold text-amber-700 dark:text-amber-300">جاري تحليل البيانات وتسكين المتدربين ذكياً بالذكاء الاصطناعي...</p>
+                  <p className="text-[10px] text-slate-500 dark:text-slate-400 text-center px-6">نقوم بفحص الفصول واللغات والفروع لتسكين الطلاب مسبقاً دون تكرار المجموعات.</p>
                 </div>
               )}
 
               {/* AI Interactive Smart Placement Preview List */}
               {importPreviewStudents && (
                 <div className="space-y-4">
-                  <div className="bg-slate-950/60 p-4 rounded-xl border border-slate-800 space-y-3">
+                  <div className="bg-slate-50 dark:bg-slate-950/60 p-4 rounded-xl border border-slate-200 dark:border-slate-800 space-y-3">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div>
-                        <h4 className="font-bold text-slate-200 flex items-center gap-1">
-                          <Sparkles className="w-4 h-4 text-amber-400 animate-pulse" />
+                        <h4 className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1">
+                          <Sparkles className="w-4 h-4 text-amber-500 animate-pulse" />
                           <span>تقرير التوزيع والمسامحة اللفظية المقترح بالذكاء الاصطناعي</span>
                         </h4>
-                        <p className="text-[10px] text-slate-400 mt-0.5">تم تحليل {importPreviewStudents.length} متدرب في الملف.</p>
+                        <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">تم تحليل {importPreviewStudents.length} متدرب في الملف.</p>
                       </div>
                       <div className="flex gap-2">
-                        <span className="px-2 py-1 rounded bg-emerald-500/15 text-emerald-400 font-bold text-[10px]">
+                        <span className="px-2 py-1 rounded bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 font-bold text-[10px]">
                           ✅ مسكن في المجموعات الشغالة: {importPreviewStudents.filter(s => s.suggestedGroupId && !s.suggestedGroupId.startsWith('CREATE_NEW:')).length}
                         </span>
-                        <span className="px-2 py-1 rounded bg-amber-500/15 text-amber-400 font-bold text-[10px]">
+                        <span className="px-2 py-1 rounded bg-amber-500/15 text-amber-700 dark:text-amber-400 font-bold text-[10px]">
                           ⚠️ غير مسكن: {importPreviewStudents.filter(s => !s.suggestedGroupId || s.suggestedGroupId.startsWith('CREATE_NEW:')).length}
                         </span>
                       </div>
                     </div>
 
-                    <div className="flex flex-wrap gap-2 pt-1.5 border-t border-slate-800">
+                    <div className="flex flex-wrap gap-2 pt-1.5 border-t border-slate-200 dark:border-slate-800">
                       <button
                         type="button"
                         onClick={handleCreateNewGroupsForUnassigned}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-[10px] transition-all"
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-[10px] transition-all cursor-pointer"
                       >
                         <Plus className="w-3.5 h-3.5" />
                         <span>➕ تأسيس مجموعات جديدة تلقائياً لغير المسكنين</span>
@@ -4763,26 +4769,26 @@ export const TraineesView: React.FC = () => {
                     </div>
 
                     {/* Scrollable list of students */}
-                    <div className="max-h-[300px] overflow-y-auto border border-slate-800 rounded-lg divide-y divide-slate-800 bg-slate-900/80">
+                    <div className="max-h-[300px] overflow-y-auto border border-slate-200 dark:border-slate-800 rounded-lg divide-y divide-slate-200 dark:divide-slate-800 bg-white dark:bg-slate-900/80">
                       {importPreviewStudents.map((student, idx) => {
                         return (
-                          <div key={idx} className="p-3 flex flex-col md:flex-row md:items-center justify-between gap-3 text-[11px] hover:bg-slate-800/40">
+                          <div key={idx} className="p-3 flex flex-col md:flex-row md:items-center justify-between gap-3 text-[11px] hover:bg-slate-50 dark:hover:bg-slate-800/40">
                             <div className="space-y-1 flex-1">
                               <div className="flex items-center gap-2">
-                                <span className="font-bold text-slate-200 text-xs">{student.fullName}</span>
+                                <span className="font-bold text-slate-900 dark:text-slate-200 text-xs">{student.fullName}</span>
                                 {student.language && (
-                                  <span className={`px-1.5 py-0.5 rounded text-[9px] font-semibold ${student.language.includes('لغات') ? 'bg-sky-500/10 text-sky-400' : 'bg-slate-700 text-slate-300'}`}>
+                                  <span className={`px-1.5 py-0.5 rounded text-[9px] font-semibold ${student.language.includes('لغات') ? 'bg-sky-50 dark:bg-sky-500/10 text-sky-700 dark:text-sky-400' : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300'}`}>
                                     {student.language}
                                   </span>
                                 )}
                               </div>
-                              <div className="flex flex-wrap gap-x-3 text-slate-400 text-[10px]">
-                                <span>الفصل: <strong className="text-slate-300">{student.class || 'غير محدد'}</strong></span>
-                                <span>الفرع: <strong className="text-slate-300">{student.branch || 'غير محدد'}</strong></span>
+                              <div className="flex flex-wrap gap-x-3 text-slate-500 dark:text-slate-400 text-[10px]">
+                                <span>الفصل: <strong className="text-slate-700 dark:text-slate-300">{student.class || 'غير محدد'}</strong></span>
+                                <span>الفرع: <strong className="text-slate-700 dark:text-slate-300">{student.branch || 'غير محدد'}</strong></span>
                                 {student.phone && <span>الهاتف: {student.phone}</span>}
                               </div>
-                              <p className="text-[10px] text-slate-400 flex items-center gap-1">
-                                <Sparkles className="w-3 h-3 text-amber-400 shrink-0" />
+                              <p className="text-[10px] text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                                <Sparkles className="w-3 h-3 text-amber-500 shrink-0" />
                                 <span>{student.reason}</span>
                               </p>
                             </div>
@@ -4814,7 +4820,7 @@ export const TraineesView: React.FC = () => {
                                   }
                                   setImportPreviewStudents(updated);
                                 }}
-                                className="w-full text-[10px] bg-slate-950 border border-slate-700 rounded px-2 py-1.5 text-slate-200 outline-none focus:border-amber-500"
+                                className="w-full text-[10px] bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded px-2 py-1.5 text-slate-900 dark:text-slate-200 outline-none focus:border-amber-500"
                               >
                                 <option value="">⚠️ غير مسكن - بانتظار التسكين</option>
                                 <option value={`CREATE_NEW:${student.class || 'مجموعة جديدة'}:${student.branchId || 'branch-1'}`}>
@@ -4838,7 +4844,7 @@ export const TraineesView: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => setImportPreviewStudents(null)}
-                      className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold transition-colors"
+                      className="px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl font-bold transition-colors cursor-pointer"
                     >
                       إلغاء ومعاودة الرفع
                     </button>
@@ -4846,7 +4852,7 @@ export const TraineesView: React.FC = () => {
                       type="button"
                       disabled={isImportCommiting}
                       onClick={handleConfirmImport}
-                      className="flex items-center gap-1.5 px-6 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl shadow-lg shadow-emerald-950/40 disabled:opacity-50 transition-all text-xs"
+                      className="flex items-center gap-1.5 px-6 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl shadow-lg shadow-emerald-950/40 disabled:opacity-50 transition-all text-xs cursor-pointer"
                     >
                       {isImportCommiting ? (
                         <>
@@ -4866,20 +4872,20 @@ export const TraineesView: React.FC = () => {
 
               {/* Import Results Box */}
               {importResults && (
-                <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-800 space-y-2 animate-in fade-in">
-                  <div className="flex items-center gap-2 text-emerald-400 font-bold">
+                <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 space-y-2 animate-in fade-in">
+                  <div className="flex items-center gap-2 text-emerald-700 dark:text-emerald-400 font-bold">
                     <CheckCircle className="w-4 h-4" />
                     <span>تم استيراد {importResults.importedCount} متدرب بنجاح وإنشاء أكوادهم وتسكينهم وتوليد حساباتهم تلقائياً.</span>
                   </div>
                   {importResults.errorsCount > 0 && (
-                    <div className="space-y-1 pt-2 border-t border-slate-800">
-                      <div className="flex items-center gap-2 text-rose-400 font-bold">
+                    <div className="space-y-1 pt-2 border-t border-slate-200 dark:border-slate-800">
+                      <div className="flex items-center gap-2 text-rose-700 dark:text-rose-400 font-bold">
                         <XCircle className="w-4 h-4" />
                         <span>تم تخطي {importResults.errorsCount} متدرب مكرر مسبقاً في النظام لضمان النزاهة:</span>
                       </div>
-                      <div className="max-h-32 overflow-y-auto space-y-1 text-[11px] text-slate-400">
+                      <div className="max-h-32 overflow-y-auto space-y-1 text-[11px] text-slate-600 dark:text-slate-400">
                         {importResults.errors.map((err, i) => (
-                          <div key={i} className="text-amber-300">
+                          <div key={i} className="text-amber-700 dark:text-amber-300">
                             - {err.reason}
                           </div>
                         ))}
@@ -4893,7 +4899,7 @@ export const TraineesView: React.FC = () => {
                 <div className="pt-2 flex justify-end">
                   <button
                     onClick={() => setIsImportModalOpen(false)}
-                    className="px-4 py-2 bg-slate-800 text-slate-300 rounded-xl"
+                    className="px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl font-bold cursor-pointer transition-colors"
                   >
                     إغلاق
                   </button>
@@ -4905,7 +4911,7 @@ export const TraineesView: React.FC = () => {
       )}
 
       {/* ----------------- MODAL: WhatsApp Template Sender ----------------- */}
-            {/* ----------------- MODAL: Advanced Branded Card & WhatsApp Hub ----------------- */}
+      {/* ----------------- MODAL: Advanced Branded Card & WhatsApp Hub ----------------- */}
       {isWhatsAppModalOpen && activeTrainee && (
         <WhatsAppShareModal
           activeTrainee={activeTrainee}
@@ -4915,11 +4921,11 @@ export const TraineesView: React.FC = () => {
       )}
 
       {deleteConfirm?.isOpen && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[100] backdrop-blur-sm p-4">
-          <div className="bg-slate-900 border border-slate-700 rounded-3xl p-6 w-full max-w-sm shadow-2xl text-center">
+        <div className="fixed inset-0 bg-slate-950/75 flex items-center justify-center z-[100] backdrop-blur-sm p-4">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-3xl p-6 w-full max-w-sm shadow-2xl text-center">
             <Trash2 className="w-12 h-12 text-rose-500 mx-auto mb-4" />
-            <h3 className="text-xl font-bold text-slate-100 mb-2">تأكيد الحذف</h3>
-            <p className="text-slate-400 mb-6 text-sm">
+            <h3 className="text-xl font-bold text-slate-900 dark:text-slate-100 mb-2">تأكيد الحذف</h3>
+            <p className="text-slate-600 dark:text-slate-400 mb-6 text-sm">
               {deleteConfirm.type === 'single' 
                 ? `هل أنت متأكد من حذف المتدرب (${deleteConfirm.trainee?.fullName}) وسجلاته بشكل نهائي؟`
                 : `هل أنت متأكد من حذف ${selectedTraineeIds.length} متدرب بشكل نهائي؟`}
@@ -4927,13 +4933,13 @@ export const TraineesView: React.FC = () => {
             <div className="flex justify-center gap-3">
               <button
                 onClick={() => setDeleteConfirm(null)}
-                className="px-4 py-2 rounded-xl text-slate-400 hover:bg-slate-800 transition-colors"
+                className="px-4 py-2 rounded-xl text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors font-bold cursor-pointer"
               >
                 إلغاء والتراجع
               </button>
               <button
                 onClick={deleteConfirm.type === 'single' ? executeDeleteSingle : executeBulkDelete}
-                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold shadow-lg shadow-rose-900/50 transition-colors"
+                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold shadow-lg shadow-rose-900/30 transition-colors cursor-pointer"
               >
                 نعم، تأكيد الحذف
               </button>
@@ -4943,26 +4949,26 @@ export const TraineesView: React.FC = () => {
       )}
       {/* Bulk Assign Group Modal */}
       {isBulkAssignModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm" onClick={() => setIsBulkAssignModalOpen(false)}>
-          <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-sm shadow-2xl p-6 relative" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/75 backdrop-blur-sm" onClick={() => setIsBulkAssignModalOpen(false)}>
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl w-full max-w-sm shadow-2xl p-6 relative animate-in fade-in zoom-in-95 text-slate-900 dark:text-slate-100" onClick={e => e.stopPropagation()}>
             <button
               onClick={() => setIsBulkAssignModalOpen(false)}
-              className="absolute top-4 left-4 p-2 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white rounded-full transition-colors"
+              className="absolute top-4 left-4 p-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white rounded-full transition-colors cursor-pointer"
             >
               <X className="w-4 h-4" />
             </button>
-            <h3 className="text-lg font-black text-slate-100 mb-4 flex items-center gap-2">
-              <Users className="w-5 h-5 text-indigo-400" />
+            <h3 className="text-lg font-black text-slate-900 dark:text-slate-100 mb-4 flex items-center gap-2">
+              <Users className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
               تكوين / نقل لمجموعة
             </h3>
-            <p className="text-xs text-slate-400 mb-4">
+            <p className="text-xs text-slate-600 dark:text-slate-400 mb-4">
               اختر المجموعة التي ترغب في نقل أو إضافة المتدربين المحددين ({selectedTraineeIds.length} متدرب) إليها:
             </p>
             <div className="mb-5">
               <select
                 value={bulkAssignGroupId}
                 onChange={e => setBulkAssignGroupId(e.target.value)}
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-3 text-sm text-slate-200 focus:outline-none focus:border-indigo-500"
+                className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl px-3 py-3 text-sm text-slate-900 dark:text-slate-200 focus:outline-none focus:border-indigo-500"
               >
                 <option value="">اختر المجموعة...</option>
                 {groups.map(g => {
@@ -4978,14 +4984,14 @@ export const TraineesView: React.FC = () => {
             <div className="flex gap-2">
               <button
                 onClick={() => setIsBulkAssignModalOpen(false)}
-                className="flex-1 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-xl text-xs transition-colors"
+                className="flex-1 px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold rounded-xl text-xs transition-colors cursor-pointer"
               >
                 إلغاء
               </button>
               <button
                 onClick={executeBulkAssignGroup}
                 disabled={!bulkAssignGroupId}
-                className="flex-[2] px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl text-xs shadow-md transition-colors disabled:opacity-50"
+                className="flex-[2] px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl text-xs shadow-md transition-colors disabled:opacity-50 cursor-pointer"
               >
                 تأكيد النقل للمجموعة
               </button>
@@ -5089,26 +5095,26 @@ export const TraineesView: React.FC = () => {
 
       {/* Student Code Audit & Bulk Grade Alignment Modal */}
       {isCodeAuditModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/80 backdrop-blur-md overflow-hidden">
-          <div className="bg-slate-900 border border-slate-700 rounded-3xl shadow-2xl max-w-3xl w-full max-h-[90vh] flex flex-col overflow-hidden text-slate-100">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/75 backdrop-blur-md overflow-hidden">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-3xl shadow-2xl max-w-3xl w-full max-h-[90vh] flex flex-col overflow-hidden text-slate-900 dark:text-slate-100 animate-in fade-in zoom-in-95">
             {/* Header */}
-            <div className="shrink-0 p-4 border-b border-slate-800 flex items-center justify-between bg-slate-900/90">
+            <div className="shrink-0 p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-900/90">
               <div className="flex items-center gap-2">
-                <div className="w-9 h-9 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 font-bold">
+                <div className="w-9 h-9 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-600 dark:text-amber-400 font-bold">
                   🏷️
                 </div>
                 <div>
-                  <h3 className="font-black text-sm text-slate-100">
+                  <h3 className="font-black text-sm text-slate-900 dark:text-slate-100">
                     فحص وتدقيق أكواد الطلاب حسب المراحل الدراسية
                   </h3>
-                  <p className="text-[10px] text-slate-400">
+                  <p className="text-[10px] text-slate-500 dark:text-slate-400">
                     التحقق من مطابقة بادئة الكود (A=الرابع، B=الخامس، C=السادس، D=الأول الإعدادي...) وترتيب التسلسل تلقائياً
                   </p>
                 </div>
               </div>
               <button
                 onClick={() => setIsCodeAuditModalOpen(false)}
-                className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors"
+                className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white transition-colors cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -5118,46 +5124,46 @@ export const TraineesView: React.FC = () => {
             <div className="p-5 overflow-y-auto space-y-4 text-xs">
               {codeAuditLoading ? (
                 <div className="py-16 text-center space-y-3">
-                  <Sparkles className="w-8 h-8 text-amber-400 animate-spin mx-auto" />
-                  <p className="font-bold text-slate-300 text-sm">جاري فحص وتدقيق أكواد جميع الطلاب في قاعدة البيانات...</p>
+                  <Sparkles className="w-8 h-8 text-amber-500 animate-spin mx-auto" />
+                  <p className="font-bold text-slate-700 dark:text-slate-300 text-sm">جاري فحص وتدقيق أكواد جميع الطلاب في قاعدة البيانات...</p>
                   <p className="text-[10px] text-slate-500">يتم فحص مطابقة الصفوف والمراحل وتكرارات وتداخلات البادئات</p>
                 </div>
               ) : codeAuditData ? (
                 <div className="space-y-4">
                   {/* Summary Bar */}
                   <div className="grid grid-cols-3 gap-3">
-                    <div className="p-3 bg-slate-950/60 rounded-2xl border border-slate-800 text-center">
-                      <p className="text-[10px] text-slate-400 font-bold">إجمالي الطلاب المفحوصين</p>
-                      <p className="text-xl font-black text-slate-100 mt-1 font-mono">{codeAuditData.totalTrainees}</p>
+                    <div className="p-3 bg-slate-50 dark:bg-slate-950/60 rounded-2xl border border-slate-200 dark:border-slate-800 text-center">
+                      <p className="text-[10px] text-slate-500 dark:text-slate-400 font-bold">إجمالي الطلاب المفحوصين</p>
+                      <p className="text-xl font-black text-slate-900 dark:text-slate-100 mt-1 font-mono">{codeAuditData.totalTrainees}</p>
                     </div>
-                    <div className="p-3 bg-emerald-950/40 rounded-2xl border border-emerald-500/30 text-center">
-                      <p className="text-[10px] text-emerald-400 font-bold">أكواد مطابقة ومضبوطة</p>
-                      <p className="text-xl font-black text-emerald-300 mt-1 font-mono">{codeAuditData.validCount}</p>
+                    <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 rounded-2xl border border-emerald-200 dark:border-emerald-500/30 text-center">
+                      <p className="text-[10px] text-emerald-700 dark:text-emerald-400 font-bold">أكواد مطابقة ومضبوطة</p>
+                      <p className="text-xl font-black text-emerald-700 dark:text-emerald-300 mt-1 font-mono">{codeAuditData.validCount}</p>
                     </div>
-                    <div className="p-3 bg-amber-950/40 rounded-2xl border border-amber-500/30 text-center">
-                      <p className="text-[10px] text-amber-400 font-bold">بحاجة لتحديث وتصحيح</p>
-                      <p className="text-xl font-black text-amber-300 mt-1 font-mono">{codeAuditData.changesCount}</p>
+                    <div className="p-3 bg-amber-50 dark:bg-amber-950/40 rounded-2xl border border-amber-200 dark:border-amber-500/30 text-center">
+                      <p className="text-[10px] text-amber-700 dark:text-amber-400 font-bold">بحاجة لتحديث وتصحيح</p>
+                      <p className="text-xl font-black text-amber-700 dark:text-amber-300 mt-1 font-mono">{codeAuditData.changesCount}</p>
                     </div>
                   </div>
 
                   {codeAuditData.itemsToFix.length === 0 ? (
-                    <div className="p-6 bg-emerald-950/30 border border-emerald-500/30 rounded-2xl text-center space-y-2">
+                    <div className="p-6 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-500/30 rounded-2xl text-center space-y-2">
                       <div className="text-3xl">🎉</div>
-                      <p className="font-black text-emerald-300 text-sm">جميع أكواد الطلاب متطابقة تماماً وموزعة بالتسلسل الصحيح حسب مراحلهم الدراسية!</p>
-                      <p className="text-[11px] text-slate-400">لا يوجد أي تعارض أو كود يحمل بادئة مرحلة غير مطابقة لصف الطالب.</p>
+                      <p className="font-black text-emerald-750 dark:text-emerald-300 text-sm">جميع أكواد الطلاب متطابقة تماماً وموزعة بالتسلسل الصحيح حسب مراحلهم الدراسية!</p>
+                      <p className="text-[11px] text-slate-600 dark:text-slate-400">لا يوجد أي تعارض أو كود يحمل بادئة مرحلة غير مطابقة لصف الطالب.</p>
                     </div>
                   ) : (
                     <div className="space-y-3">
-                      <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-2xl flex items-start gap-2">
-                        <Sparkles className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
-                        <p className="text-[11px] text-amber-200">
+                      <div className="p-3 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 rounded-2xl flex items-start gap-2">
+                        <Sparkles className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                        <p className="text-[11px] text-amber-800 dark:text-amber-200">
                           تم العثور على <strong>{codeAuditData.itemsToFix.length}</strong> طالب أكوادهم السابقة كانت غير مطابقة لصفهم الدراسي الحالي أو متداخلة. يمكنك مراجعة الكود المقترح واعتماده بضغطة زر.
                         </p>
                       </div>
 
-                      <div className="border border-slate-800 rounded-2xl overflow-hidden shadow-inner bg-slate-950/40">
+                      <div className="border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-xs bg-white dark:bg-slate-950/40">
                         <table className="w-full text-right text-xs">
-                          <thead className="bg-slate-800/80 text-slate-300 border-b border-slate-700">
+                          <thead className="bg-slate-50 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700">
                             <tr>
                               <th className="p-2.5 font-bold">اسم الطالب</th>
                               <th className="p-2.5 font-bold">الصف الدراسي</th>
@@ -5166,26 +5172,26 @@ export const TraineesView: React.FC = () => {
                               <th className="p-2.5 font-bold">ملاحظات التدقيق</th>
                             </tr>
                           </thead>
-                          <tbody className="divide-y divide-slate-800/60">
+                          <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
                             {codeAuditData.itemsToFix.map((item, idx) => (
-                              <tr key={item.id || idx} className="hover:bg-slate-800/30 transition-colors">
-                                <td className="p-2.5 font-bold text-slate-200">
+                              <tr key={item.id || idx} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
+                                <td className="p-2.5 font-bold text-slate-900 dark:text-slate-200">
                                   {item.fullName}
                                 </td>
-                                <td className="p-2.5 text-slate-300">
-                                  <span className="px-2 py-0.5 rounded-md bg-slate-800 border border-slate-700 text-[10px]">
+                                <td className="p-2.5 text-slate-700 dark:text-slate-300">
+                                  <span className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-[10px]">
                                     {item.grade || 'غير محدد'}
                                   </span>
                                 </td>
-                                <td className="p-2.5 font-mono font-bold text-rose-400 line-through">
+                                <td className="p-2.5 font-mono font-bold text-rose-600 dark:text-rose-400 line-through">
                                   {item.currentCode}
                                 </td>
-                                <td className="p-2.5 font-mono font-black text-emerald-400">
-                                  <span className="px-2 py-0.5 rounded-md bg-emerald-950/60 border border-emerald-500/40">
+                                <td className="p-2.5 font-mono font-black text-emerald-700 dark:text-emerald-400">
+                                  <span className="px-2 py-0.5 rounded-md bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-500/40">
                                     {item.proposedCode}
                                   </span>
                                 </td>
-                                <td className="p-2.5 text-[10px] text-slate-400">
+                                <td className="p-2.5 text-[10px] text-slate-500 dark:text-slate-400">
                                   {item.reason}
                                 </td>
                               </tr>
@@ -5200,11 +5206,11 @@ export const TraineesView: React.FC = () => {
             </div>
 
             {/* Footer */}
-            <div className="p-4 border-t border-slate-800 bg-slate-900/90 flex items-center justify-between gap-3">
+            <div className="p-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/90 flex items-center justify-between gap-3">
               <button
                 type="button"
                 onClick={() => setIsCodeAuditModalOpen(false)}
-                className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs transition-all"
+                className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold text-xs transition-all cursor-pointer"
               >
                 إغلاق
               </button>
@@ -5214,7 +5220,7 @@ export const TraineesView: React.FC = () => {
                   type="button"
                   onClick={handleApplyCodeFix}
                   disabled={codeAuditApplying}
-                  className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-xs shadow-lg shadow-emerald-600/30 transition-all flex items-center gap-2 disabled:opacity-50"
+                  className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-xs shadow-lg shadow-emerald-600/30 transition-all flex items-center gap-2 disabled:opacity-50 cursor-pointer"
                 >
                   {codeAuditApplying ? (
                     <>

@@ -213,33 +213,33 @@ export const StudentPromotionModal: React.FC<StudentPromotionModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 overflow-hidden" dir="rtl">
-      <div className="bg-slate-900 border border-slate-700/80 rounded-3xl max-w-4xl w-full text-slate-100 max-h-[90vh] flex flex-col shadow-2xl relative animate-in fade-in zoom-in-95 duration-200 overflow-hidden">
+    <div className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 overflow-hidden" dir="rtl">
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700/80 rounded-3xl max-w-4xl w-full text-slate-900 dark:text-slate-100 max-h-[90vh] flex flex-col shadow-2xl relative animate-in fade-in zoom-in-95 duration-200 overflow-hidden">
         
         {/* Top Header */}
-        <div className="shrink-0 p-4 sm:p-5 flex items-center justify-between border-b border-slate-800 bg-slate-900/90">
+        <div className="shrink-0 p-4 sm:p-5 flex items-center justify-between border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/90">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400">
+            <div className="w-10 h-10 rounded-2xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-600 dark:text-amber-400">
               <GraduationCap className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-base font-black text-white">مركز ترقية وتصعيد الطلاب للعام الدراسي الجديد</h2>
-              <p className="text-xs text-slate-400">الانتقال الشامل للصفوف والمراحل الدراسية الجديدة</p>
+              <h2 className="text-base font-black text-slate-900 dark:text-white">مركز ترقية وتصعيد الطلاب للعام الدراسي الجديد</h2>
+              <p className="text-xs text-slate-500 dark:text-slate-400">الانتقال الشامل للصفوف والمراحل الدراسية الجديدة</p>
             </div>
           </div>
 
           <div className="flex items-center gap-2">
             {/* Mode Switcher Tabs */}
-            <div className="flex bg-slate-950 p-1 rounded-xl border border-slate-800">
+            <div className="flex bg-slate-100 dark:bg-slate-950 p-1 rounded-xl border border-slate-200 dark:border-slate-800">
               <button
                 onClick={() => setMode('batch')}
-                className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-colors ${mode === 'batch' ? 'bg-amber-500 text-slate-950' : 'text-slate-400 hover:text-white'}`}
+                className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-colors cursor-pointer ${mode === 'batch' ? 'bg-amber-500 text-slate-950' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'}`}
               >
                 ترقية جماعية (حسب المقررات)
               </button>
               <button
                 onClick={() => setMode('individual')}
-                className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-colors ${mode === 'individual' ? 'bg-amber-500 text-slate-950' : 'text-slate-400 hover:text-white'}`}
+                className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-colors cursor-pointer ${mode === 'individual' ? 'bg-amber-500 text-slate-950' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'}`}
               >
                 ترقية وتصعيد فردي (بالطلاب)
               </button>
@@ -247,7 +247,7 @@ export const StudentPromotionModal: React.FC<StudentPromotionModalProps> = ({
 
             <button
               onClick={onClose}
-              className="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition-colors cursor-pointer"
+              className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white flex items-center justify-center transition-colors cursor-pointer"
             >
               <X className="w-4 h-4" />
             </button>
@@ -261,19 +261,19 @@ export const StudentPromotionModal: React.FC<StudentPromotionModalProps> = ({
         {mode === 'batch' && (
           <div className="space-y-6">
             {/* Stepper Header */}
-            <div className="flex items-center justify-center gap-4 bg-slate-950/60 p-3 rounded-2xl border border-slate-800">
-              <div className={`flex items-center gap-2 text-xs font-bold ${batchStep === 1 ? 'text-amber-400' : 'text-slate-400'}`}>
-                <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] ${batchStep === 1 ? 'bg-amber-500 text-slate-950' : 'bg-slate-800'}`}>1</span>
+            <div className="flex items-center justify-center gap-4 bg-slate-50 dark:bg-slate-950/60 p-3 rounded-2xl border border-slate-200 dark:border-slate-800">
+              <div className={`flex items-center gap-2 text-xs font-bold ${batchStep === 1 ? 'text-amber-600 dark:text-amber-400' : 'text-slate-500 dark:text-slate-400'}`}>
+                <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] ${batchStep === 1 ? 'bg-amber-500 text-slate-950 font-black' : 'bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300'}`}>1</span>
                 <span>تحديد القواعد والسنوات</span>
               </div>
-              <span className="text-slate-700">←</span>
-              <div className={`flex items-center gap-2 text-xs font-bold ${batchStep === 2 ? 'text-amber-400' : 'text-slate-400'}`}>
-                <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] ${batchStep === 2 ? 'bg-amber-500 text-slate-950' : 'bg-slate-800'}`}>2</span>
+              <span className="text-slate-300 dark:text-slate-700">←</span>
+              <div className={`flex items-center gap-2 text-xs font-bold ${batchStep === 2 ? 'text-amber-600 dark:text-amber-400' : 'text-slate-500 dark:text-slate-400'}`}>
+                <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] ${batchStep === 2 ? 'bg-amber-500 text-slate-950 font-black' : 'bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300'}`}>2</span>
                 <span>المعاينة والتأكيد</span>
               </div>
-              <span className="text-slate-700">←</span>
-              <div className={`flex items-center gap-2 text-xs font-bold ${batchStep === 3 ? 'text-emerald-400' : 'text-slate-400'}`}>
-                <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] ${batchStep === 3 ? 'bg-emerald-500 text-slate-950' : 'bg-slate-800'}`}>3</span>
+              <span className="text-slate-300 dark:text-slate-700">←</span>
+              <div className={`flex items-center gap-2 text-xs font-bold ${batchStep === 3 ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-500 dark:text-slate-400'}`}>
+                <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] ${batchStep === 3 ? 'bg-emerald-500 text-slate-950 font-black' : 'bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300'}`}>3</span>
                 <span>النتيجة والإنهاء</span>
               </div>
             </div>
@@ -281,38 +281,38 @@ export const StudentPromotionModal: React.FC<StudentPromotionModalProps> = ({
             {/* Step 1: Rules & Academic Year */}
             {batchStep === 1 && (
               <div className="space-y-5">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-slate-950 p-4 rounded-2xl border border-slate-800">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-slate-50 dark:bg-slate-950 p-4 rounded-2xl border border-slate-200 dark:border-slate-800">
                   <div>
-                    <label className="block text-xs font-bold text-slate-400 mb-1">العام الدراسي الحالي:</label>
+                    <label className="block text-xs font-bold text-slate-600 dark:text-slate-400 mb-1">العام الدراسي الحالي:</label>
                     <input
                       type="text"
                       value={academicYear}
                       onChange={(e) => setAcademicYear(e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white font-mono"
+                      className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-white font-mono"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-bold text-slate-400 mb-1">العام الدراسي الجديد للتصعيد:</label>
+                    <label className="block text-xs font-bold text-slate-600 dark:text-slate-400 mb-1">العام الدراسي الجديد للتصعيد:</label>
                     <input
                       type="text"
                       value={targetYear}
                       onChange={(e) => setTargetYear(e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-amber-300 font-mono"
+                      className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-xs text-amber-700 dark:text-amber-300 font-bold font-mono"
                     />
                   </div>
                 </div>
 
                 <div className="space-y-3">
-                  <h4 className="text-xs font-bold text-slate-300">خطة الانتقال للمقررات والدورات:</h4>
+                  <h4 className="text-xs font-bold text-slate-800 dark:text-slate-300">خطة الانتقال للمقررات والدورات:</h4>
                   <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
                     {rules.map((rule) => (
-                      <div key={rule.fromCourseId} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-950 p-3 rounded-xl border border-slate-800">
-                        <span className="text-xs font-bold text-slate-200">{rule.fromCourseName}</span>
-                        <span className="text-xs text-amber-400 font-bold hidden sm:inline">← تنتقل إلى ←</span>
+                      <div key={rule.fromCourseId} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50 dark:bg-slate-950 p-3 rounded-xl border border-slate-200 dark:border-slate-800">
+                        <span className="text-xs font-bold text-slate-800 dark:text-slate-200">{rule.fromCourseName}</span>
+                        <span className="text-xs text-amber-600 dark:text-amber-400 font-bold hidden sm:inline">← تنتقل إلى ←</span>
                         <select
                           value={rule.toCourseId}
                           onChange={(e) => handleRuleTargetChange(rule.fromCourseId, e.target.value)}
-                          className="bg-slate-900 border border-slate-700 text-xs text-amber-300 font-bold rounded-xl px-3 py-1.5 focus:outline-none"
+                          className="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-xs text-amber-700 dark:text-amber-300 font-bold rounded-xl px-3 py-1.5 focus:outline-none"
                         >
                           <option value="graduate">🎓 تخرج وإتمام المرحلة</option>
                           <option value="stay">🛑 البقاء في نفس الصف</option>
@@ -325,10 +325,10 @@ export const StudentPromotionModal: React.FC<StudentPromotionModalProps> = ({
                   </div>
                 </div>
 
-                <div className="flex justify-end pt-3 border-t border-slate-800">
+                <div className="flex justify-end pt-3 border-t border-slate-200 dark:border-slate-800">
                   <button
                     onClick={() => setBatchStep(2)}
-                    className="px-6 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs flex items-center gap-2 shadow"
+                    className="px-6 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs flex items-center gap-2 shadow cursor-pointer"
                   >
                     <span>المعاينة والتأكيد</span>
                     <ArrowLeft className="w-4 h-4" />
@@ -341,28 +341,28 @@ export const StudentPromotionModal: React.FC<StudentPromotionModalProps> = ({
             {batchStep === 2 && (
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-slate-300">معاينة الترقية الجماعية ({previewItems.length} طالب):</span>
+                  <span className="text-xs font-bold text-slate-700 dark:text-slate-300">معاينة الترقية الجماعية ({previewItems.length} طالب):</span>
                   <input
                     type="text"
                     placeholder="بحث في المعاينة..."
                     value={batchSearch}
                     onChange={(e) => setBatchSearch(e.target.value)}
-                    className="bg-slate-950 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white"
+                    className="bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-1.5 text-xs text-slate-900 dark:text-white"
                   />
                 </div>
 
-                <div className="max-h-72 overflow-y-auto border border-slate-800 rounded-2xl bg-slate-950 divide-y divide-slate-800/60">
+                <div className="max-h-72 overflow-y-auto border border-slate-200 dark:border-slate-800 rounded-2xl bg-white dark:bg-slate-950 divide-y divide-slate-100 dark:divide-slate-800/60">
                   {previewItems.filter(i => !batchSearch || i.fullName.toLowerCase().includes(batchSearch.toLowerCase())).map((item) => (
                     <div key={item.traineeId} className="p-3 flex items-center justify-between text-xs">
                       <div>
-                        <span className="font-bold text-white block">{item.fullName}</span>
-                        <span className="text-[10px] text-slate-400">{item.currentCourseName}</span>
+                        <span className="font-bold text-slate-900 dark:text-white block">{item.fullName}</span>
+                        <span className="text-[10px] text-slate-500 dark:text-slate-400">{item.currentCourseName}</span>
                       </div>
                       <div className="text-left">
                         <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold ${
-                          item.status === 'GRADUATED' ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' :
-                          item.status === 'STAY' ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30' :
-                          'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                          item.status === 'GRADUATED' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-500/20 dark:text-emerald-300 dark:border-emerald-500/30' :
+                          item.status === 'STAY' ? 'bg-rose-50 text-rose-700 border border-rose-200 dark:bg-rose-500/20 dark:text-rose-300 dark:border-rose-500/30' :
+                          'bg-amber-50 text-amber-800 border border-amber-200 dark:bg-amber-500/20 dark:text-amber-300 dark:border-amber-500/30'
                         }`}>
                           {item.targetCourseName}
                         </span>
@@ -371,17 +371,17 @@ export const StudentPromotionModal: React.FC<StudentPromotionModalProps> = ({
                   ))}
                 </div>
 
-                <div className="flex items-center justify-between pt-3 border-t border-slate-800">
+                <div className="flex items-center justify-between pt-3 border-t border-slate-200 dark:border-slate-800">
                   <button
                     onClick={() => setBatchStep(1)}
-                    className="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 text-xs font-bold"
+                    className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-bold cursor-pointer"
                   >
                     رجوع للتعديل
                   </button>
                   <button
                     onClick={handleExecuteBatchPromotion}
                     disabled={isSubmitting}
-                    className="px-6 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs flex items-center gap-2 shadow disabled:opacity-50"
+                    className="px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs flex items-center gap-2 shadow disabled:opacity-50 cursor-pointer"
                   >
                     <CheckCircle2 className="w-4 h-4" />
                     <span>{isSubmitting ? 'جاري تنفيذ الترقية...' : 'اعتماد وتنفيذ الترقية الجماعية الآن 🚀'}</span>
@@ -392,16 +392,16 @@ export const StudentPromotionModal: React.FC<StudentPromotionModalProps> = ({
 
             {/* Step 3: Success Result */}
             {batchStep === 3 && (
-              <div className="text-center py-8 space-y-4 bg-emerald-950/20 border border-emerald-500/30 rounded-3xl p-6">
-                <CheckCircle2 className="w-14 h-14 text-emerald-400 mx-auto animate-bounce" />
-                <h3 className="text-lg font-black text-emerald-300">تمت العملية بنجاح!</h3>
-                <p className="text-xs text-slate-300 max-w-md mx-auto">
+              <div className="text-center py-8 space-y-4 bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-500/30 rounded-3xl p-6">
+                <CheckCircle2 className="w-14 h-14 text-emerald-600 dark:text-emerald-400 mx-auto animate-bounce" />
+                <h3 className="text-lg font-black text-emerald-800 dark:text-emerald-300">تمت العملية بنجاح!</h3>
+                <p className="text-xs text-slate-700 dark:text-slate-300 max-w-md mx-auto">
                   تم تصعيد الطلاب وتحديث صفوفهم للعام الدراسي الجديد {targetYear} بنجاح.
                 </p>
 
                 <button
                   onClick={onClose}
-                  className="px-6 py-2.5 rounded-xl bg-emerald-500 text-slate-950 font-bold text-xs"
+                  className="px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs cursor-pointer"
                 >
                   إغلاق النافذة
                 </button>
@@ -413,7 +413,7 @@ export const StudentPromotionModal: React.FC<StudentPromotionModalProps> = ({
         {/* MODE 2: INDIVIDUAL PROMOTION */}
         {mode === 'individual' && (
           <div className="space-y-4">
-            <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-950 p-3.5 rounded-2xl border border-slate-800">
+            <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-50 dark:bg-slate-950 p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800">
               <div className="flex items-center gap-2">
                 <Search className="w-4 h-4 text-slate-400" />
                 <input
@@ -421,39 +421,39 @@ export const StudentPromotionModal: React.FC<StudentPromotionModalProps> = ({
                   placeholder="بحث باسم الطالب أو الكود..."
                   value={indivSearch}
                   onChange={(e) => setIndivSearch(e.target.value)}
-                  className="bg-transparent text-xs text-white focus:outline-none w-48 sm:w-64"
+                  className="bg-transparent text-xs text-slate-900 dark:text-white focus:outline-none w-48 sm:w-64"
                 />
               </div>
 
               <div className="flex items-center gap-2">
                 <button
                   onClick={handleSelectAllIndiv}
-                  className="px-3 py-1.5 rounded-xl bg-slate-800 text-amber-300 text-xs font-bold flex items-center gap-1.5"
+                  className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-750 text-slate-700 dark:text-amber-300 text-xs font-bold flex items-center gap-1.5 cursor-pointer"
                 >
-                  {selectedIds.length === filteredIndivStudents.length ? <CheckSquare className="w-4 h-4" /> : <Square className="w-4 h-4" />}
+                  {selectedIds.length === filteredIndivStudents.length ? <CheckSquare className="w-4 h-4 text-amber-600 dark:text-amber-400" /> : <Square className="w-4 h-4" />}
                   <span>تحديد الكل ({filteredIndivStudents.length})</span>
                 </button>
               </div>
             </div>
 
             {/* Student List Table */}
-            <div className="max-h-80 overflow-y-auto border border-slate-800 rounded-2xl bg-slate-950 divide-y divide-slate-800/60">
+            <div className="max-h-80 overflow-y-auto border border-slate-200 dark:border-slate-800 rounded-2xl bg-white dark:bg-slate-950 divide-y divide-slate-100 dark:divide-slate-800/60">
               {filteredIndivStudents.map((s: any) => {
                 const isSelected = selectedIds.includes(s.traineeId);
                 const currentAction = customActionMap[s.traineeId] || 'promote';
 
                 return (
-                  <div key={s.traineeId} className={`p-3 flex items-center justify-between gap-3 text-xs transition-colors ${isSelected ? 'bg-amber-500/5' : ''}`}>
+                  <div key={s.traineeId} className={`p-3 flex items-center justify-between gap-3 text-xs transition-colors ${isSelected ? 'bg-amber-500/10' : ''}`}>
                     <div className="flex items-center gap-3">
                       <button
                         onClick={() => handleToggleSelectIndiv(s.traineeId)}
-                        className="text-slate-400 hover:text-amber-400"
+                        className="text-slate-400 hover:text-amber-500 cursor-pointer"
                       >
-                        {isSelected ? <CheckSquare className="w-5 h-5 text-amber-400" /> : <Square className="w-5 h-5" />}
+                        {isSelected ? <CheckSquare className="w-5 h-5 text-amber-600 dark:text-amber-400" /> : <Square className="w-5 h-5" />}
                       </button>
                       <div>
-                        <span className="font-bold text-white block">{s.fullName}</span>
-                        <span className="text-[10px] font-mono text-amber-400">{s.traineeCode} • {s.currentCourseName}</span>
+                        <span className="font-bold text-slate-900 dark:text-white block">{s.fullName}</span>
+                        <span className="text-[10px] font-mono text-amber-700 dark:text-amber-400">{s.traineeCode} • {s.currentCourseName}</span>
                       </div>
                     </div>
 
@@ -461,7 +461,7 @@ export const StudentPromotionModal: React.FC<StudentPromotionModalProps> = ({
                       <select
                         value={currentAction}
                         onChange={(e) => setCustomActionMap({ ...customActionMap, [s.traineeId]: e.target.value as any })}
-                        className="bg-slate-900 border border-slate-700 text-xs text-amber-300 font-bold rounded-xl px-2.5 py-1 focus:outline-none"
+                        className="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-xs text-slate-900 dark:text-amber-300 font-bold rounded-xl px-2.5 py-1 focus:outline-none"
                       >
                         <option value="promote">🚀 تصعيد للصف التالي</option>
                         <option value="graduate">🎓 تخرج وإتمام المرحلة</option>
@@ -473,15 +473,15 @@ export const StudentPromotionModal: React.FC<StudentPromotionModalProps> = ({
               })}
             </div>
 
-            <div className="flex items-center justify-between pt-3 border-t border-slate-800">
-              <span className="text-xs text-slate-400">
-                المحدد: <strong className="text-amber-400">{selectedIds.length}</strong> من إجمالي {filteredIndivStudents.length} طالب
+            <div className="flex items-center justify-between pt-3 border-t border-slate-200 dark:border-slate-800">
+              <span className="text-xs text-slate-500 dark:text-slate-400">
+                المحدد: <strong className="text-amber-600 dark:text-amber-400">{selectedIds.length}</strong> من إجمالي {filteredIndivStudents.length} طالب
               </span>
 
               <button
                 onClick={handleExecuteIndivPromotion}
                 disabled={isSubmitting || selectedIds.length === 0}
-                className="px-6 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs flex items-center gap-2 shadow disabled:opacity-50"
+                className="px-6 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs flex items-center gap-2 shadow disabled:opacity-50 cursor-pointer"
               >
                 <Zap className="w-4 h-4 fill-slate-950" />
                 <span>{isSubmitting ? 'جاري المعالجة...' : 'تنفيذ ترقية الطلاب المحددين 🚀'}</span>
