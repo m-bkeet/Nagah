@@ -1321,16 +1321,16 @@ export const FloatingTeachingToolsOverlay: React.FC<FloatingTeachingToolsOverlay
       )}
 
       {/* ---------------------------------------------------- */}
-      {/* POPUP MODAL: SMART TIMER */}
+      {/* POPUP: FLOATING ACTIVITY TIMER */}
       {/* ---------------------------------------------------- */}
       {activeTool === 'timer' && (
-        <div className="fixed bottom-20 sm:bottom-6 inset-x-4 sm:inset-x-auto sm:left-6 z-[9992] bg-slate-900 border border-slate-700 p-5 rounded-2xl shadow-2xl text-white w-full max-w-xs sm:w-80 mx-auto sm:mx-0 dir-rtl">
-          <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+        <div className="fixed bottom-20 sm:bottom-6 inset-x-4 sm:inset-x-auto sm:left-6 z-[9992] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-5 rounded-2xl shadow-2xl text-slate-900 dark:text-white w-full max-w-xs sm:w-80 mx-auto sm:mx-0 dir-rtl">
+          <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
             <div className="flex items-center gap-2">
-              <Clock className="w-5 h-5 text-emerald-400" />
+              <Clock className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
               <h3 className="text-sm font-bold">المؤقت الذكي للأنشطة والتحديات</h3>
             </div>
-            <button onClick={() => setActiveTool('none')} className="text-slate-400 hover:text-white">
+            <button onClick={() => setActiveTool('none')} className="text-slate-400 hover:text-slate-700 dark:hover:text-white">
               <X className="w-4 h-4" />
             </button>
           </div>
@@ -1340,10 +1340,10 @@ export const FloatingTeachingToolsOverlay: React.FC<FloatingTeachingToolsOverlay
               type="text"
               value={timerTaskTitle}
               onChange={e => setTimerTaskTitle(e.target.value)}
-              className="text-xs text-slate-300 bg-slate-800/80 px-3 py-1.5 rounded-lg w-full text-center mb-3 border border-slate-700"
+              className="text-xs text-slate-800 dark:text-slate-200 bg-slate-100 dark:bg-slate-800/80 px-3 py-1.5 rounded-lg w-full text-center mb-3 border border-slate-200 dark:border-slate-700"
               placeholder="اسم النشاط أو التحدي..."
             />
-            <div className="text-4xl font-mono font-extrabold text-emerald-400 tracking-wider my-2">
+            <div className="text-4xl font-mono font-extrabold text-emerald-600 dark:text-emerald-400 tracking-wider my-2">
               {formatTimer(timerSeconds)}
             </div>
           </div>
@@ -1358,7 +1358,7 @@ export const FloatingTeachingToolsOverlay: React.FC<FloatingTeachingToolsOverlay
                   setTimerInitialSeconds(s);
                   setIsTimerRunning(false);
                 }}
-                className="py-1 bg-slate-800 hover:bg-slate-700 rounded-lg text-xs font-semibold text-slate-300"
+                className="py-1 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg text-xs font-semibold text-slate-700 dark:text-slate-300 transition-colors"
               >
                 {s / 60} د
               </button>
@@ -1369,7 +1369,7 @@ export const FloatingTeachingToolsOverlay: React.FC<FloatingTeachingToolsOverlay
           <div className="flex items-center gap-2">
             <button
               onClick={() => setIsTimerRunning(!isTimerRunning)}
-              className={`flex-1 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 ${
+              className={`flex-1 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${
                 isTimerRunning ? 'bg-amber-600 hover:bg-amber-700 text-white' : 'bg-emerald-600 hover:bg-emerald-700 text-white'
               }`}
             >
@@ -1382,7 +1382,7 @@ export const FloatingTeachingToolsOverlay: React.FC<FloatingTeachingToolsOverlay
                 setIsTimerRunning(false);
                 setTimerSeconds(timerInitialSeconds);
               }}
-              className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl"
+              className="p-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-xl"
             >
               <RotateCcw className="w-4 h-4" />
             </button>
@@ -1394,42 +1394,42 @@ export const FloatingTeachingToolsOverlay: React.FC<FloatingTeachingToolsOverlay
       {/* POPUP MODAL: CLASSPOINT POINTS & REWARDS PANEL */}
       {/* ---------------------------------------------------- */}
       {activeTool === 'points' && (
-        <div className="fixed inset-0 z-[9996] bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 dir-rtl">
-          <div className="bg-slate-900 border border-amber-500/40 p-5 sm:p-6 rounded-3xl shadow-2xl text-white max-w-lg w-full space-y-4 relative max-h-[90vh] flex flex-col">
+        <div className="fixed inset-0 z-[9996] bg-slate-900/60 dark:bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 dir-rtl">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-amber-500/40 p-5 sm:p-6 rounded-3xl shadow-2xl text-slate-900 dark:text-white max-w-lg w-full space-y-4 relative max-h-[90vh] flex flex-col">
             <button
               onClick={() => setActiveTool('none')}
-              className="absolute top-4 left-4 text-slate-400 hover:text-white p-1 rounded-lg"
+              className="absolute top-4 left-4 text-slate-400 hover:text-slate-700 dark:hover:text-white p-1 rounded-lg"
             >
               <X className="w-5 h-5" />
             </button>
 
-            <div className="flex items-center gap-3 border-b border-slate-800 pb-3">
-              <div className="w-10 h-10 rounded-2xl bg-amber-500/20 text-amber-400 border border-amber-500/40 flex items-center justify-center font-bold">
-                <Star className="w-6 h-6 fill-amber-400" />
+            <div className="flex items-center gap-3 border-b border-slate-200 dark:border-slate-800 pb-3">
+              <div className="w-10 h-10 rounded-2xl bg-amber-100 dark:bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-300 dark:border-amber-500/40 flex items-center justify-center font-bold">
+                <Star className="w-6 h-6 fill-amber-400 text-amber-500" />
               </div>
               <div>
-                <h2 className="text-base font-extrabold text-slate-100 flex items-center gap-2">
+                <h2 className="text-base font-extrabold text-slate-900 dark:text-slate-100 flex items-center gap-2">
                   <span>إسناد ومنح النقاط (ClassPoint ⭐)</span>
-                  <span className="text-[10px] bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded-full border border-amber-500/30">
+                  <span className="text-[10px] bg-amber-100 dark:bg-amber-500/20 text-amber-800 dark:text-amber-300 px-2 py-0.5 rounded-full font-bold">
                     تفاعل فوري ⚡
                   </span>
                 </h2>
-                <p className="text-xs text-slate-400">
+                <p className="text-xs text-slate-500 dark:text-slate-400">
                   {activeDetectedGroupName || 'جميع الطلاب بالمعمل'}
                 </p>
               </div>
             </div>
 
-            <div className="flex items-center justify-between bg-slate-800/80 p-2 rounded-2xl border border-slate-700/70 text-xs gap-2">
+            <div className="flex items-center justify-between bg-slate-50 dark:bg-slate-800/80 p-2 rounded-2xl border border-slate-200 dark:border-slate-700/70 text-xs gap-2">
               <div className="flex items-center gap-2 flex-1">
-                <Users className="w-4 h-4 text-amber-400 shrink-0" />
+                <Users className="w-4 h-4 text-amber-500 shrink-0" />
                 <select
                   value={selectedGroupId}
                   onChange={(e) => {
                     setSelectedGroupId(e.target.value);
                     syncBranchStudents(activeBranchId, true, false, e.target.value);
                   }}
-                  className="bg-slate-950 text-amber-300 font-bold border border-slate-700 rounded-xl px-2.5 py-1 text-xs focus:outline-none focus:border-amber-400 w-full"
+                  className="bg-white dark:bg-slate-950 text-slate-900 dark:text-amber-300 font-bold border border-slate-200 dark:border-slate-700 rounded-xl px-2.5 py-1 text-xs focus:outline-none focus:border-amber-400 w-full"
                 >
                   <option value="auto">المجموعة الحالية (تلقائي)</option>
                   <option value="all">جميع الطلاب / المجموعات</option>
@@ -1444,20 +1444,20 @@ export const FloatingTeachingToolsOverlay: React.FC<FloatingTeachingToolsOverlay
               <button
                 onClick={() => syncBranchStudents(activeBranchId, true, false)}
                 disabled={isSyncingStudents}
-                className="px-2.5 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 rounded-xl font-bold flex items-center gap-1 shrink-0 transition-all text-[11px]"
+                className="px-2.5 py-1 bg-amber-100 dark:bg-amber-500/20 hover:bg-amber-200 dark:hover:bg-amber-500/30 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-500/40 rounded-xl font-bold flex items-center gap-1 shrink-0 transition-all text-[11px]"
               >
                 <RotateCcw className={`w-3.5 h-3.5 ${isSyncingStudents ? 'animate-spin' : ''}`} />
                 <span>مزامنة 🔄</span>
               </button>
             </div>
 
-            <div className="bg-slate-950/70 border border-slate-800 p-3 rounded-2xl space-y-3">
+            <div className="bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800 p-3 rounded-2xl space-y-3">
               <div className="flex items-center justify-between">
-                <label className="text-xs font-extrabold text-amber-300 flex items-center gap-1">
-                  <Zap className="w-4 h-4 text-amber-400 fill-amber-400" />
+                <label className="text-xs font-extrabold text-amber-800 dark:text-amber-300 flex items-center gap-1">
+                  <Zap className="w-4 h-4 text-amber-500 fill-amber-400" />
                   <span>اختر مقدار النقاط (+ / -):</span>
                 </label>
-                <span className="text-xs font-mono font-black text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-lg border border-amber-500/30">
+                <span className="text-xs font-mono font-black text-amber-700 dark:text-amber-400 bg-amber-100 dark:bg-amber-500/10 px-2 py-0.5 rounded-lg border border-amber-300 dark:border-amber-500/30">
                   {pointsAmount > 0 ? `+${pointsAmount}` : pointsAmount} نقطة
                 </span>
               </div>
@@ -1470,8 +1470,8 @@ export const FloatingTeachingToolsOverlay: React.FC<FloatingTeachingToolsOverlay
                     onClick={() => setPointsAmount(pts)}
                     className={`py-1.5 rounded-xl text-xs font-black transition-all border ${
                       pointsAmount === pts
-                        ? 'bg-amber-500 text-slate-950 border-amber-300 shadow-md scale-105'
-                        : 'bg-slate-900 text-amber-400 hover:bg-slate-800 border-amber-500/30'
+                        ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-md scale-105'
+                        : 'bg-white dark:bg-slate-900 text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-slate-800 border-slate-200 dark:border-amber-500/30'
                     }`}
                   >
                     {pts > 0 ? `+${pts}` : pts}
@@ -1480,7 +1480,7 @@ export const FloatingTeachingToolsOverlay: React.FC<FloatingTeachingToolsOverlay
               </div>
 
               <div className="space-y-1">
-                <label className="text-[11px] font-bold text-slate-400 block">سبب المكافأة / التنبيه:</label>
+                <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400 block">سبب المكافأة / التنبيه:</label>
                 <div className="flex flex-wrap gap-1.5">
                   {[
                     'إجابة ممتازة وتسريع الكود',
@@ -1495,8 +1495,8 @@ export const FloatingTeachingToolsOverlay: React.FC<FloatingTeachingToolsOverlay
                       onClick={() => setPointsReason(r)}
                       className={`text-[10px] px-2.5 py-1 rounded-lg border transition-all ${
                         pointsReason === r
-                          ? 'bg-amber-500/20 text-amber-300 border-amber-400 font-bold'
-                          : 'bg-slate-900 text-slate-400 border-slate-800 hover:bg-slate-800'
+                          ? 'bg-amber-100 dark:bg-amber-500/20 text-amber-900 dark:text-amber-300 border-amber-300 dark:border-amber-400 font-bold'
+                          : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800'
                       }`}
                     >
                       {r}
@@ -1508,15 +1508,15 @@ export const FloatingTeachingToolsOverlay: React.FC<FloatingTeachingToolsOverlay
                   value={pointsReason}
                   onChange={(e) => setPointsReason(e.target.value)}
                   placeholder="سبب مخصص للنقاط..."
-                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-400"
+                  className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-1.5 text-xs text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-amber-500"
                 />
               </div>
             </div>
 
-            <div className="flex items-center justify-between text-xs font-bold text-slate-300 bg-slate-800/50 px-3 py-2 rounded-xl border border-slate-700/50">
+            <div className="flex items-center justify-between text-xs font-bold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800/50 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700/50">
               <div className="flex items-center gap-2">
                 <span>المحددون:</span>
-                <span className="text-amber-400 font-mono font-black text-sm">
+                <span className="text-amber-600 dark:text-amber-400 font-mono font-black text-sm">
                   {selectedPointStudentIds.length} من {rawTrainees.length}
                 </span>
               </div>
@@ -1524,7 +1524,7 @@ export const FloatingTeachingToolsOverlay: React.FC<FloatingTeachingToolsOverlay
                 <button
                   type="button"
                   onClick={() => setSelectedPointStudentIds(rawTrainees.map((t) => t.id))}
-                  className="text-amber-400 hover:underline"
+                  className="text-amber-600 dark:text-amber-400 hover:underline"
                 >
                   تحديد الكل ({rawTrainees.length})
                 </button>
@@ -1536,7 +1536,7 @@ export const FloatingTeachingToolsOverlay: React.FC<FloatingTeachingToolsOverlay
                       rawTrainees.filter((t) => t.attendanceStatus === 'present' || t.isDeviceOnline).map((t) => t.id)
                     )
                   }
-                  className="text-emerald-400 hover:underline"
+                  className="text-emerald-600 dark:text-emerald-400 hover:underline"
                 >
                   الحاضرون فقط
                 </button>
@@ -1544,14 +1544,14 @@ export const FloatingTeachingToolsOverlay: React.FC<FloatingTeachingToolsOverlay
                 <button
                   type="button"
                   onClick={() => setSelectedPointStudentIds([])}
-                  className="text-rose-400 hover:underline"
+                  className="text-rose-600 dark:text-rose-400 hover:underline"
                 >
                   إلغاء
                 </button>
               </div>
             </div>
 
-            <div className="flex-1 bg-slate-950/70 rounded-2xl border border-slate-800 p-2 overflow-y-auto max-h-[220px] space-y-1.5">
+            <div className="flex-1 bg-slate-50 dark:bg-slate-950/70 rounded-2xl border border-slate-200 dark:border-slate-800 p-2 overflow-y-auto max-h-[220px] space-y-1.5">
               {rawTrainees.length === 0 ? (
                 <div className="text-center py-8 text-slate-500 text-xs">
                   لا يوجد طلاب مسجلون في هذه المجموعة حالياً
@@ -1559,6 +1559,7 @@ export const FloatingTeachingToolsOverlay: React.FC<FloatingTeachingToolsOverlay
               ) : (
                 rawTrainees.map((t) => {
                   const isSelected = selectedPointStudentIds.includes(t.id);
+                  const photo = t.photoUrl || (t as any).photo;
                   return (
                     <div
                       key={t.id}
@@ -1569,41 +1570,48 @@ export const FloatingTeachingToolsOverlay: React.FC<FloatingTeachingToolsOverlay
                       }}
                       className={`flex items-center justify-between p-2.5 rounded-xl cursor-pointer transition-all border ${
                         isSelected
-                          ? 'bg-amber-500/10 border-amber-500/50 text-white'
-                          : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:bg-slate-900'
+                          ? 'bg-amber-50 dark:bg-amber-500/10 border-amber-300 dark:border-amber-500/50 text-slate-900 dark:text-white'
+                          : 'bg-white dark:bg-slate-900/60 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-900'
                       }`}
                     >
-                      <div className="flex items-center gap-2.5">
+                      <div className="flex items-center gap-2.5 min-w-0">
                         <input
                           type="checkbox"
                           checked={isSelected}
                           onChange={() => {}}
-                          className="w-4 h-4 rounded text-amber-500 focus:ring-amber-500 bg-slate-950 border-slate-700 cursor-pointer"
+                          className="w-4 h-4 rounded text-amber-500 focus:ring-amber-500 bg-white dark:bg-slate-950 border-slate-300 dark:border-slate-700 cursor-pointer"
                         />
-                        <div>
-                          <div className="font-bold text-xs text-slate-200 flex items-center gap-1.5">
-                            <span>{t.fullName}</span>
-                            <span className="text-[10px] text-slate-400 font-mono">({t.code})</span>
+                        <div className="w-8 h-8 rounded-xl overflow-hidden bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-bold text-xs flex items-center justify-center shrink-0 border border-slate-200 dark:border-slate-700">
+                          {photo ? (
+                            <img src={photo} alt={t.fullName} className="w-full h-full object-cover" />
+                          ) : (
+                            t.fullName?.charAt(0) || 'ط'
+                          )}
+                        </div>
+                        <div className="min-w-0 truncate">
+                          <div className="font-bold text-xs text-slate-900 dark:text-slate-200 flex items-center gap-1.5 truncate">
+                            <span className="truncate">{t.fullName}</span>
+                            <span className="text-[10px] text-slate-500 dark:text-slate-400 font-mono shrink-0">({t.code})</span>
                           </div>
-                          <div className="text-[10px] text-slate-400 flex items-center gap-2">
+                          <div className="text-[10px] text-slate-500 dark:text-slate-400 flex items-center gap-2">
                             <span>النقاط الحالية: {t.totalPoints || t.points || 0} ⭐</span>
                           </div>
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 shrink-0">
                         {t.isDeviceOnline && (
-                          <span className="text-[9px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-1.5 py-0.5 rounded-md font-bold">
+                          <span className="text-[9px] bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-500/30 px-1.5 py-0.5 rounded-md font-bold">
                             جهاز متصل 🟢
                           </span>
                         )}
                         <span
                           className={`text-[9px] px-2 py-0.5 rounded-md font-bold ${
                             t.attendanceStatus === 'present'
-                              ? 'bg-emerald-500/20 text-emerald-300'
+                              ? 'bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300'
                               : t.attendanceStatus === 'late'
-                              ? 'bg-amber-500/20 text-amber-300'
-                              : 'bg-rose-500/20 text-rose-300'
+                              ? 'bg-amber-100 dark:bg-amber-500/20 text-amber-800 dark:text-amber-300'
+                              : 'bg-rose-100 dark:bg-rose-500/20 text-rose-700 dark:text-rose-300'
                           }`}
                         >
                           {t.attendanceStatus === 'present'
@@ -1619,12 +1627,12 @@ export const FloatingTeachingToolsOverlay: React.FC<FloatingTeachingToolsOverlay
               )}
             </div>
 
-            <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-800">
+            <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-200 dark:border-slate-800">
               <button
                 type="button"
                 onClick={() => handleAwardPoints(false)}
                 disabled={selectedPointStudentIds.length === 0}
-                className="py-3 bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-slate-950 font-black rounded-2xl shadow-xl transition-all text-xs disabled:opacity-50 flex items-center justify-center gap-1.5"
+                className="py-3 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black rounded-2xl shadow-lg transition-all text-xs disabled:opacity-50 flex items-center justify-center gap-1.5"
               >
                 <Zap className="w-4 h-4 fill-current" />
                 <span>منح للمحدد ({selectedPointStudentIds.length}) ⭐</span>
@@ -1634,7 +1642,7 @@ export const FloatingTeachingToolsOverlay: React.FC<FloatingTeachingToolsOverlay
                 type="button"
                 onClick={() => handleAwardPoints(true)}
                 disabled={rawTrainees.length === 0}
-                className="py-3 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-black rounded-2xl shadow-xl transition-all text-xs disabled:opacity-50 flex items-center justify-center gap-1.5"
+                className="py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-black rounded-2xl shadow-lg transition-all text-xs disabled:opacity-50 flex items-center justify-center gap-1.5"
               >
                 <Award className="w-4 h-4 fill-current" />
                 <span>منح جماعي للكل ({rawTrainees.length}) 🏆</span>
@@ -1648,33 +1656,33 @@ export const FloatingTeachingToolsOverlay: React.FC<FloatingTeachingToolsOverlay
       {/* POPUP MODAL: RANDOM WHEEL OF FORTUNE */}
       {/* ---------------------------------------------------- */}
       {activeTool === 'wheel' && (
-        <div className="fixed inset-0 z-[9996] bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 dir-rtl">
-          <div className="bg-slate-900 border border-slate-700 p-4 rounded-3xl shadow-2xl text-white max-w-sm w-full space-y-3 relative">
+        <div className="fixed inset-0 z-[9996] bg-slate-900/60 dark:bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 dir-rtl">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-4 rounded-3xl shadow-2xl text-slate-900 dark:text-white max-w-sm w-full space-y-3 relative">
             <button
               onClick={() => setActiveTool('none')}
-              className="absolute top-3 left-3 text-slate-400 hover:text-white p-1 rounded-lg"
+              className="absolute top-3 left-3 text-slate-400 hover:text-slate-700 dark:hover:text-white p-1 rounded-lg"
             >
               <X className="w-4 h-4" />
             </button>
 
             <div className="text-center">
-              <div className="inline-flex p-2 bg-amber-500/10 text-amber-400 rounded-2xl mb-1">
+              <div className="inline-flex p-2 bg-amber-100 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 rounded-2xl mb-1">
                 <RotateCw className="w-5 h-5 animate-spin-slow" />
               </div>
-              <h2 className="text-base font-extrabold">عجلة الحظ التفاعلية 🎡</h2>
-              <p className="text-[10px] text-slate-400">سحب عشوائي لطلاب المعمل الحاضرين في اللحظة الحالية فقط</p>
+              <h2 className="text-base font-extrabold text-slate-900 dark:text-white">عجلة الحظ التفاعلية 🎡</h2>
+              <p className="text-[10px] text-slate-500 dark:text-slate-400">سحب عشوائي لطلاب المعمل الحاضرين في اللحظة الحالية فقط</p>
             </div>
 
             {/* Per-Branch Student Sync Status Bar */}
-            <div className="flex items-center justify-between bg-slate-800/80 px-2.5 py-1.5 rounded-xl border border-slate-700/70 text-[11px]">
-              <div className="flex items-center gap-1.5 text-slate-300 font-bold">
-                <Users className="w-3.5 h-3.5 text-amber-400" />
-                <span>الحاضرون بالمعمل: <strong className="text-emerald-400">{liveStudents.length}</strong></span>
+            <div className="flex items-center justify-between bg-slate-50 dark:bg-slate-800/80 px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700/70 text-[11px]">
+              <div className="flex items-center gap-1.5 text-slate-700 dark:text-slate-300 font-bold">
+                <Users className="w-3.5 h-3.5 text-amber-500" />
+                <span>الحاضرون بالمعمل: <strong className="text-emerald-600 dark:text-emerald-400">{liveStudents.length}</strong></span>
               </div>
               <button
                 onClick={() => syncBranchStudents(activeBranchId)}
                 disabled={isSyncingStudents}
-                className="px-2 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 rounded-lg font-bold flex items-center gap-1 transition-all text-[10px]"
+                className="px-2 py-1 bg-amber-100 dark:bg-amber-500/20 hover:bg-amber-200 dark:hover:bg-amber-500/30 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-500/40 rounded-lg font-bold flex items-center gap-1 transition-all text-[10px]"
               >
                 <RotateCcw className={`w-3 h-3 ${isSyncingStudents ? 'animate-spin' : ''}`} />
                 <span>مزامنة 🔄</span>
@@ -1682,28 +1690,28 @@ export const FloatingTeachingToolsOverlay: React.FC<FloatingTeachingToolsOverlay
             </div>
 
             {/* Selector */}
-            <div className="grid grid-cols-4 gap-1 bg-slate-800 p-1 rounded-xl text-[11px] font-semibold">
+            <div className="grid grid-cols-4 gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl text-[11px] font-semibold">
               <button
                 onClick={() => setWheelType('attendees')}
-                className={`py-1 rounded-lg ${wheelType === 'attendees' ? 'bg-amber-500 text-slate-950 font-bold' : 'text-slate-400'}`}
+                className={`py-1 rounded-lg transition-all ${wheelType === 'attendees' ? 'bg-amber-500 text-slate-950 font-bold' : 'text-slate-600 dark:text-slate-400'}`}
               >
                 الطلاب
               </button>
               <button
                 onClick={() => setWheelType('questions')}
-                className={`py-1 rounded-lg ${wheelType === 'questions' ? 'bg-amber-500 text-slate-950 font-bold' : 'text-slate-400'}`}
+                className={`py-1 rounded-lg transition-all ${wheelType === 'questions' ? 'bg-amber-500 text-slate-950 font-bold' : 'text-slate-600 dark:text-slate-400'}`}
               >
                 الأسئلة
               </button>
               <button
                 onClick={() => setWheelType('codes')}
-                className={`py-1 rounded-lg ${wheelType === 'codes' ? 'bg-amber-500 text-slate-950 font-bold' : 'text-slate-400'}`}
+                className={`py-1 rounded-lg transition-all ${wheelType === 'codes' ? 'bg-amber-500 text-slate-950 font-bold' : 'text-slate-600 dark:text-slate-400'}`}
               >
                 الأكواد ⚡
               </button>
               <button
                 onClick={() => setWheelType('teams')}
-                className={`py-1 rounded-lg ${wheelType === 'teams' ? 'bg-amber-500 text-slate-950 font-bold' : 'text-slate-400'}`}
+                className={`py-1 rounded-lg transition-all ${wheelType === 'teams' ? 'bg-amber-500 text-slate-950 font-bold' : 'text-slate-600 dark:text-slate-400'}`}
               >
                 الفرق
               </button>
@@ -1718,7 +1726,7 @@ export const FloatingTeachingToolsOverlay: React.FC<FloatingTeachingToolsOverlay
                   onChange={e => setNewWheelItemInput(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && handleAddCustomWheelItem()}
                   placeholder="إضافة عنصر إضافي للعجلة..."
-                  className="flex-1 bg-slate-800 border border-slate-700 rounded-xl px-2.5 py-1.5 text-[11px] text-white placeholder-slate-400 focus:outline-none focus:border-amber-400"
+                  className="flex-1 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-2.5 py-1.5 text-[11px] text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-amber-500"
                 />
                 <button
                   onClick={handleAddCustomWheelItem}
@@ -1732,12 +1740,12 @@ export const FloatingTeachingToolsOverlay: React.FC<FloatingTeachingToolsOverlay
             {/* Wheel Canvas Representation */}
             <div className="relative w-40 h-40 mx-auto flex items-center justify-center">
               <div
-                className="w-full h-full rounded-full border-6 border-amber-500 shadow-xl flex items-center justify-center transition-all duration-[3000ms] ease-out bg-gradient-to-br from-indigo-900 via-purple-900 to-slate-900"
+                className="w-full h-full rounded-full border-6 border-amber-500 shadow-xl flex items-center justify-center transition-all duration-[3000ms] ease-out bg-gradient-to-br from-amber-500/20 via-purple-500/20 to-indigo-500/20 dark:from-indigo-900 dark:via-purple-900 dark:to-slate-900"
                 style={{ transform: `rotate(${wheelRotation}deg)` }}
               >
                 <div className="text-center p-2">
-                  <Sparkles className="w-6 h-6 text-amber-400 mx-auto animate-bounce" />
-                  <p className="text-[11px] font-extrabold text-amber-200 mt-1 line-clamp-2">
+                  <Sparkles className="w-6 h-6 text-amber-500 dark:text-amber-400 mx-auto animate-bounce" />
+                  <p className="text-[11px] font-extrabold text-slate-900 dark:text-amber-200 mt-1 line-clamp-2">
                     {wheelWinner ? `🎉 ${wheelWinner}` : 'اضغط تدوير'}
                   </p>
                 </div>
@@ -1749,7 +1757,7 @@ export const FloatingTeachingToolsOverlay: React.FC<FloatingTeachingToolsOverlay
             <button
               onClick={handleSpinWheel}
               disabled={wheelIsSpinning}
-              className="w-full py-2.5 bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-600 hover:to-yellow-600 text-slate-950 font-black rounded-xl shadow-lg transition-all text-xs disabled:opacity-50"
+              className="w-full py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black rounded-xl shadow-md transition-all text-xs disabled:opacity-50"
             >
               {wheelIsSpinning ? 'جاري الدوران... 🎡' : 'تدوير العجلة الآن 🚀'}
             </button>
@@ -1761,55 +1769,55 @@ export const FloatingTeachingToolsOverlay: React.FC<FloatingTeachingToolsOverlay
       {/* POPUP MODAL: RANDOM STUDENT PICKER */}
       {/* ---------------------------------------------------- */}
       {activeTool === 'picker' && (
-        <div className="fixed inset-0 z-[9996] bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 dir-rtl">
-          <div className="bg-slate-900 border border-slate-700 p-6 rounded-3xl shadow-2xl text-white max-w-md w-full space-y-4 relative text-center">
+        <div className="fixed inset-0 z-[9996] bg-slate-900/60 dark:bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 dir-rtl">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-6 rounded-3xl shadow-2xl text-slate-900 dark:text-white max-w-md w-full space-y-4 relative text-center">
             <button
               onClick={() => setActiveTool('none')}
-              className="absolute top-4 left-4 text-slate-400 hover:text-white p-1 rounded-lg"
+              className="absolute top-4 left-4 text-slate-400 hover:text-slate-700 dark:hover:text-white p-1 rounded-lg"
             >
               <X className="w-5 h-5" />
             </button>
 
-            <div className="inline-flex p-3 bg-sky-500/20 text-sky-400 rounded-2xl">
+            <div className="inline-flex p-3 bg-sky-100 dark:bg-sky-500/20 text-sky-600 dark:text-sky-400 rounded-2xl">
               <UserCheck className="w-8 h-8" />
             </div>
-            <h2 className="text-xl font-extrabold">مُنتخِب الطلاب العشوائي (Per-Branch)</h2>
-            <p className="text-xs text-slate-400">اختيار طالب عشوائي من طلاب الفرع الحاضرين بالمعمل حالياً</p>
+            <h2 className="text-xl font-extrabold text-slate-900 dark:text-white">مُنتخِب الطلاب العشوائي (Per-Branch)</h2>
+            <p className="text-xs text-slate-500 dark:text-slate-400">اختيار طالب عشوائي من طلاب الفرع الحاضرين بالمعمل حالياً</p>
 
-            <div className="flex items-center justify-between bg-slate-800/80 px-3 py-2 rounded-2xl border border-slate-700/70 text-xs">
-              <div className="flex items-center gap-2 text-slate-300 font-bold">
-                <Users className="w-4 h-4 text-sky-400" />
-                <span>طلاب الفرع الحاضرين: <strong className="text-emerald-400">{liveStudents.length}</strong></span>
+            <div className="flex items-center justify-between bg-slate-50 dark:bg-slate-800/80 px-3 py-2 rounded-2xl border border-slate-200 dark:border-slate-700/70 text-xs">
+              <div className="flex items-center gap-2 text-slate-700 dark:text-slate-300 font-bold">
+                <Users className="w-4 h-4 text-sky-500" />
+                <span>طلاب الفرع الحاضرين: <strong className="text-emerald-600 dark:text-emerald-400">{liveStudents.length}</strong></span>
               </div>
               <button
                 onClick={() => syncBranchStudents(activeBranchId)}
                 disabled={isSyncingStudents}
-                className="px-2.5 py-1 bg-sky-500/20 hover:bg-sky-500/30 text-sky-300 border border-sky-500/40 rounded-xl font-bold flex items-center gap-1.5 transition-all text-[11px]"
+                className="px-2.5 py-1 bg-sky-100 dark:bg-sky-500/20 hover:bg-sky-200 dark:hover:bg-sky-500/30 text-sky-800 dark:text-sky-300 border border-sky-300 dark:border-sky-500/40 rounded-xl font-bold flex items-center gap-1.5 transition-all text-[11px]"
               >
                 <RotateCcw className={`w-3.5 h-3.5 ${isSyncingStudents ? 'animate-spin' : ''}`} />
                 <span>مزامنة الطلاب 🔄</span>
               </button>
             </div>
 
-            <div className="p-6 bg-slate-950/70 rounded-2xl border border-slate-800 min-h-[100px] flex items-center justify-center">
+            <div className="p-6 bg-slate-50 dark:bg-slate-950/70 rounded-2xl border border-slate-200 dark:border-slate-800 min-h-[100px] flex items-center justify-center">
               {pickingStudent ? (
-                <div className="text-2xl font-black text-amber-400 animate-pulse">
+                <div className="text-2xl font-black text-amber-500 animate-pulse">
                   {selectedStudentResult || 'جاري الاختيار العشوائي...'}
                 </div>
               ) : selectedStudentResult ? (
                 <div>
-                  <span className="text-xs text-emerald-400 font-bold block mb-1">وقع الاختيار الفائز على:</span>
-                  <span className="text-xl font-extrabold text-white">{selectedStudentResult}</span>
+                  <span className="text-xs text-emerald-600 dark:text-emerald-400 font-bold block mb-1">وقع الاختيار الفائز على:</span>
+                  <span className="text-xl font-extrabold text-slate-900 dark:text-white">{selectedStudentResult}</span>
                 </div>
               ) : (
-                <span className="text-xs text-slate-400">اضغط على زر الاختيار لبدء السحب العشوائي بين طلاب المعمل</span>
+                <span className="text-xs text-slate-500 dark:text-slate-400">اضغط على زر الاختيار لبدء السحب العشوائي بين طلاب المعمل</span>
               )}
             </div>
 
             <button
               onClick={handlePickRandomStudent}
               disabled={pickingStudent || liveStudents.length === 0}
-              className="w-full py-3 bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-600 hover:to-blue-700 text-slate-950 font-extrabold rounded-2xl shadow-xl transition-all disabled:opacity-50"
+              className="w-full py-3 bg-sky-600 hover:bg-sky-500 text-white font-extrabold rounded-2xl shadow-lg transition-all disabled:opacity-50"
             >
               {pickingStudent ? 'جاري السحب... 🎲' : 'اختيار طالب عشوائي الآن 🎯'}
             </button>
@@ -1821,13 +1829,13 @@ export const FloatingTeachingToolsOverlay: React.FC<FloatingTeachingToolsOverlay
       {/* POPUP MODAL: SESSION COPILOT AI */}
       {/* ---------------------------------------------------- */}
       {activeTool === 'copilot' && (
-        <div className="fixed bottom-20 sm:bottom-6 inset-x-4 sm:inset-x-auto sm:right-6 z-[9996] bg-slate-900 border border-purple-500/40 p-5 rounded-3xl shadow-2xl text-white w-full max-w-sm mx-auto sm:mx-0 dir-rtl">
-          <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+        <div className="fixed bottom-20 sm:bottom-6 inset-x-4 sm:inset-x-auto sm:right-6 z-[9996] bg-white dark:bg-slate-900 border border-purple-300 dark:border-purple-500/40 p-5 rounded-3xl shadow-2xl text-slate-900 dark:text-white w-full max-w-sm mx-auto sm:mx-0 dir-rtl">
+          <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
             <div className="flex items-center gap-2">
-              <Bot className="w-5 h-5 text-purple-400" />
-              <h3 className="text-sm font-bold text-purple-300">مساعد الحصة الذكي (Session Copilot)</h3>
+              <Bot className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+              <h3 className="text-sm font-bold text-purple-700 dark:text-purple-300">مساعد الحصة الذكي (Session Copilot)</h3>
             </div>
-            <button onClick={() => setActiveTool('none')} className="text-slate-400 hover:text-white">
+            <button onClick={() => setActiveTool('none')} className="text-slate-400 hover:text-slate-700 dark:hover:text-white">
               <X className="w-4 h-4" />
             </button>
           </div>
@@ -1836,9 +1844,9 @@ export const FloatingTeachingToolsOverlay: React.FC<FloatingTeachingToolsOverlay
             {copilotAlerts.map(alert => (
               <div
                 key={alert.id}
-                className="p-3 bg-slate-800/90 rounded-2xl border border-slate-700/80 text-xs space-y-2"
+                className="p-3 bg-slate-50 dark:bg-slate-800/90 rounded-2xl border border-slate-200 dark:border-slate-700/80 text-xs space-y-2"
               >
-                <p className="text-slate-200 font-medium">{alert.text}</p>
+                <p className="text-slate-800 dark:text-slate-200 font-medium">{alert.text}</p>
                 {alert.actionText && (
                   <button
                     onClick={() => {

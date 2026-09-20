@@ -1382,8 +1382,16 @@ export const InteractiveSessionsView: React.FC<InteractiveSessionsViewProps> = (
                     {/* Trainee Top Info */}
                     <div className="flex items-start justify-between gap-2.5">
                       <div className="flex items-center gap-2.5 min-w-0">
-                        <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-500 to-purple-600 text-white flex items-center justify-center font-black text-xs shrink-0 shadow-sm">
-                          {(trainee.fullName || trainee.name || 'ط').charAt(0)}
+                        <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-500 to-purple-600 text-white flex items-center justify-center font-black text-xs shrink-0 shadow-sm overflow-hidden border border-indigo-200 dark:border-indigo-800">
+                          {trainee.photoUrl || (trainee as any).photo ? (
+                            <img 
+                              src={trainee.photoUrl || (trainee as any).photo} 
+                              alt={trainee.fullName || trainee.name} 
+                              className="w-full h-full object-cover" 
+                            />
+                          ) : (
+                            (trainee.fullName || trainee.name || 'ط').charAt(0)
+                          )}
                         </div>
                         <div className="min-w-0">
                           <h4 className="text-xs font-black text-slate-900 dark:text-white truncate">
