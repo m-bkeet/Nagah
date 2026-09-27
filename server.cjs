@@ -622,7 +622,7 @@ function getDb() {
 var collectionHashes = /* @__PURE__ */ new Map();
 var isQuotaExceeded = false;
 var quotaExceededNoticeTime = 0;
-var QUOTA_BACKOFF_MS = 15 * 60 * 1e3;
+var QUOTA_BACKOFF_MS = 30 * 1e3;
 var TRANSIENT_COLLECTIONS = /* @__PURE__ */ new Set([
   "devices",
   "deviceCommands",
@@ -631,7 +631,7 @@ var TRANSIENT_COLLECTIONS = /* @__PURE__ */ new Set([
   "notifications",
   "deletedDeviceIds"
 ]);
-function withTimeout(promise, ms = 8e3) {
+function withTimeout(promise, ms = 12e3) {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error("FIRESTORE_TIMEOUT")), ms);
     promise.then(
@@ -676,7 +676,7 @@ function sanitizeForFirestore(collectionName, items) {
   }
   return items;
 }
-async function saveCollectionToFirestore(collectionName, rawItems) {
+async function saveCollectionToFirestore(collectionName, rawItems, updateSyncMeta = true) {
   if (TRANSIENT_COLLECTIONS.has(collectionName)) {
     return true;
   }
@@ -702,31 +702,44 @@ async function saveCollectionToFirestore(collectionName, rawItems) {
         isSplit: false,
         totalParts: 1,
         updatedAt: now
-      }, { merge: true }), 6e3);
+      }, { merge: true }), 1e4);
     } else {
       const totalParts = Math.ceil(serialized.length / CHUNK_SIZE);
       const partPromises = [];
       for (let i = 0; i < totalParts; i++) {
         const chunk = serialized.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE);
         const partRef = (0, import_firestore.doc)(db2, "nagah_store", `${collectionName}_p${i + 1}`);
-        partPromises.push(withTimeout((0, import_firestore.setDoc)(partRef, { payload: chunk, part: i + 1, totalParts, updatedAt: now }, { merge: true }), 6e3));
+        partPromises.push(withTimeout((0, import_firestore.setDoc)(partRef, { payload: chunk, part: i + 1, totalParts, updatedAt: now }, { merge: true }), 1e4));
       }
       await Promise.all(partPromises);
-      await withTimeout((0, import_firestore.setDoc)(docRef, { isSplit: true, totalParts, updatedAt: now }, { merge: true }), 6e3);
+      await withTimeout((0, import_firestore.setDoc)(docRef, { isSplit: true, totalParts, updatedAt: now }, { merge: true }), 1e4);
+    }
+    if (updateSyncMeta) {
+      try {
+        const metaRef = (0, import_firestore.doc)(db2, "nagah_store", "sync_meta");
+        await (0, import_firestore.setDoc)(metaRef, {
+          lastUpdatedCollection: collectionName,
+          lastCollection: collectionName,
+          updatedAt: now,
+          version: now
+        }, { merge: true });
+      } catch (metaErr) {
+        console.warn("[FirestoreStorage] sync_meta write notice:", metaErr);
+      }
     }
     collectionHashes.set(collectionName, newHash);
     isQuotaExceeded = false;
     return true;
   } catch (err) {
     const errMsg = err?.message || String(err);
-    if (errMsg.includes("RESOURCE_EXHAUSTED") || errMsg.includes("Quota limit exceeded") || errMsg.includes("8") || errMsg.includes("FIRESTORE_TIMEOUT")) {
+    if (errMsg.includes("RESOURCE_EXHAUSTED") || errMsg.includes("Quota limit exceeded")) {
       isQuotaExceeded = true;
       quotaExceededNoticeTime = now;
-      console.warn(`[FirestoreStorage] Cloud Firestore Quota reached or paused. Active local persistence handles all operations smoothly.`);
+      console.warn(`[FirestoreStorage] Cloud Firestore Quota reached. Backing off for 30s.`);
     } else {
-      console.warn(`[FirestoreStorage] Non-critical save note for ${collectionName}:`, errMsg);
+      console.warn(`[FirestoreStorage] Note for ${collectionName}:`, errMsg);
     }
-    return true;
+    return false;
   }
 }
 async function loadCollectionFromFirestore(collectionName) {
@@ -741,13 +754,13 @@ async function loadCollectionFromFirestore(collectionName) {
   }
   try {
     const docRef = (0, import_firestore.doc)(db2, "nagah_store", collectionName);
-    const snap = await withTimeout((0, import_firestore.getDoc)(docRef), 6e3);
+    const snap = await withTimeout((0, import_firestore.getDoc)(docRef), 1e4);
     if (!snap.exists()) return null;
     const data = snap.data();
     if (data?.isSplit) {
       const totalParts = data.totalParts || 2;
       const partSnaps = await Promise.all(
-        Array.from({ length: totalParts }, (_, i) => withTimeout((0, import_firestore.getDoc)((0, import_firestore.doc)(db2, "nagah_store", `${collectionName}_p${i + 1}`)), 6e3))
+        Array.from({ length: totalParts }, (_, i) => withTimeout((0, import_firestore.getDoc)((0, import_firestore.doc)(db2, "nagah_store", `${collectionName}_p${i + 1}`)), 1e4))
       );
       const fullStr = partSnaps.map((s) => s.data()?.payload || "").join("");
       return fullStr ? JSON.parse(fullStr) : null;
@@ -758,7 +771,7 @@ async function loadCollectionFromFirestore(collectionName) {
     return null;
   } catch (err) {
     const errMsg = err?.message || String(err);
-    if (errMsg.includes("RESOURCE_EXHAUSTED") || errMsg.includes("Quota limit exceeded") || errMsg.includes("8")) {
+    if (errMsg.includes("RESOURCE_EXHAUSTED") || errMsg.includes("Quota limit exceeded")) {
       isQuotaExceeded = true;
       quotaExceededNoticeTime = now;
     }
@@ -801,8 +814,23 @@ async function saveFullDbToFirestore2(dbData, immediate = false) {
       "traineeBadges",
       "portalMessages"
     ];
-    const tasks = coreCollections.filter((k) => current[k] !== void 0).map((k) => saveCollectionToFirestore(k, current[k]));
-    await Promise.all(tasks);
+    const tasks = coreCollections.filter((k) => current[k] !== void 0).map((k) => saveCollectionToFirestore(k, current[k], false));
+    const results = await Promise.all(tasks);
+    const anyWritten = results.some((r) => r === true);
+    if (anyWritten) {
+      try {
+        const db2 = getDb();
+        if (db2) {
+          const metaRef = (0, import_firestore.doc)(db2, "nagah_store", "sync_meta");
+          await (0, import_firestore.setDoc)(metaRef, {
+            updatedAt: Date.now(),
+            version: Date.now()
+          }, { merge: true });
+        }
+      } catch (metaErr) {
+        console.warn("[FirestoreStorage] sync_meta batch write notice:", metaErr);
+      }
+    }
   };
   if (immediate || isServerless) {
     if (debouncedSyncTimer) {
@@ -810,7 +838,7 @@ async function saveFullDbToFirestore2(dbData, immediate = false) {
       debouncedSyncTimer = null;
     }
     try {
-      await withTimeout(executeSync(), 5e3);
+      await withTimeout(executeSync(), 12e3);
     } catch (err) {
     }
     return;
@@ -824,13 +852,13 @@ async function saveFullDbToFirestore2(dbData, immediate = false) {
       await executeSync();
     } catch (e) {
     }
-  }, 15e3);
+  }, 500);
 }
-async function allocateNextTraineeCode(prefix = "A", localTrainees = []) {
+async function allocateNextTraineeCode(prefix = "A", localTrainees = [], groupId, freedCodesList = []) {
   const pfx = (prefix || "A").toUpperCase().trim().slice(0, 3);
   const regex = new RegExp(`^${pfx}-?(\\d+)$`, "i");
-  let maxNum = 0;
   const usedCodes = /* @__PURE__ */ new Set();
+  const usedNumbers = /* @__PURE__ */ new Set();
   if (Array.isArray(localTrainees)) {
     for (const t of localTrainees) {
       if (t && t.code) {
@@ -839,7 +867,7 @@ async function allocateNextTraineeCode(prefix = "A", localTrainees = []) {
         const m = c.match(regex);
         if (m) {
           const num = parseInt(m[1], 10);
-          if (!isNaN(num) && num > maxNum) maxNum = num;
+          if (!isNaN(num)) usedNumbers.add(num);
         }
       }
     }
@@ -847,27 +875,16 @@ async function allocateNextTraineeCode(prefix = "A", localTrainees = []) {
   const db2 = getDb();
   if (db2) {
     try {
-      const traineesDocRef = (0, import_firestore.doc)(db2, "nagah_store", "trainees");
-      const snap = await withTimeout((0, import_firestore.getDoc)(traineesDocRef), 4e3);
-      if (snap.exists()) {
-        const raw = snap.data();
-        let remoteList = [];
-        if (raw?.payload) {
-          try {
-            remoteList = JSON.parse(raw.payload);
-          } catch {
-          }
-        }
-        if (Array.isArray(remoteList)) {
-          for (const t of remoteList) {
-            if (t && t.code) {
-              const c = String(t.code).trim().toUpperCase();
-              usedCodes.add(c);
-              const m = c.match(regex);
-              if (m) {
-                const num = parseInt(m[1], 10);
-                if (!isNaN(num) && num > maxNum) maxNum = num;
-              }
+      const remoteList = await loadCollectionFromFirestore("trainees");
+      if (Array.isArray(remoteList)) {
+        for (const t of remoteList) {
+          if (t && t.code) {
+            const c = String(t.code).trim().toUpperCase();
+            usedCodes.add(c);
+            const m = c.match(regex);
+            if (m) {
+              const num = parseInt(m[1], 10);
+              if (!isNaN(num)) usedNumbers.add(num);
             }
           }
         }
@@ -875,38 +892,68 @@ async function allocateNextTraineeCode(prefix = "A", localTrainees = []) {
     } catch (e) {
       console.warn("[allocateNextTraineeCode] remote trainees scan notice:", e);
     }
+  }
+  if (groupId && Array.isArray(freedCodesList)) {
+    const groupFreed = freedCodesList.find(
+      (f) => f && f.code && f.groupId === groupId && (f.prefix?.toUpperCase() === pfx || f.code.toUpperCase().startsWith(pfx)) && !usedCodes.has(f.code.toUpperCase())
+    );
+    if (groupFreed) {
+      const code = groupFreed.code.toUpperCase();
+      console.log(`[allocateNextTraineeCode] Reusing freed code ${code} for group ${groupId}`);
+      return code;
+    }
+  }
+  if (Array.isArray(freedCodesList)) {
+    const prefixFreed = freedCodesList.find(
+      (f) => f && f.code && (f.prefix?.toUpperCase() === pfx || f.code.toUpperCase().startsWith(pfx)) && !usedCodes.has(f.code.toUpperCase())
+    );
+    if (prefixFreed) {
+      const code = prefixFreed.code.toUpperCase();
+      console.log(`[allocateNextTraineeCode] Reusing freed code ${code} for prefix ${pfx}`);
+      return code;
+    }
+  }
+  let candidateNum = 1;
+  while (usedNumbers.has(candidateNum)) {
+    candidateNum++;
+  }
+  let candidate = `${pfx}${String(candidateNum).padStart(3, "0")}`;
+  while (usedCodes.has(candidate.toUpperCase())) {
+    candidateNum++;
+    candidate = `${pfx}${String(candidateNum).padStart(3, "0")}`;
+  }
+  if (db2) {
     try {
       const counterRef = (0, import_firestore.doc)(db2, "nagah_store", "code_counters");
-      const counterSnap = await withTimeout((0, import_firestore.getDoc)(counterRef), 4e3);
+      const counterSnap = await withTimeout((0, import_firestore.getDoc)(counterRef), 3e3);
       let countersMap = {};
       if (counterSnap.exists()) {
         countersMap = counterSnap.data()?.counters || {};
       }
       const existingVal = Number(countersMap[pfx]) || 0;
-      if (existingVal > maxNum) {
-        maxNum = existingVal;
+      if (candidateNum > existingVal) {
+        countersMap[pfx] = candidateNum;
+        await withTimeout((0, import_firestore.setDoc)(counterRef, { counters: countersMap, updatedAt: (/* @__PURE__ */ new Date()).toISOString() }, { merge: true }), 3e3);
       }
-      let nextNum2 = maxNum + 1;
-      let candidate2 = `${pfx}${String(nextNum2).padStart(3, "0")}`;
-      while (usedCodes.has(candidate2.toUpperCase())) {
-        nextNum2++;
-        candidate2 = `${pfx}${String(nextNum2).padStart(3, "0")}`;
-      }
-      countersMap[pfx] = nextNum2;
-      await withTimeout((0, import_firestore.setDoc)(counterRef, { counters: countersMap, updatedAt: (/* @__PURE__ */ new Date()).toISOString() }, { merge: true }), 4e3);
-      console.log(`[allocateNextTraineeCode] Allocated persistent unique code ${candidate2} (prefix: ${pfx}, nextNum: ${nextNum2})`);
-      return candidate2;
     } catch (e) {
       console.warn("[allocateNextTraineeCode] Firestore code_counters update notice:", e);
     }
   }
-  let nextNum = maxNum + 1;
-  let candidate = `${pfx}${String(nextNum).padStart(3, "0")}`;
-  while (usedCodes.has(candidate.toUpperCase())) {
-    nextNum++;
-    candidate = `${pfx}${String(nextNum).padStart(3, "0")}`;
-  }
+  console.log(`[allocateNextTraineeCode] Allocated unique code ${candidate} (prefix: ${pfx}, num: ${candidateNum})`);
   return candidate;
+}
+async function getSyncMeta() {
+  const db2 = getDb();
+  if (!db2) return null;
+  try {
+    const metaRef = (0, import_firestore.doc)(db2, "nagah_store", "sync_meta");
+    const snap = await withTimeout((0, import_firestore.getDoc)(metaRef), 3e3);
+    if (snap.exists()) {
+      return snap.data();
+    }
+  } catch (e) {
+  }
+  return null;
 }
 async function loadFullDbFromFirestore() {
   const collections = [
@@ -943,21 +990,25 @@ async function loadFullDbFromFirestore() {
   ];
   const result = {};
   let loadedCount = 0;
-  const loadTasks = await Promise.all(
-    collections.map(async (col) => {
-      try {
-        const data = await loadCollectionFromFirestore(col);
-        return { col, data };
-      } catch (e) {
-        return { col, data: null };
+  const batchSize = 6;
+  for (let i = 0; i < collections.length; i += batchSize) {
+    const batch = collections.slice(i, i + batchSize);
+    const batchTasks = await Promise.all(
+      batch.map(async (col) => {
+        try {
+          const data = await loadCollectionFromFirestore(col);
+          return { col, data };
+        } catch (e) {
+          return { col, data: null };
+        }
+      })
+    );
+    for (const { col, data } of batchTasks) {
+      if (data !== null) {
+        result[col] = data;
+        collectionHashes.set(col, hashPayload(data));
+        loadedCount++;
       }
-    })
-  );
-  for (const { col, data } of loadTasks) {
-    if (data !== null) {
-      result[col] = data;
-      collectionHashes.set(col, hashPayload(data));
-      loadedCount++;
     }
   }
   return loadedCount > 0 ? result : null;
@@ -983,6 +1034,7 @@ var defaultPointRules = [
   { id: "rule-5", title: "\u0645\u062E\u0627\u0644\u0641\u0629 \u0623\u0648 \u062A\u0623\u062E\u064A\u0631", pointValue: -10, ruleType: "violation", description: "\u0627\u0644\u062A\u0623\u062E\u064A\u0631 \u0623\u0648 \u0639\u062F\u0645 \u0627\u0644\u0627\u0644\u062A\u0632\u0627\u0645 \u0628\u0642\u0648\u0627\u0639\u062F \u0627\u0644\u0642\u0627\u0639\u0629", isActive: true }
 ];
 var initialData = {
+  freedTraineeCodes: [],
   devices: [],
   traineeScreenshots: [],
   computerLabs: [],
@@ -3299,6 +3351,148 @@ var initialData = {
   ],
   questions: [
     {
+      "id": "q-pre-ict4-01",
+      "examId": "exam-1787463526231",
+      "questionType": "mcq",
+      "questionText": "\u064A\u0633\u062A\u062E\u062F\u0645 \u0639\u0644\u0645\u0627\u0621 \u0627\u0644\u0622\u062B\u0627\u0631 \u062C\u0647\u0627\u0632 ............ \u0644\u0644\u0628\u062D\u062B \u0639\u0646 \u0627\u0644\u0645\u0639\u0627\u062F\u0646 \u0648\u0627\u0644\u0623\u062C\u0633\u0627\u0645 \u0627\u0644\u0645\u0639\u062F\u0646\u064A\u0629 \u0627\u0644\u0645\u062F\u0641\u0648\u0646\u0629 \u062A\u062D\u062A \u0627\u0644\u0623\u0631\u0636.",
+      "options": [
+        "\u0645\u0642\u064A\u0627\u0633 \u0627\u0644\u0645\u063A\u0646\u0627\u0637\u064A\u0633\u064A\u0629 (Magnetometer)",
+        "\u0646\u0638\u0627\u0645 \u062A\u062D\u062F\u064A\u062F \u0627\u0644\u0645\u0648\u0627\u0642\u0639 \u0627\u0644\u0639\u0627\u0644\u0645\u064A (GPS)",
+        "\u0627\u0644\u0631\u0627\u062F\u0627\u0631 \u0627\u0644\u0645\u062E\u062A\u0631\u0642 \u0644\u0644\u0623\u0631\u0636 (GPR)",
+        "\u0627\u0644\u0637\u0627\u0628\u0639\u0629 \u062B\u0644\u0627\u062B\u064A\u0629 \u0627\u0644\u0623\u0628\u0639\u0627\u062F"
+      ],
+      "correctAnswer": "\u0645\u0642\u064A\u0627\u0633 \u0627\u0644\u0645\u063A\u0646\u0627\u0637\u064A\u0633\u064A\u0629 (Magnetometer)",
+      "explanation": "\u0645\u0642\u064A\u0627\u0633 \u0627\u0644\u0645\u063A\u0646\u0627\u0637\u064A\u0633\u064A\u0629 \u064A\u0642\u064A\u0633 \u0627\u0644\u0645\u062C\u0627\u0644 \u0627\u0644\u0645\u063A\u0646\u0627\u0637\u064A\u0633\u064A \u0648\u064A\u0643\u0634\u0641 \u0639\u0646 \u0627\u0644\u0645\u0639\u0627\u062F\u0646 \u0627\u0644\u0645\u062F\u0641\u0648\u0646\u0629 \u0641\u064A \u0627\u0644\u0623\u0631\u0636.",
+      "marks": 10
+    },
+    {
+      "id": "q-pre-ict4-02",
+      "examId": "exam-1787463526231",
+      "questionType": "mcq",
+      "questionText": "\u062A\u0639\u062A\u0628\u0631 ............ \u0647\u064A \u0628\u0645\u062B\u0627\u0628\u0629 \u0627\u0644\u0639\u0642\u0644 \u0627\u0644\u0645\u062A\u062D\u0643\u0645 \u0641\u064A \u062C\u0647\u0627\u0632 \u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631 \u0648\u062A\u0642\u0648\u0645 \u0628\u0645\u0639\u0627\u0644\u062C\u0629 \u0643\u0627\u0641\u0629 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A \u0648\u0627\u0644\u062A\u0639\u0644\u064A\u0645\u0627\u062A.",
+      "options": [
+        "\u0648\u062D\u062F\u0629 \u0627\u0644\u0645\u0639\u0627\u0644\u062C\u0629 \u0627\u0644\u0645\u0631\u0643\u0632\u064A\u0629 (CPU)",
+        "\u0644\u0648\u062D\u0629 \u0627\u0644\u0645\u0641\u0627\u062A\u064A\u062D (Keyboard)",
+        "\u0627\u0644\u0634\u0627\u0634\u0629 (Monitor)",
+        "\u0627\u0644\u0633\u0645\u0627\u0639\u0627\u062A (Speakers)"
+      ],
+      "correctAnswer": "\u0648\u062D\u062F\u0629 \u0627\u0644\u0645\u0639\u0627\u0644\u062C\u0629 \u0627\u0644\u0645\u0631\u0643\u0632\u064A\u0629 (CPU)",
+      "explanation": "\u0648\u062D\u062F\u0629 \u0627\u0644\u0645\u0639\u0627\u0644\u062C\u0629 \u0627\u0644\u0645\u0631\u0643\u0632\u064A\u0629 CPU \u0647\u064A \u0627\u0644\u0639\u0642\u0644 \u0627\u0644\u0645\u062F\u0628\u0631 \u0644\u0644\u062D\u0627\u0633\u0648\u0628 \u0644\u0645\u0639\u0627\u0644\u062C\u0629 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A \u0648\u0627\u0644\u0639\u0645\u0644\u064A\u0627\u062A.",
+      "marks": 10
+    },
+    {
+      "id": "q-pre-ict4-03",
+      "examId": "exam-1787463526231",
+      "questionType": "mcq",
+      "questionText": "\u0646\u0638\u0627\u0645 \u062A\u062D\u062F\u064A\u062F \u0627\u0644\u0645\u0648\u0627\u0642\u0639 \u0627\u0644\u0639\u0627\u0644\u0645\u064A (GPS) \u064A\u0639\u062A\u0645\u062F \u0639\u0644\u0649 \u0627\u0644\u0627\u062A\u0635\u0627\u0644 \u0627\u0644\u0645\u0628\u0627\u0634\u0631 \u0628\u0640 ............ \u0644\u062A\u062D\u062F\u064A\u062F \u0627\u0644\u0623\u0645\u0627\u0643\u0646 \u0628\u062F\u0642\u0629 \u0641\u0627\u0626\u0642\u0629.",
+      "options": [
+        "\u0627\u0644\u0623\u0642\u0645\u0627\u0631 \u0627\u0644\u0635\u0646\u0627\u0639\u064A\u0629 (Satellites)",
+        "\u062C\u0647\u0627\u0632 \u0627\u0644\u0631\u0627\u0648\u062A\u0631 \u0627\u0644\u0645\u0646\u0632\u0644\u064A",
+        "\u0623\u0628\u0631\u0627\u062C \u0627\u0644\u0643\u0647\u0631\u0628\u0627\u0621",
+        "\u0627\u0644\u0645\u0627\u0633\u062D \u0627\u0644\u0636\u0648\u0626\u064A"
+      ],
+      "correctAnswer": "\u0627\u0644\u0623\u0642\u0645\u0627\u0631 \u0627\u0644\u0635\u0646\u0627\u0639\u064A\u0629 (Satellites)",
+      "explanation": "\u064A\u0639\u062A\u0645\u062F GPS \u0639\u0644\u0649 \u0634\u0628\u0643\u0629 \u0645\u0646 \u0627\u0644\u0623\u0642\u0645\u0627\u0631 \u0627\u0644\u0635\u0646\u0627\u0639\u064A\u0629 \u062D\u0648\u0644 \u0627\u0644\u0623\u0631\u0636 \u0644\u062A\u062D\u062F\u064A\u062F \u0627\u0644\u0625\u062D\u062F\u0627\u062B\u064A\u0627\u062A.",
+      "marks": 10
+    },
+    {
+      "id": "q-pre-ict4-04",
+      "examId": "exam-1787463526231",
+      "questionType": "mcq",
+      "questionText": "\u0623\u064A \u0645\u0646 \u0627\u0644\u0628\u0631\u0627\u0645\u062C \u0627\u0644\u062A\u0627\u0644\u064A\u0629 \u064A\u064F\u0633\u062A\u062E\u062F\u0645 \u0641\u064A \u0625\u0639\u062F\u0627\u062F \u0648\u062A\u0642\u062F\u064A\u0645 \u0627\u0644\u0639\u0631\u0648\u0636 \u0627\u0644\u062A\u0642\u062F\u064A\u0645\u064A\u0629 \u0648\u062A\u0635\u0645\u064A\u0645 \u0627\u0644\u0634\u0631\u0627\u0626\u062D \u0648\u0627\u0644\u0645\u0624\u062B\u0631\u0627\u062A \u0627\u0644\u0628\u0635\u0631\u064A\u0629\u061F",
+      "options": [
+        "Microsoft PowerPoint",
+        "Microsoft Excel",
+        "\u0622\u0644\u0629 \u062D\u0627\u0633\u0628\u0629 Calculator",
+        "\u0645\u0641\u0643\u0631\u0629 \u0627\u0644\u0646\u0635\u0648\u0635 Notepad"
+      ],
+      "correctAnswer": "Microsoft PowerPoint",
+      "explanation": "\u0628\u0631\u0646\u0627\u0645\u062C \u0627\u0644\u0628\u0627\u0648\u0631\u0628\u0648\u064A\u0646\u062A \u0645\u062E\u0635\u0635 \u0644\u0625\u0639\u062F\u0627\u062F \u0627\u0644\u0639\u0631\u0648\u0636 \u0627\u0644\u062A\u0642\u062F\u064A\u0645\u064A\u0629 \u0648\u0627\u0644\u0634\u0631\u0627\u0626\u062D \u0627\u0644\u062A\u0641\u0627\u0639\u0644\u064A\u0629.",
+      "marks": 10
+    },
+    {
+      "id": "q-pre-ict4-05",
+      "examId": "exam-1787463526231",
+      "questionType": "mcq",
+      "questionText": "\u0623\u064A \u0645\u0646 \u0627\u0644\u0623\u062C\u0647\u0632\u0629 \u0627\u0644\u062A\u0627\u0644\u064A\u0629 \u064A\u064F\u0639\u062A\u0628\u0631 \u0645\u0646 \u0623\u062C\u0647\u0632\u0629 \u0627\u0644\u0625\u062E\u0631\u0627\u062C (Output Unit) \u0641\u064A \u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631\u061F",
+      "options": [
+        "\u0645\u0643\u0628\u0631\u0627\u062A \u0627\u0644\u0635\u0648\u062A (Speakers)",
+        "\u0627\u0644\u0641\u0623\u0631\u0629 (Mouse)",
+        "\u0644\u0648\u062D\u0629 \u0627\u0644\u0645\u0641\u0627\u062A\u064A\u062D (Keyboard)",
+        "\u0627\u0644\u0645\u0627\u0633\u062D \u0627\u0644\u0636\u0648\u0626\u064A (Scanner)"
+      ],
+      "correctAnswer": "\u0645\u0643\u0628\u0631\u0627\u062A \u0627\u0644\u0635\u0648\u062A (Speakers)",
+      "explanation": "\u0627\u0644\u0633\u0645\u0627\u0639\u0627\u062A \u062A\u062E\u0631\u062C \u0627\u0644\u0635\u0648\u062A \u0644\u0644\u0645\u0633\u062A\u062E\u062F\u0645 \u0628\u064A\u0646\u0645\u0627 \u0627\u0644\u0641\u0623\u0631\u0629 \u0648\u0627\u0644\u0645\u064A\u0643\u0631\u0648\u0641\u0648\u0646 \u0623\u062C\u0647\u0632\u0629 \u0625\u062F\u062E\u0627\u0644.",
+      "marks": 10
+    },
+    {
+      "id": "q-pre-ict4-06",
+      "examId": "exam-1787463526231",
+      "questionType": "true_false",
+      "questionText": "\u062A\u062A\u0643\u0648\u0646 \u0643\u0644\u0645\u0629 \u0627\u0644\u0645\u0631\u0648\u0631 \u0627\u0644\u0642\u0648\u064A\u0629 \u0648\u0627\u0644\u0622\u0645\u0646\u0629 \u0645\u0646 8 \u062E\u0627\u0646\u0627\u062A \u0639\u0644\u0649 \u0627\u0644\u0623\u0642\u0644 \u0648\u062A\u062C\u0645\u0639 \u0628\u064A\u0646 \u062D\u0631\u0648\u0641 \u0648\u0623\u0631\u0642\u0627\u0645 \u0648\u0631\u0645\u0648\u0632 \u062E\u0627\u0635\u0629.",
+      "options": [
+        "\u0635\u062D",
+        "\u062E\u0637\u0623"
+      ],
+      "correctAnswer": "\u0635\u062D",
+      "explanation": "\u0643\u0644\u0645\u0627\u062A \u0627\u0644\u0645\u0631\u0648\u0631 \u0627\u0644\u0645\u0639\u0642\u062F\u0629 \u062A\u062D\u0645\u064A \u0627\u0644\u062D\u0633\u0627\u0628\u0627\u062A \u0645\u0646 \u0627\u0644\u0627\u062E\u062A\u0631\u0627\u0642 \u0648\u0633\u0631\u0642\u0629 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0644\u0634\u062E\u0635\u064A\u0629.",
+      "marks": 10
+    },
+    {
+      "id": "q-pre-ict4-07",
+      "examId": "exam-1787463526231",
+      "questionType": "true_false",
+      "questionText": "\u0627\u0644\u062A\u0646\u0645\u0631 \u0639\u0628\u0631 \u0627\u0644\u0625\u0646\u062A\u0631\u0646\u062A (Cyberbullying) \u0648\u0646\u0634\u0631 \u0627\u0644\u0634\u0627\u0626\u0639\u0627\u062A \u0633\u0644\u0648\u0643 \u0645\u0642\u0628\u0648\u0644 \u0648\u0645\u0633\u0645\u0648\u062D \u0628\u0647 \u0641\u064A \u0634\u0628\u0643\u0627\u062A \u0627\u0644\u062A\u0648\u0627\u0635\u0644.",
+      "options": [
+        "\u0635\u062D",
+        "\u062E\u0637\u0623"
+      ],
+      "correctAnswer": "\u062E\u0637\u0623",
+      "explanation": "\u0627\u0644\u062A\u0646\u0645\u0631 \u0627\u0644\u0625\u0644\u0643\u062A\u0631\u0648\u0646\u064A \u0633\u0644\u0648\u0643 \u0636\u0627\u0631 \u0648\u063A\u064A\u0631 \u0642\u0627\u0646\u0648\u0646\u064A \u064A\u062C\u0628 \u0627\u0644\u0625\u0628\u0644\u0627\u063A \u0639\u0646\u0647 \u0648\u062A\u062C\u0646\u0628\u0647 \u062A\u0645\u0627\u0645\u0627\u064B.",
+      "marks": 10
+    },
+    {
+      "id": "q-pre-ict4-08",
+      "examId": "exam-1787463526231",
+      "questionType": "true_false",
+      "questionText": "\u0639\u0646\u062F \u0645\u0648\u0627\u062C\u0647\u0629 \u062A\u062C\u0645\u062F \u0627\u0644\u0634\u0627\u0634\u0629 \u0623\u0648 \u0639\u062F\u0645 \u0627\u0633\u062A\u062C\u0627\u0628\u0629 \u0623\u062D\u062F \u0627\u0644\u0628\u0631\u0627\u0645\u062C\u060C \u064A\u0645\u0643\u0646 \u0627\u0633\u062A\u062E\u062F\u0627\u0645 \u0627\u062E\u062A\u0635\u0627\u0631 (Ctrl + Alt + Delete).",
+      "options": [
+        "\u0635\u062D",
+        "\u062E\u0637\u0623"
+      ],
+      "correctAnswer": "\u0635\u062D",
+      "explanation": "\u064A\u0641\u062A\u062D \u0647\u0630\u0627 \u0627\u0644\u0627\u062E\u062A\u0635\u0627\u0631 \u0645\u062F\u064A\u0631 \u0627\u0644\u0645\u0647\u0627\u0645 Task Manager \u0644\u0625\u0646\u0647\u0627\u0621 \u0627\u0644\u0628\u0631\u0627\u0645\u062C \u0627\u0644\u0639\u0627\u0644\u0642\u0629 \u0648\u0625\u0639\u0627\u062F\u0629 \u0627\u0644\u062A\u0646\u0634\u064A\u0637.",
+      "marks": 10
+    },
+    {
+      "id": "q-pre-ict4-09",
+      "examId": "exam-1787463526231",
+      "questionType": "mcq",
+      "questionText": "\u0644\u0644\u0628\u062D\u062B \u0628\u062F\u0642\u0629 \u0639\u0646 \u062C\u0645\u0644\u0629 \u0645\u062D\u062F\u062F\u0629 \u0628\u0627\u0644\u0646\u0635 \u0641\u064A \u0645\u062D\u0631\u0643\u0627\u062A \u0627\u0644\u0628\u062D\u062B \u0645\u062B\u0644 Google\u060C \u0646\u0636\u0639 \u0627\u0644\u062C\u0645\u0644\u0629 \u0628\u064A\u0646: ............ ",
+      "options": [
+        '\u0639\u0644\u0627\u0645\u062A\u064A \u062A\u0646\u0635\u064A\u0635 " "',
+        "\u0623\u0642\u0648\u0627\u0633 \u0645\u0631\u0628\u0639\u0629 [ ]",
+        "\u0639\u0644\u0627\u0645\u0629 \u0627\u0644\u0646\u062C\u0645\u0629 * *",
+        "\u0625\u0634\u0627\u0631\u0629 \u0627\u0644\u062C\u0645\u0639 +"
+      ],
+      "correctAnswer": '\u0639\u0644\u0627\u0645\u062A\u064A \u062A\u0646\u0635\u064A\u0635 " "',
+      "explanation": "\u0639\u0644\u0627\u0645\u062A\u0627 \u0627\u0644\u062A\u0646\u0635\u064A\u0635 \u062A\u062D\u0635\u0631 \u0645\u062D\u0631\u0643 \u0627\u0644\u0628\u062D\u062B \u0641\u064A \u0625\u064A\u062C\u0627\u062F \u0627\u0644\u062A\u0637\u0627\u0628\u0642 \u0627\u0644\u062A\u0627\u0645 \u0644\u0644\u062C\u0645\u0644\u0629 \u0627\u0644\u0645\u0643\u062A\u0648\u0628\u0629.",
+      "marks": 10
+    },
+    {
+      "id": "q-pre-ict4-10",
+      "examId": "exam-1787463526231",
+      "questionType": "true_false",
+      "questionText": "\u064A\u062C\u0628 \u0627\u0633\u062A\u0626\u0630\u0627\u0646 \u0635\u0627\u062D\u0628 \u0627\u0644\u0645\u0646\u0634\u0648\u0631 \u0623\u0648 \u0627\u0644\u0635\u0648\u0631\u0629 \u0648\u062A\u0648\u062B\u064A\u0642 \u0627\u0644\u0645\u0635\u062F\u0631 \u0642\u0628\u0644 \u0627\u0633\u062A\u062E\u062F\u0627\u0645\u0647\u0627 \u062A\u0642\u062F\u064A\u0631\u0627\u064B \u0644\u062D\u0642\u0648\u0642 \u0627\u0644\u0645\u0644\u0643\u064A\u0629 \u0627\u0644\u0641\u0643\u0631\u064A\u0629.",
+      "options": [
+        "\u0635\u062D",
+        "\u062E\u0637\u0623"
+      ],
+      "correctAnswer": "\u0635\u062D",
+      "explanation": "\u0627\u062D\u062A\u0631\u0627\u0645 \u062D\u0642\u0648\u0642 \u0627\u0644\u0645\u0644\u0643\u064A\u0629 \u0627\u0644\u0641\u0643\u0631\u064A\u0629 \u0648\u0642\u0648\u0627\u0646\u064A\u0646 \u0627\u0644\u0646\u0634\u0631 \u0648\u0627\u062C\u0628 \u0623\u062E\u0644\u0627\u0642\u064A \u0648\u0642\u0627\u0646\u0648\u0646\u064A \u0641\u064A \u0627\u0644\u0639\u0627\u0644\u0645 \u0627\u0644\u0631\u0642\u0645\u064A.",
+      "marks": 10
+    },
+    {
       "id": "q-1787446743699-0-m40",
       "examId": "exam-1787446743699",
       "questionType": "mcq",
@@ -4476,6 +4670,7 @@ var DatabaseManager = class {
     this.isFirestoreHydrated = false;
     this.lastHydrationTime = 0;
     this.lastHydrationAttemptTime = 0;
+    this.lastRemoteSyncMetaTime = 0;
     this.hydrationPromise = null;
     this.ensureDataDir();
     this.data = this.loadData();
@@ -4502,8 +4697,6 @@ var DatabaseManager = class {
       let existing = null;
       if (id && byId.has(id)) {
         existing = byId.get(id);
-      } else if (code && byCode.has(code)) {
-        existing = byCode.get(code);
       } else if (normName && byNormName.has(normName)) {
         const candidate = byNormName.get(normName);
         const cPhone = cleanPhone(candidate.phone);
@@ -4511,6 +4704,14 @@ var DatabaseManager = class {
         const samePhone = phone && (phone === cPhone || phone === cParentPhone) || parentPhone && (parentPhone === cPhone || parentPhone === cParentPhone);
         const sameGroupOrCourse = t.groupId && candidate.groupId && t.groupId === candidate.groupId || t.courseId && candidate.courseId && t.courseId === candidate.courseId;
         if (samePhone || sameGroupOrCourse || !phone && !parentPhone && !cPhone && !cParentPhone) {
+          existing = candidate;
+        }
+      } else if (code && byCode.has(code)) {
+        const candidate = byCode.get(code);
+        const candNorm = normArabic(candidate.fullName || candidate.name);
+        const sameName = candNorm && normName && candNorm === normName;
+        const sameNatId = t.nationalId && candidate.nationalId && String(t.nationalId).trim() === String(candidate.nationalId).trim();
+        if (sameName || sameNatId) {
           existing = candidate;
         }
       }
@@ -4536,9 +4737,13 @@ var DatabaseManager = class {
         });
       } else {
         const record = { ...t };
+        if (code && byCode.has(code)) {
+          const suffix = Math.random().toString(36).substring(2, 5).toUpperCase();
+          record.code = `${code}-${suffix}`;
+        }
         result.push(record);
         if (id) byId.set(id, record);
-        if (code) byCode.set(code, record);
+        if (record.code) byCode.set(record.code, record);
         if (normName) byNormName.set(normName, record);
       }
     }
@@ -4546,29 +4751,50 @@ var DatabaseManager = class {
   }
   async ensureHydrated(force = false) {
     const now = Date.now();
-    if (!force && now - this.lastHydrationAttemptTime < 15 * 60 * 1e3) {
+    const CACHE_TTL_MS = 15e3;
+    if (!force && this.isFirestoreHydrated && now - this.lastHydrationTime < CACHE_TTL_MS) {
       return;
     }
-    if (!force && this.isFirestoreHydrated && now - this.lastHydrationTime < 60 * 60 * 1e3) {
-      return;
-    }
-    if (this.hydrationPromise && !force) {
+    if (this.hydrationPromise) {
       return this.hydrationPromise;
     }
     this.lastHydrationAttemptTime = now;
     this.hydrationPromise = (async () => {
       this.lastHydrationTime = Date.now();
       try {
+        const meta = await getSyncMeta();
+        const remoteTime = meta?.updatedAt || 0;
+        if (this.isFirestoreHydrated && remoteTime > 0 && remoteTime <= this.lastRemoteSyncMetaTime && !force) {
+          return;
+        }
+        if (this.isFirestoreHydrated && meta?.lastCollection === "trainees" && remoteTime > this.lastRemoteSyncMetaTime) {
+          const remoteTrainees = await loadCollectionFromFirestore("trainees");
+          if (Array.isArray(remoteTrainees) && remoteTrainees.length > 0) {
+            console.log("[DB] Fast-hydrated trainees from Firestore! Count:", remoteTrainees.length);
+            const current = this.data || {};
+            const coursesList = Array.isArray(current.courses) ? current.courses : [];
+            const deduplicated = this.deduplicateTrainees(remoteTrainees);
+            current.trainees = deduplicated.map((t) => ({
+              ...t,
+              ...calculateTraineeFeeAndFinancials(t, coursesList)
+            }));
+            this.lastRemoteSyncMetaTime = remoteTime;
+            return;
+          }
+        }
         const remoteData = await loadFullDbFromFirestore();
         if (remoteData && Object.keys(remoteData).length > 0) {
-          console.log("[DB] Hydrated from Firestore! Collections loaded:", Object.keys(remoteData));
+          console.log("[DB] Hydrated from Firestore! Collections loaded:", Object.keys(remoteData).length);
           const current = this.data || {};
           const merged = { ...current };
           for (const [key, val] of Object.entries(remoteData)) {
             if (Array.isArray(val)) {
               if (key === "trainees") {
-                const combined = [...val, ...Array.isArray(merged[key]) ? merged[key] : []];
-                merged[key] = this.deduplicateTrainees(combined);
+                const remoteList = Array.isArray(val) ? val : [];
+                const localList = Array.isArray(merged[key]) ? merged[key] : [];
+                const remoteIdSet = new Set(remoteList.map((t) => t.id || t.code).filter(Boolean));
+                const localOnly = localList.filter((t) => t && t.id && !remoteIdSet.has(t.id) && (!t.code || !remoteIdSet.has(t.code)));
+                merged[key] = this.deduplicateTrainees([...remoteList, ...localOnly]);
               } else if (Array.isArray(merged[key]) && merged[key].length > 0) {
                 const remoteMap = new Map(val.map((item) => [item.id, item]));
                 for (const localItem of merged[key]) {
@@ -4590,15 +4816,13 @@ var DatabaseManager = class {
           if (Array.isArray(merged.trainees)) {
             const coursesList = Array.isArray(merged.courses) ? merged.courses : [];
             const deduplicated = this.deduplicateTrainees(merged.trainees);
-            merged.trainees = deduplicated.map((t) => {
-              const fin = calculateTraineeFeeAndFinancials(t, coursesList);
-              return {
-                ...t,
-                ...fin
-              };
-            });
+            merged.trainees = deduplicated.map((t) => ({
+              ...t,
+              ...calculateTraineeFeeAndFinancials(t, coursesList)
+            }));
           }
           this.data = merged;
+          this.lastRemoteSyncMetaTime = remoteTime || Date.now();
         }
       } catch (err) {
         console.warn("[DB] Firestore hydration notice:", err);
@@ -4843,8 +5067,8 @@ var DatabaseManager = class {
     if (norm.includes("\u0633\u0627\u062F\u0633") || norm.includes("\u0633\u0627\u062F\u0633\u0647") || norm.includes("\u0633\u0627\u062A\u0647") || norm.includes("6\u0627\u0628\u062A\u062F\u0627\u0626\u064A") || norm.includes("\u0627\u0628\u062A\u062F\u0627\u0626\u064A6") || norm.includes("ict6") || norm.includes("grade6") || norm.includes("primary6") || norm === "6" || norm === "\u0635\u06416") return "C";
     return this.data.settings.traineeCodePrefix || "A";
   }
-  getNextTraineeCode(prefixOrGrade) {
-    console.log("[DB] getNextTraineeCode: prefixOrGrade=", prefixOrGrade);
+  getNextTraineeCode(prefixOrGrade, groupId) {
+    console.log("[DB] getNextTraineeCode: prefixOrGrade=", prefixOrGrade, "groupId=", groupId);
     let p = "A";
     if (prefixOrGrade && prefixOrGrade.length === 1 && /[A-Za-z0-9\u0600-\u06FF]/.test(prefixOrGrade)) {
       p = prefixOrGrade.toUpperCase();
@@ -4853,23 +5077,51 @@ var DatabaseManager = class {
     } else {
       p = this.data.settings.traineeCodePrefix || "A";
     }
-    console.log("[DB] getNextTraineeCode: p=", p);
     const len = this.data.settings.autoCodeLength || 3;
-    let maxNum = 0;
-    const regex = new RegExp(`^${p}(\\d+)$`, "i");
-    for (const t of this.data.trainees) {
-      const match = t.code?.trim().match(regex);
-      if (match) {
-        const num = parseInt(match[1], 10);
-        if (num > maxNum) {
-          maxNum = num;
+    const usedCodes = /* @__PURE__ */ new Set();
+    const usedNums = /* @__PURE__ */ new Set();
+    const regex = new RegExp(`^${p}-?(\\d+)$`, "i");
+    for (const t of this.data.trainees || []) {
+      if (t && t.code) {
+        const c = String(t.code).trim().toUpperCase();
+        usedCodes.add(c);
+        const match = c.match(regex);
+        if (match) {
+          const num = parseInt(match[1], 10);
+          if (!isNaN(num)) usedNums.add(num);
         }
       }
     }
-    const nextNum = maxNum + 1;
-    const result = `${p}${String(nextNum).padStart(len, "0")}`;
-    console.log("[DB] getNextTraineeCode: result=", result);
-    return result;
+    const freedList = this.data.freedTraineeCodes || [];
+    if (groupId && Array.isArray(freedList)) {
+      const groupFreed = freedList.find(
+        (f) => f && f.code && f.groupId === groupId && (f.prefix?.toUpperCase() === p || f.code.toUpperCase().startsWith(p)) && !usedCodes.has(f.code.toUpperCase())
+      );
+      if (groupFreed) {
+        console.log("[DB] getNextTraineeCode: Reusing group freed code=", groupFreed.code);
+        return groupFreed.code.toUpperCase();
+      }
+    }
+    if (Array.isArray(freedList)) {
+      const prefixFreed = freedList.find(
+        (f) => f && f.code && (f.prefix?.toUpperCase() === p || f.code.toUpperCase().startsWith(p)) && !usedCodes.has(f.code.toUpperCase())
+      );
+      if (prefixFreed) {
+        console.log("[DB] getNextTraineeCode: Reusing prefix freed code=", prefixFreed.code);
+        return prefixFreed.code.toUpperCase();
+      }
+    }
+    let candidateNum = 1;
+    while (usedNums.has(candidateNum)) {
+      candidateNum++;
+    }
+    let candidate = `${p}${String(candidateNum).padStart(len, "0")}`;
+    while (usedCodes.has(candidate.toUpperCase())) {
+      candidateNum++;
+      candidate = `${p}${String(candidateNum).padStart(len, "0")}`;
+    }
+    console.log("[DB] getNextTraineeCode: allocated candidate=", candidate);
+    return candidate;
   }
   recalculateTraineeRankings() {
     try {
@@ -5300,8 +5552,8 @@ var adminDb = new AdminDbMock();
 // server/data/index.ts
 function createRepo(key) {
   return {
-    async getAll() {
-      await db.ensureHydrated();
+    async getAll(forceFresh = false) {
+      await db.ensureHydrated(forceFresh);
       const memData = db.getData();
       if (!memData || !Array.isArray(memData[key])) {
         return [];
@@ -5762,12 +6014,19 @@ async function handlePublicRegister(req, res) {
     const allCourses = await CourseRepo.getAll();
     const allGroups = await GroupRepo.getAll();
     const allBranches = await BranchRepo.getAll();
+    const cleanNationalId = String(data.nationalId || "").trim();
     const existingTrainee = allTrainees.find((t) => {
       const tPhoneDigits = String(t.phone || "").replace(/\D/g, "").slice(-10);
+      const tParentPhoneDigits = String(t.parentPhone || "").replace(/\D/g, "").slice(-10);
       const normExistingName = normalizeArabicFull(t.fullName || "");
-      const sameStudentPhone = phoneDigits && phoneDigits.length >= 8 && tPhoneDigits && tPhoneDigits === phoneDigits;
-      const sameNormalizedName = normInputName && normExistingName && normInputName === normExistingName;
-      return sameStudentPhone || sameNormalizedName;
+      if (cleanNationalId && cleanNationalId.length >= 10 && t.nationalId && String(t.nationalId).trim() === cleanNationalId) {
+        return true;
+      }
+      const sameName = normInputName && normExistingName && normInputName === normExistingName;
+      if (!sameName) return false;
+      const samePhone = phoneDigits && phoneDigits.length >= 8 && (phoneDigits === tPhoneDigits || phoneDigits === tParentPhoneDigits) || parentPhoneDigits && parentPhoneDigits.length >= 8 && (parentPhoneDigits === tPhoneDigits || parentPhoneDigits === tParentPhoneDigits);
+      const sameGrade = grade && t.grade && String(t.grade).trim().toLowerCase() === grade.toLowerCase();
+      return samePhone || sameGrade;
     });
     if (existingTrainee) {
       const existingCourse = allCourses.find((c) => c.id === existingTrainee.courseId);
@@ -7904,12 +8163,74 @@ function getAI() {
   return aiClient;
 }
 var GEMINI_MODEL_CASCADE = [
-  "gemini-3.8-flash",
-  "gemini-3.7-flash",
-  "gemini-3.1-flash-lite",
+  "gemini-2.5-flash",
+  "gemini-2.5-pro",
   "gemini-flash-latest",
-  "gemini-3.1-pro-preview"
+  "gemini-3.1-pro-preview",
+  "gemini-3.1-flash-lite",
+  "gemini-3.8-flash"
 ];
+function createWavFromPcm(pcmData, sampleRate = 24e3, numChannels = 1, bitsPerSample = 16) {
+  if (pcmData.length >= 12 && pcmData.toString("ascii", 0, 4) === "RIFF" && pcmData.toString("ascii", 8, 12) === "WAVE") {
+    return pcmData;
+  }
+  const byteRate = sampleRate * numChannels * (bitsPerSample / 8);
+  const blockAlign = numChannels * (bitsPerSample / 8);
+  const dataSize = pcmData.length;
+  const header = Buffer.alloc(44);
+  header.write("RIFF", 0);
+  header.writeUInt32LE(36 + dataSize, 4);
+  header.write("WAVE", 8);
+  header.write("fmt ", 12);
+  header.writeUInt32LE(16, 16);
+  header.writeUInt16LE(1, 20);
+  header.writeUInt16LE(numChannels, 22);
+  header.writeUInt32LE(sampleRate, 24);
+  header.writeUInt32LE(byteRate, 28);
+  header.writeUInt16LE(blockAlign, 32);
+  header.writeUInt16LE(bitsPerSample, 34);
+  header.write("data", 36);
+  header.writeUInt32LE(dataSize, 40);
+  return Buffer.concat([header, pcmData]);
+}
+async function generateGeminiSpeechAudio(params) {
+  if (!process.env.GEMINI_API_KEY) {
+    return { success: false, error: "GEMINI_API_KEY is not configured" };
+  }
+  const ai = getAI();
+  const voice = params.voiceName || "Puck";
+  const prompt = params.promptStyle ? `${params.promptStyle}
+${params.text}` : `\u0627\u0646\u0637\u0642 \u0647\u0630\u0647 \u0627\u0644\u0639\u0628\u0627\u0631\u0629 \u0628\u0635\u0648\u062A \u0645\u0630\u064A\u0639 \u0625\u0630\u0627\u0639\u064A \u0645\u0635\u0631\u064A \u062D\u0645\u0627\u0633\u064A\u060C \u062F\u0627\u0641\u0626 \u0648\u0645\u0628\u0647\u062C \u0648\u0637\u0628\u064A\u0639\u064A \u062C\u062F\u0627\u064B \u0628\u0646\u0628\u0631\u0629 \u0627\u062D\u062A\u0641\u0627\u0644\u064A\u0629 \u062D\u0642\u064A\u0642\u064A\u0629 \u0648\u0628\u0644\u0647\u062C\u0629 \u0645\u0635\u0631\u064A\u0629 \u0623\u0635\u064A\u0644\u0629 \u0648\u0627\u0636\u062D\u0629: "${params.text}"`;
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-3.1-flash-tts-preview",
+      contents: [{ parts: [{ text: prompt }] }],
+      config: {
+        responseModalities: ["AUDIO"],
+        speechConfig: {
+          voiceConfig: {
+            prebuiltVoiceConfig: { voiceName: voice }
+          }
+        }
+      }
+    });
+    const audioPart = response.candidates?.[0]?.content?.parts?.[0];
+    const rawData = audioPart?.inlineData?.data;
+    if (rawData) {
+      const rawBuf = Buffer.from(rawData, "base64");
+      const wavBuf = createWavFromPcm(rawBuf, 24e3, 1, 16);
+      return {
+        success: true,
+        audioBase64: wavBuf.toString("base64"),
+        mimeType: "audio/wav"
+      };
+    }
+    return { success: false, error: "No audio data returned by model" };
+  } catch (err) {
+    console.warn("[Gemini TTS] TTS generation attempt failed:", err?.message || err);
+    return { success: false, error: err?.message || "TTS generation error" };
+  }
+}
 async function generateWithModelCascade(params) {
   if (!process.env.GEMINI_API_KEY) {
     return { text: null, modelUsed: null };
@@ -7941,44 +8262,52 @@ async function extractExamFromMediaOrText(params) {
   const lang = params.targetLanguage || "ar";
   const langName = lang === "ar" ? "\u0627\u0644\u0644\u063A\u0629 \u0627\u0644\u0639\u0631\u0628\u064A\u0629" : "English Language";
   if (params.imageBase64) {
+    let detectedMime = params.mimeType || "image/jpeg";
+    if (params.imageBase64.includes("data:application/pdf") || params.imageBase64.startsWith("JVBERi0") || params.imageBase64.includes(";base64,JVBERi0")) {
+      detectedMime = "application/pdf";
+    } else if (params.imageBase64.includes("data:image/png")) {
+      detectedMime = "image/png";
+    } else if (params.imageBase64.includes("data:image/webp")) {
+      detectedMime = "image/webp";
+    }
     const cleanBase64 = params.imageBase64.replace(/^data:[^;]+;base64,/, "").trim();
     if (cleanBase64.length > 0) {
       parts.push({
         inlineData: {
           data: cleanBase64,
-          mimeType: params.mimeType || "image/jpeg"
+          mimeType: detectedMime
         }
       });
     }
   }
   const prompt = `\u0623\u0646\u062A \u062E\u0628\u064A\u0631 \u062A\u0631\u0628\u0648\u064A \u0648\u0645\u0633\u062A\u0634\u0627\u0631 \u0627\u0645\u062A\u062D\u0627\u0646\u0627\u062A \u0645\u062A\u0642\u062F\u0645 \u0641\u064A "\u0645\u0631\u0643\u0632 \u0627\u0644\u0646\u062C\u0627\u062D \u0644\u0644\u062A\u062F\u0631\u064A\u0628 \u0648\u0627\u0644\u0627\u0633\u062A\u0634\u0627\u0631\u0627\u062A".
-\u0645\u0647\u0645\u062A\u0643 \u0647\u064A \u0642\u0631\u0627\u0621\u0629 \u0648\u062A\u062D\u0644\u064A\u0644 \u0648\u0631\u0642\u0629 \u0623\u0648 \u0635\u0648\u0631\u0629 \u0627\u0644\u0627\u062E\u062A\u0628\u0627\u0631 \u0623\u0648 \u0627\u0644\u0645\u0648\u0636\u0648\u0639 \u0627\u0644\u062A\u062F\u0631\u064A\u0628\u064A \u0627\u0644\u0645\u0631\u0641\u0642 \u0628\u062F\u0642\u0629 \u0641\u0627\u0626\u0642\u0629\u060C \u0648\u0627\u0633\u062A\u062E\u0631\u0627\u062C/\u0625\u0646\u0634\u0627\u0621 \u062C\u0645\u064A\u0639 \u0627\u0644\u0623\u0633\u0626\u0644\u0629 \u0648\u062A\u062D\u0648\u064A\u0644\u0647\u0627 \u0625\u0644\u0649 \u0646\u0645\u0648\u0630\u062C \u0627\u062E\u062A\u0628\u0627\u0631 \u0625\u0644\u0643\u062A\u0631\u0648\u0646\u064A \u0645\u062A\u0641\u0627\u0639\u0644 (\u0645\u062B\u0644 \u0643\u0627\u0647\u0648\u062A Kahoot) \u0628\u0627\u0644\u0644\u063A\u0629 ${langName}.
+\u0645\u0647\u0645\u062A\u0643 \u0627\u0644\u0623\u0633\u0627\u0633\u064A\u0629 \u0647\u064A \u0642\u0631\u0627\u0621\u0629 \u0648\u062A\u062D\u0644\u064A\u0644 \u0648\u0631\u0642\u0629 \u0623\u0648 \u0635\u0648\u0631\u0629 \u0623\u0648 \u0645\u0644\u0641 PDF \u0644\u0644\u0627\u062E\u062A\u0628\u0627\u0631 \u0627\u0644\u0645\u0631\u0641\u0642 \u0628\u062F\u0642\u0629 \u0641\u0627\u0626\u0642\u0629:
+1. \u0625\u0630\u0627 \u0643\u0627\u0646\u062A \u0627\u0644\u0635\u0648\u0631\u0629/\u0627\u0644\u0645\u0644\u0641 \u0627\u0644\u0645\u0631\u0641\u0642 \u064A\u062D\u062A\u0648\u064A \u0639\u0644\u0649 \u0623\u0633\u0626\u0644\u0629 \u0645\u0648\u062C\u0648\u062F\u0629 \u0628\u0627\u0644\u0641\u0639\u0644\u060C \u0642\u0645 \u0628\u0627\u0633\u062A\u062E\u0631\u0627\u062C \u062C\u0645\u064A\u0639 \u0627\u0644\u0623\u0633\u0626\u0644\u0629 \u0627\u0644\u0648\u0627\u0631\u062F\u0629 \u062D\u0631\u0641\u064A\u0627\u064B \u0628\u0646\u0641\u0633 \u0646\u0635\u0648\u0635\u0647\u0627 \u0648\u062E\u064A\u0627\u0631\u0627\u062A\u0647\u0627 \u0643\u0645\u0627 \u0647\u064A \u0641\u064A \u0627\u0644\u0648\u0631\u0642\u0629\u060C \u0648\u062D\u062F\u062F \u0627\u0644\u0625\u062C\u0627\u0628\u0629 \u0627\u0644\u0646\u0645\u0648\u0630\u062C\u064A\u0629 \u0627\u0644\u0635\u062D\u064A\u062D\u0629 \u0644\u0643\u0644 \u0633\u0624\u0627\u0644 \u0645\u0639 \u0634\u0631\u062D \u0645\u0648\u062C\u0632.
+2. \u0625\u0630\u0627 \u0643\u0627\u0646 \u0627\u0644\u0645\u0631\u0641\u0642 \u064A\u062D\u062A\u0648\u064A \u0639\u0644\u0649 \u062F\u0631\u0633 \u0623\u0648 \u0645\u0644\u062E\u0635 \u0623\u0648 \u062A\u0639\u0644\u064A\u0645\u0627\u062A\u060C \u0642\u0645 \u0628\u0635\u064A\u0627\u063A\u0629 \u0627\u062E\u062A\u0628\u0627\u0631 \u062A\u0641\u0627\u0639\u0644\u064A \u0639\u0627\u0644\u064A \u0627\u0644\u062C\u0648\u062F\u0629 \u064A\u0642\u064A\u0633 \u0627\u0633\u062A\u064A\u0639\u0627\u0628 \u0627\u0644\u0645\u0641\u0627\u0647\u064A\u0645.
+3. \u064A\u062C\u0628 \u0623\u0646 \u062A\u0643\u0648\u0646 \u0644\u063A\u0629 \u0627\u0644\u0627\u062E\u062A\u0628\u0627\u0631 ${langName}.
 
 ${params.courseName ? `\u0627\u0644\u062F\u0648\u0631\u0629 / \u0627\u0644\u0645\u0627\u062F\u0629 \u0627\u0644\u062A\u062F\u0631\u064A\u0628\u064A\u0629 \u0627\u0644\u0645\u0633\u062A\u0647\u062F\u0641\u0629: ${params.courseName}` : ""}
-${params.textPrompt ? `\u062A\u0639\u0644\u064A\u0645\u0627\u062A / \u0645\u0648\u0636\u0648\u0639 \u0627\u0644\u0623\u0633\u0626\u0644\u0629 \u0627\u0644\u0645\u0637\u0644\u0648\u0628 \u062A\u0648\u0644\u064A\u062F\u0647\u0627: ${params.textPrompt}` : ""}
+${params.textPrompt ? `\u0645\u0644\u0627\u062D\u0638\u0627\u062A \u0623\u0648 \u062A\u0648\u062C\u064A\u0647\u0627\u062A \u0625\u0636\u0627\u0641\u064A\u0629: ${params.textPrompt}` : ""}
 
-\u064A\u062C\u0628 \u0623\u0646 \u064A\u0643\u0648\u0646 \u0627\u0644\u0627\u062E\u062A\u0628\u0627\u0631 \u0645\u062A\u0646\u0648\u0639\u0627\u064B \u0648\u0634\u064A\u0642\u0627\u064B \u0648\u064A\u062D\u062A\u0648\u064A \u0639\u0644\u0649 \u0627\u0644\u0623\u0646\u0648\u0627\u0639 \u0627\u0644\u062A\u0627\u0644\u064A\u0629 \u0645\u0646 \u0627\u0644\u0623\u0633\u0626\u0644\u0629:
-1. 'mcq': \u0627\u062E\u062A\u064A\u0627\u0631 \u0645\u0646 \u0645\u062A\u0639\u062F\u062F (4 \u062E\u064A\u0627\u0631\u0627\u062A).
-2. 'true_false': \u0635\u0648\u0627\u0628 \u0648\u062E\u0637\u0623.
-3. 'fill_blanks': \u0623\u0643\u0645\u0644 \u0627\u0644\u0641\u0631\u0627\u063A\u0627\u062A.
-4. 'matching': \u0627\u0644\u062A\u0648\u0635\u064A\u0644 (\u0636\u0639 \u0627\u0644\u0639\u0646\u0627\u0635\u0631 \u0641\u064A \u062E\u064A\u0627\u0631\u0627\u062A \u0648\u0627\u0644\u0645\u0637\u0627\u0628\u0642 \u0644\u0647\u0627 \u0641\u064A \u0645\u0635\u0641\u0648\u0641\u0629).
-5. 'ordering': \u0627\u0644\u062A\u0631\u062A\u064A\u0628.
+\u0623\u0646\u0648\u0627\u0639 \u0627\u0644\u0623\u0633\u0626\u0644\u0629 \u0627\u0644\u0645\u062F\u0639\u0648\u0645\u0629:
+- 'mcq': \u0627\u062E\u062A\u064A\u0627\u0631 \u0645\u0646 \u0645\u062A\u0639\u062F\u062F (4 \u062E\u064A\u0627\u0631\u0627\u062A \u0648\u0627\u0636\u062D\u0629 \u0645\u0639 \u062A\u062D\u062F\u064A\u062F \u0627\u0644\u062E\u064A\u0627\u0631 \u0627\u0644\u0635\u062D\u064A\u062D \u0628\u062F\u0642\u0629 \u0641\u064A correctAnswer).
+- 'true_false': \u0635\u0648\u0627\u0628 \u0623\u0648 \u062E\u0637\u0623 (\u0627\u0644\u062E\u064A\u0627\u0631\u0627\u062A: ["\u0635\u062D", "\u062E\u0637\u0623"]).
+- 'fill_blanks': \u0623\u0643\u0645\u0644 \u0627\u0644\u0641\u0631\u0627\u063A\u0627\u062A \u0623\u0648 \u0633\u0624\u0627\u0644 \u0642\u0635\u064A\u0631.
+- 'short_answer': \u0633\u0624\u0627\u0644 \u0645\u0642\u0627\u0644\u064A \u0623\u0648 \u0625\u062C\u0627\u0628\u0629 \u0642\u0635\u064A\u0631\u0629.
 
 \u064A\u0631\u062C\u0649 \u0625\u062E\u0631\u0627\u062C \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A \u0628\u062A\u0646\u0633\u064A\u0642 JSON \u062D\u0635\u0631\u0627\u064B:
-1. \u0639\u0646\u0648\u0627\u0646 \u0627\u0644\u0627\u062E\u062A\u0628\u0627\u0631 \u0627\u0644\u0645\u0642\u062A\u0631\u062D (title)
+1. \u0639\u0646\u0648\u0627\u0646 \u0627\u0644\u0627\u062E\u062A\u0628\u0627\u0631 \u0627\u0644\u0645\u0642\u062A\u0631\u062D (title) - \u0645\u0633\u062A\u0648\u062D\u0649 \u0645\u0646 \u0645\u062D\u062A\u0648\u0649 \u0627\u0644\u0648\u0631\u0642\u0629/\u0627\u0644\u0635\u0648\u0631\u0629.
 2. \u0627\u0644\u0645\u0627\u062F\u0629 \u0623\u0648 \u0627\u0644\u062F\u0648\u0631\u0629 (subject)
 3. \u0627\u0644\u0645\u062F\u0629 \u0627\u0644\u0645\u0642\u062A\u0631\u062D\u0629 \u0628\u0627\u0644\u062F\u0642\u0627\u0626\u0642 (suggestedDurationMinutes) - \u0631\u0642\u0645
 4. \u0627\u0644\u062F\u0631\u062C\u0629 \u0627\u0644\u0643\u0644\u064A\u0629 (totalMarks) \u0648\u062F\u0631\u062C\u0629 \u0627\u0644\u0646\u062C\u0627\u062D (passingMarks) - \u0623\u0631\u0642\u0627\u0645
 5. \u0642\u0627\u0626\u0645\u0629 \u0627\u0644\u0623\u0633\u0626\u0644\u0629 (questions) \u0643\u0643\u0627\u0626\u0646\u0627\u062A \u062A\u062D\u062A\u0648\u064A \u0639\u0644\u0649:
    - questionNumber: \u0631\u0642\u0645 \u0627\u0644\u0633\u0624\u0627\u0644
-   - questionType: \u0646\u0648\u0639 \u0627\u0644\u0633\u0624\u0627\u0644 (mcq, true_false, fill_blanks, matching, ordering)
-   - questionText: \u0646\u0635 \u0627\u0644\u0633\u0624\u0627\u0644 \u0628\u0627\u0644\u0644\u063A\u0629 ${langName}
-   - options: \u0645\u0635\u0641\u0648\u0641\u0629 \u062E\u064A\u0627\u0631\u0627\u062A (\u0644\u0640 mcq \u0623\u0648 \u0627\u0644\u0639\u0646\u0627\u0635\u0631 \u0627\u0644\u062A\u064A \u0633\u064A\u062A\u0645 \u062A\u0631\u062A\u064A\u0628\u0647\u0627 \u0623\u0648 \u062A\u0648\u0635\u064A\u0644\u0647\u0627)
-   - matchingPairs: (\u0641\u0642\u0637 \u0644\u0640 matching) \u0643\u0627\u0626\u0646 \u064A\u0631\u0628\u0637 \u0643\u0644 \u062E\u064A\u0627\u0631 \u0628\u0625\u062C\u0627\u0628\u062A\u0647
-   - correctAnswer: \u0627\u0644\u0625\u062C\u0627\u0628\u0629 \u0627\u0644\u0646\u0645\u0648\u0630\u062C\u064A\u0629 \u0627\u0644\u0635\u062D\u064A\u062D\u0629
-   - explanation: \u0634\u0631\u062D \u0645\u062E\u062A\u0635\u0631 \u0644\u0633\u0628\u0628 \u0635\u062D\u0629 \u0627\u0644\u0625\u062C\u0627\u0628\u0629
-   - marks: \u0627\u0644\u062F\u0631\u062C\u0629 (\u0645\u062B\u0644\u0627\u064B 10\u060C 20)
-   - timeLimitSeconds: \u0648\u0642\u062A \u0645\u0642\u062A\u0631\u062D \u0644\u0644\u0633\u0624\u0627\u0644 (\u0645\u062B\u0644\u0627\u064B 20\u060C 30\u060C 60)
+   - questionType: \u0646\u0648\u0639 \u0627\u0644\u0633\u0624\u0627\u0644 (mcq, true_false, fill_blanks, short_answer)
+   - questionText: \u0646\u0635 \u0627\u0644\u0633\u0624\u0627\u0644 \u0628\u062F\u0642\u0629 \u0643\u0645\u0627 \u0648\u0631\u062F \u0641\u064A \u0627\u0644\u0648\u0631\u0642\u0629
+   - options: \u0645\u0635\u0641\u0648\u0641\u0629 \u0627\u0644\u062E\u064A\u0627\u0631\u0627\u062A (\u0644\u0623\u0633\u0626\u0644\u0629 \u0627\u0644\u0627\u062E\u062A\u064A\u0627\u0631 \u0645\u0646 \u0645\u062A\u0639\u062F\u062F \u0648\u0627\u0644\u0635\u0648\u0627\u0628 \u0648\u0627\u0644\u062E\u0637\u0623)
+   - correctAnswer: \u0627\u0644\u0625\u062C\u0627\u0628\u0629 \u0627\u0644\u0646\u0645\u0648\u0630\u062C\u064A\u0629 \u0627\u0644\u0635\u062D\u064A\u062D\u0629 \u0627\u0644\u0645\u0637\u0627\u0628\u0642\u0629 \u0644\u0623\u062D\u062F \u0627\u0644\u062E\u064A\u0627\u0631\u0627\u062A
+   - explanation: \u0634\u0631\u062D \u0645\u0648\u062C\u0632 \u0644\u0633\u0628\u0628 \u0635\u062D\u0629 \u0627\u0644\u0625\u062C\u0627\u0628\u0629
+   - marks: \u062F\u0631\u062C\u0629 \u0627\u0644\u0633\u0624\u0627\u0644 (\u0645\u062B\u0644\u0627\u064B 5\u060C 10\u060C 20)
    - difficulty: 'easy', 'medium', 'hard'
 6. \u0645\u0644\u062E\u0635 \u0645\u062D\u062A\u0648\u0649 \u0627\u0644\u0627\u062E\u062A\u0628\u0627\u0631 (summary)`;
   parts.push({ text: prompt });
@@ -8043,70 +8372,343 @@ ${params.textPrompt ? `\u062A\u0639\u0644\u064A\u0645\u0627\u062A / \u0645\u0648
       console.warn("Gemini API generateContent notice, utilizing smart educational fallback engine:", apiError?.message);
     }
   }
-  const course = params.courseName || "\u062A\u0642\u0646\u064A\u0629 \u0627\u0644\u0645\u0639\u0644\u0648\u0645\u0627\u062A \u0648\u062A\u0637\u0648\u064A\u0631 \u0627\u0644\u0645\u0647\u0627\u0631\u0627\u062A";
-  const topic = params.textPrompt || "\u0623\u0633\u0627\u0633\u064A\u0627\u062A \u0648\u062A\u0637\u0628\u064A\u0642\u0627\u062A \u0627\u0644\u062F\u0648\u0631\u0629 \u0627\u0644\u062A\u062F\u0631\u064A\u0628\u064A\u0629";
+  const courseStr = (params.courseName || "").toLowerCase();
+  const promptStr = (params.textPrompt || "").toLowerCase();
+  const isLanguages = courseStr.includes("\u0644\u063A\u0627\u062A") || courseStr.includes("languages") || courseStr.includes("english") || promptStr.includes("\u0644\u063A\u0627\u062A") || promptStr.includes("english");
+  const isGrade5 = courseStr.includes("\u062E\u0627\u0645\u0633") || courseStr.includes("grade 5") || promptStr.includes("\u062E\u0627\u0645\u0633");
+  const isGrade4 = courseStr.includes("\u0631\u0627\u0628\u0639") || courseStr.includes("grade 4") || promptStr.includes("\u0631\u0627\u0628\u0639");
+  if (isLanguages) {
+    return {
+      title: "ICT Final Assessment - Grade 6 (Languages Curriculum)",
+      subject: "Information & Communication Technology (Grade 6)",
+      suggestedDurationMinutes: 30,
+      totalMarks: 100,
+      passingMarks: 60,
+      summary: "Authentic interactive exam based on the Egyptian Ministry of Education Grade 6 ICT Languages syllabus covering Networks, HTML, Cybersecurity, and Cloud Services.",
+      questions: [
+        {
+          questionNumber: 1,
+          questionType: "mcq",
+          questionText: "Which network device connects a Local Area Network (LAN) to the Internet via an Internet Service Provider (ISP)?",
+          options: ["Modem", "Switch", "Printer", "Scanner"],
+          correctAnswer: "Modem",
+          explanation: "A modem converts signals from the ISP into digital data that computers understand.",
+          marks: 10
+        },
+        {
+          questionNumber: 2,
+          questionType: "mcq",
+          questionText: "Which intelligent device sends data packets ONLY to a specific destination device on the network to reduce traffic?",
+          options: ["Switch", "Modem", "Ethernet Cable", "Webcam"],
+          correctAnswer: "Switch",
+          explanation: "A switch intelligently routes data only to the designated recipient device.",
+          marks: 10
+        },
+        {
+          questionNumber: 3,
+          questionType: "true_false",
+          questionText: "Multi-Factor Authentication (MFA) requires at least two separate methods to verify user identity before granting access.",
+          options: ["\u0635\u062D", "\u062E\u0637\u0623"],
+          correctAnswer: "\u0635\u062D",
+          explanation: "MFA adds an essential security layer by requiring passwords plus mobile OTP codes or biometric scans.",
+          marks: 10
+        },
+        {
+          questionNumber: 4,
+          questionType: "mcq",
+          questionText: "In HTML web design, which tag is used to create the largest primary heading on a webpage?",
+          options: ["<h1>", "<p>", "<h6>", "<title>"],
+          correctAnswer: "<h1>",
+          explanation: "The <h1> tag defines the most prominent, largest heading in HTML.",
+          marks: 10
+        },
+        {
+          questionNumber: 5,
+          questionType: "mcq",
+          questionText: "In Microsoft Excel, any mathematical formula or function MUST always start with which character?",
+          options: ["=", "+", "*", "#"],
+          correctAnswer: "=",
+          explanation: "The equal sign (=) instructs Excel to evaluate the cell input as a mathematical formula.",
+          marks: 10
+        },
+        {
+          questionNumber: 6,
+          questionType: "mcq",
+          questionText: "Which technology overlays digital 3D models and information onto the real world view through a mobile camera?",
+          options: ["Augmented Reality (AR)", "Virtual Reality (VR)", "Artificial Intelligence (AI)", "Cloud Computing"],
+          correctAnswer: "Augmented Reality (AR)",
+          explanation: "Augmented Reality (AR) enhances the physical real-world environment with interactive digital overlays.",
+          marks: 10
+        },
+        {
+          questionNumber: 7,
+          questionType: "true_false",
+          questionText: "Cloud computing allows users to store, backup, and collaborate on files online from anywhere.",
+          options: ["\u0635\u062D", "\u062E\u0637\u0623"],
+          correctAnswer: "\u0635\u062D",
+          explanation: "Cloud platforms like OneDrive and Google Drive provide ubiquitous, secure file storage and collaboration.",
+          marks: 10
+        },
+        {
+          questionNumber: 8,
+          questionType: "mcq",
+          questionText: "A strong password should consist of at least 8 characters including:",
+          options: [
+            "Uppercase letters, lowercase letters, numbers, and special symbols",
+            "Only your name and birth year",
+            "Consecutive numbers like 12345678",
+            "Your mobile telephone number"
+          ],
+          correctAnswer: "Uppercase letters, lowercase letters, numbers, and special symbols",
+          explanation: "Complex combinations of letters, numbers, and symbols protect personal accounts against brute-force attacks.",
+          marks: 10
+        },
+        {
+          questionNumber: 9,
+          questionType: "short_answer",
+          questionText: "What is the HTML tag used to define a standard paragraph of text on a web page?",
+          options: [],
+          correctAnswer: "<p>",
+          explanation: "The <p> tag stands for Paragraph in HTML.",
+          marks: 10
+        },
+        {
+          questionNumber: 10,
+          questionType: "true_false",
+          questionText: "Phishing is a scam where attackers send deceptive messages or fake emails pretending to be legitimate organizations.",
+          options: ["\u0635\u062D", "\u062E\u0637\u0623"],
+          correctAnswer: "\u0635\u062D",
+          explanation: "Phishing attacks attempt to trick victims into revealing sensitive personal data and passwords.",
+          marks: 10
+        }
+      ]
+    };
+  }
+  if (isGrade5) {
+    return {
+      title: "\u0627\u062E\u062A\u0628\u0627\u0631 \u0645\u0627\u062F\u0629 \u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u0627\u0644\u0645\u0639\u0644\u0648\u0645\u0627\u062A \u0648\u0627\u0644\u0627\u062A\u0635\u0627\u0644\u0627\u062A - \u0627\u0644\u0635\u0641 \u0627\u0644\u062E\u0627\u0645\u0633 \u0627\u0644\u0627\u0628\u062A\u062F\u0627\u0626\u064A",
+      subject: "\u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u0627\u0644\u0645\u0639\u0644\u0648\u0645\u0627\u062A \u0648\u0627\u0644\u0627\u062A\u0635\u0627\u0644\u0627\u062A (\u0627\u0644\u0635\u0641 \u0627\u0644\u062E\u0627\u0645\u0633)",
+      suggestedDurationMinutes: 30,
+      totalMarks: 100,
+      passingMarks: 60,
+      summary: "\u0627\u062E\u062A\u0628\u0627\u0631 \u062A\u0641\u0627\u0639\u0644\u064A \u0645\u0639\u062A\u0645\u062F \u0644\u0645\u0646\u0647\u062C \u0627\u0644\u0635\u0641 \u0627\u0644\u062E\u0627\u0645\u0633 \u0627\u0644\u0627\u0628\u062A\u062F\u0627\u0626\u064A \u064A\u063A\u0637\u064A \u0648\u062D\u062F\u0627\u062A \u0627\u0644\u062A\u062E\u0632\u064A\u0646\u060C \u0628\u0646\u0643 \u0627\u0644\u0645\u0639\u0631\u0641\u0629 \u0627\u0644\u0645\u0635\u0631\u064A\u060C \u0648\u0623\u0633\u0627\u0633\u064A\u0627\u062A \u0627\u0644\u0623\u0645\u0646 \u0627\u0644\u0631\u0642\u0645\u064A.",
+      questions: [
+        {
+          questionNumber: 1,
+          questionType: "mcq",
+          questionText: "\u0623\u0635\u063A\u0631 \u0648\u062D\u062F\u0629 \u0644\u0642\u064A\u0627\u0633 \u0648\u062A\u062E\u0632\u064A\u0646 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A \u0641\u064A \u0623\u062C\u0647\u0632\u0629 \u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631 \u0627\u0644\u0631\u0642\u0645\u064A\u0629 \u0647\u064A:",
+          options: ["\u0627\u0644\u0628\u062A (Bit)", "\u0627\u0644\u0628\u0627\u064A\u062A (Byte)", "\u0627\u0644\u0645\u064A\u062C\u0627\u0628\u0627\u064A\u062A (MB)", "\u0627\u0644\u062C\u064A\u062C\u0627\u0628\u0627\u064A\u062A (GB)"],
+          correctAnswer: "\u0627\u0644\u0628\u062A (Bit)",
+          explanation: "\u0627\u0644\u0628\u062A (Bit) \u064A\u0645\u062B\u0644 \u0642\u064A\u0645\u0629 \u062B\u0646\u0627\u0626\u064A\u0629 \u0648\u0627\u062D\u062F\u0629 (0 \u0623\u0648 1)\u060C \u0648\u0627\u0644\u0628\u0627\u064A\u062A \u064A\u062A\u0643\u0648\u0646 \u0645\u0646 8 \u0628\u062A.",
+          marks: 15
+        },
+        {
+          questionNumber: 2,
+          questionType: "mcq",
+          questionText: "\u0627\u0644\u0628\u0627\u064A\u062A \u0627\u0644\u0648\u0627\u062D\u062F (1 Byte) \u064A\u0639\u0627\u062F\u0644 \u0643\u0627\u0645 \u0628\u062A (Bits) \u0648\u064A\u0645\u062B\u0644 \u062D\u0631\u0641\u0627\u064B \u0648\u0627\u062D\u062F\u0627\u064B \u0641\u064A \u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631\u061F",
+          options: ["8 \u0628\u062A", "4 \u0628\u062A", "16 \u0628\u062A", "1024 \u0628\u062A"],
+          correctAnswer: "8 \u0628\u062A",
+          explanation: "1 Byte = 8 Bits \u0648\u064A\u0643\u0641\u064A \u0644\u062A\u062E\u0632\u064A\u0646 \u062D\u0631\u0641 \u0623\u0628\u062C\u062F\u064A \u0623\u0648 \u0631\u0642\u0645 \u0648\u0627\u062D\u062F.",
+          marks: 15
+        },
+        {
+          questionNumber: 3,
+          questionType: "true_false",
+          questionText: "\u064A\u0639\u062F \u0628\u0646\u0643 \u0627\u0644\u0645\u0639\u0631\u0641\u0629 \u0627\u0644\u0645\u0635\u0631\u064A (EKB) \u0645\u0646 \u0627\u0644\u0645\u0635\u0627\u062F\u0631 \u0627\u0644\u0631\u0642\u0645\u064A\u0629 \u0627\u0644\u0622\u0645\u0646\u0629 \u0648\u0627\u0644\u0645\u0648\u062B\u0648\u0642\u0629 \u0627\u0644\u0645\u062A\u0627\u062D\u0629 \u0645\u062C\u0627\u0646\u0627\u064B \u0644\u0644\u0637\u0644\u0627\u0628 \u0648\u0627\u0644\u0645\u0639\u0644\u0645\u064A\u0646 \u0641\u064A \u0645\u0635\u0631.",
+          options: ["\u0635\u062D", "\u062E\u0637\u0623"],
+          correctAnswer: "\u0635\u062D",
+          explanation: "\u0628\u0646\u0643 \u0627\u0644\u0645\u0639\u0631\u0641\u0629 \u0627\u0644\u0645\u0635\u0631\u064A \u0645\u0646\u0635\u0629 \u0648\u0637\u0646\u064A\u0629 \u062A\u0642\u062F\u0645 \u0645\u062D\u062A\u0648\u0649 \u062A\u0639\u0644\u064A\u0645\u064A\u0627\u064B \u0645\u0639\u062A\u0645\u062F\u0627\u064B \u0648\u0645\u0648\u062B\u0642\u0627\u064B.",
+          marks: 15
+        },
+        {
+          questionNumber: 4,
+          questionType: "mcq",
+          questionText: "\u0623\u064A \u0645\u0646 \u0627\u0644\u0631\u0645\u0648\u0632 \u0627\u0644\u062A\u0627\u0644\u064A\u0629 \u064A\u0648\u0636\u0639 \u062D\u0648\u0644 \u0627\u0644\u0639\u0628\u0627\u0631\u0629 \u0641\u064A \u0645\u062D\u0631\u0643\u0627\u062A \u0627\u0644\u0628\u062D\u062B \u0644\u062D\u0635\u0631 \u0627\u0644\u0646\u062A\u0627\u0626\u062C \u0641\u064A \u0627\u0644\u062C\u0645\u0644\u0629 \u0627\u0644\u062F\u0642\u064A\u0642\u0629 \u062F\u0648\u0646 \u063A\u064A\u0631\u0647\u0627\u061F",
+          options: ['\u0639\u0644\u0627\u0645\u0627\u062A \u0627\u0644\u062A\u0646\u0635\u064A\u0635 " "', "\u0639\u0644\u0627\u0645\u0629 \u0627\u0644\u0632\u0627\u0626\u062F (+)", "\u0627\u0644\u0623\u0642\u0648\u0627\u0633 \u0627\u0644\u0645\u0639\u0642\u0648\u0641\u0629 [ ]", "\u0639\u0644\u0627\u0645\u0629 \u0627\u0644\u0627\u0633\u062A\u0641\u0647\u0627\u0645 (\u061F)"],
+          correctAnswer: '\u0639\u0644\u0627\u0645\u0627\u062A \u0627\u0644\u062A\u0646\u0635\u064A\u0635 " "',
+          explanation: "\u0648\u0636\u0639 \u0627\u0644\u0643\u0644\u0645\u0627\u062A \u0628\u064A\u0646 \u0639\u0644\u0627\u0645\u062A\u064A \u062A\u0646\u0635\u064A\u0635 \u064A\u062C\u0628\u0631 \u0645\u062D\u0631\u0643 \u0627\u0644\u0628\u062D\u062B \u0639\u0644\u0649 \u0625\u064A\u062C\u0627\u062F \u0627\u0644\u0639\u0628\u0627\u0631\u0629 \u0628\u0627\u0644\u0646\u0635 \u0627\u0644\u0643\u0627\u0645\u0644.",
+          marks: 15
+        },
+        {
+          questionNumber: 5,
+          questionType: "true_false",
+          questionText: "\u064A\u062C\u0628 \u062A\u062D\u062F\u064A\u062B \u0628\u0631\u0627\u0645\u062C \u0645\u0643\u0627\u0641\u062D\u0629 \u0627\u0644\u0641\u064A\u0631\u0648\u0633\u0627\u062A (Antivirus) \u0628\u0627\u0646\u062A\u0638\u0627\u0645 \u0644\u0627\u0643\u062A\u0634\u0627\u0641 \u0627\u0644\u062A\u0647\u062F\u064A\u062F\u0627\u062A \u0627\u0644\u0628\u0631\u0645\u062C\u064A\u0629 \u0648\u0627\u0644\u0628\u0631\u0627\u0645\u062C \u0627\u0644\u0636\u0627\u0631\u0629 \u0627\u0644\u062C\u062F\u064A\u062F\u0629.",
+          options: ["\u0635\u062D", "\u062E\u0637\u0623"],
+          correctAnswer: "\u0635\u062D",
+          explanation: "\u0627\u0644\u062A\u062D\u062F\u064A\u062B \u0627\u0644\u0645\u0633\u062A\u0645\u0631 \u064A\u0636\u0645\u0646 \u062D\u0645\u0627\u064A\u0629 \u0627\u0644\u062C\u0647\u0627\u0632 \u0645\u0646 \u0623\u062D\u062F\u062B \u0623\u0646\u0648\u0627\u0639 \u0627\u0644\u0641\u064A\u0631\u0648\u0633\u0627\u062A \u0648\u0628\u0631\u0627\u0645\u062C \u0627\u0644\u062A\u062C\u0633\u0633.",
+          marks: 20
+        },
+        {
+          questionNumber: 6,
+          questionType: "short_answer",
+          questionText: "\u0645\u0627 \u0647\u0648 \u0645\u0646\u0641\u0630 \u0627\u0644\u0625\u064A\u062B\u0631\u0646\u062A (Ethernet Port) \u0648\u0641\u064A\u0645\u0627 \u064A\u0633\u062A\u062E\u062F\u0645\u061F",
+          options: [],
+          correctAnswer: "\u0645\u0646\u0641\u0630 \u0644\u062A\u0648\u0635\u064A\u0644 \u0643\u0627\u0628\u0644 \u0627\u0644\u0625\u0646\u062A\u0631\u0646\u062A \u0628\u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631 \u0644\u062A\u0648\u0641\u064A\u0631 \u0627\u062A\u0635\u0627\u0644 \u0634\u0628\u0643\u0629 \u0633\u0644\u0643\u064A \u0633\u0631\u064A\u0639 \u0648\u0645\u0633\u062A\u0642\u0631",
+          explanation: "\u0643\u0627\u0628\u0644 \u0627\u0644\u0625\u064A\u062B\u0631\u0646\u062A \u064A\u0648\u0641\u0631 \u0627\u062A\u0635\u0627\u0644\u0627\u064B \u0633\u0644\u0643\u064A\u0627\u064B \u0623\u0643\u062B\u0631 \u0627\u0633\u062A\u0642\u0631\u0627\u0631\u0627\u064B \u0648\u0633\u0631\u0639\u0629 \u0645\u0642\u0627\u0631\u0646\u0629 \u0628\u0627\u0644\u0648\u0627\u064A \u0641\u0627\u064A.",
+          marks: 20
+        }
+      ]
+    };
+  }
+  if (isGrade4) {
+    return {
+      title: "\u0627\u062E\u062A\u0628\u0627\u0631 \u0645\u0627\u062F\u0629 \u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u0627\u0644\u0645\u0639\u0644\u0648\u0645\u0627\u062A \u0648\u0627\u0644\u0627\u062A\u0635\u0627\u0644\u0627\u062A - \u0627\u0644\u0635\u0641 \u0627\u0644\u0631\u0627\u0628\u0639 \u0627\u0644\u0627\u0628\u062A\u062F\u0627\u0626\u064A",
+      subject: "\u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u0627\u0644\u0645\u0639\u0644\u0648\u0645\u0627\u062A \u0648\u0627\u0644\u0627\u062A\u0635\u0627\u0644\u0627\u062A (\u0627\u0644\u0635\u0641 \u0627\u0644\u0631\u0627\u0628\u0639)",
+      suggestedDurationMinutes: 30,
+      totalMarks: 100,
+      passingMarks: 60,
+      summary: "\u0627\u062E\u062A\u0628\u0627\u0631 \u062A\u0641\u0627\u0639\u0644\u064A \u0645\u0639\u062A\u0645\u062F \u0644\u0645\u0646\u0647\u062C \u0627\u0644\u0635\u0641 \u0627\u0644\u0631\u0627\u0628\u0639 \u0627\u0644\u0627\u0628\u062A\u062F\u0627\u0626\u064A \u064A\u063A\u0637\u064A \u0648\u062D\u062F\u0627\u062A \u0627\u0644\u0625\u062F\u062E\u0627\u0644 \u0648\u0627\u0644\u0625\u062E\u0631\u0627\u062C\u060C \u0627\u0644\u0645\u0633\u062A\u0643\u0634\u0641 \u0627\u0644\u0646\u0634\u0637\u060C \u0648\u0627\u0644\u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u0627\u0644\u0645\u0633\u0627\u0639\u062F\u0629.",
+      questions: [
+        {
+          questionNumber: 1,
+          questionType: "mcq",
+          questionText: "\u0627\u0633\u062A\u062E\u062F\u0645 \u0639\u0627\u0644\u0645 \u0627\u0644\u0622\u062B\u0627\u0631 \u0623\u0644\u0628\u0631\u062A \u0644\u064A\u0646 \u062C\u0647\u0627\u0632 ........... \u0644\u0627\u0633\u062A\u0643\u0634\u0627\u0641 \u0648\u062A\u062D\u062F\u064A\u062F \u0627\u0644\u0645\u0648\u0627\u0642\u0639 \u0627\u0644\u0623\u062B\u0631\u064A\u0629 \u0641\u0648\u0642 \u0633\u0637\u062D \u0627\u0644\u0623\u0631\u0636 \u0639\u0628\u0631 \u0627\u0644\u0623\u0642\u0645\u0627\u0631 \u0627\u0644\u0635\u0646\u0627\u0639\u064A\u0629.",
+          options: ["\u0646\u0638\u0627\u0645 \u062A\u062D\u062F\u064A\u062F \u0627\u0644\u0645\u0648\u0627\u0642\u0639 \u0627\u0644\u0639\u0627\u0644\u0645\u064A (GPS)", "\u0627\u0644\u0631\u0627\u062F\u0627\u0631 \u0627\u0644\u0645\u062E\u062A\u0631\u0642 \u0644\u0644\u0623\u0631\u0636 (GPR)", "\u0645\u0642\u064A\u0627\u0633 \u0627\u0644\u0645\u063A\u0646\u0627\u0637\u064A\u0633\u064A\u0629", "\u0627\u0644\u0637\u0627\u0628\u0639\u0629 \u062B\u0644\u0627\u062B\u064A\u0629 \u0627\u0644\u0623\u0628\u0639\u0627\u062F"],
+          correctAnswer: "\u0646\u0638\u0627\u0645 \u062A\u062D\u062F\u064A\u062F \u0627\u0644\u0645\u0648\u0627\u0642\u0639 \u0627\u0644\u0639\u0627\u0644\u0645\u064A (GPS)",
+          explanation: "\u0646\u0638\u0627\u0645 GPS \u064A\u062D\u062F\u062F \u0627\u0644\u0645\u0648\u0627\u0642\u0639 \u0627\u0644\u062C\u063A\u0631\u0627\u0641\u064A\u0629 \u0628\u062F\u0642\u0629 \u0641\u0648\u0642 \u0633\u0637\u062D \u0627\u0644\u0623\u0631\u0636 \u0628\u0627\u0633\u062A\u062E\u062F\u0627\u0645 \u0627\u0644\u0623\u0642\u0645\u0627\u0631 \u0627\u0644\u0635\u0646\u0627\u0639\u064A\u0629.",
+          marks: 20
+        },
+        {
+          questionNumber: 2,
+          questionType: "mcq",
+          questionText: "\u0623\u064A \u0645\u0646 \u0627\u0644\u0623\u062C\u0647\u0632\u0629 \u0627\u0644\u062A\u0627\u0644\u064A\u0629 \u064A\u064F\u0639\u062F \u0645\u0646 \u0648\u062D\u062F\u0627\u062A \u0625\u062F\u062E\u0627\u0644 \u0627\u0644\u0635\u0648\u0631 \u0648\u0627\u0644\u0648\u062B\u0627\u0626\u0642 \u0627\u0644\u0648\u0631\u0642\u064A\u0629 \u0625\u0644\u0649 \u062F\u0627\u062E\u0644 \u062C\u0647\u0627\u0632 \u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631\u061F",
+          options: ["\u0627\u0644\u0645\u0627\u0633\u062D \u0627\u0644\u0636\u0648\u0626\u064A (Scanner)", "\u0634\u0627\u0634\u0629 \u0627\u0644\u0639\u0631\u0636 (Screen)", "\u0645\u0643\u0628\u0631 \u0627\u0644\u0635\u0648\u062A (Speaker)", "\u0627\u0644\u0637\u0627\u0628\u0639\u0629 (Printer)"],
+          correctAnswer: "\u0627\u0644\u0645\u0627\u0633\u062D \u0627\u0644\u0636\u0648\u0626\u064A (Scanner)",
+          explanation: "\u0627\u0644\u0645\u0627\u0633\u062D \u0627\u0644\u0636\u0648\u0626\u064A \u064A\u0642\u0648\u0645 \u0628\u062A\u062D\u0648\u064A\u0644 \u0627\u0644\u0623\u0648\u0631\u0627\u0642 \u0648\u0627\u0644\u0635\u0648\u0631 \u0627\u0644\u0645\u0637\u0628\u0648\u0639\u0629 \u0625\u0644\u0649 \u0645\u0644\u0641\u0627\u062A \u0631\u0642\u0645\u064A\u0629 \u062F\u0627\u062E\u0644 \u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631.",
+          marks: 20
+        },
+        {
+          questionNumber: 3,
+          questionType: "true_false",
+          questionText: "\u062A\u0633\u0627\u0639\u062F \u0628\u0631\u0645\u062C\u064A\u0627\u062A \u062A\u0643\u0628\u064A\u0631 \u0627\u0644\u0634\u0627\u0634\u0629 \u0648\u0645\u0631\u0643\u0628 \u0627\u0644\u0643\u0644\u0627\u0645 \u0630\u0648\u064A \u0627\u0644\u0647\u0645\u0645 \u0648\u0636\u0639\u0627\u0641 \u0627\u0644\u0628\u0635\u0631 \u0641\u064A \u0627\u0633\u062A\u062E\u062F\u0627\u0645 \u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631 \u0628\u0633\u0647\u0648\u0644\u0629.",
+          options: ["\u0635\u062D", "\u062E\u0637\u0623"],
+          correctAnswer: "\u0635\u062D",
+          explanation: "\u0627\u0644\u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u0627\u0644\u0645\u0633\u0627\u0639\u062F\u0629 \u062A\u0645\u0643\u0646 \u0630\u0648\u064A \u0627\u0644\u0647\u0645\u0645 \u0645\u0646 \u0627\u0644\u062A\u0641\u0627\u0639\u0644 \u0648\u0627\u0644\u0642\u0631\u0627\u0621\u0629 \u0648\u0627\u0633\u062A\u062E\u062F\u0627\u0645 \u0627\u0644\u062D\u0627\u0633\u0648\u0628 \u0628\u0643\u0641\u0627\u0621\u0629.",
+          marks: 20
+        },
+        {
+          questionNumber: 4,
+          questionType: "mcq",
+          questionText: "\u0648\u062D\u062F\u0629 \u0627\u0644\u0625\u062E\u0631\u0627\u062C \u0627\u0644\u0645\u0633\u0624\u0648\u0644\u0629 \u0639\u0646 \u0637\u0628\u0627\u0639\u0629 \u0627\u0644\u0646\u0635\u0648\u0635 \u0648\u0627\u0644\u0635\u0648\u0631 \u0645\u0646 \u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631 \u0639\u0644\u0649 \u0627\u0644\u0648\u0631\u0642 \u0647\u064A:",
+          options: ["\u0627\u0644\u0637\u0627\u0628\u0639\u0629 (Printer)", "\u0644\u0648\u062D\u0629 \u0627\u0644\u0645\u0641\u0627\u062A\u064A\u062D (Keyboard)", "\u0627\u0644\u0641\u0623\u0631\u0629 (Mouse)", "\u0627\u0644\u0645\u064A\u0643\u0631\u0648\u0641\u0648\u0646 (Microphone)"],
+          correctAnswer: "\u0627\u0644\u0637\u0627\u0628\u0639\u0629 (Printer)",
+          explanation: "\u0627\u0644\u0637\u0627\u0628\u0639\u0629 \u062A\u062E\u0631\u062C \u0627\u0644\u0645\u0633\u062A\u0646\u062F\u0627\u062A \u0627\u0644\u0631\u0642\u0645\u064A\u0629 \u0641\u064A \u0635\u0648\u0631\u0629 \u0646\u0633\u062E \u0648\u0631\u0642\u064A\u0629 \u0645\u0637\u0628\u0648\u0639\u0629.",
+          marks: 20
+        },
+        {
+          questionNumber: 5,
+          questionType: "true_false",
+          questionText: "\u062A\u0639\u062A\u0628\u0631 \u0648\u062D\u062F\u0629 \u0627\u0644\u0645\u0639\u0627\u0644\u062C\u0629 \u0627\u0644\u0645\u0631\u0643\u0632\u064A\u0629 (CPU) \u0628\u0645\u062B\u0627\u0628\u0629 \u0639\u0642\u0644 \u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631 \u0648\u0645\u0633\u0624\u0648\u0644\u0629 \u0639\u0646 \u0645\u0639\u0627\u0644\u062C\u0629 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A \u0648\u062A\u062D\u0648\u064A\u0644\u0647\u0627 \u0644\u0645\u0639\u0644\u0648\u0645\u0627\u062A.",
+          options: ["\u0635\u062D", "\u062E\u0637\u0623"],
+          correctAnswer: "\u0635\u062D",
+          explanation: "\u0627\u0644\u0645\u0639\u0627\u0644\u062C CPU \u064A\u0646\u0641\u0630 \u0627\u0644\u0623\u0648\u0627\u0645\u0631 \u0648\u0627\u0644\u0639\u0645\u0644\u064A\u0627\u062A \u0627\u0644\u062D\u0633\u0627\u0628\u064A\u0629 \u0648\u0627\u0644\u0645\u0646\u0637\u0642\u064A\u0629 \u0644\u0644\u0628\u064A\u0627\u0646\u0627\u062A.",
+          marks: 20
+        }
+      ]
+    };
+  }
   return {
-    title: `\u0627\u062E\u062A\u0628\u0627\u0631 \u062A\u0642\u064A\u064A\u0645 \u0634\u0627\u0645\u0644 - ${course}`,
-    subject: course,
-    suggestedDurationMinutes: 45,
+    title: "\u0627\u062E\u062A\u0628\u0627\u0631 \u0645\u0627\u062F\u0629 \u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u0627\u0644\u0645\u0639\u0644\u0648\u0645\u0627\u062A \u0648\u0627\u0644\u0627\u062A\u0635\u0627\u0644\u0627\u062A (ICT) - \u0627\u0644\u0635\u0641 \u0627\u0644\u0633\u0627\u062F\u0633 \u0627\u0644\u0627\u0628\u062A\u062F\u0627\u0626\u064A",
+    subject: "\u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u0627\u0644\u0645\u0639\u0644\u0648\u0645\u0627\u062A \u0648\u0627\u0644\u0627\u062A\u0635\u0627\u0644\u0627\u062A (\u0627\u0644\u0635\u0641 \u0627\u0644\u0633\u0627\u062F\u0633 \u0627\u0644\u0627\u0628\u062A\u062F\u0627\u0626\u064A)",
+    suggestedDurationMinutes: 30,
     totalMarks: 100,
     passingMarks: 60,
-    summary: `\u0627\u062E\u062A\u0628\u0627\u0631 \u0642\u064A\u0627\u0633 \u0643\u0641\u0627\u0621\u0629 \u0645\u062A\u0643\u0627\u0645\u0644 \u0641\u064A \u0645\u0648\u0636\u0648\u0639 ${topic} \u064A\u063A\u0637\u064A \u0627\u0644\u0645\u0641\u0627\u0647\u064A\u0645 \u0627\u0644\u0623\u0633\u0627\u0633\u064A\u0629 \u0648\u0627\u0644\u062A\u0637\u0628\u064A\u0642\u0627\u062A \u0627\u0644\u0639\u0645\u0644\u064A\u0629 \u0648\u0627\u0644\u0645\u0647\u0627\u0631\u0627\u062A \u0627\u0644\u0645\u062A\u0642\u062F\u0645\u0629.`,
+    summary: "\u0627\u062E\u062A\u0628\u0627\u0631 \u062A\u0641\u0627\u0639\u0644\u064A \u0634\u0627\u0645\u0644 \u0648\u0645\u0648\u062B\u0642 \u0637\u0628\u0642\u0627\u064B \u0644\u0645\u0646\u0647\u062C \u0648\u0632\u0627\u0631\u0629 \u0627\u0644\u062A\u0631\u0628\u064A\u0629 \u0648\u0627\u0644\u062A\u0639\u0644\u064A\u0645 \u0627\u0644\u0645\u0635\u0631\u064A\u0629 \u0644\u0644\u0635\u0641 \u0627\u0644\u0633\u0627\u062F\u0633 \u0627\u0644\u0627\u0628\u062A\u062F\u0627\u0626\u064A (\u0627\u0644\u0641\u0635\u0644 \u0627\u0644\u062F\u0631\u0627\u0633\u064A - \u0634\u0628\u0643\u0627\u062A\u060C HTML\u060C \u0623\u0645\u0646 \u0633\u064A\u0628\u0631\u0627\u0646\u064A\u060C Excel).",
     questions: [
       {
         questionNumber: 1,
         questionType: "mcq",
-        questionText: `\u0645\u0627 \u0647\u0648 \u0627\u0644\u0645\u0641\u0647\u0648\u0645 \u0627\u0644\u0623\u0633\u0627\u0633\u064A \u0648\u0627\u0644\u0647\u062F\u0641 \u0627\u0644\u0631\u0626\u064A\u0633\u064A \u0641\u064A ${course}\u061F`,
-        options: [
-          "\u062A\u0637\u0628\u064A\u0642 \u0627\u0644\u0645\u0645\u0627\u0631\u0633\u0627\u062A \u0627\u0644\u0642\u064A\u0627\u0633\u064A\u0629 \u0648\u062A\u062D\u0633\u064A\u0646 \u062C\u0648\u062F\u0629 \u0648\u0633\u0631\u0639\u0629 \u0627\u0644\u0623\u062F\u0627\u0621",
-          "\u0627\u0644\u0627\u0639\u062A\u0645\u0627\u062F \u0639\u0644\u0649 \u0627\u0644\u062D\u0641\u0638 \u0627\u0644\u0646\u0638\u0631\u064A \u062F\u0648\u0646 \u062A\u0637\u0628\u064A\u0642 \u0639\u0645\u0644\u064A",
-          "\u0625\u0644\u063A\u0627\u0621 \u0627\u0644\u0645\u0631\u0627\u062C\u0639\u0629 \u0648\u0627\u0644\u062A\u0648\u062B\u064A\u0642",
-          "\u062A\u0642\u0644\u064A\u0644 \u0627\u0644\u0643\u0641\u0627\u0621\u0629 \u0644\u062A\u0642\u0644\u064A\u0644 \u0627\u0644\u062A\u0643\u0644\u0641\u0629"
-        ],
-        correctAnswer: "\u062A\u0637\u0628\u064A\u0642 \u0627\u0644\u0645\u0645\u0627\u0631\u0633\u0627\u062A \u0627\u0644\u0642\u064A\u0627\u0633\u064A\u0629 \u0648\u062A\u062D\u0633\u064A\u0646 \u062C\u0648\u062F\u0629 \u0648\u0633\u0631\u0639\u0629 \u0627\u0644\u0623\u062F\u0627\u0621",
-        explanation: "\u0627\u0644\u0647\u062F\u0641 \u0627\u0644\u0623\u0633\u0627\u0633\u064A \u0644\u0644\u062F\u0648\u0631\u0627\u062A \u0627\u0644\u062A\u062F\u0631\u064A\u0628\u064A\u0629 \u0627\u0644\u0645\u0639\u062A\u0645\u062F\u0629 \u0647\u0648 \u062A\u0637\u0628\u064A\u0642 \u0623\u0641\u0636\u0644 \u0627\u0644\u0645\u0645\u0627\u0631\u0633\u0627\u062A \u0627\u0644\u0645\u0647\u0646\u064A\u0629 \u0639\u0645\u0644\u064A\u0627\u064B.",
-        marks: 20
+        questionText: "\u0623\u064A \u0645\u0646 \u0623\u062C\u0647\u0632\u0629 \u0627\u0644\u0634\u0628\u0643\u0629 \u0627\u0644\u062A\u0627\u0644\u064A\u0629 \u064A\u0642\u0648\u0645 \u0628\u0625\u0631\u0633\u0627\u0644 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A \u0625\u0644\u0649 \u062C\u0647\u0627\u0632 \u0645\u062D\u062F\u062F \u0641\u0642\u0637 \u062F\u0627\u062E\u0644 \u0627\u0644\u0634\u0628\u0643\u0629 \u0644\u062A\u0642\u0644\u064A\u0644 \u0627\u0644\u0627\u0632\u062F\u062D\u0627\u0645\u061F",
+        options: ["\u0627\u0644\u0645\u062D\u0648\u0644 (Switch)", "\u0627\u0644\u0645\u0648\u062F\u0645 (Modem)", "\u0627\u0644\u0645\u0648\u062C\u0651\u0647 (Router)", "\u0643\u0627\u0628\u0644 \u0627\u0644\u0625\u064A\u062B\u0631\u0646\u062A (Ethernet)"],
+        correctAnswer: "\u0627\u0644\u0645\u062D\u0648\u0644 (Switch)",
+        explanation: "\u0627\u0644\u0645\u062D\u0648\u0651\u0644 (Switch) \u062C\u0647\u0627\u0632 \u0630\u0643\u064A \u064A\u0631\u0633\u0644 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A \u0625\u0644\u0649 \u0627\u0644\u062C\u0647\u0627\u0632 \u0627\u0644\u0645\u062D\u062F\u062F \u0641\u0642\u0637 \u0628\u0646\u0627\u0621\u064B \u0639\u0644\u0649 \u0639\u0646\u0648\u0627\u0646\u0647\u060C \u0628\u062E\u0644\u0627\u0641 \u0627\u0644\u0623\u062C\u0647\u0632\u0629 \u0627\u0644\u062A\u0642\u0644\u064A\u062F\u064A\u0629.",
+        marks: 10
       },
       {
         questionNumber: 2,
-        questionType: "true_false",
-        questionText: `\u064A\u0639\u062F \u0627\u0644\u0627\u0644\u062A\u0632\u0627\u0645 \u0628\u0627\u0644\u0645\u0639\u0627\u064A\u064A\u0631 \u0627\u0644\u0645\u0647\u0646\u064A\u0629 \u0648\u0627\u0644\u062A\u0637\u0628\u064A\u0642\u0627\u062A \u0627\u0644\u0639\u0645\u0644\u064A\u0629 \u0634\u0631\u0637\u0627\u064B \u0623\u0633\u0627\u0633\u064A\u0627\u064B \u0644\u0627\u062C\u062A\u064A\u0627\u0632 \u062A\u0642\u064A\u064A\u0645 ${course}.`,
-        options: ["\u0635\u0648\u0627\u0628", "\u062E\u0637\u0623"],
-        correctAnswer: "\u0635\u0648\u0627\u0628",
-        explanation: "\u0627\u0644\u062A\u0642\u064A\u064A\u0645 \u0627\u0644\u0639\u0645\u0644\u064A \u0648\u0627\u0644\u0645\u0639\u064A\u0627\u0631\u064A \u0647\u0648 \u0627\u0644\u0631\u0643\u064A\u0632\u0629 \u0627\u0644\u0623\u0633\u0627\u0633\u064A\u0629 \u0644\u0627\u0639\u062A\u0645\u0627\u062F \u0627\u0644\u0645\u0647\u0627\u0631\u0629.",
-        marks: 20
+        questionType: "mcq",
+        questionText: "\u064A\u0631\u0628\u0637 \u062C\u0647\u0627\u0632 ........... \u0634\u0628\u0643\u0629 \u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631 \u0627\u0644\u0645\u062D\u0644\u064A\u0629 (LAN) \u0628\u0634\u0628\u0643\u0629 \u0627\u0644\u0625\u0646\u062A\u0631\u0646\u062A \u0627\u0644\u0639\u0627\u0644\u0645\u064A\u0629 \u0639\u0628\u0631 \u0645\u0632\u0648\u062F \u0627\u0644\u062E\u062F\u0645\u0629 (ISP).",
+        options: ["\u0627\u0644\u0645\u0648\u062F\u0645 (Modem)", "\u0627\u0644\u0634\u0627\u0634\u0629 (Monitor)", "\u0627\u0644\u0637\u0627\u0628\u0639\u0629 (Printer)", "\u0627\u0644\u0645\u0627\u0633\u062D \u0627\u0644\u0636\u0648\u0626\u064A (Scanner)"],
+        correctAnswer: "\u0627\u0644\u0645\u0648\u062F\u0645 (Modem)",
+        explanation: "\u0627\u0644\u0645\u0648\u062F\u0645 \u064A\u062D\u0648\u0644 \u0627\u0644\u0625\u0634\u0627\u0631\u0627\u062A \u0645\u0646 \u0645\u0632\u0648\u062F \u062E\u062F\u0645\u0629 \u0627\u0644\u0625\u0646\u062A\u0631\u0646\u062A \u0625\u0644\u0649 \u0628\u064A\u0627\u0646\u0627\u062A \u0631\u0642\u0645\u064A\u0629 \u062A\u0641\u0647\u0645\u0647\u0627 \u0623\u062C\u0647\u0632\u0629 \u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631.",
+        marks: 10
       },
       {
         questionNumber: 3,
-        questionType: "mcq",
-        questionText: `\u0623\u064A \u0645\u0646 \u0627\u0644\u062E\u064A\u0627\u0631\u0627\u062A \u0627\u0644\u062A\u0627\u0644\u064A\u0629 \u064A\u0645\u062B\u0644 \u0627\u0644\u062E\u0637\u0648\u0629 \u0627\u0644\u0623\u0648\u0644\u0649 \u0627\u0644\u0635\u062D\u064A\u062D\u0629 \u0639\u0646\u062F \u0628\u062F\u0621 \u0645\u0634\u0631\u0648\u0639 \u0623\u0648 \u0645\u0647\u0645\u0629 \u0641\u064A ${topic}\u061F`,
-        options: [
-          "\u0627\u0644\u062A\u062D\u0644\u064A\u0644 \u0648\u0627\u0644\u062A\u062E\u0637\u064A\u0637 \u0648\u062A\u062D\u062F\u064A\u062F \u0627\u0644\u0645\u062A\u0637\u0644\u0628\u0627\u062A \u0628\u062F\u0642\u0629",
-          "\u0627\u0644\u0628\u062F\u0621 \u0627\u0644\u0639\u0634\u0648\u0627\u0626\u064A \u062F\u0648\u0646 \u062F\u0631\u0627\u0633\u0629 \u0645\u0633\u0628\u0642\u0629",
-          "\u062A\u062C\u0627\u0647\u0644 \u0645\u0639\u0627\u064A\u064A\u0631 \u0627\u0644\u0623\u0645\u0627\u0646 \u0648\u0627\u0644\u062C\u0648\u062F\u0629",
-          "\u062A\u0633\u0644\u064A\u0645 \u0627\u0644\u0645\u062E\u0631\u062C\u0627\u062A \u0642\u0628\u0644 \u0645\u0631\u0627\u062C\u0639\u062A\u0647\u0627 \u0648\u062A\u062F\u0642\u064A\u0642\u0647\u0627"
-        ],
-        correctAnswer: "\u0627\u0644\u062A\u062D\u0644\u064A\u0644 \u0648\u0627\u0644\u062A\u062E\u0637\u064A\u0637 \u0648\u062A\u062D\u062F\u064A\u062F \u0627\u0644\u0645\u062A\u0637\u0644\u0628\u0627\u062A \u0628\u062F\u0642\u0629",
-        explanation: "\u0645\u0631\u062D\u0644\u0629 \u0627\u0644\u062A\u062E\u0637\u064A\u0637 \u0648\u0627\u0644\u062A\u062D\u0644\u064A\u0644 \u0647\u064A \u0623\u0633\u0627\u0633 \u0646\u062C\u0627\u062D \u0623\u064A \u0646\u0638\u0627\u0645 \u0623\u0648 \u0645\u0634\u0631\u0648\u0639 \u062A\u062F\u0631\u064A\u0628\u064A \u0627\u062D\u062A\u0631\u0627\u0641\u064A.",
-        marks: 20
+        questionType: "true_false",
+        questionText: "\u062A\u062A\u0637\u0644\u0628 \u0627\u0644\u0645\u0635\u0627\u062F\u0642\u0629 \u0645\u062A\u0639\u062F\u062F\u0629 \u0627\u0644\u0639\u0648\u0627\u0645\u0644 (MFA) \u0637\u0631\u064A\u0642\u062A\u064A\u0646 \u0639\u0644\u0649 \u0627\u0644\u0623\u0642\u0644 \u0644\u062A\u0623\u0643\u064A\u062F \u0647\u0648\u064A\u0629 \u0627\u0644\u0645\u0633\u062A\u062E\u062F\u0645 \u0648\u062D\u0645\u0627\u064A\u0629 \u062D\u0633\u0627\u0628\u0647 \u0645\u0646 \u0627\u0644\u0627\u062E\u062A\u0631\u0627\u0642.",
+        options: ["\u0635\u062D", "\u062E\u0637\u0623"],
+        correctAnswer: "\u0635\u062D",
+        explanation: "\u0627\u0644\u0645\u0635\u0627\u062F\u0642\u0629 \u0645\u062A\u0639\u062F\u062F\u0629 \u0627\u0644\u0639\u0648\u0627\u0645\u0644 (MFA) \u062A\u062C\u0645\u0639 \u0628\u064A\u0646 \u0643\u0644\u0645\u0629 \u0627\u0644\u0645\u0631\u0648\u0631 \u0648\u0631\u0645\u0632 \u064A\u0631\u0633\u0644 \u0644\u0644\u0647\u0627\u062A\u0641 \u0623\u0648 \u0627\u0644\u0628\u0635\u0645\u0629 \u0644\u062A\u0639\u0632\u064A\u0632 \u0627\u0644\u0623\u0645\u0627\u0646.",
+        marks: 10
       },
       {
         questionNumber: 4,
-        questionType: "true_false",
-        questionText: "\u064A\u0645\u0643\u0646 \u0627\u0644\u0627\u0639\u062A\u0645\u0627\u062F \u0639\u0644\u0649 \u0627\u0644\u0627\u062E\u062A\u0628\u0627\u0631\u0627\u062A \u0627\u0644\u0622\u0644\u064A\u0629 \u0648\u0627\u0644\u062A\u0642\u064A\u064A\u0645 \u0627\u0644\u0645\u0633\u062A\u0645\u0631 \u0644\u0636\u0645\u0627\u0646 \u0623\u0639\u0644\u0649 \u0645\u0633\u062A\u0648\u0649 \u0645\u0646 \u0627\u0644\u062F\u0642\u0629 \u0648\u0627\u0644\u062C\u0648\u062F\u0629.",
-        options: ["\u0635\u0648\u0627\u0628", "\u062E\u0637\u0623"],
-        correctAnswer: "\u0635\u0648\u0627\u0628",
-        explanation: "\u0627\u0644\u0627\u062E\u062A\u0628\u0627\u0631\u0627\u062A \u0627\u0644\u062F\u0648\u0631\u064A\u0629 \u062A\u0631\u0641\u0639 \u0645\u0646 \u0643\u0641\u0627\u0621\u0629 \u0627\u0644\u0627\u0633\u062A\u064A\u0639\u0627\u0628 \u0648\u062A\u0643\u0634\u0641 \u0646\u0642\u0627\u0637 \u0627\u0644\u062A\u062D\u0633\u064A\u0646 \u0641\u0648\u0631\u0627\u064B.",
-        marks: 20
+        questionType: "mcq",
+        questionText: "\u0641\u064A \u0644\u063A\u0629 \u062A\u0631\u0645\u064A\u0632 \u0627\u0644\u0646\u0635 \u0627\u0644\u062A\u0634\u0639\u0628\u064A (HTML)\u060C \u0645\u0627 \u0647\u0648 \u0627\u0644\u0648\u0633\u0645 \u0627\u0644\u0645\u0633\u062A\u062E\u062F\u0645 \u0644\u0625\u0646\u0634\u0627\u0621 \u0623\u0643\u0628\u0631 \u0639\u0646\u0648\u0627\u0646 \u0631\u0626\u064A\u0633\u064A \u0641\u064A \u0627\u0644\u0635\u0641\u062D\u0629\u061F",
+        options: ["<h1>", "<p>", "<h6>", "<title>"],
+        correctAnswer: "<h1>",
+        explanation: "\u0627\u0644\u0648\u0633\u0645 <h1> \u064A\u0645\u062B\u0644 \u0627\u0644\u0639\u0646\u0648\u0627\u0646 \u0627\u0644\u0623\u0643\u0628\u0631 \u0648\u0627\u0644\u0623\u0647\u0645 \u0641\u064A \u0635\u0641\u062D\u0629 \u0627\u0644\u0648\u064A\u0628\u060C \u0628\u064A\u0646\u0645\u0627 <h6> \u0647\u0648 \u0627\u0644\u0623\u0635\u063A\u0631.",
+        marks: 10
       },
       {
         questionNumber: 5,
+        questionType: "mcq",
+        questionText: "\u0641\u064A \u0628\u0631\u0646\u0627\u0645\u062C \u062C\u062F\u0627\u0648\u0644 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A Microsoft Excel\u060C \u064A\u062C\u0628 \u0623\u0646 \u062A\u0628\u062F\u0623 \u0623\u064A \u0635\u064A\u063A\u0629 \u062D\u0633\u0627\u0628\u064A\u0629 \u0623\u0648 \u062F\u0627\u0644\u0629 \u0628\u0639\u0644\u0627\u0645\u0629:",
+        options: ["=", "+", "*", "#"],
+        correctAnswer: "=",
+        explanation: "\u0639\u0644\u0627\u0645\u0629 \u064A\u0633\u0627\u0648\u064A (=) \u062A\u062E\u0628\u0631 \u0627\u0644\u0628\u0631\u0646\u0627\u0645\u062C \u0628\u0623\u0646 \u0627\u0644\u0645\u062F\u062E\u0644 \u0627\u0644\u062A\u0627\u0644\u064A \u0647\u0648 \u0645\u0639\u0627\u062F\u0644\u0629 \u062D\u0633\u0627\u0628\u064A\u0629 \u0648\u0644\u064A\u0633 \u0645\u062C\u0631\u062F \u0646\u0635 \u0623\u0648 \u0631\u0642\u0645 \u0639\u0627\u062F\u064A.",
+        marks: 10
+      },
+      {
+        questionNumber: 6,
+        questionType: "mcq",
+        questionText: "\u062A\u0642\u0646\u064A\u0629 \u062A\u064F\u0633\u0642\u0637 \u0645\u062C\u0633\u0645\u0627\u062A \u0648\u0645\u0639\u0644\u0648\u0645\u0627\u062A \u0627\u0641\u062A\u0631\u0627\u0636\u064A\u0629 \u0639\u0644\u0649 \u0627\u0644\u0639\u0627\u0644\u0645 \u0627\u0644\u062D\u0642\u064A\u0642\u064A \u0627\u0644\u0630\u064A \u0646\u0631\u0627\u0647 \u0623\u0645\u0627\u0645\u0646\u0627 \u062A\u0633\u0645\u0649:",
+        options: ["\u0627\u0644\u0648\u0627\u0642\u0639 \u0627\u0644\u0645\u0639\u0632\u0632 (AR)", "\u0627\u0644\u0648\u0627\u0642\u0639 \u0627\u0644\u0627\u0641\u062A\u0631\u0627\u0636\u064A (VR)", "\u0627\u0644\u0630\u0643\u0627\u0621 \u0627\u0644\u0627\u0635\u0637\u0646\u0627\u0639\u064A (AI)", "\u0627\u0644\u062D\u0648\u0633\u0628\u0629 \u0627\u0644\u0633\u062D\u0627\u0628\u064A\u0629"],
+        correctAnswer: "\u0627\u0644\u0648\u0627\u0642\u0639 \u0627\u0644\u0645\u0639\u0632\u0632 (AR)",
+        explanation: "\u0627\u0644\u0648\u0627\u0642\u0639 \u0627\u0644\u0645\u0639\u0632\u0632 (Augmented Reality) \u064A\u062F\u0645\u062C \u0627\u0644\u0639\u0627\u0644\u0645 \u0627\u0644\u062D\u0642\u064A\u0642\u064A \u0645\u0639 \u0627\u0644\u0639\u0646\u0627\u0635\u0631 \u0627\u0644\u0631\u0642\u0645\u064A\u0629 \u0645\u062B\u0644 \u0643\u0627\u0645\u064A\u0631\u0627 \u0627\u0644\u0647\u0627\u062A\u0641.",
+        marks: 10
+      },
+      {
+        questionNumber: 7,
+        questionType: "true_false",
+        questionText: "\u062A\u062A\u064A\u062D \u0627\u0644\u062D\u0648\u0633\u0628\u0629 \u0627\u0644\u0633\u062D\u0627\u0628\u064A\u0629 (Cloud Computing) \u062A\u062E\u0632\u064A\u0646 \u0627\u0644\u0645\u0644\u0641\u0627\u062A \u0648\u0645\u0634\u0627\u0631\u0643\u062A\u0647\u0627 \u0648\u0627\u0644\u0648\u0635\u0648\u0644 \u0625\u0644\u064A\u0647\u0627 \u0645\u0646 \u0623\u064A \u0645\u0643\u0627\u0646 \u0639\u0628\u0631 \u0627\u0644\u0625\u0646\u062A\u0631\u0646\u062A.",
+        options: ["\u0635\u062D", "\u062E\u0637\u0623"],
+        correctAnswer: "\u0635\u062D",
+        explanation: "\u062E\u062F\u0645\u0627\u062A \u0627\u0644\u062A\u062E\u0632\u064A\u0646 \u0627\u0644\u0633\u062D\u0627\u0628\u064A \u0645\u062B\u0644 OneDrive \u0648Google Drive \u062A\u062A\u064A\u062D \u0627\u0644\u0648\u0635\u0648\u0644 \u0627\u0644\u0622\u0645\u0646 \u0644\u0644\u0645\u0644\u0641\u0627\u062A \u0639\u0628\u0631 \u0623\u064A \u062C\u0647\u0627\u0632.",
+        marks: 10
+      },
+      {
+        questionNumber: 8,
+        questionType: "mcq",
+        questionText: "\u0644\u062D\u0645\u0627\u064A\u0629 \u062D\u0633\u0627\u0628\u0643 \u0648\u0628\u064A\u0627\u0646\u0627\u062A\u0643 \u0627\u0644\u0634\u062E\u0635\u064A\u0629\u060C \u064A\u062C\u0628 \u0623\u0646 \u062A\u062A\u0643\u0648\u0646 \u0643\u0644\u0645\u0629 \u0627\u0644\u0645\u0631\u0648\u0631 \u0627\u0644\u0642\u0648\u064A\u0629 \u0645\u0646:",
+        options: [
+          "8 \u062E\u0627\u0646\u0627\u062A \u0639\u0644\u0649 \u0627\u0644\u0623\u0642\u0644 \u062A\u0634\u0645\u0644 \u062D\u0631\u0648\u0641\u0627\u064B \u0643\u0628\u064A\u0631\u0629 \u0648\u0635\u063A\u064A\u0631\u0629 \u0648\u0623\u0631\u0642\u0627\u0645\u0627\u064B \u0648\u0631\u0645\u0648\u0632\u0627\u064B",
+          "\u0627\u0633\u0645\u0643 \u0648\u0633\u0646\u0629 \u0645\u064A\u0644\u0627\u062F\u0643 \u0641\u0642\u0637",
+          "\u0623\u0631\u0642\u0627\u0645 \u0645\u062A\u0633\u0644\u0633\u0644\u0629 \u0645\u062B\u0644 12345678",
+          "\u0631\u0642\u0645 \u0627\u0644\u0647\u0627\u062A\u0641 \u0627\u0644\u0645\u062D\u0645\u0648\u0644"
+        ],
+        correctAnswer: "8 \u062E\u0627\u0646\u0627\u062A \u0639\u0644\u0649 \u0627\u0644\u0623\u0642\u0644 \u062A\u0634\u0645\u0644 \u062D\u0631\u0648\u0641\u0627\u064B \u0643\u0628\u064A\u0631\u0629 \u0648\u0635\u063A\u064A\u0631\u0629 \u0648\u0623\u0631\u0642\u0627\u0645\u0627\u064B \u0648\u0631\u0645\u0648\u0632\u0627\u064B",
+        explanation: "\u0627\u0644\u062F\u0645\u062C \u0628\u064A\u0646 \u0627\u0644\u0623\u062D\u0631\u0641 \u0627\u0644\u0643\u0628\u064A\u0631\u0629 \u0648\u0627\u0644\u0635\u063A\u064A\u0631\u0629 \u0648\u0627\u0644\u0623\u0631\u0642\u0627\u0645 \u0648\u0627\u0644\u0631\u0645\u0648\u0632 \u064A\u062C\u0639\u0644 \u062A\u062E\u0645\u064A\u0646 \u0643\u0644\u0645\u0629 \u0627\u0644\u0645\u0631\u0648\u0631 \u0645\u0633\u062A\u062D\u064A\u0644\u0627\u064B.",
+        marks: 10
+      },
+      {
+        questionNumber: 9,
         questionType: "short_answer",
-        questionText: `\u0627\u0634\u0631\u062D \u0628\u0627\u062E\u062A\u0635\u0627\u0631 \u0623\u0647\u0645 \u0641\u0627\u0626\u062F\u0629 \u062A\u0637\u0628\u064A\u0642\u064A\u0629 \u0645\u0643\u062A\u0633\u0628\u0629 \u0645\u0646 \u062F\u0631\u0627\u0633\u0629 ${course} \u0648\u0643\u064A\u0641 \u062A\u0633\u0627\u0647\u0645 \u0641\u064A \u0628\u064A\u0626\u0629 \u0627\u0644\u0639\u0645\u0644 \u0627\u0644\u062D\u0642\u064A\u0642\u064A\u0629\u061F`,
+        questionText: "\u0645\u0627 \u0647\u0648 \u0627\u0644\u0648\u0633\u0645 (Tag) \u0627\u0644\u0645\u0633\u062A\u062E\u062F\u0645 \u0641\u064A \u0644\u063A\u0629 HTML \u0644\u0643\u062A\u0627\u0628\u0629 \u0641\u0642\u0631\u0629 \u0646\u0635\u064A\u0629 \u0639\u0627\u062F\u064A\u0629\u061F",
         options: [],
-        correctAnswer: "\u0627\u0643\u062A\u0633\u0627\u0628 \u0627\u0644\u0645\u0647\u0627\u0631\u0627\u062A \u0627\u0644\u0627\u062D\u062A\u0631\u0627\u0641\u064A\u0629\u060C \u062D\u0644 \u0627\u0644\u0645\u0634\u0643\u0644\u0627\u062A \u0627\u0644\u0639\u0645\u0644\u064A\u0629 \u0628\u0643\u0641\u0627\u0621\u0629\u060C \u0648\u0631\u0641\u0639 \u0625\u0646\u062A\u0627\u062C\u064A\u0629 \u0627\u0644\u0641\u0631\u064A\u0642.",
-        explanation: "\u0625\u062C\u0627\u0628\u0629 \u0645\u0642\u0627\u0644\u064A\u0629 \u062A\u0642\u064A\u0633 \u0642\u062F\u0631\u0629 \u0627\u0644\u0645\u062A\u062F\u0631\u0628 \u0639\u0644\u0649 \u0631\u0628\u0637 \u0627\u0644\u0645\u062D\u062A\u0648\u0649 \u0627\u0644\u0646\u0638\u0631\u064A \u0628\u0633\u0648\u0642 \u0627\u0644\u0639\u0645\u0644.",
-        marks: 20
+        correctAnswer: "<p>",
+        explanation: "\u0648\u0633\u0645 \u0627\u0644\u0641\u0642\u0631\u0629 \u0627\u0644\u0646\u0635\u064A\u0629 \u0641\u064A HTML \u0647\u0648 <p> \u0627\u062E\u062A\u0635\u0627\u0631\u0627\u064B \u0644\u0643\u0644\u0645\u0629 Paragraph.",
+        marks: 10
+      },
+      {
+        questionNumber: 10,
+        questionType: "true_false",
+        questionText: "\u0627\u0644\u062A\u0635\u064A\u062F \u0627\u0644\u0627\u062D\u062A\u064A\u0627\u0644\u064A (Phishing) \u0647\u0648 \u0625\u0631\u0633\u0627\u0644 \u0631\u0633\u0627\u0626\u0644 \u0623\u0648 \u0625\u064A\u0645\u064A\u0644\u0627\u062A \u0645\u0632\u064A\u0641\u0629 \u0644\u062E\u062F\u0627\u0639 \u0627\u0644\u0623\u0634\u062E\u0627\u0635 \u0648\u0633\u0631\u0642\u0629 \u0628\u064A\u0627\u0646\u0627\u062A\u0647\u0645 \u0627\u0644\u062D\u0633\u0627\u0633\u0629.",
+        options: ["\u0635\u062D", "\u062E\u0637\u0623"],
+        correctAnswer: "\u0635\u062D",
+        explanation: "\u0627\u0644\u062A\u0635\u064A\u062F \u0627\u0644\u0627\u062D\u062A\u064A\u0627\u0644\u064A \u0623\u0633\u0644\u0648\u0628 \u062E\u062F\u0627\u0639\u064A \u062E\u0637\u064A\u0631 \u064A\u062C\u0628 \u0627\u0644\u062D\u0630\u0631 \u0645\u0646\u0647 \u0648\u0639\u062F\u0645 \u0641\u062A\u062D \u0631\u0648\u0627\u0628\u0637 \u0645\u062C\u0647\u0648\u0644\u0629.",
+        marks: 10
       }
     ]
   };
@@ -10193,27 +10795,61 @@ apiRouter.get("/settings", (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-apiRouter.post("/settings", (req, res) => {
+apiRouter.post("/settings", async (req, res) => {
   try {
     const data = db.getData();
     data.settings = {
       ...data.settings || {},
       ...req.body || {}
     };
+    if (data.settings?.logoUrl && typeof data.settings.logoUrl === "string" && data.settings.logoUrl.startsWith("data:image/")) {
+      try {
+        const base64Data = data.settings.logoUrl.replace(/^data:image\/\w+;base64,/, "");
+        const pubPng = import_path4.default.join(process.cwd(), "public", "logo.png");
+        const pubSvg = import_path4.default.join(process.cwd(), "public", "logo.svg");
+        import_fs4.default.writeFileSync(pubPng, Buffer.from(base64Data, "base64"));
+        const svgWrapper = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500" width="500" height="500"><image href="${data.settings.logoUrl}" width="500" height="500" preserveAspectRatio="xMidYMid meet" /></svg>`;
+        import_fs4.default.writeFileSync(pubSvg, svgWrapper, "utf8");
+      } catch (err) {
+        console.warn("[Settings] Failed to write logo files:", err);
+      }
+    }
     db.save();
+    try {
+      await saveCollectionToFirestore("settings", [data.settings]);
+    } catch (e) {
+      console.warn("[Settings] Firestore sync warning:", e);
+    }
     res.json({ success: true, settings: data.settings });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
-apiRouter.put("/settings", (req, res) => {
+apiRouter.put("/settings", async (req, res) => {
   try {
     const data = db.getData();
     data.settings = {
       ...data.settings || {},
       ...req.body || {}
     };
+    if (data.settings?.logoUrl && typeof data.settings.logoUrl === "string" && data.settings.logoUrl.startsWith("data:image/")) {
+      try {
+        const base64Data = data.settings.logoUrl.replace(/^data:image\/\w+;base64,/, "");
+        const pubPng = import_path4.default.join(process.cwd(), "public", "logo.png");
+        const pubSvg = import_path4.default.join(process.cwd(), "public", "logo.svg");
+        import_fs4.default.writeFileSync(pubPng, Buffer.from(base64Data, "base64"));
+        const svgWrapper = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500" width="500" height="500"><image href="${data.settings.logoUrl}" width="500" height="500" preserveAspectRatio="xMidYMid meet" /></svg>`;
+        import_fs4.default.writeFileSync(pubSvg, svgWrapper, "utf8");
+      } catch (err) {
+        console.warn("[Settings] Failed to write logo files:", err);
+      }
+    }
     db.save();
+    try {
+      await saveCollectionToFirestore("settings", [data.settings]);
+    } catch (e) {
+      console.warn("[Settings] Firestore sync warning:", e);
+    }
     res.json({ success: true, settings: data.settings });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -10900,44 +11536,65 @@ apiRouter.post("/branches/:id/duplicate", async (req, res) => {
 });
 apiRouter.get("/trainees/next-code", async (req, res) => {
   try {
-    const { prefix, courseId, grade, excludeId } = req.query;
+    const { prefix, courseId, grade, groupId, excludeId } = req.query;
     let targetPrefix = typeof prefix === "string" ? prefix : "";
+    let targetGroupId = typeof groupId === "string" && groupId ? groupId : void 0;
+    if (targetGroupId && !targetPrefix && !courseId && !grade) {
+      const groups = await GroupRepo.getAll();
+      const grp = groups.find((g) => g.id === targetGroupId);
+      if (grp) {
+        if (grp.courseId) {
+          const courses = await CourseRepo.getAll();
+          const course = courses.find((c) => c.id === grp.courseId);
+          if (course) {
+            targetPrefix = db.getPrefixForGradeOrCourse(course.name || course.grade || "");
+          }
+        } else if (grp.grade) {
+          targetPrefix = db.getPrefixForGradeOrCourse(grp.grade);
+        }
+      }
+    }
     if (!targetPrefix && typeof courseId === "string" && courseId) {
       const courses = await CourseRepo.getAll();
       const course = courses.find((c) => c.id === courseId);
       if (course) {
-        targetPrefix = db.getPrefixForGradeOrCourse(course.name);
+        targetPrefix = db.getPrefixForGradeOrCourse(course.name || course.grade || "");
       }
     }
     if (!targetPrefix && typeof grade === "string" && grade) {
       targetPrefix = db.getPrefixForGradeOrCourse(grade);
     }
     const resolvedPrefix = targetPrefix ? targetPrefix.length === 1 ? targetPrefix.toUpperCase() : db.getPrefixForGradeOrCourse(targetPrefix) : db.getData().settings?.traineeCodePrefix || "A";
-    const allTrainees = await TraineeRepo.getAll();
+    let allTrainees = await TraineeRepo.getAll();
+    if (excludeId && typeof excludeId === "string") {
+      allTrainees = allTrainees.filter((t) => t && t.id !== excludeId);
+    }
     const pfx = (resolvedPrefix || "A").toUpperCase();
-    const regex = new RegExp(`^${pfx}-?(\\d+)$`, "i");
-    let maxNum = 0;
-    allTrainees.forEach((t) => {
-      if (t.code && (!excludeId || t.id !== excludeId)) {
-        const match = String(t.code).trim().match(regex);
-        if (match) {
-          const num = parseInt(match[1], 10);
-          if (!isNaN(num) && num > maxNum) {
-            maxNum = num;
-          }
-        }
-      }
+    const freedList = db.getData().freedTraineeCodes || [];
+    const code = await allocateNextTraineeCode(pfx, allTrainees, targetGroupId, freedList);
+    const numMatch = code.match(/\d+$/);
+    const nextNum = numMatch ? parseInt(numMatch[0], 10) : 1;
+    const freedSlot = freedList.find((f) => f && f.code && f.code.toUpperCase() === code.toUpperCase());
+    const isRecycled = Boolean(freedSlot);
+    res.json({
+      code,
+      prefix: pfx,
+      nextNumber: nextNum,
+      isRecycled,
+      freedSlotInfo: freedSlot ? {
+        originalGroupId: freedSlot.groupId,
+        previousTraineeName: freedSlot.traineeName,
+        freedAt: freedSlot.freedAt
+      } : null
     });
-    const nextNum = maxNum + 1;
-    const code = `${pfx}${String(nextNum).padStart(3, "0")}`;
-    res.json({ code, prefix: pfx, nextNumber: nextNum });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 apiRouter.get("/trainees", authMiddleware, async (req, res) => {
   try {
-    let list = await TraineeRepo.getAll();
+    const isFresh = req.query.fresh === "true" || req.headers["x-fresh"] === "true";
+    let list = await TraineeRepo.getAll(isFresh);
     list = db.deduplicateTrainees(list);
     const user = req.user;
     if (user) {
@@ -10987,16 +11644,89 @@ apiRouter.get("/trainees/:id", async (req, res) => {
     const { id } = req.params;
     const trainee = await TraineeRepo.getById(id);
     if (!trainee) return res.status(404).json({ success: false, error: "\u0627\u0644\u0645\u062A\u062F\u0631\u0628 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F" });
-    const payments = await PaymentRepo.getByTraineeId(trainee.id);
-    const attendance = await AttendanceRepo.getByTraineeId(trainee.id);
-    const pointsFromFs = await PointTransactionRepo.getByTraineeId(trainee.id);
-    const pointsLocal = (db.getData().pointTransactions || []).filter((pt) => pt.traineeId === trainee.id);
+    const traineeKeys = /* @__PURE__ */ new Set();
+    if (trainee.id) traineeKeys.add(String(trainee.id).trim().toLowerCase());
+    if (trainee.code) traineeKeys.add(String(trainee.code).trim().toLowerCase());
+    if (trainee.studentCode) traineeKeys.add(String(trainee.studentCode).trim().toLowerCase());
+    if (trainee.legacyId) traineeKeys.add(String(trainee.legacyId).trim().toLowerCase());
+    if (trainee.phone) traineeKeys.add(String(trainee.phone).trim().toLowerCase());
+    if (trainee.nationalId) traineeKeys.add(String(trainee.nationalId).trim().toLowerCase());
+    if (trainee.fullName) traineeKeys.add(String(trainee.fullName).trim().toLowerCase());
+    const allTrainees = db.getData().trainees || [];
+    for (const other of allTrainees) {
+      if (other.fullName && trainee.fullName && other.fullName.trim() === trainee.fullName.trim() || other.phone && trainee.phone && other.phone === trainee.phone || other.code && trainee.code && String(other.code) === String(trainee.code)) {
+        if (other.id) traineeKeys.add(String(other.id).trim().toLowerCase());
+        if (other.code) traineeKeys.add(String(other.code).trim().toLowerCase());
+      }
+    }
+    const paymentsFromFs = await PaymentRepo.getByTraineeId(trainee.id).catch(() => []);
+    const paymentsLocal = (db.getData().payments || []).filter((p) => {
+      return [p.traineeId, p.studentId, p.traineeCode].some((cand) => cand && traineeKeys.has(String(cand).trim().toLowerCase()));
+    });
+    const payMap = /* @__PURE__ */ new Map();
+    for (const p of [...paymentsFromFs, ...paymentsLocal]) {
+      if (p.id) payMap.set(p.id, p);
+    }
+    const payments = Array.from(payMap.values()).sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime());
+    const attFromFs = await AttendanceRepo.getAll().catch(() => []);
+    const attFromDb = db.getData().attendance || [];
+    const attMap = /* @__PURE__ */ new Map();
+    for (const a of [...attFromFs, ...attFromDb]) {
+      if (!a) continue;
+      const matches = [
+        a.traineeId,
+        a.studentId,
+        a.traineeCode,
+        a.studentCode,
+        a.traineeName
+      ].some((cand) => cand && traineeKeys.has(String(cand).trim().toLowerCase()));
+      if (matches) {
+        const uniqueKey = a.id || `${a.date}_${a.traineeId}`;
+        attMap.set(uniqueKey, a);
+      }
+    }
+    const allPt = db.getData().pointTransactions || [];
+    for (const pt of allPt) {
+      if (pt && pt.reason && pt.reason.includes("\u062D\u0636\u0648\u0631") && [pt.traineeId, pt.studentId, pt.traineeCode].some((cand) => cand && traineeKeys.has(String(cand).trim().toLowerCase()))) {
+        const pDate = pt.createdAt ? pt.createdAt.split("T")[0] : "2026-08-22";
+        const hasDate = Array.from(attMap.values()).some((a) => a.date === pDate);
+        if (!hasDate) {
+          const ptRec = {
+            id: `att-pt-${pt.id || pDate}`,
+            date: pDate,
+            time: pt.createdAt ? new Date(pt.createdAt).toLocaleTimeString("ar-EG") : "\u0660\u0661:\u0662\u0665 \u0635",
+            branchId: pt.branchId || trainee.branchId || "branch-1",
+            groupId: pt.groupId || trainee.groupId || "",
+            courseId: trainee.courseId || "",
+            traineeId: trainee.id,
+            status: "present",
+            notes: pt.reason || "\u062D\u0636\u0648\u0631 \u0645\u0648\u062B\u0642 \u0645\u0646 \u0633\u062C\u0644 \u0627\u0644\u0646\u0642\u0627\u0637 \u0627\u0644\u0645\u0639\u0645\u0644\u064A\u0629",
+            groupName: trainee.groupName || "",
+            courseName: ""
+          };
+          attMap.set(ptRec.id, ptRec);
+        }
+      }
+    }
+    const groupsList = db.getData().groups || [];
+    const coursesList = db.getData().courses || [];
+    const groupMap = new Map(groupsList.map((g) => [g.id, g.name]));
+    const courseMap = new Map(coursesList.map((c) => [c.id, c.name]));
+    const attendance = Array.from(attMap.values()).map((a) => ({
+      ...a,
+      groupName: a.groupName || groupMap.get(a.groupId) || trainee.groupName || "",
+      courseName: a.courseName || courseMap.get(a.courseId) || ""
+    })).sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+    const pointsFromFs = await PointTransactionRepo.getByTraineeId(trainee.id).catch(() => []);
+    const pointsLocal = (db.getData().pointTransactions || []).filter((pt) => {
+      return [pt.traineeId, pt.studentId, pt.traineeCode].some((cand) => cand && traineeKeys.has(String(cand).trim().toLowerCase()));
+    });
     const ptMap = /* @__PURE__ */ new Map();
     for (const p of [...pointsFromFs, ...pointsLocal]) {
       if (p.id) ptMap.set(p.id, p);
     }
     const points = Array.from(ptMap.values()).sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
-    const exams = (db.getData().examResults || []).filter((er) => er.traineeId === trainee.id);
+    const exams = (db.getData().examResults || []).filter((er) => traineeKeys.has(String(er.traineeId).trim().toLowerCase()));
     res.json({ trainee, payments, attendance, points, exams });
   } catch (e) {
     res.status(500).json({ success: false, error: e.message });
@@ -11017,12 +11747,14 @@ apiRouter.post("/trainees", async (req, res) => {
     const recentDuplicate = list.find((t) => {
       const tNormName = normalizeArabic(t.fullName);
       const sameName = tNormName === normName;
+      if (!sameName) return false;
       const tPhone = String(t.phone || "").replace(/[^0-9]/g, "").slice(-10);
       const tParentPhone = String(t.parentPhone || "").replace(/[^0-9]/g, "").slice(-10);
       const sameStudentPhone = normPhone && tPhone && tPhone === normPhone;
       const sameParentPhone = normParentPhone && tParentPhone && tParentPhone === normParentPhone;
+      const sameNatId = data.nationalId && t.nationalId && String(data.nationalId).trim().length >= 10 && String(t.nationalId).trim() === String(data.nationalId).trim();
       const createdInDoubleTapWindow = t.createdAt && Date.now() - new Date(t.createdAt).getTime() < 8e3;
-      if (sameName && (sameStudentPhone || sameParentPhone || createdInDoubleTapWindow)) {
+      if (sameStudentPhone || sameParentPhone || sameNatId || createdInDoubleTapWindow) {
         return true;
       }
       return false;
@@ -11036,28 +11768,33 @@ apiRouter.post("/trainees", async (req, res) => {
       });
     }
     let code = data.code?.trim()?.toUpperCase();
+    let prefix = "A";
+    try {
+      const course = await CourseRepo.getById(data.courseId || "");
+      if (course && course.grade) {
+        prefix = db.getPrefixForGradeOrCourse(course.grade);
+      } else if (data.grade) {
+        prefix = db.getPrefixForGradeOrCourse(data.grade);
+      }
+    } catch (e) {
+      console.warn("Could not determine grade prefix, using fallback", e);
+    }
+    prefix = (prefix || "A").toUpperCase();
+    const freedList = db.getData().freedTraineeCodes || [];
     if (code) {
       const duplicate = list.find((t) => t.code && String(t.code).trim().toUpperCase() === code);
       if (duplicate) {
-        return res.status(400).json({
-          success: false,
-          error: `\u0643\u0648\u062F \u0627\u0644\u0637\u0627\u0644\u0628 (${code}) \u0645\u0633\u062A\u062E\u062F\u0645 \u0628\u0627\u0644\u0641\u0639\u0644 \u0644\u0644\u0637\u0627\u0644\u0628 "${duplicate.fullName}". \u064A\u0631\u062C\u0649 \u0625\u062F\u062E\u0627\u0644 \u0643\u0648\u062F \u0641\u0631\u064A\u062F \u0623\u0648 \u062A\u0631\u0643 \u0627\u0644\u062E\u0627\u0646\u0629 \u0641\u0627\u0631\u063A\u0629 \u0644\u0644\u062A\u0648\u0644\u064A\u062F \u0627\u0644\u062A\u0644\u0642\u0627\u0626\u064A.`
-        });
+        console.warn(`[Trainee] Code ${code} already in use by "${duplicate.fullName}". Automatically allocating recycled or fresh unique code.`);
+        code = await allocateNextTraineeCode(prefix, list, data.groupId, freedList);
       }
     } else {
-      let prefix = "A";
-      try {
-        const course = await CourseRepo.getById(data.courseId || "");
-        if (course && course.grade) {
-          prefix = db.getPrefixForGradeOrCourse(course.grade);
-        } else if (data.grade) {
-          prefix = db.getPrefixForGradeOrCourse(data.grade);
-        }
-      } catch (e) {
-        console.warn("Could not determine grade prefix, using fallback", e);
-      }
-      prefix = (prefix || "A").toUpperCase();
-      code = await allocateNextTraineeCode(prefix, list);
+      code = await allocateNextTraineeCode(prefix, list, data.groupId, freedList);
+    }
+    const memData = db.getData();
+    if (Array.isArray(memData.freedTraineeCodes)) {
+      memData.freedTraineeCodes = memData.freedTraineeCodes.filter(
+        (f) => f && f.code && f.code.toUpperCase() !== code.toUpperCase()
+      );
     }
     const traineeId = "trainee-" + Date.now() + "-" + Math.random().toString(36).substr(2, 4);
     const feeAmount = Number(data.feeAmount) || 0;
@@ -11068,14 +11805,17 @@ apiRouter.post("/trainees", async (req, res) => {
     const created = await TraineeRepo.create(traineeId, {
       ...data,
       code,
-      prefix: code.match(/^([a-zA-Z]+)/)?.[1]?.toUpperCase() || "A",
+      prefix: code.match(/^([a-zA-Z]+)/)?.[1]?.toUpperCase() || prefix || "A",
       feeAmount,
       discountAmount,
       netAmount,
       paidAmount,
       remainingAmount,
+      totalPoints: 0,
+      attendanceRate: 100,
       createdAt: (/* @__PURE__ */ new Date()).toISOString()
     });
+    db.saveImmediate();
     res.json({ success: true, trainee: created });
   } catch (e) {
     res.status(500).json({ success: false, error: e.message });
@@ -11269,33 +12009,198 @@ apiRouter.post(["/student/update-photo", "/trainees/update-photo"], async (req, 
     res.status(500).json({ success: false, error: err.message });
   }
 });
-apiRouter.delete("/trainees/:id", async (req, res) => {
+async function purgeCompleteTraineeData(traineeId) {
   try {
-    const { id } = req.params;
-    const trainee = await TraineeRepo.getById(id);
-    if (!trainee) return res.status(404).json({ success: false, error: "\u0627\u0644\u0645\u062A\u062F\u0631\u0628 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F" });
-    await TraineeRepo.delete(id);
     const memData = db.getData();
-    if (memData && Array.isArray(memData.trainees)) {
-      const idx = memData.trainees.findIndex((t) => t.id === id);
-      if (idx >= 0) {
-        memData.trainees.splice(idx, 1);
+    const trainee = await TraineeRepo.getById(traineeId) || (memData.trainees || []).find((t) => t && t.id === traineeId);
+    if (!trainee) return { success: false, error: "\u0627\u0644\u0645\u062A\u062F\u0631\u0628 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F" };
+    const traineeCode = trainee.code ? String(trainee.code).trim().toUpperCase() : "";
+    const traineeName = trainee.fullName || trainee.name || "\u0645\u062A\u062F\u0631\u0628";
+    const groupId = trainee.groupId || "";
+    const courseId = trainee.courseId || "";
+    const grade = trainee.grade || "";
+    const branchId = trainee.branchId || "";
+    const prefix = trainee.prefix || (traineeCode ? traineeCode.match(/^[A-Za-z]+/)?.[0]?.toUpperCase() : "") || "A";
+    if (traineeCode) {
+      if (!Array.isArray(memData.freedTraineeCodes)) {
+        memData.freedTraineeCodes = [];
       }
+      memData.freedTraineeCodes = memData.freedTraineeCodes.filter((f) => f && f.code && f.code.toUpperCase() !== traineeCode);
+      memData.freedTraineeCodes.unshift({
+        code: traineeCode,
+        prefix,
+        groupId,
+        courseId,
+        grade,
+        branchId,
+        freedAt: (/* @__PURE__ */ new Date()).toISOString(),
+        traineeName
+      });
+    }
+    await TraineeRepo.delete(traineeId);
+    if (Array.isArray(memData.trainees)) {
+      memData.trainees = memData.trainees.filter((t) => t && t.id !== traineeId);
+    }
+    const paymentsToDelete = (memData.payments || []).filter(
+      (p) => p && (p.traineeId === traineeId || traineeCode && p.traineeCode === traineeCode)
+    );
+    for (const p of paymentsToDelete) {
+      try {
+        await PaymentRepo.delete(p.id);
+      } catch {
+      }
+    }
+    if (Array.isArray(memData.payments)) {
+      memData.payments = memData.payments.filter(
+        (p) => p && p.traineeId !== traineeId && (!traineeCode || p.traineeCode !== traineeCode)
+      );
+    }
+    const attendanceToDelete = (memData.attendance || []).filter(
+      (a) => a && (a.traineeId === traineeId || traineeCode && a.traineeCode === traineeCode)
+    );
+    for (const a of attendanceToDelete) {
+      try {
+        await AttendanceRepo.delete(a.id);
+      } catch {
+      }
+    }
+    if (Array.isArray(memData.attendance)) {
+      memData.attendance = memData.attendance.filter(
+        (a) => a && a.traineeId !== traineeId && (!traineeCode || a.traineeCode !== traineeCode)
+      );
+    }
+    const pointsToDelete = (memData.pointTransactions || []).filter(
+      (pt) => pt && pt.traineeId === traineeId
+    );
+    for (const pt of pointsToDelete) {
+      try {
+        await PointTransactionRepo.delete(pt.id);
+      } catch {
+      }
+    }
+    if (Array.isArray(memData.pointTransactions)) {
+      memData.pointTransactions = memData.pointTransactions.filter(
+        (pt) => pt && pt.traineeId !== traineeId
+      );
+    }
+    const examResultsToDelete = (memData.examResults || []).filter(
+      (er) => er && er.traineeId === traineeId
+    );
+    for (const er of examResultsToDelete) {
+      try {
+        await ExamResultRepo.delete(er.id);
+      } catch {
+      }
+    }
+    if (Array.isArray(memData.examResults)) {
+      memData.examResults = memData.examResults.filter(
+        (er) => er && er.traineeId !== traineeId
+      );
+    }
+    const submissionsToDelete = (memData.homeworkSubmissions || []).filter(
+      (hs) => hs && hs.traineeId === traineeId
+    );
+    for (const hs of submissionsToDelete) {
+      try {
+        await HomeworkSubmissionRepo.delete(hs.id);
+      } catch {
+      }
+    }
+    if (Array.isArray(memData.homeworkSubmissions)) {
+      memData.homeworkSubmissions = memData.homeworkSubmissions.filter(
+        (hs) => hs && hs.traineeId !== traineeId
+      );
+    }
+    if (Array.isArray(memData.traineeBadges)) {
+      memData.traineeBadges = memData.traineeBadges.filter((tb) => tb && tb.traineeId !== traineeId);
+    }
+    if (Array.isArray(memData.portalMessages)) {
+      memData.portalMessages = memData.portalMessages.filter(
+        (pm) => pm && pm.traineeId !== traineeId && pm.senderId !== traineeId
+      );
+    }
+    if (Array.isArray(memData.traineeScreenshots)) {
+      memData.traineeScreenshots = memData.traineeScreenshots.filter((s) => s && s.traineeId !== traineeId);
+    }
+    if (Array.isArray(memData.devices)) {
+      memData.devices.forEach((d) => {
+        if (d && (d.currentTraineeId === traineeId || traineeCode && d.currentTraineeCode === traineeCode)) {
+          d.currentTraineeId = null;
+          d.currentTraineeCode = null;
+          d.currentTraineeName = null;
+          d.currentTraineePhoto = null;
+          d.status = "idle";
+        }
+      });
+    }
+    if (Array.isArray(memData.groups)) {
+      memData.groups.forEach((g) => {
+        if (g && Array.isArray(g.traineeIds)) {
+          g.traineeIds = g.traineeIds.filter((tid) => tid !== traineeId);
+        }
+      });
+    }
+    if (Array.isArray(memData.users)) {
+      const studentUsers = memData.users.filter(
+        (u) => u && (u.traineeId === traineeId || u.role === "student" && traineeCode && u.username === traineeCode)
+      );
+      for (const u of studentUsers) {
+        try {
+          await UserRepo.delete(u.id);
+        } catch {
+        }
+      }
+      memData.users = memData.users.filter(
+        (u) => u && u.traineeId !== traineeId && !(u.role === "student" && traineeCode && u.username === traineeCode)
+      );
     }
     db.saveImmediate();
     TraineeRepo.invalidateCache();
+    PaymentRepo.invalidateCache();
+    AttendanceRepo.invalidateCache();
+    PointTransactionRepo.invalidateCache();
+    ExamResultRepo.invalidateCache();
+    HomeworkSubmissionRepo.invalidateCache();
+    UserRepo.invalidateCache();
     try {
-      await adminDb.collection("trainees").doc(id).delete();
-    } catch {
+      const batch = adminDb.batch();
+      batch.delete(adminDb.collection("trainees").doc(traineeId));
+      paymentsToDelete.forEach((p) => batch.delete(adminDb.collection("payments").doc(p.id)));
+      attendanceToDelete.forEach((a) => batch.delete(adminDb.collection("attendance").doc(a.id)));
+      pointsToDelete.forEach((pt) => batch.delete(adminDb.collection("pointTransactions").doc(pt.id)));
+      examResultsToDelete.forEach((er) => batch.delete(adminDb.collection("examResults").doc(er.id)));
+      submissionsToDelete.forEach((hs) => batch.delete(adminDb.collection("homeworkSubmissions").doc(hs.id)));
+      await batch.commit();
+    } catch (fsErr) {
+      console.warn("[purgeCompleteTraineeData] Firestore batch commit notice:", fsErr);
     }
     db.logAudit({
       userId: "admin",
       userName: "\u0645\u062F\u064A\u0631 \u0627\u0644\u0646\u0638\u0627\u0645",
-      action: "\u062D\u0630\u0641 \u0645\u062A\u062F\u0631\u0628",
+      action: "\u062D\u0630\u0641 \u0648\u062A\u0635\u0641\u064A\u0629 \u0645\u062A\u062F\u0631\u0628 \u0628\u0627\u0644\u0643\u0627\u0645\u0644 \u0648\u062A\u062F\u0648\u064A\u0631 \u0627\u0644\u0643\u0648\u062F",
       entity: "\u0627\u0644\u0645\u062A\u062F\u0631\u0628\u064A\u0646",
-      details: `\u062A\u0645 \u062D\u0630\u0641 \u0627\u0644\u0645\u062A\u062F\u0631\u0628 ${trainee.fullName || trainee.name} (${id}) \u0646\u0647\u0627\u0626\u064A\u0627\u064B`
+      entityId: traineeId,
+      details: `\u062A\u0645 \u062D\u0630\u0641 \u0627\u0644\u0645\u062A\u062F\u0631\u0628 ${traineeName} (${traineeId}) \u0648\u0643\u0627\u0641\u0629 \u0633\u062C\u0644\u0627\u062A\u0647 \u0648\u062A\u0641\u0631\u064A\u063A \u0627\u0644\u0643\u0648\u062F (${traineeCode}) \u0644\u0644\u0641\u0635\u0644/\u0627\u0644\u0645\u062C\u0645\u0648\u0639\u0629 \u0628\u0646\u062C\u0627\u062D`
     });
-    res.json({ success: true, message: "\u062A\u0645 \u062D\u0630\u0641 \u0627\u0644\u0645\u062A\u062F\u0631\u0628 \u0628\u0646\u062C\u0627\u062D" });
+    return { success: true, trainee, recycledCode: traineeCode };
+  } catch (err) {
+    console.error("[purgeCompleteTraineeData] error:", err);
+    return { success: false, error: err.message };
+  }
+}
+apiRouter.delete("/trainees/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await purgeCompleteTraineeData(id);
+    if (!result.success) {
+      return res.status(404).json({ success: false, error: result.error || "\u0627\u0644\u0645\u062A\u062F\u0631\u0628 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F" });
+    }
+    res.json({
+      success: true,
+      message: `\u062A\u0645 \u062D\u0630\u0641 \u0627\u0644\u0645\u062A\u062F\u0631\u0628 (${result.trainee?.fullName || result.trainee?.name}) \u0648\u0643\u0627\u0641\u0629 \u0628\u064A\u0627\u0646\u0627\u062A\u0647 \u0648\u0633\u062C\u0644\u0627\u062A\u0647 \u0646\u0647\u0627\u0626\u064A\u0627\u064B\u060C \u0648\u062A\u0645 \u0625\u062A\u0627\u062D\u0629 \u0627\u0644\u0643\u0648\u062F (${result.recycledCode}) \u0644\u064A\u0623\u062E\u0630 \u0645\u0643\u0627\u0646\u0647 \u0623\u064A \u0645\u062A\u062F\u0631\u0628 \u062C\u062F\u064A\u062F \u0641\u064A \u0646\u0641\u0633 \u0627\u0644\u0641\u0635\u0644`,
+      recycledCode: result.recycledCode,
+      trainee: result.trainee
+    });
   } catch (e) {
     res.status(500).json({ success: false, error: e.message });
   }
@@ -11347,33 +12252,22 @@ apiRouter.post("/trainees/bulk-delete", async (req, res) => {
     const { ids } = req.body;
     if (!ids || !Array.isArray(ids) || ids.length === 0) return res.status(400).json({ error: "\u0627\u0644\u0645\u0639\u0631\u0641\u0627\u062A \u063A\u064A\u0631 \u0635\u0627\u0644\u062D\u0629" });
     let count = 0;
-    const memData = db.getData();
+    const recycledCodes = [];
     for (const id of ids) {
-      await TraineeRepo.delete(id);
-      if (memData && Array.isArray(memData.trainees)) {
-        const idx = memData.trainees.findIndex((t) => t.id === id);
-        if (idx >= 0) {
-          memData.trainees.splice(idx, 1);
-        }
+      const purgeRes = await purgeCompleteTraineeData(id);
+      if (purgeRes.success) {
+        count++;
+        if (purgeRes.recycledCode) recycledCodes.push(purgeRes.recycledCode);
       }
-      count++;
-    }
-    db.saveImmediate();
-    TraineeRepo.invalidateCache();
-    try {
-      const batch = adminDb.batch();
-      ids.forEach((id) => batch.delete(adminDb.collection("trainees").doc(id)));
-      await batch.commit();
-    } catch {
     }
     db.logAudit({
       userId: "admin",
       userName: "\u0645\u062F\u064A\u0631 \u0627\u0644\u0646\u0638\u0627\u0645",
-      action: "\u062D\u0630\u0641 \u0645\u062A\u062F\u0631\u0628\u064A\u0646 \u0628\u0627\u0644\u062C\u0645\u0644\u0629",
+      action: "\u062D\u0630\u0641 \u0645\u062A\u062F\u0631\u0628\u064A\u0646 \u0628\u0627\u0644\u062C\u0645\u0644\u0629 \u0648\u062A\u062F\u0648\u064A\u0631 \u0627\u0644\u0623\u0643\u0648\u0627\u062F",
       entity: "\u0627\u0644\u0645\u062A\u062F\u0631\u0628\u064A\u0646",
-      details: `\u062A\u0645 \u062D\u0630\u0641 ${count} \u0645\u062A\u062F\u0631\u0628 \u0628\u0646\u062C\u0627\u062D`
+      details: `\u062A\u0645 \u0645\u0633\u062D \u0648\u062A\u0635\u0641\u064A\u0629 ${count} \u0645\u062A\u062F\u0631\u0628 \u0648\u0633\u062C\u0644\u0627\u062A\u0647\u0645 \u0648\u0625\u062A\u0627\u062D\u0629 ${recycledCodes.length} \u0643\u0648\u062F \u0644\u0644\u0641\u0635\u0648\u0644 \u0627\u0644\u0645\u0642\u0627\u0628\u0644\u0629 \u0628\u0646\u062C\u0627\u062D`
     });
-    res.json({ success: true, count });
+    res.json({ success: true, count, recycledCodes });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -13439,13 +14333,142 @@ apiRouter.get("/attendance", async (req, res) => {
     const date = req.query.date;
     const groupId = req.query.groupId;
     const branchId = req.query.branchId;
-    let list = await AttendanceRepo.getAll();
+    const traineeId = req.query.traineeId;
+    const fsList = await AttendanceRepo.getAll().catch(() => []);
+    const localList = db.getData().attendance || [];
+    const pool = /* @__PURE__ */ new Map();
+    for (const a of [...fsList, ...localList]) {
+      if (a && a.id) pool.set(a.id, a);
+    }
+    let list = Array.from(pool.values());
     if (date) list = list.filter((a) => a.date === date);
     if (groupId) list = list.filter((a) => a.groupId === groupId);
     if (branchId) list = list.filter((a) => a.branchId === branchId);
-    res.json(list);
+    if (traineeId) {
+      const tid = String(traineeId).toLowerCase();
+      list = list.filter((a) => {
+        return a.traineeId && String(a.traineeId).toLowerCase() === tid || a.studentId && String(a.studentId).toLowerCase() === tid || a.traineeCode && String(a.traineeCode).toLowerCase() === tid || a.studentCode && String(a.studentCode).toLowerCase() === tid;
+      });
+    }
+    const groupsList = db.getData().groups || [];
+    const coursesList = db.getData().courses || [];
+    const traineesList = db.getData().trainees || [];
+    const groupMap = new Map(groupsList.map((g) => [g.id, g.name]));
+    const courseMap = new Map(coursesList.map((c) => [c.id, c.name]));
+    const traineeMap = new Map(traineesList.map((t) => [t.id, t]));
+    const enrichedList = list.map((a) => {
+      const tr = traineeMap.get(a.traineeId);
+      return {
+        ...a,
+        groupName: a.groupName || groupMap.get(a.groupId) || "",
+        courseName: a.courseName || courseMap.get(a.courseId) || "",
+        traineeName: a.traineeName || tr?.fullName || "",
+        traineeCode: a.traineeCode || tr?.code || ""
+      };
+    });
+    enrichedList.sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+    res.json(enrichedList);
   } catch (e) {
     res.status(500).json({ success: false, error: e.message });
+  }
+});
+apiRouter.post("/attendance", async (req, res) => {
+  try {
+    const { traineeId, date, status, notes, groupId, branchId, courseId, trainerId } = req.body;
+    if (!traineeId) return res.status(400).json({ success: false, error: "\u0645\u0639\u0631\u0641 \u0627\u0644\u0645\u062A\u062F\u0631\u0628 \u0645\u0637\u0644\u0648\u0628" });
+    const sessionDate = date || (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
+    const student = await TraineeRepo.getById(traineeId);
+    if (!student) return res.status(404).json({ success: false, error: "\u0627\u0644\u0645\u062A\u062F\u0631\u0628 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F \u0641\u064A \u0642\u0627\u0639\u062F\u0629 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A" });
+    const currentAttendance = db.getData().attendance || [];
+    db.getData().attendance = currentAttendance.filter(
+      (a) => !([a.traineeId, a.studentId, a.traineeCode].some(
+        (c) => c && (String(c).toLowerCase() === String(student.id).toLowerCase() || student.code && String(c).toLowerCase() === String(student.code).toLowerCase())
+      ) && a.date === sessionDate)
+    );
+    const groupObj = (db.getData().groups || []).find((g) => g.id === (groupId || student.groupId));
+    const courseObj = (db.getData().courses || []).find((c) => c.id === (courseId || student.courseId));
+    const newRecord = {
+      id: "att-" + Date.now() + "-" + Math.random().toString(36).substr(2, 4),
+      date: sessionDate,
+      time: (/* @__PURE__ */ new Date()).toLocaleTimeString("ar-EG"),
+      branchId: branchId || student.branchId || "branch-1",
+      groupId: groupId || student.groupId || "",
+      courseId: courseId || student.courseId || "",
+      trainerId: trainerId || void 0,
+      traineeId: student.id,
+      status: status || "present",
+      notes: notes || "",
+      groupName: groupObj?.name || "",
+      courseName: courseObj?.name || courseObj?.title || ""
+    };
+    db.getData().attendance.push(newRecord);
+    if (!Array.isArray(db.getData().pointTransactions)) {
+      db.getData().pointTransactions = [];
+    }
+    const existingAttTx = db.getData().pointTransactions.find(
+      (pt) => pt.traineeId === student.id && (pt.ruleId === "att-rule" || pt.ruleId === "rule-1" || pt.reason?.includes("\u062D\u0636\u0648\u0631")) && (pt.reason?.includes(sessionDate) || pt.createdAt?.startsWith(sessionDate))
+    );
+    let pointsAwarded = 0;
+    if (status === "present") {
+      if (!existingAttTx) {
+        const attRule = (db.getData().pointRules || []).find((pr) => pr.ruleType === "attendance" && pr.isActive);
+        pointsAwarded = attRule ? attRule.pointValue : 10;
+        student.totalPoints = (student.totalPoints || 0) + pointsAwarded;
+        student.points = student.totalPoints;
+        db.getData().pointTransactions.push({
+          id: "pt-" + Date.now() + "-" + Math.random().toString(36).substr(2, 4),
+          traineeId: student.id,
+          groupId: newRecord.groupId,
+          branchId: student.branchId,
+          points: pointsAwarded,
+          reason: `\u062D\u0636\u0648\u0631 \u062C\u0644\u0633\u0629 \u062A\u062F\u0631\u064A\u0628\u064A\u0629 \u062A\u0627\u0631\u064A\u062E ${sessionDate}`,
+          ruleId: attRule?.id || "att-rule",
+          addedByUserId: req.user?.id || "admin",
+          createdAt: (/* @__PURE__ */ new Date()).toISOString()
+        });
+      }
+    } else {
+      if (existingAttTx) {
+        student.totalPoints = Math.max(0, (student.totalPoints || 0) - existingAttTx.points);
+        student.points = student.totalPoints;
+        db.getData().pointTransactions = db.getData().pointTransactions.filter((pt) => pt.id !== existingAttTx.id);
+      }
+    }
+    db.recalculateTraineeRankings();
+    db.save();
+    try {
+      await saveCollectionToFirestore("attendance", db.getData().attendance);
+      await saveCollectionToFirestore("pointTransactions", db.getData().pointTransactions);
+      await saveCollectionToFirestore("trainees", db.getData().trainees);
+    } catch (fsErr) {
+      console.warn("[Attendance] Firestore sync warning:", fsErr);
+    }
+    res.json({
+      success: true,
+      record: newRecord,
+      pointsAwarded,
+      newTotalPoints: student.totalPoints
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+apiRouter.delete("/attendance/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const attList = db.getData().attendance || [];
+    const idx = attList.findIndex((a) => a.id === id);
+    if (idx >= 0) {
+      attList.splice(idx, 1);
+      db.save();
+      try {
+        await saveCollectionToFirestore("attendance", attList);
+      } catch {
+      }
+    }
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
   }
 });
 apiRouter.post("/attendance/batch", async (req, res) => {
@@ -13454,44 +14477,71 @@ apiRouter.post("/attendance/batch", async (req, res) => {
     return res.status(400).json({ error: "\u0633\u062C\u0644\u0627\u062A \u0627\u0644\u062D\u0636\u0648\u0631 \u063A\u064A\u0631 \u0635\u0627\u0644\u062D\u0629" });
   }
   const sessionDate = date || (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
+  const groupObj = (db.getData().groups || []).find((g) => g.id === groupId);
+  const courseObj = (db.getData().courses || []).find((c) => c.id === (courseId || groupObj?.courseId));
   db.getData().attendance = db.getData().attendance.filter((a) => !(a.groupId === groupId && a.date === sessionDate));
+  if (!Array.isArray(db.getData().pointTransactions)) {
+    db.getData().pointTransactions = [];
+  }
+  const pointRules = db.getData().pointRules || [];
+  const attRule = pointRules.find((pr) => pr.ruleType === "attendance" && pr.isActive);
+  const ptsToAdd = attRule ? attRule.pointValue : 10;
+  const updatedTraineesMap = /* @__PURE__ */ new Map();
   for (const r of records) {
+    const student = await TraineeRepo.getById(r.traineeId);
+    if (!student) continue;
     const newRecord = {
       id: "att-" + Date.now() + "-" + Math.random().toString(36).substr(2, 4),
       date: sessionDate,
       time: (/* @__PURE__ */ new Date()).toLocaleTimeString("ar-EG"),
-      branchId: branchId || "branch-1",
+      branchId: branchId || student.branchId || "branch-1",
       groupId,
-      courseId: courseId || "",
+      courseId: courseId || student.courseId || "",
       trainerId: trainerId || void 0,
-      traineeId: r.traineeId,
+      traineeId: student.id,
       status: r.status || "present",
-      notes: r.notes || ""
+      notes: r.notes || "",
+      groupName: groupObj?.name || "",
+      courseName: courseObj?.name || courseObj?.title || ""
     };
     db.getData().attendance.push(newRecord);
+    const existingAttTx = db.getData().pointTransactions.find(
+      (pt) => pt.traineeId === student.id && (pt.ruleId === "att-rule" || pt.ruleId === "rule-1" || pt.reason?.includes("\u062D\u0636\u0648\u0631")) && (pt.reason?.includes(sessionDate) || pt.createdAt?.startsWith(sessionDate))
+    );
     if (r.status === "present") {
-      const attRule = db.getData().pointRules.find((pr) => pr.ruleType === "attendance" && pr.isActive);
-      if (attRule) {
-        const student = await TraineeRepo.getById(r.traineeId);
-        if (student) {
-          student.totalPoints = (student.totalPoints || 0) + attRule.pointValue;
-          db.getData().pointTransactions.push({
-            id: "pt-" + Date.now() + "-" + Math.random().toString(36).substr(2, 4),
-            traineeId: student.id,
-            groupId,
-            branchId: student.branchId,
-            points: attRule.pointValue,
-            reason: `\u062D\u0636\u0648\u0631 \u062C\u0644\u0633\u0629 \u062A\u0627\u0631\u064A\u062E ${sessionDate}`,
-            ruleId: attRule.id,
-            addedByUserId: "trainer",
-            createdAt: (/* @__PURE__ */ new Date()).toISOString()
-          });
-        }
+      if (!existingAttTx) {
+        student.totalPoints = (student.totalPoints || 0) + ptsToAdd;
+        student.points = student.totalPoints;
+        db.getData().pointTransactions.push({
+          id: "pt-" + Date.now() + "-" + Math.random().toString(36).substr(2, 4),
+          traineeId: student.id,
+          groupId,
+          branchId: student.branchId,
+          points: ptsToAdd,
+          reason: `\u062D\u0636\u0648\u0631 \u062C\u0644\u0633\u0629 \u062A\u0627\u0631\u064A\u062E ${sessionDate}`,
+          ruleId: attRule?.id || "att-rule",
+          addedByUserId: "trainer",
+          createdAt: (/* @__PURE__ */ new Date()).toISOString()
+        });
+      }
+    } else {
+      if (existingAttTx) {
+        student.totalPoints = Math.max(0, (student.totalPoints || 0) - existingAttTx.points);
+        student.points = student.totalPoints;
+        db.getData().pointTransactions = db.getData().pointTransactions.filter((pt) => pt.id !== existingAttTx.id);
       }
     }
+    updatedTraineesMap.set(student.id, { id: student.id, totalPoints: student.totalPoints, points: student.points });
   }
   db.recalculateTraineeRankings();
   db.save();
+  try {
+    await saveCollectionToFirestore("attendance", db.getData().attendance);
+    await saveCollectionToFirestore("pointTransactions", db.getData().pointTransactions);
+    await saveCollectionToFirestore("trainees", db.getData().trainees);
+  } catch (fsErr) {
+    console.warn("[Attendance Batch] Firestore sync warning:", fsErr);
+  }
   db.logAudit({
     userId: "user",
     userName: "\u0627\u0644\u0645\u0634\u0631\u0641/\u0627\u0644\u0645\u062F\u0631\u0628",
@@ -13499,7 +14549,11 @@ apiRouter.post("/attendance/batch", async (req, res) => {
     entity: "\u0627\u0644\u062D\u0636\u0648\u0631",
     details: `\u062A\u0645 \u062D\u0641\u0638 \u0643\u0634\u0641 \u062D\u0636\u0648\u0631 \u0644\u0639\u062F\u062F ${records.length} \u0645\u062A\u062F\u0631\u0628 \u0644\u062A\u0627\u0631\u064A\u062E ${sessionDate}`
   });
-  res.json({ success: true, count: records.length });
+  res.json({
+    success: true,
+    count: records.length,
+    updatedTrainees: Array.from(updatedTraineesMap.values())
+  });
 });
 var handleGetPayments = async (req, res) => {
   try {
@@ -14525,8 +15579,8 @@ apiRouter.post("/points/add", async (req, res) => {
     db.save();
     TraineeRepo.invalidateCache();
     try {
-      await saveCollectionToFirestore("trainees", dbData.trainees);
-      await saveCollectionToFirestore("pointTransactions", dbData.pointTransactions);
+      await saveCollectionToFirestore("trainees", dbData.trainees, false);
+      await saveCollectionToFirestore("pointTransactions", dbData.pointTransactions, false);
     } catch (fsErr) {
       console.warn("[Points] Firestore cloud sync warning:", fsErr);
     }
@@ -14563,7 +15617,12 @@ apiRouter.get("/exams", async (req, res) => {
     let list = await ExamRepo.getAll();
     if (branchId && branchId !== "all") list = list.filter((e) => e.branchId === branchId);
     if (courseId && courseId !== "all") list = list.filter((e) => e.courseId === courseId);
-    res.json(list);
+    const allQuestions = db.getData().questions || [];
+    const enrichedList = list.map((e) => ({
+      ...e,
+      questionsCount: allQuestions.filter((q) => q.examId === e.id).length
+    }));
+    res.json(enrichedList);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -14571,16 +15630,19 @@ apiRouter.get("/exams", async (req, res) => {
 apiRouter.post("/exams", async (req, res) => {
   try {
     const d = req.body;
-    if (!d.title || !d.branchId || !d.courseId) {
-      return res.status(400).json({ error: "\u0639\u0646\u0648\u0627\u0646 \u0627\u0644\u0627\u062E\u062A\u0628\u0627\u0631 \u0648\u0627\u0644\u0641\u0631\u0639 \u0648\u0627\u0644\u062F\u0648\u0631\u0629 \u062D\u0642\u0648\u0644 \u0645\u0637\u0644\u0648\u0628\u0629" });
+    if (!d.title || !d.courseId) {
+      return res.status(400).json({ error: "\u0639\u0646\u0648\u0627\u0646 \u0627\u0644\u0627\u062E\u062A\u0628\u0627\u0631 \u0648\u0627\u0644\u062F\u0648\u0631\u0629 \u062D\u0642\u0648\u0644 \u0645\u0637\u0644\u0648\u0628\u0629" });
     }
+    const course = db.getData().courses?.find((c) => c.id === d.courseId);
+    const group = d.groupId ? db.getData().groups?.find((g) => g.id === d.groupId) : void 0;
+    const effectiveBranchId = d.branchId || group?.branchId || course?.branchId || "branch-1";
     const newExam = {
       id: "exam-" + Date.now(),
       title: d.title.trim(),
-      branchId: d.branchId,
+      branchId: effectiveBranchId,
       courseId: d.courseId,
       groupId: d.groupId || void 0,
-      trainerId: d.trainerId || void 0,
+      trainerId: d.trainerId || group?.trainerId || void 0,
       examDate: d.examDate || (/* @__PURE__ */ new Date()).toISOString().split("T")[0],
       totalMarks: Number(d.totalMarks) || 100,
       durationMinutes: Number(d.durationMinutes) || 60,
@@ -15217,116 +16279,892 @@ apiRouter.put("/homeworks/:id", async (req, res) => {
     res.status(500).json({ error: "\u0641\u0634\u0644 \u062D\u0641\u0638 \u0627\u0644\u062A\u0639\u062F\u064A\u0644\u0627\u062A \u0639\u0644\u0649 \u0627\u0644\u062A\u0642\u0631\u064A\u0631: " + err.message });
   }
 });
-apiRouter.post("/exams/create-full", (req, res) => {
-  const { exam, questions } = req.body;
-  if (!exam || !exam.title || !exam.courseId) {
-    return res.status(400).json({ error: "\u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0644\u0627\u062E\u062A\u0628\u0627\u0631 \u063A\u064A\u0631 \u0645\u0643\u062A\u0645\u0644\u0629" });
-  }
-  const newExam = {
-    id: "exam-" + Date.now(),
-    title: exam.title.trim(),
-    branchId: exam.branchId || "branch-1",
-    courseId: exam.courseId,
-    groupId: exam.groupId || void 0,
-    trainerId: exam.trainerId || void 0,
-    examDate: exam.examDate || (/* @__PURE__ */ new Date()).toISOString().split("T")[0],
-    totalMarks: Number(exam.totalMarks) || 100,
-    passingMarks: Number(exam.passingMarks) || 60,
-    durationMinutes: Number(exam.durationMinutes) || 60,
-    status: exam.status || "scheduled",
-    instructions: exam.instructions || ""
-  };
-  db.getData().exams.push(newExam);
-  if (Array.isArray(questions) && questions.length > 0) {
-    for (let i = 0; i < questions.length; i++) {
-      const q = questions[i];
-      const newQ = {
-        id: "q-" + Date.now() + "-" + i + "-" + Math.random().toString(36).substr(2, 3),
-        examId: newExam.id,
-        questionType: q.questionType || "mcq",
-        questionText: q.questionText || `\u0627\u0644\u0633\u0624\u0627\u0644 ${i + 1}`,
-        options: Array.isArray(q.options) ? q.options : [],
-        correctAnswer: q.correctAnswer || "",
-        marks: Number(q.marks) || 10
-      };
-      db.getData().questions.push(newQ);
+apiRouter.post("/exams/create-full", async (req, res) => {
+  try {
+    const { exam, questions } = req.body;
+    if (!exam || !exam.title || !exam.courseId) {
+      return res.status(400).json({ error: "\u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0644\u0627\u062E\u062A\u0628\u0627\u0631 \u063A\u064A\u0631 \u0645\u0643\u062A\u0645\u0644\u0629 (\u0627\u0644\u0639\u0646\u0648\u0627\u0646 \u0648\u0627\u0644\u062F\u0648\u0631\u0629 \u0645\u0637\u0644\u0648\u0628\u0627\u0646)" });
     }
+    const course = db.getData().courses.find((c) => c.id === exam.courseId);
+    const group = exam.groupId ? db.getData().groups.find((g) => g.id === exam.groupId) : void 0;
+    const newExam = {
+      id: "exam-" + Date.now(),
+      title: exam.title.trim(),
+      branchId: exam.branchId || "branch-1",
+      courseId: exam.courseId,
+      groupId: exam.groupId || void 0,
+      trainerId: exam.trainerId || void 0,
+      examDate: exam.examDate || (/* @__PURE__ */ new Date()).toISOString().split("T")[0],
+      totalMarks: Number(exam.totalMarks) || 100,
+      passingMarks: Number(exam.passingMarks) || 60,
+      durationMinutes: Number(exam.durationMinutes) || 45,
+      status: exam.status || "scheduled",
+      instructions: exam.instructions || "\u0623\u062C\u0628 \u0639\u0646 \u062C\u0645\u064A\u0639 \u0627\u0644\u0623\u0633\u0626\u0644\u0629 \u0628\u062F\u0642\u0629.",
+      policy: exam.policy || {
+        shuffleQuestions: true,
+        shuffleOptions: true,
+        lockdownLabMode: false,
+        instantResults: true,
+        issueCertificateOnPass: true
+      }
+    };
+    if (!db.getData().exams) db.getData().exams = [];
+    db.getData().exams.unshift(newExam);
+    try {
+      await ExamRepo.create(newExam.id, newExam);
+    } catch (dbErr) {
+      console.warn("ExamRepo.create fallback to local db:", dbErr);
+    }
+    const createdQuestions = [];
+    if (Array.isArray(questions) && questions.length > 0) {
+      if (!db.getData().questions) db.getData().questions = [];
+      for (let i = 0; i < questions.length; i++) {
+        const q = questions[i];
+        const newQ = {
+          id: "q-" + Date.now() + "-" + i + "-" + Math.random().toString(36).substr(2, 3),
+          examId: newExam.id,
+          questionType: q.questionType || "mcq",
+          questionText: q.questionText || `\u0627\u0644\u0633\u0624\u0627\u0644 ${i + 1}`,
+          options: Array.isArray(q.options) ? q.options : [],
+          correctAnswer: q.correctAnswer || "",
+          explanation: q.explanation || "",
+          marks: Number(q.marks) || 10
+        };
+        db.getData().questions.push(newQ);
+        createdQuestions.push(newQ);
+        try {
+          await ExamQuestionRepo.create(newQ.id, newQ);
+        } catch (qErr) {
+        }
+      }
+    }
+    db.save();
+    db.logAudit({
+      userId: "trainer",
+      userName: "\u0627\u0644\u0645\u062D\u0627\u0636\u0631/\u0627\u0644\u0625\u062F\u0627\u0631\u0629",
+      action: "\u0625\u0646\u0634\u0627\u0621 \u0627\u062E\u062A\u0628\u0627\u0631 \u062A\u0641\u0627\u0639\u0644\u064A",
+      entity: "\u0627\u0644\u0627\u062E\u062A\u0628\u0627\u0631\u0627\u062A",
+      entityId: newExam.id,
+      details: `\u062A\u0645 \u0625\u0646\u0634\u0627\u0621 \u0627\u0644\u0627\u062E\u062A\u0628\u0627\u0631 \u0627\u0644\u062A\u0641\u0627\u0639\u0644\u064A (${newExam.title}) \u0645\u0639 ${createdQuestions.length} \u0633\u0624\u0627\u0644 \u0628\u0631\u0627\u0628\u0637 \u0645\u0628\u0627\u0634\u0631`
+    });
+    res.json({
+      success: true,
+      exam: {
+        ...newExam,
+        courseName: course?.name,
+        groupName: group?.name
+      },
+      questionsCount: createdQuestions.length,
+      questions: createdQuestions
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message || "\u0641\u0634\u0644 \u0625\u0646\u0634\u0627\u0621 \u0627\u0644\u0627\u062E\u062A\u0628\u0627\u0631" });
   }
-  db.save();
-  db.logAudit({
-    userId: "trainer",
-    userName: "\u0627\u0644\u0645\u062F\u0631\u0628/\u0627\u0644\u0625\u062F\u0627\u0631\u0629",
-    action: "\u0625\u0646\u0634\u0627\u0621 \u0627\u062E\u062A\u0628\u0627\u0631 \u0628\u0627\u0644\u0630\u0643\u0627\u0621 \u0627\u0644\u0627\u0635\u0637\u0646\u0627\u0639\u064A",
-    entity: "\u0627\u0644\u0627\u062E\u062A\u0628\u0627\u0631\u0627\u062A",
-    entityId: newExam.id,
-    details: `\u062A\u0645 \u0625\u0646\u0634\u0627\u0621 \u0627\u062E\u062A\u0628\u0627\u0631 (${newExam.title}) \u0645\u0639 ${Array.isArray(questions) ? questions.length : 0} \u0633\u0624\u0627\u0644`
-  });
-  res.json({ success: true, exam: newExam, questionsCount: Array.isArray(questions) ? questions.length : 0 });
+});
+apiRouter.get("/public/trainees/lookup", async (req, res) => {
+  try {
+    const { code } = req.query;
+    if (!code) return res.json({ found: false });
+    const trainees = await TraineeRepo.getAll();
+    const match = findTraineeMatch(trainees, String(code));
+    if (!match) {
+      return res.json({ found: false });
+    }
+    const group = db.getData().groups.find((g) => g.id === match.groupId);
+    const course = db.getData().courses.find((c) => c.id === match.courseId);
+    res.json({
+      found: true,
+      trainee: {
+        id: match.id,
+        fullName: match.fullName,
+        code: match.code,
+        photoUrl: match.photoUrl || "",
+        groupId: match.groupId,
+        groupName: group?.name || "",
+        courseId: match.courseId,
+        courseName: course?.name || "",
+        currentPoints: match.currentPoints || match.points || 0
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ found: false, error: err.message });
+  }
+});
+apiRouter.get(["/public/exams/:id", "/exams/:id/public"], async (req, res) => {
+  try {
+    const { id } = req.params;
+    let exam = db.getData().exams?.find((e) => e.id === id);
+    if (!exam) {
+      exam = await ExamRepo.getById(id);
+    }
+    if (!exam) {
+      return res.status(404).json({ error: "\u0644\u0645 \u064A\u062A\u0645 \u0627\u0644\u0639\u062B\u0648\u0631 \u0639\u0644\u0649 \u0627\u0644\u0627\u062E\u062A\u0628\u0627\u0631 \u0627\u0644\u0645\u0637\u0644\u0648\u0628 \u0623\u0648 \u0623\u0646 \u0627\u0644\u0631\u0627\u0628\u0637 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D" });
+    }
+    let questions = db.getData().questions?.filter((q) => q.examId === id) || [];
+    if (questions.length === 0) {
+      try {
+        questions = await ExamQuestionRepo.query([{ field: "examId", operator: "==", value: id }]);
+      } catch (e) {
+      }
+    }
+    const course = db.getData().courses.find((c) => c.id === exam.courseId);
+    const group = exam.groupId ? db.getData().groups.find((g) => g.id === exam.groupId) : void 0;
+    const sanitizedQuestions = questions.map((q, idx) => ({
+      id: q.id,
+      questionNumber: idx + 1,
+      questionType: q.questionType || "mcq",
+      questionText: q.questionText,
+      options: q.options || [],
+      marks: q.marks || 10
+    }));
+    res.json({
+      success: true,
+      exam: {
+        id: exam.id,
+        title: exam.title,
+        courseId: exam.courseId,
+        courseName: course?.name || "\u0628\u0631\u0646\u0627\u0645\u062C \u062A\u062F\u0631\u064A\u0628\u064A",
+        groupId: exam.groupId,
+        groupName: group?.name,
+        examDate: exam.examDate,
+        durationMinutes: exam.durationMinutes || 45,
+        totalMarks: exam.totalMarks || 100,
+        passingMarks: exam.passingMarks || 60,
+        instructions: exam.instructions || "\u064A\u0631\u062C\u0649 \u0627\u0644\u0625\u062C\u0627\u0628\u0629 \u0639\u0646 \u0643\u0627\u0641\u0629 \u0627\u0644\u0623\u0633\u0626\u0644\u0629 \u0628\u062F\u0642\u0629.",
+        status: exam.status
+      },
+      questions: sanitizedQuestions
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+apiRouter.post(["/public/exams/:id/submit", "/exams/:id/public-submit"], async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { traineeCode, traineeName, answers, timeSpentSeconds } = req.body;
+    let exam = db.getData().exams?.find((e) => e.id === id);
+    if (!exam) {
+      exam = await ExamRepo.getById(id);
+    }
+    if (!exam) {
+      return res.status(404).json({ error: "\u0644\u0645 \u064A\u062A\u0645 \u0627\u0644\u0639\u062B\u0648\u0631 \u0639\u0644\u0649 \u0627\u0644\u0627\u062E\u062A\u0628\u0627\u0631" });
+    }
+    const allTrainees = await TraineeRepo.getAll();
+    let student = findTraineeMatch(allTrainees, traineeCode || traineeName || "");
+    const studentFullName = student?.fullName || traineeName || "\u0645\u062A\u062F\u0631\u0628";
+    const studentCode = student?.code || traineeCode || "\u0637\u0627\u0644\u0628";
+    let questions = db.getData().questions?.filter((q) => q.examId === id) || [];
+    if (questions.length === 0) {
+      try {
+        questions = await ExamQuestionRepo.query([{ field: "examId", operator: "==", value: id }]);
+      } catch (e) {
+      }
+    }
+    let earnedScore = 0;
+    let totalMarks = exam.totalMarks || 0;
+    if (totalMarks === 0 && questions.length > 0) {
+      totalMarks = questions.reduce((sum, q) => sum + (q.marks || 10), 0);
+    }
+    if (totalMarks === 0) totalMarks = 100;
+    const answerReview = [];
+    const submittedAnswers = answers || {};
+    questions.forEach((q, idx) => {
+      const studentAns = String(submittedAnswers[q.id] ?? "").trim();
+      const correctAns = String(q.correctAnswer ?? "").trim();
+      const qMarks = Number(q.marks) || Math.round(totalMarks / Math.max(questions.length, 1));
+      let isCorrect = false;
+      if (q.questionType === "mcq" || q.questionType === "true_false") {
+        const normStudent = studentAns.toLowerCase().replace(/[\s\-_]/g, "");
+        const normCorrect = correctAns.toLowerCase().replace(/[\s\-_]/g, "");
+        isCorrect = normStudent.length > 0 && normStudent === normCorrect;
+      } else {
+        isCorrect = studentAns.length > 0 && (studentAns.toLowerCase().includes(correctAns.toLowerCase()) || correctAns.toLowerCase().includes(studentAns.toLowerCase()));
+      }
+      if (isCorrect) {
+        earnedScore += qMarks;
+      }
+      answerReview.push({
+        questionId: q.id,
+        questionNumber: idx + 1,
+        questionText: q.questionText,
+        questionType: q.questionType,
+        studentAnswer: studentAns || "\u0644\u0645 \u062A\u062A\u0645 \u0627\u0644\u0625\u062C\u0627\u0628\u0629",
+        correctAnswer: correctAns,
+        explanation: q.explanation || "",
+        isCorrect,
+        marksEarned: isCorrect ? qMarks : 0,
+        marksTotal: qMarks
+      });
+    });
+    const percentage = Math.round(earnedScore / totalMarks * 100);
+    const passingMarks = exam.passingMarks || Math.round(totalMarks * 0.6);
+    const passed = earnedScore >= passingMarks;
+    let rating = "\u0631\u0627\u0633\u0628";
+    if (percentage >= 90) rating = "\u0645\u0645\u062A\u0627\u0632";
+    else if (percentage >= 80) rating = "\u062C\u064A\u062F \u062C\u062F\u0627\u064B";
+    else if (percentage >= 65) rating = "\u062C\u064A\u062F";
+    else if (percentage >= 50) rating = "\u0645\u0642\u0628\u0648\u0644";
+    const resultId = "res-" + Date.now() + "-" + Math.random().toString(36).substr(2, 4);
+    const newResult = {
+      id: resultId,
+      examId: id,
+      traineeId: student?.id || "guest-" + Date.now(),
+      score: earnedScore,
+      totalMarks,
+      percentage,
+      rating,
+      notes: `\u062A\u0633\u0644\u064A\u0645 \u0625\u0644\u0643\u062A\u0631\u0648\u0646\u064A \u062A\u0641\u0627\u0639\u0644\u064A \u0639\u0628\u0631 \u0627\u0644\u0631\u0627\u0628\u0637 (\u0627\u0644\u0648\u0642\u062A: ${Math.round((timeSpentSeconds || 0) / 60)} \u062F\u0642\u064A\u0642\u0629)`,
+      submittedAt: (/* @__PURE__ */ new Date()).toISOString()
+    };
+    newResult.traineeName = studentFullName;
+    newResult.traineeCode = studentCode;
+    newResult.answerReview = answerReview;
+    if (!db.getData().examResults) db.getData().examResults = [];
+    db.getData().examResults = db.getData().examResults.filter(
+      (r) => !(r.examId === id && (r.traineeId === (student?.id || "") || r.traineeCode === studentCode))
+    );
+    db.getData().examResults.unshift(newResult);
+    try {
+      await ExamResultRepo.create(newResult.id, newResult);
+    } catch (e) {
+      console.warn("ExamResultRepo.create fallback to local:", e);
+    }
+    if (student?.id) {
+      try {
+        const bonusPoints = passed ? percentage >= 90 ? 25 : 15 : 5;
+        const currentPts = student.currentPoints || student.points || 0;
+        await TraineeRepo.update(student.id, {
+          currentPoints: currentPts + bonusPoints,
+          points: currentPts + bonusPoints
+        });
+      } catch (ptsErr) {
+      }
+    }
+    db.save();
+    res.json({
+      success: true,
+      result: newResult,
+      score: earnedScore,
+      totalMarks,
+      percentage,
+      rating,
+      passed,
+      answerReview,
+      traineeName: studentFullName,
+      traineeCode: studentCode
+    });
+  } catch (err) {
+    console.error("Error submitting interactive exam:", err);
+    res.status(500).json({ error: err.message || "\u0641\u0634\u0644 \u0625\u0631\u0633\u0627\u0644 \u0646\u062A\u064A\u062C\u0629 \u0627\u0644\u0627\u062E\u062A\u0628\u0627\u0631" });
+  }
 });
 apiRouter.get("/exams/:id/questions", async (req, res) => {
   try {
     const questions = await ExamQuestionRepo.query([{ field: "examId", operator: "==", value: req.params.id }]);
-    res.json(questions);
+    if (questions.length > 0) return res.json(questions);
+    const localQ = db.getData().questions?.filter((q) => q.examId === req.params.id) || [];
+    res.json(localQ);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    const localQ = db.getData().questions?.filter((q) => q.examId === req.params.id) || [];
+    res.json(localQ);
   }
 });
 apiRouter.post("/exams/:id/questions", async (req, res) => {
   try {
     const { id } = req.params;
-    const { questionType, questionText, options, correctAnswer, marks } = req.body;
+    const { questionType, questionText, options, correctAnswer, explanation, marks } = req.body;
     const newQ = {
       id: "q-" + Date.now() + "-" + Math.random().toString(36).substr(2, 4),
       examId: id,
       questionType: questionType || "mcq",
       questionText: questionText.trim(),
       options: Array.isArray(options) ? options : [],
-      correctAnswer: correctAnswer.trim(),
+      correctAnswer: (correctAnswer || "").trim(),
+      explanation: (explanation || "").trim(),
       marks: Number(marks) || 10
     };
-    await ExamQuestionRepo.create(newQ.id, newQ);
+    if (!db.getData().questions) db.getData().questions = [];
+    db.getData().questions.push(newQ);
+    await ExamQuestionRepo.create(newQ.id, newQ).catch(() => {
+    });
+    db.save();
     res.json({ success: true, question: newQ });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
-apiRouter.get("/exams/:id/results", async (req, res) => {
+apiRouter.put("/exams/:examId/questions/:questionId", async (req, res) => {
   try {
-    const results = await ExamResultRepo.getByExamId(req.params.id);
-    res.json(results);
+    const { examId, questionId } = req.params;
+    const { questionType, questionText, options, correctAnswer, explanation, marks, programmingLanguage, codeTemplate, testCases } = req.body;
+    const data = db.getData();
+    if (!data.questions) data.questions = [];
+    let q = data.questions.find((item) => item.id === questionId);
+    if (q) {
+      if (questionType !== void 0) q.questionType = questionType;
+      if (questionText !== void 0) q.questionText = questionText.trim();
+      if (options !== void 0) q.options = Array.isArray(options) ? options : [];
+      if (correctAnswer !== void 0) q.correctAnswer = (correctAnswer || "").trim();
+      if (explanation !== void 0) q.explanation = (explanation || "").trim();
+      if (marks !== void 0) q.marks = Number(marks) || 10;
+      if (programmingLanguage !== void 0) q.programmingLanguage = programmingLanguage;
+      if (codeTemplate !== void 0) q.codeTemplate = codeTemplate;
+      if (testCases !== void 0) q.testCases = testCases;
+    } else {
+      q = {
+        id: questionId,
+        examId,
+        questionType: questionType || "mcq",
+        questionText: (questionText || "").trim(),
+        options: Array.isArray(options) ? options : [],
+        correctAnswer: (correctAnswer || "").trim(),
+        explanation: (explanation || "").trim(),
+        marks: Number(marks) || 10
+      };
+      data.questions.push(q);
+    }
+    try {
+      await ExamQuestionRepo.update(questionId, q);
+    } catch (e) {
+      await ExamQuestionRepo.create(questionId, q).catch(() => {
+      });
+    }
+    db.save();
+    res.json({ success: true, question: q });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: err.message || "\u0641\u0634\u0644 \u062A\u062D\u062F\u064A\u062B \u0627\u0644\u0633\u0624\u0627\u0644" });
   }
 });
-apiRouter.post("/exams/:id/results/batch", (req, res) => {
-  const { id } = req.params;
-  const { results, totalMarks } = req.body;
-  if (!Array.isArray(results)) return res.status(400).json({ error: "\u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A \u063A\u064A\u0631 \u0635\u0627\u0644\u062D\u0629" });
-  const tot = Number(totalMarks) || 100;
-  db.getData().examResults = db.getData().examResults.filter((r) => r.examId !== id);
-  results.forEach((r) => {
-    const score = Number(r.score) || 0;
-    const percentage = Math.round(score / tot * 100);
-    let rating = "\u0631\u0627\u0633\u0628";
-    if (percentage >= 90) rating = "\u0645\u0645\u062A\u0627\u0632";
-    else if (percentage >= 80) rating = "\u062C\u064A\u062F \u062C\u062F\u0627\u064B";
-    else if (percentage >= 65) rating = "\u062C\u064A\u062F";
-    else if (percentage >= 50) rating = "\u0645\u0642\u0628\u0648\u0644";
-    const newResult = {
-      id: "res-" + Date.now() + "-" + Math.random().toString(36).substr(2, 4),
-      examId: id,
-      traineeId: r.traineeId,
-      score,
-      totalMarks: tot,
-      percentage,
-      rating,
-      notes: r.notes || "",
-      submittedAt: (/* @__PURE__ */ new Date()).toISOString()
+apiRouter.delete(["/exams/:examId/questions/:questionId", "/questions/:questionId"], async (req, res) => {
+  try {
+    const { questionId } = req.params;
+    const data = db.getData();
+    if (data.questions) {
+      data.questions = data.questions.filter((q) => q.id !== questionId);
+    }
+    try {
+      await ExamQuestionRepo.delete(questionId);
+    } catch (e) {
+    }
+    db.save();
+    res.json({ success: true, message: "\u062A\u0645 \u062D\u0630\u0641 \u0627\u0644\u0633\u0624\u0627\u0644 \u0628\u0646\u062C\u0627\u062D" });
+  } catch (err) {
+    res.status(500).json({ error: err.message || "\u0641\u0634\u0644 \u062D\u0630\u0641 \u0627\u0644\u0633\u0624\u0627\u0644" });
+  }
+});
+apiRouter.put("/exams/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const updateData = req.body;
+    const data = db.getData();
+    if (!data.exams) data.exams = [];
+    const exam = data.exams.find((e) => e.id === id);
+    if (exam) {
+      Object.assign(exam, updateData);
+    }
+    try {
+      await ExamRepo.update(id, updateData);
+    } catch (e) {
+    }
+    db.save();
+    res.json({ success: true, exam: exam || updateData });
+  } catch (err) {
+    res.status(500).json({ error: err.message || "\u0641\u0634\u0644 \u062A\u062D\u062F\u064A\u062B \u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0644\u0627\u062E\u062A\u0628\u0627\u0631" });
+  }
+});
+apiRouter.delete("/exams/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const data = db.getData();
+    if (data.exams) data.exams = data.exams.filter((e) => e.id !== id);
+    if (data.questions) data.questions = data.questions.filter((q) => q.examId !== id);
+    if (data.examResults) data.examResults = data.examResults.filter((r) => r.examId !== id);
+    try {
+      await ExamRepo.delete(id);
+    } catch (e) {
+    }
+    db.save();
+    res.json({ success: true, message: "\u062A\u0645 \u062D\u0630\u0641 \u0627\u0644\u0627\u062E\u062A\u0628\u0627\u0631 \u0648\u0643\u0627\u0641\u0629 \u0645\u062A\u0639\u0644\u0642\u0627\u062A\u0647 \u0628\u0646\u062C\u0627\u062D" });
+  } catch (err) {
+    res.status(500).json({ error: err.message || "\u0641\u0634\u0644 \u062D\u0630\u0641 \u0627\u0644\u0627\u062E\u062A\u0628\u0627\u0631" });
+  }
+});
+apiRouter.get("/exams/:id/results", async (req, res) => {
+  try {
+    if (db.getData().examResults) {
+      db.getData().examResults = db.getData().examResults.filter(
+        (r) => !(r.traineeName?.includes("\u0644\u064A\u0646") && r.rating === "\u0631\u0627\u0633\u0628")
+      );
+    }
+    if (db.getData().certificates) {
+      db.getData().certificates = db.getData().certificates.filter(
+        (c) => !((c.studentName?.includes("\u0644\u064A\u0646") || c.traineeName?.includes("\u0644\u064A\u0646")) && (c.grade === "\u0631\u0627\u0633\u0628" || String(c.grade || "").includes("\u0631\u0627\u0633\u0628")))
+      );
+    }
+    let results = await ExamResultRepo.getByExamId(req.params.id);
+    if (!results || results.length === 0) {
+      results = db.getData().examResults?.filter((r) => r.examId === req.params.id) || [];
+    }
+    results = results.filter((r) => !(r.traineeName?.includes("\u0644\u064A\u0646") && r.rating === "\u0631\u0627\u0633\u0628"));
+    const trainees = await TraineeRepo.getAll();
+    const enhancedResults = results.map((r) => {
+      const tr = trainees.find((t) => t.id === r.traineeId);
+      return {
+        ...r,
+        traineeName: tr?.fullName || r.traineeName || "\u0645\u062A\u062F\u0631\u0628",
+        traineeCode: tr?.code || r.traineeCode || "\u2014",
+        traineePhoto: tr?.photoUrl || ""
+      };
+    });
+    enhancedResults.sort((a, b) => {
+      const scoreA = Number(a.score) || 0;
+      const scoreB = Number(b.score) || 0;
+      if (scoreB !== scoreA) return scoreB - scoreA;
+      const pctA = Number(a.percentage) || 0;
+      const pctB = Number(b.percentage) || 0;
+      return pctB - pctA;
+    });
+    res.json(enhancedResults);
+  } catch (err) {
+    const localResults = db.getData().examResults?.filter((r) => r.examId === req.params.id) || [];
+    localResults.sort((a, b) => (Number(b.score) || 0) - (Number(a.score) || 0));
+    res.json(localResults);
+  }
+});
+apiRouter.post("/exams/:id/results/batch", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { results, totalMarks } = req.body;
+    if (!Array.isArray(results)) return res.status(400).json({ error: "\u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A \u063A\u064A\u0631 \u0635\u0627\u0644\u062D\u0629" });
+    const tot = Number(totalMarks) || 100;
+    const trainees = await TraineeRepo.getAll();
+    db.getData().examResults = db.getData().examResults?.filter((r) => r.examId !== id) || [];
+    const createdResults = [];
+    for (const r of results) {
+      const score = Number(r.score) || 0;
+      const percentage = Math.round(score / tot * 100);
+      let rating = "\u0631\u0627\u0633\u0628";
+      if (percentage >= 90) rating = "\u0645\u0645\u062A\u0627\u0632";
+      else if (percentage >= 80) rating = "\u062C\u064A\u062F \u062C\u062F\u0627\u064B";
+      else if (percentage >= 65) rating = "\u062C\u064A\u062F";
+      else if (percentage >= 50) rating = "\u0645\u0642\u0628\u0648\u0644";
+      const tr = trainees.find((t) => t.id === r.traineeId);
+      const newResult = {
+        id: "res-" + Date.now() + "-" + Math.random().toString(36).substr(2, 4),
+        examId: id,
+        traineeId: r.traineeId,
+        score,
+        totalMarks: tot,
+        percentage,
+        rating,
+        notes: r.notes || (r.attendanceStatus === "absent" ? "\u063A\u0627\u0626\u0628 \u0639\u0646 \u0627\u0644\u0627\u062E\u062A\u0628\u0627\u0631" : ""),
+        submittedAt: (/* @__PURE__ */ new Date()).toISOString()
+      };
+      newResult.traineeName = tr?.fullName;
+      newResult.traineeCode = tr?.code;
+      newResult.attendanceStatus = r.attendanceStatus || "present";
+      db.getData().examResults.push(newResult);
+      createdResults.push(newResult);
+      if (tr && r.attendanceStatus !== "absent" && score > 0) {
+        let earnedPoints = 10;
+        if (percentage >= 95) earnedPoints = 50;
+        else if (percentage >= 90) earnedPoints = 40;
+        else if (percentage >= 80) earnedPoints = 30;
+        else if (percentage >= 60) earnedPoints = 20;
+        tr.points = (Number(tr.points) || 0) + earnedPoints;
+        tr.totalPoints = (Number(tr.totalPoints) || 0) + earnedPoints;
+        if (!db.getData().pointTransactions) db.getData().pointTransactions = [];
+        db.getData().pointTransactions.push({
+          id: "pt-" + Date.now() + "-" + Math.random().toString(36).substr(2, 4),
+          traineeId: tr.id,
+          points: earnedPoints,
+          reason: `\u062F\u0631\u062C\u0629 \u0645\u062A\u0645\u064A\u0632\u0629 \u0641\u064A \u0627\u0644\u0627\u062E\u062A\u0628\u0627\u0631 (${score}/${tot})`,
+          date: (/* @__PURE__ */ new Date()).toISOString()
+        });
+        if (percentage >= 90) {
+          if (!db.getData().badges) db.getData().badges = [];
+          db.getData().badges.push({
+            id: "badge-" + Date.now() + "-" + Math.random().toString(36).substr(2, 4),
+            traineeId: tr.id,
+            studentId: tr.id,
+            title: percentage === 100 ? "\u0646\u062C\u0645 \u0627\u0644\u062F\u0631\u062C\u0629 \u0627\u0644\u0646\u0647\u0627\u0626\u064A\u0629 \u{1F4AF}" : "\u0648\u0633\u0627\u0645 \u0627\u0644\u062A\u0641\u0648\u0642 \u0648\u0627\u0644\u062A\u0645\u064A\u0632 \u{1F31F}",
+            description: `\u0627\u0644\u062D\u0635\u0648\u0644 \u0639\u0644\u0649 \u062F\u0631\u062C\u0629 ${score} \u0645\u0646 ${tot} \u0628\u062A\u0642\u062F\u064A\u0631 \u0645\u0645\u062A\u0627\u0632`,
+            icon: percentage === 100 ? "\u{1F451}" : "\u2B50",
+            date: (/* @__PURE__ */ new Date()).toISOString().split("T")[0]
+          });
+        }
+        try {
+          await TraineeRepo.update(tr.id, { points: tr.points, totalPoints: tr.totalPoints });
+        } catch (e) {
+        }
+      }
+      try {
+        await ExamResultRepo.create(newResult.id, newResult);
+      } catch (err) {
+      }
+    }
+    db.save();
+    db.logAudit({
+      userId: "trainer",
+      userName: "\u0627\u0644\u0645\u062D\u0627\u0636\u0631/\u0627\u0644\u0625\u062F\u0627\u0631\u0629",
+      action: "\u0631\u0635\u062F \u062F\u0631\u062C\u0627\u062A \u0627\u062E\u062A\u0628\u0627\u0631 \u064A\u062F\u0648\u064A",
+      entity: "\u0627\u0644\u0627\u062E\u062A\u0628\u0627\u0631\u0627\u062A",
+      entityId: id,
+      details: `\u062A\u0645 \u0631\u0635\u062F \u062F\u0631\u062C\u0627\u062A ${createdResults.length} \u0645\u062A\u062F\u0631\u0628 \u0644\u0644\u0627\u062E\u062A\u0628\u0627\u0631 \u0628\u0646\u062C\u0627\u062D`
+    });
+    res.json({ success: true, count: createdResults.length, results: createdResults });
+  } catch (err) {
+    res.status(500).json({ error: err.message || "\u0641\u0634\u0644 \u0631\u0635\u062F \u0627\u0644\u062F\u0631\u062C\u0627\u062A" });
+  }
+});
+apiRouter.delete(["/exams/:examId/results/:resultId", "/exam-results/:resultId"], async (req, res) => {
+  try {
+    const { resultId } = req.params;
+    const data = db.getData();
+    let removed = false;
+    if (data.examResults) {
+      const prevLen = data.examResults.length;
+      data.examResults = data.examResults.filter((r) => r.id !== resultId);
+      if (data.examResults.length < prevLen) removed = true;
+    }
+    try {
+      await ExamResultRepo.delete(resultId);
+      removed = true;
+    } catch (e) {
+    }
+    db.save();
+    res.json({ success: true, message: "\u062A\u0645 \u062D\u0630\u0641 \u0646\u062A\u064A\u062C\u0629 \u0627\u0644\u0627\u062E\u062A\u0628\u0627\u0631 \u0648\u0633\u062C\u0644 \u0627\u0644\u0637\u0627\u0644\u0628 \u0628\u0646\u062C\u0627\u062D" });
+  } catch (err) {
+    res.status(500).json({ error: err.message || "\u0641\u0634\u0644 \u062D\u0630\u0641 \u0627\u0644\u0646\u062A\u064A\u062C\u0629" });
+  }
+});
+apiRouter.post(["/exams/:examId/results/:resultId/reset", "/exam-results/:resultId/reset"], async (req, res) => {
+  try {
+    const { resultId } = req.params;
+    const data = db.getData();
+    let targetResult = data.examResults?.find((r) => r.id === resultId);
+    if (!targetResult) {
+      try {
+        targetResult = await ExamResultRepo.getById(resultId);
+      } catch (e) {
+      }
+    }
+    if (data.examResults) {
+      data.examResults = data.examResults.filter((r) => r.id !== resultId);
+    }
+    if (targetResult) {
+      if (data.studentExamSubmissions) {
+        data.studentExamSubmissions = data.studentExamSubmissions.filter(
+          (s) => !(s.examId === targetResult?.examId && (s.traineeId === targetResult?.traineeId || s.traineeCode === targetResult.traineeCode))
+        );
+      }
+      if (data.certificates) {
+        data.certificates = data.certificates.filter((c) => {
+          const isSameStudent = c.traineeId === targetResult?.traineeId || c.studentId === targetResult?.traineeId;
+          return !(isSameStudent && (c.grade === "\u0631\u0627\u0633\u0628" || c.lectureTitle?.includes(targetResult?.examId || "")));
+        });
+      }
+    }
+    try {
+      await ExamResultRepo.delete(resultId);
+    } catch (e) {
+    }
+    db.save();
+    res.json({ success: true, message: "\u062A\u0645\u062A \u0625\u0639\u0627\u062F\u0629 \u0636\u0628\u0637 \u0645\u062D\u0627\u0648\u0644\u0629 \u0627\u0644\u0637\u0627\u0644\u0628 \u0628\u0646\u062C\u0627\u062D\u060C \u0648\u064A\u0645\u0643\u0646\u0647 \u0627\u0644\u0622\u0646 \u0625\u0639\u0627\u062F\u0629 \u0625\u062C\u0631\u0627\u0621 \u0627\u0644\u0627\u062E\u062A\u0628\u0627\u0631 \u0645\u0646 \u062C\u062F\u064A\u062F" });
+  } catch (err) {
+    res.status(500).json({ error: err.message || "\u0641\u0634\u0644 \u0625\u0639\u0627\u062F\u0629 \u0636\u0628\u0637 \u0627\u0644\u0645\u062D\u0627\u0648\u0644\u0629" });
+  }
+});
+apiRouter.put(["/exams/:examId/results/:resultId", "/exam-results/:resultId"], async (req, res) => {
+  try {
+    const { resultId } = req.params;
+    const { score, totalMarks, percentage, rating, notes, attendanceStatus, bonusMarks, traineeName, traineeCode } = req.body;
+    const data = db.getData();
+    if (!data.examResults) data.examResults = [];
+    let target = data.examResults.find((r) => r.id === resultId);
+    const tot = Number(totalMarks) || (target ? target.totalMarks : 100) || 100;
+    const effectiveScore = Number(score) !== void 0 ? Number(score) : target ? target.score : 0;
+    const calculatedPct = percentage !== void 0 ? Number(percentage) : Math.round(effectiveScore / Math.max(tot, 1) * 100);
+    let calculatedRating = rating;
+    if (!calculatedRating) {
+      if (calculatedPct >= 90) calculatedRating = "\u0645\u0645\u062A\u0627\u0632";
+      else if (calculatedPct >= 80) calculatedRating = "\u062C\u064A\u062F \u062C\u062F\u0627\u064B";
+      else if (calculatedPct >= 65) calculatedRating = "\u062C\u064A\u062F";
+      else if (calculatedPct >= 50) calculatedRating = "\u0645\u0642\u0628\u0648\u0644";
+      else calculatedRating = "\u0631\u0627\u0633\u0628";
+    }
+    if (target) {
+      if (score !== void 0) target.score = effectiveScore;
+      if (totalMarks !== void 0) target.totalMarks = tot;
+      target.percentage = calculatedPct;
+      target.rating = calculatedRating;
+      if (notes !== void 0) target.notes = notes;
+      if (attendanceStatus !== void 0) target.attendanceStatus = attendanceStatus;
+      if (bonusMarks !== void 0) target.bonusMarks = Number(bonusMarks);
+      if (traineeName !== void 0) target.traineeName = traineeName;
+      if (traineeCode !== void 0) target.traineeCode = traineeCode;
+      target.lastModifiedAt = (/* @__PURE__ */ new Date()).toISOString();
+    } else {
+      target = {
+        id: resultId,
+        examId: req.params.examId || "",
+        traineeId: req.body.traineeId || "tr-" + Date.now(),
+        score: effectiveScore,
+        totalMarks: tot,
+        percentage: calculatedPct,
+        rating: calculatedRating,
+        notes: notes || "",
+        submittedAt: (/* @__PURE__ */ new Date()).toISOString()
+      };
+      target.attendanceStatus = attendanceStatus || "present";
+      data.examResults.push(target);
+    }
+    try {
+      await ExamResultRepo.update(resultId, target);
+    } catch (e) {
+      try {
+        await ExamResultRepo.create(resultId, target);
+      } catch (err2) {
+      }
+    }
+    db.save();
+    db.logAudit({
+      userId: req.user?.id || "admin",
+      userName: req.user?.name || "\u0645\u062F\u064A\u0631 \u0627\u0644\u0646\u0638\u0627\u0645",
+      action: "\u062A\u0639\u062F\u064A\u0644 \u0646\u062A\u064A\u062C\u0629 \u0627\u062E\u062A\u0628\u0627\u0631 \u0637\u0627\u0644\u0628",
+      entity: "\u0627\u0644\u0627\u062E\u062A\u0628\u0627\u0631\u0627\u062A",
+      entityId: resultId,
+      details: `\u062A\u0645 \u062A\u0639\u062F\u064A\u0644 \u0646\u062A\u064A\u062C\u0629 \u0627\u0644\u0637\u0627\u0644\u0628 (${target.traineeName || target.traineeId}) \u0625\u0644\u0649 ${target.score}/${target.totalMarks} (${target.percentage}%)`
+    });
+    res.json({ success: true, result: target, message: "\u062A\u0645 \u062A\u062D\u062F\u064A\u062B \u0648\u062A\u0639\u062F\u064A\u0644 \u0646\u062A\u064A\u062C\u0629 \u0627\u0644\u0637\u0627\u0644\u0628 \u0628\u0646\u062C\u0627\u062D \u2728" });
+  } catch (err) {
+    res.status(500).json({ error: err.message || "\u0641\u0634\u0644 \u062A\u062D\u062F\u064A\u062B \u0646\u062A\u064A\u062C\u0629 \u0627\u0644\u0627\u062E\u062A\u0628\u0627\u0631" });
+  }
+});
+apiRouter.post(["/exams/:examId/results/:resultId/grant-retake", "/exam-results/:resultId/grant-retake"], async (req, res) => {
+  try {
+    const { resultId } = req.params;
+    const { mode = "keep_best", reason = "\u0625\u0639\u0627\u062F\u0629 \u0627\u0644\u0627\u062E\u062A\u0628\u0627\u0631 \u0644\u062A\u062D\u0633\u064A\u0646 \u0627\u0644\u062F\u0631\u062C\u0629" } = req.body;
+    const data = db.getData();
+    if (!data.examResults) data.examResults = [];
+    const target = data.examResults.find((r) => r.id === resultId);
+    if (!target) {
+      return res.status(404).json({ error: "\u0644\u0645 \u064A\u062A\u0645 \u0627\u0644\u0639\u062B\u0648\u0631 \u0639\u0644\u0649 \u0646\u062A\u064A\u062C\u0629 \u0627\u0644\u0637\u0627\u0644\u0628" });
+    }
+    if (!target.attemptHistory) target.attemptHistory = [];
+    target.attemptHistory.push({
+      score: target.score,
+      totalMarks: target.totalMarks,
+      percentage: target.percentage,
+      rating: target.rating,
+      date: target.submittedAt || (/* @__PURE__ */ new Date()).toISOString()
+    });
+    target.allowRetake = true;
+    target.retakeMode = mode;
+    target.retakeReason = reason;
+    target.retakeGrantedAt = (/* @__PURE__ */ new Date()).toISOString();
+    target.notes = `${target.notes ? target.notes + " | " : ""}\u0645\u0633\u0645\u0648\u062D \u0628\u0625\u0639\u0627\u062F\u0629 \u0627\u0644\u0645\u062D\u0627\u0648\u0644\u0629 (\u0627\u0644\u062F\u0631\u062C\u0629 \u0627\u0644\u0633\u0627\u0628\u0642\u0629: ${target.score})`;
+    if (data.studentExamSubmissions) {
+      data.studentExamSubmissions = data.studentExamSubmissions.filter(
+        (s) => !(s.examId === target.examId && (s.traineeId === target.traineeId || s.traineeCode === target.traineeCode))
+      );
+    }
+    try {
+      await ExamResultRepo.update(resultId, target);
+    } catch (e) {
+    }
+    db.save();
+    res.json({
+      success: true,
+      result: target,
+      message: `\u062A\u0645 \u062A\u0641\u0639\u064A\u0644 \u0625\u0645\u0643\u0627\u0646\u064A\u0629 \u0625\u0639\u0627\u062F\u0629 \u0627\u0644\u0627\u062E\u062A\u0628\u0627\u0631 \u0644\u0644\u0637\u0627\u0644\u0628 \u0628\u0646\u062C\u0627\u062D \u0645\u0639 \u0627\u0644\u0627\u062D\u062A\u0641\u0627\u0638 \u0628\u0633\u062C\u0644 \u062F\u0631\u062C\u0627\u062A\u0647 \u0627\u0644\u0633\u0627\u0628\u0642\u0629 (${target.score} \u062F\u0631\u062C\u0629) \u{1F504}\u2728`
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message || "\u0641\u0634\u0644 \u0645\u0646\u062D \u0635\u0644\u0627\u062D\u064A\u0629 \u0625\u0639\u0627\u062F\u0629 \u0627\u0644\u0627\u062E\u062A\u0628\u0627\u0631" });
+  }
+});
+apiRouter.post("/exams/clear-trainee-results", async (req, res) => {
+  try {
+    const { traineeId, traineeCode, traineeName } = req.body;
+    const data = db.getData();
+    let count = 0;
+    if (data.examResults) {
+      const orig = data.examResults.length;
+      data.examResults = data.examResults.filter((r) => {
+        const matches = traineeId && r.traineeId === traineeId || traineeCode && r.traineeCode === traineeCode || traineeName && r.traineeName?.toLowerCase().includes(String(traineeName).toLowerCase());
+        return !matches;
+      });
+      count = orig - data.examResults.length;
+    }
+    if (data.certificates) {
+      data.certificates = data.certificates.filter((c) => {
+        const matches = traineeId && (c.traineeId === traineeId || c.studentId === traineeId) || traineeName && (c.studentName?.toLowerCase().includes(String(traineeName).toLowerCase()) || c.traineeName?.toLowerCase().includes(String(traineeName).toLowerCase()));
+        return !(matches && c.grade === "\u0631\u0627\u0633\u0628");
+      });
+    }
+    db.save();
+    res.json({ success: true, count, message: `\u062A\u0645 \u062D\u0630\u0641 \u0648\u062A\u0635\u0641\u064A\u0631 \u0633\u062C\u0644\u0627\u062A \u0627\u0644\u0627\u062E\u062A\u0628\u0627\u0631\u0627\u062A \u0644\u0644\u0637\u0627\u0644\u0628 (${traineeName || traineeCode || traineeId || ""}) \u0628\u0646\u062C\u0627\u062D` });
+  } catch (err) {
+    res.status(500).json({ error: err.message || "\u0641\u0634\u0644 \u062A\u0635\u0641\u064A\u0631 \u0633\u062C\u0644\u0627\u062A \u0627\u0644\u0637\u0627\u0644\u0628" });
+  }
+});
+apiRouter.get("/certificates", async (req, res) => {
+  try {
+    const certs = db.getData().certificates || [];
+    res.json(certs);
+  } catch (err) {
+    res.status(500).json({ error: err.message || "\u0641\u0634\u0644 \u062C\u0644\u0628 \u0627\u0644\u0634\u0647\u0627\u062F\u0627\u062A" });
+  }
+});
+apiRouter.post("/certificates", async (req, res) => {
+  try {
+    const certData = req.body;
+    if (!certData) return res.status(400).json({ error: "\u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0644\u0634\u0647\u0627\u062F\u0629 \u0645\u0637\u0644\u0648\u0628\u0629" });
+    const newCert = {
+      id: certData.id || "cert-" + Date.now() + "-" + Math.random().toString(36).substr(2, 4),
+      traineeId: certData.traineeId || certData.studentId,
+      traineeName: certData.traineeName || certData.studentName || "\u0627\u0644\u0645\u062A\u062F\u0631\u0628",
+      courseId: certData.courseId || "",
+      courseName: certData.courseName || "",
+      issueDate: certData.issueDate || (/* @__PURE__ */ new Date()).toISOString().split("T")[0],
+      grade: certData.grade || "\u0627\u0645\u062A\u064A\u0627\u0632",
+      certificateNumber: certData.certificateNumber || "CERT-" + Math.floor(1e5 + Math.random() * 9e5),
+      serialNumber: certData.serialNumber || certData.certificateNumber || "",
+      durationText: certData.durationText || "",
+      trainerName: certData.trainerName || "",
+      managerName: certData.managerName || "",
+      certificateTitle: certData.certificateTitle || "",
+      certificateTitleEn: certData.certificateTitleEn || "",
+      status: certData.status || "issued",
+      qrCode: certData.qrCode || "",
+      type: certData.type || "appreciation",
+      templateId: certData.templateId || "default",
+      notes: certData.notes || "",
+      score: certData.score !== void 0 ? Number(certData.score) : void 0,
+      totalMarks: certData.totalMarks !== void 0 ? Number(certData.totalMarks) : void 0,
+      rank: certData.rank !== void 0 ? Number(certData.rank) : void 0,
+      createdAt: (/* @__PURE__ */ new Date()).toISOString()
     };
-    db.getData().examResults.push(newResult);
-  });
-  db.save();
-  res.json({ success: true, count: results.length });
+    newCert.studentId = newCert.traineeId;
+    newCert.studentName = newCert.traineeName;
+    if (!db.getData().certificates) {
+      db.getData().certificates = [];
+    }
+    db.getData().certificates.push(newCert);
+    if (newCert.traineeId) {
+      const trainees = await TraineeRepo.getAll();
+      const tr = trainees.find((t) => t.id === newCert.traineeId);
+      if (tr) {
+        tr.points = (Number(tr.points) || 0) + 50;
+        tr.totalPoints = (Number(tr.totalPoints) || 0) + 50;
+        await TraineeRepo.update(tr.id, { points: tr.points, totalPoints: tr.totalPoints });
+        if (!db.getData().badges) db.getData().badges = [];
+        db.getData().badges.push({
+          id: "badge-" + Date.now(),
+          traineeId: tr.id,
+          studentId: tr.id,
+          title: "\u0634\u0647\u0627\u062F\u0629 \u062A\u0642\u062F\u064A\u0631 \u0648\u062A\u0641\u0648\u0642 \u{1F4DC}\u2B50",
+          description: `\u0645\u0646\u062D\u062A \u0639\u0646 ${newCert.courseName || "\u0627\u0644\u0623\u062F\u0627\u0621 \u0627\u0644\u0645\u062A\u0645\u064A\u0632"}`,
+          icon: "\u{1F3C6}",
+          date: (/* @__PURE__ */ new Date()).toISOString().split("T")[0]
+        });
+        if (!db.getData().pointTransactions) db.getData().pointTransactions = [];
+        db.getData().pointTransactions.push({
+          id: "pt-" + Date.now(),
+          traineeId: tr.id,
+          points: 50,
+          reason: `\u0645\u0643\u0627\u0641\u0623\u0629 \u0627\u0644\u062D\u0635\u0648\u0644 \u0639\u0644\u0649 \u0634\u0647\u0627\u062F\u0629 \u062A\u0642\u062F\u064A\u0631 (${newCert.courseName || "\u062A\u0641\u0648\u0642"})`,
+          date: (/* @__PURE__ */ new Date()).toISOString()
+        });
+      }
+    }
+    try {
+      await CertificateRepo.create(newCert.id, newCert);
+    } catch (e) {
+    }
+    db.save();
+    res.json({ success: true, certificate: newCert });
+  } catch (err) {
+    res.status(500).json({ error: err.message || "\u0641\u0634\u0644 \u0625\u0635\u062F\u0627\u0631 \u0627\u0644\u0634\u0647\u0627\u062F\u0629" });
+  }
+});
+apiRouter.get("/certificates/templates", async (req, res) => {
+  try {
+    const templates = db.getData().certificateTemplates || [];
+    res.json(templates);
+  } catch (err) {
+    res.status(500).json({ error: err.message || "\u0641\u0634\u0644 \u062C\u0644\u0628 \u0642\u0648\u0627\u0644\u0628 \u0627\u0644\u0634\u0647\u0627\u062F\u0627\u062A" });
+  }
+});
+apiRouter.post("/certificates/templates", async (req, res) => {
+  try {
+    const templateData = req.body;
+    const newTemplate = {
+      id: templateData.id || "tmpl-" + Date.now(),
+      ...templateData,
+      createdAt: (/* @__PURE__ */ new Date()).toISOString()
+    };
+    if (!db.getData().certificateTemplates) {
+      db.getData().certificateTemplates = [];
+    }
+    db.getData().certificateTemplates.push(newTemplate);
+    try {
+      await CertificateTemplateRepo.create(newTemplate.id, newTemplate);
+    } catch (e) {
+    }
+    db.save();
+    res.json({ success: true, template: newTemplate });
+  } catch (err) {
+    res.status(500).json({ error: err.message || "\u0641\u0634\u0644 \u062D\u0641\u0638 \u0642\u0627\u0644\u0628 \u0627\u0644\u0634\u0647\u0627\u062F\u0629" });
+  }
+});
+apiRouter.put("/certificates/templates/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const templateData = req.body;
+    const data = db.getData();
+    if (data.certificateTemplates) {
+      const idx = data.certificateTemplates.findIndex((t) => t.id === id);
+      if (idx !== -1) {
+        data.certificateTemplates[idx] = { ...data.certificateTemplates[idx], ...templateData, id };
+      }
+    }
+    try {
+      await CertificateTemplateRepo.update(id, templateData);
+    } catch (e) {
+    }
+    db.save();
+    res.json({ success: true, template: { id, ...templateData } });
+  } catch (err) {
+    res.status(500).json({ error: err.message || "\u0641\u0634\u0644 \u062A\u0639\u062F\u064A\u0644 \u0642\u0627\u0644\u0628 \u0627\u0644\u0634\u0647\u0627\u062F\u0629" });
+  }
+});
+apiRouter.delete("/certificates/templates/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const data = db.getData();
+    if (data.certificateTemplates) {
+      data.certificateTemplates = data.certificateTemplates.filter((t) => t.id !== id);
+    }
+    db.save();
+    res.json({ success: true, message: "\u062A\u0645 \u062D\u0630\u0641 \u0642\u0627\u0644\u0628 \u0627\u0644\u0634\u0647\u0627\u062F\u0629 \u0628\u0646\u062C\u0627\u062D" });
+  } catch (err) {
+    res.status(500).json({ error: err.message || "\u0641\u0634\u0644 \u062D\u0630\u0641 \u0642\u0627\u0644\u0628 \u0627\u0644\u0634\u0647\u0627\u062F\u0629" });
+  }
+});
+apiRouter.delete(["/certificates/:id", "/certificates/delete/:id"], async (req, res) => {
+  try {
+    const { id } = req.params;
+    const data = db.getData();
+    if (data.certificates) {
+      data.certificates = data.certificates.filter((c) => c.id !== id);
+    }
+    db.save();
+    res.json({ success: true, message: "\u062A\u0645 \u062D\u0630\u0641 \u0627\u0644\u0634\u0647\u0627\u062F\u0629 \u0628\u0646\u062C\u0627\u062D" });
+  } catch (err) {
+    res.status(500).json({ error: err.message || "\u0641\u0634\u0644 \u062D\u0630\u0641 \u0627\u0644\u0634\u0647\u0627\u062F\u0629" });
+  }
 });
 apiRouter.get("/interactive-sessions", (req, res) => {
   res.json(db.getData().interactiveSessions || []);
@@ -16162,7 +18000,7 @@ apiRouter.post("/student/login", async (req, res) => {
     { id: "b-2", title: "\u0646\u062C\u0645 \u0627\u0644\u062D\u0636\u0648\u0631 \u0648\u0627\u0644\u0627\u0644\u062A\u0632\u0627\u0645", description: "\u0627\u0644\u0627\u0644\u062A\u0632\u0627\u0645 \u0628\u062D\u0636\u0648\u0631 \u0627\u0644\u062D\u0635\u0635 \u0648\u0627\u0644\u062A\u0641\u0627\u0639\u0644 \u0627\u0644\u0645\u062A\u0645\u064A\u0632", icon: "\u2B50", date: (/* @__PURE__ */ new Date()).toISOString().split("T")[0] }
   ];
   const studentCerts = (db.getData().certificates || []).filter(
-    (c) => c.traineeId === trainee.id || c.studentId === trainee.id
+    (c) => c.traineeId === trainee.id || c.studentId === trainee.id || c.traineeName && trainee.fullName && String(c.traineeName).trim().toLowerCase() === String(trainee.fullName).trim().toLowerCase() || c.studentName && trainee.fullName && String(c.studentName).trim().toLowerCase() === String(trainee.fullName).trim().toLowerCase() || c.traineeCode && trainee.code && String(c.traineeCode).trim().toLowerCase() === String(trainee.code).trim().toLowerCase() || c.studentCode && trainee.code && String(c.studentCode).trim().toLowerCase() === String(trainee.code).trim().toLowerCase()
   );
   res.json({
     success: true,
@@ -16656,6 +18494,47 @@ apiRouter.post("/agent/reset-device", (req, res) => {
 });
 var activeLabQuickQuestion = null;
 var activeLabExternalActivity = null;
+var activeLabStatus = {
+  global: {
+    isOpen: true,
+    trainerName: "\u0627\u0644\u0645\u062D\u0627\u0636\u0631 \u0627\u0644\u0645\u0634\u0631\u0641",
+    roomName: "\u0627\u0644\u0645\u0639\u0645\u0644 \u0627\u0644\u0631\u0626\u064A\u0633\u064A",
+    updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+  }
+};
+apiRouter.get("/lab/status", (req, res) => {
+  const branchId = req.query.branchId || "global";
+  const status = activeLabStatus[branchId] || activeLabStatus["global"] || {
+    isOpen: true,
+    trainerName: "\u0627\u0644\u0645\u062D\u0627\u0636\u0631 \u0627\u0644\u0645\u0634\u0631\u0641",
+    roomName: "\u0627\u0644\u0645\u0639\u0645\u0644 \u0627\u0644\u0631\u0626\u064A\u0633\u064A",
+    updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+  };
+  res.json({ success: true, ...status });
+});
+apiRouter.post("/lab/status", (req, res) => {
+  const { isOpen, branchId = "global", trainerName = "\u0627\u0644\u0645\u062D\u0627\u0636\u0631 \u0627\u0644\u0645\u0634\u0631\u0641", roomName = "\u0627\u0644\u0645\u0639\u0645\u0644 \u0627\u0644\u0631\u0626\u064A\u0633\u064A" } = req.body;
+  const statusObj = {
+    isOpen: Boolean(isOpen),
+    branchId,
+    trainerName,
+    roomName,
+    updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+  };
+  activeLabStatus[branchId] = statusObj;
+  activeLabStatus["global"] = statusObj;
+  try {
+    const devices = db.getData().devices || [];
+    devices.forEach((d) => {
+      if (!branchId || branchId === "global" || d.branchId === branchId) {
+        d.status = isOpen ? "active" : "locked";
+      }
+    });
+    db.save();
+  } catch (e) {
+  }
+  res.json({ success: true, ...statusObj });
+});
 apiRouter.get("/lab/quick-question", (req, res) => {
   const external = activeLabExternalActivity || masterBroadcast.activeExternalSession;
   const isTeacher = req.query.isTeacher === "true" || req.query.role === "admin" || req.query.role === "trainer";
@@ -18641,7 +20520,37 @@ apiRouter.post("/gemini/generate", async (req, res) => {
   }
 });
 apiRouter.post("/gemini/tts", async (req, res) => {
-  res.json({ success: false, fallback: true, message: "Gemini direct audio fallback activated" });
+  try {
+    const { text, promptStyle, voiceName } = req.body || {};
+    if (!text || typeof text !== "string" || !text.trim()) {
+      return res.status(400).json({ success: false, error: "Text is required for TTS" });
+    }
+    const ttsResult = await generateGeminiSpeechAudio({
+      text: text.trim(),
+      promptStyle,
+      voiceName: voiceName || "Puck"
+    });
+    if (ttsResult.success && ttsResult.audioBase64) {
+      return res.json({
+        success: true,
+        audio: ttsResult.audioBase64,
+        audioBase64: ttsResult.audioBase64,
+        mimeType: ttsResult.mimeType || "audio/wav"
+      });
+    }
+    return res.json({
+      success: false,
+      fallback: true,
+      error: ttsResult.error || "Gemini TTS unavailable, fallback activated"
+    });
+  } catch (err) {
+    console.warn("[Gemini TTS Route Error]:", err?.message || err);
+    return res.json({
+      success: false,
+      fallback: true,
+      error: err?.message || "Internal error during speech generation"
+    });
+  }
 });
 apiRouter.post("/ai/trainer-assistant", async (req, res) => {
   try {
@@ -18960,6 +20869,15 @@ app.use((req, res, next) => {
 });
 app.use(import_express5.default.json({ limit: "100mb" }));
 app.use(import_express5.default.urlencoded({ extended: true, limit: "100mb" }));
+app.use(async (req, res, next) => {
+  try {
+    const isFresh = req.query?.fresh === "true" || req.headers?.["x-fresh"] === "true";
+    await db.ensureHydrated(isFresh);
+  } catch (e) {
+    console.warn("[Hydration Middleware Notice]", e);
+  }
+  next();
+});
 app.use("/api/domain", domainRouter);
 app.use("/api", apiRouter);
 app.post("/api/log-error", import_express5.default.json(), (req, res) => {
@@ -19314,13 +21232,34 @@ app.post("/api/student/submit-homework", async (req, res) => {
       };
     }
     const submissionId = "sub_" + Date.now();
+    const existingTrainee = db.data.trainees.find((t) => t.id === traineeId || t.code === traineeId);
+    const awardedPoints = Number(aiEvaluation.pointsAwarded) || 25;
+    let newTotalPoints = 125;
+    if (existingTrainee) {
+      const currentPts = Number(existingTrainee.totalPoints || existingTrainee.points || 0);
+      newTotalPoints = currentPts + awardedPoints;
+      existingTrainee.points = newTotalPoints;
+      existingTrainee.totalPoints = newTotalPoints;
+      const ptTransaction = {
+        id: "pt-" + Date.now() + "-" + Math.random().toString(36).substr(2, 4),
+        traineeId: existingTrainee.id,
+        branchId: existingTrainee.branchId || "branch-1",
+        points: awardedPoints,
+        reason: `\u062A\u0633\u0644\u064A\u0645 \u0648\u0627\u062C\u0628 \u0648\u0645\u0647\u0645\u0629: ${title} (\u062A\u0635\u062D\u064A\u062D \u0627\u0644\u0630\u0643\u0627\u0621 \u0627\u0644\u0627\u0635\u0637\u0646\u0627\u0639\u064A)`,
+        addedByUserId: "ai-system",
+        addedByUserName: "\u0627\u0644\u0645\u0635\u062D\u062D \u0627\u0644\u0630\u0643\u064A AI",
+        createdAt: (/* @__PURE__ */ new Date()).toISOString()
+      };
+      db.data.pointTransactions = db.data.pointTransactions || [];
+      db.data.pointTransactions.unshift(ptTransaction);
+    }
     const submission = {
       id: submissionId,
-      traineeId,
-      traineeCode: "\u0645001",
-      traineeName: "\u0637\u0627\u0644\u0628 \u0627\u0644\u0646\u062C\u0627\u062D",
+      traineeId: existingTrainee?.id || traineeId,
+      traineeCode: existingTrainee?.code || "\u0645001",
+      traineeName: existingTrainee?.fullName || "\u0637\u0627\u0644\u0628 \u0627\u0644\u0646\u062C\u0627\u062D",
       taskTitle: title,
-      mediaUrl: mediaBase64 ? mediaBase64.substring(0, 100) + "..." : void 0,
+      mediaUrl: mediaBase64 ? mediaBase64.startsWith("data:") ? mediaBase64 : `data:image/jpeg;base64,${mediaBase64}` : void 0,
       mediaType: mediaType || "image",
       submittedAt: (/* @__PURE__ */ new Date()).toISOString(),
       grade: aiEvaluation.grade || 95,
@@ -19330,13 +21269,16 @@ app.post("/api/student/submit-homework", async (req, res) => {
       strengths: Array.isArray(aiEvaluation.strengths) ? aiEvaluation.strengths : ["\u0625\u062A\u0642\u0627\u0646 \u0627\u0644\u062D\u0644 \u0648\u0627\u0644\u0645\u0648\u0627\u0638\u0628\u0629"],
       corrections: Array.isArray(aiEvaluation.corrections) ? aiEvaluation.corrections : [],
       generalFeedback: aiEvaluation.generalFeedback || "\u0645\u0633\u062A\u0648\u0649 \u0645\u0645\u062A\u0627\u0632 \u0648\u062C\u0647\u062F \u0645\u0634\u0643\u0648\u0631!",
-      pointsAwarded: aiEvaluation.pointsAwarded || 25,
+      pointsAwarded: awardedPoints,
       isSpeedWinner: true,
       submissionChannel: "home_student_portal"
     };
+    db.data.homeworkSubmissions = db.data.homeworkSubmissions || [];
+    db.data.homeworkSubmissions.unshift(submission);
+    db.save();
     sendResponse(res, true, {
       submission,
-      newTotalPoints: 125,
+      newTotalPoints,
       speedBadgeAwarded: true
     });
   } catch (err) {
@@ -23178,7 +25120,7 @@ async function startServer() {
     });
     app.use(vite.middlewares);
   } else {
-    const distPath = import_path5.default.join(process.cwd(), "dist");
+    const distPath = import_fs5.default.existsSync(import_path5.default.join(process.cwd(), "dist", "index.html")) ? import_path5.default.join(process.cwd(), "dist") : process.cwd();
     app.use(import_express5.default.static(distPath));
     app.get("*", (req, res) => {
       if (req.path.startsWith("/api") || req.originalUrl.startsWith("/api")) {

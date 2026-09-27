@@ -120,6 +120,7 @@ export function deduplicateTraineeList(list: Trainee[]): Trainee[] {
         Number(t.totalPoints !== undefined ? t.totalPoints : (t.points || 0))
       );
       const mergedPaidAmount = Math.max(Number(existing.paidAmount || 0), Number(t.paidAmount || 0));
+      const mergedPhoto = t.photoUrl || (t as any).photo || existing.photoUrl || (existing as any).photo || (id ? localStorage.getItem('student_session_photo_' + id) : null) || (code ? localStorage.getItem('student_session_photo_' + code) : null) || '';
 
       Object.assign(existing, {
         ...t,
@@ -130,6 +131,8 @@ export function deduplicateTraineeList(list: Trainee[]): Trainee[] {
         phone: existing.phone || t.phone,
         parentPhone: existing.parentPhone || t.parentPhone,
         nationalId: existing.nationalId || t.nationalId,
+        photoUrl: mergedPhoto,
+        photo: mergedPhoto,
         totalPoints: mergedTotalPoints,
         points: mergedTotalPoints,
         paidAmount: mergedPaidAmount,
@@ -137,6 +140,13 @@ export function deduplicateTraineeList(list: Trainee[]): Trainee[] {
       });
     } else {
       const record = { ...t };
+      if (!record.photoUrl) {
+        const storedPhoto = (record.id ? localStorage.getItem('student_session_photo_' + record.id) : null) || (record.code ? localStorage.getItem('student_session_photo_' + record.code) : null) || (record as any).photo;
+        if (storedPhoto) {
+          record.photoUrl = storedPhoto;
+          (record as any).photo = storedPhoto;
+        }
+      }
       // If code collided with a different student, guarantee unique code so student is preserved
       if (code && byCode.has(code)) {
         const suffix = Math.random().toString(36).substring(2, 5).toUpperCase();
@@ -235,6 +245,62 @@ export const CenterProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       try { localStorage.setItem('nagah_trainers', JSON.stringify(trainers)); } catch {}
     }
   }, [trainers]);
+
+  // Synchronize student photos, custom logo, and attendance instantly across all portals, modals, and views
+  useEffect(() => {
+    const handlePhotoUpdated = (e: any) => {
+      const { traineeId, code, photoUrl } = e.detail || {};
+      if (!photoUrl) return;
+      setTrainees(prev => prev.map(t => {
+        if (t.id === traineeId || (code && t.code === code) || (traineeId && t.code === traineeId)) {
+          return { ...t, photoUrl, photo: photoUrl };
+        }
+        return t;
+      }));
+    };
+
+    const handleLogoUpdated = (e: any) => {
+      const newLogo = typeof e.detail === 'string' ? e.detail : e.detail?.logoUrl;
+      if (newLogo) {
+        setSettings(prev => prev ? { ...prev, logoUrl: newLogo } : { logoUrl: newLogo } as any);
+        try {
+          localStorage.setItem('nagah_center_logo', newLogo);
+          localStorage.setItem('nagah_custom_logo', newLogo);
+        } catch {}
+      }
+    };
+
+    const handleAttendanceUpdated = () => {
+      loadData();
+    };
+
+    const handleStorageEvent = (e: StorageEvent) => {
+      if (e.key && e.key.startsWith('student_session_photo_') && e.newValue) {
+        const idOrCode = e.key.replace('student_session_photo_', '');
+        setTrainees(prev => prev.map(t => {
+          if (t.id === idOrCode || t.code === idOrCode) {
+            return { ...t, photoUrl: e.newValue || t.photoUrl, photo: e.newValue || (t as any).photo };
+          }
+          return t;
+        }));
+      }
+      if ((e.key === 'nagah_custom_logo' || e.key === 'nagah_center_logo') && e.newValue) {
+        setSettings(prev => prev ? { ...prev, logoUrl: e.newValue! } : { logoUrl: e.newValue! } as any);
+      }
+    };
+
+    window.addEventListener('nagah_photo_updated', handlePhotoUpdated);
+    window.addEventListener('nagah_logo_updated', handleLogoUpdated);
+    window.addEventListener('nagah_attendance_updated', handleAttendanceUpdated);
+    window.addEventListener('storage', handleStorageEvent);
+
+    return () => {
+      window.removeEventListener('nagah_photo_updated', handlePhotoUpdated);
+      window.removeEventListener('nagah_logo_updated', handleLogoUpdated);
+      window.removeEventListener('nagah_attendance_updated', handleAttendanceUpdated);
+      window.removeEventListener('storage', handleStorageEvent);
+    };
+  }, []);
 
   // Ref tracking pending optimistic updates to avoid being overwritten by incoming listeners
   const pendingUpdatesRef = useRef<Set<string>>(new Set());
@@ -634,16 +700,17 @@ export const CenterProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       if (settingsRes && typeof settingsRes === 'object' && !Array.isArray(settingsRes)) {
         const s = { ...settingsRes } as any;
         if (!s.logoUrl) {
-          const cachedLogo = localStorage.getItem('nagah_center_logo');
+          const cachedLogo = localStorage.getItem('nagah_custom_logo') || localStorage.getItem('nagah_center_logo');
           if (cachedLogo) {
             s.logoUrl = cachedLogo;
           }
         } else {
           localStorage.setItem('nagah_center_logo', s.logoUrl);
+          localStorage.setItem('nagah_custom_logo', s.logoUrl);
         }
         setSettings(s);
       } else {
-        const cachedLogo = localStorage.getItem('nagah_center_logo');
+        const cachedLogo = localStorage.getItem('nagah_custom_logo') || localStorage.getItem('nagah_center_logo');
         if (cachedLogo) {
           setSettings({ logoUrl: cachedLogo } as any);
         }

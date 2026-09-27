@@ -53,7 +53,7 @@ export const SocialPublishingStudioModal: React.FC<SocialPublishingStudioModalPr
   const [selectedTraineeId, setSelectedTraineeId] = useState<string>('');
   
   // Customization Options
-  const [customCenterName, setCustomCenterName] = useState<string>('مركز النجاح للتدريب والتطوير');
+  const [customCenterName, setCustomCenterName] = useState<string>('مركز النجاح للتدريب والاستشارات');
   const [customTitle, setCustomTitle] = useState<string>('لوحة الشرف وتكريم نجوم الأسبوع 🌟');
   const [postTone, setPostTone] = useState<PostTone>('enthusiastic');
   const [postCaption, setPostCaption] = useState<string>('');
@@ -335,44 +335,44 @@ export const SocialPublishingStudioModal: React.FC<SocialPublishingStudioModalPr
   // Helper styles for themes
   const themeStyles = {
     royal_gold: {
-      cardBg: 'bg-gradient-to-br from-slate-950 via-[#0f172a] to-[#1c1304] text-slate-100 border-[#d97706]/70',
-      headerGradient: 'from-amber-400 via-yellow-300 to-amber-500',
+      cardBg: 'bg-gradient-to-b from-[#0b101b] via-[#101726] to-[#080c14] text-slate-100 border-2 border-[#f59e0b]/80 shadow-[0_0_50px_rgba(245,158,11,0.2)]',
+      headerGradient: 'from-amber-300 via-yellow-200 to-amber-400',
       accentColor: 'text-amber-400',
-      badgeBg: 'bg-gradient-to-r from-amber-500 to-yellow-600 text-slate-950 font-black',
-      podium1: 'border-amber-400 bg-gradient-to-b from-amber-500/20 to-slate-900/90 text-amber-300 shadow-[0_0_25px_rgba(251,191,36,0.3)]',
-      podium2: 'border-slate-300 bg-gradient-to-b from-slate-400/20 to-slate-900/90 text-slate-200',
-      podium3: 'border-amber-700 bg-gradient-to-b from-amber-800/20 to-slate-900/90 text-amber-500',
-      watermark: 'border-amber-500/30 bg-amber-500/10 text-amber-300'
+      badgeBg: 'bg-gradient-to-r from-amber-400 via-yellow-400 to-amber-500 text-slate-950 font-black shadow-lg',
+      podium1: 'border-2 border-amber-400 bg-gradient-to-b from-amber-500/25 via-amber-950/70 to-slate-950/95 text-amber-300 shadow-[0_0_35px_rgba(251,191,36,0.35)]',
+      podium2: 'border-2 border-slate-300 bg-gradient-to-b from-slate-400/20 via-slate-800/80 to-slate-950/95 text-slate-100 shadow-[0_0_20px_rgba(203,213,225,0.2)]',
+      podium3: 'border-2 border-amber-700 bg-gradient-to-b from-amber-800/20 via-slate-800/80 to-slate-950/95 text-amber-400 shadow-[0_0_20px_rgba(180,83,9,0.2)]',
+      watermark: 'border-2 border-amber-400/60 bg-gradient-to-r from-amber-500/20 to-amber-400/30 text-amber-200'
     },
     cyber_neon: {
-      cardBg: 'bg-gradient-to-br from-[#060814] via-[#0c102b] to-[#1a082b] text-cyan-100 border-cyan-500/70',
-      headerGradient: 'from-cyan-400 via-fuchsia-400 to-indigo-400',
+      cardBg: 'bg-gradient-to-b from-[#060814] via-[#0c102b] to-[#1a082b] text-cyan-100 border-2 border-cyan-500/80 shadow-[0_0_50px_rgba(6,182,212,0.25)]',
+      headerGradient: 'from-cyan-300 via-fuchsia-300 to-indigo-300',
       accentColor: 'text-cyan-400',
       badgeBg: 'bg-gradient-to-r from-cyan-400 to-fuchsia-500 text-slate-950 font-black',
-      podium1: 'border-cyan-400 bg-gradient-to-b from-cyan-500/20 to-slate-950/90 text-cyan-300 shadow-[0_0_25px_rgba(34,211,238,0.3)]',
-      podium2: 'border-fuchsia-400 bg-gradient-to-b from-fuchsia-500/20 to-slate-950/90 text-fuchsia-300',
-      podium3: 'border-indigo-400 bg-gradient-to-b from-indigo-500/20 to-slate-950/90 text-indigo-300',
-      watermark: 'border-cyan-500/30 bg-cyan-500/10 text-cyan-300'
+      podium1: 'border-2 border-cyan-400 bg-gradient-to-b from-cyan-500/25 to-slate-950/95 text-cyan-300 shadow-[0_0_35px_rgba(34,211,238,0.35)]',
+      podium2: 'border-2 border-fuchsia-400 bg-gradient-to-b from-fuchsia-500/20 to-slate-950/95 text-fuchsia-300',
+      podium3: 'border-2 border-indigo-400 bg-gradient-to-b from-indigo-500/20 to-slate-950/95 text-indigo-300',
+      watermark: 'border-2 border-cyan-500/50 bg-cyan-500/20 text-cyan-300'
     },
     emerald_prestige: {
-      cardBg: 'bg-gradient-to-br from-[#021f15] via-[#062c20] to-[#041710] text-emerald-100 border-emerald-500/70',
-      headerGradient: 'from-emerald-400 via-teal-300 to-amber-300',
+      cardBg: 'bg-gradient-to-b from-[#021f15] via-[#062c20] to-[#041710] text-emerald-100 border-2 border-emerald-500/80 shadow-[0_0_50px_rgba(16,185,129,0.25)]',
+      headerGradient: 'from-emerald-300 via-teal-200 to-amber-300',
       accentColor: 'text-emerald-400',
       badgeBg: 'bg-gradient-to-r from-emerald-400 to-teal-500 text-slate-950 font-black',
-      podium1: 'border-emerald-400 bg-gradient-to-b from-emerald-500/25 to-slate-950/90 text-emerald-300 shadow-[0_0_25px_rgba(52,211,153,0.3)]',
-      podium2: 'border-teal-400 bg-gradient-to-b from-teal-500/20 to-slate-950/90 text-teal-300',
-      podium3: 'border-amber-600 bg-gradient-to-b from-amber-700/20 to-slate-950/90 text-amber-300',
-      watermark: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
+      podium1: 'border-2 border-emerald-400 bg-gradient-to-b from-emerald-500/30 to-slate-950/95 text-emerald-300 shadow-[0_0_35px_rgba(52,211,153,0.35)]',
+      podium2: 'border-2 border-teal-400 bg-gradient-to-b from-teal-500/20 to-slate-950/95 text-teal-300',
+      podium3: 'border-2 border-amber-600 bg-gradient-to-b from-amber-700/20 to-slate-950/95 text-amber-300',
+      watermark: 'border-2 border-emerald-500/50 bg-emerald-500/20 text-emerald-300'
     },
     clean_light: {
-      cardBg: 'bg-gradient-to-br from-white via-slate-50 to-amber-50/40 text-slate-900 border-amber-400 shadow-xl',
+      cardBg: 'bg-gradient-to-br from-white via-slate-50 to-amber-50/60 text-slate-900 border-2 border-amber-400 shadow-2xl',
       headerGradient: 'from-amber-600 via-yellow-600 to-orange-600',
       accentColor: 'text-amber-600',
       badgeBg: 'bg-amber-500 text-slate-950 font-black',
-      podium1: 'border-amber-400 bg-amber-50/90 text-amber-900 shadow-md',
-      podium2: 'border-slate-300 bg-slate-100/90 text-slate-800',
-      podium3: 'border-orange-300 bg-orange-50/90 text-orange-900',
-      watermark: 'border-amber-300 bg-amber-100 text-amber-900'
+      podium1: 'border-2 border-amber-400 bg-amber-50/95 text-amber-950 shadow-lg',
+      podium2: 'border-2 border-slate-300 bg-slate-100/95 text-slate-900',
+      podium3: 'border-2 border-orange-300 bg-orange-50/95 text-orange-950',
+      watermark: 'border-2 border-amber-300 bg-amber-100 text-amber-950'
     }
   }[visualTheme];
 

@@ -29,6 +29,7 @@ import {
 } from 'lucide-react';
 import { audioService } from '../services/audioService';
 import { captureElementToCanvas } from '../utils/captureUtils';
+import { getResolvedTraineePhoto } from '../utils/centerLogo';
 import confetti from 'canvas-confetti';
 
 interface SessionCeremonyModalProps {
@@ -605,7 +606,7 @@ export const SessionCeremonyModal: React.FC<SessionCeremonyModalProps> = ({
                         { label: 'المركز الثالث 🥉', badge: 'bg-amber-700 text-white', ring: 'ring-amber-600' }
                       ];
                       const rank = ranks[index] || ranks[0];
-                      const photo = st.photoUrl || (st as any)?.photo;
+                      const photo = getResolvedTraineePhoto(st);
                       const displayName = st.fullName || 'متدرب متميز';
 
                       return (
@@ -755,7 +756,7 @@ export const SessionCeremonyModal: React.FC<SessionCeremonyModalProps> = ({
 
                         <div>
                           <span className="text-[10px] font-black text-slate-700 uppercase tracking-wider block">المركز الثاني 🥈</span>
-                          <h4 className="font-black text-sm text-slate-950 mt-1 truncate">{top3[1]?.fullName || 'متدرب متميز'}</h4>
+                          <h4 className="font-black text-xs sm:text-sm text-slate-950 mt-1 break-words font-serif leading-snug px-1 min-h-[32px] flex items-center justify-center">{top3[1]?.fullName || 'متدرب متميز'}</h4>
                           <p className="text-[10px] text-slate-600 font-mono font-bold mt-0.5">كود: {top3[1]?.code || '---'}</p>
                         </div>
 
@@ -815,7 +816,7 @@ export const SessionCeremonyModal: React.FC<SessionCeremonyModalProps> = ({
 
                         <div>
                           <span className="text-[11px] font-black text-amber-900 uppercase tracking-widest block">🥇 بطل الجلسة والتاج</span>
-                          <h3 className="font-black text-base text-slate-950 mt-1 truncate">{top3[0]?.fullName || 'البطل الأول'}</h3>
+                          <h3 className="font-black text-sm sm:text-base text-slate-950 mt-1 break-words font-serif leading-snug px-1 min-h-[36px] flex items-center justify-center">{top3[0]?.fullName || 'البطل الأول'}</h3>
                           <p className="text-[11px] text-amber-900 font-mono font-bold mt-0.5">كود: {top3[0]?.code || '---'}</p>
                         </div>
 
@@ -875,7 +876,7 @@ export const SessionCeremonyModal: React.FC<SessionCeremonyModalProps> = ({
 
                         <div>
                           <span className="text-[10px] font-black text-orange-800 dark:text-amber-300 uppercase tracking-wider block">المركز الثالث 🥉</span>
-                          <h4 className="font-black text-sm text-slate-950 dark:text-white mt-1 truncate">{top3[2]?.fullName || 'متدرب متميز'}</h4>
+                          <h4 className="font-black text-xs sm:text-sm text-slate-950 dark:text-white mt-1 break-words font-serif leading-snug px-1 min-h-[32px] flex items-center justify-center">{top3[2]?.fullName || 'متدرب متميز'}</h4>
                           <p className="text-[10px] text-orange-800/80 dark:text-amber-200/80 font-mono font-bold mt-0.5">كود: {top3[2]?.code || '---'}</p>
                         </div>
 

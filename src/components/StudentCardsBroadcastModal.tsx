@@ -20,6 +20,8 @@ import QRCode from 'qrcode';
 import { Trainee, Course, Group, Branch } from '../types';
 import { getPublicStudentPortalUrl } from '../utils/urlHelper';
 import { useCenter } from '../context/CenterContext';
+import { useTheme } from '../context/ThemeContext';
+import { getEffectiveCenterLogo, handleLogoError } from '../utils/centerLogo';
 
 interface StudentCardsBroadcastModalProps {
   isOpen: boolean;
@@ -55,7 +57,9 @@ export const StudentCardsBroadcastModal: React.FC<StudentCardsBroadcastModalProp
   const [selectedCourseId, setSelectedCourseId] = useState<string>(initialCourseId || 'all');
   const [selectedGroupId, setSelectedGroupId] = useState<string>(initialGroupId || 'all');
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const [printTheme, setPrintTheme] = useState<'light' | 'dark'>('light');
+  const { settings } = useCenter();
+  const { theme } = useTheme();
+  const [printTheme, setPrintTheme] = useState<'light' | 'dark'>(() => (theme === 'dark' ? 'dark' : 'light'));
   const [cardsPerPage, setCardsPerPage] = useState<'4' | '2' | '1'>('4');
   const [isPreparingPrint, setIsPreparingPrint] = useState(false);
   const [broadcastMessage, setBroadcastMessage] = useState<string>(
@@ -64,8 +68,14 @@ export const StudentCardsBroadcastModal: React.FC<StudentCardsBroadcastModalProp
   const [selectedTraineeIds, setSelectedTraineeIds] = useState<string[]>(
     initialSelectedTrainee ? [initialSelectedTrainee.id] : []
   );
-  const { settings } = useCenter();
   const managerName = settings?.managerName || 'د. محمد رمضان بخيت';
+  const centerLogo = getEffectiveCenterLogo(settings?.logoUrl);
+
+  useEffect(() => {
+    if (theme) {
+      setPrintTheme(theme === 'dark' ? 'dark' : 'light');
+    }
+  }, [theme]);
 
   if (!isOpen) return null;
 
@@ -143,13 +153,6 @@ export const StudentCardsBroadcastModal: React.FC<StudentCardsBroadcastModalProp
         })
       );
 
-      const printWindow = window.open('', '_blank');
-      if (!printWindow) {
-        onShowToast('يرجى السماح بفتح النوافذ المنبثقة للطباعة', 'error');
-        setIsPreparingPrint(false);
-        return;
-      }
-
       const isDark = printTheme === 'dark';
       const gridColumns = cardsPerPage === '1' ? '1fr' : 'repeat(2, 1fr)';
       const cardHeight = cardsPerPage === '4' ? '128mm' : cardsPerPage === '2' ? '138mm' : '145mm';
@@ -162,7 +165,7 @@ export const StudentCardsBroadcastModal: React.FC<StudentCardsBroadcastModalProp
           );
           const groupObj = groups.find((g) => g.id === t.groupId);
           const qrCodeImg = qrCodesMap[t.id] || '';
-          const photo = t.photoUrl;
+          const photo = t.photoUrl || (t as any).photo || (t.id ? localStorage.getItem('student_session_photo_' + t.id) : null) || (t.code ? localStorage.getItem('student_session_photo_' + t.code) : null) || '';
           const initialLetter = t.fullName?.charAt(0) || 'م';
           const branchName = branchObj ? branchObj.name : 'الفرع الرئيسي';
           const courseName = courseObj ? courseObj.name : 'الدورة التدريبية';
@@ -181,10 +184,10 @@ export const StudentCardsBroadcastModal: React.FC<StudentCardsBroadcastModalProp
             <!-- Card Header -->
             <div class="card-header">
               <div class="logo-box">
-                <img src="/logo.svg" alt="شعار المركز" onerror="this.src='/logo.png'" />
+                <img src="${centerLogo}" alt="شعار المركز" onerror="this.src='/logo.png'" />
               </div>
               <div class="header-titles">
-                <div class="org-name">النجاح للتدريب والاستشارات</div>
+                <div class="org-name">${settings?.centerName || 'النجاح للتدريب والاستشارات'}</div>
                 <div class="card-title">🌟 بطاقة العضوية والتدريب الرسمية الذكية</div>
               </div>
               <div class="year-pill">2026/2027</div>
@@ -247,9 +250,9 @@ export const StudentCardsBroadcastModal: React.FC<StudentCardsBroadcastModalProp
                 </div>
 
                 <div class="signature-container">
-                  <div class="sign-title">الاعتماد والتوقيع الرسمي</div>
+                  <div class="sign-title">يعتمد</div>
+                  <div class="sign-subtitle">مدير عام الأكاديمية</div>
                   <div class="sign-name">${managerName}</div>
-                  <div class="sign-verified">✓ معتمد إلكترونياً من الإدارة</div>
                   <svg class="sign-svg" viewBox="0 0 140 40" fill="none">
                     <path d="M10 25 C30 5, 45 35, 70 15 C95 -5, 110 30, 130 18" stroke="${isDark ? '#38bdf8' : '#0284c7'}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />
                     <path d="M40 32 C60 28, 85 32, 115 28" stroke="${isDark ? '#38bdf8' : '#0284c7'}" stroke-width="1.6" stroke-linecap="round" />
@@ -268,7 +271,7 @@ export const StudentCardsBroadcastModal: React.FC<StudentCardsBroadcastModalProp
         })
         .join('');
 
-      printWindow.document.write(`
+      const fullPrintDocumentHtml = `
         <!DOCTYPE html>
         <html lang="ar" dir="rtl">
         <head>
@@ -279,13 +282,13 @@ export const StudentCardsBroadcastModal: React.FC<StudentCardsBroadcastModalProp
             * { box-sizing: border-box; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
             body {
               font-family: 'Cairo', sans-serif;
-              background: #e2e8f0;
-              color: #0f172a;
+              background: ${isDark ? '#0b0f19' : '#f8fafc'};
+              color: ${isDark ? '#f8fafc' : '#0f172a'};
               margin: 0;
               padding: 24px;
             }
             .no-print {
-              background: #ffffff;
+              background: ${isDark ? '#1e293b' : '#ffffff'};
               border-radius: 16px;
               padding: 16px 24px;
               margin-bottom: 24px;
@@ -293,6 +296,7 @@ export const StudentCardsBroadcastModal: React.FC<StudentCardsBroadcastModalProp
               align-items: center;
               justify-content: space-between;
               box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+              border: 1px solid ${isDark ? '#334155' : '#e2e8f0'};
             }
             .print-btn {
               background: linear-gradient(135deg, #d97706, #b45309);
@@ -309,7 +313,7 @@ export const StudentCardsBroadcastModal: React.FC<StudentCardsBroadcastModalProp
             .print-info {
               font-size: 13px;
               font-weight: 700;
-              color: #475569;
+              color: ${isDark ? '#94a3b8' : '#475569'};
             }
             .grid-sheet {
               display: grid;
@@ -340,9 +344,9 @@ export const StudentCardsBroadcastModal: React.FC<StudentCardsBroadcastModalProp
               height: ${cardHeight};
               border-radius: 16px;
               overflow: hidden;
-              background: ${isDark ? 'linear-gradient(145deg, #090e1a, #0f172a, #1e1b4b)' : 'linear-gradient(145deg, #ffffff, #f8fafc, #f1f5f9)'};
+              background: ${isDark ? 'linear-gradient(145deg, #090e1a, #0f172a, #1e1b4b)' : '#ffffff'};
               color: ${isDark ? '#f8fafc' : '#0f172a'};
-              border: 2px solid ${isDark ? '#f59e0b' : '#cbd5e1'};
+              border: 2px solid ${isDark ? '#f59e0b' : '#d97706'};
               box-shadow: 0 8px 20px rgba(0,0,0,0.12);
               display: flex;
               flex-direction: column;
@@ -368,8 +372,8 @@ export const StudentCardsBroadcastModal: React.FC<StudentCardsBroadcastModalProp
               margin: 5px auto 0 auto;
             }
             .card-header {
-              background: ${isDark ? 'linear-gradient(90deg, #1e293b, #0f172a)' : 'linear-gradient(90deg, #1e3a8a, #0f172a)'};
-              color: #ffffff;
+              background: ${isDark ? 'linear-gradient(90deg, #1e293b, #0f172a)' : 'linear-gradient(90deg, #fffbeb, #ffffff, #fffbeb)'};
+              color: ${isDark ? '#ffffff' : '#0f172a'};
               padding: 7px 12px;
               border-bottom: 2px solid #f59e0b;
               display: flex;
@@ -390,16 +394,16 @@ export const StudentCardsBroadcastModal: React.FC<StudentCardsBroadcastModalProp
             }
             .logo-box img { width: 100%; height: 100%; object-fit: contain; }
             .header-titles { flex: 1; margin-right: 8px; }
-            .org-name { font-size: 11.5px; font-weight: 900; color: #fbbf24; line-height: 1.2; }
-            .card-title { font-size: 8px; font-weight: 700; color: #e2e8f0; margin-top: 1px; }
+            .org-name { font-size: 11.5px; font-weight: 900; color: ${isDark ? '#fbbf24' : '#b45309'}; line-height: 1.2; }
+            .card-title { font-size: 8px; font-weight: 700; color: ${isDark ? '#e2e8f0' : '#475569'}; margin-top: 1px; }
             .year-pill {
               font-size: 7.5px;
               font-weight: 800;
-              background: rgba(245, 158, 11, 0.2);
-              color: #fbbf24;
+              background: ${isDark ? 'rgba(245, 158, 11, 0.2)' : '#fef3c7'};
+              color: ${isDark ? '#fbbf24' : '#92400e'};
               padding: 2px 6px;
               border-radius: 6px;
-              border: 1px solid rgba(245, 158, 11, 0.4);
+              border: 1px solid ${isDark ? 'rgba(245, 158, 11, 0.4)' : '#fde68a'};
             }
             .card-body {
               padding: 8px 11px;
@@ -407,6 +411,7 @@ export const StudentCardsBroadcastModal: React.FC<StudentCardsBroadcastModalProp
               display: flex;
               flex-direction: column;
               justify-content: space-between;
+              background: ${isDark ? 'transparent' : '#ffffff'};
             }
             .photo-code-row {
               display: flex;
@@ -420,7 +425,7 @@ export const StudentCardsBroadcastModal: React.FC<StudentCardsBroadcastModalProp
               border-radius: 12px;
               border: 2px solid #f59e0b;
               overflow: hidden;
-              background: ${isDark ? '#1e293b' : '#e2e8f0'};
+              background: ${isDark ? '#1e293b' : '#f1f5f9'};
               display: flex;
               align-items: center;
               justify-content: center;
@@ -443,18 +448,18 @@ export const StudentCardsBroadcastModal: React.FC<StudentCardsBroadcastModalProp
             .photo-note { font-size: 6.5px; font-weight: 700; margin-top: 1px; line-height: 1; }
             .code-box {
               flex: 1;
-              background: ${isDark ? 'rgba(15, 23, 42, 0.85)' : '#f8fafc'};
-              border: 1.5px dashed ${isDark ? '#f59e0b' : '#94a3b8'};
+              background: ${isDark ? 'rgba(15, 23, 42, 0.85)' : '#fffdfa'};
+              border: 1.5px dashed ${isDark ? '#f59e0b' : '#d97706'};
               border-radius: 10px;
               padding: 5px 8px;
               text-align: center;
             }
-            .code-title { font-size: 7.5px; font-weight: 700; color: ${isDark ? '#94a3b8' : '#64748b'}; }
-            .code-val { font-family: monospace; font-size: 18px; font-weight: 900; color: #f59e0b; letter-spacing: 1.5px; margin: 1px 0; }
-            .code-badge { font-size: 7px; font-weight: 800; color: #10b981; }
+            .code-title { font-size: 7.5px; font-weight: 700; color: ${isDark ? '#94a3b8' : '#78350f'}; }
+            .code-val { font-family: monospace; font-size: 19px; font-weight: 900; color: ${isDark ? '#fbbf24' : '#b45309'}; letter-spacing: 2px; margin: 1px 0; }
+            .code-badge { font-size: 7px; font-weight: 800; color: #059669; }
             .info-table {
               width: 100%;
-              background: ${isDark ? 'rgba(30, 41, 59, 0.7)' : '#ffffff'};
+              background: ${isDark ? 'rgba(30, 41, 59, 0.7)' : '#f8fafc'};
               border-radius: 9px;
               border: 1px solid ${isDark ? 'rgba(245, 158, 11, 0.3)' : '#e2e8f0'};
               padding: 6px 8px;
@@ -463,14 +468,15 @@ export const StudentCardsBroadcastModal: React.FC<StudentCardsBroadcastModalProp
             .info-row {
               display: flex;
               justify-content: space-between;
+              align-items: center;
               font-size: 9px;
               padding: 2.5px 0;
-              border-bottom: 1px solid ${isDark ? 'rgba(255,255,255,0.06)' : '#f1f5f9'};
+              border-bottom: 1px solid ${isDark ? 'rgba(255,255,255,0.06)' : '#edf2f7'};
             }
             .info-row:last-child { border-bottom: none; }
             .info-lbl { color: ${isDark ? '#94a3b8' : '#64748b'}; font-weight: 700; }
-            .info-val { font-weight: 800; color: ${isDark ? '#ffffff' : '#0f172a'}; max-width: 65%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-            .name-val { font-size: 10.5px; font-weight: 900; color: ${isDark ? '#fef08a' : '#1e3a8a'}; }
+            .info-val { font-weight: 800; color: ${isDark ? '#ffffff' : '#0f172a'}; max-width: 75%; }
+            .name-val { font-size: 11px; font-weight: 900; color: ${isDark ? '#fef08a' : '#1e3a8a'}; white-space: normal !important; word-break: break-word !important; line-height: 1.25; overflow: visible !important; text-overflow: clip !important; }
             .group-val { color: ${isDark ? '#a5b4fc' : '#4338ca'}; }
             .phone-val { font-family: monospace; }
             .qr-sign-row {
@@ -502,22 +508,22 @@ export const StudentCardsBroadcastModal: React.FC<StudentCardsBroadcastModalProp
               flex-direction: column;
               align-items: center;
             }
-            .sign-title { font-size: 7px; font-weight: 700; color: ${isDark ? '#94a3b8' : '#64748b'}; }
-            .sign-name { font-size: 9px; font-weight: 900; color: #f59e0b; margin-top: 1px; }
-            .sign-verified { font-size: 6.5px; color: #10b981; font-weight: 700; }
-            .sign-svg { width: 65px; height: 20px; margin-top: 1px; }
+            .sign-title { font-size: 8px; font-weight: 900; color: ${isDark ? '#f59e0b' : '#b45309'}; }
+            .sign-subtitle { font-size: 7px; font-weight: 700; color: ${isDark ? '#94a3b8' : '#64748b'}; }
+            .sign-name { font-size: 9.5px; font-weight: 900; color: ${isDark ? '#ffffff' : '#0f172a'}; margin-top: 1px; }
+            .sign-svg { width: 65px; height: 18px; margin-top: 1px; }
             .card-footer {
-              background: ${isDark ? '#020617' : '#0f172a'};
-              color: #94a3b8;
-              font-size: 7px;
+              background: ${isDark ? '#020617' : '#ffffff'};
+              color: ${isDark ? '#94a3b8' : '#64748b'};
+              font-size: 7.5px;
               font-weight: 700;
-              padding: 4px 10px;
+              padding: 5px 10px;
               display: flex;
               justify-content: space-between;
               align-items: center;
-              border-top: 1px solid #f59e0b;
+              border-top: 1px solid ${isDark ? '#f59e0b' : '#e2e8f0'};
             }
-            .seal-badge { color: #f59e0b; font-weight: 800; }
+            .seal-badge { color: ${isDark ? '#f59e0b' : '#b45309'}; font-weight: 800; }
           </style>
         </head>
         <body>
@@ -534,14 +540,56 @@ export const StudentCardsBroadcastModal: React.FC<StudentCardsBroadcastModalProp
           </div>
           <script>
             window.onload = function() {
-              setTimeout(() => { window.print(); }, 500);
+              setTimeout(() => { window.print(); }, 400);
             }
           </script>
         </body>
         </html>
-      `);
-      printWindow.document.close();
-      onShowToast(`تم فتح صفحة طباعة ${listToPrint.length} كارنيه بنجاح! 🖨️`, 'success');
+      `;
+
+      // Safe printing via hidden iframe to completely eliminate browser popup blockers
+      let printFrame = document.getElementById('nagah-student-cards-print-frame') as HTMLIFrameElement;
+      if (!printFrame) {
+        printFrame = document.createElement('iframe');
+        printFrame.id = 'nagah-student-cards-print-frame';
+        printFrame.style.position = 'fixed';
+        printFrame.style.top = '-9999px';
+        printFrame.style.left = '-9999px';
+        printFrame.style.width = '1200px';
+        printFrame.style.height = '900px';
+        printFrame.style.border = 'none';
+        document.body.appendChild(printFrame);
+      }
+
+      const frameDoc = printFrame.contentWindow?.document;
+      if (frameDoc) {
+        frameDoc.open();
+        frameDoc.write(fullPrintDocumentHtml);
+        frameDoc.close();
+
+        setTimeout(() => {
+          try {
+            printFrame.contentWindow?.focus();
+            printFrame.contentWindow?.print();
+            onShowToast(`تم إرسال ${listToPrint.length} بطاقة كارنيه إلى أمر الطباعة بنجاح دون أي حظر نوافذ! 🖨️✨`, 'success');
+          } catch (e) {
+            console.warn('Iframe print fallback to window:', e);
+            window.print();
+          } finally {
+            setIsPreparingPrint(false);
+          }
+        }, 600);
+      } else {
+        const printWindow = window.open('', '_blank');
+        if (printWindow) {
+          printWindow.document.write(fullPrintDocumentHtml);
+          printWindow.document.close();
+          onShowToast(`تم فتح صفحة طباعة ${listToPrint.length} كارنيه بنجاح! 🖨️`, 'success');
+        } else {
+          window.print();
+        }
+        setIsPreparingPrint(false);
+      }
     } catch (err) {
       console.error('Error generating cards print:', err);
       onShowToast('حدث خطأ أثناء تجهيز البطاقات للطباعة', 'error');

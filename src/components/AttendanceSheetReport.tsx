@@ -35,6 +35,7 @@ import confetti from 'canvas-confetti';
 import { audioService } from '../services/audioService';
 import { SessionCelebrationOverlay } from './SessionCelebrationOverlay';
 import { LectureExcellenceCertificateModal, LectureCertificateInitialData } from './LectureExcellenceCertificateModal';
+import { getEffectiveCenterLogo, handleLogoError } from '../utils/centerLogo';
 
 interface TraineeAttendanceItem {
   id?: string;
@@ -651,7 +652,7 @@ export const AttendanceSheetReport: React.FC<AttendanceSheetReportProps> = ({ da
       >
         {/* Watermark Logo Background */}
         <div className="absolute inset-0 flex items-center justify-center opacity-[0.03] pointer-events-none select-none">
-          <img src={settings?.logoUrl || '/logo.svg'} alt="" className="w-96 h-96 object-contain" />
+          <img src={getEffectiveCenterLogo(settings?.logoUrl)} alt="" className="w-96 h-96 object-contain" onError={handleLogoError} />
         </div>
 
         {/* 1. Official Header */}
@@ -659,7 +660,7 @@ export const AttendanceSheetReport: React.FC<AttendanceSheetReportProps> = ({ da
           {/* Center Brand Identity */}
           <div className="flex items-center gap-3.5 text-right">
             <div className="w-16 h-16 rounded-2xl border-2 border-amber-500/80 p-1.5 bg-slate-900 shadow-md flex items-center justify-center shrink-0">
-              <img src={settings?.logoUrl || '/logo.svg'} alt="شعار المركز" className="w-full h-full object-contain" />
+              <img src={getEffectiveCenterLogo(settings?.logoUrl)} alt="شعار المركز" className="w-full h-full object-contain" onError={handleLogoError} />
             </div>
             <div>
               <div className="flex items-center gap-1.5">

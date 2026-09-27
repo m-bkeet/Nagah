@@ -820,6 +820,9 @@ export interface Certificate {
   managerName?: string;
   templateId?: string;
   templateTheme?: string;
+  certificateTitle?: string;
+  certificateTitleEn?: string;
+  language?: 'ar' | 'en';
 }
 
 export interface GoogleDriveBackupFile {

@@ -168,8 +168,8 @@ export const OfficialReceiptModal: React.FC<OfficialReceiptModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/75 backdrop-blur-md overflow-hidden print:p-0 print:bg-white print:static" dir="rtl">
-      <div className="relative w-full max-w-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl max-h-[92vh] flex flex-col overflow-hidden print:border-none print:shadow-none print:bg-white print:text-black print:w-full">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/75 backdrop-blur-md overflow-hidden print-modal-overlay" dir="rtl">
+      <div className="relative w-full max-w-xl bg-white border border-slate-200 rounded-3xl shadow-2xl max-h-[92vh] flex flex-col overflow-hidden print-modal-box">
         
         {/* Modal Action Bar (Hidden on Print) */}
         <div className="shrink-0 p-3.5 sm:p-4 bg-slate-50 dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between flex-wrap gap-2 print:hidden">

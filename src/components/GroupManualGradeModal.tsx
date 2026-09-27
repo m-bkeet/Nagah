@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { Course, Group, Trainee, Exam, ExamResult } from '../types';
 import { api } from '../services/api';
+import { useCenter } from '../context/CenterContext';
 
 interface GroupManualGradeModalProps {
   isOpen: boolean;
@@ -51,6 +52,7 @@ export const GroupManualGradeModal: React.FC<GroupManualGradeModalProps> = ({
   onGradesSaved,
   onIssueCertificate
 }) => {
+  const { showToast } = useCenter();
   // Course, Group, and Exam selections
   const [selectedCourseId, setSelectedCourseId] = useState<string>(courses[0]?.id || '');
   const [selectedGroupId, setSelectedGroupId] = useState<string>('');
@@ -62,6 +64,8 @@ export const GroupManualGradeModal: React.FC<GroupManualGradeModalProps> = ({
 
   // Table rows
   const [gradeRows, setGradeRows] = useState<StudentGradeRow[]>([]);
+  const userEditsRef = React.useRef<Record<string, { score: number | string; attendanceStatus: 'present' | 'absent' | 'excused'; notes: string }>>({});
+  const lastLoadedGroupExamRef = React.useRef<string>('');
   const [isSaving, setIsSaving] = useState<boolean>(false);
   const [isLoadingExisting, setIsLoadingExisting] = useState<boolean>(false);
 
@@ -84,11 +88,18 @@ export const GroupManualGradeModal: React.FC<GroupManualGradeModalProps> = ({
     return exams.filter(e => !selectedCourseId || e.courseId === selectedCourseId);
   }, [exams, selectedCourseId]);
 
-  // Populate grade rows when selectedGroupId or selectedExamId changes
+  // Populate grade rows safely without wiping user's typed scores
   useEffect(() => {
     if (!selectedGroupId) {
       setGradeRows([]);
       return;
+    }
+
+    const currentKey = `${selectedGroupId}-${selectedExamId}`;
+    const isDifferentGroupOrExam = lastLoadedGroupExamRef.current !== currentKey;
+    if (isDifferentGroupOrExam) {
+      lastLoadedGroupExamRef.current = currentKey;
+      userEditsRef.current = {};
     }
 
     // Get all trainees enrolled in this group
@@ -114,15 +125,17 @@ export const GroupManualGradeModal: React.FC<GroupManualGradeModalProps> = ({
       }
 
       const rows: StudentGradeRow[] = groupTrainees.map(t => {
+        const userEdit = userEditsRef.current[t.id];
         const exist = existingResultsMap[t.id];
+
         return {
           traineeId: t.id,
           traineeCode: t.code || '—',
           traineeName: t.fullName,
           traineePhoto: t.photoUrl,
-          attendanceStatus: (exist as any)?.attendanceStatus || (exist?.rating === 'راسب' && exist.score === 0 ? 'absent' : 'present'),
-          score: exist ? exist.score : '',
-          notes: exist?.notes || ''
+          attendanceStatus: userEdit?.attendanceStatus || (exist as any)?.attendanceStatus || (exist?.rating === 'راسب' && exist.score === 0 ? 'absent' : 'present'),
+          score: userEdit !== undefined ? userEdit.score : (exist ? exist.score : ''),
+          notes: userEdit !== undefined ? userEdit.notes : (exist?.notes || '')
         };
       });
 
@@ -130,7 +143,7 @@ export const GroupManualGradeModal: React.FC<GroupManualGradeModalProps> = ({
     };
 
     loadData();
-  }, [selectedGroupId, selectedExamId, trainees]);
+  }, [selectedGroupId, selectedExamId, trainees.length]);
 
   // Calculate ranks and top scorers
   const rankedStudents = useMemo(() => {
@@ -184,7 +197,7 @@ export const GroupManualGradeModal: React.FC<GroupManualGradeModalProps> = ({
   // Save all grades
   const handleSaveAllGrades = async () => {
     if (!selectedGroupId) {
-      alert('يرجى اختيار المجموعة أولاً.');
+      showToast('يرجى اختيار المجموعة أولاً.', 'warning');
       return;
     }
 
@@ -192,10 +205,15 @@ export const GroupManualGradeModal: React.FC<GroupManualGradeModalProps> = ({
     try {
       let activeExamId = selectedExamId;
 
+      const groupObj = groups.find(g => g.id === selectedGroupId);
+      const courseObj = courses.find(c => c.id === selectedCourseId);
+      const effectiveBranchId = groupObj?.branchId || courseObj?.branchId || 'branch-1';
+
       // If "new" exam or no exam selected, create a quick exam first
       if (!activeExamId || activeExamId === 'new') {
         const newExamRes = await api.createExam({
           title: customExamTitle.trim() || 'رصد درجات الاختبار',
+          branchId: effectiveBranchId,
           courseId: selectedCourseId,
           groupId: selectedGroupId,
           totalMarks: Number(totalMarks) || 100,
@@ -228,11 +246,11 @@ export const GroupManualGradeModal: React.FC<GroupManualGradeModalProps> = ({
         onGradesSaved();
       }
 
-      alert('تم حفظ ورصد درجات المجموعة بنجاح! 💾');
+      showToast('تم حفظ ورصد درجات المجموعة بنجاح! 💾', 'success');
       onClose();
     } catch (err: any) {
       console.error('Error saving batch grades:', err);
-      alert(err.message || 'حدث خطأ أثناء حفظ الدرجات');
+      showToast(err.message || 'حدث خطأ أثناء حفظ الدرجات', 'error');
     } finally {
       setIsSaving(false);
     }
@@ -545,13 +563,20 @@ export const GroupManualGradeModal: React.FC<GroupManualGradeModalProps> = ({
                             value={row.attendanceStatus}
                             onChange={e => {
                               const newStatus = e.target.value as StudentGradeRow['attendanceStatus'];
+                              const newScore = newStatus === 'absent' ? 0 : row.score;
+                              userEditsRef.current[row.traineeId] = {
+                                ...userEditsRef.current[row.traineeId],
+                                attendanceStatus: newStatus,
+                                score: newScore,
+                                notes: row.notes
+                              };
                               setGradeRows(
                                 gradeRows.map(r =>
                                   r.traineeId === row.traineeId
                                     ? {
                                         ...r,
                                         attendanceStatus: newStatus,
-                                        score: newStatus === 'absent' ? 0 : r.score
+                                        score: newScore
                                       }
                                     : r
                                 )
@@ -582,6 +607,12 @@ export const GroupManualGradeModal: React.FC<GroupManualGradeModalProps> = ({
                               disabled={row.attendanceStatus === 'absent'}
                               onChange={e => {
                                 const val = e.target.value;
+                                userEditsRef.current[row.traineeId] = {
+                                  attendanceStatus: row.attendanceStatus,
+                                  notes: row.notes,
+                                  ...userEditsRef.current[row.traineeId],
+                                  score: val
+                                };
                                 setGradeRows(
                                   gradeRows.map(r => (r.traineeId === row.traineeId ? { ...r, score: val } : r))
                                 );
@@ -620,6 +651,12 @@ export const GroupManualGradeModal: React.FC<GroupManualGradeModalProps> = ({
                             value={row.notes}
                             onChange={e => {
                               const val = e.target.value;
+                              userEditsRef.current[row.traineeId] = {
+                                attendanceStatus: row.attendanceStatus,
+                                score: row.score,
+                                ...userEditsRef.current[row.traineeId],
+                                notes: val
+                              };
                               setGradeRows(
                                 gradeRows.map(r => (r.traineeId === row.traineeId ? { ...r, notes: val } : r))
                               );

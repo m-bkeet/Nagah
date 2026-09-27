@@ -1,362 +1,351 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
-import { Shield, Lock, User, CheckCircle2, ArrowRight, Download, Smartphone, Monitor, UserPlus, BookOpen, GraduationCap } from 'lucide-react';
-import { UserRole } from '../types';
-import { PwaInstallPrompt } from '../components/PwaInstallPrompt';
+import { useCenter } from '../context/CenterContext';
+import { 
+  Shield, 
+  Lock, 
+  User, 
+  ArrowRight, 
+  BookOpen, 
+  Sparkles,
+  Eye,
+  EyeOff,
+  CheckCircle2,
+  Crown,
+  Wallet,
+  ClipboardList,
+  GraduationCap
+} from 'lucide-react';
 import { ThemeQuickSwitcher } from '../components/ThemeQuickSwitcher';
 import { AdminPasscodeModal } from '../components/AdminPasscodeModal';
 
 export const LoginView: React.FC = () => {
   const { login, alwaysRequireLogin, setAlwaysRequireLogin } = useAuth();
-  const { themeConfig } = useTheme();
+  const { isDark } = useTheme();
+  const { settings } = useCenter();
+  
+  const effectiveLogo = settings?.logoUrl || localStorage.getItem('nagah_custom_logo') || '/logo.svg';
+  const effectiveCenterName = settings?.centerName || 'مركز النجاح للتدريب';
+  const effectiveSubtitle = settings?.centerSubtitle || 'نظام الإدارة والتشغيل السحابي';
   
   const [isPasscodeUnlocked, setIsPasscodeUnlocked] = useState(true);
   const [showPasscodeModal, setShowPasscodeModal] = useState(false);
-  const [username, setUsername] = useState(() => {
-    return localStorage.getItem('nagah_saved_username') || 'admin';
-  });
+  const [username, setUsername] = useState('admin');
   const [password, setPassword] = useState('1234');
+  const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [devClicks, setDevClicks] = useState(0);
-  const [showDevPanel, setShowDevPanel] = useState(true);
-
-  const handleDevClick = () => {
-    setDevClicks(prev => {
-      const next = prev + 1;
-      if (next >= 5) {
-        setShowDevPanel(true);
-        return 0;
-      }
-      return next;
-    });
-  };
+  const [selectedRoleTitle, setSelectedRoleTitle] = useState('المدير العام');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!username.trim()) {
+      setError('يرجى إدخال اسم المستخدم أو كود الحساب');
+      return;
+    }
+    if (!password.trim()) {
+      setError('يرجى إدخال كلمة المرور');
+      return;
+    }
     setError('');
     setIsLoading(true);
     try {
-      const res = await login(username, password, rememberMe);
+      const res = await login(username.trim(), password, rememberMe);
       if (!res.success) {
-        setError(res.message || 'بيانات الدخول غير صحيحة');
+        setError(res.message || 'بيانات الدخول غير صحيحة، يرجى التحقق وإعادة المحاولة');
       }
     } catch (err: any) {
-      setError(err.message || 'فشل الاتصال بالنظام');
+      setError(err.message || 'فشل الاتصال بالنظام، يرجى التحقق من الاتصال بالإنترنت');
     } finally {
       setIsLoading(false);
     }
   };
 
-  const quickRoles: { role: UserRole; title: string; u: string; p: string; desc: string }[] = [
+  const quickRoles = [
     {
-      role: 'super_admin',
-      title: 'المدير العام (Super Admin)',
+      id: 'super_admin',
+      title: 'المدير العام',
       u: 'admin',
       p: '1234',
-      desc: 'صلاحيات كاملة غير مقيدة على جميع الفروع'
+      icon: <Crown className="w-4 h-4 text-amber-500" />,
+      desc: 'صلاحيات كاملة'
     },
     {
-      role: 'branch_manager',
-      title: 'مدير فرع النجاح',
-      u: 'manager_ngah',
-      p: '1234',
-      desc: 'إدارة عمليات فرع النجاح بالكامل والتقارير'
-    },
-    {
-      role: 'accountant',
-      title: 'المدير المالي والمحاسب',
+      id: 'accountant',
+      title: 'الماليات والخزينة',
       u: 'accountant',
       p: '1234',
-      desc: 'إدارة الخزينة، سندات القبض والصرف والمصروفات'
+      icon: <Wallet className="w-4 h-4 text-emerald-500" />,
+      desc: 'تحصيل ومصروفات'
     },
     {
-      role: 'receptionist',
-      title: 'مسؤول الاستقبال وشؤون الطلاب',
+      id: 'receptionist',
+      title: 'الاستقبال وشؤون الطلاب',
       u: 'reception',
       p: '1234',
-      desc: 'تسجيل الطلاب، الحضور والغياب، وإصدار الشهادات'
+      icon: <ClipboardList className="w-4 h-4 text-blue-500" />,
+      desc: 'حضور وتسجيل'
     },
     {
-      role: 'trainer',
-      title: 'مدرب ومحاضر',
+      id: 'trainer',
+      title: 'المدرب والمحاضر',
       u: 'trainer',
       p: '1234',
-      desc: 'الجلسات التفاعلية، رصد درجات الاختبارات وكشف المستحقات'
+      icon: <GraduationCap className="w-4 h-4 text-purple-500" />,
+      desc: 'المجموعات والدرجات'
     }
   ];
 
-  const handleQuickLogin = async (u: string, p: string) => {
-    setUsername(u);
-    setPassword(p);
+  const handleQuickSelect = (r: typeof quickRoles[0]) => {
+    setUsername(r.u);
+    setPassword(r.p);
+    setSelectedRoleTitle(r.title);
     setError('');
-    setIsLoading(true);
-    try {
-      const res = await login(u, p);
-      if (!res.success) {
-        setError(res.message || 'بيانات الدخول غير صحيحة');
-      }
-    } catch (err: any) {
-      setError(err.message || 'فشل الاتصال بالنظام');
-    } finally {
-      setIsLoading(false);
-    }
   };
 
   return (
     <div 
-      className="min-h-screen flex flex-col justify-center items-center p-4 relative overflow-hidden transition-colors duration-300" 
+      className="h-screen max-h-screen w-full flex items-center justify-center p-3 sm:p-5 lg:p-6 bg-slate-100 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors duration-300 overflow-hidden"
       style={{
-        background: `linear-gradient(to bottom, ${themeConfig.colors.bgMainGradientStart}, ${themeConfig.colors.bgMainGradientMid}, ${themeConfig.colors.bgMainGradientEnd})`,
-        backgroundColor: themeConfig.colors.bgMain
+        backgroundImage: isDark 
+          ? `radial-gradient(circle at 50% 20%, rgba(245, 158, 11, 0.08) 0%, transparent 55%), radial-gradient(circle at 50% 80%, rgba(15, 23, 42, 0.95) 0%, transparent 60%)`
+          : `radial-gradient(circle at 50% 20%, rgba(245, 158, 11, 0.12) 0%, transparent 50%), radial-gradient(circle at 50% 80%, rgba(226, 232, 240, 0.85) 0%, transparent 60%)`
       }}
       dir="rtl"
     >
-      <div className="absolute top-4 left-4 z-20">
+      {/* Top Theme Switcher Button */}
+      <div className="fixed top-3 left-3 z-30 flex items-center gap-2">
         <ThemeQuickSwitcher />
       </div>
 
-      {/* Glow effect */}
-      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
-
-      <div className="max-w-md w-full relative z-10 space-y-6">
-        {/* Brand Header */}
-        <div className="text-center space-y-2">
-          <div className="inline-flex items-center justify-center w-24 h-24 rounded-2xl bg-slate-900 border border-slate-800 shadow-xl shadow-amber-500/10 mb-2 p-3">
-            <img 
-              src="/logo.svg" 
-              alt="مركز النجاح" 
-              className="w-full h-full object-contain" 
-            />
-          </div>
-          <h1 className="text-2xl font-black text-slate-100">
-            مركز النجاح للتدريب والاستشارات
-          </h1>
-          <p className="text-xs text-amber-400 font-mono font-bold tracking-wider">
-            Nagah M-S
-          </p>
-        </div>
-
-        {/* Login Card */}
-        <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-6 shadow-2xl backdrop-blur-xl space-y-5">
-          <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-            <h2 className="text-sm font-bold text-slate-200 flex items-center gap-2">
-              <Shield className="w-4 h-4 text-amber-400" />
-              تسجيل الدخول إلى النظام
-            </h2>
-            <span 
-              onClick={handleDevClick} 
-              className="text-[10px] text-slate-400 font-mono cursor-pointer select-none active:text-amber-400"
-              title="تفعيل وضع المطورين والتحكم والمدربين"
-            >
-              النسخة السابعة V7 {devClicks > 0 && `(${devClicks}/5)`}
-            </span>
-          </div>
-
-          {error && (
-            <div className="bg-rose-500/20 border border-rose-500/40 text-rose-300 text-xs p-3 rounded-xl">
-              {error}
-            </div>
-          )}
-
-          <form onSubmit={handleSubmit} className="space-y-3.5 text-xs">
-            <div>
-              <label className="block text-slate-300 font-bold mb-1">اسم المستخدم</label>
-              <div className="relative">
-                <User className="w-4 h-4 text-slate-400 absolute right-3 top-2.5" />
-                <input
-                  type="text"
-                  required
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-700 rounded-xl pr-9 pl-3 py-2.5 text-slate-100 text-sm focus:outline-none focus:border-amber-500"
-                  placeholder="اسم المستخدم..."
+      {/* Main Responsive Wide Frame */}
+      <div className="w-full max-w-4xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl shadow-slate-900/15 dark:shadow-none overflow-hidden flex flex-col lg:flex-row max-h-[96vh]">
+        
+        {/* Right Panel: Brand & Quick Roles (Horizontal on Desktop) */}
+        <div className="lg:w-5/12 bg-gradient-to-br from-amber-500/10 via-slate-50 to-slate-100 dark:from-amber-950/20 dark:via-slate-900 dark:to-slate-950 p-4 sm:p-6 border-b lg:border-b-0 lg:border-l border-slate-200 dark:border-slate-800 flex flex-col justify-between">
+          <div>
+            {/* Logo & Header */}
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-white dark:bg-slate-900 border-2 border-amber-500/40 p-1.5 shadow-md shrink-0 flex items-center justify-center overflow-hidden">
+                <img 
+                  src={effectiveLogo} 
+                  alt={effectiveCenterName} 
+                  className="w-full h-full object-contain"
+                  onError={(e) => {
+                    (e.target as HTMLElement).setAttribute('src', '/logo.svg');
+                  }}
                 />
+              </div>
+              <div className="min-w-0">
+                <h1 className="text-base sm:text-lg font-black text-slate-900 dark:text-white truncate">
+                  {effectiveCenterName}
+                </h1>
+                <p className="text-xs text-amber-600 dark:text-amber-400 font-bold flex items-center gap-1 truncate">
+                  <Sparkles className="w-3.5 h-3.5 shrink-0" />
+                  <span>{effectiveSubtitle}</span>
+                </p>
               </div>
             </div>
 
-            <div>
-              <label className="block text-slate-300 font-bold mb-1">كلمة المرور</label>
-              <div className="relative">
-                <Lock className="w-4 h-4 text-slate-400 absolute right-3 top-2.5" />
-                <input
-                  type="password"
-                  required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-700 rounded-xl pr-9 pl-3 py-2.5 text-slate-100 text-sm focus:outline-none focus:border-amber-500 font-mono"
-                  placeholder="••••••••"
-                />
-              </div>
-            </div>
-
-            {/* Remember Me and Preferences */}
-            <div className="space-y-2 pt-1">
-              <label className="flex items-center gap-2 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={rememberMe}
-                  onChange={(e) => setRememberMe(e.target.checked)}
-                  className="w-4 h-4 rounded text-amber-500 bg-slate-950 border-slate-700 focus:ring-amber-500"
-                />
-                <span className="text-xs text-slate-300 font-medium">
-                  حفظ بيانات الدخول وتذكر الجلسة على هذا الجهاز
-                </span>
-              </label>
-
-              <label className="flex items-center gap-2 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={alwaysRequireLogin}
-                  onChange={(e) => setAlwaysRequireLogin(e.target.checked)}
-                  className="w-4 h-4 rounded text-amber-500 bg-slate-950 border-slate-700 focus:ring-amber-500"
-                />
-                <span className="text-xs text-slate-400">
-                  إلزام تسجيل الدخول في كل مرة يتم فتح البرنامج (أمان إضافي)
-                </span>
-              </label>
-            </div>
-
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="w-full py-3 rounded-xl bg-gradient-to-r from-amber-500 to-amber-400 text-slate-950 font-black text-sm shadow-lg shadow-amber-500/20 hover:brightness-110 active:scale-[0.99] transition-all flex items-center justify-center gap-2 mt-4"
-            >
-              <span>{isLoading ? 'جاري التحقق...' : 'دخول النظام'}</span>
-              <ArrowRight className="w-4 h-4 rotate-180" />
-            </button>
-          </form>
-
-          {/* Quick Demo Switcher */}
-          {showDevPanel && (
-            <div className="pt-4 border-t border-slate-800 space-y-2 animate-fadeIn">
-              <span className="text-[11px] text-slate-400 font-bold block text-center">
-                دخول سريع لحسابات الأدوار والصلاحيات (تجريبي):
+            {/* Quick Roles Grid */}
+            <div className="space-y-1.5">
+              <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 flex items-center gap-1 mb-1">
+                <span>⚡</span>
+                <span>اختر الحساب المطلوب للدخول الفوري:</span>
               </span>
-              <div className="grid grid-cols-2 gap-2">
-                {quickRoles.map((r, i) => (
-                  <button
-                    key={i}
-                    type="button"
-                    onClick={() => handleQuickLogin(r.u, r.p)}
-                    className="p-2 rounded-xl bg-slate-950/70 border border-slate-800 hover:border-amber-500/50 text-right transition-all group"
-                  >
-                    <span className="font-bold text-[11px] text-slate-200 group-hover:text-amber-300 block">
-                      {r.title}
-                    </span>
-                    <span className="text-[9px] text-slate-400 block truncate">{r.desc}</span>
-                  </button>
-                ))}
+
+              <div className="grid grid-cols-2 gap-1.5">
+                {quickRoles.map((r) => {
+                  const isSelected = username === r.u;
+                  return (
+                    <button
+                      key={r.id}
+                      type="button"
+                      onClick={() => handleQuickSelect(r)}
+                      className={`p-2 rounded-xl text-right transition-all flex items-center gap-2 cursor-pointer border ${
+                        isSelected
+                          ? 'bg-amber-500 text-slate-950 font-black border-amber-600 shadow-md scale-[1.02]'
+                          : 'bg-white/80 dark:bg-slate-800/80 hover:bg-white dark:hover:bg-slate-800 text-slate-800 dark:text-slate-200 border-slate-200 dark:border-slate-700'
+                      }`}
+                    >
+                      <div className={`p-1.5 rounded-lg shrink-0 ${isSelected ? 'bg-slate-950/15' : 'bg-slate-100 dark:bg-slate-700'}`}>
+                        {r.icon}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className={`text-xs truncate ${isSelected ? 'font-black text-slate-950' : 'font-bold'}`}>
+                          {r.title}
+                        </p>
+                        <p className={`text-[10px] truncate ${isSelected ? 'text-slate-900/80 font-bold' : 'text-slate-400'}`}>
+                          {r.desc}
+                        </p>
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
             </div>
-          )}
-        </div>
-
-        {/* Public Home Page Button */}
-        <a
-          href="/?view=public_home"
-          className="w-full py-3 px-4 rounded-2xl bg-slate-900 hover:bg-slate-800 border border-amber-500/40 text-amber-300 font-bold text-xs flex items-center justify-between shadow-lg transition-all group"
-        >
-          <div className="flex items-center gap-2">
-            <BookOpen className="w-4 h-4 text-amber-400 group-hover:scale-110 transition-transform" />
-            <span>الواجهة الرئيسية العامة للطلاب وأولياء الأمور</span>
           </div>
-          <ArrowRight className="w-4 h-4 rotate-180 text-amber-400" />
-        </a>
 
-        {/* Student, Parent, Trainer & Lab Portals Direct Access */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-          <a
-            href="/?view=student_portal"
-            className="bg-amber-950/40 border border-amber-500/40 hover:border-amber-400 rounded-2xl p-3 text-center backdrop-blur-md space-y-1 shadow-xl block group transition-all"
-          >
-            <div className="flex items-center justify-center gap-1.5 text-amber-300 font-bold text-xs group-hover:text-amber-200">
-              <BookOpen className="w-4 h-4 text-amber-400 shrink-0" />
-              <span>بوابة الطالب</span>
-            </div>
-            <p className="text-[9px] text-slate-400 leading-tight">
-              الواجبات وتصحيح الذكاء الاصطناعي
-            </p>
-          </a>
-
-          <a
-            href="/?view=parent_portal"
-            className="bg-emerald-950/40 border border-emerald-500/40 hover:border-emerald-400 rounded-2xl p-3 text-center backdrop-blur-md space-y-1 shadow-xl block group transition-all"
-          >
-            <div className="flex items-center justify-center gap-1.5 text-emerald-300 font-bold text-xs group-hover:text-emerald-200">
-              <User className="w-4 h-4 text-emerald-400 shrink-0" />
-              <span>بوابة ولي الأمر</span>
-            </div>
-            <p className="text-[9px] text-slate-400 leading-tight">
-              متابعة الحضور، النتائج والدفع
-            </p>
-          </a>
-
-          <a
-            href="/?view=trainer_portal"
-            className="bg-indigo-950/40 border border-indigo-500/40 hover:border-indigo-400 rounded-2xl p-3 text-center backdrop-blur-md space-y-1 shadow-xl block group transition-all"
-          >
-            <div className="flex items-center justify-center gap-1.5 text-indigo-300 font-bold text-xs group-hover:text-indigo-200">
-              <GraduationCap className="w-4 h-4 text-indigo-400 shrink-0" />
-              <span>بوابة المدرب</span>
-            </div>
-            <p className="text-[9px] text-slate-400 leading-tight">
-              إدارة المجموعات، الحضور والواجبات
-            </p>
-          </a>
-
-          <a
-            href="/?view=kiosk"
-            className="bg-cyan-950/40 border border-cyan-500/40 hover:border-cyan-400 rounded-2xl p-3 text-center backdrop-blur-md space-y-1 shadow-xl block group transition-all"
-          >
-            <div className="flex items-center justify-center gap-1.5 text-cyan-300 font-bold text-xs group-hover:text-cyan-200">
-              <Monitor className="w-4 h-4 text-cyan-400 shrink-0" />
-              <span>رابط المعمل والأجهزة</span>
-            </div>
-            <p className="text-[9px] text-slate-400 leading-tight">
-              حضور تلقائي، تحكم ونقاط (LAN / Cloud)
-            </p>
-          </a>
-        </div>
-
-        {/* Student Public Registration Button */}
-        <div className="bg-indigo-950/40 border border-indigo-500/40 rounded-3xl p-5 text-center backdrop-blur-md space-y-2.5 shadow-xl">
-          <div className="flex items-center justify-center gap-2 text-indigo-300 font-bold text-sm">
-            <UserPlus className="w-5 h-5 text-indigo-400" />
-            <span>تسجيل طالب جديد في الدورات التدريبية</span>
+          {/* Public Portal Link Footer */}
+          <div className="pt-3 mt-3 border-t border-slate-200/60 dark:border-slate-800">
+            <a
+              href="/#public"
+              className="py-2 px-3 rounded-xl bg-white dark:bg-slate-800/90 hover:bg-amber-50 dark:hover:bg-slate-750 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:text-amber-700 dark:hover:text-amber-400 font-bold text-xs flex items-center justify-between transition-all"
+            >
+              <div className="flex items-center gap-1.5">
+                <BookOpen className="w-3.5 h-3.5 text-amber-500" />
+                <span>بوابة الطلاب وأولياء الأمور العامة</span>
+              </div>
+              <ArrowRight className="w-3.5 h-3.5 rotate-180 text-amber-500" />
+            </a>
           </div>
-          <p className="text-xs text-slate-300">
-            للتسجيل الفوري للطلاب دون الحاجة لتسجيل دخول أو بريد إلكتروني
-          </p>
-          <a
-            href="/?view=register"
-            className="inline-flex items-center justify-center gap-2 w-full py-3 px-4 rounded-2xl bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 text-white font-bold text-xs shadow-lg shadow-indigo-600/30 active:scale-[0.99] transition-all"
-          >
-            <span>فتح نموذج تسجيل الطلاب الآن</span>
-            <ArrowRight className="w-4 h-4 rotate-180" />
-          </a>
         </div>
 
-        {/* PWA Install Promotion Box */}
-        <div className="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-3.5 flex items-center justify-between backdrop-blur-md">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
-              <Download className="w-4 h-4" />
+        {/* Left Panel: Direct Login Form */}
+        <div className="lg:w-7/12 p-4 sm:p-6 lg:p-7 flex flex-col justify-between bg-white dark:bg-slate-900">
+          
+          <div>
+            {/* Header */}
+            <div className="flex items-center justify-between pb-3 mb-3 border-b border-slate-100 dark:border-slate-800">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-amber-500/15 text-amber-600 dark:text-amber-400 flex items-center justify-center">
+                  <Shield className="w-4 h-4" />
+                </div>
+                <div>
+                  <h2 className="text-sm sm:text-base font-black text-slate-900 dark:text-white">
+                    تسجيل الدخول إلى النظام
+                  </h2>
+                  <p className="text-[11px] text-slate-400">
+                    أدخل بيانات الاعتماد أو اضغط على أحد الحسابات السريعة
+                  </p>
+                </div>
+              </div>
+
+              <span className="text-[10px] font-black px-2.5 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-mono">
+                V7.0 سحابي
+              </span>
             </div>
-            <div>
-              <p className="text-xs font-bold text-slate-200">تثبيت التطبيق على جهازك</p>
-              <p className="text-[10px] text-slate-400">للكمبيوتر (Windows/Mac) والموبايل (Android/iOS)</p>
-            </div>
+
+            {/* Error Message */}
+            {error && (
+              <div className="mb-3 bg-rose-50 dark:bg-rose-950/40 border border-rose-300 dark:border-rose-800 text-rose-700 dark:text-rose-300 text-xs p-2.5 rounded-xl flex items-center gap-2 animate-in fade-in">
+                <span className="w-2 h-2 rounded-full bg-rose-500 shrink-0" />
+                <p className="font-semibold">{error}</p>
+              </div>
+            )}
+
+            {/* Form */}
+            <form onSubmit={handleSubmit} className="space-y-3">
+              
+              {/* Username Field */}
+              <div>
+                <label className="block text-slate-800 dark:text-slate-200 font-bold mb-1 text-xs">
+                  اسم المستخدم أو كود الحساب
+                </label>
+                <div className="relative">
+                  <User className="w-4 h-4 text-slate-400 absolute right-3.5 top-3" />
+                  <input
+                    type="text"
+                    required
+                    value={username}
+                    onChange={(e) => {
+                      setUsername(e.target.value);
+                      setSelectedRoleTitle('');
+                    }}
+                    className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 focus:border-amber-500 focus:bg-white dark:focus:bg-slate-900 rounded-xl pr-10 pl-4 py-2.5 text-slate-900 dark:text-white text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-amber-500/20 transition-all"
+                    placeholder="اسم المستخدم..."
+                    autoComplete="username"
+                  />
+                </div>
+              </div>
+
+              {/* Password Field */}
+              <div>
+                <label className="block text-slate-800 dark:text-slate-200 font-bold mb-1 text-xs">
+                  كلمة المرور
+                </label>
+                <div className="relative">
+                  <Lock className="w-4 h-4 text-slate-400 absolute right-3.5 top-3" />
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    required
+                    value={password}
+                    onChange={(e) => {
+                      setPassword(e.target.value);
+                      setSelectedRoleTitle('');
+                    }}
+                    className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 focus:border-amber-500 focus:bg-white dark:focus:bg-slate-900 rounded-xl pr-10 pl-10 py-2.5 text-slate-900 dark:text-white text-xs sm:text-sm font-mono focus:outline-none focus:ring-2 focus:ring-amber-500/20 transition-all"
+                    placeholder="كلمة المرور..."
+                    autoComplete="current-password"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute left-3 top-2.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors p-0.5 cursor-pointer"
+                  >
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+
+              {/* Options: Remember Me & Lock */}
+              <div className="flex items-center justify-between pt-0.5">
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={rememberMe}
+                    onChange={(e) => setRememberMe(e.target.checked)}
+                    className="w-3.5 h-3.5 rounded text-amber-600 focus:ring-amber-500 border-slate-300 dark:border-slate-700"
+                  />
+                  <span className="text-[11px] text-slate-700 dark:text-slate-300 font-bold">
+                    تذكر الجلسة على هذا الجهاز
+                  </span>
+                </label>
+
+                <button
+                  type="button"
+                  onClick={() => setAlwaysRequireLogin(!alwaysRequireLogin)}
+                  className={`text-[10px] font-bold px-2 py-0.5 rounded-md transition-colors ${
+                    alwaysRequireLogin
+                      ? 'text-amber-700 dark:text-amber-400 bg-amber-500/10'
+                      : 'text-slate-400 hover:text-slate-600'
+                  }`}
+                >
+                  {alwaysRequireLogin ? '🔒 قفل أمني مفعل' : '🔓 قفل أمني عادي'}
+                </button>
+              </div>
+
+              {/* Selected role confirmation */}
+              {selectedRoleTitle && (
+                <div className="p-2 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-[11px] text-amber-900 dark:text-amber-200 flex items-center justify-between">
+                  <span className="flex items-center gap-1.5 font-bold">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-amber-600" />
+                    <span>تم تجهيز بيانات حساب: <b>{selectedRoleTitle}</b></span>
+                  </span>
+                  <span className="text-[9.5px] font-mono opacity-80 font-bold">جاهز للدخول</span>
+                </div>
+              )}
+
+              {/* Prominent Login Button - Always 100% In-View */}
+              <button
+                type="submit"
+                disabled={isLoading}
+                className="w-full py-3 px-6 rounded-2xl bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500 hover:brightness-110 text-slate-950 font-black text-sm sm:text-base shadow-lg shadow-amber-500/25 active:scale-[0.99] transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-70 mt-2"
+              >
+                <span>{isLoading ? 'جاري التحقق والدخول...' : 'تسجيل الدخول إلى النظام'}</span>
+                <ArrowRight className="w-4 h-4 rotate-180" />
+              </button>
+            </form>
           </div>
-          <PwaInstallPrompt />
+
+          <div className="pt-2 text-center text-[10px] text-slate-400">
+            <span>منظومة النجاح الذكية للتدريب والاستشارات V7.0 — جميع الحقوق محفوظة</span>
+          </div>
+
         </div>
 
-        {/* Footer info */}
-        <p className="text-center text-xs text-slate-400">
-          مركز النجاح للتدريب والاستشارات © {new Date().getFullYear()} - جميع الحقوق محفوظة
-        </p>
       </div>
 
       {/* Admin Passcode Gate Modal */}
@@ -364,7 +353,7 @@ export const LoginView: React.FC = () => {
         isOpen={showPasscodeModal && !isPasscodeUnlocked}
         onClose={() => {
           setShowPasscodeModal(false);
-          window.location.href = '/?view=public_home';
+          window.location.href = '/#public';
         }}
         onSuccess={() => {
           setIsPasscodeUnlocked(true);

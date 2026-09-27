@@ -606,6 +606,29 @@ export const api = {
       trainerId: data.trainerId
     });
   },
+  recordAttendance: (data: {
+    traineeId: string;
+    status: string;
+    date?: string;
+    notes?: string;
+    groupId?: string;
+    branchId?: string;
+    courseId?: string;
+    trainerId?: string;
+  }) =>
+    request<{
+      success: boolean;
+      record: AttendanceRecord;
+      pointsAwarded: number;
+      newTotalPoints: number;
+    }>('/attendance', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    }),
+  deleteAttendance: (id: string) =>
+    request<{ success: boolean }>(`/attendance/${id}`, {
+      method: 'DELETE'
+    }),
 
   // Finance
   getPayments: (params?: Record<string, string>) => {
@@ -800,6 +823,16 @@ export const api = {
   deleteExamResult: (examId: string, resultId: string) =>
     request<{ success: boolean; message: string }>(`/exams/${examId}/results/${resultId}`, {
       method: 'DELETE'
+    }),
+  updateExamResult: (examId: string, resultId: string, data: Partial<ExamResult>) =>
+    request<{ success: boolean; result: ExamResult; message?: string }>(`/exams/${examId}/results/${resultId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data)
+    }),
+  grantTraineeRetake: (examId: string, resultId: string, options?: { mode?: 'keep_best' | 'keep_latest' | 'reset_score'; reason?: string }) =>
+    request<{ success: boolean; message: string; result: ExamResult }>(`/exams/${examId}/results/${resultId}/grant-retake`, {
+      method: 'POST',
+      body: JSON.stringify(options || {})
     }),
   resetExamResult: (examId: string, resultId: string) =>
     request<{ success: boolean; message: string }>(`/exams/${examId}/results/${resultId}/reset`, {

@@ -2,7 +2,7 @@
   "name": "nagah-training-center",
   "version": "1.0.0",
   "description": "Nagah Training Center Management Platform",
-  "main": "server.cjs",
+  "main": "server.ts",
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",

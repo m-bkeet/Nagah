@@ -51,6 +51,7 @@ import { PublicStudentPortalView } from './views/PublicStudentPortalView';
 import { PublicParentPortalView } from './views/PublicParentPortalView';
 import { PublicTrainerPortalView } from './views/PublicTrainerPortalView';
 import { PublicInteractiveExamView } from './views/PublicInteractiveExamView';
+import { PublicVerificationView } from './views/PublicVerificationView';
 import { IdleSleepWatcher } from './components/IdleSleepWatcher';
 import { hasPermission } from './utils/permissions';
 import { ShieldAlert, LayoutDashboard } from 'lucide-react';
@@ -100,6 +101,10 @@ const AppContent: React.FC = () => {
     if (typeof window === 'undefined') return { tab: 'dashboard', taskId: null };
 
     const searchParams = new URLSearchParams(window.location.search);
+    if (searchParams.has('verifyReceipt') || searchParams.has('verify') || searchParams.has('id') || searchParams.has('serial') || searchParams.has('attestation')) {
+      return { tab: 'verify_document', taskId: null };
+    }
+
     let view = searchParams.get('view');
     let taskId = searchParams.get('task');
 
@@ -130,8 +135,28 @@ const AppContent: React.FC = () => {
     if (searchParams.get('role') === 'trainee_device' || searchParams.get('kiosk') === 'true' || searchParams.get('lab') === 'true') {
       return { tab: 'kiosk', taskId };
     }
+    if (searchParams.get('role') === 'student' || searchParams.get('student') === 'true') {
+      return { tab: 'student_portal', taskId };
+    }
+    if (searchParams.get('role') === 'trainer' || searchParams.get('trainer') === 'true') {
+      return { tab: 'trainer_portal', taskId };
+    }
+    if (searchParams.get('role') === 'parent' || searchParams.get('parent') === 'true') {
+      return { tab: 'parent_portal', taskId };
+    }
+    if (searchParams.get('role') === 'exam' || searchParams.get('exam') === 'true') {
+      return { tab: 'interactive-exam', taskId };
+    }
+    if (searchParams.get('role') === 'registration' || searchParams.get('register') === 'true') {
+      return { tab: 'register', taskId };
+    }
+    if (searchParams.get('trainer_register') === 'true' || searchParams.get('role') === 'trainer_registration' || searchParams.get('register_trainer') === 'true') {
+      return { tab: 'register-trainer', taskId };
+    }
+    if (searchParams.get('role') === 'admin' || searchParams.get('login') === 'true') {
+      return { tab: 'login', taskId };
+    }
     if (searchParams.get('projector') === 'true') return { tab: 'dashboard', taskId };
-    if (searchParams.get('register') === 'true') return { tab: 'register', taskId };
 
     return { tab: 'dashboard', taskId };
   };
@@ -167,32 +192,49 @@ const AppContent: React.FC = () => {
         return <StudentKioskView />;
       case 'projector':
         return <PublicHomeView onNavigate={(view) => setActiveTab(view)} />;
+      case 'public':
+      case 'home':
+      case 'landing':
       case 'public_home':
       case 'public-home':
       case 'public_landing':
         return <PublicHomeView onNavigate={(view) => setActiveTab(view)} />;
       case 'login':
+      case 'signin':
+      case 'auth':
         return <LoginView />;
       case 'register':
+      case 'apply':
+      case 'signup':
+      case 'register-student':
         return <PublicRegistrationView onBack={() => setActiveTab('public_home')} />;
       case 'register-trainer':
+      case 'register_trainer':
+      case 'trainer_registration':
+      case 'trainer-registration':
         return <PublicTrainerRegistrationView onBack={() => setActiveTab('public_home')} />;
-      case 'quiz-challenge':
-      case 'challenge':
+      case 'student':
       case 'student-portal':
       case 'student_portal':
+      case 'quiz-challenge':
+      case 'challenge':
+      case 'portal':
         return <PublicStudentPortalView directTaskId={directTaskId} onBack={() => setActiveTab('public_home')} />;
       case 'interactive-exam':
       case 'interactive_exam':
       case 'exam':
       case 'take-exam':
         return <PublicInteractiveExamView onBack={() => setActiveTab('public_home')} />;
+      case 'parent':
       case 'parent-portal':
       case 'parent_portal':
         return <PublicParentPortalView onBack={() => setActiveTab('public_home')} />;
+      case 'trainer':
       case 'trainer-portal':
       case 'trainer_portal':
         return <PublicTrainerPortalView onBack={() => setActiveTab('public_home')} />;
+      case 'verify_document':
+        return <PublicVerificationView onBack={() => { window.location.href = window.location.origin; }} />;
       default:
         return null;
     }

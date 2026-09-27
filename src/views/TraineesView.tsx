@@ -97,6 +97,11 @@ import { GoogleSheetsHubModal } from '../components/GoogleSheetsHubModal';
 import { GoogleSheetsService } from '../services/googleSheets';
 import { GoogleFormsImportModal } from '../components/GoogleFormsImportModal';
 
+const getTraineePhoto = (t: any): string => {
+  if (!t) return '';
+  return t.photoUrl || t.photo || (t.id ? localStorage.getItem('student_session_photo_' + t.id) : null) || (t.code ? localStorage.getItem('student_session_photo_' + t.code) : null) || '';
+};
+
 export const TraineesView: React.FC = () => {
   const { 
     branches, 
@@ -123,6 +128,8 @@ export const TraineesView: React.FC = () => {
   const [isAddingTrainee, setIsAddingTrainee] = useState(false);
   const [isEditingTrainee, setIsEditingTrainee] = useState(false);
   const [isSubmittingPayment, setIsSubmittingPayment] = useState(false);
+  const [activeTrainee, setActiveTrainee] = useState<Trainee | null>(null);
+  const [traineeProfileData, setTraineeProfileData] = useState<any>(null);
 
   // View Mode: Table or Student Cards (Auto-adaptive default on mobile)
   const [viewMode, setViewMode] = useState<'table' | 'cards'>(() => {
@@ -145,6 +152,20 @@ export const TraineesView: React.FC = () => {
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
+
+  // Real-time synchronization when attendance changes anywhere in the platform
+  useEffect(() => {
+    const handleAttSync = () => {
+      loadData();
+      if (activeTrainee?.id) {
+        api.getTraineeDetails(activeTrainee.id).then(details => {
+          if (details) setTraineeProfileData(details);
+        }).catch(() => {});
+      }
+    };
+    window.addEventListener('nagah_attendance_updated', handleAttSync);
+    return () => window.removeEventListener('nagah_attendance_updated', handleAttSync);
+  }, [activeTrainee?.id]);
 
   // Filters & Search
   const [searchQuery, setSearchQuery] = useState('');
@@ -333,11 +354,16 @@ export const TraineesView: React.FC = () => {
   const [isSubmittingStars, setIsSubmittingStars] = useState<boolean>(false);
 
   // Selected trainee data
-  const [activeTrainee, setActiveTrainee] = useState<Trainee | null>(null);
   const [isBulkAssignModalOpen, setIsBulkAssignModalOpen] = useState(false);
   const [bulkAssignGroupId, setBulkAssignGroupId] = useState("");
   const [deleteConfirm, setDeleteConfirm] = useState<{isOpen: boolean, type: 'single' | 'bulk', trainee?: Trainee} | null>(null);
-  const [traineeProfileData, setTraineeProfileData] = useState<any>(null);
+
+  // Trainee Profile Attendance Recording States
+  const [isRecordingAttendance, setIsRecordingAttendance] = useState(false);
+  const [showAddAttendanceForm, setShowAddAttendanceForm] = useState(false);
+  const [attendanceFormDate, setAttendanceFormDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [attendanceFormStatus, setAttendanceFormStatus] = useState<'present' | 'absent' | 'late' | 'excused'>('present');
+  const [attendanceFormNotes, setAttendanceFormNotes] = useState('');
 
   // Student Care Vault & Early Warning States
   const [isVaultUnlocked, setIsVaultUnlocked] = useState<boolean>(false);
@@ -836,6 +862,75 @@ export const TraineesView: React.FC = () => {
       setIsProfileModalOpen(true);
     } catch (err: any) {
       showToast(err.message || 'تعذر جلب ملف المتدرب', 'error');
+    }
+  };
+
+  const handleRecordTraineeAttendance = async (
+    status: 'present' | 'absent' | 'late' | 'excused', 
+    customDate?: string, 
+    customNotes?: string
+  ) => {
+    if (!activeTrainee) return;
+    setIsRecordingAttendance(true);
+    try {
+      const targetDate = customDate || attendanceFormDate || new Date().toISOString().split('T')[0];
+      const res = await api.recordAttendance({
+        traineeId: activeTrainee.id,
+        date: targetDate,
+        status,
+        notes: customNotes || attendanceFormNotes || (status === 'present' ? 'حضور مسجل من ملف الطالب' : ''),
+        groupId: activeTrainee.groupId,
+        branchId: activeTrainee.branchId,
+        courseId: activeTrainee.courseId
+      });
+
+      if (res.success) {
+        showToast(
+          status === 'present'
+            ? `تم تسجيل حضور المتدرب (${activeTrainee.fullName}) لتاريخ ${targetDate} ومنحه +${res.pointsAwarded} نقطة تميز! 🌟`
+            : `تم تسجيل حالة (${status === 'absent' ? 'غياب' : status === 'late' ? 'تأخير' : 'معذور'}) لتاريخ ${targetDate}`,
+          'success'
+        );
+
+        setTraineeProfileData((prev: any) => {
+          if (!prev) return prev;
+          const filteredAtt = (prev.attendance || []).filter((a: any) => a.date !== targetDate);
+          return {
+            ...prev,
+            attendance: [res.record, ...filteredAtt]
+          };
+        });
+
+        if (res.newTotalPoints !== undefined) {
+          setActiveTrainee(prev => prev ? { ...prev, totalPoints: res.newTotalPoints, points: res.newTotalPoints } : null);
+          setTrainees(prev => prev.map(tr => tr.id === activeTrainee.id ? { ...tr, totalPoints: res.newTotalPoints, points: res.newTotalPoints } : tr));
+        }
+
+        setShowAddAttendanceForm(false);
+        setAttendanceFormNotes('');
+        window.dispatchEvent(new CustomEvent('nagah_attendance_updated'));
+      }
+    } catch (err: any) {
+      showToast(err.message || 'فشل تسجيل الحضور', 'error');
+    } finally {
+      setIsRecordingAttendance(false);
+    }
+  };
+
+  const handleDeleteTraineeAttendance = async (attendanceId: string) => {
+    try {
+      await api.deleteAttendance(attendanceId);
+      showToast('تم حذف سجل الحضور بنجاح', 'info');
+      setTraineeProfileData((prev: any) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          attendance: (prev.attendance || []).filter((a: any) => a.id !== attendanceId)
+        };
+      });
+      window.dispatchEvent(new CustomEvent('nagah_attendance_updated'));
+    } catch (err: any) {
+      showToast(err.message || 'فشل حذف السجل', 'error');
     }
   };
 
@@ -2404,9 +2499,9 @@ export const TraineesView: React.FC = () => {
                         <td className="p-3.5 min-w-[200px]">
                           <div className="flex items-center gap-3 bg-slate-50/80 dark:bg-slate-900/60 p-2 rounded-2xl border border-slate-200/90 dark:border-slate-800/80 hover:border-amber-400 dark:hover:border-amber-500/50 hover:bg-amber-50/40 dark:hover:bg-slate-850 transition-all duration-300 shadow-2xs relative group">
                             <div className="relative shrink-0">
-                              {t.photoUrl ? (
+                              {getTraineePhoto(t) ? (
                                 <img
-                                  src={t.photoUrl}
+                                  src={getTraineePhoto(t)}
                                   alt={t.fullName}
                                   className="w-10 h-10 rounded-xl object-cover shadow-2xs border-2 border-slate-200 dark:border-slate-700/50 group-hover:border-amber-400 dark:group-hover:border-amber-500/50 transition-colors"
                                 />
@@ -2421,7 +2516,7 @@ export const TraineesView: React.FC = () => {
                             </div>
                             <div className="min-w-0 flex-1 relative z-10">
                               <div
-                                className="cursor-pointer font-black text-[13px] text-slate-900 dark:text-slate-100 group-hover:text-amber-600 dark:group-hover:text-amber-400 transition-colors truncate block"
+                                className="cursor-pointer font-black text-[13px] text-slate-900 dark:text-slate-100 group-hover:text-amber-600 dark:group-hover:text-amber-400 transition-colors leading-snug break-words block"
                                 onClick={() => handleOpenProfile(t)}
                                 title={t.fullName}
                               >
@@ -3934,9 +4029,9 @@ export const TraineesView: React.FC = () => {
               {/* Profile Card Header (Hero Identity Card) */}
               <div className="p-4 sm:p-5 rounded-2xl bg-white dark:bg-slate-850/90 border border-slate-200/90 dark:border-slate-800 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 shadow-2xs">
                 <div className="flex items-center gap-4 text-right">
-                  {activeTrainee.photoUrl ? (
+                  {getTraineePhoto(activeTrainee) ? (
                     <img
-                      src={activeTrainee.photoUrl}
+                      src={getTraineePhoto(activeTrainee)}
                       alt={activeTrainee.fullName}
                       className="w-16 h-16 rounded-2xl object-cover ring-2 ring-amber-500/40 border-2 border-white dark:border-slate-800 shadow-sm shrink-0"
                     />
@@ -4219,34 +4314,210 @@ export const TraineesView: React.FC = () => {
               )}
 
               {/* Tab 2: Attendance History */}
-              {profileTab === 'attendance' && (
-                <div className="bg-white dark:bg-slate-850/60 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-3 shadow-2xs">
-                  <h4 className="font-bold text-slate-900 dark:text-white flex items-center gap-2 text-xs">
-                    <Clock className="w-4 h-4 text-indigo-500" />
-                    سجل الحضور والغياب للمتدرب
-                  </h4>
-                  {traineeProfileData?.attendance?.length === 0 ? (
-                    <div className="text-center py-8 bg-slate-50 dark:bg-slate-900/60 rounded-xl border border-dashed border-slate-200 dark:border-slate-800 text-slate-400 dark:text-slate-500">
-                      لا توجد سجلات حضور مسجلة حتى الآن.
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-56 overflow-y-auto custom-scrollbar">
-                      {traineeProfileData?.attendance?.map((a: any) => (
-                        <div key={a.id} className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800 flex justify-between items-center text-xs">
-                          <span className="text-slate-700 dark:text-slate-300 font-medium">{a.date}</span>
-                          <span className={`font-bold px-2 py-0.5 rounded-md ${
-                            a.status === 'present'
-                              ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300'
-                              : 'bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300'
-                          }`}>
-                            {a.status === 'present' ? 'حاضر ✓' : a.status === 'absent' ? 'غائب ✗' : a.status}
-                          </span>
+              {profileTab === 'attendance' && (() => {
+                const attList = traineeProfileData?.attendance || [];
+                const totalAtt = attList.length;
+                const presentCount = attList.filter((a: any) => a.status === 'present').length;
+                const absentCount = attList.filter((a: any) => a.status === 'absent').length;
+                const attRate = totalAtt > 0 ? Math.round((presentCount / totalAtt) * 100) : 100;
+                const todayStr = new Date().toISOString().split('T')[0];
+                const hasAttendedToday = attList.some((a: any) => a.date === todayStr && a.status === 'present');
+
+                return (
+                  <div className="bg-white dark:bg-slate-850/60 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-3.5 shadow-2xs">
+                    {/* Header and Quick Actions */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-2.5 border-b border-slate-100 dark:border-slate-800">
+                      <div>
+                        <h4 className="font-bold text-slate-900 dark:text-white flex items-center gap-2 text-xs">
+                          <Clock className="w-4 h-4 text-indigo-500" />
+                          سجل وتوثيق الحضور والغياب
+                        </h4>
+                        <div className="flex items-center gap-2 mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+                          <span>الإجمالي: <b className="text-slate-800 dark:text-slate-200">{totalAtt} جلسات</b></span>
+                          <span>•</span>
+                          <span className="text-emerald-600 dark:text-emerald-400 font-bold">حضور: {presentCount} ({attRate}%)</span>
+                          <span>•</span>
+                          <span className="text-rose-600 dark:text-rose-400 font-bold">غياب: {absentCount}</span>
                         </div>
-                      ))}
+                      </div>
+
+                      {/* Action Buttons */}
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <button
+                          type="button"
+                          onClick={() => handleRecordTraineeAttendance('present', todayStr, 'حضور سريع')}
+                          disabled={isRecordingAttendance || hasAttendedToday}
+                          className={`px-3 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer shadow-xs ${
+                            hasAttendedToday
+                              ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700 opacity-90'
+                              : 'bg-emerald-600 hover:bg-emerald-500 text-white active:scale-95'
+                          }`}
+                          title={hasAttendedToday ? 'تم تسجيل حضور اليوم بالفعل' : 'تسجيل حضور المتدرب لليوم فوراً ومنحه +10 نقاط'}
+                        >
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          <span>{hasAttendedToday ? 'حاضر اليوم ✓' : 'تسجيل حضور اليوم (+10 نقاط) ⚡'}</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleRecordTraineeAttendance('absent', todayStr, 'تسجيل غياب يدوي')}
+                          disabled={isRecordingAttendance}
+                          className="px-3 py-1.5 bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-100 dark:hover:bg-rose-900/40 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800 rounded-xl font-bold text-xs flex items-center gap-1 transition-all cursor-pointer"
+                          title="تسجيل غياب الطالب لجلسة اليوم"
+                        >
+                          <span>تسجيل غياب اليوم ✗</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setShowAddAttendanceForm(!showAddAttendanceForm)}
+                          className="px-3 py-1.5 bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 rounded-xl font-bold text-xs flex items-center gap-1 transition-all cursor-pointer"
+                        >
+                          <span>{showAddAttendanceForm ? 'إخفاء النموذج ✕' : '+ جلسة سابقة بتاريخ محدد'}</span>
+                        </button>
+                      </div>
                     </div>
-                  )}
-                </div>
-              )}
+
+                    {/* Inline Attendance Record Form */}
+                    {showAddAttendanceForm && (
+                      <div className="p-3.5 rounded-2xl bg-indigo-50/70 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-800/60 space-y-3 animate-in fade-in">
+                        <div className="flex items-center justify-between text-xs font-bold text-indigo-900 dark:text-indigo-200">
+                          <span>تسجيل حالة حضور أو غياب لجلسة تدريبية:</span>
+                          <span className="text-[10px] text-slate-500">منظومة الرصد الفوري</span>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                          {/* Date input */}
+                          <div>
+                            <div className="flex items-center justify-between mb-1">
+                              <label className="text-[10px] font-bold text-slate-700 dark:text-slate-300">
+                                تاريخ الجلسة:
+                              </label>
+                              <div className="flex items-center gap-1">
+                                <button type="button" onClick={() => setAttendanceFormDate(todayStr)} className="px-1.5 py-0.5 text-[9px] bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 rounded cursor-pointer">اليوم</button>
+                                <button type="button" onClick={() => { const d = new Date(); d.setDate(d.getDate() - 1); setAttendanceFormDate(d.toISOString().split('T')[0]); }} className="px-1.5 py-0.5 text-[9px] bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 rounded cursor-pointer">أمس</button>
+                                <button type="button" onClick={() => { const d = new Date(); d.setDate(d.getDate() - 7); setAttendanceFormDate(d.toISOString().split('T')[0]); }} className="px-1.5 py-0.5 text-[9px] bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 rounded cursor-pointer">أسبوع سابق</button>
+                              </div>
+                            </div>
+                            <input
+                              type="date"
+                              value={attendanceFormDate}
+                              onChange={(e) => setAttendanceFormDate(e.target.value)}
+                              className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-2.5 py-1.5 text-xs text-slate-900 dark:text-slate-100 font-mono focus:outline-none"
+                            />
+                          </div>
+
+                          {/* Status selector */}
+                          <div>
+                            <label className="block text-[10px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                              حالة الحضور:
+                            </label>
+                            <select
+                              value={attendanceFormStatus}
+                              onChange={(e) => setAttendanceFormStatus(e.target.value as any)}
+                              className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-2.5 py-1.5 text-xs text-slate-900 dark:text-slate-100 font-bold focus:outline-none"
+                            >
+                              <option value="present">حاضر (Present ✓) (+10 نقاط)</option>
+                              <option value="absent">غائب (Absent ✗)</option>
+                              <option value="late">متأخر (Late ⏱️)</option>
+                              <option value="excused">معذور ومستأذن (Excused 📝)</option>
+                            </select>
+                          </div>
+
+                          {/* Notes input */}
+                          <div>
+                            <label className="block text-[10px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                              ملاحظات الجلسة:
+                            </label>
+                            <input
+                              type="text"
+                              placeholder="مثال: تفاعل عملي في المعمل"
+                              value={attendanceFormNotes}
+                              onChange={(e) => setAttendanceFormNotes(e.target.value)}
+                              className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-2.5 py-1.5 text-xs text-slate-900 dark:text-slate-100 focus:outline-none"
+                            />
+                          </div>
+                        </div>
+
+                        {/* Submit Row */}
+                        <div className="flex justify-end gap-2 pt-1">
+                          <button
+                            type="button"
+                            onClick={() => setShowAddAttendanceForm(false)}
+                            className="px-3 py-1 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                          >
+                            إلغاء
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleRecordTraineeAttendance(attendanceFormStatus, attendanceFormDate, attendanceFormNotes)}
+                            disabled={isRecordingAttendance}
+                            className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-black shadow-xs transition-all active:scale-95 cursor-pointer disabled:opacity-50"
+                          >
+                            {isRecordingAttendance ? 'جاري الحفظ...' : 'تأكيد وحفظ السجل'}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Attendance List */}
+                    {attList.length === 0 ? (
+                      <div className="text-center py-8 bg-slate-50 dark:bg-slate-900/60 rounded-xl border border-dashed border-slate-200 dark:border-slate-800 text-slate-400 dark:text-slate-500 space-y-1">
+                        <Clock className="w-8 h-8 text-slate-300 dark:text-slate-600 mx-auto mb-1" />
+                        <p className="text-xs font-bold">لا توجد سجلات حضور مسجلة حتى الآن لهذا المتدرب.</p>
+                        <p className="text-[11px] text-slate-400">اضغط على "تسجيل حضور اليوم" أو حدد تاريخ محاضرة لتسجيلها فوراً.</p>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-64 overflow-y-auto custom-scrollbar pr-0.5">
+                        {attList.map((a: any) => (
+                          <div 
+                            key={a.id || `${a.date}_${a.traineeId}`} 
+                            className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800 flex items-center justify-between text-xs hover:border-slate-300 dark:hover:border-slate-700 transition-colors shadow-2xs"
+                          >
+                            <div className="space-y-0.5">
+                              <div className="flex items-center gap-1.5 font-medium text-slate-800 dark:text-slate-200">
+                                <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                                <span className="font-mono font-bold">{a.date}</span>
+                                {a.time && <span className="text-[10px] text-slate-400">({a.time})</span>}
+                              </div>
+                              {a.notes && (
+                                <p className="text-[10px] text-slate-500 dark:text-slate-400 line-clamp-1">
+                                  {a.notes}
+                                </p>
+                              )}
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                              <span className={`font-bold px-2 py-0.5 rounded-lg border text-[11px] ${
+                                a.status === 'present'
+                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-300 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800'
+                                  : a.status === 'absent'
+                                  ? 'bg-rose-50 text-rose-700 border-rose-300 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800'
+                                  : a.status === 'late'
+                                  ? 'bg-amber-50 text-amber-700 border-amber-300 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800'
+                                  : 'bg-blue-50 text-blue-700 border-blue-300 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800'
+                              }`}>
+                                {a.status === 'present' ? 'حاضر ✓ (+10)' : a.status === 'absent' ? 'غائب ✗' : a.status === 'late' ? 'متأخر ⏱️' : 'معذور 📝'}
+                              </span>
+
+                              {a.id && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteTraineeAttendance(a.id)}
+                                  className="p-1 hover:bg-rose-100 dark:hover:bg-rose-950/60 rounded text-slate-400 hover:text-rose-600 transition-colors cursor-pointer"
+                                  title="حذف هذا السجل"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
 
               {/* Tab 3: Points & Star History */}
               {profileTab === 'points' && (

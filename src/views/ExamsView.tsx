@@ -72,6 +72,9 @@ import { GroupManualGradeModal } from '../components/GroupManualGradeModal';
 import { LectureExcellenceCertificateModal, LectureCertificateInitialData } from '../components/LectureExcellenceCertificateModal';
 import { ExamQuestionsEditorModal } from '../components/ExamQuestionsEditorModal';
 import { ClearTraineeExamModal } from '../components/ClearTraineeExamModal';
+import { EditExamModal } from '../components/EditExamModal';
+import { ExamGroupBroadcastModal } from '../components/ExamGroupBroadcastModal';
+import { EditStudentExamResultModal } from '../components/EditStudentExamResultModal';
 import { PublicInteractiveExamView } from './PublicInteractiveExamView';
 import { getCurriculumExamQuestions } from '../data/ictCurriculumQuestions';
 
@@ -141,6 +144,16 @@ export const ExamsView: React.FC = () => {
   const [editorTargetExam, setEditorTargetExam] = useState<Exam | null>(null);
   const [isClearTraineeModalOpen, setIsClearTraineeModalOpen] = useState(false);
   const [studentPreviewExam, setStudentPreviewExam] = useState<Exam | null>(null);
+
+  // Edit Exam & Broadcast Cockpit Modals
+  const [isEditExamModalOpen, setIsEditExamModalOpen] = useState(false);
+  const [targetEditExam, setTargetEditExam] = useState<Exam | null>(null);
+  const [isExamBroadcastOpen, setIsExamBroadcastOpen] = useState(false);
+  const [broadcastTargetExam, setBroadcastTargetExam] = useState<Exam | null>(null);
+
+  // Edit Single Trainee Exam Result Modal
+  const [isEditResultModalOpen, setIsEditResultModalOpen] = useState(false);
+  const [selectedResultToEdit, setSelectedResultToEdit] = useState<ExamResult | null>(null);
 
   // AI Question Generator Form
   const [aiGenCourseId, setAiGenCourseId] = useState('');
@@ -303,7 +316,14 @@ export const ExamsView: React.FC = () => {
     setIsLoadingResults(true);
     try {
       const fetched = await api.getExamResults(examId).catch(() => []);
-      setSelectedExamResults(Array.isArray(fetched) ? fetched : []);
+      const resultsArr = Array.isArray(fetched) ? [...fetched] : [];
+      resultsArr.sort((a, b) => {
+        const scoreA = Number(a.score) || 0;
+        const scoreB = Number(b.score) || 0;
+        if (scoreB !== scoreA) return scoreB - scoreA;
+        return (Number(b.percentage) || 0) - (Number(a.percentage) || 0);
+      });
+      setSelectedExamResults(resultsArr);
     } catch (e) {
       setSelectedExamResults([]);
     } finally {
@@ -931,6 +951,33 @@ export const ExamsView: React.FC = () => {
                   <div className="flex flex-wrap items-center gap-2">
                     <button
                       onClick={() => {
+                        setBroadcastTargetExam(exam);
+                        setSelectedExamId(exam.id);
+                        setSelectedExam(exam);
+                        loadExamResults(exam.id);
+                        setIsExamBroadcastOpen(true);
+                      }}
+                      className="px-3 py-1.5 bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-600 hover:brightness-110 text-white text-xs font-black rounded-lg transition-all flex items-center gap-1.5 shadow-md shadow-emerald-600/20 cursor-pointer"
+                      title="نشر كشف درجات الاختبار ولوحة الشرف والشهادات على جروب الواتساب فوراً"
+                    >
+                      <Share2 className="w-3.5 h-3.5 text-emerald-200" />
+                      <span>نشر التقرير للجروب 🚀</span>
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        setTargetEditExam(exam);
+                        setIsEditExamModalOpen(true);
+                      }}
+                      className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-slate-950 text-xs font-black rounded-lg transition-colors flex items-center gap-1.5 shadow-sm cursor-pointer"
+                      title="تعديل اسم الاختبار، الدورة، المجموعة، الدرجات، الإجراءات الأمنية"
+                    >
+                      <Edit className="w-3.5 h-3.5" />
+                      <span>تعديل بيانات الاختبار ✏️</span>
+                    </button>
+
+                    <button
+                      onClick={() => {
                         setEditorTargetExam(exam);
                         setIsQuestionsEditorOpen(true);
                       }}
@@ -1506,10 +1553,40 @@ export const ExamsView: React.FC = () => {
               </select>
             </div>
 
-            <div className="flex items-center gap-2 w-full sm:w-auto">
+            <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+              <button
+                onClick={() => {
+                  const cur = exams.find(e => e.id === selectedExamId) || selectedExam;
+                  if (cur) {
+                    setBroadcastTargetExam(cur);
+                    setIsExamBroadcastOpen(true);
+                  }
+                }}
+                className="px-3.5 py-2 bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-600 hover:brightness-110 text-white rounded-xl text-xs font-black flex items-center gap-1.5 shadow-md shadow-emerald-600/20 transition-all cursor-pointer"
+                title="نشر تقرير نتائج الاختبار، لوحة الشرف التكريمية، والشهادات على جروب الواتساب فوراً"
+              >
+                <Share2 className="w-3.5 h-3.5 text-emerald-200" />
+                <span>نشر التقرير والشهادات لجروب الواتساب 📢</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  const cur = exams.find(e => e.id === selectedExamId) || selectedExam;
+                  if (cur) {
+                    setTargetEditExam(cur);
+                    setIsEditExamModalOpen(true);
+                  }
+                }}
+                className="px-3.5 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 rounded-xl text-xs font-black flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+                title="تعديل اسم وبيانات الاختبار بالكامل"
+              >
+                <Edit className="w-3.5 h-3.5" />
+                <span>تعديل بيانات الاختبار ✏️</span>
+              </button>
+
               <button
                 onClick={() => setIsGroupManualGradeOpen(true)}
-                className="px-3.5 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+                className="px-3.5 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
               >
                 <Award className="w-3.5 h-3.5 text-amber-300" />
                 <span>رصد يدوي للمجموعة ✍️</span>
@@ -1529,13 +1606,22 @@ export const ExamsView: React.FC = () => {
           {(() => {
             const curExam = exams.find(e => e.id === selectedExamId) || selectedExam;
             const totMarks = curExam?.totalMarks || 100;
-            const validResults = selectedExamResults.filter(r => r.score !== undefined && !isNaN(Number(r.score)));
+            
+            // Sort strictly by score descending, then by percentage descending
+            const sortedResults = [...selectedExamResults].sort((a, b) => {
+              const scoreA = Number(a.score) || 0;
+              const scoreB = Number(b.score) || 0;
+              if (scoreB !== scoreA) return scoreB - scoreA;
+              return (Number(b.percentage) || 0) - (Number(a.percentage) || 0);
+            });
+
+            const validResults = sortedResults.filter(r => r.score !== undefined && !isNaN(Number(r.score)));
             const avg = validResults.length > 0 ? Math.round(validResults.reduce((s, r) => s + Number(r.score), 0) / validResults.length) : 0;
-            const topScore = validResults.length > 0 ? Math.max(...validResults.map(r => Number(r.score))) : 0;
+            const topScore = validResults.length > 0 ? Math.max(...validResults.map(r => Number(r.score) || 0)) : 0;
             const passedCount = validResults.filter(r => Number(r.score) >= (curExam?.passingMarks || 60)).length;
             const passPercent = validResults.length > 0 ? Math.round((passedCount / validResults.length) * 100) : 0;
 
-            // Find top student
+            // Find top student with the ACTUAL maximum score
             const topStudentResult = validResults.find(r => Number(r.score) === topScore && topScore > 0);
             const topTraineeObj = topStudentResult ? trainees.find(t => t.id === topStudentResult.traineeId) : null;
 
@@ -1616,10 +1702,10 @@ export const ExamsView: React.FC = () => {
                   <div className="p-4 sm:p-5 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
                     <div>
                       <h4 className="font-bold text-slate-900 dark:text-white text-base">
-                        كشف نتائج وتسليمات الطلاب ({selectedExamResults.length} طالب)
+                        كشف نتائج وتسليمات الطلاب ({sortedResults.length} طالب)
                       </h4>
                       <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                        يتم رصد نتائج الاختبارات المحلولة ذاتياً عبر الرابط أو المرصودة يدوياً فوراً
+                        يتم ترتيب المتدربين تصاعدياً وفق أعلى الدرجات المحققة بدقة
                       </p>
                     </div>
 
@@ -1634,7 +1720,7 @@ export const ExamsView: React.FC = () => {
                     )}
                   </div>
 
-                  {selectedExamResults.length === 0 ? (
+                  {sortedResults.length === 0 ? (
                     <div className="text-center py-12 text-slate-400 space-y-3">
                       <Award className="w-12 h-12 mx-auto text-slate-300 dark:text-slate-600" />
                       <p className="text-sm font-bold">لم يتم تسجيل نتائج لهذا الاختبار بعد</p>
@@ -1671,7 +1757,7 @@ export const ExamsView: React.FC = () => {
                       {/* Top Action Bar for existing results */}
                       <div className="flex flex-wrap items-center justify-between gap-2 p-2 bg-slate-50 dark:bg-slate-800/50 rounded-xl">
                         <span className="text-xs text-slate-500 font-bold pr-2">
-                          إجمالي المسجلين في هذا الاختبار: {selectedExamResults.length} متدرب
+                          إجمالي المسجلين في هذا الاختبار: {sortedResults.length} متدرب
                         </span>
                         <div className="flex items-center gap-2">
                           <button
@@ -1705,14 +1791,26 @@ export const ExamsView: React.FC = () => {
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                          {selectedExamResults.map((res, rIdx) => {
+                          {sortedResults.map((res, rIdx) => {
                             const scoreNum = Number(res.score) || 0;
                             const tot = Number(res.totalMarks) || totMarks;
                             const pct = res.percentage !== undefined ? res.percentage : Math.round((scoreNum / Math.max(tot, 1)) * 100);
                             const passScore = curExam?.passingMarks || Math.round(tot * 0.6);
                             const isPassed = scoreNum >= passScore && res.rating !== 'راسب';
-                            const isTop = rIdx === 0 && scoreNum > 0 && isPassed;
+                            const isTop = isPassed && scoreNum === topScore && topScore > 0;
                             const traineeObj = trainees.find(t => t.id === res.traineeId);
+
+                            // Accurate rank display: tied top scores get 🥇, second rank gets 🥈, third gets 🥉
+                            let rankDisplay: React.ReactNode = rIdx + 1;
+                            if (isPassed && scoreNum > 0) {
+                              if (scoreNum === topScore) {
+                                rankDisplay = '🥇';
+                              } else if (rIdx === 1 || (sortedResults[0] && scoreNum >= Number(sortedResults[1]?.score || 0))) {
+                                rankDisplay = '🥈';
+                              } else if (rIdx === 2) {
+                                rankDisplay = '🥉';
+                              }
+                            }
 
                             return (
                               <tr
@@ -1722,7 +1820,7 @@ export const ExamsView: React.FC = () => {
                                 }`}
                               >
                                 <td className="p-3 text-center font-bold text-slate-400">
-                                  {isTop ? '🥇' : rIdx === 1 && isPassed ? '🥈' : rIdx === 2 && isPassed ? '🥉' : rIdx + 1}
+                                  {rankDisplay}
                                 </td>
 
                                 <td className="p-3">
@@ -1779,15 +1877,20 @@ export const ExamsView: React.FC = () => {
                                     <button
                                       onClick={() => {
                                         const course = courses.find(c => c.id === curExam?.courseId);
+                                        const group = groups.find(g => g.id === curExam?.groupId || g.id === traineeObj?.groupId);
                                         setCertificateInitialData({
                                           traineeId: res.traineeId,
                                           traineeName: res.traineeName || traineeObj?.fullName,
                                           traineeCode: res.traineeCode || traineeObj?.code,
                                           traineePhoto: traineeObj?.photoUrl,
                                           traineePhone: traineeObj?.phone,
+                                          courseId: course?.id,
                                           courseName: course?.name || 'الدورة التدريبية',
-                                          lectureTitle: `اختبار: ${curExam?.title}`,
-                                          awardTitle: isTop ? 'نجم الاختبار والمركز الأول 🥇🏆' : 'شهادة تميز في الاختبار 📜🌟',
+                                          groupId: group?.id,
+                                          groupName: group?.name || 'المجموعة',
+                                          whatsappGroupLink: group?.whatsappGroupLink || (group as any)?.whatsappLink,
+                                          lectureTitle: `اختبار: ${curExam?.title || 'الاختبار التقييمي'}`,
+                                          awardTitle: isTop ? 'نجم الاختبار والمركز الأول 🥇🏆' : 'شهادة تميز وتفوق في الاختبار 📜🌟',
                                           points: isTop ? 30 : 20,
                                           stars: isTop ? 5 : 4
                                         });
@@ -1808,12 +1911,15 @@ export const ExamsView: React.FC = () => {
                                         لم يجتز (لا تصدر شهادة)
                                       </span>
                                       <button
-                                        onClick={() => handleResetResult(res.id)}
+                                        onClick={() => {
+                                          setSelectedResultToEdit(res);
+                                          setIsEditResultModalOpen(true);
+                                        }}
                                         className="text-[10px] text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-0.5 font-bold cursor-pointer"
-                                        title="إعادة ضبط المحاولة للطالب ليعيد الاختبار"
+                                        title="تعديل الدرجة أو إتاحة إعادة المحاولة للطالب"
                                       >
                                         <RotateCcw className="w-3 h-3" />
-                                        <span>إعادة الاختبار 🔄</span>
+                                        <span>إعادة الاختبار / تعديل 🔄</span>
                                       </button>
                                     </div>
                                   )}
@@ -1823,9 +1929,23 @@ export const ExamsView: React.FC = () => {
                                 <td className="p-3 text-center">
                                   <div className="flex items-center justify-center gap-1.5">
                                     <button
-                                      onClick={() => handleResetResult(res.id)}
+                                      onClick={() => {
+                                        setSelectedResultToEdit(res);
+                                        setIsEditResultModalOpen(true);
+                                      }}
+                                      className="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-slate-750 rounded-lg transition-colors cursor-pointer"
+                                      title="تعديل درجة ونتيجة الطالب وإتاحة الإعادة ✍️"
+                                    >
+                                      <Edit className="w-4 h-4" />
+                                    </button>
+
+                                    <button
+                                      onClick={() => {
+                                        setSelectedResultToEdit(res);
+                                        setIsEditResultModalOpen(true);
+                                      }}
                                       className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-slate-750 rounded-lg transition-colors cursor-pointer"
-                                      title="إعادة ضبط المحاولة للطالب وتفريغ النتيجة"
+                                      title="إتاحة إعادة المحاولة للطالب مع حفظ الدرجة 🔄"
                                     >
                                       <RotateCcw className="w-4 h-4" />
                                     </button>
@@ -2339,6 +2459,93 @@ export const ExamsView: React.FC = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* ---------------------------------------------------- */}
+      {/* MODAL: EDIT SINGLE TRAINEE EXAM RESULT */}
+      {/* ---------------------------------------------------- */}
+      {isEditResultModalOpen && selectedResultToEdit && (
+        <EditStudentExamResultModal
+          isOpen={isEditResultModalOpen}
+          result={selectedResultToEdit}
+          exam={selectedExam || exams.find(e => e.id === selectedResultToEdit.examId) || null}
+          trainee={trainees.find(t => t.id === selectedResultToEdit.traineeId)}
+          onClose={() => {
+            setIsEditResultModalOpen(false);
+            setSelectedResultToEdit(null);
+          }}
+          onResultUpdated={(updatedResult) => {
+            setSelectedExamResults(prev => prev.map(r => r.id === updatedResult.id ? updatedResult : r));
+            loadExamResults(selectedExamId || updatedResult.examId);
+          }}
+        />
+      )}
+
+      {/* ---------------------------------------------------- */}
+      {/* MODAL: EDIT EXAM DETAILS & POLICIES */}
+      {/* ---------------------------------------------------- */}
+      {isEditExamModalOpen && targetEditExam && (
+        <EditExamModal
+          isOpen={isEditExamModalOpen}
+          exam={targetEditExam}
+          courses={courses}
+          groups={groups}
+          onClose={() => {
+            setIsEditExamModalOpen(false);
+            setTargetEditExam(null);
+          }}
+          onExamUpdated={(updatedExam) => {
+            setExams(prev => prev.map(e => e.id === updatedExam.id ? updatedExam : e));
+            if (selectedExamId === updatedExam.id) {
+              setSelectedExam(updatedExam);
+            }
+            loadData();
+          }}
+        />
+      )}
+
+      {/* ---------------------------------------------------- */}
+      {/* MODAL: WHATSAPP EXAM GROUP BROADCAST & CERTIFICATES HUB */}
+      {/* ---------------------------------------------------- */}
+      {isExamBroadcastOpen && broadcastTargetExam && (
+        <ExamGroupBroadcastModal
+          isOpen={isExamBroadcastOpen}
+          exam={broadcastTargetExam}
+          results={selectedExamResults}
+          courses={courses}
+          groups={groups}
+          trainees={trainees}
+          onClose={() => {
+            setIsExamBroadcastOpen(false);
+            setBroadcastTargetExam(null);
+          }}
+          onOpenSingleCertificate={(traineeId, res) => {
+            const course = courses.find(c => c.id === broadcastTargetExam.courseId);
+            const group = groups.find(g => g.id === broadcastTargetExam.groupId);
+            const traineeObj = trainees.find(t => t.id === traineeId);
+            const scoreNum = Number(res.score) || 0;
+            const tot = Number(res.totalMarks) || Number(broadcastTargetExam.totalMarks) || 100;
+            const isTop = scoreNum === Math.max(...selectedExamResults.map(r => Number(r.score) || 0));
+
+            setCertificateInitialData({
+              traineeId,
+              traineeName: res.traineeName || traineeObj?.fullName,
+              traineeCode: res.traineeCode || traineeObj?.code,
+              traineePhoto: traineeObj?.photoUrl,
+              traineePhone: traineeObj?.phone,
+              courseId: course?.id,
+              courseName: course?.name || 'الدورة التدريبية',
+              groupId: group?.id,
+              groupName: group?.name || 'المجموعة',
+              whatsappGroupLink: group?.whatsappGroupLink || (group as any)?.whatsappLink,
+              lectureTitle: `اختبار: ${broadcastTargetExam.title}`,
+              awardTitle: isTop ? 'نجم الاختبار والمركز الأول 🥇🏆' : 'شهادة تميز وتفوق في الاختبار 📜🌟',
+              points: isTop ? 30 : 20,
+              stars: isTop ? 5 : 4
+            });
+            setIsCertificateModalOpen(true);
+          }}
+        />
       )}
 
       {/* ---------------------------------------------------- */}

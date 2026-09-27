@@ -3,6 +3,7 @@ import {
   Camera,
   Upload,
   RotateCw,
+  RotateCcw,
   ZoomIn,
   ZoomOut,
   Sparkles,
@@ -19,9 +20,16 @@ import {
   Sun,
   Contrast,
   RefreshCw,
-  Move
+  Move,
+  FlipHorizontal,
+  FlipVertical,
+  Maximize2,
+  Minimize2,
+  Layers,
+  Palette
 } from 'lucide-react';
 import { api } from '../services/api';
+import { useTheme } from '../context/ThemeContext';
 
 interface StudentPhotoCropperModalProps {
   isOpen: boolean;
@@ -31,7 +39,6 @@ interface StudentPhotoCropperModalProps {
   initialImage?: string | null;
 }
 
-// Available Costumes / Attire Overlays
 export interface CostumeOption {
   id: string;
   name: string;
@@ -39,63 +46,62 @@ export interface CostumeOption {
   badge: string;
   color: string;
   description: string;
-  // SVG overlay generator function or elements
   type: 'graduation' | 'suit' | 'sash' | 'labcoat' | 'crown' | 'none';
 }
 
 const COSTUMES: CostumeOption[] = [
   {
     id: 'none',
-    name: 'الصورة الأصلية',
+    name: 'الصورة الطبيعية',
     icon: '📸',
-    badge: 'تلقائي',
+    badge: 'الأصلية بدون زي',
     color: 'bg-slate-700',
-    description: 'بدون إضافة زي تفوق',
+    description: 'بدون إضافات',
     type: 'none'
   },
   {
     id: 'graduation',
-    name: 'رداء وقبعة التخرج 🎓',
+    name: 'قبعة ورداء التخرج 🎓',
     icon: '🎓',
-    badge: 'التخرج والتميز',
+    badge: 'التفوق والتخرج',
     color: 'bg-indigo-600',
-    description: 'قبعة تخرج سوداء بشراشيب ذهبية ورداء أكاديمي',
+    description: 'قبعة تخرج ملكية بشراشيب ذهبية وياقة أكاديمية',
     type: 'graduation'
   },
   {
     id: 'suit',
     name: 'بدلة رسمية وكرافتة 👔',
     icon: '👔',
-    badge: 'أنيق ورسمي',
+    badge: 'مظهر رسمي أنيق',
     color: 'bg-blue-600',
-    description: 'بدلة داكنة مع قميص أبيض وربطة عنق احترافية',
+    description: 'بدلة كلاسيكية مع قميص أبيض وربطة عنق فاخرة',
     type: 'suit'
   },
   {
     id: 'sash',
     name: 'وشاح وسام التكريم 🏅',
     icon: '🏅',
-    badge: 'الطالب المثالي',
+    badge: 'المتدرب المثالي',
     color: 'bg-amber-500',
-    description: 'وشاح ملكي مذهب محفور بشعار مركز النجاح',
+    description: 'وشاح مذهب مطرز بشعار النجاح',
     type: 'sash'
   },
   {
     id: 'crown',
-    name: 'تاج التفوق الذهبي 👑',
+    name: 'تاج المركز الأول 👑',
     icon: '👑',
-    badge: 'المرتبة الأولى',
+    badge: 'الصدارة والتميز',
     color: 'bg-yellow-500',
-    description: 'تاج ذهبي مرصع بالأحجار الكريمة أعلى الرأس',
+    description: 'تاج ملكي مرصع بالأحجار الكريمة أعلى الرأس',
     type: 'crown'
   },
   {
     id: 'labcoat',
-    name: 'زي المعلم والتكنولوجيا 🥼',
+    name: 'زي المعامل والتكنولوجيا 🥼',
     icon: '🥼',
-    badge: 'الحاسب والتكنولوجيا',
+    badge: 'تطبيقات عملية',
     color: 'bg-teal-600',
-    description: 'رداء المختبر والمعامل الفنية الحديثة',
+    description: 'رداء المعمل والمهارات التقنية',
     type: 'labcoat'
   }
 ];
@@ -107,22 +113,31 @@ export const StudentPhotoCropperModal: React.FC<StudentPhotoCropperModalProps> =
   studentName = 'المتدرب',
   initialImage = null
 }) => {
+  const { theme } = useTheme();
+  const isDark = theme === 'dark';
+
   // Source Image
   const [imageSrc, setImageSrc] = useState<string | null>(initialImage);
   const [isCameraActive, setIsCameraActive] = useState(false);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
-  // Adjustment States
-  const [zoom, setZoom] = useState<number>(1);
+  // Transformations
+  const [zoom, setZoom] = useState<number>(0.9); // Default to slightly zoomed out so heads are never cut!
   const [rotation, setRotation] = useState<number>(0); // 0, 90, 180, 270
-  const [brightness, setBrightness] = useState<number>(100); // 50 - 150
-  const [contrast, setContrast] = useState<number>(100); // 50 - 150
-  const [saturation, setSaturation] = useState<number>(100); // 0 - 200
+  const [freeAngle, setFreeAngle] = useState<number>(0); // -45 to +45
+  const [flipH, setFlipH] = useState<boolean>(false);
+  const [flipV, setFlipV] = useState<boolean>(false);
+  const [scaleWidth, setScaleWidth] = useState<number>(100); // 70 - 140%
+  const [scaleHeight, setScaleHeight] = useState<number>(100); // 70 - 140%
   const [panX, setPanX] = useState<number>(0);
   const [panY, setPanY] = useState<number>(0);
-  const [maskType, setMaskType] = useState<'circle' | 'square'>('circle');
+  const [maskType, setMaskType] = useState<'square' | 'circle' | 'portrait'>('square');
+
+  // Lighting & Studio Adjustments
+  const [brightness, setBrightness] = useState<number>(100);
+  const [contrast, setContrast] = useState<number>(100);
+  const [saturation, setSaturation] = useState<number>(100);
 
   // Selected Costume State & Positioning
   const [selectedCostume, setSelectedCostume] = useState<string>('none');
@@ -143,6 +158,8 @@ export const StudentPhotoCropperModal: React.FC<StudentPhotoCropperModalProps> =
       setImageSrc(initialImage);
     }
   }, [initialImage]);
+
+  if (!isOpen) return null;
 
   // Handle File Upload
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -180,7 +197,7 @@ export const StudentPhotoCropperModal: React.FC<StudentPhotoCropperModalProps> =
   const stopCamera = () => {
     if (videoRef.current && videoRef.current.srcObject) {
       const stream = videoRef.current.srcObject as MediaStream;
-      stream.getTracks().forEach(track => track.stop());
+      stream.getTracks().forEach((track) => track.stop());
       videoRef.current.srcObject = null;
     }
     setIsCameraActive(false);
@@ -202,8 +219,13 @@ export const StudentPhotoCropperModal: React.FC<StudentPhotoCropperModalProps> =
   };
 
   const resetAdjustments = () => {
-    setZoom(1);
+    setZoom(0.9);
     setRotation(0);
+    setFreeAngle(0);
+    setFlipH(false);
+    setFlipV(false);
+    setScaleWidth(100);
+    setScaleHeight(100);
     setBrightness(100);
     setContrast(100);
     setSaturation(100);
@@ -214,7 +236,13 @@ export const StudentPhotoCropperModal: React.FC<StudentPhotoCropperModalProps> =
     setCostumeOffsetY(0);
   };
 
-  // Mouse Drag Panning for Crop Alignment
+  const fitFullImage = () => {
+    setZoom(0.85);
+    setPanX(0);
+    setPanY(15);
+  };
+
+  // Drag Panning for Mouse and Touch
   const handleMouseDown = (e: React.MouseEvent) => {
     setIsDragging(true);
     setDragStart({ x: e.clientX - panX, y: e.clientY - panY });
@@ -230,308 +258,295 @@ export const StudentPhotoCropperModal: React.FC<StudentPhotoCropperModalProps> =
     setIsDragging(false);
   };
 
-  // AI Auto Lighting & Portrait Enhancement
-  const handleAiEnhance = async () => {
-    if (!imageSrc) return;
-    setIsAiEnhancing(true);
-    setAiMessage('جاري تحسين إضاءة وألوان صورة الطالب بالذكاء الاصطناعي... ✨');
-    try {
-      const res = await (api as any).enhancePhoto(studentName);
-      // Auto adjust filters to studio portrait quality
-      setBrightness(110);
-      setContrast(115);
-      setSaturation(110);
-      setAiMessage(res.message || 'تم تحسين الصورة وضبط إضاءة الاستوديو بنجاح! 🌟');
-      setTimeout(() => setAiMessage(null), 3000);
-    } catch (err) {
-      setBrightness(108);
-      setContrast(112);
-      setAiMessage('تم ضبط التباين والإضاءة الذكية لمستوى الاستوديو المحترف ✨');
-      setTimeout(() => setAiMessage(null), 3000);
-    } finally {
-      setIsAiEnhancing(false);
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length === 1) {
+      setIsDragging(true);
+      setDragStart({ x: e.touches[0].clientX - panX, y: e.touches[0].clientY - panY });
     }
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!isDragging || e.touches.length !== 1) return;
+    setPanX(e.touches[0].clientX - dragStart.x);
+    setPanY(e.touches[0].clientY - dragStart.y);
+  };
+
+  // AI Presets
+  const applyPreset = (type: 'studio' | 'smooth' | 'vibrant' | 'natural') => {
+    if (type === 'studio') {
+      setBrightness(108);
+      setContrast(114);
+      setSaturation(105);
+      setAiMessage('تم تطبيق إضاءة استوديو متوازنة للوجه 💡');
+    } else if (type === 'smooth') {
+      setBrightness(112);
+      setContrast(106);
+      setSaturation(108);
+      setAiMessage('تم تطبيق تصفية وتنعيم ذكي للبشرة ✨');
+    } else if (type === 'vibrant') {
+      setBrightness(106);
+      setContrast(120);
+      setSaturation(125);
+      setAiMessage('تم زيادة تشبع ووضوح الألوان 🌟');
+    } else {
+      setBrightness(100);
+      setContrast(100);
+      setSaturation(100);
+      setAiMessage('تمت استعادة الألوان الطبيعية 🌿');
+    }
+    setTimeout(() => setAiMessage(null), 3000);
   };
 
   // Render & Export Cropped Canvas Image
-  const generateCroppedImage = (): string | null => {
+  const generateCroppedImage = async (): Promise<string | null> => {
     if (!imageSrc) return null;
 
-    const exportSize = 512; // High-res square avatar
-    const canvas = document.createElement('canvas');
-    canvas.width = exportSize;
-    canvas.height = exportSize;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return null;
+    return new Promise((resolve) => {
+      const exportWidth = 600;
+      const exportHeight = maskType === 'portrait' ? 800 : 600;
 
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
-    img.src = imageSrc;
+      const canvas = document.createElement('canvas');
+      canvas.width = exportWidth;
+      canvas.height = exportHeight;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        resolve(null);
+        return;
+      }
 
-    // Synchronous rendering assumption when exporting
-    // Clear Canvas
-    ctx.clearRect(0, 0, exportSize, exportSize);
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        ctx.clearRect(0, 0, exportWidth, exportHeight);
 
-    // Save state for circular clipping if selected
-    ctx.save();
+        // Circular clipping if circular mask
+        ctx.save();
+        if (maskType === 'circle') {
+          ctx.beginPath();
+          ctx.arc(exportWidth / 2, exportHeight / 2, Math.min(exportWidth, exportHeight) / 2, 0, Math.PI * 2);
+          ctx.clip();
+        }
 
-    if (maskType === 'circle') {
-      ctx.beginPath();
-      ctx.arc(exportSize / 2, exportSize / 2, exportSize / 2, 0, Math.PI * 2);
-      ctx.clip();
-    }
+        // Filters
+        ctx.filter = `brightness(${brightness}%) contrast(${contrast}%) saturate(${saturation}%)`;
 
-    // Apply Filter Adjustments
-    ctx.filter = `brightness(${brightness}%) contrast(${contrast}%) saturate(${saturation}%)`;
+        // Transforms
+        ctx.translate(exportWidth / 2 + panX, exportHeight / 2 + panY);
+        const totalRotation = ((rotation + freeAngle) * Math.PI) / 180;
+        ctx.rotate(totalRotation);
 
-    // Center and transform
-    ctx.translate(exportSize / 2 + panX, exportSize / 2 + panY);
-    ctx.rotate((rotation * Math.PI) / 180);
-    ctx.scale(zoom, zoom);
+        const currentScaleX = zoom * (scaleWidth / 100) * (flipH ? -1 : 1);
+        const currentScaleY = zoom * (scaleHeight / 100) * (flipV ? -1 : 1);
+        ctx.scale(currentScaleX, currentScaleY);
 
-    // Draw Source Image centered
-    const aspect = img.width / img.height;
-    let drawWidth = exportSize;
-    let drawHeight = exportSize;
-    if (aspect > 1) {
-      drawWidth = exportSize * aspect;
-    } else {
-      drawHeight = exportSize / aspect;
-    }
+        // Draw image maintaining aspect ratio
+        const aspect = img.width / img.height;
+        let drawWidth = exportWidth;
+        let drawHeight = exportHeight;
+        if (aspect > 1) {
+          drawWidth = exportWidth * aspect;
+        } else {
+          drawHeight = exportWidth / aspect;
+        }
 
-    ctx.drawImage(img, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight);
-    ctx.restore(); // Restore context after image draw & filter
+        ctx.drawImage(img, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight);
+        ctx.restore();
 
-    // Draw Costume Overlay if selected
-    if (selectedCostume !== 'none') {
-      drawCostumeOverlayOnCanvas(ctx, selectedCostume, exportSize);
-    }
+        // Draw Costume Overlay on Canvas
+        if (selectedCostume !== 'none') {
+          drawCostumeOverlayOnCanvas(ctx, selectedCostume, exportWidth, exportHeight);
+        }
 
-    return canvas.toDataURL('image/png', 0.95);
+        resolve(canvas.toDataURL('image/jpeg', 0.92));
+      };
+      img.onerror = () => resolve(null);
+      img.src = imageSrc;
+    });
   };
 
-  // Helper function to draw Costume Vectors on top of the exported image
-  const drawCostumeOverlayOnCanvas = (ctx: CanvasRenderingContext2D, costumeId: string, size: number) => {
+  // High-Quality Vector Costume Drawing
+  const drawCostumeOverlayOnCanvas = (
+    ctx: CanvasRenderingContext2D,
+    costumeId: string,
+    width: number,
+    height: number
+  ) => {
     ctx.save();
-    const cx = size / 2 + costumeOffsetX;
-    const cy = size / 2 + costumeOffsetY;
+    const cx = width / 2 + costumeOffsetX * (width / 400);
+    const cy = height / 2 + costumeOffsetY * (height / 400);
+
+    ctx.translate(cx, cy);
+    ctx.scale(costumeScale, costumeScale);
 
     if (costumeId === 'graduation') {
-      // 🎓 GRADUATION CAP & GOWN
-      ctx.save();
-      ctx.translate(cx, cy);
-      ctx.scale(costumeScale, costumeScale);
-
-      // 1. Graduation Cap (Top of head)
-      ctx.fillStyle = '#1E1B4B'; // Dark Navy/Black
-      // Cap Diamond Top
+      // 🎓 Cap Top
+      ctx.fillStyle = '#0f172a';
       ctx.beginPath();
-      ctx.moveTo(0, -size * 0.42);
-      ctx.lineTo(size * 0.28, -size * 0.35);
-      ctx.lineTo(0, -size * 0.28);
-      ctx.lineTo(-size * 0.28, -size * 0.35);
+      ctx.moveTo(0, -height * 0.44);
+      ctx.lineTo(width * 0.32, -height * 0.36);
+      ctx.lineTo(0, -height * 0.28);
+      ctx.lineTo(-width * 0.32, -height * 0.36);
       ctx.closePath();
       ctx.fill();
-      ctx.strokeStyle = '#F59E0B';
-      ctx.lineWidth = 2;
+      ctx.strokeStyle = '#f59e0b';
+      ctx.lineWidth = 3;
       ctx.stroke();
 
       // Cap Skull Band
-      ctx.fillStyle = '#0F172A';
+      ctx.fillStyle = '#1e293b';
       ctx.beginPath();
-      ctx.moveTo(-size * 0.16, -size * 0.34);
-      ctx.quadraticCurveTo(0, -size * 0.30, size * 0.16, -size * 0.34);
-      ctx.lineTo(size * 0.14, -size * 0.26);
-      ctx.quadraticCurveTo(0, -size * 0.22, -size * 0.14, -size * 0.26);
+      ctx.moveTo(-width * 0.18, -height * 0.35);
+      ctx.quadraticCurveTo(0, -height * 0.31, width * 0.18, -height * 0.35);
+      ctx.lineTo(width * 0.15, -height * 0.26);
+      ctx.quadraticCurveTo(0, -height * 0.22, -width * 0.15, -height * 0.26);
       ctx.closePath();
       ctx.fill();
 
       // Golden Tassel
-      ctx.strokeStyle = '#F59E0B';
-      ctx.lineWidth = 3;
+      ctx.strokeStyle = '#f59e0b';
+      ctx.lineWidth = 3.5;
       ctx.beginPath();
-      ctx.moveTo(0, -size * 0.35);
-      ctx.lineTo(size * 0.22, -size * 0.31);
-      ctx.lineTo(size * 0.22, -size * 0.23);
+      ctx.moveTo(0, -height * 0.36);
+      ctx.lineTo(width * 0.26, -height * 0.31);
+      ctx.lineTo(width * 0.26, -height * 0.22);
       ctx.stroke();
-      ctx.fillStyle = '#F59E0B';
+      ctx.fillStyle = '#fbbf24';
       ctx.beginPath();
-      ctx.arc(size * 0.22, -size * 0.22, 5, 0, Math.PI * 2);
+      ctx.arc(width * 0.26, -height * 0.21, 6, 0, Math.PI * 2);
       ctx.fill();
 
-      // 2. Academic Collar / Gown (Shoulders at bottom)
-      ctx.fillStyle = '#0F172A'; // Black gown
+      // Gown Bottom
+      ctx.fillStyle = '#0f172a';
       ctx.beginPath();
-      ctx.moveTo(-size * 0.48, size * 0.50);
-      ctx.quadraticCurveTo(-size * 0.25, size * 0.28, 0, size * 0.30);
-      ctx.quadraticCurveTo(size * 0.25, size * 0.28, size * 0.48, size * 0.50);
+      ctx.moveTo(-width * 0.48, height * 0.50);
+      ctx.quadraticCurveTo(-width * 0.25, height * 0.28, 0, height * 0.30);
+      ctx.quadraticCurveTo(width * 0.25, height * 0.28, width * 0.48, height * 0.50);
       ctx.closePath();
       ctx.fill();
 
-      // Golden V-Sash Collar
-      ctx.fillStyle = '#F59E0B';
+      // Gold Trim Collar
+      ctx.fillStyle = '#d97706';
       ctx.beginPath();
-      ctx.moveTo(-size * 0.22, size * 0.32);
-      ctx.lineTo(0, size * 0.46);
-      ctx.lineTo(size * 0.22, size * 0.32);
-      ctx.lineTo(size * 0.16, size * 0.30);
-      ctx.lineTo(0, size * 0.41);
-      ctx.lineTo(-size * 0.16, size * 0.30);
+      ctx.moveTo(-width * 0.22, height * 0.32);
+      ctx.lineTo(0, height * 0.46);
+      ctx.lineTo(width * 0.22, height * 0.32);
+      ctx.lineTo(width * 0.16, height * 0.30);
+      ctx.lineTo(0, height * 0.41);
+      ctx.lineTo(-width * 0.16, height * 0.30);
       ctx.closePath();
       ctx.fill();
-
-      ctx.restore();
     } else if (costumeId === 'suit') {
-      // 👔 FORMAL SUIT & TIE
-      ctx.save();
-      ctx.translate(cx, cy);
-      ctx.scale(costumeScale, costumeScale);
-
-      // Shirt Collar
-      ctx.fillStyle = '#FFFFFF';
+      // 👔 Suit Jacket & Tie
+      ctx.fillStyle = '#0f172a';
       ctx.beginPath();
-      ctx.moveTo(-size * 0.18, size * 0.28);
-      ctx.lineTo(0, size * 0.36);
-      ctx.lineTo(size * 0.18, size * 0.28);
-      ctx.lineTo(0, size * 0.25);
+      ctx.moveTo(-width * 0.48, height * 0.50);
+      ctx.quadraticCurveTo(-width * 0.20, height * 0.26, 0, height * 0.28);
+      ctx.quadraticCurveTo(width * 0.20, height * 0.26, width * 0.48, height * 0.50);
       ctx.closePath();
       ctx.fill();
 
-      // Blue Tie
-      ctx.fillStyle = '#1D4ED8';
+      // White Shirt Collar
+      ctx.fillStyle = '#ffffff';
       ctx.beginPath();
-      ctx.moveTo(-size * 0.04, size * 0.30);
-      ctx.lineTo(size * 0.04, size * 0.30);
-      ctx.lineTo(size * 0.06, size * 0.48);
-      ctx.lineTo(0, size * 0.52);
-      ctx.lineTo(-size * 0.06, size * 0.48);
+      ctx.moveTo(-width * 0.14, height * 0.28);
+      ctx.lineTo(0, height * 0.38);
+      ctx.lineTo(width * 0.14, height * 0.28);
+      ctx.lineTo(0, height * 0.26);
       ctx.closePath();
       ctx.fill();
 
-      // Jacket Lapels
-      ctx.fillStyle = '#1E293B';
+      // Navy/Red Tie
+      ctx.fillStyle = '#2563eb';
       ctx.beginPath();
-      ctx.moveTo(-size * 0.48, size * 0.50);
-      ctx.lineTo(-size * 0.18, size * 0.28);
-      ctx.lineTo(-size * 0.06, size * 0.40);
-      ctx.lineTo(-size * 0.20, size * 0.50);
+      ctx.moveTo(-width * 0.04, height * 0.35);
+      ctx.lineTo(width * 0.04, height * 0.35);
+      ctx.lineTo(width * 0.06, height * 0.50);
+      ctx.lineTo(0, height * 0.54);
+      ctx.lineTo(-width * 0.06, height * 0.50);
       ctx.closePath();
       ctx.fill();
-
-      ctx.beginPath();
-      ctx.moveTo(size * 0.48, size * 0.50);
-      ctx.lineTo(size * 0.18, size * 0.28);
-      ctx.lineTo(size * 0.06, size * 0.40);
-      ctx.lineTo(size * 0.20, size * 0.50);
-      ctx.closePath();
-      ctx.fill();
-
-      ctx.restore();
-    } else if (costumeId === 'sash') {
-      // 🏅 HONOR SASH
-      ctx.save();
-      ctx.translate(cx, cy);
-      ctx.scale(costumeScale, costumeScale);
-
-      // Golden Sash
-      ctx.fillStyle = 'rgba(217, 119, 6, 0.9)';
-      ctx.beginPath();
-      ctx.moveTo(-size * 0.38, size * 0.20);
-      ctx.lineTo(-size * 0.28, size * 0.18);
-      ctx.lineTo(size * 0.32, size * 0.50);
-      ctx.lineTo(size * 0.20, size * 0.50);
-      ctx.closePath();
-      ctx.fill();
-
-      // Medal Badge
-      ctx.fillStyle = '#F59E0B';
-      ctx.beginPath();
-      ctx.arc(-size * 0.22, size * 0.30, 18, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.strokeStyle = '#FFFFFF';
-      ctx.lineWidth = 2;
-      ctx.stroke();
-
-      ctx.restore();
     } else if (costumeId === 'crown') {
-      // 👑 GOLDEN CROWN
-      ctx.save();
-      ctx.translate(cx, cy);
-      ctx.scale(costumeScale, costumeScale);
-
-      ctx.fillStyle = '#F59E0B';
+      // 👑 Gold Imperial Tiara
+      ctx.fillStyle = '#f59e0b';
+      ctx.strokeStyle = '#d97706';
+      ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.moveTo(-size * 0.20, -size * 0.28);
-      ctx.lineTo(-size * 0.25, -size * 0.42);
-      ctx.lineTo(-size * 0.10, -size * 0.34);
-      ctx.lineTo(0, -size * 0.46);
-      ctx.lineTo(size * 0.10, -size * 0.34);
-      ctx.lineTo(size * 0.25, -size * 0.42);
-      ctx.lineTo(size * 0.20, -size * 0.28);
+      ctx.moveTo(-width * 0.25, -height * 0.36);
+      ctx.lineTo(-width * 0.18, -height * 0.46);
+      ctx.lineTo(-width * 0.08, -height * 0.40);
+      ctx.lineTo(0, -height * 0.50);
+      ctx.lineTo(width * 0.08, -height * 0.40);
+      ctx.lineTo(width * 0.18, -height * 0.46);
+      ctx.lineTo(width * 0.25, -height * 0.36);
       ctx.closePath();
       ctx.fill();
+      ctx.stroke();
 
       // Jewels
-      ctx.fillStyle = '#EF4444';
+      ctx.fillStyle = '#dc2626';
       ctx.beginPath();
-      ctx.arc(0, -size * 0.38, 4, 0, Math.PI * 2);
-      ctx.arc(-size * 0.18, -size * 0.34, 3, 0, Math.PI * 2);
-      ctx.arc(size * 0.18, -size * 0.34, 3, 0, Math.PI * 2);
+      ctx.arc(0, -height * 0.42, 5, 0, Math.PI * 2);
       ctx.fill();
-
-      ctx.restore();
-    } else if (costumeId === 'labcoat') {
-      // 🥼 LAB COAT
-      ctx.save();
-      ctx.translate(cx, cy);
-      ctx.scale(costumeScale, costumeScale);
-
-      ctx.fillStyle = '#F8FAFC';
+    } else if (costumeId === 'sash') {
+      // 🏅 Diagonal Sash
+      ctx.fillStyle = '#f59e0b';
       ctx.beginPath();
-      ctx.moveTo(-size * 0.48, size * 0.50);
-      ctx.lineTo(-size * 0.16, size * 0.28);
-      ctx.lineTo(0, size * 0.34);
-      ctx.lineTo(size * 0.16, size * 0.28);
-      ctx.lineTo(size * 0.48, size * 0.50);
+      ctx.moveTo(-width * 0.48, height * 0.20);
+      ctx.lineTo(-width * 0.30, height * 0.10);
+      ctx.lineTo(width * 0.48, height * 0.45);
+      ctx.lineTo(width * 0.30, height * 0.55);
       ctx.closePath();
       ctx.fill();
 
-      ctx.strokeStyle = '#0284C7';
-      ctx.lineWidth = 2;
-      ctx.stroke();
-
-      ctx.restore();
+      ctx.fillStyle = '#78350f';
+      ctx.font = 'bold 14px Cairo, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('⭐ متدرب متميز ⭐', 0, height * 0.35);
     }
 
     ctx.restore();
   };
 
-  const handleSave = () => {
-    const finalPhoto = generateCroppedImage();
+  const handleSave = async () => {
+    const finalPhoto = await generateCroppedImage();
     if (finalPhoto) {
       onSavePhoto(finalPhoto);
+      stopCamera();
       onClose();
     }
   };
 
-  if (!isOpen) return null;
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 md:p-6 bg-slate-950/85 backdrop-blur-md animate-in fade-in duration-200">
-      <div className="relative w-full max-w-4xl bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[95vh] text-slate-100" dir="rtl">
-        
-        {/* Modal Header */}
-        <div className="px-6 py-4 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 border-b border-slate-800 flex items-center justify-between">
+    <div className="fixed inset-0 z-[99999] flex items-center justify-center p-3 sm:p-5 bg-slate-950/75 backdrop-blur-md animate-in fade-in duration-200">
+      <div
+        className={`relative w-full max-w-4xl rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[95vh] border transition-all ${
+          isDark
+            ? 'bg-slate-900 border-slate-800 text-slate-100'
+            : 'bg-white border-amber-200/90 text-slate-900'
+        }`}
+        dir="rtl"
+      >
+        {/* Header */}
+        <div
+          className={`px-5 py-3.5 border-b flex items-center justify-between shrink-0 ${
+            isDark
+              ? 'bg-slate-900/90 border-slate-800 text-white'
+              : 'bg-slate-50 border-slate-200 text-slate-900'
+          }`}
+        >
           <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-indigo-500/20 text-indigo-400 rounded-2xl border border-indigo-500/30">
-              <Wand2 className="w-6 h-6 animate-pulse" />
+            <div className="p-2.5 bg-amber-500/15 text-amber-600 dark:text-amber-400 rounded-2xl border border-amber-500/30">
+              <Wand2 className="w-5 h-5 animate-pulse" />
             </div>
             <div>
-              <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                أداة قص وتزيين صور الطلاب بالذكاء الاصطناعي 🎓
+              <h3 className="text-base font-black flex items-center gap-2">
+                <span>استوديو معالجة وتخصيص صورة المتدرب 📷</span>
+                <span className="text-[10px] bg-amber-500/15 text-amber-600 dark:text-amber-400 px-2 py-0.5 rounded-full font-bold">
+                  {studentName}
+                </span>
               </h3>
-              <p className="text-xs text-slate-400">
-                ضبط مقاس الصورة، الفلاتر، وإضافة زي وقبعة التخرج أو أوسمة التكريم لـ ({studentName})
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 font-semibold">
+                تكبير وتصغير سلس، تدوير، قلب أفقي ورأسي، وضبط زي التكريم بدون قص الرأس
               </p>
             </div>
           </div>
@@ -541,36 +556,37 @@ export const StudentPhotoCropperModal: React.FC<StudentPhotoCropperModalProps> =
               stopCamera();
               onClose();
             }}
-            className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-full transition-colors"
+            className="p-2 text-slate-400 hover:text-slate-700 dark:hover:text-white rounded-xl transition-colors cursor-pointer"
           >
-            <X className="w-6 h-6" />
+            <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Modal Main Body */}
-        <div className="flex-1 overflow-y-auto p-4 md:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
-
-          {/* LEFT 7 COLS: Canvas Preview Stage */}
-          <div className="lg:col-span-7 flex flex-col items-center justify-center space-y-4">
-            
-            {/* Camera or Image Preview Stage */}
-            <div className="relative w-full max-w-sm aspect-square bg-slate-950 rounded-3xl border-2 border-indigo-500/30 overflow-hidden shadow-2xl flex items-center justify-center select-none group">
-              
+        {/* Body */}
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 grid grid-cols-1 lg:grid-cols-12 gap-5 custom-scrollbar">
+          {/* LEFT 7 COLS: Preview Stage */}
+          <div className="lg:col-span-7 flex flex-col items-center justify-center space-y-3">
+            {/* Visual Canvas Stage */}
+            <div
+              className={`relative w-full max-w-[340px] sm:max-w-[380px] aspect-square rounded-3xl border-2 overflow-hidden shadow-xl flex items-center justify-center select-none group ${
+                isDark ? 'bg-slate-950 border-amber-500/40' : 'bg-slate-100 border-amber-300'
+              }`}
+            >
               {isCameraActive ? (
                 <div className="relative w-full h-full bg-black flex items-center justify-center">
                   <video ref={videoRef} playsInline muted className="w-full h-full object-cover" />
                   <div className="absolute inset-x-0 bottom-4 flex justify-center gap-3 z-10">
                     <button
                       onClick={capturePhoto}
-                      className="px-6 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-2xl shadow-lg flex items-center gap-2"
+                      className="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs rounded-xl shadow-lg flex items-center gap-2 cursor-pointer"
                     >
-                      <Camera className="w-5 h-5" /> التقاط الصورة 📸
+                      <Camera className="w-4 h-4" /> التقاط الصورة الآن 📸
                     </button>
                     <button
                       onClick={stopCamera}
-                      className="p-2.5 bg-rose-600 text-white rounded-2xl"
+                      className="p-2 bg-rose-600 text-white rounded-xl cursor-pointer"
                     >
-                      <X className="w-5 h-5" />
+                      <X className="w-4 h-4" />
                     </button>
                   </div>
                 </div>
@@ -581,20 +597,23 @@ export const StudentPhotoCropperModal: React.FC<StudentPhotoCropperModalProps> =
                   onMouseMove={handleMouseMove}
                   onMouseUp={handleMouseUp}
                   onMouseLeave={handleMouseUp}
+                  onTouchStart={handleTouchStart}
+                  onTouchMove={handleTouchMove}
+                  onTouchEnd={handleMouseUp}
                 >
-                  {/* Background Image with transformations */}
+                  {/* Photo with live transformations */}
                   <img
                     src={imageSrc}
-                    alt="Student Preview"
+                    alt={studentName}
                     style={{
-                      transform: `translate(${panX}px, ${panY}px) scale(${zoom}) rotate(${rotation}deg)`,
+                      transform: `translate(${panX}px, ${panY}px) scale(${zoom * (scaleWidth / 100) * (flipH ? -1 : 1)}, ${zoom * (scaleHeight / 100) * (flipV ? -1 : 1)}) rotate(${rotation + freeAngle}deg)`,
                       filter: `brightness(${brightness}%) contrast(${contrast}%) saturate(${saturation}%)`,
-                      transition: isDragging ? 'none' : 'transform 0.1s ease-out'
+                      transition: isDragging ? 'none' : 'transform 0.05s ease-out'
                     }}
-                    className="max-w-none w-full h-full object-cover pointer-events-none"
+                    className="max-w-none w-full h-full object-contain pointer-events-none"
                   />
 
-                  {/* Costume SVG Overlay preview on stage */}
+                  {/* High Quality Costume SVG Live Stage Overlay */}
                   {selectedCostume !== 'none' && (
                     <div
                       style={{
@@ -604,81 +623,105 @@ export const StudentPhotoCropperModal: React.FC<StudentPhotoCropperModalProps> =
                       className="absolute inset-0 pointer-events-none flex items-center justify-center z-20"
                     >
                       {selectedCostume === 'graduation' && (
-                        <div className="relative w-full h-full">
-                          {/* Cap Top */}
-                          <div className="absolute top-[8%] left-1/2 -translate-x-1/2 text-5xl drop-shadow-lg">
-                            🎓
+                        <div className="relative w-full h-full flex flex-col justify-between">
+                          {/* Graduation Cap */}
+                          <div className="absolute top-[3%] left-1/2 -translate-x-1/2 w-44 drop-shadow-2xl">
+                            <svg viewBox="0 0 200 120" className="w-full h-auto">
+                              <polygon points="100,10 190,45 100,75 10,45" fill="#0f172a" stroke="#f59e0b" strokeWidth="4" />
+                              <path d="M50,55 Q100,75 150,55 L145,85 Q100,105 55,85 Z" fill="#1e293b" />
+                              <line x1="100" y1="45" x2="170" y2="60" stroke="#f59e0b" strokeWidth="4" />
+                              <line x1="170" y1="60" x2="170" y2="90" stroke="#f59e0b" strokeWidth="4" />
+                              <circle cx="170" cy="95" r="7" fill="#fbbf24" />
+                            </svg>
                           </div>
-                          {/* Academic Gown Bottom Collar */}
-                          <div className="absolute bottom-[4%] inset-x-4 h-24 bg-gradient-to-t from-slate-950 via-indigo-950/90 to-transparent rounded-b-full border-b-4 border-amber-400 flex items-center justify-center">
-                            <span className="text-amber-400 font-bold text-xs tracking-widest uppercase">النجاح للتدريب</span>
+                          {/* Academic Collar */}
+                          <div className="absolute bottom-0 inset-x-2 drop-shadow-xl">
+                            <svg viewBox="0 0 200 80" className="w-full h-auto">
+                              <path d="M10,80 Q50,20 100,25 Q150,20 190,80 Z" fill="#0f172a" />
+                              <polygon points="60,30 100,70 140,30 125,25 100,55 75,25" fill="#f59e0b" />
+                            </svg>
                           </div>
                         </div>
                       )}
 
                       {selectedCostume === 'suit' && (
-                        <div className="absolute bottom-[2%] inset-x-6 h-28 flex flex-col items-center justify-end">
-                          <div className="w-10 h-16 bg-white border border-slate-300 rotate-45 rounded-sm -mb-8"></div>
-                          <div className="w-6 h-20 bg-blue-600 rounded-b-md z-10 shadow-md"></div>
-                          <div className="w-full h-16 bg-slate-900 border-t-2 border-slate-700 rounded-t-3xl -mt-12 flex justify-between px-4">
-                            <div className="w-10 h-16 bg-slate-800 -rotate-12 border-l border-slate-600"></div>
-                            <div className="w-10 h-16 bg-slate-800 rotate-12 border-r border-slate-600"></div>
-                          </div>
-                        </div>
-                      )}
-
-                      {selectedCostume === 'sash' && (
-                        <div className="relative w-full h-full">
-                          <div className="absolute top-1/3 -left-2 w-full h-12 bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-600 -rotate-45 shadow-xl flex items-center justify-center">
-                            <span className="text-slate-950 font-black text-[10px]">⭐ الطالب المتفوق - Nagah TC ⭐</span>
-                          </div>
+                        <div className="absolute bottom-0 inset-x-2 drop-shadow-2xl">
+                          <svg viewBox="0 0 200 90" className="w-full h-auto">
+                            <path d="M10,90 Q50,25 100,30 Q150,25 190,90 Z" fill="#0f172a" />
+                            <polygon points="75,30 100,55 125,30 100,22" fill="#ffffff" />
+                            <polygon points="92,48 108,48 112,85 100,90 88,85" fill="#2563eb" />
+                          </svg>
                         </div>
                       )}
 
                       {selectedCostume === 'crown' && (
-                        <div className="absolute top-[6%] left-1/2 -translate-x-1/2 text-5xl drop-shadow-xl animate-bounce" style={{ animationDuration: '3s' }}>
-                          👑
+                        <div className="absolute top-[4%] left-1/2 -translate-x-1/2 w-32 drop-shadow-2xl">
+                          <svg viewBox="0 0 160 100" className="w-full h-auto">
+                            <polygon points="10,85 25,20 55,50 80,10 105,50 135,20 150,85" fill="#f59e0b" stroke="#b45309" strokeWidth="4" />
+                            <circle cx="80" cy="50" r="8" fill="#dc2626" />
+                            <circle cx="40" cy="65" r="6" fill="#2563eb" />
+                            <circle cx="120" cy="65" r="6" fill="#10b981" />
+                          </svg>
+                        </div>
+                      )}
+
+                      {selectedCostume === 'sash' && (
+                        <div className="relative w-full h-full flex items-center justify-center">
+                          <div className="w-[120%] py-2.5 bg-gradient-to-r from-amber-500 via-amber-400 to-amber-600 -rotate-30 shadow-2xl flex items-center justify-center border-y-2 border-amber-300">
+                            <span className="text-slate-950 font-black text-xs">
+                              ⭐ المتدرب المتفوق - Nagah Center ⭐
+                            </span>
+                          </div>
                         </div>
                       )}
 
                       {selectedCostume === 'labcoat' && (
-                        <div className="absolute bottom-0 inset-x-6 h-24 bg-slate-100 dark:bg-slate-200 border-t-2 border-teal-500 rounded-t-3xl shadow-lg flex items-center justify-center">
-                          <span className="text-teal-900 font-bold text-[10px]">🥼 IT &amp; Tech Academy</span>
+                        <div className="absolute bottom-0 inset-x-2 drop-shadow-xl">
+                          <svg viewBox="0 0 200 90" className="w-full h-auto">
+                            <path d="M15,90 Q50,25 100,30 Q150,25 185,90 Z" fill="#f8fafc" stroke="#0d9488" strokeWidth="3" />
+                            <line x1="100" y1="30" x2="100" y2="90" stroke="#0d9488" strokeWidth="3" />
+                            <rect x="135" y="45" width="22" height="28" rx="3" fill="#ccfbf1" stroke="#0d9488" strokeWidth="2" />
+                          </svg>
                         </div>
                       )}
                     </div>
                   )}
 
-                  {/* Mask Overlay (Circle vs Square Frame) */}
-                  <div className="absolute inset-0 pointer-events-none z-10 border-[30px] border-slate-950/70" style={{ borderRadius: maskType === 'circle' ? '50%' : '24px' }}></div>
-                  <div className="absolute inset-0 pointer-events-none z-10 border border-amber-400/40" style={{ borderRadius: maskType === 'circle' ? '50%' : '24px' }}></div>
-
-                  {/* Helpful hint overlay */}
-                  <div className="absolute bottom-2 inset-x-0 text-center opacity-0 group-hover:opacity-100 transition-opacity z-30">
-                    <span className="bg-slate-900/80 text-amber-300 text-[10px] px-3 py-1 rounded-full border border-amber-500/30">
-                      💡 اسحب الصورة بالماوس لضبط التوسيط
-                    </span>
-                  </div>
+                  {/* Mask visual guide */}
+                  <div
+                    className="absolute inset-0 pointer-events-none z-10 border-[24px] border-slate-950/60 transition-all"
+                    style={{
+                      borderRadius:
+                        maskType === 'circle' ? '50%' : maskType === 'portrait' ? '16px' : '28px'
+                    }}
+                  />
+                  <div
+                    className="absolute inset-0 pointer-events-none z-10 border-2 border-amber-400/60"
+                    style={{
+                      borderRadius:
+                        maskType === 'circle' ? '50%' : maskType === 'portrait' ? '16px' : '28px'
+                    }}
+                  />
                 </div>
               ) : (
-                <div className="p-6 text-center space-y-4">
-                  <div className="w-16 h-16 mx-auto bg-indigo-500/10 text-indigo-400 rounded-2xl flex items-center justify-center">
-                    <ImageIcon className="w-8 h-8" />
+                <div className="p-6 text-center space-y-3">
+                  <div className="w-14 h-14 mx-auto bg-amber-500/10 text-amber-600 dark:text-amber-400 rounded-2xl flex items-center justify-center">
+                    <ImageIcon className="w-7 h-7" />
                   </div>
                   <div>
-                    <h4 className="font-bold text-white text-sm">لم يتم رفع صورة بعد</h4>
-                    <p className="text-xs text-slate-400 mt-1">اختر صورة من جهازك أو استخدم الكاميرا المباشرة</p>
+                    <h4 className="font-black text-sm">لم يتم رفع صورة حتى الآن</h4>
+                    <p className="text-xs text-slate-500 mt-0.5">اختر صورة من جهازك للبدء في ضبطها وتخصيصها</p>
                   </div>
                   <div className="flex justify-center gap-2 pt-2">
                     <button
                       onClick={() => fileInputRef.current?.click()}
-                      className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs rounded-xl flex items-center gap-1.5"
+                      className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 cursor-pointer shadow-md"
                     >
                       <Upload className="w-4 h-4" /> رفع صورة
                     </button>
                     <button
                       onClick={startCamera}
-                      className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs rounded-xl flex items-center gap-1.5"
+                      className="px-4 py-2 bg-slate-200 dark:bg-slate-800 text-slate-800 dark:text-slate-200 font-bold text-xs rounded-xl flex items-center gap-1.5 cursor-pointer"
                     >
                       <Camera className="w-4 h-4" /> الكاميرا
                     </button>
@@ -695,193 +738,365 @@ export const StudentPhotoCropperModal: React.FC<StudentPhotoCropperModalProps> =
               />
             </div>
 
-            {/* Quick Action Bar under Stage */}
+            {/* Stage Quick Controls */}
             {imageSrc && !isCameraActive && (
-              <div className="flex flex-wrap items-center justify-center gap-2 bg-slate-950/60 p-2 rounded-2xl border border-slate-800">
+              <div
+                className={`flex flex-wrap items-center justify-center gap-1.5 p-2 rounded-2xl border text-xs ${
+                  isDark ? 'bg-slate-950/80 border-slate-800' : 'bg-slate-50 border-slate-200'
+                }`}
+              >
                 <button
-                  onClick={() => setZoom(prev => Math.min(prev + 0.15, 3))}
-                  className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl"
+                  onClick={fitFullImage}
+                  className="px-2.5 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black rounded-xl flex items-center gap-1 cursor-pointer shadow-xs"
+                  title="إظهار الرأس والصورة كاملة بدون قص"
+                >
+                  <Maximize2 className="w-3.5 h-3.5" />
+                  <span>احتواء كامل (لا تقص الرأس)</span>
+                </button>
+
+                <button
+                  onClick={() => setZoom((prev) => Math.min(prev + 0.15, 3))}
+                  className="p-1.5 rounded-xl bg-slate-200 dark:bg-slate-800 hover:bg-amber-500/20 text-slate-800 dark:text-slate-200 transition-colors"
                   title="تكبير"
                 >
                   <ZoomIn className="w-4 h-4" />
                 </button>
                 <button
-                  onClick={() => setZoom(prev => Math.max(prev - 0.15, 0.5))}
-                  className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl"
+                  onClick={() => setZoom((prev) => Math.max(prev - 0.15, 0.3))}
+                  className="p-1.5 rounded-xl bg-slate-200 dark:bg-slate-800 hover:bg-amber-500/20 text-slate-800 dark:text-slate-200 transition-colors"
                   title="تصغير"
                 >
                   <ZoomOut className="w-4 h-4" />
                 </button>
+
                 <button
-                  onClick={() => setRotation(prev => (prev + 90) % 360)}
-                  className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl"
-                  title="تدوير 90 درجة"
+                  onClick={() => setRotation((prev) => (prev + 90) % 360)}
+                  className="p-1.5 rounded-xl bg-slate-200 dark:bg-slate-800 hover:bg-amber-500/20 text-slate-800 dark:text-slate-200 transition-colors"
+                  title="تدوير يميناً 90°"
                 >
                   <RotateCw className="w-4 h-4" />
                 </button>
+
                 <button
-                  onClick={() => setMaskType(prev => prev === 'circle' ? 'square' : 'circle')}
-                  className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-amber-300 font-bold text-xs rounded-xl flex items-center gap-1"
+                  onClick={() => setRotation((prev) => (prev - 90 + 360) % 360)}
+                  className="p-1.5 rounded-xl bg-slate-200 dark:bg-slate-800 hover:bg-amber-500/20 text-slate-800 dark:text-slate-200 transition-colors"
+                  title="تدوير يساراً 90°"
                 >
-                  <Scissors className="w-3.5 h-3.5" />
-                  {maskType === 'circle' ? 'إطار دائري' : 'إطار كارت مربعي'}
+                  <RotateCcw className="w-4 h-4" />
                 </button>
+
+                <button
+                  onClick={() => setFlipH((prev) => !prev)}
+                  className={`p-1.5 rounded-xl transition-colors ${
+                    flipH
+                      ? 'bg-amber-500 text-slate-950 font-bold'
+                      : 'bg-slate-200 dark:bg-slate-800 text-slate-800 dark:text-slate-200'
+                  }`}
+                  title="قلب أفقي (انعكاس يمين/شمال)"
+                >
+                  <FlipHorizontal className="w-4 h-4" />
+                </button>
+
+                <button
+                  onClick={() => setFlipV((prev) => !prev)}
+                  className={`p-1.5 rounded-xl transition-colors ${
+                    flipV
+                      ? 'bg-amber-500 text-slate-950 font-bold'
+                      : 'bg-slate-200 dark:bg-slate-800 text-slate-800 dark:text-slate-200'
+                  }`}
+                  title="قلب رأسي (فوق/تحت)"
+                >
+                  <FlipVertical className="w-4 h-4" />
+                </button>
+
                 <button
                   onClick={resetAdjustments}
-                  className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-400 rounded-xl"
-                  title="إعادة ضبط"
+                  className="p-1.5 rounded-xl bg-slate-200 dark:bg-slate-800 text-slate-500 hover:text-rose-500 transition-colors"
+                  title="إعادة ضبط الكل"
                 >
                   <RefreshCw className="w-4 h-4" />
                 </button>
               </div>
             )}
 
-            {/* AI Enhance Banner Message */}
+            {/* AI Message */}
             {aiMessage && (
-              <div className="p-3 bg-indigo-500/15 border border-indigo-500/30 rounded-xl text-indigo-300 text-xs text-center font-bold animate-in fade-in">
+              <div className="p-2.5 bg-emerald-500/15 border border-emerald-500/30 rounded-xl text-emerald-700 dark:text-emerald-300 text-xs font-bold text-center animate-in fade-in">
                 {aiMessage}
               </div>
             )}
-
           </div>
 
-          {/* RIGHT 5 COLS: Controls, Costumes & AI Tools */}
-          <div className="lg:col-span-5 space-y-5">
-            
-            {/* AI Studio Enhance Button */}
+          {/* RIGHT 5 COLS: Professional Tuning & AI Studio */}
+          <div className="lg:col-span-5 space-y-4">
+            {/* Aspect & Mask Chooser */}
+            <div
+              className={`p-3 rounded-2xl border ${
+                isDark ? 'bg-slate-950/70 border-slate-800' : 'bg-slate-50 border-slate-200'
+              }`}
+            >
+              <label className="text-xs font-bold block mb-2 text-slate-700 dark:text-slate-300">
+                نوع الإطار والشكل المطلوب:
+              </label>
+              <div className="grid grid-cols-3 gap-1.5 text-xs">
+                <button
+                  type="button"
+                  onClick={() => setMaskType('square')}
+                  className={`py-1.5 rounded-xl font-bold transition-all ${
+                    maskType === 'square'
+                      ? 'bg-amber-500 text-slate-950 shadow-sm'
+                      : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
+                  }`}
+                >
+                  كارت مربعي 1:1
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMaskType('circle')}
+                  className={`py-1.5 rounded-xl font-bold transition-all ${
+                    maskType === 'circle'
+                      ? 'bg-amber-500 text-slate-950 shadow-sm'
+                      : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
+                  }`}
+                >
+                  دائري للبروفايل
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMaskType('portrait')}
+                  className={`py-1.5 rounded-xl font-bold transition-all ${
+                    maskType === 'portrait'
+                      ? 'bg-amber-500 text-slate-950 shadow-sm'
+                      : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
+                  }`}
+                >
+                  شخصية 3:4
+                </button>
+              </div>
+            </div>
+
+            {/* Width and Height Stretch Sliders */}
             {imageSrc && (
-              <button
-                onClick={handleAiEnhance}
-                disabled={isAiEnhancing}
-                className="w-full py-3 px-4 bg-gradient-to-r from-amber-500 via-indigo-600 to-purple-600 hover:from-amber-600 hover:to-purple-700 text-white font-bold rounded-2xl shadow-lg flex items-center justify-center gap-2 text-xs transition-all transform active:scale-95 disabled:opacity-50"
+              <div
+                className={`p-3.5 rounded-2xl border space-y-2.5 ${
+                  isDark ? 'bg-slate-950/70 border-slate-800' : 'bg-slate-50 border-slate-200'
+                }`}
               >
-                <Sparkles className="w-4 h-4 text-amber-300 animate-spin" style={{ animationDuration: '3s' }} />
-                {isAiEnhancing ? 'جاري ضبط ألوان البورتريه...' : '✨ تحسين الجودة والتباين بالذكاء الاصطناعي'}
-              </button>
+                <span className="text-xs font-bold text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                  <Sliders className="w-3.5 h-3.5" /> ضبط الطول والعرض وزاوية الميل الدقيقة:
+                </span>
+
+                <div className="grid grid-cols-2 gap-2 text-[11px]">
+                  <div>
+                    <div className="flex justify-between text-slate-600 dark:text-slate-400 mb-0.5">
+                      <span>العرض (تعريض):</span>
+                      <span>{scaleWidth}%</span>
+                    </div>
+                    <input
+                      type="range"
+                      min={70}
+                      max={140}
+                      value={scaleWidth}
+                      onChange={(e) => setScaleWidth(Number(e.target.value))}
+                      className="w-full accent-amber-500"
+                    />
+                  </div>
+
+                  <div>
+                    <div className="flex justify-between text-slate-600 dark:text-slate-400 mb-0.5">
+                      <span>الطول (تطويل):</span>
+                      <span>{scaleHeight}%</span>
+                    </div>
+                    <input
+                      type="range"
+                      min={70}
+                      max={140}
+                      value={scaleHeight}
+                      onChange={(e) => setScaleHeight(Number(e.target.value))}
+                      className="w-full accent-amber-500"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <div className="flex justify-between text-[11px] text-slate-600 dark:text-slate-400 mb-0.5">
+                    <span>زاوية الميل الحر (Free Angle):</span>
+                    <span>{freeAngle}°</span>
+                  </div>
+                  <input
+                    type="range"
+                    min={-45}
+                    max={45}
+                    value={freeAngle}
+                    onChange={(e) => setFreeAngle(Number(e.target.value))}
+                    className="w-full accent-amber-500"
+                  />
+                </div>
+              </div>
             )}
 
-            {/* COSTUME / ATTIRE SELECTION */}
-            <div className="space-y-2">
-              <label className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
-                <GraduationCap className="w-4 h-4 text-amber-400" />
-                اختر زي التكريم والتفوق للطالب (AI Costume):
+            {/* AI Lighting Presets */}
+            {imageSrc && (
+              <div
+                className={`p-3 rounded-2xl border space-y-2 ${
+                  isDark ? 'bg-slate-950/70 border-slate-800' : 'bg-slate-50 border-slate-200'
+                }`}
+              >
+                <span className="text-xs font-bold text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                  <Sparkles className="w-3.5 h-3.5" /> فلاتر الإضاءة الاستوديو الذكية:
+                </span>
+                <div className="grid grid-cols-2 gap-1.5 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => applyPreset('studio')}
+                    className="p-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-amber-400 rounded-xl text-right font-bold transition-all shadow-xs cursor-pointer"
+                  >
+                    💡 إضاءة استوديو
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => applyPreset('smooth')}
+                    className="p-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-amber-400 rounded-xl text-right font-bold transition-all shadow-xs cursor-pointer"
+                  >
+                    ✨ تصفية وتنعيم
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => applyPreset('vibrant')}
+                    className="p-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-amber-400 rounded-xl text-right font-bold transition-all shadow-xs cursor-pointer"
+                  >
+                    🌟 إشراقة وتباين
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => applyPreset('natural')}
+                    className="p-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-amber-400 rounded-xl text-right font-bold transition-all shadow-xs cursor-pointer"
+                  >
+                    🌿 ألوان طبيعية
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Costumes Picker */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
+                <GraduationCap className="w-4 h-4" />
+                زي التكريم وقبعة التخرج الاحترافية:
               </label>
 
-              <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto p-1 pr-2">
-                {COSTUMES.map(costume => (
+              <div className="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto p-1 custom-scrollbar">
+                {COSTUMES.map((costume) => (
                   <button
                     key={costume.id}
                     onClick={() => setSelectedCostume(costume.id)}
-                    className={`p-2.5 rounded-2xl border text-right transition-all flex items-start gap-2 ${
+                    className={`p-2.5 rounded-2xl border text-right transition-all flex items-center gap-2 cursor-pointer ${
                       selectedCostume === costume.id
-                        ? 'bg-indigo-600/30 border-indigo-500 text-white ring-2 ring-indigo-500/50'
-                        : 'bg-slate-950/60 border-slate-800 text-slate-300 hover:border-slate-700'
+                        ? 'bg-amber-500/20 border-amber-500 text-amber-900 dark:text-amber-200 ring-2 ring-amber-500/40'
+                        : isDark
+                        ? 'bg-slate-950/70 border-slate-800 text-slate-300 hover:border-slate-700'
+                        : 'bg-white border-slate-200 text-slate-800 hover:border-slate-300 shadow-2xs'
                     }`}
                   >
                     <span className="text-2xl shrink-0">{costume.icon}</span>
                     <div className="overflow-hidden">
                       <span className="block font-bold text-xs truncate">{costume.name}</span>
-                      <span className="text-[10px] text-slate-400 block truncate">{costume.badge}</span>
+                      <span className="text-[10px] text-slate-500 dark:text-slate-400 block truncate">
+                        {costume.badge}
+                      </span>
                     </div>
                   </button>
                 ))}
               </div>
             </div>
 
-            {/* COSTUME POSITION CONTROLS (IF COSTUME SELECTED) */}
+            {/* Costume Position & Scale Controls */}
             {selectedCostume !== 'none' && (
-              <div className="p-3 bg-slate-950/70 rounded-2xl border border-indigo-500/20 space-y-2 animate-in fade-in">
-                <div className="flex items-center justify-between text-xs font-bold text-slate-300">
-                  <span className="flex items-center gap-1"><Move className="w-3.5 h-3.5 text-indigo-400" /> ضبط موضع زي التخرج</span>
-                  <span className="text-[10px] text-slate-400">حجم الزي: {Math.round(costumeScale * 100)}%</span>
+              <div
+                className={`p-3 rounded-2xl border space-y-2 animate-in fade-in ${
+                  isDark ? 'bg-slate-950/80 border-amber-500/30' : 'bg-amber-50/70 border-amber-300'
+                }`}
+              >
+                <div className="flex items-center justify-between text-xs font-bold">
+                  <span className="flex items-center gap-1 text-amber-700 dark:text-amber-400">
+                    <Move className="w-3.5 h-3.5" /> ضبط حجم ومكان القبعة / الزي بدقة:
+                  </span>
+                  <span className="text-[10px] text-slate-600 dark:text-slate-400">
+                    الحجم: {Math.round(costumeScale * 100)}%
+                  </span>
                 </div>
 
-                <div className="grid grid-cols-2 gap-2 text-xs">
+                <div className="space-y-1.5 text-[11px]">
                   <div>
-                    <label className="text-[10px] text-slate-400 block mb-1">الموقع الرأسي Y</label>
+                    <div className="flex justify-between text-slate-600 dark:text-slate-400 mb-0.5">
+                      <span>تكبير / تصغير الزي:</span>
+                      <span>{Math.round(costumeScale * 100)}%</span>
+                    </div>
                     <input
                       type="range"
-                      min={-100}
-                      max={100}
-                      value={costumeOffsetY}
-                      onChange={(e) => setCostumeOffsetY(Number(e.target.value))}
-                      className="w-full accent-indigo-500"
+                      min={0.5}
+                      max={2.2}
+                      step={0.05}
+                      value={costumeScale}
+                      onChange={(e) => setCostumeScale(Number(e.target.value))}
+                      className="w-full accent-amber-500"
                     />
                   </div>
-                  <div>
-                    <label className="text-[10px] text-slate-400 block mb-1">الموقع الأفقي X</label>
-                    <input
-                      type="range"
-                      min={-100}
-                      max={100}
-                      value={costumeOffsetX}
-                      onChange={(e) => setCostumeOffsetX(Number(e.target.value))}
-                      className="w-full accent-indigo-500"
-                    />
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <div className="flex justify-between text-slate-600 dark:text-slate-400 mb-0.5">
+                        <span>فوق / تحت Y:</span>
+                        <span>{costumeOffsetY}px</span>
+                      </div>
+                      <input
+                        type="range"
+                        min={-120}
+                        max={120}
+                        value={costumeOffsetY}
+                        onChange={(e) => setCostumeOffsetY(Number(e.target.value))}
+                        className="w-full accent-amber-500"
+                      />
+                    </div>
+                    <div>
+                      <div className="flex justify-between text-slate-600 dark:text-slate-400 mb-0.5">
+                        <span>يمين / شمال X:</span>
+                        <span>{costumeOffsetX}px</span>
+                      </div>
+                      <input
+                        type="range"
+                        min={-100}
+                        max={100}
+                        value={costumeOffsetX}
+                        onChange={(e) => setCostumeOffsetX(Number(e.target.value))}
+                        className="w-full accent-amber-500"
+                      />
+                    </div>
                   </div>
                 </div>
               </div>
             )}
-
-            {/* MANUAL LIGHTING & COLOR ADJUSTMENTS */}
-            {imageSrc && (
-              <div className="p-3.5 bg-slate-950/70 rounded-2xl border border-slate-800 space-y-3">
-                <span className="text-xs font-bold text-slate-300 flex items-center gap-1">
-                  <Sliders className="w-3.5 h-3.5 text-amber-400" /> تعديل الإضاءة والتباين باليد
-                </span>
-
-                {/* Brightness */}
-                <div>
-                  <div className="flex justify-between text-[11px] text-slate-400 mb-1">
-                    <span className="flex items-center gap-1"><Sun className="w-3 h-3 text-amber-400" /> السطوع والإضاءة</span>
-                    <span>{brightness}%</span>
-                  </div>
-                  <input
-                    type="range"
-                    min={50}
-                    max={150}
-                    value={brightness}
-                    onChange={(e) => setBrightness(Number(e.target.value))}
-                    className="w-full accent-amber-500"
-                  />
-                </div>
-
-                {/* Contrast */}
-                <div>
-                  <div className="flex justify-between text-[11px] text-slate-400 mb-1">
-                    <span className="flex items-center gap-1"><Contrast className="w-3 h-3 text-indigo-400" /> التباين (Contrast)</span>
-                    <span>{contrast}%</span>
-                  </div>
-                  <input
-                    type="range"
-                    min={50}
-                    max={150}
-                    value={contrast}
-                    onChange={(e) => setContrast(Number(e.target.value))}
-                    className="w-full accent-indigo-500"
-                  />
-                </div>
-              </div>
-            )}
-
           </div>
-
         </div>
 
-        {/* Modal Footer */}
-        <div className="px-6 py-4 bg-slate-950 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3">
+        {/* Footer Actions */}
+        <div
+          className={`px-5 py-3.5 border-t flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0 ${
+            isDark ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200'
+          }`}
+        >
           <div className="flex items-center gap-2">
             <button
               onClick={() => fileInputRef.current?.click()}
-              className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-xl flex items-center gap-1.5"
+              className="px-4 py-2 bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs font-bold rounded-xl flex items-center gap-1.5 cursor-pointer"
             >
-              <Upload className="w-4 h-4" /> رفع صورة أخرى
+              <Upload className="w-4 h-4" /> اختيار صورة أخرى
             </button>
             <button
               onClick={startCamera}
-              className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-xl flex items-center gap-1.5"
+              className="px-4 py-2 bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs font-bold rounded-xl flex items-center gap-1.5 cursor-pointer"
             >
-              <Camera className="w-4 h-4" /> التقاط صورة
+              <Camera className="w-4 h-4" /> الكاميرا
             </button>
           </div>
 
@@ -891,20 +1106,19 @@ export const StudentPhotoCropperModal: React.FC<StudentPhotoCropperModalProps> =
                 stopCamera();
                 onClose();
               }}
-              className="px-4 py-2.5 text-slate-400 hover:text-white text-xs font-bold"
+              className="px-4 py-2.5 text-slate-500 hover:text-slate-800 dark:hover:text-white text-xs font-bold cursor-pointer"
             >
               إلغاء
             </button>
             <button
               onClick={handleSave}
               disabled={!imageSrc}
-              className="w-full sm:w-auto px-6 py-2.5 bg-gradient-to-r from-emerald-500 via-teal-500 to-indigo-600 hover:from-emerald-600 hover:to-indigo-700 text-white font-bold text-sm rounded-xl shadow-lg flex items-center justify-center gap-2 disabled:opacity-50"
+              className="w-full sm:w-auto px-6 py-2.5 bg-gradient-to-r from-emerald-600 via-teal-600 to-indigo-600 hover:from-emerald-500 hover:to-indigo-500 text-white font-black text-sm rounded-xl shadow-lg flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
             >
-              <Check className="w-4 h-4" /> اعتماد وحفظ صورة الطالب 📸
+              <Check className="w-4 h-4" /> اعتماد وتثبيت صورة الطالب 📸
             </button>
           </div>
         </div>
-
       </div>
     </div>
   );

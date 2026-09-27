@@ -28,7 +28,9 @@ import {
 import QRCode from 'qrcode';
 import { captureElementToCanvas } from '../utils/captureUtils';
 import { Trainee, Course, Group, Branch } from '../types';
+import { getEffectiveCenterLogo, handleLogoError } from '../utils/centerLogo';
 import { useCenter } from '../context/CenterContext';
+import { useTheme } from '../context/ThemeContext';
 import { getPublicStudentPortalUrl } from '../utils/urlHelper';
 import { api } from '../services/api';
 
@@ -66,12 +68,21 @@ export const TraineeDigitalCardModal: React.FC<TraineeDigitalCardModalProps> = (
   const [qrDataUrl, setQrDataUrl] = useState<string>('');
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
   const [isCopied, setIsCopied] = useState(false);
-  const [cardTheme, setCardTheme] = useState<'dark' | 'light'>('dark');
+  const { theme } = useTheme();
+  const [cardTheme, setCardTheme] = useState<'dark' | 'light'>(() => (theme === 'dark' ? 'dark' : 'light'));
   const [currentPhoto, setCurrentPhoto] = useState<string | undefined>(
-    trainee?.photoUrl || customData?.photoUrl
+    trainee?.photoUrl || (trainee as any)?.photo || customData?.photoUrl || (trainee?.id ? localStorage.getItem('student_session_photo_' + trainee.id) || localStorage.getItem('student_session_photo_' + trainee.code) : '') || undefined
   );
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const { showToast, settings } = useCenter();
+  const centerLogo = getEffectiveCenterLogo(settings?.logoUrl);
+
+  // Sync with global theme
+  useEffect(() => {
+    if (theme) {
+      setCardTheme(theme === 'dark' ? 'dark' : 'light');
+    }
+  }, [theme]);
 
   const name = trainee?.fullName || customData?.traineeName || 'متدرب النجاح';
   const code = trainee?.code || customData?.traineeCode || 'A001';
@@ -94,8 +105,9 @@ export const TraineeDigitalCardModal: React.FC<TraineeDigitalCardModalProps> = (
 
   // Keep current photo synced if trainee changes
   useEffect(() => {
-    setCurrentPhoto(trainee?.photoUrl || customData?.photoUrl);
-  }, [trainee?.photoUrl, customData?.photoUrl]);
+    const resolved = trainee?.photoUrl || (trainee as any)?.photo || customData?.photoUrl || (trainee?.id ? localStorage.getItem('student_session_photo_' + trainee.id) || localStorage.getItem('student_session_photo_' + trainee.code) : '');
+    setCurrentPhoto(resolved || undefined);
+  }, [trainee?.photoUrl, (trainee as any)?.photo, customData?.photoUrl, trainee?.id, trainee?.code]);
 
   // Generate high-resolution QR Code
   useEffect(() => {
@@ -105,7 +117,7 @@ export const TraineeDigitalCardModal: React.FC<TraineeDigitalCardModalProps> = (
       width: 320,
       margin: 1,
       color: {
-        dark: cardTheme === 'dark' ? '#0f172a' : '#0a192f',
+        dark: cardTheme === 'dark' ? '#0f172a' : '#78350f',
         light: '#ffffff'
       },
       errorCorrectionLevel: 'M'
@@ -146,7 +158,23 @@ export const TraineeDigitalCardModal: React.FC<TraineeDigitalCardModalProps> = (
 
         if (trainee?.id) {
           try {
+            // Save to localStorage for instant persistence across tabs and portals
+            localStorage.setItem('student_session_photo_' + trainee.id, base64Data);
+            if (trainee.code) {
+              localStorage.setItem('student_session_photo_' + trainee.code, base64Data);
+            }
+
+            // Sync to backend APIs
             await api.updateTrainee(trainee.id, { photoUrl: base64Data });
+            try {
+              await api.updateStudentPhoto({ traineeId: trainee.id, photoUrl: base64Data });
+            } catch {}
+
+            // Broadcast photo update event across open views
+            window.dispatchEvent(new CustomEvent('nagah_photo_updated', {
+              detail: { traineeId: trainee.id, code: trainee.code, photoUrl: base64Data }
+            }));
+
             if (onPhotoUpdated) {
               onPhotoUpdated(trainee.id, base64Data);
             }
@@ -256,9 +284,9 @@ export const TraineeDigitalCardModal: React.FC<TraineeDigitalCardModalProps> = (
             border-radius: 16px;
             overflow: hidden;
             position: relative;
-            background: ${isDark ? 'linear-gradient(145deg, #090e1a, #0f172a, #1e1b4b)' : 'linear-gradient(145deg, #ffffff, #f8fafc, #f1f5f9)'};
+            background: ${isDark ? 'linear-gradient(145deg, #090e1a, #0f172a, #1e1b4b)' : 'linear-gradient(145deg, #ffffff, #fffdf8, #f8fafc)'};
             color: ${isDark ? '#f8fafc' : '#0f172a'};
-            border: 2px solid ${isDark ? '#f59e0b' : '#cbd5e1'};
+            border: 2px solid ${isDark ? '#f59e0b' : '#d97706'};
             box-shadow: 0 20px 35px -10px rgba(0,0,0,0.25);
             display: flex;
             flex-direction: column;
@@ -266,12 +294,12 @@ export const TraineeDigitalCardModal: React.FC<TraineeDigitalCardModalProps> = (
           .lanyard-slot {
             width: 32px;
             height: 5px;
-            background: ${isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.1)'};
+            background: ${isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.08)'};
             border-radius: 10px;
             margin: 6px auto 0 auto;
           }
           .header-box {
-            background: ${isDark ? 'linear-gradient(90deg, #1e293b, #0f172a)' : 'linear-gradient(90deg, #1e3a8a, #0f172a)'};
+            background: ${isDark ? 'linear-gradient(90deg, #1e293b, #0f172a)' : 'linear-gradient(90deg, #d97706, #b45309)'};
             color: #ffffff;
             padding: 10px 14px;
             border-bottom: 2px solid #f59e0b;
@@ -414,10 +442,10 @@ export const TraineeDigitalCardModal: React.FC<TraineeDigitalCardModalProps> = (
           <div class="lanyard-slot"></div>
           <div class="header-box">
             <div class="logo-circle">
-              <img src="/logo.svg" alt="شعار المركز" onerror="this.src='/logo.png'" />
+              <img src="${centerLogo}" alt="شعار المركز" onerror="this.src='/logo.png'" />
             </div>
             <div class="header-text">
-              <div class="center-name">النجاح للتدريب والاستشارات</div>
+              <div class="center-name">${settings?.centerName || 'النجاح للتدريب والاستشارات'}</div>
               <div class="badge-type">🌟 بطاقة العضوية والتدريب الرسمية الذكية</div>
             </div>
           </div>
@@ -564,7 +592,7 @@ export const TraineeDigitalCardModal: React.FC<TraineeDigitalCardModalProps> = (
             className={`relative overflow-hidden rounded-3xl border-2 transition-all shadow-2xl p-4 sm:p-6 ${
               isDark
                 ? 'bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 text-slate-100 border-amber-500/80 shadow-amber-500/20'
-                : 'bg-gradient-to-br from-white via-slate-50 to-amber-50/30 text-slate-900 border-amber-500 shadow-xl shadow-amber-950/10'
+                : 'bg-gradient-to-br from-white via-amber-50/25 to-slate-50 text-slate-900 border-amber-500 shadow-xl shadow-amber-950/10'
             }`}
             style={{ minHeight: '460px' }}
           >
@@ -581,37 +609,35 @@ export const TraineeDigitalCardModal: React.FC<TraineeDigitalCardModalProps> = (
               className={`p-3.5 sm:p-4 rounded-2xl border flex items-center justify-between relative z-10 shadow-md ${
                 isDark
                   ? 'bg-gradient-to-r from-slate-950 via-slate-900 to-indigo-950 border-amber-500/40 text-white'
-                  : 'bg-gradient-to-r from-slate-950 via-slate-900 to-indigo-950 border-amber-500 text-white'
+                  : 'bg-gradient-to-r from-amber-600 via-amber-500 to-amber-600 border-amber-400 text-white'
               }`}
             >
               <div className="flex items-center gap-3">
                 {/* Official Logo with Golden Halo */}
                 <div className="w-13 h-13 rounded-2xl bg-white p-1 border-2 border-amber-400 shadow-lg shadow-amber-500/30 flex items-center justify-center shrink-0">
                   <img
-                    src="/logo.svg"
+                    src={centerLogo}
                     alt="النجاح"
                     className="w-full h-full object-contain"
-                    onError={(e) => {
-                      (e.target as HTMLElement).style.display = 'none';
-                    }}
+                    onError={handleLogoError}
                   />
                   <span className="hidden font-black text-xs text-amber-600">النجاح</span>
                 </div>
                 <div>
-                  <h4 className="text-base sm:text-lg font-black text-amber-400 leading-tight">
-                    مركز النجاح للتدريب والاستشارات
+                  <h4 className="text-base sm:text-lg font-black text-amber-100 dark:text-amber-400 leading-tight">
+                    {settings?.centerName || 'مركز النجاح للتدريب والاستشارات'}
                   </h4>
-                  <p className="text-[10.5px] font-bold text-slate-200 flex items-center gap-1.5 mt-0.5">
+                  <p className="text-[10.5px] font-bold text-amber-50 dark:text-slate-200 flex items-center gap-1.5 mt-0.5">
                     <span>🌟 بطاقة العضوية والتدريب الرسمية الذكية</span>
                     <span>•</span>
-                    <span className="text-amber-300">{branchName}</span>
+                    <span className="text-amber-200 dark:text-amber-300 font-extrabold">{branchName}</span>
                   </p>
                 </div>
               </div>
 
               <div className="text-left shrink-0">
-                <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-[10px] font-black bg-amber-500/20 text-amber-300 border border-amber-400/50 shadow-sm">
-                  <Sparkles className="w-3 h-3 text-amber-400" />
+                <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-[10px] font-black bg-white/20 dark:bg-amber-500/20 text-white dark:text-amber-300 border border-white/40 dark:border-amber-400/50 shadow-sm">
+                  <Sparkles className="w-3 h-3 text-amber-200 dark:text-amber-400" />
                   <span>2026/2027</span>
                 </span>
               </div>
@@ -623,7 +649,7 @@ export const TraineeDigitalCardModal: React.FC<TraineeDigitalCardModalProps> = (
               <div className="col-span-4 sm:col-span-3 flex flex-col items-center">
                 <div
                   onClick={() => fileInputRef.current?.click()}
-                  className="group relative w-22 h-22 sm:w-24 sm:h-24 rounded-2xl border-2 border-amber-500 overflow-hidden shadow-xl bg-slate-900 flex items-center justify-center cursor-pointer transition-all hover:scale-105"
+                  className="group relative w-22 h-22 sm:w-24 sm:h-24 rounded-2xl border-2 border-amber-500 overflow-hidden shadow-xl bg-slate-100 dark:bg-slate-900 flex items-center justify-center cursor-pointer transition-all hover:scale-105"
                   title="انقر لتغيير أو رفع صورة المتدرب"
                 >
                   {currentPhoto ? (
@@ -663,13 +689,13 @@ export const TraineeDigitalCardModal: React.FC<TraineeDigitalCardModalProps> = (
                   className={`p-3.5 rounded-2xl border-2 shadow-sm flex items-center justify-between ${
                     isDark
                       ? 'bg-slate-900/90 border-amber-500/50 text-slate-100'
-                      : 'bg-white border-amber-500/60 text-slate-900'
+                      : 'bg-amber-50/60 border-amber-400/80 text-slate-900'
                   }`}
                 >
                   <div className="text-right space-y-0.5">
                     <span
                       className={`text-[10.5px] font-bold block ${
-                        isDark ? 'text-amber-300/80' : 'text-slate-600'
+                        isDark ? 'text-amber-300/80' : 'text-slate-700'
                       }`}
                     >
                       كود المتدرب الرسمي للدخول والحضور:
@@ -709,7 +735,7 @@ export const TraineeDigitalCardModal: React.FC<TraineeDigitalCardModalProps> = (
               className={`p-4 rounded-2xl border-2 mb-3.5 relative z-10 ${
                 isDark
                   ? 'bg-slate-900/95 border-amber-500/40 text-slate-100'
-                  : 'bg-white border-slate-200 text-slate-800 shadow-sm'
+                  : 'bg-white border-amber-200/90 text-slate-900 shadow-sm'
               }`}
             >
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-3 text-xs">
@@ -719,10 +745,10 @@ export const TraineeDigitalCardModal: React.FC<TraineeDigitalCardModalProps> = (
                       isDark ? 'text-amber-300' : 'text-slate-600'
                     }`}
                   >
-                    اسم المتدرب الرباعي:
+                    اسم المتدرب الرباعي الكامل:
                   </span>
                   <span
-                    className={`font-black text-sm sm:text-base leading-tight block mt-0.5 ${
+                    className={`font-black text-base sm:text-lg leading-snug break-words block mt-0.5 ${
                       isDark ? 'text-white' : 'text-slate-950'
                     }`}
                   >
@@ -823,7 +849,7 @@ export const TraineeDigitalCardModal: React.FC<TraineeDigitalCardModalProps> = (
               className={`p-3.5 rounded-2xl border-2 flex items-center justify-between gap-3 relative z-10 ${
                 isDark
                   ? 'bg-slate-950/90 border-amber-500/30'
-                  : 'bg-slate-50 border-slate-200 shadow-sm'
+                  : 'bg-white border-amber-200/90 shadow-sm'
               }`}
             >
               {/* QR Code with Attendance Link */}
@@ -865,14 +891,17 @@ export const TraineeDigitalCardModal: React.FC<TraineeDigitalCardModalProps> = (
 
               {/* Director Signature & Stamp */}
               <div className="text-center flex flex-col items-center justify-center pl-2 border-r-2 border-slate-300 dark:border-slate-700 pr-4">
+                <span className="text-[10px] font-black text-amber-600 dark:text-amber-400">
+                  يعتمد
+                </span>
                 <span
                   className={`text-[9px] font-bold ${
                     isDark ? 'text-slate-400' : 'text-slate-600'
                   }`}
                 >
-                  مدير عام المركز
+                  مدير عام الأكاديمية
                 </span>
-                <span className="text-xs sm:text-sm font-black text-amber-600 dark:text-amber-400 whitespace-nowrap mt-0.5">
+                <span className="text-xs sm:text-sm font-black text-slate-900 dark:text-amber-300 whitespace-nowrap mt-0.5">
                   {managerName}
                 </span>
                 {/* Official Signature SVG */}
@@ -891,10 +920,6 @@ export const TraineeDigitalCardModal: React.FC<TraineeDigitalCardModalProps> = (
                     strokeLinecap="round"
                   />
                 </svg>
-                <span className="text-[8px] font-black text-emerald-600 dark:text-emerald-400 flex items-center gap-0.5">
-                  <ShieldCheck className="w-3 h-3" />
-                  <span>معتمد إلكترونياً</span>
-                </span>
               </div>
             </div>
 

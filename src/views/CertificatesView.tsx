@@ -23,9 +23,125 @@ import {
   Crown,
   Star
 } from 'lucide-react';
-import { Certificate, CertificateTemplate, Trainee, Course } from '../types';
+import { Certificate, CertificateTemplate, Trainee, Course, Trainer } from '../types';
 import { CertificateTemplateBuilderModal } from '../components/CertificateTemplateBuilderModal';
 import { LectureExcellenceCertificateModal } from '../components/LectureExcellenceCertificateModal';
+
+const transliterateArabicToEnglish = (arabicName: string): string => {
+  if (!arabicName) return '';
+  
+  const nameMap: { [key: string]: string } = {
+    'محمد': 'Mohamed',
+    'احمد': 'Ahmed',
+    'أحمد': 'Ahmed',
+    'محمود': 'Mahmoud',
+    'علي': 'Ali',
+    'حسن': 'Hassan',
+    'حسين': 'Hussein',
+    'ابراهيم': 'Ibrahim',
+    'إبراهيم': 'Ibrahim',
+    'عبد': 'Abdel',
+    'الرحمن': 'Rahman',
+    'الرحيم': 'Rahim',
+    'الله': 'Allah',
+    'خالد': 'Khaled',
+    'عمر': 'Omar',
+    'عمرو': 'Amr',
+    'يوسف': 'Youssef',
+    'مصطفى': 'Mostafa',
+    'سعيد': 'Said',
+    'سعد': 'Saad',
+    'طه': 'Taha',
+    'ياسر': 'Yasser',
+    'هاني': 'Hany',
+    'هشام': 'Hisham',
+    'طارق': 'Tarek',
+    'شريف': 'Sherif',
+    'رائد': 'Raed',
+    'عماد': 'Emad',
+    'رفيف': 'Rafif',
+    'محمد رمضان بخيت': 'Mohamed Ramadan Bkeet',
+    'رمضان': 'Ramadan',
+    'بخيت': 'Bkeet',
+    'وليد': 'Waleed',
+    'جمال': 'Gamal',
+    'سامح': 'Sameh',
+    'سيد': 'Sayed',
+    'أيمن': 'Ayman',
+    'ايمن': 'Ayman',
+    'كريم': 'Karim',
+    'مجدي': 'Magdy',
+    'مريم': 'Maryam',
+    'نور': 'Nour',
+    'سارة': 'Sarah',
+    'فاطمة': 'Fatma',
+    'زينب': 'Zainab',
+    'منى': 'Mona',
+    'رنا': 'Rana',
+    'ندى': 'Nada',
+    'أميرة': 'Amira',
+    'اميرة': 'Amira',
+    'هدى': 'Hoda',
+    'آية': 'Aya',
+    'ايه': 'Aya',
+    'دعاء': 'Doaa',
+    'شيماء': 'Shaimaa',
+    'إيمان': 'Eman',
+    'ايمان': 'Eman',
+    'منار': 'Manar',
+    'منة': 'Menna',
+    'منة الله': 'Menna Allah',
+    'شروق': 'Shorouk',
+    'أسماء': 'Asmaa',
+    'نهى': 'Noha',
+    'ريهام': 'Reham',
+    'سلوى': 'Salwa'
+  };
+
+  const words = arabicName.trim().split(/\s+/);
+  const englishWords = words.map(word => {
+    if (nameMap[word]) return nameMap[word];
+    const cleanedWord = word.replace(/[أإآ]/g, 'ا').replace(/ة$/g, 'ه');
+    if (nameMap[cleanedWord]) return nameMap[cleanedWord];
+    
+    let eng = word;
+    eng = eng.replace(/ش/g, 'sh');
+    eng = eng.replace(/خ/g, 'kh');
+    eng = eng.replace(/غ/g, 'gh');
+    eng = eng.replace(/ع/g, 'a');
+    eng = eng.replace(/ح/g, 'h');
+    eng = eng.replace(/ج/g, 'g');
+    eng = eng.replace(/ق/g, 'q');
+    eng = eng.replace(/ص/g, 's');
+    eng = eng.replace(/ض/g, 'd');
+    eng = eng.replace(/ط/g, 't');
+    eng = eng.replace(/ظ/g, 'z');
+    eng = eng.replace(/ث/g, 'th');
+    eng = eng.replace(/ذ/g, 'th');
+    eng = eng.replace(/ف/g, 'f');
+    eng = eng.replace(/ب/g, 'b');
+    eng = eng.replace(/ت/g, 't');
+    eng = eng.replace(/د/g, 'd');
+    eng = eng.replace(/ر/g, 'r');
+    eng = eng.replace(/ز/g, 'z');
+    eng = eng.replace(/س/g, 's');
+    eng = eng.replace(/ك/g, 'k');
+    eng = eng.replace(/ل/g, 'l');
+    eng = eng.replace(/م/g, 'm');
+    eng = eng.replace(/ن/g, 'n');
+    eng = eng.replace(/ه/g, 'h');
+    eng = eng.replace(/و/g, 'w');
+    eng = eng.replace(/ي/g, 'y');
+    eng = eng.replace(/[أإآا]/g, 'a');
+    eng = eng.replace(/[ُ]/g, 'u');
+    eng = eng.replace(/[ِ]/g, 'i');
+    eng = eng.replace(/[َ]/g, 'a');
+    
+    return eng.charAt(0).toUpperCase() + eng.slice(1);
+  });
+
+  return englishWords.join(' ');
+};
 
 export const CertificatesView: React.FC = () => {
   const { 
@@ -35,12 +151,14 @@ export const CertificatesView: React.FC = () => {
     setPrintData, 
     refreshKey,
     trainees: ctxTrainees,
-    courses: ctxCourses
+    courses: ctxCourses,
+    trainers: ctxTrainers
   } = useCenter();
   const [certificates, setCertificates] = useState<Certificate[]>([]);
   const [templates, setTemplates] = useState<CertificateTemplate[]>([]);
   const [trainees, setTrainees] = useState<Trainee[]>(() => ctxTrainees || []);
   const [courses, setCourses] = useState<Course[]>(() => ctxCourses || []);
+  const [trainers, setTrainers] = useState<Trainer[]>(() => ctxTrainers || []);
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
@@ -50,6 +168,10 @@ export const CertificatesView: React.FC = () => {
   useEffect(() => {
     if (ctxCourses && ctxCourses.length > 0) setCourses(ctxCourses);
   }, [ctxCourses]);
+
+  useEffect(() => {
+    if (ctxTrainers && ctxTrainers.length > 0) setTrainers(ctxTrainers);
+  }, [ctxTrainers]);
   const [activeTab, setActiveTab] = useState<'certificates' | 'templates'>('certificates');
 
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -130,14 +252,24 @@ export const CertificatesView: React.FC = () => {
 
     try {
       let count = 0;
+      const course = courses.find(c => c.id === bulkCourseId);
+      const courseCode = course?.code || (course?.name ? course.name.replace(/[^a-zA-Z0-9]/g, '').slice(0, 4).toUpperCase() : 'ICT4');
       for (const t of eligibleTrainees) {
         // Prevent duplicate certs
         if (!certificates.find(c => c.traineeId === t.id && c.courseId === bulkCourseId)) {
+          const traineeCode = t.code || 'C001';
+          const countExistingInCourse = certificates.filter(
+            (c) => c.traineeId === t.id && c.courseId === bulkCourseId
+          ).length;
+          const nextNumber = countExistingInCourse + 1;
+          const serial = `${courseCode}-${traineeCode}-C${nextNumber}`;
+
           await api.createCertificate({
             ...formData,
             traineeId: t.id,
             courseId: bulkCourseId,
-            serialNumber: 'CERT-' + Date.now().toString(36).toUpperCase() + '-' + count
+            serialNumber: serial,
+            certificateNumber: serial
           });
           count++;
         }
@@ -202,18 +334,66 @@ export const CertificatesView: React.FC = () => {
 
   const handleOpenAdd = () => {
     const defaultTmpl = (templates && templates.length > 0) ? (templates.find(t => t.isDefault) || templates?.[0]) : null;
+    const initialCourseId = courses?.[0]?.id || '';
+    const course = courses.find(c => c.id === initialCourseId);
+    
+    let trainerName = 'المدرب المعتمد';
+    if (course && course.trainerId) {
+      const trainer = trainers.find(t => t.id === course.trainerId);
+      if (trainer) {
+        const prefix = trainer.prefix || trainer.title;
+        const prefixStr = prefix === 'DR' ? 'د. ' : prefix === 'ENG' ? 'م. ' : prefix === 'TR' ? 'المدرب ' : '';
+        trainerName = `${prefixStr}${trainer.name}`;
+      }
+    }
+
+    const eligibleTrainees = trainees.filter(t => t.courseId === initialCourseId || t.courseIds?.includes(initialCourseId));
+    const firstTrainee = eligibleTrainees[0];
+    const traineeId = firstTrainee ? firstTrainee.id : '';
+    const traineeNameEn = firstTrainee ? transliterateArabicToEnglish(firstTrainee.fullName) : '';
+
     setFormData({
-      traineeId: trainees?.[0]?.id || '',
-      courseId: courses?.[0]?.id || '',
+      traineeId,
+      courseId: initialCourseId,
       branchId: activeBranchId !== 'all' ? activeBranchId : branches?.[0]?.id || 'branch-1',
       templateId: defaultTmpl?.id || '',
       grade: 'امتياز مع مرتبة الشرف (A+)',
       issueDate: new Date().toISOString().split('T')[0],
       durationText: '30 ساعة تدريبية معتمدة',
-      trainerName: 'المدرب المعتمد',
-      managerName: 'د. محمد رمضان بخيت'
+      trainerName,
+      managerName: 'د. محمد رمضان بخيت',
+      language: 'ar',
+      certificateTitle: 'شهادة تقدير',
+      certificateTitleEn: 'Certificate of Appreciation',
+      traineeNameEn
     });
     setIsAddModalOpen(true);
+  };
+
+  const handleCourseChange = (courseId: string) => {
+    const course = courses.find(c => c.id === courseId);
+    let trainerName = 'المدرب المعتمد';
+    if (course && course.trainerId) {
+      const trainer = trainers.find(t => t.id === course.trainerId);
+      if (trainer) {
+        const prefix = trainer.prefix || trainer.title;
+        const prefixStr = prefix === 'DR' ? 'د. ' : prefix === 'ENG' ? 'م. ' : prefix === 'TR' ? 'المدرب ' : '';
+        trainerName = `${prefixStr}${trainer.name}`;
+      }
+    }
+
+    const eligibleTrainees = trainees.filter(t => t.courseId === courseId || t.courseIds?.includes(courseId));
+    const firstTrainee = eligibleTrainees[0];
+    const traineeId = firstTrainee ? firstTrainee.id : '';
+    const traineeNameEn = firstTrainee ? transliterateArabicToEnglish(firstTrainee.fullName) : '';
+
+    setFormData((prev: any) => ({
+      ...prev,
+      courseId,
+      trainerName,
+      traineeId,
+      traineeNameEn
+    }));
   };
 
   const handleSaveCertificate = async (e: React.FormEvent) => {
@@ -221,7 +401,27 @@ export const CertificatesView: React.FC = () => {
     if (!formData.traineeId || !formData.courseId) return;
 
     try {
-      const res = await api.createCertificate(formData);
+      const trainee = trainees.find(t => t.id === formData.traineeId);
+      const course = courses.find(c => c.id === formData.courseId);
+      const courseCode = course?.code || (course?.name ? course.name.replace(/[^a-zA-Z0-9]/g, '').slice(0, 4).toUpperCase() : 'ICT4');
+      const traineeCode = trainee?.code || 'C001';
+
+      // Calculate serial number based on existing certificates
+      const countExistingInCourse = certificates.filter(
+        (c) => c.traineeId === formData.traineeId && c.courseId === formData.courseId
+      ).length;
+      const nextNumber = countExistingInCourse + 1;
+      const serial = `${courseCode}-${traineeCode}-C${nextNumber}`;
+
+      const payload = {
+        ...formData,
+        traineeName: trainee?.fullName || '',
+        courseName: course?.name || '',
+        serialNumber: serial,
+        certificateNumber: serial
+      };
+
+      const res = await api.createCertificate(payload);
       if (res.success) {
         showToast('تم إصدار الشهادة وتوثيقها بالباركود والـ QR بنجاح! 🎓', 'success');
         setIsAddModalOpen(false);
@@ -254,7 +454,7 @@ export const CertificatesView: React.FC = () => {
     const course = courses.find(cr => cr.id === c.courseId);
 
     setPrintData({
-      title: `شهادة إتمام وتفوق - ${c.traineeName || trainee?.fullName}`,
+      title: `${c.certificateTitle || 'شهادة'} - ${c.traineeName || trainee?.fullName}`,
       type: 'certificate',
       data: {
         certificate: c,
@@ -303,7 +503,11 @@ export const CertificatesView: React.FC = () => {
       }),
       trainerName: formData.trainerName || 'المدرب المعتمد',
       managerName: formData.managerName || 'د. محمد رمضان بخيت',
-      templateId: formData.templateId || undefined
+      templateId: formData.templateId || undefined,
+      certificateTitle: formData.certificateTitle || 'شهادة تقدير',
+      certificateTitleEn: formData.certificateTitleEn || 'Certificate of Appreciation',
+      traineeNameEn: formData.traineeNameEn || '',
+      language: formData.language || 'ar'
     };
 
     setPrintData({
@@ -626,25 +830,10 @@ export const CertificatesView: React.FC = () => {
 
             <form onSubmit={handleSaveCertificate} className="flex-1 overflow-y-auto custom-scrollbar p-4 sm:p-6 space-y-3 text-xs">
               <div>
-                <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">اختر المتدرب *</label>
-                <select
-                  value={formData.traineeId ?? ''}
-                  onChange={(e) => setFormData({ ...formData, traineeId: e.target.value })}
-                  className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 focus:outline-none"
-                >
-                  {trainees.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.fullName} ({t.code}) - {t.phone}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
                 <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">الدورة التدريبية المجتازة *</label>
                 <select
                   value={formData.courseId ?? ''}
-                  onChange={(e) => setFormData({ ...formData, courseId: e.target.value })}
+                  onChange={(e) => handleCourseChange(e.target.value)}
                   className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 focus:outline-none"
                 >
                   {courses.map((c) => (
@@ -652,6 +841,35 @@ export const CertificatesView: React.FC = () => {
                       {c.name} ({c.hoursCount} ساعة)
                     </option>
                   ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">اختر المتدرب *</label>
+                <select
+                  value={formData.traineeId ?? ''}
+                  onChange={(e) => {
+                    const tid = e.target.value;
+                    const tr = trainees.find(t => t.id === tid);
+                    setFormData({
+                      ...formData,
+                      traineeId: tid,
+                      traineeNameEn: tr ? transliterateArabicToEnglish(tr.fullName) : ''
+                    });
+                  }}
+                  className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 focus:outline-none"
+                >
+                  {trainees
+                    .filter(t => !formData.courseId || t.courseId === formData.courseId || t.courseIds?.includes(formData.courseId))
+                    .map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.fullName} ({t.code}) - {t.phone}
+                      </option>
+                    ))
+                  }
+                  {trainees.filter(t => !formData.courseId || t.courseId === formData.courseId || t.courseIds?.includes(formData.courseId)).length === 0 && (
+                    <option value="">لا يوجد متدربين في هذه الدورة</option>
+                  )}
                 </select>
               </div>
 
@@ -669,6 +887,71 @@ export const CertificatesView: React.FC = () => {
                   ))}
                 </select>
               </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">لغة الشهادة</label>
+                  <select
+                    value={formData.language ?? 'ar'}
+                    onChange={(e) => setFormData({ ...formData, language: e.target.value as any })}
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 focus:outline-none"
+                  >
+                    <option value="ar">العربية (Arabic)</option>
+                    <option value="en">الإنجليزية (English)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">نوع ومسمى الشهادة</label>
+                  <select
+                    value={formData.certificateTitle ?? 'شهادة تقدير'}
+                    onChange={(e) => {
+                      const title = e.target.value;
+                      let titleEn = 'Certificate of Appreciation';
+                      if (title === 'وسام تميز') titleEn = 'Medal of Excellence';
+                      else if (title === 'شهادة إتمام دورة') titleEn = 'Certificate of Course Completion';
+                      else if (title === 'شهادة') titleEn = 'Certificate';
+                      setFormData({
+                        ...formData,
+                        certificateTitle: title,
+                        certificateTitleEn: titleEn
+                      });
+                    }}
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 focus:outline-none"
+                  >
+                    <option value="شهادة تقدير">شهادة تقدير (Appreciation)</option>
+                    <option value="وسام تميز">وسام تميز (Medal of Excellence)</option>
+                    <option value="شهادة إتمام دورة">شهادة إتمام دورة (Completion)</option>
+                    <option value="شهادة">شهادة (Certificate)</option>
+                  </select>
+                </div>
+              </div>
+
+              {formData.language === 'en' && (
+                <div className="grid grid-cols-2 gap-3 p-3 bg-indigo-50/50 dark:bg-indigo-950/20 rounded-2xl border border-indigo-100 dark:border-indigo-900/40">
+                  <div>
+                    <label className="block text-indigo-900 dark:text-indigo-300 font-bold mb-1">اسم المتدرب بالإنجليزية *</label>
+                    <input
+                      type="text"
+                      required={formData.language === 'en'}
+                      value={formData.traineeNameEn ?? ''}
+                      onChange={(e) => setFormData({ ...formData, traineeNameEn: e.target.value })}
+                      className="w-full bg-white dark:bg-slate-800 border border-indigo-200 dark:border-indigo-800 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 focus:outline-none"
+                      placeholder="English Trainee Name"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-indigo-900 dark:text-indigo-300 font-bold mb-1">مسمى الشهادة بالإنجليزية *</label>
+                    <input
+                      type="text"
+                      required={formData.language === 'en'}
+                      value={formData.certificateTitleEn ?? ''}
+                      onChange={(e) => setFormData({ ...formData, certificateTitleEn: e.target.value })}
+                      className="w-full bg-white dark:bg-slate-800 border border-indigo-200 dark:border-indigo-800 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 focus:outline-none"
+                      placeholder="Certificate Title English"
+                    />
+                  </div>
+                </div>
+              )}
 
               <div className="grid grid-cols-2 gap-3">
                 <div>

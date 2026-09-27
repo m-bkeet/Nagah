@@ -6,7 +6,9 @@ import { GoogleDriveService } from '../services/googleDrive';
 import { PwaInstallPrompt } from './PwaInstallPrompt';
 import { InstallPwaButton } from './InstallPwaButton';
 import { AiAssistantsModal } from './AiAssistantsModal';
+import { PortalsQuickMenu } from './PortalsQuickMenu';
 import { ThemeQuickSwitcher } from './ThemeQuickSwitcher';
+import { getEffectiveCenterLogo, handleLogoError } from '../utils/centerLogo';
 import {
   Search,
   Bell,
@@ -47,6 +49,7 @@ export const Header: React.FC<HeaderProps> = ({ toggleSidebar, onNavigate }) => 
   const [showNotifMenu, setShowNotifMenu] = useState(false);
   const [isUserMenuPinned, setIsUserMenuPinned] = useState(false);
   const [isNotifMenuPinned, setIsNotifMenuPinned] = useState(false);
+  const [showPortalsMenu, setShowPortalsMenu] = useState(false);
 
   const userMenuRef = React.useRef<HTMLDivElement>(null);
   const notifMenuRef = React.useRef<HTMLDivElement>(null);
@@ -250,7 +253,7 @@ export const Header: React.FC<HeaderProps> = ({ toggleSidebar, onNavigate }) => 
   };
 
   return (
-    <header className="shrink-0 w-full bg-white/95 dark:bg-slate-900/90 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 sticky top-0 z-30 px-3 sm:px-4 py-1.5 flex items-center justify-between text-slate-800 dark:text-slate-100 no-print transition-colors shadow-xs dark:shadow-md select-none safe-top">
+    <header className="shrink-0 w-full bg-white/95 dark:bg-slate-900/90 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 sticky top-0 z-50 px-3 sm:px-4 py-1.5 flex items-center justify-between text-slate-800 dark:text-slate-100 no-print transition-colors shadow-xs dark:shadow-md select-none safe-top">
       {/* Right Side: Center Brand & Active Branch */}
       <div className="flex items-center gap-3 md:gap-5">
         <button
@@ -264,13 +267,10 @@ export const Header: React.FC<HeaderProps> = ({ toggleSidebar, onNavigate }) => 
         <div className="flex items-center gap-2 sm:gap-3 cursor-pointer" onClick={() => onNavigate?.('dashboard')}>
           <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-slate-100 dark:bg-slate-900 p-0.5 shadow-md border-2 border-amber-500/80 flex items-center justify-center overflow-hidden shrink-0">
             <img
-              src={settings?.logoUrl || '/logo.svg'}
+              src={getEffectiveCenterLogo(settings?.logoUrl)}
               alt={settings?.centerName || 'النجاح للتدريب والاستشارات'}
               className="w-full h-full rounded-full object-cover"
-              onError={(e) => {
-                // Fallback to default svg if custom url fails
-                (e.target as HTMLElement).setAttribute('src', '/logo.svg');
-              }}
+              onError={handleLogoError}
             />
           </div>
           <div className="min-w-0">
@@ -319,53 +319,26 @@ export const Header: React.FC<HeaderProps> = ({ toggleSidebar, onNavigate }) => 
           <span className="font-mono font-black">{labAttendanceCount}</span>
         </button>
 
-        {/* Compact Lab Links / Shortcuts Button */}
-        <div className="relative group">
+        {/* Compact Portals & Links Hub Menu */}
+        <div className="relative">
           <button
-            onClick={() => {
-              const sharedUrl = window.location.origin;
-              const labUrl = sharedUrl + '?role=trainee_device';
-              window.open(labUrl, '_blank');
-            }}
-            className="p-1.5 rounded-lg bg-indigo-600/20 hover:bg-indigo-600 text-indigo-300 hover:text-white border border-indigo-500/30 transition-all flex items-center justify-center shadow-sm"
-            title="روابط أجهزة المعمل السحابية والمحلية"
+            type="button"
+            onClick={() => setShowPortalsMenu((prev) => !prev)}
+            className={`p-1.5 rounded-lg border transition-all flex items-center justify-center shadow-sm cursor-pointer ${
+              showPortalsMenu
+                ? 'bg-indigo-600 text-white border-indigo-600 shadow-indigo-500/20 ring-2 ring-indigo-400/30'
+                : 'bg-indigo-50 hover:bg-indigo-100/90 text-indigo-700 border-indigo-200/90 dark:bg-indigo-950/40 dark:hover:bg-indigo-900/50 dark:text-indigo-300 dark:border-indigo-800/80'
+            }`}
+            title="روابط وبوابات المركز (المعمل، الطلاب، المدربين، Vercel)"
+            aria-label="روابط وبوابات المركز"
           >
             <Monitor className="w-3.5 h-3.5" />
           </button>
-          
-          <div className="absolute top-full right-0 mt-1.5 w-52 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-[100] p-2 space-y-1.5 text-xs">
-            <p className="text-[10px] font-black text-amber-400 border-b border-slate-800 pb-1">روابط تشغيل أجهزة المعمل 💻</p>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                const labUrl = window.location.origin + '?role=trainee_device';
-                navigator.clipboard.writeText(labUrl);
-                showToast('تم نسخ الرابط العام بنجاح! 🔗', 'success');
-              }}
-              className="w-full text-right px-2 py-1 rounded bg-indigo-600/20 hover:bg-indigo-600 text-indigo-100 text-[11px] font-bold transition-all flex items-center justify-between"
-            >
-              <span>نسخ الرابط العام</span>
-              <Globe className="w-3 h-3 text-indigo-300" />
-            </button>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                const targetIp = (serverIp === '127.0.0.1' || !serverIp) ? window.location.hostname : serverIp;
-                const localLabUrl = `http://${targetIp}:3000?role=trainee_device`;
-                const urlContent = `[InternetShortcut]\r\nURL=${localLabUrl}\r\nIDList=\r\n[{000214A0-0000-0000-C000-000000000046}]\r\nProp3=19,2`;
-                const blob = new Blob([urlContent], { type: 'text/plain' });
-                const link = document.createElement('a');
-                link.href = URL.createObjectURL(blob);
-                link.download = "تشغيل_معمل_محلي.url";
-                link.click();
-                showToast('تم تحميل شورت‌كات الشبكة المحلية بنجاح! 💾', 'success');
-              }}
-              className="w-full text-right px-2 py-1 rounded bg-emerald-600/20 hover:bg-emerald-600 text-emerald-100 text-[11px] font-bold transition-all flex items-center justify-between"
-            >
-              <span>تحميل شورت‌كات محلي (فلاشة)</span>
-              <Download className="w-3 h-3 text-emerald-300" />
-            </button>
-          </div>
+
+          <PortalsQuickMenu
+            isOpen={showPortalsMenu}
+            onClose={() => setShowPortalsMenu(false)}
+          />
         </div>
       </div>
 

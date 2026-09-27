@@ -3551,6 +3551,13 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
             localStorage.setItem('student_session_photo_' + student.code, optimizedPhoto);
           }
 
+          // Broadcast photo update to all components and tabs
+          try {
+            window.dispatchEvent(new CustomEvent('nagah_photo_updated', {
+              detail: { traineeId: student.id, code: student.code, photoUrl: optimizedPhoto }
+            }));
+          } catch {}
+
           // 3. Update active session & offline resilience cache
           try {
             const activeStr = localStorage.getItem('nagah_student_active_session');

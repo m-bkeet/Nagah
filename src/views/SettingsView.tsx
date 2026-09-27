@@ -51,7 +51,10 @@ import {
   Palette,
   Sun,
   Moon,
-  SlidersHorizontal
+  SlidersHorizontal,
+  Image as ImageIcon,
+  Camera,
+  Globe
 } from 'lucide-react';
 import { SystemSettings, GoogleDriveBackupFile, RolePermissionConfig } from '../types';
 
@@ -131,6 +134,45 @@ export const SettingsView: React.FC = () => {
       rolePermissions: (prev.rolePermissions || []).filter((r) => r.id !== roleId)
     }));
     showToast('تم إزالة الدور من القائمة المؤقتة، اضغط على حفظ الإعدادات لتأكيد الحذف النهائي.', 'warning');
+  };
+
+  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      showToast('حجم ملف الشعار كبير، يفضل اختيار صورة أقل من 5 ميجابايت لسرعة التحميل', 'warning');
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const dataUrl = event.target?.result as string;
+      if (dataUrl) {
+        setSettings((prev) => ({ ...prev, logoUrl: dataUrl }));
+        localStorage.setItem('nagah_custom_logo', dataUrl);
+        // Live update Favicon & Apple touch icon
+        try {
+          const iconLink = document.querySelector("link[rel*='icon']") as HTMLLinkElement;
+          if (iconLink) iconLink.href = dataUrl;
+          const appleIcon = document.querySelector("link[rel='apple-touch-icon']") as HTMLLinkElement;
+          if (appleIcon) appleIcon.href = dataUrl;
+        } catch {}
+        showToast('تم رفع وتعيين الشعار العام بنجاح! اضغط "حفظ الإعدادات" لتثبيته في قاعدة البيانات 🖼️✨', 'success');
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleResetLogo = () => {
+    setSettings((prev) => ({ ...prev, logoUrl: '/logo.svg' }));
+    localStorage.removeItem('nagah_custom_logo');
+    try {
+      const iconLink = document.querySelector("link[rel*='icon']") as HTMLLinkElement;
+      if (iconLink) iconLink.href = '/logo.svg';
+      const appleIcon = document.querySelector("link[rel='apple-touch-icon']") as HTMLLinkElement;
+      if (appleIcon) appleIcon.href = '/logo.svg';
+    } catch {}
+    showToast('تمت استعادة الشعار المعتمد الافتراضي بنجاح 🔄', 'info');
   };
 
   const [localFolderName, setLocalFolderName] = useState<string>(localStorage.getItem('local_backup_folder_name') || '📁 اختيار مجلد مخصص للنسخ الاحتياطي الدوري');
@@ -928,6 +970,58 @@ export const SettingsView: React.FC = () => {
                     <Building className="w-4 h-4 text-purple-600 dark:text-purple-400" />
                     البيانات الرسمية للمركز (تظهر على الشهادات والإيصالات)
                   </h3>
+
+                  {/* Unified Logo & Brand Studio */}
+                  <div className="p-4 bg-gradient-to-br from-amber-500/10 via-purple-500/5 to-slate-50 dark:from-amber-950/20 dark:via-purple-950/20 dark:to-slate-900/90 border-2 border-dashed border-amber-400/60 dark:border-amber-500/40 rounded-2xl space-y-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div className="flex items-center gap-3">
+                        <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-white dark:bg-slate-950 border-2 border-amber-500/60 p-2 shadow-lg shrink-0 flex items-center justify-center overflow-hidden ring-4 ring-amber-400/20">
+                          <img
+                            src={settings.logoUrl || '/logo.svg'}
+                            alt="شعار المركز"
+                            className="w-full h-full object-contain"
+                            onError={(e) => {
+                              (e.target as HTMLElement).setAttribute('src', '/logo.svg');
+                            }}
+                          />
+                        </div>
+                        <div>
+                          <h4 className="font-black text-sm text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
+                            <ImageIcon className="w-4 h-4 text-amber-500" />
+                            <span>الشعار واللوجو العام المعتمد للمركز (Unified Brand Logo)</span>
+                          </h4>
+                          <p className="text-[11px] text-slate-600 dark:text-slate-300 mt-0.5 max-w-lg leading-relaxed">
+                            هذا الشعار هو اللوجو الرسمي الموحد لجميع شاشات النظام، شاشة تسجيل الدخول، ترويسة البرنامج، شهادات التقدير، كروت التهنئة، وأيقونة سطح المكتب والتثبيت السحابي على Vercel وPWA.
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-2">
+                        <label className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs shadow-md shadow-amber-500/20 flex items-center gap-1.5 cursor-pointer transition-all active:scale-95">
+                          <Upload className="w-4 h-4" />
+                          <span>رفع لوجو جديد (PNG/SVG)</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={handleLogoUpload}
+                            className="hidden"
+                          />
+                        </label>
+
+                        {settings.logoUrl && settings.logoUrl !== '/logo.svg' && (
+                          <button
+                            type="button"
+                            onClick={handleResetLogo}
+                            className="px-3 py-2 rounded-xl bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold text-xs transition-all flex items-center gap-1 cursor-pointer"
+                            title="استعادة الشعار الافتراضي"
+                          >
+                            <RefreshCw className="w-3.5 h-3.5" />
+                            <span>استعادة الافتراضي</span>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 text-xs">
                     <div>

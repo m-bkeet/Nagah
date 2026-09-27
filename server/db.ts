@@ -3879,7 +3879,7 @@ class DatabaseManager {
 
   public async ensureHydrated(force = false): Promise<void> {
     const now = Date.now();
-    const CACHE_TTL_MS = 2500;
+    const CACHE_TTL_MS = 15000;
     if (!force && this.isFirestoreHydrated && (now - this.lastHydrationTime < CACHE_TTL_MS)) {
       return;
     }

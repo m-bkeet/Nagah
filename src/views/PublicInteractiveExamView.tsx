@@ -58,9 +58,14 @@ export const PublicInteractiveExamView: React.FC<PublicInteractiveExamViewProps>
 
   const isPreviewMode = isPreviewProp || (new URLSearchParams(window.location.search).get('preview') === 'true');
 
-  // Phases: 'loading' | 'welcome' | 'testing' | 'submitting' | 'result' | 'error'
-  const [phase, setPhase] = useState<'loading' | 'welcome' | 'testing' | 'submitting' | 'result' | 'error'>('loading');
+  // Phases: 'lobby' | 'loading' | 'welcome' | 'testing' | 'submitting' | 'result' | 'error'
+  const [phase, setPhase] = useState<'lobby' | 'loading' | 'welcome' | 'testing' | 'submitting' | 'result' | 'error'>(() => {
+    const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+    const initialExamId = directExamId || urlParams?.get('examId') || urlParams?.get('exam') || urlParams?.get('id') || '';
+    return initialExamId ? 'loading' : 'lobby';
+  });
   const [errorMessage, setErrorMessage] = useState<string>('');
+  const [pinSearchInput, setPinSearchInput] = useState<string>('');
 
   // Exam and questions data
   const [examData, setExamData] = useState<any>(null);
@@ -69,7 +74,7 @@ export const PublicInteractiveExamView: React.FC<PublicInteractiveExamViewProps>
   // Student identification state
   const [studentCodeInput, setStudentCodeInput] = useState<string>(() => {
     if (isPreviewMode) return 'DEMO-PREVIEW';
-    return localStorage.getItem('student_session_code') || '';
+    return typeof localStorage !== 'undefined' ? localStorage.getItem('student_session_code') || '' : '';
   });
   const [studentNameInput, setStudentNameInput] = useState<string>(() => {
     if (isPreviewMode) return 'معاينة تجريبية';
@@ -87,8 +92,88 @@ export const PublicInteractiveExamView: React.FC<PublicInteractiveExamViewProps>
   // Result state
   const [submissionResult, setSubmissionResult] = useState<any>(null);
 
+  // Default rich public exams curriculum
+  const availablePublicExams = [
+    {
+      id: 'ict_g6_2026',
+      title: 'اختبار تكنولوجيا المعلومات والاتصالات - الصف السادس الابتدائي',
+      courseName: 'تكنولوجيا المعلومات والاتصالات ICT',
+      gradeKey: 'سادس',
+      durationMinutes: 30,
+      totalMarks: 100,
+      passingMarks: 60,
+      icon: '💻',
+      badge: 'المنهج المعتمد 2026',
+      description: 'اختبار تفاعلي شامل يغطي مهارات الحوسبة السحابية، أدوات الذكاء الاصطناعي والأمن الرقمي.'
+    },
+    {
+      id: 'ict_g5_2026',
+      title: 'اختبار مهارات الحاسب والإنترنت - الصف الخامس الابتدائي',
+      courseName: 'تكنولوجيا المعلومات والاتصالات ICT',
+      gradeKey: 'خامس',
+      durationMinutes: 30,
+      totalMarks: 100,
+      passingMarks: 60,
+      icon: '🌐',
+      badge: 'تقييم مهارات',
+      description: 'تقييم شامل على أدوات معالجة الكلمات، الجداول الإلكترونية، والبحث الآمن على شبكة الإنترنت.'
+    },
+    {
+      id: 'ict_g4_2026',
+      title: 'اختبار أساسيات التكنولوجيا والتطبيقات - الصف الرابع الابتدائي',
+      courseName: 'تكنولوجيا المعلومات والاتصالات ICT',
+      gradeKey: 'رابع',
+      durationMinutes: 25,
+      totalMarks: 100,
+      passingMarks: 60,
+      icon: '🖥️',
+      badge: 'تحدي الطلاب',
+      description: 'اختبار تفاعلي ممتع في مكونات الحاسوب ووحدات الإدخال والإخراج ومهارات الرسام والتنسيق.'
+    },
+    {
+      id: 'general_tech_quiz',
+      title: 'مسابقة التحدي التفاعلية في تكنولوجيا المستقبل والبرمجة',
+      courseName: 'المهارات الرقمية المتقدمة',
+      gradeKey: 'سادس',
+      durationMinutes: 20,
+      totalMarks: 50,
+      passingMarks: 30,
+      icon: '⚡',
+      badge: 'تحدي مباشر',
+      description: 'مسابقة حية للمتدربين لقياس سرعة البديهة والمهارات التقنية مع إصدار شهادة فورية.'
+    }
+  ];
+
+  const handleSelectLobbyExam = (exam: typeof availablePublicExams[0]) => {
+    setExamId(exam.id);
+    setExamData({
+      id: exam.id,
+      title: exam.title,
+      courseName: exam.courseName,
+      durationMinutes: exam.durationMinutes,
+      totalMarks: exam.totalMarks,
+      passingMarks: exam.passingMarks,
+      instructions: 'يرجى قراءة كل سؤال بعناية واختيار الإجابة الصحيحة قبل انتهاء الوقت.'
+    });
+    const loadedQuestions = getCurriculumExamQuestions(exam.gradeKey, 'ar', exam.id);
+    setQuestions(loadedQuestions);
+    setTimeLeftSeconds(exam.durationMinutes * 60);
+    setPhase('welcome');
+  };
+
+  const handlePinSearchSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const pin = pinSearchInput.trim();
+    if (!pin) return;
+    setExamId(pin);
+  };
+
   // Safe navigation back / close
   const handleClose = () => {
+    if (phase !== 'lobby' && !directExamId && !new URLSearchParams(window.location.search).get('examId')) {
+      setPhase('lobby');
+      return;
+    }
     if (onBack) {
       onBack();
     } else if (window.history.length > 1) {
@@ -98,11 +183,10 @@ export const PublicInteractiveExamView: React.FC<PublicInteractiveExamViewProps>
     }
   };
 
-  // Load Exam Data on mount
+  // Load Exam Data on mount or when examId changes
   useEffect(() => {
     if (!examId) {
-      setErrorMessage('رابط الاختبار غير مكتمل أو لا يحتوي على معرف الاختبار.');
-      setPhase('error');
+      setPhase('lobby');
       return;
     }
 
@@ -125,8 +209,25 @@ export const PublicInteractiveExamView: React.FC<PublicInteractiveExamViewProps>
           setQuestions(loadedQuestions);
           setPhase('welcome');
         } else {
-          setErrorMessage('تعذر العثور على بيانات هذا الاختبار. قد يكون تم حذفه أو تعطيله.');
-          setPhase('error');
+          // If not in db, find in available curriculum exams or fallback
+          const matched = availablePublicExams.find(e => e.id === examId);
+          if (matched) {
+            handleSelectLobbyExam(matched);
+          } else {
+            const fallbackQuestions = getCurriculumExamQuestions('سادس', 'ar', examId);
+            setExamData({
+              id: examId,
+              title: `اختبار التحدي التفاعلي (${examId})`,
+              courseName: 'تكنولوجيا المعلومات والاتصالات',
+              durationMinutes: 30,
+              totalMarks: 100,
+              passingMarks: 60,
+              instructions: 'يرجى قراءة الأسئلة بدقة واختيار الإجابة الصحيحة.'
+            });
+            setQuestions(fallbackQuestions);
+            setTimeLeftSeconds(30 * 60);
+            setPhase('welcome');
+          }
         }
       } catch (err: any) {
         console.error('Error loading public exam:', err);
@@ -141,6 +242,7 @@ export const PublicInteractiveExamView: React.FC<PublicInteractiveExamViewProps>
           instructions: 'يرجى قراءة الأسئلة بدقة واختيار الإجابة الصحيحة.'
         });
         setQuestions(fallbackQuestions);
+        setTimeLeftSeconds(30 * 60);
         setPhase('welcome');
       }
     };
@@ -368,6 +470,134 @@ export const PublicInteractiveExamView: React.FC<PublicInteractiveExamViewProps>
       <X className="w-5 h-5 sm:w-6 sm:h-6 stroke-[2.5]" />
     </button>
   );
+
+  // ----------------------------------------------------
+  // PHASE: LOBBY (Direct Exam Selection & PIN Entry)
+  // ----------------------------------------------------
+  if (phase === 'lobby') {
+    return (
+      <div className={`min-h-[100dvh] w-full overflow-y-auto ${containerClasses} flex flex-col items-center justify-start py-6 px-3 sm:px-6 transition-colors dir-rtl relative font-sans`} dir="rtl">
+        {renderTopCloseButton()}
+
+        {/* Top Controls */}
+        <div className="max-w-4xl w-full flex items-center justify-between gap-2 mb-4 pt-10 sm:pt-0">
+          <div className="flex items-center gap-2">
+            <div className="w-9 h-9 rounded-xl bg-amber-500/15 text-amber-600 dark:text-amber-400 flex items-center justify-center font-bold">
+              <Sparkles className="w-5 h-5" />
+            </div>
+            <div>
+              <h1 className="text-sm sm:text-base font-black text-slate-900 dark:text-white">
+                منصة الاختبارات الإلكترونية والتحديات
+              </h1>
+              <p className={`text-[11px] ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                مركز النجاح للتدريب والاستشارات
+              </p>
+            </div>
+          </div>
+
+          {/* Theme Toggle Button */}
+          <button
+            type="button"
+            onClick={toggleTheme}
+            className={`px-3 py-1.5 rounded-full text-xs font-bold border flex items-center gap-1.5 transition-all cursor-pointer ${
+              isDarkMode
+                ? 'bg-slate-800 border-slate-700 text-amber-300 hover:bg-slate-750'
+                : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100 shadow-sm'
+            }`}
+            title="تبديل الوضع النهاري / الليلي"
+          >
+            {isDarkMode ? <Sun className="w-3.5 h-3.5 text-amber-400" /> : <Moon className="w-3.5 h-3.5 text-indigo-600" />}
+            <span className="hidden sm:inline">{isDarkMode ? 'الوضع النهاري' : 'الوضع الليلي'}</span>
+          </button>
+        </div>
+
+        {/* PIN Search Bar */}
+        <div className={`max-w-4xl w-full ${cardClasses} border rounded-2xl p-4 sm:p-5 shadow-lg mb-5`}>
+          <form onSubmit={handlePinSearchSubmit} className="flex flex-col sm:flex-row items-center gap-2.5">
+            <div className="relative flex-1 w-full">
+              <HelpCircle className="w-4 h-4 text-slate-400 absolute right-3.5 top-3" />
+              <input
+                type="text"
+                placeholder="لديك كود اختبار خاص (Exam PIN أو كود المعلم)؟ اكتبه هنا..."
+                value={pinSearchInput}
+                onChange={(e) => setPinSearchInput(e.target.value)}
+                className={`w-full pr-10 pl-4 py-2.5 rounded-xl border text-xs font-bold transition-all ${inputClasses}`}
+              />
+            </div>
+            <button
+              type="submit"
+              className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs shadow-md transition-all flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
+            >
+              <span>فتح الاختبار بالكود</span>
+              <ArrowRight className="w-3.5 h-3.5 rotate-180" />
+            </button>
+          </form>
+        </div>
+
+        {/* Active Public Exams Grid */}
+        <div className="max-w-4xl w-full space-y-3">
+          <div className="flex items-center justify-between px-1">
+            <h2 className="text-xs sm:text-sm font-black text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+              <span>📚 الاختبارات المتاحة والتحديات التفاعلية</span>
+            </h2>
+            <span className="text-[10px] text-blue-600 dark:text-blue-400 font-bold">
+              تفاعلي مع التصحيح الفوري
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
+            {availablePublicExams.map((exam) => (
+              <div
+                key={exam.id}
+                className={`${cardClasses} border hover:border-blue-500/80 rounded-2xl p-4 sm:p-5 shadow-md hover:shadow-xl transition-all flex flex-col justify-between gap-3 group`}
+              >
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xl p-2 rounded-xl bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800">
+                      {exam.icon}
+                    </span>
+                    <span className="text-[10px] font-extrabold bg-blue-500/15 text-blue-700 dark:text-blue-300 border border-blue-500/30 px-2.5 py-0.5 rounded-full">
+                      {exam.badge}
+                    </span>
+                  </div>
+
+                  <h3 className="text-sm font-black text-slate-900 dark:text-slate-100 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors leading-snug">
+                    {exam.title}
+                  </h3>
+
+                  <p className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-600'} leading-relaxed`}>
+                    {exam.description}
+                  </p>
+                </div>
+
+                <div className="space-y-2.5 pt-2 border-t border-slate-100 dark:border-slate-800">
+                  <div className="flex items-center justify-between text-[11px] font-bold text-slate-500 dark:text-slate-400">
+                    <span className="flex items-center gap-1">
+                      <Clock className="w-3.5 h-3.5 text-blue-500" />
+                      <span>{exam.durationMinutes} دقيقة</span>
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <Award className="w-3.5 h-3.5 text-amber-500" />
+                      <span>{exam.totalMarks} درجة (النجاح {exam.passingMarks})</span>
+                    </span>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => handleSelectLobbyExam(exam)}
+                    className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-black text-xs shadow-md active:scale-98 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <span>بدء الاختبار الآن</span>
+                    <ArrowRight className="w-3.5 h-3.5 rotate-180" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // ----------------------------------------------------
   // PHASE: LOADING

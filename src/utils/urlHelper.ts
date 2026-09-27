@@ -10,6 +10,16 @@ export function getPublicBaseUrl(): string {
   return origin;
 }
 
+export function getVercelBaseUrl(): string {
+  if (typeof window === 'undefined') return 'https://nagah-ms.vercel.app';
+  const custom = localStorage.getItem('nagah_custom_vercel_url');
+  if (custom) return custom.replace(/\/+$/, '');
+  if (window.location.origin.includes('vercel.app')) {
+    return window.location.origin;
+  }
+  return 'https://nagah-ms.vercel.app';
+}
+
 export function getPublicRegistrationUrl(): string {
   return `${getPublicBaseUrl()}/?view=register`;
 }
@@ -45,4 +55,5 @@ export function getPublicParentPortalUrl(studentCode?: string): string {
     ? `${base}/?view=parent_portal&code=${studentCode}`
     : `${base}/?view=parent_portal`;
 }
+
 

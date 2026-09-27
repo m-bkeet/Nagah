@@ -12,21 +12,21 @@ import pg from "pg";
 
 
 
-import { classroomSessionService } from "./src/server/classroomSessionService.js";
-import { classroomEventBus } from "./src/server/classroomEventBus.js";
-import { audioSessionService } from "./src/server/audioSessionService.js";
-import { voiceSessionService } from "./src/server/voiceSessionService.js";
-import { aiModelRouter } from "./src/server/aiModelRouter.js";
-import { aiIntelligenceService } from "./src/server/aiIntelligenceService.js";
-import { aiAuditService } from "./src/server/aiAuditService.js";
-import { aiModelRegistry } from "./src/server/aiModelRegistry.js";
-import { student360Service } from "./src/server/student360Service.js";
-import { centerKnowledgeService } from "./src/server/centerKnowledgeService.js";
-import { aiMemoryService } from "./src/server/aiMemoryService.js";
-import { aiFeedbackService } from "./src/server/aiFeedbackService.js";
-import { domainRouter } from "./src/server/domainRoutes.js";
-import { apiRouter } from "./server/routes.js";
-import { db } from "./server/db.js";
+import { classroomSessionService } from "./src/server/classroomSessionService.ts";
+import { classroomEventBus } from "./src/server/classroomEventBus.ts";
+import { audioSessionService } from "./src/server/audioSessionService.ts";
+import { voiceSessionService } from "./src/server/voiceSessionService.ts";
+import { aiModelRouter } from "./src/server/aiModelRouter.ts";
+import { aiIntelligenceService } from "./src/server/aiIntelligenceService.ts";
+import { aiAuditService } from "./src/server/aiAuditService.ts";
+import { aiModelRegistry } from "./src/server/aiModelRegistry.ts";
+import { student360Service } from "./src/server/student360Service.ts";
+import { centerKnowledgeService } from "./src/server/centerKnowledgeService.ts";
+import { aiMemoryService } from "./src/server/aiMemoryService.ts";
+import { aiFeedbackService } from "./src/server/aiFeedbackService.ts";
+import { domainRouter } from "./src/server/domainRoutes.ts";
+import { apiRouter } from "./server/routes.ts";
+import { db } from "./server/db.ts";
 
 const { Pool } = pg;
 
@@ -464,13 +464,38 @@ app.post("/api/student/submit-homework", async (req, res) => {
     }
 
     const submissionId = "sub_" + Date.now();
+    const existingTrainee = db.data.trainees.find(t => t.id === traineeId || t.code === traineeId);
+    const awardedPoints = Number(aiEvaluation.pointsAwarded) || 25;
+
+    let newTotalPoints = 125;
+    if (existingTrainee) {
+      const currentPts = Number(existingTrainee.totalPoints || existingTrainee.points || 0);
+      newTotalPoints = currentPts + awardedPoints;
+      existingTrainee.points = newTotalPoints;
+      existingTrainee.totalPoints = newTotalPoints;
+      
+      // Record point transaction
+      const ptTransaction: any = {
+        id: "pt-" + Date.now() + "-" + Math.random().toString(36).substr(2, 4),
+        traineeId: existingTrainee.id,
+        branchId: existingTrainee.branchId || "branch-1",
+        points: awardedPoints,
+        reason: `تسليم واجب ومهمة: ${title} (تصحيح الذكاء الاصطناعي)`,
+        addedByUserId: "ai-system",
+        addedByUserName: "المصحح الذكي AI",
+        createdAt: new Date().toISOString()
+      };
+      db.data.pointTransactions = db.data.pointTransactions || [];
+      db.data.pointTransactions.unshift(ptTransaction);
+    }
+
     const submission = {
       id: submissionId,
-      traineeId,
-      traineeCode: "م001",
-      traineeName: "طالب النجاح",
+      traineeId: existingTrainee?.id || traineeId,
+      traineeCode: existingTrainee?.code || "م001",
+      traineeName: existingTrainee?.fullName || "طالب النجاح",
       taskTitle: title,
-      mediaUrl: mediaBase64 ? mediaBase64.substring(0, 100) + "..." : undefined,
+      mediaUrl: mediaBase64 ? (mediaBase64.startsWith("data:") ? mediaBase64 : `data:image/jpeg;base64,${mediaBase64}`) : undefined,
       mediaType: mediaType || "image",
       submittedAt: new Date().toISOString(),
       grade: aiEvaluation.grade || 95,
@@ -480,14 +505,18 @@ app.post("/api/student/submit-homework", async (req, res) => {
       strengths: Array.isArray(aiEvaluation.strengths) ? aiEvaluation.strengths : ["إتقان الحل والمواظبة"],
       corrections: Array.isArray(aiEvaluation.corrections) ? aiEvaluation.corrections : [],
       generalFeedback: aiEvaluation.generalFeedback || "مستوى ممتاز وجهد مشكور!",
-      pointsAwarded: aiEvaluation.pointsAwarded || 25,
+      pointsAwarded: awardedPoints,
       isSpeedWinner: true,
       submissionChannel: "home_student_portal"
     };
 
+    db.data.homeworkSubmissions = db.data.homeworkSubmissions || [];
+    db.data.homeworkSubmissions.unshift(submission);
+    db.save();
+
     sendResponse(res, true, {
       submission,
-      newTotalPoints: 125,
+      newTotalPoints,
       speedBadgeAwarded: true
     });
   } catch (err: any) {

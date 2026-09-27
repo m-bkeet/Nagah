@@ -96,28 +96,62 @@ apiRouter.get('/settings', (req: Request, res: Response) => {
   }
 });
 
-apiRouter.post('/settings', (req: Request, res: Response) => {
+apiRouter.post('/settings', async (req: Request, res: Response) => {
   try {
     const data = db.getData();
     data.settings = {
       ...(data.settings || {}),
       ...(req.body || {})
     };
+    if (data.settings?.logoUrl && typeof data.settings.logoUrl === 'string' && data.settings.logoUrl.startsWith('data:image/')) {
+      try {
+        const base64Data = data.settings.logoUrl.replace(/^data:image\/\w+;base64,/, '');
+        const pubPng = path.join(process.cwd(), 'public', 'logo.png');
+        const pubSvg = path.join(process.cwd(), 'public', 'logo.svg');
+        fs.writeFileSync(pubPng, Buffer.from(base64Data, 'base64'));
+        const svgWrapper = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500" width="500" height="500"><image href="${data.settings.logoUrl}" width="500" height="500" preserveAspectRatio="xMidYMid meet" /></svg>`;
+        fs.writeFileSync(pubSvg, svgWrapper, 'utf8');
+      } catch (err) {
+        console.warn('[Settings] Failed to write logo files:', err);
+      }
+    }
     db.save();
+    try {
+      await saveCollectionToFirestore('settings', [data.settings]);
+    } catch (e) {
+      console.warn('[Settings] Firestore sync warning:', e);
+    }
     res.json({ success: true, settings: data.settings });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
 });
 
-apiRouter.put('/settings', (req: Request, res: Response) => {
+apiRouter.put('/settings', async (req: Request, res: Response) => {
   try {
     const data = db.getData();
     data.settings = {
       ...(data.settings || {}),
       ...(req.body || {})
     };
+    if (data.settings?.logoUrl && typeof data.settings.logoUrl === 'string' && data.settings.logoUrl.startsWith('data:image/')) {
+      try {
+        const base64Data = data.settings.logoUrl.replace(/^data:image\/\w+;base64,/, '');
+        const pubPng = path.join(process.cwd(), 'public', 'logo.png');
+        const pubSvg = path.join(process.cwd(), 'public', 'logo.svg');
+        fs.writeFileSync(pubPng, Buffer.from(base64Data, 'base64'));
+        const svgWrapper = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500" width="500" height="500"><image href="${data.settings.logoUrl}" width="500" height="500" preserveAspectRatio="xMidYMid meet" /></svg>`;
+        fs.writeFileSync(pubSvg, svgWrapper, 'utf8');
+      } catch (err) {
+        console.warn('[Settings] Failed to write logo files:', err);
+      }
+    }
     db.save();
+    try {
+      await saveCollectionToFirestore('settings', [data.settings]);
+    } catch (e) {
+      console.warn('[Settings] Firestore sync warning:', e);
+    }
     res.json({ success: true, settings: data.settings });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -1112,18 +1146,114 @@ apiRouter.get('/trainees/:id', async (req: Request, res: Response) => {
     const trainee = await TraineeRepo.getById(id);
     if (!trainee) return res.status(404).json({ success: false, error: 'المتدرب غير موجود' });
     
-    // Fetch payments, attendance, and point transactions directly from Firestore Repositories
-    const payments = await PaymentRepo.getByTraineeId(trainee.id);
-    const attendance = await AttendanceRepo.getByTraineeId(trainee.id);
-    const pointsFromFs = await PointTransactionRepo.getByTraineeId(trainee.id);
-    const pointsLocal = (db.getData().pointTransactions || []).filter(pt => pt.traineeId === trainee.id);
+    // Collect all candidate identifiers for this trainee
+    const traineeKeys = new Set<string>();
+    if (trainee.id) traineeKeys.add(String(trainee.id).trim().toLowerCase());
+    if (trainee.code) traineeKeys.add(String(trainee.code).trim().toLowerCase());
+    if ((trainee as any).studentCode) traineeKeys.add(String((trainee as any).studentCode).trim().toLowerCase());
+    if ((trainee as any).legacyId) traineeKeys.add(String((trainee as any).legacyId).trim().toLowerCase());
+    if (trainee.phone) traineeKeys.add(String(trainee.phone).trim().toLowerCase());
+    if (trainee.nationalId) traineeKeys.add(String(trainee.nationalId).trim().toLowerCase());
+    if (trainee.fullName) traineeKeys.add(String(trainee.fullName).trim().toLowerCase());
+
+    // Link any duplicated historical trainee records with matching full name, code, or phone
+    const allTrainees = db.getData().trainees || [];
+    for (const other of allTrainees) {
+      if (
+        (other.fullName && trainee.fullName && other.fullName.trim() === trainee.fullName.trim()) ||
+        (other.phone && trainee.phone && other.phone === trainee.phone) ||
+        (other.code && trainee.code && String(other.code) === String(trainee.code))
+      ) {
+        if (other.id) traineeKeys.add(String(other.id).trim().toLowerCase());
+        if (other.code) traineeKeys.add(String(other.code).trim().toLowerCase());
+      }
+    }
+
+    // Fetch payments directly from Firestore and local pool
+    const paymentsFromFs = await PaymentRepo.getByTraineeId(trainee.id).catch(() => []);
+    const paymentsLocal = (db.getData().payments || []).filter(p => {
+      return [p.traineeId, (p as any).studentId, (p as any).traineeCode].some(cand => cand && traineeKeys.has(String(cand).trim().toLowerCase()));
+    });
+    const payMap = new Map<string, any>();
+    for (const p of [...paymentsFromFs, ...paymentsLocal]) {
+      if (p.id) payMap.set(p.id, p);
+    }
+    const payments = Array.from(payMap.values()).sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime());
+
+    // Combine Attendance from AttendanceRepo (Firestore) AND db.getData().attendance (memory/local)
+    const attFromFs = await AttendanceRepo.getAll().catch(() => []);
+    const attFromDb = db.getData().attendance || [];
+    const attMap = new Map<string, AttendanceRecord>();
+    for (const a of [...attFromFs, ...attFromDb]) {
+      if (!a) continue;
+      const matches = [
+        a.traineeId,
+        (a as any).studentId,
+        (a as any).traineeCode,
+        (a as any).studentCode,
+        (a as any).traineeName
+      ].some(cand => cand && traineeKeys.has(String(cand).trim().toLowerCase()));
+
+      if (matches) {
+        const uniqueKey = a.id || `${a.date}_${a.traineeId}`;
+        attMap.set(uniqueKey, a);
+      }
+    }
+
+    // Automatically synchronize any attendance point transactions into the attendance history
+    const allPt = db.getData().pointTransactions || [];
+    for (const pt of allPt) {
+      if (
+        pt &&
+        pt.reason &&
+        pt.reason.includes('حضور') &&
+        [pt.traineeId, (pt as any).studentId, (pt as any).traineeCode].some(cand => cand && traineeKeys.has(String(cand).trim().toLowerCase()))
+      ) {
+        const pDate = pt.createdAt ? pt.createdAt.split('T')[0] : '2026-08-22';
+        const hasDate = Array.from(attMap.values()).some(a => a.date === pDate);
+        if (!hasDate) {
+          const ptRec: AttendanceRecord = {
+            id: `att-pt-${pt.id || pDate}`,
+            date: pDate,
+            time: pt.createdAt ? new Date(pt.createdAt).toLocaleTimeString('ar-EG') : '٠١:٢٥ ص',
+            branchId: pt.branchId || trainee.branchId || 'branch-1',
+            groupId: pt.groupId || trainee.groupId || '',
+            courseId: trainee.courseId || '',
+            traineeId: trainee.id,
+            status: 'present',
+            notes: pt.reason || 'حضور موثق من سجل النقاط المعملية',
+            groupName: (trainee as any).groupName || '',
+            courseName: ''
+          } as any;
+          attMap.set(ptRec.id, ptRec);
+        }
+      }
+    }
+
+    const groupsList = db.getData().groups || [];
+    const coursesList = db.getData().courses || [];
+    const groupMap = new Map(groupsList.map(g => [g.id, g.name]));
+    const courseMap = new Map(coursesList.map(c => [c.id, c.name]));
+
+    const attendance = Array.from(attMap.values())
+      .map(a => ({
+        ...a,
+        groupName: (a as any).groupName || groupMap.get(a.groupId) || (trainee as any).groupName || '',
+        courseName: (a as any).courseName || courseMap.get(a.courseId) || ''
+      }))
+      .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+
     // Combine Firestore and local point transactions without duplicates
+    const pointsFromFs = await PointTransactionRepo.getByTraineeId(trainee.id).catch(() => []);
+    const pointsLocal = (db.getData().pointTransactions || []).filter(pt => {
+      return [pt.traineeId, (pt as any).studentId, (pt as any).traineeCode].some(cand => cand && traineeKeys.has(String(cand).trim().toLowerCase()));
+    });
     const ptMap = new Map<string, PointTransaction>();
     for (const p of [...pointsFromFs, ...pointsLocal]) {
       if (p.id) ptMap.set(p.id, p);
     }
     const points = Array.from(ptMap.values()).sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
-    const exams = (db.getData().examResults || []).filter(er => er.traineeId === trainee.id);
+    const exams = (db.getData().examResults || []).filter(er => traineeKeys.has(String(er.traineeId).trim().toLowerCase()));
 
     res.json({ trainee, payments, attendance, points, exams });
   } catch(e: any) { res.status(500).json({ success: false, error: e.message }); }
@@ -4168,15 +4298,170 @@ apiRouter.get('/attendance', async (req: Request, res: Response) => {
     const date = req.query.date as string;
     const groupId = req.query.groupId as string;
     const branchId = req.query.branchId as string;
+    const traineeId = req.query.traineeId as string;
 
-    let list = await AttendanceRepo.getAll();
+    const fsList = await AttendanceRepo.getAll().catch(() => []);
+    const localList = db.getData().attendance || [];
+    const pool = new Map<string, AttendanceRecord>();
+    for (const a of [...fsList, ...localList]) {
+      if (a && a.id) pool.set(a.id, a);
+    }
+    let list = Array.from(pool.values());
 
     if (date) list = list.filter(a => a.date === date);
     if (groupId) list = list.filter(a => a.groupId === groupId);
     if (branchId) list = list.filter(a => a.branchId === branchId);
+    if (traineeId) {
+      const tid = String(traineeId).toLowerCase();
+      list = list.filter(a => {
+        return (
+          (a.traineeId && String(a.traineeId).toLowerCase() === tid) ||
+          ((a as any).studentId && String((a as any).studentId).toLowerCase() === tid) ||
+          ((a as any).traineeCode && String((a as any).traineeCode).toLowerCase() === tid) ||
+          ((a as any).studentCode && String((a as any).studentCode).toLowerCase() === tid)
+        );
+      });
+    }
 
-    res.json(list);
+    const groupsList = db.getData().groups || [];
+    const coursesList = db.getData().courses || [];
+    const traineesList = db.getData().trainees || [];
+    const groupMap = new Map(groupsList.map(g => [g.id, g.name]));
+    const courseMap = new Map(coursesList.map(c => [c.id, c.name]));
+    const traineeMap = new Map(traineesList.map(t => [t.id, t]));
+
+    const enrichedList = list.map(a => {
+      const tr = traineeMap.get(a.traineeId);
+      return {
+        ...a,
+        groupName: (a as any).groupName || groupMap.get(a.groupId) || '',
+        courseName: (a as any).courseName || courseMap.get(a.courseId) || '',
+        traineeName: (a as any).traineeName || tr?.fullName || '',
+        traineeCode: (a as any).traineeCode || tr?.code || ''
+      };
+    });
+
+    enrichedList.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+    res.json(enrichedList);
   } catch(e: any) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+apiRouter.post('/attendance', async (req: Request, res: Response) => {
+  try {
+    const { traineeId, date, status, notes, groupId, branchId, courseId, trainerId } = req.body;
+    if (!traineeId) return res.status(400).json({ success: false, error: 'معرف المتدرب مطلوب' });
+
+    const sessionDate = date || new Date().toISOString().split('T')[0];
+    const student = await TraineeRepo.getById(traineeId);
+    if (!student) return res.status(404).json({ success: false, error: 'المتدرب غير موجود في قاعدة البيانات' });
+
+    const currentAttendance = db.getData().attendance || [];
+    // Remove previous record on the same date for this trainee to prevent duplicates
+    db.getData().attendance = currentAttendance.filter(
+      a => !(
+        [a.traineeId, (a as any).studentId, (a as any).traineeCode].some(
+          c => c && (String(c).toLowerCase() === String(student.id).toLowerCase() || (student.code && String(c).toLowerCase() === String(student.code).toLowerCase()))
+        ) && a.date === sessionDate
+      )
+    );
+
+    const groupObj = (db.getData().groups || []).find(g => g.id === (groupId || student.groupId));
+    const courseObj = (db.getData().courses || []).find(c => c.id === (courseId || student.courseId));
+
+    const newRecord: AttendanceRecord = {
+      id: 'att-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
+      date: sessionDate,
+      time: new Date().toLocaleTimeString('ar-EG'),
+      branchId: branchId || student.branchId || 'branch-1',
+      groupId: groupId || student.groupId || '',
+      courseId: courseId || student.courseId || '',
+      trainerId: trainerId || undefined,
+      traineeId: student.id,
+      status: status || 'present',
+      notes: notes || '',
+      groupName: groupObj?.name || '',
+      courseName: courseObj?.name || courseObj?.title || ''
+    } as any;
+
+    db.getData().attendance.push(newRecord);
+
+    if (!Array.isArray(db.getData().pointTransactions)) {
+      db.getData().pointTransactions = [];
+    }
+
+    // Check if points were already granted for attendance on this date for this trainee
+    const existingAttTx = db.getData().pointTransactions.find(
+      pt => pt.traineeId === student.id && (pt.ruleId === 'att-rule' || pt.ruleId === 'rule-1' || pt.reason?.includes('حضور')) && (pt.reason?.includes(sessionDate) || pt.createdAt?.startsWith(sessionDate))
+    );
+
+    let pointsAwarded = 0;
+    if (status === 'present') {
+      if (!existingAttTx) {
+        const attRule = (db.getData().pointRules || []).find(pr => pr.ruleType === 'attendance' && pr.isActive);
+        pointsAwarded = attRule ? attRule.pointValue : 10;
+        student.totalPoints = (student.totalPoints || 0) + pointsAwarded;
+        student.points = student.totalPoints;
+
+        db.getData().pointTransactions.push({
+          id: 'pt-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
+          traineeId: student.id,
+          groupId: newRecord.groupId,
+          branchId: student.branchId,
+          points: pointsAwarded,
+          reason: `حضور جلسة تدريبية تاريخ ${sessionDate}`,
+          ruleId: attRule?.id || 'att-rule',
+          addedByUserId: (req as any).user?.id || 'admin',
+          createdAt: new Date().toISOString()
+        });
+      }
+    } else {
+      // If status changed to absent/excused/late, and they had previously received points for attendance on this date, revoke them
+      if (existingAttTx) {
+        student.totalPoints = Math.max(0, (student.totalPoints || 0) - existingAttTx.points);
+        student.points = student.totalPoints;
+        db.getData().pointTransactions = db.getData().pointTransactions.filter(pt => pt.id !== existingAttTx.id);
+      }
+    }
+
+    db.recalculateTraineeRankings();
+    db.save();
+
+    // Persist changes to Firestore
+    try {
+      await saveCollectionToFirestore('attendance', db.getData().attendance);
+      await saveCollectionToFirestore('pointTransactions', db.getData().pointTransactions);
+      await saveCollectionToFirestore('trainees', db.getData().trainees);
+    } catch (fsErr) {
+      console.warn('[Attendance] Firestore sync warning:', fsErr);
+    }
+
+    res.json({
+      success: true,
+      record: newRecord,
+      pointsAwarded,
+      newTotalPoints: student.totalPoints
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+apiRouter.delete('/attendance/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const attList = db.getData().attendance || [];
+    const idx = attList.findIndex(a => a.id === id);
+    if (idx >= 0) {
+      attList.splice(idx, 1);
+      db.save();
+      try {
+        await saveCollectionToFirestore('attendance', attList);
+      } catch {}
+    }
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
 });
 
 apiRouter.post('/attendance/batch', async (req: Request, res: Response) => {
@@ -4186,50 +4471,83 @@ apiRouter.post('/attendance/batch', async (req: Request, res: Response) => {
   }
 
   const sessionDate = date || new Date().toISOString().split('T')[0];
+  const groupObj = (db.getData().groups || []).find(g => g.id === groupId);
+  const courseObj = (db.getData().courses || []).find(c => c.id === (courseId || groupObj?.courseId));
 
   // Remove existing records for this group & date to avoid duplication
   db.getData().attendance = db.getData().attendance.filter(a => !(a.groupId === groupId && a.date === sessionDate));
 
+  if (!Array.isArray(db.getData().pointTransactions)) {
+    db.getData().pointTransactions = [];
+  }
+
+  const pointRules = db.getData().pointRules || [];
+  const attRule = pointRules.find(pr => pr.ruleType === 'attendance' && pr.isActive);
+  const ptsToAdd = attRule ? attRule.pointValue : 10;
+  const updatedTraineesMap = new Map<string, any>();
+
   for (const r of records) {
+    const student = await TraineeRepo.getById(r.traineeId);
+    if (!student) continue;
+
     const newRecord: AttendanceRecord = {
       id: 'att-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
       date: sessionDate,
       time: new Date().toLocaleTimeString('ar-EG'),
-      branchId: branchId || 'branch-1',
+      branchId: branchId || student.branchId || 'branch-1',
       groupId,
-      courseId: courseId || '',
+      courseId: courseId || student.courseId || '',
       trainerId: trainerId || undefined,
-      traineeId: r.traineeId,
+      traineeId: student.id,
       status: r.status || 'present',
-      notes: r.notes || ''
-    };
+      notes: r.notes || '',
+      groupName: groupObj?.name || '',
+      courseName: courseObj?.name || courseObj?.title || ''
+    } as any;
     db.getData().attendance.push(newRecord);
 
-    // If present, optionally give attendance points if rule exists
+    const existingAttTx = db.getData().pointTransactions.find(
+      pt => pt.traineeId === student.id && (pt.ruleId === 'att-rule' || pt.ruleId === 'rule-1' || pt.reason?.includes('حضور')) && (pt.reason?.includes(sessionDate) || pt.createdAt?.startsWith(sessionDate))
+    );
+
+    // If present, award attendance points only once per sessionDate
     if (r.status === 'present') {
-      const attRule = db.getData().pointRules.find(pr => pr.ruleType === 'attendance' && pr.isActive);
-      if (attRule) {
-        const student = await TraineeRepo.getById(r.traineeId);
-        if (student) {
-          student.totalPoints = (student.totalPoints || 0) + attRule.pointValue;
-          db.getData().pointTransactions.push({
-            id: 'pt-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
-            traineeId: student.id,
-            groupId,
-            branchId: student.branchId,
-            points: attRule.pointValue,
-            reason: `حضور جلسة تاريخ ${sessionDate}`,
-            ruleId: attRule.id,
-            addedByUserId: 'trainer',
-            createdAt: new Date().toISOString()
-          });
-        }
+      if (!existingAttTx) {
+        student.totalPoints = (student.totalPoints || 0) + ptsToAdd;
+        student.points = student.totalPoints;
+        db.getData().pointTransactions.push({
+          id: 'pt-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
+          traineeId: student.id,
+          groupId,
+          branchId: student.branchId,
+          points: ptsToAdd,
+          reason: `حضور جلسة تاريخ ${sessionDate}`,
+          ruleId: attRule?.id || 'att-rule',
+          addedByUserId: 'trainer',
+          createdAt: new Date().toISOString()
+        });
+      }
+    } else {
+      // If marked absent or excused, and had an attendance point transaction for today, revoke it
+      if (existingAttTx) {
+        student.totalPoints = Math.max(0, (student.totalPoints || 0) - existingAttTx.points);
+        student.points = student.totalPoints;
+        db.getData().pointTransactions = db.getData().pointTransactions.filter(pt => pt.id !== existingAttTx.id);
       }
     }
+    updatedTraineesMap.set(student.id, { id: student.id, totalPoints: student.totalPoints, points: student.points });
   }
 
   db.recalculateTraineeRankings();
   db.save();
+
+  try {
+    await saveCollectionToFirestore('attendance', db.getData().attendance);
+    await saveCollectionToFirestore('pointTransactions', db.getData().pointTransactions);
+    await saveCollectionToFirestore('trainees', db.getData().trainees);
+  } catch (fsErr) {
+    console.warn('[Attendance Batch] Firestore sync warning:', fsErr);
+  }
 
   db.logAudit({
     userId: 'user',
@@ -4239,7 +4557,11 @@ apiRouter.post('/attendance/batch', async (req: Request, res: Response) => {
     details: `تم حفظ كشف حضور لعدد ${records.length} متدرب لتاريخ ${sessionDate}`
   });
 
-  res.json({ success: true, count: records.length });
+  res.json({
+    success: true,
+    count: records.length,
+    updatedTrainees: Array.from(updatedTraineesMap.values())
+  });
 });
 
 // ----------------------------------------------------
@@ -5528,17 +5850,21 @@ apiRouter.get('/exams', async (req: Request, res: Response) => {
 apiRouter.post('/exams', async (req: Request, res: Response) => {
   try {
     const d = req.body;
-    if (!d.title || !d.branchId || !d.courseId) {
-      return res.status(400).json({ error: 'عنوان الاختبار والفرع والدورة حقول مطلوبة' });
+    if (!d.title || !d.courseId) {
+      return res.status(400).json({ error: 'عنوان الاختبار والدورة حقول مطلوبة' });
     }
+
+    const course = db.getData().courses?.find(c => c.id === d.courseId);
+    const group = d.groupId ? db.getData().groups?.find(g => g.id === d.groupId) : undefined;
+    const effectiveBranchId = d.branchId || group?.branchId || course?.branchId || 'branch-1';
 
     const newExam: Exam = {
       id: 'exam-' + Date.now(),
       title: d.title.trim(),
-      branchId: d.branchId,
+      branchId: effectiveBranchId,
       courseId: d.courseId,
       groupId: d.groupId || undefined,
-      trainerId: d.trainerId || undefined,
+      trainerId: d.trainerId || group?.trainerId || undefined,
       examDate: d.examDate || new Date().toISOString().split('T')[0],
       totalMarks: Number(d.totalMarks) || 100,
       durationMinutes: Number(d.durationMinutes) || 60,
@@ -6791,9 +7117,20 @@ apiRouter.get('/exams/:id/results', async (req: Request, res: Response) => {
       };
     });
 
+    // Sort strictly by score descending, then by percentage descending
+    enhancedResults.sort((a, b) => {
+      const scoreA = Number(a.score) || 0;
+      const scoreB = Number(b.score) || 0;
+      if (scoreB !== scoreA) return scoreB - scoreA;
+      const pctA = Number(a.percentage) || 0;
+      const pctB = Number(b.percentage) || 0;
+      return pctB - pctA;
+    });
+
     res.json(enhancedResults);
   } catch (err: any) {
     const localResults = db.getData().examResults?.filter(r => r.examId === req.params.id) || [];
+    localResults.sort((a, b) => (Number(b.score) || 0) - (Number(a.score) || 0));
     res.json(localResults);
   }
 });
@@ -6840,6 +7177,46 @@ apiRouter.post('/exams/:id/results/batch', async (req: Request, res: Response) =
 
       db.getData().examResults.push(newResult);
       createdResults.push(newResult);
+
+      // Award points & badges to trainee for taking and passing the exam
+      if (tr && r.attendanceStatus !== 'absent' && score > 0) {
+        let earnedPoints = 10;
+        if (percentage >= 95) earnedPoints = 50;
+        else if (percentage >= 90) earnedPoints = 40;
+        else if (percentage >= 80) earnedPoints = 30;
+        else if (percentage >= 60) earnedPoints = 20;
+
+        tr.points = (Number(tr.points) || 0) + earnedPoints;
+        tr.totalPoints = (Number(tr.totalPoints) || 0) + earnedPoints;
+
+        // Add Point Transaction
+        if (!db.getData().pointTransactions) db.getData().pointTransactions = [];
+        db.getData().pointTransactions.push({
+          id: 'pt-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
+          traineeId: tr.id,
+          points: earnedPoints,
+          reason: `درجة متميزة في الاختبار (${score}/${tot})`,
+          date: new Date().toISOString()
+        } as any);
+
+        // Add Excellence Badge if score >= 90%
+        if (percentage >= 90) {
+          if (!db.getData().badges) db.getData().badges = [];
+          db.getData().badges.push({
+            id: 'badge-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
+            traineeId: tr.id,
+            studentId: tr.id,
+            title: percentage === 100 ? 'نجم الدرجة النهائية 💯' : 'وسام التفوق والتميز 🌟',
+            description: `الحصول على درجة ${score} من ${tot} بتقدير ممتاز`,
+            icon: percentage === 100 ? '👑' : '⭐',
+            date: new Date().toISOString().split('T')[0]
+          });
+        }
+
+        try {
+          await TraineeRepo.update(tr.id, { points: tr.points, totalPoints: tr.totalPoints });
+        } catch (e) {}
+      }
 
       try {
         await ExamResultRepo.create(newResult.id, newResult);
@@ -6933,7 +7310,132 @@ apiRouter.post(['/exams/:examId/results/:resultId/reset', '/exam-results/:result
   }
 });
 
-// Clear All Test Attempts for a Student (By ID, Code, or Name)
+// Update Single Trainee Exam Result (Score, Percentage, Rating, Notes)
+apiRouter.put(['/exams/:examId/results/:resultId', '/exam-results/:resultId'], async (req: Request, res: Response) => {
+  try {
+    const { resultId } = req.params;
+    const { score, totalMarks, percentage, rating, notes, attendanceStatus, bonusMarks, traineeName, traineeCode } = req.body;
+    const data = db.getData();
+    if (!data.examResults) data.examResults = [];
+
+    let target = data.examResults.find(r => r.id === resultId);
+    const tot = Number(totalMarks) || (target ? target.totalMarks : 100) || 100;
+    const effectiveScore = Number(score) !== undefined ? Number(score) : (target ? target.score : 0);
+    const calculatedPct = percentage !== undefined ? Number(percentage) : Math.round((effectiveScore / Math.max(tot, 1)) * 100);
+
+    let calculatedRating = rating;
+    if (!calculatedRating) {
+      if (calculatedPct >= 90) calculatedRating = 'ممتاز';
+      else if (calculatedPct >= 80) calculatedRating = 'جيد جداً';
+      else if (calculatedPct >= 65) calculatedRating = 'جيد';
+      else if (calculatedPct >= 50) calculatedRating = 'مقبول';
+      else calculatedRating = 'راسب';
+    }
+
+    if (target) {
+      if (score !== undefined) target.score = effectiveScore;
+      if (totalMarks !== undefined) target.totalMarks = tot;
+      target.percentage = calculatedPct;
+      target.rating = calculatedRating;
+      if (notes !== undefined) target.notes = notes;
+      if (attendanceStatus !== undefined) (target as any).attendanceStatus = attendanceStatus;
+      if (bonusMarks !== undefined) (target as any).bonusMarks = Number(bonusMarks);
+      if (traineeName !== undefined) (target as any).traineeName = traineeName;
+      if (traineeCode !== undefined) (target as any).traineeCode = traineeCode;
+      (target as any).lastModifiedAt = new Date().toISOString();
+    } else {
+      target = {
+        id: resultId,
+        examId: req.params.examId || '',
+        traineeId: req.body.traineeId || ('tr-' + Date.now()),
+        score: effectiveScore,
+        totalMarks: tot,
+        percentage: calculatedPct,
+        rating: calculatedRating,
+        notes: notes || '',
+        submittedAt: new Date().toISOString()
+      };
+      (target as any).attendanceStatus = attendanceStatus || 'present';
+      data.examResults.push(target);
+    }
+
+    try {
+      await ExamResultRepo.update(resultId, target);
+    } catch (e) {
+      try {
+        await ExamResultRepo.create(resultId, target);
+      } catch (err2) {}
+    }
+
+    db.save();
+
+    db.logAudit({
+      userId: (req as any).user?.id || 'admin',
+      userName: (req as any).user?.name || 'مدير النظام',
+      action: 'تعديل نتيجة اختبار طالب',
+      entity: 'الاختبارات',
+      entityId: resultId,
+      details: `تم تعديل نتيجة الطالب (${(target as any).traineeName || target.traineeId}) إلى ${target.score}/${target.totalMarks} (${target.percentage}%)`
+    });
+
+    res.json({ success: true, result: target, message: 'تم تحديث وتعديل نتيجة الطالب بنجاح ✨' });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'فشل تحديث نتيجة الاختبار' });
+  }
+});
+
+// Grant Smart Retake Permission (Without Deleting Student Record)
+apiRouter.post(['/exams/:examId/results/:resultId/grant-retake', '/exam-results/:resultId/grant-retake'], async (req: Request, res: Response) => {
+  try {
+    const { resultId } = req.params;
+    const { mode = 'keep_best', reason = 'إعادة الاختبار لتحسين الدرجة' } = req.body;
+    const data = db.getData();
+    if (!data.examResults) data.examResults = [];
+
+    const target = data.examResults.find(r => r.id === resultId);
+    if (!target) {
+      return res.status(404).json({ error: 'لم يتم العثور على نتيجة الطالب' });
+    }
+
+    // Preserve previous attempt in history
+    if (!(target as any).attemptHistory) (target as any).attemptHistory = [];
+    (target as any).attemptHistory.push({
+      score: target.score,
+      totalMarks: target.totalMarks,
+      percentage: target.percentage,
+      rating: target.rating,
+      date: target.submittedAt || new Date().toISOString()
+    });
+
+    // Mark as retake allowed
+    (target as any).allowRetake = true;
+    (target as any).retakeMode = mode;
+    (target as any).retakeReason = reason;
+    (target as any).retakeGrantedAt = new Date().toISOString();
+    (target as any).notes = `${target.notes ? target.notes + ' | ' : ''}مسموح بإعادة المحاولة (الدرجة السابقة: ${target.score})`;
+
+    // Reset linked student submissions so online kiosk lets them take it again
+    if ((data as any).studentExamSubmissions) {
+      (data as any).studentExamSubmissions = (data as any).studentExamSubmissions.filter(
+        (s: any) => !(s.examId === target.examId && (s.traineeId === target.traineeId || s.traineeCode === (target as any).traineeCode))
+      );
+    }
+
+    try {
+      await ExamResultRepo.update(resultId, target);
+    } catch (e) {}
+
+    db.save();
+
+    res.json({
+      success: true,
+      result: target,
+      message: `تم تفعيل إمكانية إعادة الاختبار للطالب بنجاح مع الاحتفاظ بسجل درجاته السابقة (${target.score} درجة) 🔄✨`
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'فشل منح صلاحية إعادة الاختبار' });
+  }
+});
 apiRouter.post('/exams/clear-trainee-results', async (req: Request, res: Response) => {
   try {
     const { traineeId, traineeCode, traineeName } = req.body;
@@ -6964,6 +7466,164 @@ apiRouter.post('/exams/clear-trainee-results', async (req: Request, res: Respons
     res.json({ success: true, count, message: `تم حذف وتصفير سجلات الاختبارات للطالب (${traineeName || traineeCode || traineeId || ''}) بنجاح` });
   } catch (err: any) {
     res.status(500).json({ error: err.message || 'فشل تصفير سجلات الطالب' });
+  }
+});
+
+// ----------------------------------------------------
+// Certificates & Templates Management API
+// ----------------------------------------------------
+apiRouter.get('/certificates', async (req: Request, res: Response) => {
+  try {
+    const certs = db.getData().certificates || [];
+    res.json(certs);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'فشل جلب الشهادات' });
+  }
+});
+
+apiRouter.post('/certificates', async (req: Request, res: Response) => {
+  try {
+    const certData = req.body;
+    if (!certData) return res.status(400).json({ error: 'بيانات الشهادة مطلوبة' });
+
+    const newCert: any = {
+      id: certData.id || 'cert-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
+      traineeId: certData.traineeId || certData.studentId,
+      traineeName: certData.traineeName || certData.studentName || 'المتدرب',
+      courseId: certData.courseId || '',
+      courseName: certData.courseName || '',
+      issueDate: certData.issueDate || new Date().toISOString().split('T')[0],
+      grade: certData.grade || 'امتياز',
+      certificateNumber: certData.certificateNumber || 'CERT-' + Math.floor(100000 + Math.random() * 900000),
+      serialNumber: certData.serialNumber || certData.certificateNumber || '',
+      durationText: certData.durationText || '',
+      trainerName: certData.trainerName || '',
+      managerName: certData.managerName || '',
+      certificateTitle: certData.certificateTitle || '',
+      certificateTitleEn: certData.certificateTitleEn || '',
+      status: certData.status || 'issued',
+      qrCode: certData.qrCode || '',
+      type: certData.type || 'appreciation',
+      templateId: certData.templateId || 'default',
+      notes: certData.notes || '',
+      score: certData.score !== undefined ? Number(certData.score) : undefined,
+      totalMarks: certData.totalMarks !== undefined ? Number(certData.totalMarks) : undefined,
+      rank: certData.rank !== undefined ? Number(certData.rank) : undefined,
+      createdAt: new Date().toISOString()
+    };
+    newCert.studentId = newCert.traineeId;
+    newCert.studentName = newCert.traineeName;
+
+    if (!db.getData().certificates) {
+      db.getData().certificates = [];
+    }
+    db.getData().certificates.push(newCert);
+
+    // Award bonus points and excellence badge to the trainee for receiving a certificate
+    if (newCert.traineeId) {
+      const trainees = await TraineeRepo.getAll();
+      const tr = trainees.find(t => t.id === newCert.traineeId);
+      if (tr) {
+        tr.points = (Number(tr.points) || 0) + 50;
+        tr.totalPoints = (Number(tr.totalPoints) || 0) + 50;
+        await TraineeRepo.update(tr.id, { points: tr.points, totalPoints: tr.totalPoints });
+
+        if (!db.getData().badges) db.getData().badges = [];
+        db.getData().badges.push({
+          id: 'badge-' + Date.now(),
+          traineeId: tr.id,
+          studentId: tr.id,
+          title: 'شهادة تقدير وتفوق 📜⭐',
+          description: `منحت عن ${newCert.courseName || 'الأداء المتميز'}`,
+          icon: '🏆',
+          date: new Date().toISOString().split('T')[0]
+        });
+
+        if (!db.getData().pointTransactions) db.getData().pointTransactions = [];
+        db.getData().pointTransactions.push({
+          id: 'pt-' + Date.now(),
+          traineeId: tr.id,
+          points: 50,
+          reason: `مكافأة الحصول على شهادة تقدير (${newCert.courseName || 'تفوق'})`,
+          date: new Date().toISOString()
+        } as any);
+      }
+    }
+
+    try {
+      await CertificateRepo.create(newCert.id, newCert);
+    } catch (e) {}
+
+    db.save();
+    res.json({ success: true, certificate: newCert });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'فشل إصدار الشهادة' });
+  }
+});
+
+apiRouter.get('/certificates/templates', async (req: Request, res: Response) => {
+  try {
+    const templates = db.getData().certificateTemplates || [];
+    res.json(templates);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'فشل جلب قوالب الشهادات' });
+  }
+});
+
+apiRouter.post('/certificates/templates', async (req: Request, res: Response) => {
+  try {
+    const templateData = req.body;
+    const newTemplate = {
+      id: templateData.id || 'tmpl-' + Date.now(),
+      ...templateData,
+      createdAt: new Date().toISOString()
+    };
+    if (!db.getData().certificateTemplates) {
+      db.getData().certificateTemplates = [];
+    }
+    db.getData().certificateTemplates.push(newTemplate);
+    try {
+      await CertificateTemplateRepo.create(newTemplate.id, newTemplate);
+    } catch (e) {}
+    db.save();
+    res.json({ success: true, template: newTemplate });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'فشل حفظ قالب الشهادة' });
+  }
+});
+
+apiRouter.put('/certificates/templates/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const templateData = req.body;
+    const data = db.getData();
+    if (data.certificateTemplates) {
+      const idx = data.certificateTemplates.findIndex((t: any) => t.id === id);
+      if (idx !== -1) {
+        data.certificateTemplates[idx] = { ...data.certificateTemplates[idx], ...templateData, id };
+      }
+    }
+    try {
+      await CertificateTemplateRepo.update(id, templateData);
+    } catch (e) {}
+    db.save();
+    res.json({ success: true, template: { id, ...templateData } });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'فشل تعديل قالب الشهادة' });
+  }
+});
+
+apiRouter.delete('/certificates/templates/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const data = db.getData();
+    if (data.certificateTemplates) {
+      data.certificateTemplates = data.certificateTemplates.filter((t: any) => t.id !== id);
+    }
+    db.save();
+    res.json({ success: true, message: 'تم حذف قالب الشهادة بنجاح' });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'فشل حذف قالب الشهادة' });
   }
 });
 
@@ -8031,7 +8691,12 @@ apiRouter.post('/student/login', async (req: Request, res: Response) => {
   ];
 
   const studentCerts = (db.getData().certificates || []).filter((c: any) =>
-    c.traineeId === trainee.id || c.studentId === trainee.id
+    c.traineeId === trainee.id ||
+    c.studentId === trainee.id ||
+    (c.traineeName && trainee.fullName && String(c.traineeName).trim().toLowerCase() === String(trainee.fullName).trim().toLowerCase()) ||
+    (c.studentName && trainee.fullName && String(c.studentName).trim().toLowerCase() === String(trainee.fullName).trim().toLowerCase()) ||
+    (c.traineeCode && trainee.code && String(c.traineeCode).trim().toLowerCase() === String(trainee.code).trim().toLowerCase()) ||
+    (c.studentCode && trainee.code && String(c.studentCode).trim().toLowerCase() === String(trainee.code).trim().toLowerCase())
   );
 
   res.json({

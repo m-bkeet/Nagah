@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { Trainee, Course, Group } from '../types';
 import { SessionCelebrationOverlay } from '../components/SessionCelebrationOverlay';
+import { getEffectiveCenterLogo, handleLogoError } from '../utils/centerLogo';
 
 interface DashboardViewProps {
   onNavigate: (view: string) => void;
@@ -474,8 +475,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
                     reader.onloadend = async () => {
                        try {
                           const base64 = reader.result as string;
+                          try {
+                            localStorage.setItem('nagah_custom_logo', base64);
+                            localStorage.setItem('nagah_center_logo', base64);
+                            window.dispatchEvent(new CustomEvent('nagah_logo_updated', { detail: base64 }));
+                          } catch {}
                           await api.updateSettings({ logoUrl: base64 });
-                          showToast('تم تحديث الشعار بنجاح في كافة الأنظمة', 'success');
+                          showToast('تم تحديث الشعار بنجاح في كافة الأنظمة والشهادات والكارنيهات 🎉', 'success');
                           refreshAll();
                        } catch (err) {
                           showToast('فشل تحديث الشعار', 'error');
@@ -487,9 +493,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
 
               <div className="w-full h-full rounded-full bg-white dark:bg-[#0c1020] border-4 border-amber-400 p-2 flex flex-col items-center justify-center relative overflow-hidden shadow-inner">
                 <img 
-                  src={settings?.logoUrl || '/logo.svg'} 
-                  alt="Center Logo" 
+                  src={getEffectiveCenterLogo(settings?.logoUrl)} 
+                  alt={settings?.centerName || "Center Logo"} 
                   className="w-full h-full rounded-full object-contain filter drop-shadow-[0_4px_10px_rgba(0,0,0,0.25)] group-hover:scale-105 transition-transform" 
+                  onError={handleLogoError}
                 />
                 <div className="absolute inset-0 bg-purple-950/80 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center transition-opacity text-amber-300 p-2 text-center rounded-full backdrop-blur-xs">
                   <Upload className="w-6 h-6 mb-1 animate-bounce text-amber-400" />
@@ -502,7 +509,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
             <button
               type="button"
               onClick={() => onNavigate('trainees')}
-              className="absolute -top-1 sm:top-1 left-1/2 -translate-x-1/2 z-30 w-28 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-2 border-purple-500 text-purple-900 dark:text-purple-200 py-1.5 rounded-full text-xs font-black shadow-[0_0_20px_rgba(168,85,247,0.35)] ring-2 ring-purple-400/50 flex items-center justify-center gap-1.5 transition-all hover:scale-110 hover:shadow-[0_0_30px_rgba(168,85,247,0.6)] cursor-pointer"
+              className="absolute -top-1 sm:top-1 left-1/2 -translate-x-1/2 z-10 w-28 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-2 border-purple-500 text-purple-900 dark:text-purple-200 py-1.5 rounded-full text-xs font-black shadow-[0_0_20px_rgba(168,85,247,0.35)] ring-2 ring-purple-400/50 flex items-center justify-center gap-1.5 transition-all hover:scale-110 hover:shadow-[0_0_30px_rgba(168,85,247,0.6)] cursor-pointer"
             >
               <Users className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400 animate-pulse shrink-0" />
               <span>المتدربون</span>
@@ -511,7 +518,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
             <button
               type="button"
               onClick={() => onNavigate('settings')}
-              className="absolute top-12 sm:top-14 right-2 sm:right-6 z-30 w-28 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-2 border-amber-500 text-amber-900 dark:text-amber-200 py-1.5 rounded-full text-xs font-black shadow-[0_0_20px_rgba(245,158,11,0.35)] ring-2 ring-amber-400/50 flex items-center justify-center gap-1.5 transition-all hover:scale-110 hover:shadow-[0_0_30px_rgba(245,158,11,0.6)] cursor-pointer"
+              className="absolute top-12 sm:top-14 right-2 sm:right-6 z-10 w-28 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-2 border-amber-500 text-amber-900 dark:text-amber-200 py-1.5 rounded-full text-xs font-black shadow-[0_0_20px_rgba(245,158,11,0.35)] ring-2 ring-amber-400/50 flex items-center justify-center gap-1.5 transition-all hover:scale-110 hover:shadow-[0_0_30px_rgba(245,158,11,0.6)] cursor-pointer"
             >
               <Shield className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 animate-pulse shrink-0" />
               <span>الإعدادات</span>
@@ -520,7 +527,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
             <button
               type="button"
               onClick={() => onNavigate('reports')}
-              className="absolute bottom-12 sm:bottom-14 right-2 sm:right-6 z-30 w-28 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-2 border-purple-500 text-purple-900 dark:text-purple-200 py-1.5 rounded-full text-xs font-black shadow-[0_0_20px_rgba(168,85,247,0.35)] ring-2 ring-purple-400/50 flex items-center justify-center gap-1.5 transition-all hover:scale-110 hover:shadow-[0_0_30px_rgba(168,85,247,0.6)] cursor-pointer"
+              className="absolute bottom-12 sm:bottom-14 right-2 sm:right-6 z-10 w-28 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-2 border-purple-500 text-purple-900 dark:text-purple-200 py-1.5 rounded-full text-xs font-black shadow-[0_0_20px_rgba(168,85,247,0.35)] ring-2 ring-purple-400/50 flex items-center justify-center gap-1.5 transition-all hover:scale-110 hover:shadow-[0_0_30px_rgba(168,85,247,0.6)] cursor-pointer"
             >
               <Sparkles className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400 animate-pulse shrink-0" />
               <span>التقارير</span>
@@ -529,7 +536,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
             <button
               type="button"
               onClick={() => onNavigate('finance')}
-              className="absolute -bottom-1 sm:bottom-1 left-1/2 -translate-x-1/2 z-30 w-28 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-2 border-emerald-500 text-emerald-900 dark:text-emerald-200 py-1.5 rounded-full text-xs font-black shadow-[0_0_20px_rgba(160,185,129,0.35)] ring-2 ring-emerald-400/50 flex items-center justify-center gap-1.5 transition-all hover:scale-110 hover:shadow-[0_0_30px_rgba(16,185,129,0.6)] cursor-pointer"
+              className="absolute -bottom-1 sm:bottom-1 left-1/2 -translate-x-1/2 z-10 w-28 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-2 border-emerald-500 text-emerald-900 dark:text-emerald-200 py-1.5 rounded-full text-xs font-black shadow-[0_0_20px_rgba(160,185,129,0.35)] ring-2 ring-emerald-400/50 flex items-center justify-center gap-1.5 transition-all hover:scale-110 hover:shadow-[0_0_30px_rgba(16,185,129,0.6)] cursor-pointer"
             >
               <DollarSign className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 animate-pulse shrink-0" />
               <span>الماليّة</span>
@@ -538,7 +545,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
             <button
               type="button"
               onClick={() => onNavigate('certificates')}
-              className="absolute bottom-12 sm:bottom-14 left-2 sm:left-6 z-30 w-28 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-2 border-rose-500 text-rose-900 dark:text-rose-200 py-1.5 rounded-full text-xs font-black shadow-[0_0_20px_rgba(244,63,94,0.35)] ring-2 ring-rose-400/50 flex items-center justify-center gap-1.5 transition-all hover:scale-110 hover:shadow-[0_0_30px_rgba(244,63,94,0.6)] cursor-pointer"
+              className="absolute bottom-12 sm:bottom-14 left-2 sm:left-6 z-10 w-28 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-2 border-rose-500 text-rose-900 dark:text-rose-200 py-1.5 rounded-full text-xs font-black shadow-[0_0_20px_rgba(244,63,94,0.35)] ring-2 ring-rose-400/50 flex items-center justify-center gap-1.5 transition-all hover:scale-110 hover:shadow-[0_0_30px_rgba(244,63,94,0.6)] cursor-pointer"
             >
               <Award className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400 animate-pulse shrink-0" />
               <span>الشهادات</span>
@@ -547,7 +554,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
             <button
               type="button"
               onClick={() => onNavigate('interactive')}
-              className="absolute top-12 sm:top-14 left-2 sm:left-6 z-30 w-28 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-2 border-cyan-500 text-cyan-900 dark:text-cyan-200 py-1.5 rounded-full text-xs font-black shadow-[0_0_20px_rgba(6,182,212,0.35)] ring-2 ring-cyan-400/50 flex items-center justify-center gap-1.5 transition-all hover:scale-110 hover:shadow-[0_0_30px_rgba(6,182,212,0.6)] cursor-pointer"
+              className="absolute top-12 sm:top-14 left-2 sm:left-6 z-10 w-28 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-2 border-cyan-500 text-cyan-900 dark:text-cyan-200 py-1.5 rounded-full text-xs font-black shadow-[0_0_20px_rgba(6,182,212,0.35)] ring-2 ring-cyan-400/50 flex items-center justify-center gap-1.5 transition-all hover:scale-110 hover:shadow-[0_0_30px_rgba(6,182,212,0.6)] cursor-pointer"
               title="الجلسات التفاعلية وتحديات المعمل"
             >
               <Zap className="w-3.5 h-3.5 text-cyan-600 dark:text-cyan-400 animate-pulse shrink-0" />
@@ -557,7 +564,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
           </div>
 
           {/* Center Title Box */}
-          <div className="text-center mt-2 relative z-20 w-full flex flex-col items-center justify-center">
+          <div className="text-center mt-2 relative z-10 w-full flex flex-col items-center justify-center">
             <div className="inline-flex items-center gap-3 px-6 py-2 rounded-2xl bg-white/75 dark:bg-gradient-to-b dark:from-[#111827]/90 dark:via-[#0f172a]/90 dark:to-[#070b14]/90 border-2 border-amber-400/80 shadow-[0_4px_20px_rgba(245,158,11,0.2),inset_0_1px_1px_rgba(255,255,255,0.9)] dark:shadow-[0_0_20px_rgba(245,158,11,0.25)] backdrop-blur-xl">
               <div className="p-1.5 bg-amber-100 dark:bg-amber-500/20 rounded-xl text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-500/40">
                 <Crown className="w-4 h-4 text-amber-600 dark:text-amber-300 animate-pulse" />

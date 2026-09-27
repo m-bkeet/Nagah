@@ -72,7 +72,9 @@ export const InteractiveSessionsView: React.FC<InteractiveSessionsViewProps> = (
     trainers: ctxTrainers,
     groups: ctxGroups,
     courses: ctxCourses,
-    trainees: ctxTrainees
+    trainees: ctxTrainees,
+    setTrainees: setCtxTrainees,
+    refreshCoreData
   } = useCenter();
   const [isWhiteboardOpen, setIsWhiteboardOpen] = useState(false);
   const [isAllInOneModalOpen, setIsAllInOneModalOpen] = useState(false);
@@ -260,10 +262,10 @@ export const InteractiveSessionsView: React.FC<InteractiveSessionsViewProps> = (
       const existing = await api.getAttendance({ groupId, date: dateStr }).catch(() => []);
       const safeExisting = Array.isArray(existing) ? existing : [];
 
-      if (safeExisting.length > 0) {
-        const newDetailed: Record<string, { status: AttendanceStatus; notes: string; time?: string; createdAt?: string }> = {};
-        const newSimple: Record<string, AttendanceStatus> = {};
+      const newDetailed: Record<string, { status: AttendanceStatus; notes: string; time?: string; createdAt?: string }> = {};
+      const newSimple: Record<string, AttendanceStatus> = {};
 
+      if (safeExisting.length > 0) {
         safeExisting.forEach((e: any) => {
           newDetailed[e.traineeId] = {
             status: (e.status as AttendanceStatus) || 'present',
@@ -273,10 +275,19 @@ export const InteractiveSessionsView: React.FC<InteractiveSessionsViewProps> = (
           };
           newSimple[e.traineeId] = (e.status as AttendanceStatus) || 'present';
         });
-
-        setAttendanceDetails(prev => ({ ...prev, ...newDetailed }));
-        setAttendanceMap(prev => ({ ...prev, ...newSimple }));
+      } else {
+        const savedKey = `nagah_lab_attendance_${groupId}_${dateStr}`;
+        try {
+          const cached = localStorage.getItem(savedKey);
+          if (cached) {
+            const parsed = JSON.parse(cached);
+            Object.assign(newSimple, parsed);
+          }
+        } catch {}
       }
+
+      setAttendanceDetails(newDetailed);
+      setAttendanceMap(newSimple);
     } catch (e) {
       console.warn('Error loading attendance records:', e);
     }
@@ -357,7 +368,7 @@ export const InteractiveSessionsView: React.FC<InteractiveSessionsViewProps> = (
         notes: attendanceDetails[t.id]?.notes || ''
       }));
 
-      await api.saveAttendanceBatch({
+      const res = await api.saveAttendanceBatch({
         groupId: effectiveGroup.id,
         date: selectedDate,
         branchId: effectiveGroup.branchId || activeBranchId,
@@ -366,8 +377,24 @@ export const InteractiveSessionsView: React.FC<InteractiveSessionsViewProps> = (
         records
       });
 
+      if (res && res.updatedTrainees && Array.isArray(res.updatedTrainees)) {
+        const updateMap = new Map(res.updatedTrainees.map((u: any) => [u.id, u]));
+        const updateTraineeArray = (prev: Trainee[]) =>
+          prev.map(t => {
+            const u = updateMap.get(t.id);
+            return u ? { ...t, totalPoints: u.totalPoints, points: u.points } : t;
+          });
+        setTrainees(updateTraineeArray);
+        if (setCtxTrainees) setCtxTrainees(updateTraineeArray);
+      }
+
+      window.dispatchEvent(new CustomEvent('nagah_attendance_updated'));
+      if (refreshCoreData) {
+        refreshCoreData();
+      }
+
       audioService.playStarSuccess();
-      showToast(`تم حفظ كشف الحضور بنجاح للمجموعة (${effectiveGroup.name}) وتوثيق البيانات! 🎉`, 'success');
+      showToast(`تم حفظ كشف الحضور بنجاح للمجموعة (${effectiveGroup.name}) وتوثيق البيانات ومزامنة النقاط! 🎉`, 'success');
     } catch (err: any) {
       showToast(err.message || 'فشل حفظ كشف الحضور', 'error');
     } finally {
@@ -443,6 +470,11 @@ export const InteractiveSessionsView: React.FC<InteractiveSessionsViewProps> = (
       // Reload history if inspecting this student
       if (selectedHistoryStudentId === manualTraineeId) {
         loadStudentHistory(manualTraineeId);
+      }
+
+      window.dispatchEvent(new CustomEvent('nagah_attendance_updated'));
+      if (refreshCoreData) {
+        refreshCoreData();
       }
 
       audioService.playStarSuccess();
