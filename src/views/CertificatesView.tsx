@@ -18,20 +18,42 @@ import {
   Settings,
   Eye,
   FileCheck,
-  Trash2, Layers } from 'lucide-react';
+  Trash2,
+  Layers,
+  Crown,
+  Star
+} from 'lucide-react';
 import { Certificate, CertificateTemplate, Trainee, Course } from '../types';
 import { CertificateTemplateBuilderModal } from '../components/CertificateTemplateBuilderModal';
+import { LectureExcellenceCertificateModal } from '../components/LectureExcellenceCertificateModal';
 
 export const CertificatesView: React.FC = () => {
-  const { branches, activeBranchId, showToast, setPrintData, refreshKey } = useCenter();
+  const { 
+    branches, 
+    activeBranchId, 
+    showToast, 
+    setPrintData, 
+    refreshKey,
+    trainees: ctxTrainees,
+    courses: ctxCourses
+  } = useCenter();
   const [certificates, setCertificates] = useState<Certificate[]>([]);
   const [templates, setTemplates] = useState<CertificateTemplate[]>([]);
-  const [trainees, setTrainees] = useState<Trainee[]>([]);
-  const [courses, setCourses] = useState<Course[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [trainees, setTrainees] = useState<Trainee[]>(() => ctxTrainees || []);
+  const [courses, setCourses] = useState<Course[]>(() => ctxCourses || []);
+  const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    if (ctxTrainees && ctxTrainees.length > 0) setTrainees(ctxTrainees);
+  }, [ctxTrainees]);
+
+  useEffect(() => {
+    if (ctxCourses && ctxCourses.length > 0) setCourses(ctxCourses);
+  }, [ctxCourses]);
   const [activeTab, setActiveTab] = useState<'certificates' | 'templates'>('certificates');
 
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isLectureModalOpen, setIsLectureModalOpen] = useState(false);
   const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
   const [bulkCourseId, setBulkCourseId] = useState('');
   const [isAddTemplateModalOpen, setIsAddTemplateModalOpen] = useState(false);
@@ -129,19 +151,15 @@ export const CertificatesView: React.FC = () => {
   };
 
   const loadData = async () => {
-    setIsLoading(true);
     try {
-      const [certRes, tmplRes, tRes, cRes] = await Promise.all([
-        api.getCertificates(),
-        api.getCertificateTemplates(),
-        api.getTrainees(),
-        api.getCourses()
+      const [certRes, tmplRes] = await Promise.all([
+        api.getCertificates().catch(() => []),
+        api.getCertificateTemplates().catch(() => [])
       ]);
-      const filtered = activeBranchId !== 'all' ? certRes.filter(c => c.branchId === activeBranchId) : certRes;
+      const certList = Array.isArray(certRes) ? certRes : [];
+      const filtered = activeBranchId !== 'all' ? certList.filter(c => c.branchId === activeBranchId) : certList;
       setCertificates(filtered);
-      setTemplates(tmplRes || []);
-      setTrainees(tRes);
-      setCourses(cRes);
+      setTemplates(Array.isArray(tmplRes) ? tmplRes : []);
 
       if (tmplRes && tmplRes.length > 0 && !formData.templateId) {
         const defaultTmpl = tmplRes.find(t => t.isDefault) || tmplRes?.[0];
@@ -317,54 +335,64 @@ export const CertificatesView: React.FC = () => {
   return (
     <div className="space-y-5">
       {/* Header */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-slate-800/60 border border-slate-700/70 p-4 rounded-2xl backdrop-blur-md">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 sm:p-5 rounded-3xl shadow-xs backdrop-blur-md">
         <div>
-          <h2 className="text-lg font-black text-slate-100 flex items-center gap-2">
-            <Award className="w-5 h-5 text-amber-400" />
-            إدارة نماذج والشهادات المعتمدة (Certificate Studio)
+          <h2 className="text-lg sm:text-xl font-black text-slate-900 dark:text-slate-100 flex items-center gap-2">
+            <Award className="w-5 h-5 text-amber-500" />
+            <span>إدارة نماذج والشهادات المعتمدة (Certificate Studio)</span>
           </h2>
-          <p className="text-xs text-slate-400 mt-0.5">
-            تخصيص نماذج الشهادات (Royal Gold, Modern Tech, Academic)، إصدار وتوثيق الشهادات بـ QR والباركود
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+            إصدار شهادات التقدير والتفوق في المحاضرات، ونماذج الشهادات المعتمدة بـ QR والباركود الذكي
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          {/* Prominent Lecture Excellence Certificate Button */}
+          <button
+            onClick={() => setIsLectureModalOpen(true)}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500 hover:brightness-110 text-slate-950 font-black text-xs shadow-md shadow-amber-500/20 transition-all active:scale-95 cursor-pointer ring-2 ring-amber-400/40"
+          >
+            <Crown className="w-4 h-4 text-slate-950" />
+            <span>+ شهادة تفوق في محاضرة 🎖️</span>
+          </button>
+
           <button
             onClick={() => {
               setEditingTemplate(undefined);
               setIsVisualBuilderOpen(true);
             }}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-lg transition-all animate-pulse shadow-indigo-500/20"
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow transition-all active:scale-95 cursor-pointer"
           >
             <Palette className="w-4 h-4" />
-            <span>+ تصميم شهادة احترافي (مرئي)</span>
+            <span>+ تصميم شهادة مرئي</span>
           </button>
+
           <button
             onClick={() => setIsAddTemplateModalOpen(true)}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-700 hover:bg-slate-600 text-slate-100 font-bold text-xs shadow transition-all"
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 font-bold text-xs border border-slate-200 dark:border-slate-700 transition-all cursor-pointer"
           >
-            <LayoutTemplate className="w-4 h-4 text-indigo-400" />
+            <LayoutTemplate className="w-4 h-4 text-indigo-500" />
             <span>نموذج نصي عادي</span>
           </button>
 
           <button
             onClick={handleOpenAdd}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs shadow-md transition-all"
+            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-slate-900 dark:bg-slate-100 hover:bg-slate-800 dark:hover:bg-white text-white dark:text-slate-950 font-bold text-xs shadow transition-all cursor-pointer"
           >
-            <Plus className="w-4 h-4" />
-            <span>إصدار شهادة معتمدة</span>
+            <Plus className="w-4 h-4 text-amber-400 dark:text-amber-600" />
+            <span>إصدار شهادة دورة</span>
           </button>
         </div>
       </div>
 
       {/* Tabs */}
-      <div className="flex items-center gap-2 border-b border-slate-700 pb-2 overflow-x-auto">
+      <div className="flex items-center gap-2 border-b border-slate-200 dark:border-slate-800 pb-2 overflow-x-auto">
         <button
           onClick={() => setActiveTab('certificates')}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex items-center gap-1.5 ${
+          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex items-center gap-1.5 cursor-pointer ${
             activeTab === 'certificates'
-              ? 'bg-amber-500 text-slate-950 shadow'
-              : 'text-slate-400 hover:text-white bg-slate-800/60'
+              ? 'bg-amber-500 text-slate-950 shadow-xs font-black'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white bg-slate-100 dark:bg-slate-800/80'
           }`}
         >
           <FileCheck className="w-3.5 h-3.5" />
@@ -373,10 +401,10 @@ export const CertificatesView: React.FC = () => {
 
         <button
           onClick={() => setActiveTab('templates')}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex items-center gap-1.5 ${
+          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex items-center gap-1.5 cursor-pointer ${
             activeTab === 'templates'
-              ? 'bg-amber-500 text-slate-950 shadow'
-              : 'text-slate-400 hover:text-white bg-slate-800/60'
+              ? 'bg-amber-500 text-slate-950 shadow-xs font-black'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white bg-slate-100 dark:bg-slate-800/80'
           }`}
         >
           <LayoutTemplate className="w-3.5 h-3.5" />
@@ -386,7 +414,7 @@ export const CertificatesView: React.FC = () => {
 
       {/* Search & Filter Bar (Certificates Tab) */}
       {activeTab === 'certificates' && (
-        <div className="flex items-center justify-between gap-3 bg-slate-800/40 p-3 rounded-2xl border border-slate-700/60">
+        <div className="flex items-center justify-between gap-3 bg-white dark:bg-slate-900/80 p-3 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs">
           <div className="relative flex-1 max-w-md">
             <Search className="w-4 h-4 text-slate-400 absolute right-3 top-2.5" />
             <input
@@ -394,11 +422,11 @@ export const CertificatesView: React.FC = () => {
               placeholder="بحث بالرقم المسلسل، اسم المتدرب، أو اسم الدورة..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-slate-900 border border-slate-700 rounded-xl pr-9 pl-3 py-2 text-xs text-slate-100 placeholder-slate-400 focus:outline-none"
+              className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl pr-9 pl-3 py-2 text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500/20"
             />
           </div>
-          <span className="text-xs text-slate-400 font-mono">
-            {filtered.length} شهادة
+          <span className="text-xs text-slate-500 dark:text-slate-400 font-mono font-bold">
+            {filtered.length} شهادة صادرة
           </span>
         </div>
       )}
@@ -407,76 +435,101 @@ export const CertificatesView: React.FC = () => {
       {activeTab === 'certificates' && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {isLoading ? (
-            <div className="col-span-full py-12 text-center text-slate-400">
+            <div className="col-span-full py-12 text-center text-slate-500 dark:text-slate-400">
               جاري تحميل سجل الشهادات...
             </div>
           ) : filtered.length === 0 ? (
-            <div className="col-span-full py-16 text-center text-slate-400 bg-slate-800/40 rounded-2xl border border-slate-700">
-              <Award className="w-12 h-12 mx-auto text-slate-500 mb-3" />
-              <p className="font-bold text-sm">لا توجد شهادات صادرة تطابق البحث</p>
-              <p className="text-xs text-slate-400 mt-1">
-                اضغط على زر "إصدار شهادة معتمدة" لإصدار أول شهادة رسمية
+            <div className="col-span-full py-14 px-6 text-center bg-white dark:bg-slate-900/60 rounded-3xl border-2 border-dashed border-slate-200 dark:border-slate-800 shadow-xs">
+              <div className="w-16 h-16 mx-auto rounded-3xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-500 mb-3 shadow-xs">
+                <Award className="w-8 h-8" />
+              </div>
+              <h3 className="font-black text-base text-slate-900 dark:text-slate-100">
+                لا توجد شهادات صادرة تطابق البحث
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-md mx-auto">
+                يمكنك إصدار شهادة تقدير فورية لمتدرب متميز في محاضرة، أو إصدار شهادة دورة تدريبية معتمدة.
               </p>
+              
+              <div className="mt-5 flex items-center justify-center gap-3">
+                <button
+                  onClick={() => setIsLectureModalOpen(true)}
+                  className="px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-400 hover:brightness-105 text-slate-950 font-black text-xs shadow-md transition-all flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Crown className="w-4 h-4 text-slate-950" />
+                  <span>إصدار شهادة تفوق في محاضرة 🎖️</span>
+                </button>
+                <button
+                  onClick={handleOpenAdd}
+                  className="px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 font-bold text-xs border border-slate-200 dark:border-slate-700 transition-all cursor-pointer"
+                >
+                  إصدار شهادة دورة
+                </button>
+              </div>
             </div>
           ) : (
             filtered.map((cert) => {
               const tmpl = templates.find((t) => t.id === cert.templateId);
+              const isLectureCert = cert.serialNumber?.includes('STAR') || cert.certificateNumber?.includes('STAR') || cert.grade?.includes('نجم') || cert.grade?.includes('نقطة');
 
               return (
                 <div
                   key={cert.id}
-                  className="bg-slate-800/80 border border-slate-700/80 rounded-2xl p-5 shadow-lg backdrop-blur-md flex flex-col justify-between hover:border-amber-500/50 transition-all group"
+                  className="bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 shadow-xs hover:shadow-md hover:border-amber-400 dark:hover:border-amber-500/50 transition-all flex flex-col justify-between group"
                 >
                   <div>
                     <div className="flex items-start justify-between gap-2 mb-2">
-                      <div className="flex items-center gap-1 text-[11px] font-mono text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
+                      <div className="flex items-center gap-1 text-[11px] font-mono text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10 px-2.5 py-0.5 rounded-lg border border-amber-300 dark:border-amber-500/20">
                         <ShieldCheck className="w-3.5 h-3.5" />
                         <span>{cert.serialNumber || cert.certificateNumber}</span>
                       </div>
-                      <span className="text-[10px] bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded font-bold border border-emerald-500/30">
-                        مصدقة وفعالة 🌟
+                      <span className={`text-[10px] px-2 py-0.5 rounded-lg font-bold border ${
+                        isLectureCert
+                          ? 'bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border-amber-300 dark:border-amber-700/60'
+                          : 'bg-emerald-50 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-500/30'
+                      }`}>
+                        {isLectureCert ? '⭐ تفوق في محاضرة' : 'مصدقة وفعالة 🌟'}
                       </span>
                     </div>
 
-                    <h3 className="font-black text-base text-slate-100 mt-2">{cert.traineeName}</h3>
-                    <p className="text-xs text-amber-300 font-semibold">{cert.courseName}</p>
+                    <h3 className="font-black text-base text-slate-900 dark:text-slate-100 mt-2">{cert.traineeName}</h3>
+                    <p className="text-xs text-amber-700 dark:text-amber-300 font-bold">{cert.courseName}</p>
 
-                    <div className="space-y-1.5 text-xs text-slate-300 bg-slate-900/60 p-3 rounded-xl border border-slate-700/60 my-3">
+                    <div className="space-y-1.5 text-xs text-slate-700 dark:text-slate-300 bg-slate-50 dark:bg-slate-800/60 p-3 rounded-2xl border border-slate-200 dark:border-slate-700/60 my-3">
                       <div className="flex items-center justify-between">
-                        <span className="text-slate-400">التقدير العام:</span>
-                        <span className="font-bold text-amber-300">{cert?.grade || 'امتياز'}</span>
+                        <span className="text-slate-500 dark:text-slate-400">التقدير / الاستحقاق:</span>
+                        <span className="font-bold text-amber-700 dark:text-amber-300">{cert?.grade || 'امتياز'}</span>
                       </div>
                       <div className="flex items-center justify-between">
-                        <span className="text-slate-400">النموذج المستخدم:</span>
-                        <span className="text-indigo-300 font-semibold">{tmpl?.name || 'النموذج الملكي الذهبي'}</span>
+                        <span className="text-slate-500 dark:text-slate-400">النموذج المستخدم:</span>
+                        <span className="text-indigo-600 dark:text-indigo-300 font-semibold">{tmpl?.name || 'النموذج الملكي الذهبي'}</span>
                       </div>
                       <div className="flex items-center justify-between">
-                        <span className="text-slate-400">تاريخ الإصدار:</span>
-                        <span className="font-mono text-slate-300">{cert.issueDate}</span>
+                        <span className="text-slate-500 dark:text-slate-400">تاريخ الإصدار:</span>
+                        <span className="font-mono text-slate-600 dark:text-slate-300">{cert.issueDate}</span>
                       </div>
                     </div>
                   </div>
 
-                  <div className="pt-3 border-t border-slate-700/60 flex items-center justify-between">
-                    <span className="text-[10px] text-slate-400 font-mono flex items-center gap-1">
-                      <QrCode className="w-3.5 h-3.5 text-amber-400" />
+                  <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                    <span className="text-[10px] text-slate-500 dark:text-slate-400 font-mono flex items-center gap-1">
+                      <QrCode className="w-3.5 h-3.5 text-amber-500" />
                       QR Verified
                     </span>
 
                     <div className="flex gap-2">
                       <button
                         onClick={() => handleDeleteCertificate(cert.id)}
-                        className="flex items-center justify-center w-8 h-8 rounded-xl bg-rose-500/10 hover:bg-rose-500 hover:text-white text-rose-400 border border-rose-500/25 transition-all duration-150 active:scale-90"
+                        className="flex items-center justify-center w-8 h-8 rounded-xl bg-rose-50 dark:bg-rose-500/10 hover:bg-rose-500 hover:text-white text-rose-500 dark:text-rose-400 border border-rose-200 dark:border-rose-500/25 transition-all duration-150 active:scale-90 cursor-pointer"
                         title="حذف الشهادة"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
                       <button
                         onClick={() => handlePrintCert(cert)}
-                        className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs transition-colors shadow"
+                        className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs transition-colors shadow-xs cursor-pointer"
                       >
                         <Printer className="w-3.5 h-3.5" />
-                        <span>معاينة وطباعة الشهادة</span>
+                        <span>معاينة وطباعة</span>
                       </button>
                     </div>
                   </div>
@@ -493,10 +546,10 @@ export const CertificatesView: React.FC = () => {
           {templates.map((tmpl) => (
             <div
               key={tmpl.id}
-              className="bg-slate-800/90 border border-slate-700 rounded-2xl p-5 shadow-lg flex flex-col justify-between hover:border-indigo-500/50 transition-all relative overflow-hidden"
+              className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 shadow-xs flex flex-col justify-between hover:border-indigo-400 dark:hover:border-indigo-500/50 transition-all relative overflow-hidden"
             >
               {tmpl.isDefault && (
-                <div className="absolute top-0 left-0 bg-amber-500 text-slate-950 text-[10px] font-black px-3 py-0.5 rounded-br-xl shadow">
+                <div className="absolute top-0 left-0 bg-amber-500 text-slate-950 text-[10px] font-black px-3 py-0.5 rounded-br-xl shadow-xs">
                   النموذج الافتراضي ⭐
                 </div>
               )}
@@ -504,32 +557,32 @@ export const CertificatesView: React.FC = () => {
               <div>
                 <div className="flex items-center gap-2 mb-3 mt-1">
                   <div
-                    className="w-4 h-4 rounded-full border border-white/40 shadow"
+                    className="w-4 h-4 rounded-full border border-white/40 shadow-xs"
                     style={{ backgroundColor: tmpl.primaryColor || '#d97706' }}
                   />
-                  <h3 className="font-black text-sm text-slate-100">{tmpl.name}</h3>
+                  <h3 className="font-black text-sm text-slate-900 dark:text-slate-100">{tmpl.name}</h3>
                 </div>
 
-                <div className="p-4 rounded-xl border border-dashed border-slate-600 bg-slate-900/80 text-center space-y-2 mb-4">
-                  <span className="text-[10px] uppercase tracking-wider text-amber-400 font-bold font-mono">
+                <div className="p-4 rounded-2xl border border-dashed border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/80 text-center space-y-2 mb-4">
+                  <span className="text-[10px] uppercase tracking-wider text-amber-700 dark:text-amber-400 font-bold font-mono">
                     {tmpl.theme}
                   </span>
-                  <h4 className="font-bold text-xs text-slate-100">{tmpl.titleArabic}</h4>
-                  <p className="text-[10px] text-slate-400">{tmpl.subTitleArabic}</p>
-                  <div className="flex justify-between items-center text-[9px] text-slate-400 pt-2 border-t border-slate-800">
+                  <h4 className="font-bold text-xs text-slate-900 dark:text-slate-100">{tmpl.titleArabic}</h4>
+                  <p className="text-[10px] text-slate-500 dark:text-slate-400">{tmpl.subTitleArabic}</p>
+                  <div className="flex justify-between items-center text-[9px] text-slate-500 dark:text-slate-400 pt-2 border-t border-slate-200 dark:border-slate-700">
                     <span>{tmpl.trainerTitle}: المعتمد</span>
-                    <span className="font-mono text-amber-400">{tmpl.sealText}</span>
+                    <span className="font-mono text-amber-600 dark:text-amber-400">{tmpl.sealText}</span>
                     <span>{tmpl.managerTitle}: {tmpl.managerName}</span>
                   </div>
                 </div>
               </div>
 
-              <div className="pt-2 flex items-center justify-between border-t border-slate-700/60">
-                <span className="text-[11px] text-slate-400">إطار {tmpl.borderStyle}</span>
+              <div className="pt-2 flex items-center justify-between border-t border-slate-100 dark:border-slate-800">
+                <span className="text-[11px] text-slate-500 dark:text-slate-400">إطار {tmpl.borderStyle}</span>
                 <div className="flex gap-1.5 items-center">
                   <button
                     onClick={() => handleDeleteTemplate(tmpl.id)}
-                    className="text-[10px] bg-rose-500/10 hover:bg-rose-600 text-rose-400 hover:text-white border border-rose-500/20 px-2 py-1 rounded shadow-sm transition-all duration-150 flex items-center gap-1 active:scale-95"
+                    className="text-[10px] bg-rose-50 dark:bg-rose-500/10 hover:bg-rose-600 text-rose-500 hover:text-white border border-rose-200 dark:border-rose-500/20 px-2 py-1 rounded-lg shadow-2xs transition-all duration-150 flex items-center gap-1 active:scale-95 cursor-pointer"
                     title="حذف نموذج الشهادة"
                   >
                     <Trash2 className="w-3 h-3" />
@@ -541,13 +594,13 @@ export const CertificatesView: React.FC = () => {
                         setEditingTemplate(tmpl);
                         setIsVisualBuilderOpen(true);
                       }}
-                      className="text-[10px] bg-slate-700 hover:bg-emerald-600 text-white px-2 py-1 rounded shadow-sm transition-colors flex items-center gap-1"
+                      className="text-[10px] bg-slate-200 dark:bg-slate-700 hover:bg-emerald-600 text-slate-800 dark:text-white px-2 py-1 rounded-lg shadow-2xs transition-colors flex items-center gap-1 cursor-pointer"
                     >
                       <Palette className="w-3 h-3" />
                       تعديل
                     </button>
                   )}
-                  <span className="text-[11px] text-emerald-400 font-bold">
+                  <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-bold">
                     {tmpl.showQrCode ? '✓ يدعم الـ QR' : ''}
                   </span>
                 </div>
@@ -557,27 +610,27 @@ export const CertificatesView: React.FC = () => {
         </div>
       )}
 
-      {/* MODAL: Issue Certificate */}
+      {/* MODAL: Issue Course Certificate */}
       {isAddModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/80 backdrop-blur-md overflow-hidden">
-          <div className="bg-slate-900 border border-slate-700 rounded-3xl shadow-2xl max-w-lg w-full max-h-[90vh] flex flex-col overflow-hidden text-slate-100">
-            <div className="shrink-0 p-4 border-b border-slate-800 flex items-center justify-between bg-slate-900/90">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-3xl shadow-2xl max-w-lg w-full max-h-[90vh] flex flex-col overflow-hidden text-slate-900 dark:text-slate-100">
+            <div className="shrink-0 p-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-900/90">
               <div className="flex items-center gap-2">
-                <Award className="w-5 h-5 text-amber-400" />
-                <h3 className="font-bold text-sm">إصدار وتوثيق شهادة تدريبية معتمدة</h3>
+                <Award className="w-5 h-5 text-amber-500" />
+                <h3 className="font-bold text-sm">إصدار وتوثيق شهادة دورة معتمدة</h3>
               </div>
-              <button onClick={() => setIsAddModalOpen(false)} className="text-slate-400 hover:text-white cursor-pointer">
+              <button onClick={() => setIsAddModalOpen(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-white cursor-pointer">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             <form onSubmit={handleSaveCertificate} className="flex-1 overflow-y-auto custom-scrollbar p-4 sm:p-6 space-y-3 text-xs">
               <div>
-                <label className="block text-slate-300 font-bold mb-1">اختر المتدرب *</label>
+                <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">اختر المتدرب *</label>
                 <select
                   value={formData.traineeId ?? ''}
                   onChange={(e) => setFormData({ ...formData, traineeId: e.target.value })}
-                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100"
+                  className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 focus:outline-none"
                 >
                   {trainees.map((t) => (
                     <option key={t.id} value={t.id}>
@@ -588,11 +641,11 @@ export const CertificatesView: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-slate-300 font-bold mb-1">الدورة التدريبية المجتازة *</label>
+                <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">الدورة التدريبية المجتازة *</label>
                 <select
                   value={formData.courseId ?? ''}
                   onChange={(e) => setFormData({ ...formData, courseId: e.target.value })}
-                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100"
+                  className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 focus:outline-none"
                 >
                   {courses.map((c) => (
                     <option key={c.id} value={c.id}>
@@ -603,11 +656,11 @@ export const CertificatesView: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-slate-300 font-bold mb-1">نموذج وتصميم الشهادة *</label>
+                <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">نموذج وتصميم الشهادة *</label>
                 <select
                   value={formData.templateId ?? ''}
                   onChange={(e) => setFormData({ ...formData, templateId: e.target.value })}
-                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100"
+                  className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 focus:outline-none"
                 >
                   {templates.map((tmpl) => (
                     <option key={tmpl.id} value={tmpl.id}>
@@ -619,11 +672,11 @@ export const CertificatesView: React.FC = () => {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-slate-300 font-bold mb-1">التقدير العام</label>
+                  <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">التقدير العام</label>
                   <select
                     value={formData.grade ?? ''}
                     onChange={(e) => setFormData({ ...formData, grade: e.target.value })}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100"
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 focus:outline-none"
                   >
                     <option value="امتياز مع مرتبة الشرف (A+)">امتياز مع مرتبة الشرف (A+)</option>
                     <option value="ممتاز (Excellent - A)">ممتاز (Excellent - A)</option>
@@ -633,56 +686,56 @@ export const CertificatesView: React.FC = () => {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-slate-300 font-bold mb-1">تاريخ التوثيق والإصدار</label>
+                  <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">تاريخ التوثيق والإصدار</label>
                   <input
                     type="date"
                     value={formData.issueDate ?? ''}
                     onChange={(e) => setFormData({ ...formData, issueDate: e.target.value })}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 font-mono"
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 font-mono focus:outline-none"
                   />
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-slate-300 font-bold mb-1">اسم مدرب الدورة</label>
+                  <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">اسم مدرب الدورة</label>
                   <input
                     type="text"
                     value={formData.trainerName ?? ''}
                     onChange={(e) => setFormData({ ...formData, trainerName: e.target.value })}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100"
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 focus:outline-none"
                   />
                 </div>
                 <div>
-                  <label className="block text-slate-300 font-bold mb-1">اسم مدير عام المركز</label>
+                  <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">اسم مدير عام المركز</label>
                   <input
                     type="text"
                     value={formData.managerName ?? ''}
                     onChange={(e) => setFormData({ ...formData, managerName: e.target.value })}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100"
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 focus:outline-none"
                   />
                 </div>
               </div>
 
-              <div className="pt-3 border-t border-slate-800 flex justify-end gap-2">
+              <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex justify-end gap-2">
                 <button
                   type="button"
                   onClick={() => setIsAddModalOpen(false)}
-                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold text-xs"
+                  className="px-4 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl font-bold text-xs cursor-pointer"
                 >
                   إلغاء
                 </button>
                 <button
                   type="button"
                   onClick={handlePreviewBeforeIssue}
-                  className="px-4 py-2 bg-indigo-600/30 hover:bg-indigo-600/50 border border-indigo-500/30 text-indigo-300 font-bold rounded-xl text-xs flex items-center gap-1 transition-all"
+                  className="px-4 py-2 bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 font-bold rounded-xl text-xs flex items-center gap-1 transition-all cursor-pointer"
                 >
                   <Eye className="w-4 h-4" />
                   <span>معاينة ومراجعة</span>
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-xl shadow-lg text-xs"
+                  className="px-5 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-xl shadow-md text-xs cursor-pointer"
                 >
                   تأكيد وإصدار الشهادة
                 </button>
@@ -692,7 +745,7 @@ export const CertificatesView: React.FC = () => {
         </div>
       )}
 
-      
+      {/* MODAL: Visual Certificate Template Builder */}
       <CertificateTemplateBuilderModal
         isOpen={isVisualBuilderOpen}
         onClose={() => {
@@ -706,13 +759,13 @@ export const CertificatesView: React.FC = () => {
       {/* MODAL: Create Certificate Template */}
       {isAddTemplateModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/80 backdrop-blur-md overflow-hidden">
-          <div className="bg-slate-900 border border-slate-700 rounded-3xl shadow-2xl max-w-lg w-full max-h-[90vh] flex flex-col overflow-hidden text-slate-100">
-            <div className="shrink-0 p-4 border-b border-slate-800 flex items-center justify-between bg-slate-900/90">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-3xl shadow-2xl max-w-lg w-full max-h-[90vh] flex flex-col overflow-hidden text-slate-900 dark:text-slate-100">
+            <div className="shrink-0 p-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-900/90">
               <div className="flex items-center gap-2">
-                <LayoutTemplate className="w-5 h-5 text-indigo-400" />
+                <LayoutTemplate className="w-5 h-5 text-indigo-500" />
                 <h3 className="font-bold text-sm">تصميم نموذج شهادة جديد</h3>
               </div>
-              <button onClick={() => setIsAddTemplateModalOpen(false)} className="text-slate-400 hover:text-white cursor-pointer">
+              <button onClick={() => setIsAddTemplateModalOpen(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-white cursor-pointer">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -720,22 +773,22 @@ export const CertificatesView: React.FC = () => {
             <form onSubmit={handleSaveTemplate} className="flex-1 overflow-y-auto custom-scrollbar p-4 sm:p-6 space-y-3 text-xs">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-slate-300 font-bold mb-1">اسم النموذج *</label>
+                  <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">اسم النموذج *</label>
                   <input
                     type="text"
                     required
                     placeholder="مثال: النموذج الألماسي الفاخر"
                     value={templateForm.name}
                     onChange={(e) => setTemplateForm({ ...templateForm, name: e.target.value })}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100"
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 focus:outline-none"
                   />
                 </div>
                 <div>
-                  <label className="block text-slate-300 font-bold mb-1">الطابع الفني (Theme)</label>
+                  <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">الطابع الفني (Theme)</label>
                   <select
                     value={templateForm.theme}
                     onChange={(e) => setTemplateForm({ ...templateForm, theme: e.target.value as any })}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100"
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 focus:outline-none"
                   >
                     <option value="classic_gold">الملكي الذهبي (Royal Gold)</option>
                     <option value="modern_tech">التقني الحديث (Modern Tech)</option>
@@ -747,52 +800,52 @@ export const CertificatesView: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-slate-300 font-bold mb-1">عنوان الشهادة الرئيسي بالعربية *</label>
+                <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">عنوان الشهادة الرئيسي بالعربية *</label>
                 <input
                   type="text"
                   required
                   value={templateForm.titleArabic}
                   onChange={(e) => setTemplateForm({ ...templateForm, titleArabic: e.target.value })}
-                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 font-bold"
+                  className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 font-bold focus:outline-none"
                 />
               </div>
 
               <div>
-                <label className="block text-slate-300 font-bold mb-1">العنوان بالإنجليزية (Sub Title English)</label>
+                <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">العنوان بالإنجليزية (Sub Title English)</label>
                 <input
                   type="text"
                   value={templateForm.titleEnglish}
                   onChange={(e) => setTemplateForm({ ...templateForm, titleEnglish: e.target.value })}
-                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 font-mono"
+                  className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 font-mono focus:outline-none"
                 />
               </div>
 
               <div>
-                <label className="block text-slate-300 font-bold mb-1">نص الاعتماد والافتتاحية</label>
+                <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">نص الاعتماد والافتتاحية</label>
                 <textarea
                   rows={2}
                   value={templateForm.subTitleArabic}
                   onChange={(e) => setTemplateForm({ ...templateForm, subTitleArabic: e.target.value })}
-                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100"
+                  className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 focus:outline-none"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-slate-300 font-bold mb-1">نص الختم المعتمد</label>
+                  <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">نص الختم المعتمد</label>
                   <input
                     type="text"
                     value={templateForm.sealText}
                     onChange={(e) => setTemplateForm({ ...templateForm, sealText: e.target.value })}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100"
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 focus:outline-none"
                   />
                 </div>
                 <div>
-                  <label className="block text-slate-300 font-bold mb-1">نمط الإطار</label>
+                  <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">نمط الإطار</label>
                   <select
                     value={templateForm.borderStyle}
                     onChange={(e) => setTemplateForm({ ...templateForm, borderStyle: e.target.value as any })}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100"
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 focus:outline-none"
                   >
                     <option value="double">إطار ذهبي مزدوج (Double)</option>
                     <option value="solid">إطار متصل عريض (Solid)</option>
@@ -802,17 +855,17 @@ export const CertificatesView: React.FC = () => {
                 </div>
               </div>
 
-              <div className="pt-3 border-t border-slate-800 flex justify-end gap-2">
+              <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex justify-end gap-2">
                 <button
                   type="button"
                   onClick={() => setIsAddTemplateModalOpen(false)}
-                  className="px-4 py-2 bg-slate-800 text-slate-300 rounded-xl font-bold"
+                  className="px-4 py-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl font-bold cursor-pointer"
                 >
                   إلغاء
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl shadow-lg"
+                  className="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl shadow-md cursor-pointer"
                 >
                   حفظ النموذج
                 </button>
@@ -821,6 +874,13 @@ export const CertificatesView: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* DEDICATED LUXURY LECTURE EXCELLENCE CERTIFICATE MODAL */}
+      <LectureExcellenceCertificateModal
+        isOpen={isLectureModalOpen}
+        onClose={() => setIsLectureModalOpen(false)}
+        onCertificateIssued={() => loadData()}
+      />
     </div>
   );
 };

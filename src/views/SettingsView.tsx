@@ -171,6 +171,7 @@ export const SettingsView: React.FC = () => {
   useEffect(() => {
     if (!isAutoLocalBackupActive || !localDirHandle) return;
     const interval = setInterval(async () => {
+      if (typeof document !== 'undefined' && document.hidden) return;
       try {
         if (localDirHandle) {
           const backupData = await api.getBackupData();
@@ -182,7 +183,7 @@ export const SettingsView: React.FC = () => {
       } catch (e) {
         // Silent or permission check
       }
-    }, 300000); // Every 5 minutes instead of 20s
+    }, 300000); // Only when active tab is open
     return () => clearInterval(interval);
   }, [isAutoLocalBackupActive, localDirHandle]);
 
@@ -1250,7 +1251,7 @@ export const SettingsView: React.FC = () => {
                   className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-purple-700 hover:bg-purple-600 text-white font-black text-xs shadow-md shadow-purple-900/20 transition-all cursor-pointer"
                 >
                   {themeConfig.isDark ? <Sun className="w-4 h-4 text-amber-300" /> : <Moon className="w-4 h-4 text-amber-300" />}
-                  <span>{themeConfig.isDark ? "التحويل للوضع النهاري الملكي" : "التحويل للوضع الليلي الملكي"}</span>
+                  <span>{themeConfig.isDark ? "التحويل للوضع النهاري" : "التحويل للوضع الليلي"}</span>
                 </button>
               </div>
             </div>

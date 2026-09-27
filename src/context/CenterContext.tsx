@@ -277,10 +277,15 @@ export const CenterProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const nextState = active !== undefined ? active : !isTrainerSessionActive(targetBranchId);
     setTrainerLabSessionState(targetBranchId, trainerName, nextState, roomName);
     setIsTrainerLabActive(nextState);
+    api.setLabStatus({ isOpen: nextState, branchId: targetBranchId, trainerName, roomName }).catch(() => {});
     if (!nextState) {
       api.sessionCleanup().catch(() => {});
     }
-  }, [activeBranchId]);
+    showToast(
+      nextState ? '🟢 تم فتح المعمل وتفعيل الأجهزة بنجاح' : '🔒 تم إغلاق المعمل وقفل الأجهزة ومنع الدخول',
+      nextState ? 'success' : 'info'
+    );
+  }, [activeBranchId, showToast]);
 
   const openAiModal = useCallback((tab: 'manager' | 'developer' | 'social_bots' | 'trainer' = 'manager') => {
     setAiModalTab(tab);
@@ -527,10 +532,13 @@ export const CenterProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   // =========================================================================
 
   const refreshCoreData = useCallback(async (force = true) => {
+    if (typeof document !== 'undefined' && document.hidden) {
+      return;
+    }
     const now = Date.now();
     const lastFetch = (window as any).lastCoreDataFetchTime || 0;
 
-    if (!force && trainees.length > 0 && (now - lastFetch < 20000)) {
+    if (!force && trainees.length > 0 && (now - lastFetch < 60000)) {
       return;
     }
 
@@ -693,30 +701,24 @@ export const CenterProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     return () => window.removeEventListener('storage', handleStorage);
   }, []);
 
-  // Automatic fresh sync when user returns to tab / window focus
+  // On-demand sync ONLY when user returns to tab / window focus (throttled to avoid redundant calls)
   useEffect(() => {
-    const handleFocus = () => {
-      refreshCoreData(true);
-    };
-
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        refreshCoreData(true);
+    const handleActiveResume = () => {
+      if (document.hidden || document.visibilityState !== 'visible') return;
+      const now = Date.now();
+      const lastFetch = (window as any).lastCoreDataFetchTime || 0;
+      // Only refresh if more than 3 minutes have passed since last fetch
+      if (now - lastFetch > 180000) {
+        refreshCoreData(false);
       }
     };
 
-    window.addEventListener('focus', handleFocus);
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-
-    // Periodic heartbeat sync every 30s to keep Vercel and AI Studio in lockstep
-    const interval = setInterval(() => {
-      refreshCoreData(false);
-    }, 30000);
+    window.addEventListener('focus', handleActiveResume);
+    document.addEventListener('visibilitychange', handleActiveResume);
 
     return () => {
-      window.removeEventListener('focus', handleFocus);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-      clearInterval(interval);
+      window.removeEventListener('focus', handleActiveResume);
+      document.removeEventListener('visibilitychange', handleActiveResume);
     };
   }, [refreshCoreData]);
 
@@ -728,17 +730,41 @@ export const CenterProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     try {
       // 1. Listen for global metadata changes across any environment (Vercel <-> AI Studio)
+      let metaDebounceTimer: any = null;
       unsubMeta = onSnapshot(doc(db, 'nagah_store', 'sync_meta'), (snap) => {
         if (snap.exists()) {
           const meta = snap.data();
+          if (typeof document !== 'undefined' && document.hidden) return;
+          // Ignore transient high-frequency events to preserve quota and avoid UI jumping
+          if (!meta?.lastCollection || meta.lastCollection === 'pointTransactions' || meta.lastCollection === 'devices') {
+            return;
+          }
           console.log('[Firestore Realtime] Cloud sync_meta update detected:', meta?.lastCollection);
-          refreshCoreData(true);
+          clearTimeout(metaDebounceTimer);
+          metaDebounceTimer = setTimeout(() => {
+            // Targeted fetch: only fetch the changed collection instead of re-fetching the entire platform
+            if (meta.lastCollection === 'trainees') {
+              api.getTrainees().then(remoteTrainees => {
+                if (Array.isArray(remoteTrainees) && remoteTrainees.length > 0) {
+                  setTrainees(prev => deduplicateTraineeList(remoteTrainees));
+                }
+              }).catch(() => {});
+            } else if (meta.lastCollection === 'groups') {
+              api.getGroups().then(remoteGroups => {
+                if (Array.isArray(remoteGroups)) setGroups(remoteGroups);
+              }).catch(() => {});
+            } else if (meta.lastCollection === 'courses') {
+              api.getCourses().then(remoteCourses => {
+                if (Array.isArray(remoteCourses)) setCourses(remoteCourses);
+              }).catch(() => {});
+            }
+          }, 6000);
         }
       }, (err) => {
         console.warn('[Firestore Realtime] sync_meta listener note:', err);
       });
 
-      // 2. Direct listener on trainees document in case meta is skipped
+      // 2. Direct listener on trainees document with local deduplication
       unsubTrainees = onSnapshot(doc(db, 'nagah_store', 'trainees'), (snap) => {
         if (snap.exists()) {
           const data = snap.data();
@@ -753,8 +779,6 @@ export const CenterProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 });
               }
             } catch {}
-          } else {
-            refreshCoreData(true);
           }
         }
       }, (err) => {

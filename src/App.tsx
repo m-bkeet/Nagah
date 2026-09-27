@@ -44,13 +44,14 @@ import { SettingsView } from './views/SettingsView';
 
 // Public Views & Portals
 import { StudentKioskView } from './views/StudentKioskView';
-import { ProjectorView } from './views/ProjectorView';
 import { PublicHomeView } from './views/PublicHomeView';
 import { PublicRegistrationView } from './views/PublicRegistrationView';
 import { PublicTrainerRegistrationView } from './views/PublicTrainerRegistrationView';
 import { PublicStudentPortalView } from './views/PublicStudentPortalView';
 import { PublicParentPortalView } from './views/PublicParentPortalView';
 import { PublicTrainerPortalView } from './views/PublicTrainerPortalView';
+import { PublicInteractiveExamView } from './views/PublicInteractiveExamView';
+import { IdleSleepWatcher } from './components/IdleSleepWatcher';
 import { hasPermission } from './utils/permissions';
 import { ShieldAlert, LayoutDashboard } from 'lucide-react';
 
@@ -129,7 +130,7 @@ const AppContent: React.FC = () => {
     if (searchParams.get('role') === 'trainee_device' || searchParams.get('kiosk') === 'true' || searchParams.get('lab') === 'true') {
       return { tab: 'kiosk', taskId };
     }
-    if (searchParams.get('projector') === 'true') return { tab: 'projector', taskId };
+    if (searchParams.get('projector') === 'true') return { tab: 'dashboard', taskId };
     if (searchParams.get('register') === 'true') return { tab: 'register', taskId };
 
     return { tab: 'dashboard', taskId };
@@ -165,7 +166,7 @@ const AppContent: React.FC = () => {
       case 'student_kiosk':
         return <StudentKioskView />;
       case 'projector':
-        return <ProjectorView onExit={() => setActiveTab('dashboard')} />;
+        return <PublicHomeView onNavigate={(view) => setActiveTab(view)} />;
       case 'public_home':
       case 'public-home':
       case 'public_landing':
@@ -181,6 +182,11 @@ const AppContent: React.FC = () => {
       case 'student-portal':
       case 'student_portal':
         return <PublicStudentPortalView directTaskId={directTaskId} onBack={() => setActiveTab('public_home')} />;
+      case 'interactive-exam':
+      case 'interactive_exam':
+      case 'exam':
+      case 'take-exam':
+        return <PublicInteractiveExamView onBack={() => setActiveTab('public_home')} />;
       case 'parent-portal':
       case 'parent_portal':
         return <PublicParentPortalView onBack={() => setActiveTab('public_home')} />;
@@ -349,6 +355,7 @@ const AppContent: React.FC = () => {
       )}
       <AudioAutoplayUnlockBanner />
       <PwaUpdateToast />
+      <IdleSleepWatcher />
     </div>
   );
 };

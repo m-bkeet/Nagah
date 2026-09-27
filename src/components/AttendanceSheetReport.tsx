@@ -27,10 +27,14 @@ import {
   CheckCheck,
   Send
 } from 'lucide-react';
-import html2canvas from 'html2canvas';
+import { captureElementToCanvas } from '../utils/captureUtils';
 import QRCode from 'qrcode';
 import { useCenter } from '../context/CenterContext';
 import { OfficialSealBadge } from './OfficialSealBadge';
+import confetti from 'canvas-confetti';
+import { audioService } from '../services/audioService';
+import { SessionCelebrationOverlay } from './SessionCelebrationOverlay';
+import { LectureExcellenceCertificateModal, LectureCertificateInitialData } from './LectureExcellenceCertificateModal';
 
 interface TraineeAttendanceItem {
   id?: string;
@@ -71,6 +75,7 @@ interface AttendanceSheetReportProps {
   };
   onPrint: () => void;
   onClose?: () => void;
+  onEndSession?: () => void;
 }
 
 const QRCodeImg: React.FC<{ value: string; size?: number }> = ({ value, size = 68 }) => {
@@ -86,8 +91,8 @@ const QRCodeImg: React.FC<{ value: string; size?: number }> = ({ value, size = 6
   return <img src={dataUrl} alt="QR Code" style={{ width: size, height: size }} className="object-contain" />;
 };
 
-export const AttendanceSheetReport: React.FC<AttendanceSheetReportProps> = ({ data, onPrint, onClose }) => {
-  const { settings, showToast } = useCenter();
+export const AttendanceSheetReport: React.FC<AttendanceSheetReportProps> = ({ data, onPrint, onClose, onEndSession }) => {
+  const { settings, showToast, trainees: centerTrainees } = useCenter();
   const reportRef = useRef<HTMLDivElement>(null);
 
   const [isDownloading, setIsDownloading] = useState(false);
@@ -95,6 +100,30 @@ export const AttendanceSheetReport: React.FC<AttendanceSheetReportProps> = ({ da
   const [statusFilter, setStatusFilter] = useState<'all' | 'present' | 'absent'>('all');
   const [sortBy, setSortBy] = useState<'excellence' | 'time' | 'code' | 'name'>('excellence');
   const [rankingBasis, setRankingBasis] = useState<RankingBasisType>('lecture');
+  const [showCelebration, setShowCelebration] = useState(false);
+  const [isCertModalOpen, setIsCertModalOpen] = useState(false);
+  const [certInitialData, setCertInitialData] = useState<LectureCertificateInitialData | undefined>(undefined);
+
+  const handleIssueCertificateForTrainee = (trainee: TraineeAttendanceItem, defaultAwardTitle?: string) => {
+    setCertInitialData({
+      traineeId: trainee.id,
+      traineeName: trainee.fullName,
+      traineeCode: trainee.code,
+      traineePhoto: trainee.photoUrl,
+      traineePhone: trainee.phone,
+      courseId: data.group?.courseId,
+      courseName: courseName,
+      groupName: groupName,
+      lectureTitle: `محاضرة ${courseName} - ${groupName}`,
+      lectureDate: dateStr,
+      points: trainee.currentPoints || trainee.lecturePoints || 25,
+      stars: trainee.currentStars || 5,
+      awardTitle: defaultAwardTitle || 'نجم المحاضرة الذهبي والمركز الأول 🥇',
+      trainerName: data.trainerName,
+      hallName: data.hallName
+    });
+    setIsCertModalOpen(true);
+  };
 
   const rankingBasisLabels: Record<RankingBasisType, { name: string; shortName: string; badge: string; desc: string; icon: string }> = {
     lecture: {
@@ -167,8 +196,21 @@ export const AttendanceSheetReport: React.FC<AttendanceSheetReportProps> = ({ da
   const groupName = data.groupName || data.group?.name || 'ICT4 - 3';
   const courseName = data.courseName || data.group?.courseName || 'كورس تكنولوجيا المعلومات والاتصالات ICT';
   const branchName = data.branchName || 'فرع النجاح الرئيسي';
-  const trainerName = data.trainerName || 'د. محمد رمضان بخيت';
-  const trainerTitle = data.trainerTitle || 'د.';
+  const rawTrainerName = (data.trainerName || 'د. محمد رمضان بخيت').trim();
+  const rawTrainerTitle = (data.trainerTitle || '').trim();
+
+  // Smart formatter to prevent duplicated prefixes (e.g. "د. د. محمد رمضان بخيت")
+  const trainerDisplayName = (() => {
+    const hasExistingPrefix = /^(د\.?|د\/|د\s|أ\.?|أ\/|م\.?|م\/|دكتور|الدكتور|أستاذ|الأستاذ|المهندس|المدرب)\s+/i.test(rawTrainerName);
+    if (hasExistingPrefix) {
+      return rawTrainerName;
+    }
+    if (rawTrainerTitle) {
+      return `${rawTrainerTitle} ${rawTrainerName}`;
+    }
+    return rawTrainerName || 'المحاضر المشرف';
+  })();
+
   const hallName = data.hallName || data.group?.roomName || 'معمل الحاسب والذكاء الاصطناعي 01';
   const timeSlot = data.timeSlot || '10:00 ص - 12:00 م';
   const dateStr = data.date || new Date().toISOString().split('T')[0];
@@ -189,10 +231,30 @@ export const AttendanceSheetReport: React.FC<AttendanceSheetReportProps> = ({ da
     }
   } catch {}
 
-  // Parse and normalize trainees
-  const allTrainees: (TraineeAttendanceItem & { currentPoints: number; currentStars: number })[] = (data.trainees || []).map((t, idx) => {
+  // Parse and normalize trainees with guaranteed full name and profile resolution
+  const allTrainees: (TraineeAttendanceItem & { currentPoints: number; currentStars: number })[] = (data.trainees || []).map((t: any, idx) => {
+    // Find matching registered trainee from center database by id or code
+    const matchedCenterTrainee = (centerTrainees || []).find((tr: any) =>
+      (t.id && tr.id === t.id) ||
+      (t.code && (tr.code === t.code || tr.studentCode === t.code))
+    );
+
+    const resolvedFullName = (
+      t.fullName ||
+      t.name ||
+      t.studentName ||
+      t.traineeName ||
+      matchedCenterTrainee?.fullName ||
+      (matchedCenterTrainee as any)?.name ||
+      `طالب (${t.code || idx + 1})`
+    ).trim();
+
+    const resolvedCode = t.code || matchedCenterTrainee?.code || `م${idx + 1}`;
+    const resolvedPhoto = t.photoUrl || matchedCenterTrainee?.photoUrl || '';
+    const resolvedPhone = t.phone || t.parentPhone || matchedCenterTrainee?.phone || matchedCenterTrainee?.parentPhone || '';
+
     const notesText = t.notes || '';
-    let entryTime = t.entryTime || '';
+    let entryTime = t.entryTime || t.time || '';
     if (!entryTime && (t.status === 'present' || notesText.includes('حضور') || notesText.includes('جهاز'))) {
       const mins = 2 + (idx * 2) % 20;
       entryTime = `10:${mins < 10 ? '0' + mins : mins} ص`;
@@ -207,11 +269,17 @@ export const AttendanceSheetReport: React.FC<AttendanceSheetReportProps> = ({ da
     }
 
     const pts = t.totalPoints ?? t.points ?? 0;
-    const currentPts = getPointsForBasis(t, rankingBasis);
+    const currentPts = getPointsForBasis({ ...t, totalPoints: pts, points: pts }, rankingBasis);
     const currentSt = getStarsForBasis(currentPts, rankingBasis);
 
     return {
       ...t,
+      id: t.id || matchedCenterTrainee?.id,
+      code: resolvedCode,
+      fullName: resolvedFullName,
+      name: resolvedFullName,
+      photoUrl: resolvedPhoto,
+      phone: resolvedPhone,
       entryTime,
       deviceName: devName,
       totalPoints: pts,
@@ -240,6 +308,27 @@ export const AttendanceSheetReport: React.FC<AttendanceSheetReportProps> = ({ da
   const secondStar = attendedTrainees[1];
   const thirdStar = attendedTrainees[2];
   const honorStars = attendedTrainees.slice(3, 7);
+
+  // Trigger Session Ending & Top Stars Celebration
+  const handleTriggerCelebration = () => {
+    setShowCelebration(true);
+    audioService.playClapping(3.5);
+    if (firstStar?.fullName) {
+      audioService.playWinnerAnnouncement(firstStar.fullName, `star_${Date.now()}`);
+    } else {
+      audioService.playSessionEndFanfare();
+    }
+    try {
+      confetti({ particleCount: 90, spread: 70, origin: { y: 0.6 } });
+      setTimeout(() => {
+        confetti({ particleCount: 70, angle: 60, spread: 55, origin: { x: 0 } });
+        confetti({ particleCount: 70, angle: 120, spread: 55, origin: { x: 1 } });
+      }, 250);
+    } catch {}
+    if (onEndSession) {
+      onEndSession();
+    }
+  };
 
   // Filter and sort for the main table
   let displayTrainees = [...allTrainees];
@@ -283,7 +372,7 @@ export const AttendanceSheetReport: React.FC<AttendanceSheetReportProps> = ({ da
       `👥 *المجموعة:* ${groupName}\n` +
       `📅 *التاريخ:* ${formattedArabicDate}\n` +
       `⏰ *الموعد:* ${timeSlot} | 🏛️ *القاعة:* ${hallName}\n` +
-      `👨‍🏫 *المحاضر المشرف:* ${trainerTitle} ${trainerName}\n\n` +
+      `👨‍🏫 *المحاضر المشرف:* ${trainerDisplayName}\n\n` +
       `🏆 *معيار الترتيب والتقييم المعتمد:* ${rankingBasisLabels[rankingBasis].name} (${rankingBasisLabels[rankingBasis].badge})\n\n` +
       `🏆 *لوحة شرف نجوم الكشف (Top Stars):*\n` +
       `${topStarsText}\n\n` +
@@ -310,7 +399,7 @@ export const AttendanceSheetReport: React.FC<AttendanceSheetReportProps> = ({ da
       const text = `كشف حضور وانضباط وتميز المحاضرة - مركز النجاح للتدريب والاستشارات\n` +
         `المجموعة: ${groupName} | الدورة: ${courseName}\n` +
         `التاريخ: ${formattedArabicDate} | الموعد: ${timeSlot}\n` +
-        `المحاضر المشرف: ${trainerTitle} ${trainerName}\n` +
+        `المحاضر المشرف: ${trainerDisplayName}\n` +
         `معيار التقييم والترتيب: ${rankingBasisLabels[rankingBasis].name} (${rankingBasisLabels[rankingBasis].badge})\n\n` +
         `لوحة شرف نجوم الكشف:\n${topStarsText}\n\n` +
         `نسبة الحضور: ${attendanceRate}% (حاضر: ${presentCount}، غائب: ${absentCount})\n` +
@@ -331,12 +420,11 @@ export const AttendanceSheetReport: React.FC<AttendanceSheetReportProps> = ({ da
     try {
       setIsDownloading(true);
       showToast('جاري التقاط صورة التقرير عالية الدقة...', 'info');
-      const canvas = await html2canvas(reportRef.current, {
+      const canvas = await captureElementToCanvas(reportRef.current, {
         scale: 2,
-        useCORS: true,
-        backgroundColor: '#ffffff',
-        logging: false
+        backgroundColor: '#ffffff'
       });
+      if (!canvas) throw new Error('Failed to capture report');
       const imgData = canvas.toDataURL('image/png');
       const link = document.createElement('a');
       link.href = imgData;
@@ -485,6 +573,30 @@ export const AttendanceSheetReport: React.FC<AttendanceSheetReportProps> = ({ da
 
         {/* Action Buttons */}
         <div className="flex items-center gap-2">
+          {/* Issue Certificate for Lecture Star */}
+          {firstStar && (
+            <button
+              type="button"
+              onClick={() => handleIssueCertificateForTrainee(firstStar, 'نجم المحاضرة الذهبي والمركز الأول 🥇')}
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500 hover:brightness-110 text-slate-950 font-black text-xs shadow-md shadow-amber-500/20 transition-all active:scale-95 cursor-pointer ring-1 ring-amber-300"
+              title="إصدار وتوثيق شهادة تقدير للمتدرب المتفوق في المحاضرة"
+            >
+              <Award className="w-4 h-4 text-slate-950" />
+              <span>شهادة تفوق 🎖️</span>
+            </button>
+          )}
+
+          {/* End Session Celebration Button */}
+          <button
+            type="button"
+            onClick={handleTriggerCelebration}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-purple-600 via-pink-600 to-amber-500 hover:from-purple-500 hover:to-amber-400 text-white font-black text-xs shadow-lg shadow-purple-500/25 transition-all active:scale-95 cursor-pointer animate-pulse"
+            title="إنهاء الحصة وإطلاق احتفال ختام المحاضرة وتتويج النجوم بالصوت والكونفيتي"
+          >
+            <Trophy className="w-4 h-4 text-amber-300 fill-amber-300" />
+            <span>🎉 إنهاء الحصة واحتفال النجوم</span>
+          </button>
+
           <button
             type="button"
             onClick={onPrint}
@@ -627,7 +739,7 @@ export const AttendanceSheetReport: React.FC<AttendanceSheetReportProps> = ({ da
           </div>
           <div className="space-y-0.5">
             <span className="text-[10px] text-slate-500 block font-bold">المحاضر المشرف:</span>
-            <p className="font-black text-slate-900">{trainerTitle} {trainerName}</p>
+            <p className="font-black text-slate-900">{trainerDisplayName}</p>
           </div>
           <div className="space-y-0.5">
             <span className="text-[10px] text-slate-500 block font-bold">القاعة والتوقيت:</span>
@@ -681,9 +793,20 @@ export const AttendanceSheetReport: React.FC<AttendanceSheetReportProps> = ({ da
                   </p>
                 </div>
               </div>
-              <div className="hidden sm:flex items-center gap-1 text-[11px] font-bold text-amber-900 bg-amber-200/80 px-3 py-1 rounded-full border border-amber-300">
-                <Sparkles className="w-3.5 h-3.5 text-amber-700" />
-                <span>أبطال {rankingBasisLabels[rankingBasis].shortName}</span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleTriggerCelebration}
+                  className="no-print flex items-center gap-1.5 text-xs font-black text-slate-950 bg-gradient-to-r from-amber-400 via-amber-300 to-amber-400 hover:brightness-105 px-3.5 py-1.5 rounded-full border border-amber-500 shadow-md transition-all active:scale-95 cursor-pointer animate-pulse"
+                  title="إطلاق احتفال ختام الحصة وتتويج النجوم والأبطال بالصوت والكونفيتي"
+                >
+                  <Sparkles className="w-4 h-4 text-amber-950 fill-amber-950" />
+                  <span>🎉 احتفال إنهاء الحصة وتتويج الأبطال</span>
+                </button>
+                <div className="hidden md:flex items-center gap-1 text-[11px] font-bold text-amber-900 bg-amber-200/80 px-3 py-1 rounded-full border border-amber-300">
+                  <Crown className="w-3.5 h-3.5 text-amber-700" />
+                  <span>أبطال {rankingBasisLabels[rankingBasis].shortName}</span>
+                </div>
               </div>
             </div>
 
@@ -696,18 +819,26 @@ export const AttendanceSheetReport: React.FC<AttendanceSheetReportProps> = ({ da
                     <Medal className="w-3 h-3 text-slate-600" />
                     المركز الثاني
                   </div>
-                  <div className="w-14 h-14 mx-auto mt-1 rounded-2xl bg-slate-100 border-2 border-slate-300 flex items-center justify-center text-slate-800 font-black text-xl mb-2 overflow-hidden shadow-inner">
+                  <div className="w-14 h-14 mx-auto mt-1 rounded-2xl bg-slate-100 border-2 border-slate-300 flex items-center justify-center text-slate-800 font-black text-xl mb-1.5 overflow-hidden shadow-inner">
                     {secondStar.photoUrl ? (
                       <img src={secondStar.photoUrl} alt={secondStar.fullName} className="w-full h-full object-cover" />
                     ) : (
                       secondStar.fullName?.charAt(0) || '🥈'
                     )}
                   </div>
-                  <p className="font-mono text-xs font-black text-slate-600">{secondStar.code}</p>
-                  <h4 className="font-black text-xs text-slate-950 mt-0.5 truncate" style={{ color: '#090d16' }} title={secondStar.fullName}>{secondStar.fullName}</h4>
+                  {/* Full Name Prominently Displayed */}
+                  <h4 className="font-black text-sm sm:text-base text-slate-950 mt-1 line-clamp-1 tracking-tight" style={{ color: '#090d16' }} title={secondStar.fullName}>
+                    {secondStar.fullName}
+                  </h4>
+                  {/* Student Code Badge */}
+                  <div className="my-1">
+                    <span className="inline-block font-mono text-[11px] font-bold text-slate-700 bg-slate-100 border border-slate-300 px-2.5 py-0.5 rounded-full shadow-xs">
+                      كود: {secondStar.code}
+                    </span>
+                  </div>
                   <div className="flex items-center justify-center gap-0.5 text-amber-500 my-1">
                     {Array.from({ length: secondStar.currentStars || 4 }).map((_, i) => (
-                      <Star key={i} className="w-3 h-3 fill-amber-400 text-amber-500" />
+                      <Star key={i} className="w-3.5 h-3.5 fill-amber-400 text-amber-500" />
                     ))}
                   </div>
                   <div className="inline-block bg-slate-100 border border-slate-300 text-slate-900 text-[11px] font-black px-3 py-1 rounded-xl">
@@ -719,6 +850,14 @@ export const AttendanceSheetReport: React.FC<AttendanceSheetReportProps> = ({ da
                       حضور: {secondStar.entryTime}
                     </p>
                   )}
+                  <button
+                    type="button"
+                    onClick={() => handleIssueCertificateForTrainee(secondStar, 'فارس المحاضرة الفضي والمركز الثاني 🥈')}
+                    className="w-full mt-2 px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-900 font-bold text-[10px] border border-slate-300 flex items-center justify-center gap-1 transition-all cursor-pointer no-print"
+                  >
+                    <Award className="w-3 h-3 text-slate-700" />
+                    <span>شهادة تقدير 📜</span>
+                  </button>
                 </div>
               ) : null}
 
@@ -729,18 +868,26 @@ export const AttendanceSheetReport: React.FC<AttendanceSheetReportProps> = ({ da
                     <Crown className="w-3.5 h-3.5 text-slate-950" />
                     النجم الذهبي الأول
                   </div>
-                  <div className="w-16 h-16 mx-auto mt-1 rounded-2xl bg-amber-500/20 border-2 border-amber-500 flex items-center justify-center text-amber-900 font-black text-2xl mb-2 overflow-hidden shadow-md ring-4 ring-amber-300/40">
+                  <div className="w-16 h-16 mx-auto mt-1 rounded-2xl bg-amber-500/20 border-2 border-amber-500 flex items-center justify-center text-amber-900 font-black text-2xl mb-1.5 overflow-hidden shadow-md ring-4 ring-amber-300/40">
                     {firstStar.photoUrl ? (
                       <img src={firstStar.photoUrl} alt={firstStar.fullName} className="w-full h-full object-cover" />
                     ) : (
                       firstStar.fullName?.charAt(0) || '🥇'
                     )}
                   </div>
-                  <p className="font-mono text-xs font-black text-amber-900">{firstStar.code}</p>
-                  <h4 className="font-black text-sm text-slate-950 mt-0.5 truncate" style={{ color: '#090d16' }} title={firstStar.fullName}>{firstStar.fullName}</h4>
+                  {/* Full Name Prominently Displayed - Large & High Contrast */}
+                  <h4 className="font-black text-base sm:text-lg text-slate-950 mt-1 line-clamp-1 tracking-tight" style={{ color: '#090d16' }} title={firstStar.fullName}>
+                    {firstStar.fullName}
+                  </h4>
+                  {/* Student Code Badge */}
+                  <div className="my-1">
+                    <span className="inline-block font-mono text-xs font-bold text-amber-950 bg-amber-200/90 border border-amber-400 px-3 py-0.5 rounded-full shadow-xs">
+                      كود: {firstStar.code}
+                    </span>
+                  </div>
                   <div className="flex items-center justify-center gap-0.5 text-amber-500 my-1">
                     {Array.from({ length: firstStar.currentStars || 5 }).map((_, i) => (
-                      <Star key={i} className="w-3.5 h-3.5 fill-amber-400 text-amber-500" />
+                      <Star key={i} className="w-4 h-4 fill-amber-400 text-amber-500" />
                     ))}
                   </div>
                   <div className="inline-block bg-gradient-to-r from-amber-500 to-amber-400 text-slate-950 text-xs font-black px-4 py-1.5 rounded-xl shadow-sm">
@@ -752,6 +899,14 @@ export const AttendanceSheetReport: React.FC<AttendanceSheetReportProps> = ({ da
                       وقت الدخول: {firstStar.entryTime}
                     </p>
                   )}
+                  <button
+                    type="button"
+                    onClick={() => handleIssueCertificateForTrainee(firstStar, 'نجم المحاضرة الذهبي والمركز الأول 🥇')}
+                    className="w-full mt-2.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500 hover:brightness-105 text-slate-950 font-black text-xs shadow-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer no-print"
+                  >
+                    <Award className="w-3.5 h-3.5" />
+                    <span>إصدار شهادة تفوق 📜</span>
+                  </button>
                 </div>
               ) : null}
 
@@ -762,18 +917,26 @@ export const AttendanceSheetReport: React.FC<AttendanceSheetReportProps> = ({ da
                     <Medal className="w-3 h-3 text-amber-200" />
                     المركز الثالث
                   </div>
-                  <div className="w-14 h-14 mx-auto mt-1 rounded-2xl bg-amber-50 border-2 border-amber-700/40 flex items-center justify-center text-amber-900 font-black text-xl mb-2 overflow-hidden shadow-inner">
+                  <div className="w-14 h-14 mx-auto mt-1 rounded-2xl bg-amber-50 border-2 border-amber-700/40 flex items-center justify-center text-amber-900 font-black text-xl mb-1.5 overflow-hidden shadow-inner">
                     {thirdStar.photoUrl ? (
                       <img src={thirdStar.photoUrl} alt={thirdStar.fullName} className="w-full h-full object-cover" />
                     ) : (
                       thirdStar.fullName?.charAt(0) || '🥉'
                     )}
                   </div>
-                  <p className="font-mono text-xs font-black text-amber-900">{thirdStar.code}</p>
-                  <h4 className="font-black text-xs text-slate-950 mt-0.5 truncate" style={{ color: '#090d16' }} title={thirdStar.fullName}>{thirdStar.fullName}</h4>
+                  {/* Full Name Prominently Displayed */}
+                  <h4 className="font-black text-sm sm:text-base text-slate-950 mt-1 line-clamp-1 tracking-tight" style={{ color: '#090d16' }} title={thirdStar.fullName}>
+                    {thirdStar.fullName}
+                  </h4>
+                  {/* Student Code Badge */}
+                  <div className="my-1">
+                    <span className="inline-block font-mono text-[11px] font-bold text-amber-900 bg-amber-100/90 border border-amber-300 px-2.5 py-0.5 rounded-full shadow-xs">
+                      كود: {thirdStar.code}
+                    </span>
+                  </div>
                   <div className="flex items-center justify-center gap-0.5 text-amber-500 my-1">
                     {Array.from({ length: thirdStar.currentStars || 3 }).map((_, i) => (
-                      <Star key={i} className="w-3 h-3 fill-amber-400 text-amber-500" />
+                      <Star key={i} className="w-3.5 h-3.5 fill-amber-400 text-amber-500" />
                     ))}
                   </div>
                   <div className="inline-block bg-amber-100/80 border border-amber-300 text-amber-900 text-[11px] font-black px-3 py-1 rounded-xl">
@@ -785,6 +948,14 @@ export const AttendanceSheetReport: React.FC<AttendanceSheetReportProps> = ({ da
                       حضور: {thirdStar.entryTime}
                     </p>
                   )}
+                  <button
+                    type="button"
+                    onClick={() => handleIssueCertificateForTrainee(thirdStar, 'بطل المحاضرة البرونزي والمركز الثالث 🥉')}
+                    className="w-full mt-2 px-2.5 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-950 font-bold text-[10px] border border-amber-300 flex items-center justify-center gap-1 transition-all cursor-pointer no-print"
+                  >
+                    <Award className="w-3 h-3 text-amber-700" />
+                    <span>شهادة تقدير 📜</span>
+                  </button>
                 </div>
               ) : null}
             </div>
@@ -1002,7 +1173,7 @@ export const AttendanceSheetReport: React.FC<AttendanceSheetReportProps> = ({ da
           {/* Trainer Signature */}
           <div className="space-y-2 text-right">
             <span className="text-slate-500 font-bold block">المحاضر المشرف على القاعة:</span>
-            <p className="font-black text-slate-900 text-sm">{trainerTitle} {trainerName}</p>
+            <p className="font-black text-slate-900 text-sm">{trainerDisplayName}</p>
             {settings?.trainerSignatureUrl ? (
               <img src={settings.trainerSignatureUrl} alt="توقيع المحاضر" className="w-24 h-12 object-contain" />
             ) : (
@@ -1045,6 +1216,26 @@ export const AttendanceSheetReport: React.FC<AttendanceSheetReportProps> = ({ da
           <span>تاريخ الطباعة: {new Date().toLocaleString('ar-EG')}</span>
         </div>
       </div>
+
+      {/* Session End & Stars Award Celebration Ceremony Overlay */}
+      {showCelebration && (
+        <SessionCelebrationOverlay
+          isOpen={showCelebration}
+          onClose={() => setShowCelebration(false)}
+          sessionTitle={`ختام محاضرة ${courseName}`}
+          groupName={groupName}
+          courseName={courseName}
+          starWinnerName={firstStar?.fullName || 'بطل المحاضرة'}
+          starWinnerPoints={firstStar?.currentPoints || 0}
+        />
+      )}
+
+      {/* Lecture Excellence Certificate Modal */}
+      <LectureExcellenceCertificateModal
+        isOpen={isCertModalOpen}
+        onClose={() => setIsCertModalOpen(false)}
+        initialData={certInitialData}
+      />
     </div>
   );
 };

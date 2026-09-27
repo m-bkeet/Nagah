@@ -1,4 +1,5 @@
 {
+  "freedTraineeCodes": [],
   "devices": [],
   "traineeScreenshots": [],
   "computerLabs": [],
@@ -133,7 +134,7 @@
       "status": "active",
       "address": "",
       "groupId": "",
-      "ranking": 91,
+      "ranking": 99,
       "branchId": "branch-1",
       "courseId": "course-1787347508908",
       "fullName": "محمد عادل احمد محمد",
@@ -220,7 +221,7 @@
       "dataValidationStatus": "verified",
       "initialPaymentMethod": "cash",
       "parentPortalPassword": "",
-      "ranking": 92
+      "ranking": 101
     },
     {
       "id": "trainee-1787541849210-96lvp",
@@ -235,7 +236,7 @@
       "status": "active",
       "address": "",
       "groupId": "grp-1787433234491",
-      "ranking": 93,
+      "ranking": 102,
       "branchId": "branch-1",
       "courseId": "crs-1787427970903",
       "fullName": "آيه محسن محمد فرحات",
@@ -319,7 +320,7 @@
       "updatedByUserName": "مدير عام النظام",
       "dataValidationStatus": "needs_review",
       "parentPortalPassword": "",
-      "ranking": 94,
+      "ranking": 103,
       "initialPayment": 0,
       "initialPaymentMethod": "cash"
     },
@@ -331,12 +332,12 @@
       "phone": "01281016041",
       "track": "",
       "gender": "male",
-      "points": 40,
+      "points": 45,
       "prefix": "A",
       "status": "active",
       "address": "",
       "groupId": "grp-1787350487970",
-      "ranking": 54,
+      "ranking": 38,
       "branchId": "branch-1",
       "courseId": "course-1787347401956",
       "fullName": "مريم رمسيس صبري مرسال",
@@ -358,7 +359,7 @@
       "siblingIds": [],
       "parentPhone": "01281016041",
       "studentCode": "A006",
-      "totalPoints": 40,
+      "totalPoints": 45,
       "traineeCode": "A006",
       "exemptReason": "",
       "isTestRecord": false,
@@ -380,7 +381,7 @@
       "phone": "01156745251",
       "track": "",
       "gender": "male",
-      "points": 20,
+      "points": 18,
       "prefix": "D",
       "status": "active",
       "address": "",
@@ -405,7 +406,7 @@
       "parentName": "تامر محمود محمد",
       "parentPhone": "01156745251",
       "studentCode": "D023",
-      "totalPoints": 20,
+      "totalPoints": 18,
       "traineeCode": "D023",
       "exemptReason": "",
       "isTestRecord": false,
@@ -420,7 +421,7 @@
       "dataValidationStatus": "verified",
       "initialPaymentMethod": "cash",
       "parentPortalPassword": "",
-      "ranking": 77
+      "ranking": 98
     },
     {
       "id": "trainee-1787541849210-og2bf",
@@ -435,7 +436,7 @@
       "status": "active",
       "address": "",
       "groupId": "grp-1787358828709",
-      "ranking": 78,
+      "ranking": 92,
       "branchId": "branch-1",
       "courseId": "course-1787347569318",
       "fullName": "مكاريوس بيشوي نبيل كرم",
@@ -520,7 +521,7 @@
       "registrationDate": "2026-09-11",
       "dataValidationStatus": "verified",
       "parentPortalPassword": "",
-      "ranking": 95,
+      "ranking": 104,
       "initialPayment": 0,
       "initialPaymentMethod": "cash",
       "updatedByUserId": "user-admin",
@@ -534,12 +535,12 @@
       "phone": "01066747764",
       "track": "",
       "gender": "male",
-      "points": 10,
+      "points": 51,
       "prefix": "A",
       "status": "active",
       "address": "",
       "groupId": "grp-1787432103884",
-      "ranking": 96,
+      "ranking": 32,
       "branchId": "branch-2",
       "courseId": "course-1787347401956",
       "fullName": "مارينا عماد ثروت سليم",
@@ -561,7 +562,7 @@
       "siblingIds": [],
       "parentPhone": "01066747764",
       "studentCode": "A010",
-      "totalPoints": 10,
+      "totalPoints": 51,
       "traineeCode": "A010",
       "exemptReason": "",
       "isTestRecord": false,
@@ -578,20 +579,20 @@
       "id": "trainee-1787459300939-62ly",
       "code": "A001",
       "grade": "الصف الرابع الابتدائي",
-      "notes": "",
+      "notes": "ربط إخوة مع (رفيف محمد رمضان بخيت - B001، مرام محمد رمضان بخيت - D001) - تم تطبيق خصم الأخوات",
       "phone": "01500073617",
       "track": "",
       "gender": "male",
-      "points": 273,
+      "points": 278,
       "prefix": "A",
       "status": "active",
       "address": "",
-      "groupId": null,
-      "ranking": 2,
+      "groupId": "",
+      "ranking": 3,
       "branchId": "branch-1",
       "courseId": "course-1787347401956",
       "fullName": "لين محمد رمضان بخيت",
-      "isExempt": false,
+      "isExempt": true,
       "birthDate": "",
       "courseIds": [
         "course-1787347401956"
@@ -599,37 +600,39 @@
       "createdAt": "2026-09-11T18:58:20.705Z",
       "feeAmount": 200,
       "groupName": "",
-      "netAmount": 200,
+      "netAmount": 0,
       "trainerId": "trainer-1787349806643",
-      "updatedAt": "2026-09-20T04:57:25.117Z",
+      "updatedAt": "2026-09-25T11:55:20.104Z",
       "nationalId": "",
       "paidAmount": 0,
       "parentName": "محمد رمضان بخيت",
       "siblingIds": [
-        "trainee-1787361330810-d1if",
-        "trainee-1787361410293-aeko"
+        "trainee-1787361410293-aeko",
+        "trainee-1787361330810-d1if"
       ],
       "parentPhone": "01001500686",
       "studentCode": "A001",
       "totalPoints": 273,
       "traineeCode": "A001",
-      "exemptReason": "",
+      "exemptReason": "management_children",
       "isTestRecord": false,
       "siblingNames": [
-        "مرام محمد رمضان بخيت",
-        "رفيف محمد رمضان بخيت"
+        "رفيف محمد رمضان بخيت",
+        "مرام محمد رمضان بخيت"
       ],
       "creditBalance": 0,
-      "discountAmount": 0,
+      "discountAmount": 200,
       "initialPayment": 0,
       "portalPassword": "",
-      "remainingAmount": 200,
-      "updatedByUserId": "u-admin",
+      "remainingAmount": 0,
+      "updatedByUserId": "user-admin",
       "registrationDate": "2026-09-11",
-      "updatedByUserName": "المدير العام (Super Admin)",
+      "updatedByUserName": "مدير عام النظام",
       "dataValidationStatus": "verified",
       "initialPaymentMethod": "cash",
-      "parentPortalPassword": ""
+      "parentPortalPassword": "",
+      "photoUrl": "",
+      "currentPoints": 278
     },
     {
       "id": "trainee-1787541849210-ekoi2",
@@ -644,7 +647,7 @@
       "status": "active",
       "address": "",
       "groupId": "",
-      "ranking": 97,
+      "ranking": 105,
       "branchId": "branch-1",
       "courseId": "course-1787347508908",
       "fullName": "محمد محمود عبدالعزيز محمد",
@@ -727,7 +730,7 @@
       "registrationDate": "2026-09-11",
       "dataValidationStatus": "verified",
       "parentPortalPassword": "",
-      "ranking": 98,
+      "ranking": 106,
       "initialPayment": 0,
       "initialPaymentMethod": "cash",
       "updatedByUserId": "user-admin",
@@ -777,7 +780,7 @@
       "registrationDate": "2026-09-11",
       "dataValidationStatus": "verified",
       "parentPortalPassword": "",
-      "ranking": 99,
+      "ranking": 107,
       "initialPayment": 0,
       "initialPaymentMethod": "cash",
       "updatedByUserId": "user-admin",
@@ -827,7 +830,7 @@
       "registrationDate": "2026-09-11",
       "dataValidationStatus": "verified",
       "parentPortalPassword": "",
-      "ranking": 7
+      "ranking": 10
     },
     {
       "id": "trainee-1787541962983-tp0u",
@@ -842,11 +845,11 @@
       "status": "active",
       "address": "",
       "groupId": "grp-1787351870532",
-      "ranking": 20,
+      "ranking": 27,
       "branchId": "branch-1",
       "courseId": "course-1787347401956",
       "fullName": "عبدالله عبدالملك رمضان بخيت",
-      "isExempt": false,
+      "isExempt": true,
       "photoUrl": "",
       "birthDate": "",
       "courseIds": [
@@ -855,9 +858,9 @@
       "createdAt": "2026-09-11T18:58:20.802Z",
       "feeAmount": 200,
       "groupName": "ICT4 - 3",
-      "netAmount": 200,
+      "netAmount": 0,
       "trainerId": "trainer-1787349806643",
-      "updatedAt": "2026-09-03T15:45:28.844Z",
+      "updatedAt": "2026-09-20T16:21:32.210Z",
       "nationalId": "",
       "paidAmount": 0,
       "parentName": "عبدالملك رمضان بخيت",
@@ -866,33 +869,37 @@
       "studentCode": "A016",
       "totalPoints": 60,
       "traineeCode": "A016",
-      "exemptReason": "",
+      "exemptReason": "management_children",
       "isTestRecord": false,
       "siblingNames": [],
       "creditBalance": 0,
-      "discountAmount": 0,
+      "discountAmount": 200,
       "portalPassword": "",
-      "remainingAmount": 200,
+      "remainingAmount": 0,
       "registrationDate": "2026-09-11",
       "dataValidationStatus": "verified",
-      "parentPortalPassword": ""
+      "parentPortalPassword": "",
+      "initialPayment": 0,
+      "initialPaymentMethod": "cash",
+      "updatedByUserId": "user-admin",
+      "updatedByUserName": "مدير عام النظام"
     },
     {
       "id": "trainee-1787541849210-oqyov",
-      "code": "D008",
+      "code": "E004",
       "grade": "الصف الثاني الإعدادي",
       "notes": "",
       "phone": "01023768971",
       "track": "",
       "gender": "male",
       "points": 10,
-      "prefix": "D",
+      "prefix": "E",
       "status": "active",
       "address": "",
-      "groupId": "grp-1787358559234",
-      "ranking": 100,
+      "groupId": "",
+      "ranking": 108,
       "branchId": "branch-1",
-      "courseId": "course-1787347569318",
+      "courseId": "crs-1787427719238",
       "fullName": "محمود السيد مصطفى فايد",
       "isExempt": false,
       "photoUrl": "",
@@ -904,8 +911,8 @@
       "feeAmount": 200,
       "groupName": "ICT - p1 - 1",
       "netAmount": 200,
-      "trainerId": "trainer-1787349806643",
-      "updatedAt": "2026-09-03T11:35:46.140Z",
+      "trainerId": "trainer-1787349870400",
+      "updatedAt": "2026-09-20T17:00:41.712Z",
       "nationalId": "",
       "paidAmount": 0,
       "parentName": "السيد مصطفى فايد",
@@ -923,7 +930,11 @@
       "remainingAmount": 200,
       "registrationDate": "2026-09-11",
       "dataValidationStatus": "verified",
-      "parentPortalPassword": ""
+      "parentPortalPassword": "",
+      "initialPayment": 0,
+      "initialPaymentMethod": "cash",
+      "updatedByUserId": "user-admin",
+      "updatedByUserName": "مدير عام النظام"
     },
     {
       "id": "trainee-1787663187137",
@@ -933,7 +944,7 @@
       "phone": "01096932831",
       "track": "",
       "gender": "male",
-      "points": 20,
+      "points": 35,
       "prefix": "A",
       "status": "active",
       "address": "",
@@ -958,7 +969,7 @@
       "parentName": "محمد صلاح عرابى",
       "parentPhone": "01013732004",
       "studentCode": "A028",
-      "totalPoints": 20,
+      "totalPoints": 35,
       "traineeCode": "A028",
       "exemptReason": "",
       "isTestRecord": false,
@@ -973,7 +984,7 @@
       "dataValidationStatus": "verified",
       "initialPaymentMethod": "cash",
       "parentPortalPassword": "",
-      "ranking": 79
+      "ranking": 72
     },
     {
       "id": "trainee-1787541849210-brq6q",
@@ -988,7 +999,7 @@
       "status": "active",
       "address": "",
       "groupId": "grp-1787431802246",
-      "ranking": 31,
+      "ranking": 43,
       "branchId": "branch-1",
       "courseId": "course-1787347508908",
       "fullName": "اميرة محمد عبدالبصير ربيع",
@@ -1027,52 +1038,6 @@
       "parentPortalPassword": ""
     },
     {
-      "id": "trainee-1787957712994",
-      "code": "A018",
-      "grade": "الصف الرابع الابتدائي",
-      "notes": "",
-      "phone": "01100959725",
-      "track": "",
-      "gender": "male",
-      "points": 10,
-      "prefix": "A",
-      "status": "active",
-      "address": "",
-      "groupId": "grp-1787350488774",
-      "branchId": "branch-1",
-      "courseId": "crs-1787428009076",
-      "fullName": "انس محمد فتحي مبروك عبدربه",
-      "isExempt": false,
-      "photoUrl": "",
-      "birthDate": "",
-      "courseIds": [
-        "crs-1787428009076"
-      ],
-      "createdAt": "2026-09-11T18:58:20.904Z",
-      "feeAmount": 200,
-      "groupName": "ICT4 - 2",
-      "netAmount": 200,
-      "trainerId": "trainer-1787349870400",
-      "updatedAt": "2026-09-03T11:35:49.563Z",
-      "nationalId": "",
-      "paidAmount": 0,
-      "parentName": "محمد فتحي مبروك عبدربه",
-      "parentPhone": "01100959725",
-      "studentCode": "A018",
-      "totalPoints": 10,
-      "traineeCode": "A018",
-      "exemptReason": "",
-      "isTestRecord": false,
-      "creditBalance": 0,
-      "discountAmount": 0,
-      "portalPassword": "",
-      "remainingAmount": 200,
-      "registrationDate": "2026-09-11",
-      "dataValidationStatus": "verified",
-      "parentPortalPassword": "",
-      "ranking": 101
-    },
-    {
       "id": "trainee-1787541849210-8y0f7",
       "code": "C002",
       "grade": "الصف السادس الابتدائي",
@@ -1085,7 +1050,7 @@
       "status": "active",
       "address": "",
       "groupId": "",
-      "ranking": 102,
+      "ranking": 109,
       "branchId": "branch-1",
       "courseId": "course-1787347508908",
       "fullName": "أحمد حمدى محمد ابراهيم",
@@ -1137,7 +1102,7 @@
       "status": "active",
       "address": "",
       "groupId": "grp-1787351870532",
-      "ranking": 24,
+      "ranking": 33,
       "branchId": "branch-1",
       "courseId": "course-1787347401956",
       "fullName": "ادم ربيع احمد احمد",
@@ -1216,7 +1181,7 @@
       "registrationDate": "2026-09-11",
       "dataValidationStatus": "verified",
       "parentPortalPassword": "",
-      "ranking": 103,
+      "ranking": 110,
       "initialPayment": 0,
       "initialPaymentMethod": "cash",
       "updatedByUserId": "user-admin",
@@ -1234,8 +1199,8 @@
       "prefix": "C",
       "status": "active",
       "address": "",
-      "groupId": "grp-1787433082510",
-      "ranking": 55,
+      "groupId": "",
+      "ranking": 64,
       "branchId": "branch-2",
       "courseId": "course-1787347508908",
       "fullName": "رافائيل عبد المسيح درويش سليمان",
@@ -1249,7 +1214,7 @@
       "groupName": "ICT6 - B1",
       "netAmount": 250,
       "trainerId": "trainer-1787349870400",
-      "updatedAt": "2026-09-03T11:35:52.026Z",
+      "updatedAt": "2026-09-20T16:34:34.802Z",
       "nationalId": "",
       "paidAmount": 0,
       "parentName": "عبد المسيح درويش سليمان",
@@ -1267,7 +1232,12 @@
       "remainingAmount": 250,
       "registrationDate": "2026-09-11",
       "dataValidationStatus": "verified",
-      "parentPortalPassword": ""
+      "parentPortalPassword": "",
+      "initialPayment": 0,
+      "initialPaymentMethod": "cash",
+      "photoUrl": "",
+      "updatedByUserId": "user-admin",
+      "updatedByUserName": "مدير عام النظام"
     },
     {
       "id": "trainee-1787754470045",
@@ -1313,7 +1283,7 @@
       "registrationDate": "2026-09-11",
       "dataValidationStatus": "verified",
       "parentPortalPassword": "",
-      "ranking": 104,
+      "ranking": 111,
       "initialPayment": 0,
       "initialPaymentMethod": "cash",
       "updatedByUserId": "user-admin",
@@ -1332,7 +1302,7 @@
       "status": "active",
       "address": "",
       "groupId": "grp-1787431802246",
-      "ranking": 32,
+      "ranking": 44,
       "branchId": "branch-1",
       "courseId": "course-1787347508908",
       "fullName": "شيرين مبروك محمد الحداد",
@@ -1378,7 +1348,7 @@
       "prefix": "B",
       "status": "active",
       "address": "",
-      "groupId": "grp-1787431608023",
+      "groupId": "",
       "branchId": "branch-1",
       "courseId": "course-1787347462419",
       "fullName": "احمد محمد  محمود علي",
@@ -1393,7 +1363,7 @@
       "groupName": "ICT5 - 1",
       "netAmount": 200,
       "trainerId": "trainer-1787349870400",
-      "updatedAt": "2026-09-03T11:35:56.012Z",
+      "updatedAt": "2026-09-20T16:26:32.746Z",
       "nationalId": "",
       "paidAmount": 0,
       "parentName": "محمد  محمود علي",
@@ -1410,7 +1380,11 @@
       "registrationDate": "2026-09-11",
       "dataValidationStatus": "verified",
       "parentPortalPassword": "",
-      "ranking": 105
+      "ranking": 112,
+      "initialPayment": 0,
+      "initialPaymentMethod": "cash",
+      "updatedByUserId": "user-admin",
+      "updatedByUserName": "مدير عام النظام"
     },
     {
       "id": "trainee-1787663430814",
@@ -1461,7 +1435,7 @@
       "updatedByUserName": "مدير عام النظام",
       "dataValidationStatus": "needs_review",
       "parentPortalPassword": "",
-      "ranking": 106,
+      "ranking": 113,
       "initialPayment": 0,
       "initialPaymentMethod": "cash"
     },
@@ -1508,7 +1482,7 @@
       "registrationDate": "2026-09-11",
       "dataValidationStatus": "verified",
       "parentPortalPassword": "",
-      "ranking": 33
+      "ranking": 45
     },
     {
       "id": "trainee-1787541849210-n8r31",
@@ -1522,8 +1496,8 @@
       "prefix": "D",
       "status": "active",
       "address": "",
-      "groupId": "grp-1787433160347",
-      "ranking": 107,
+      "groupId": "",
+      "ranking": 114,
       "branchId": "branch-2",
       "courseId": "course-1787347569318",
       "fullName": "مصطفي عبد الله هاشم",
@@ -1538,7 +1512,7 @@
       "groupName": "ICT - p1 - B1",
       "netAmount": 250,
       "trainerId": "trainer-1787349870400",
-      "updatedAt": "2026-09-03T11:35:58.884Z",
+      "updatedAt": "2026-09-20T16:38:23.115Z",
       "nationalId": "",
       "paidAmount": 0,
       "parentName": "عبد الله هاشم",
@@ -1556,7 +1530,11 @@
       "remainingAmount": 250,
       "registrationDate": "2026-09-11",
       "dataValidationStatus": "verified",
-      "parentPortalPassword": ""
+      "parentPortalPassword": "",
+      "initialPayment": 0,
+      "initialPaymentMethod": "cash",
+      "updatedByUserId": "user-admin",
+      "updatedByUserName": "مدير عام النظام"
     },
     {
       "id": "trainee-1788265531051-e04z",
@@ -1602,7 +1580,7 @@
       "createdByUserName": "مدير عام النظام",
       "initialPaymentMethod": "cash",
       "parentPortalPassword": "",
-      "ranking": 25
+      "ranking": 34
     },
     {
       "id": "trainee-1788267739227-aqg2",
@@ -1612,7 +1590,7 @@
       "phone": "01022773941",
       "track": "",
       "gender": "male",
-      "points": 70,
+      "points": 80,
       "status": "active",
       "address": "",
       "groupId": "grp-1787432635686",
@@ -1634,7 +1612,7 @@
       "siblingIds": [],
       "parentPhone": "01009193365",
       "studentCode": "B008",
-      "totalPoints": 70,
+      "totalPoints": 80,
       "traineeCode": "B008",
       "exemptReason": "",
       "siblingNames": [],
@@ -1648,7 +1626,7 @@
       "createdByUserName": "مدير عام النظام",
       "initialPaymentMethod": "cash",
       "parentPortalPassword": "",
-      "ranking": 11
+      "ranking": 14
     },
     {
       "id": "trainee-1787541849210-13pem",
@@ -1663,7 +1641,7 @@
       "status": "active",
       "address": "",
       "groupId": "grp-1787431802246",
-      "ranking": 34,
+      "ranking": 46,
       "branchId": "branch-1",
       "courseId": "course-1787347508908",
       "fullName": "انس محمد فتحي مبروك",
@@ -1746,7 +1724,7 @@
       "createdByUserName": "مدير عام النظام",
       "initialPaymentMethod": "cash",
       "parentPortalPassword": "",
-      "ranking": 35
+      "ranking": 47
     },
     {
       "id": "trainee-1788359122667-30dx",
@@ -1792,7 +1770,7 @@
       "createdByUserName": "مدير عام النظام",
       "initialPaymentMethod": "cash",
       "parentPortalPassword": "",
-      "ranking": 36
+      "ranking": 48
     },
     {
       "id": "trainee-1788359237418-8bum",
@@ -1837,7 +1815,7 @@
       "createdByUserName": "مدير عام النظام",
       "initialPaymentMethod": "cash",
       "parentPortalPassword": "",
-      "ranking": 18
+      "ranking": 23
     },
     {
       "id": "trainee-1788359371618-3rgv",
@@ -1882,7 +1860,7 @@
       "createdByUserName": "مدير عام النظام",
       "initialPaymentMethod": "cash",
       "parentPortalPassword": "",
-      "ranking": 19
+      "ranking": 24
     },
     {
       "id": "trainee-1788348931160-wd6r",
@@ -1931,7 +1909,7 @@
       "updatedByUserName": "مدير عام النظام",
       "initialPaymentMethod": "cash",
       "parentPortalPassword": "",
-      "ranking": 37
+      "ranking": 49
     },
     {
       "id": "trainee-1788351553588-e82d",
@@ -1980,7 +1958,7 @@
       "updatedByUserName": "مدير عام النظام",
       "initialPaymentMethod": "cash",
       "parentPortalPassword": "",
-      "ranking": 38
+      "ranking": 50
     },
     {
       "id": "trainee-1788354298403-4rxe",
@@ -2026,7 +2004,7 @@
       "createdByUserName": "مدير عام النظام",
       "initialPaymentMethod": "cash",
       "parentPortalPassword": "",
-      "ranking": 39
+      "ranking": 51
     },
     {
       "id": "trainee-1788355869605-o1e8",
@@ -2075,7 +2053,7 @@
       "updatedByUserName": "مدير عام النظام",
       "initialPaymentMethod": "cash",
       "parentPortalPassword": "",
-      "ranking": 40
+      "ranking": 52
     },
     {
       "id": "trainee-1787746135198",
@@ -2085,7 +2063,7 @@
       "phone": "01022773941",
       "track": "",
       "gender": "male",
-      "points": 150,
+      "points": 170,
       "prefix": "B",
       "status": "active",
       "address": "",
@@ -2111,7 +2089,7 @@
       "siblingIds": [],
       "parentPhone": "01022773941",
       "studentCode": "B003",
-      "totalPoints": 150,
+      "totalPoints": 170,
       "traineeCode": "B003",
       "exemptReason": "",
       "isTestRecord": false,
@@ -2138,7 +2116,7 @@
       "phone": "01550235370",
       "track": "",
       "gender": "male",
-      "points": 60,
+      "points": 80,
       "prefix": "B",
       "status": "active",
       "address": "",
@@ -2160,7 +2138,7 @@
       "parentName": "نشات حميده قاسم",
       "parentPhone": "01141301010",
       "studentCode": "B010",
-      "totalPoints": 60,
+      "totalPoints": 80,
       "traineeCode": "B010",
       "exemptReason": "",
       "discountAmount": 0,
@@ -2173,7 +2151,7 @@
       "createdByUserName": "مدير عام النظام",
       "initialPaymentMethod": "cash",
       "parentPortalPassword": "",
-      "ranking": 21
+      "ranking": 15
     },
     {
       "id": "trainee-1788434285377-q7xd",
@@ -2183,7 +2161,7 @@
       "phone": "01227688584",
       "track": "",
       "gender": "male",
-      "points": 80,
+      "points": 78,
       "prefix": "B",
       "status": "active",
       "address": "",
@@ -2205,7 +2183,7 @@
       "parentName": "محمد حسن علي",
       "parentPhone": "01005845650",
       "studentCode": "B013",
-      "totalPoints": 80,
+      "totalPoints": 78,
       "traineeCode": "B013",
       "exemptReason": "",
       "discountAmount": 0,
@@ -2218,7 +2196,7 @@
       "createdByUserName": "مدير عام النظام",
       "initialPaymentMethod": "cash",
       "parentPortalPassword": "",
-      "ranking": 9
+      "ranking": 19
     },
     {
       "id": "trainee-1788434203404-zhp6",
@@ -2263,7 +2241,7 @@
       "createdByUserName": "مدير عام النظام",
       "initialPaymentMethod": "cash",
       "parentPortalPassword": "",
-      "ranking": 12
+      "ranking": 21
     },
     {
       "id": "trainee-1787541849209-sfgme",
@@ -2273,12 +2251,12 @@
       "phone": "01103791786",
       "track": "",
       "gender": "male",
-      "points": 50,
+      "points": 110,
       "prefix": "A",
       "status": "active",
       "address": "",
       "groupId": "grp-1787351870532",
-      "ranking": 26,
+      "ranking": 7,
       "branchId": "branch-1",
       "courseId": "course-1787347401956",
       "fullName": "هلا محمد فتحي يحيي",
@@ -2300,7 +2278,7 @@
       "siblingIds": [],
       "parentPhone": "01149322292",
       "studentCode": "A008",
-      "totalPoints": 50,
+      "totalPoints": 110,
       "traineeCode": "A008",
       "exemptReason": "",
       "isTestRecord": false,
@@ -2317,20 +2295,20 @@
       "id": "trainee-1787361410293-aeko",
       "code": "B001",
       "grade": "الصف الخامس الابتدائي",
-      "notes": "",
+      "notes": "ربط إخوة مع (لين محمد رمضان بخيت - A001، مرام محمد رمضان بخيت - D001) - تم تطبيق خصم الأخوات",
       "phone": "01005400325",
       "track": "",
       "gender": "male",
-      "points": 270,
+      "points": 285,
       "prefix": "B",
       "status": "active",
       "address": "",
       "groupId": "grp-1787431608023",
-      "ranking": 3,
+      "ranking": 2,
       "branchId": "branch-1",
       "courseId": "course-1787347462419",
       "fullName": "رفيف محمد رمضان بخيت",
-      "isExempt": false,
+      "isExempt": true,
       "photoUrl": "",
       "birthDate": "",
       "courseIds": [
@@ -2339,31 +2317,31 @@
       "createdAt": "2026-09-11T18:58:21.614Z",
       "feeAmount": 200,
       "groupName": "ICT5 - 1",
-      "netAmount": 200,
+      "netAmount": 0,
       "trainerId": "trainer-1787349806643",
-      "updatedAt": "2026-09-03T11:36:17.644Z",
+      "updatedAt": "2026-09-20T16:20:58.528Z",
       "nationalId": "",
       "paidAmount": 0,
       "parentName": "محمد رمضان بخيت",
       "siblingIds": [
-        "trainee-1787361330810-d1if",
-        "trainee-1787459300939-62ly"
+        "trainee-1787459300939-62ly",
+        "trainee-1787361330810-d1if"
       ],
       "parentPhone": "01001500686",
       "studentCode": "B001",
-      "totalPoints": 270,
+      "totalPoints": 285,
       "traineeCode": "B001",
-      "exemptReason": "",
+      "exemptReason": "management_children",
       "isTestRecord": false,
       "siblingNames": [
-        "مرام محمد رمضان بخيت",
-        "لين محمد رمضان بخيت"
+        "لين محمد رمضان بخيت",
+        "مرام محمد رمضان بخيت"
       ],
       "creditBalance": 0,
-      "discountAmount": 0,
+      "discountAmount": 200,
       "initialPayment": 0,
       "portalPassword": "",
-      "remainingAmount": 200,
+      "remainingAmount": 0,
       "updatedByUserId": "user-admin",
       "registrationDate": "2026-09-11",
       "updatedByUserName": "مدير عام النظام",
@@ -2379,7 +2357,7 @@
       "phone": "01275749843",
       "track": "",
       "gender": "male",
-      "points": 90,
+      "points": 105,
       "prefix": "B",
       "status": "active",
       "address": "",
@@ -2400,7 +2378,7 @@
       "parentName": "علاء سلامة عبدالسلام",
       "parentPhone": "01145987032",
       "studentCode": "B009",
-      "totalPoints": 90,
+      "totalPoints": 105,
       "traineeCode": "B009",
       "exemptReason": "",
       "discountAmount": 0,
@@ -2428,7 +2406,7 @@
       "status": "active",
       "address": "",
       "groupId": "grp-1787431802246",
-      "ranking": 41,
+      "ranking": 53,
       "branchId": "branch-1",
       "courseId": "course-1787347508908",
       "fullName": "أحمد حامد احمد السيد",
@@ -2479,8 +2457,8 @@
       "prefix": "A",
       "status": "active",
       "address": "",
-      "groupId": "grp-1787350487970",
-      "ranking": 108,
+      "groupId": "",
+      "ranking": 115,
       "branchId": "branch-1",
       "courseId": "course-1787347401956",
       "fullName": "احمد الشحات صلاح الشحات",
@@ -2495,7 +2473,7 @@
       "groupName": "ICT4 - 1",
       "netAmount": 200,
       "trainerId": "trainer-1787349870400",
-      "updatedAt": "2026-09-03T11:35:55.525Z",
+      "updatedAt": "2026-09-20T16:44:02.308Z",
       "nationalId": "",
       "paidAmount": 0,
       "parentName": "الشحات صلاح الشحات",
@@ -2514,7 +2492,11 @@
       "remainingAmount": 200,
       "registrationDate": "2026-09-11",
       "dataValidationStatus": "needs_review",
-      "parentPortalPassword": ""
+      "parentPortalPassword": "",
+      "initialPayment": 0,
+      "initialPaymentMethod": "cash",
+      "updatedByUserId": "user-admin",
+      "updatedByUserName": "مدير عام النظام"
     },
     {
       "id": "trainee-1788359019163-65vi",
@@ -2524,7 +2506,7 @@
       "phone": "01099737669",
       "track": "",
       "gender": "male",
-      "points": 44,
+      "points": 144,
       "status": "active",
       "address": "",
       "groupId": "grp-1787431825818",
@@ -2546,7 +2528,7 @@
       "siblingIds": [],
       "parentPhone": "01007282622",
       "studentCode": "C030",
-      "totalPoints": 44,
+      "totalPoints": 144,
       "traineeCode": "C030",
       "exemptReason": "",
       "siblingNames": [],
@@ -2560,7 +2542,7 @@
       "createdByUserName": "مدير عام النظام",
       "initialPaymentMethod": "cash",
       "parentPortalPassword": "",
-      "ranking": 42
+      "ranking": 5
     },
     {
       "id": "trainee-1788272413231-25ts",
@@ -2608,7 +2590,7 @@
       "updatedByUserName": "مدير عام النظام",
       "initialPaymentMethod": "cash",
       "parentPortalPassword": "",
-      "ranking": 80
+      "ranking": 93
     },
     {
       "id": "trainee-1787541849209-nt607",
@@ -2618,12 +2600,12 @@
       "phone": "01119309697",
       "track": "",
       "gender": "male",
-      "points": 30,
+      "points": 35,
       "prefix": "A",
       "status": "active",
       "address": "",
       "groupId": "grp-1787350487970",
-      "ranking": 62,
+      "ranking": 73,
       "branchId": "branch-1",
       "courseId": "course-1787347401956",
       "fullName": "انس محمد عبدالبصير ربيع",
@@ -2647,7 +2629,7 @@
       ],
       "parentPhone": "01156569121",
       "studentCode": "A017",
-      "totalPoints": 30,
+      "totalPoints": 35,
       "traineeCode": "A017",
       "exemptReason": "",
       "isTestRecord": false,
@@ -2670,13 +2652,13 @@
       "phone": "01145173650",
       "track": "",
       "gender": "female",
-      "points": 44,
+      "points": 64,
       "status": "active",
       "address": "",
       "groupId": "grp-1787358595611",
       "branchId": "branch-1",
       "courseId": "course-1787347569318",
-      "fullName": "جنى رضا عبد المغيث مهدي",
+      "fullName": "جنا رضا عبد المغيث مهدي",
       "isExempt": false,
       "photoUrl": "",
       "birthDate": "",
@@ -2685,14 +2667,14 @@
       "groupName": "ICT - p1 - 2",
       "netAmount": 200,
       "trainerId": "trainer-1787349806643",
-      "updatedAt": "2026-09-20T16:00:00.000Z",
+      "updatedAt": "2026-09-20T16:06:21.495Z",
       "nationalId": "",
       "paidAmount": 0,
       "parentName": "رضا عبد المغيث مهدي",
       "siblingIds": [],
       "parentPhone": "",
       "studentCode": "D017",
-      "totalPoints": 44,
+      "totalPoints": 64,
       "traineeCode": "D017",
       "exemptReason": "",
       "siblingNames": [],
@@ -2706,7 +2688,7 @@
       "createdByUserName": "مدير عام النظام",
       "initialPaymentMethod": "cash",
       "parentPortalPassword": "",
-      "ranking": 43,
+      "ranking": 25,
       "updatedByUserId": "user-admin",
       "updatedByUserName": "مدير عام النظام",
       "prefix": "D"
@@ -2719,12 +2701,12 @@
       "phone": "01558118998",
       "track": "",
       "gender": "male",
-      "points": 70,
+      "points": 85,
       "prefix": "B",
       "status": "active",
       "address": "",
       "groupId": "grp-1787431608023",
-      "ranking": 13,
+      "ranking": 12,
       "branchId": "branch-1",
       "courseId": "course-1787347462419",
       "fullName": "مصطفى محمود احمد خلف",
@@ -2746,7 +2728,7 @@
       "siblingIds": [],
       "parentPhone": "01154387509",
       "studentCode": "B002",
-      "totalPoints": 70,
+      "totalPoints": 85,
       "traineeCode": "B002",
       "exemptReason": "",
       "isTestRecord": false,
@@ -2771,7 +2753,7 @@
       "phone": "01113321804",
       "track": "",
       "gender": "male",
-      "points": 30,
+      "points": 35,
       "prefix": "A",
       "status": "active",
       "address": "",
@@ -2793,7 +2775,7 @@
       "parentName": "جلال جلال ابراهيم",
       "parentPhone": "01113320394",
       "studentCode": "A025",
-      "totalPoints": 30,
+      "totalPoints": 35,
       "traineeCode": "A025",
       "exemptReason": "",
       "discountAmount": 0,
@@ -2806,7 +2788,7 @@
       "createdByUserName": "مدير عام النظام",
       "initialPaymentMethod": "cash",
       "parentPortalPassword": "",
-      "ranking": 63
+      "ranking": 74
     },
     {
       "id": "trainee-1788438485051-rm83",
@@ -2816,7 +2798,7 @@
       "phone": "01154901042",
       "track": "",
       "gender": "male",
-      "points": 30,
+      "points": 35,
       "prefix": "A",
       "status": "active",
       "address": "",
@@ -2838,7 +2820,7 @@
       "parentName": "سامي ناجي سعد سلامة",
       "parentPhone": "",
       "studentCode": "A027",
-      "totalPoints": 30,
+      "totalPoints": 35,
       "traineeCode": "A027",
       "exemptReason": "",
       "discountAmount": 0,
@@ -2851,7 +2833,7 @@
       "createdByUserName": "مدير عام النظام",
       "initialPaymentMethod": "cash",
       "parentPortalPassword": "",
-      "ranking": 64
+      "ranking": 75
     },
     {
       "id": "trainee-1787541849209-v7dn1",
@@ -2861,12 +2843,12 @@
       "phone": "01120530166",
       "track": "",
       "gender": "male",
-      "points": 40,
+      "points": 45,
       "prefix": "A",
       "status": "active",
       "address": "",
       "groupId": "grp-1787350487970",
-      "ranking": 56,
+      "ranking": 39,
       "branchId": "branch-1",
       "courseId": "course-1787347401956",
       "fullName": "كاراس بيشوي نبيل كرم",
@@ -2891,7 +2873,7 @@
       ],
       "parentPhone": "01120530166",
       "studentCode": "A011",
-      "totalPoints": 40,
+      "totalPoints": 45,
       "traineeCode": "A011",
       "exemptReason": "",
       "isTestRecord": false,
@@ -2915,7 +2897,7 @@
       "phone": "01113164194",
       "track": "",
       "gender": "male",
-      "points": 10,
+      "points": 20,
       "prefix": "A",
       "status": "active",
       "address": "",
@@ -2937,7 +2919,7 @@
       "parentName": "علاءالدين احمد مبارك",
       "parentPhone": "01123335549",
       "studentCode": "A029",
-      "totalPoints": 10,
+      "totalPoints": 20,
       "traineeCode": "A029",
       "exemptReason": "",
       "discountAmount": 0,
@@ -2950,7 +2932,7 @@
       "createdByUserName": "مدير عام النظام",
       "initialPaymentMethod": "cash",
       "parentPortalPassword": "",
-      "ranking": 109
+      "ranking": 94
     },
     {
       "id": "trainee-1788441737087-oclb",
@@ -2960,7 +2942,7 @@
       "phone": "01113583424",
       "track": "",
       "gender": "male",
-      "points": 10,
+      "points": 25,
       "prefix": "A",
       "status": "active",
       "address": "",
@@ -2982,7 +2964,7 @@
       "parentName": "خالد مبروك فاروق",
       "parentPhone": "",
       "studentCode": "A031",
-      "totalPoints": 10,
+      "totalPoints": 25,
       "traineeCode": "A031",
       "exemptReason": "",
       "discountAmount": 0,
@@ -2995,7 +2977,7 @@
       "createdByUserName": "مدير عام النظام",
       "initialPaymentMethod": "cash",
       "parentPortalPassword": "",
-      "ranking": 110
+      "ranking": 89
     },
     {
       "id": "trainee-1788441590683-ngqn",
@@ -3005,7 +2987,7 @@
       "phone": "012219114664",
       "track": "",
       "gender": "male",
-      "points": 10,
+      "points": 8,
       "prefix": "A",
       "status": "active",
       "address": "",
@@ -3030,7 +3012,7 @@
       ],
       "parentPhone": "012219114664",
       "studentCode": "A030",
-      "totalPoints": 10,
+      "totalPoints": 8,
       "traineeCode": "A030",
       "exemptReason": "",
       "siblingNames": [
@@ -3046,7 +3028,7 @@
       "createdByUserName": "مدير عام النظام",
       "initialPaymentMethod": "cash",
       "parentPortalPassword": "",
-      "ranking": 111
+      "ranking": 124
     },
     {
       "id": "trainee-1788446613950-0nmo",
@@ -3090,7 +3072,7 @@
       "createdByUserName": "مدير عام النظام",
       "initialPaymentMethod": "cash",
       "parentPortalPassword": "",
-      "ranking": 122
+      "ranking": 128
     },
     {
       "id": "trainee-1788446099678-14gq",
@@ -3135,7 +3117,7 @@
       "createdByUserName": "مدير عام النظام",
       "initialPaymentMethod": "cash",
       "parentPortalPassword": "",
-      "ranking": 112
+      "ranking": 116
     },
     {
       "id": "trainee-1788446260388-hnyt",
@@ -3180,7 +3162,7 @@
       "createdByUserName": "مدير عام النظام",
       "initialPaymentMethod": "cash",
       "parentPortalPassword": "",
-      "ranking": 113
+      "ranking": 117
     },
     {
       "id": "trainee-1788446486450-581z",
@@ -3225,7 +3207,7 @@
       "createdByUserName": "مدير عام النظام",
       "initialPaymentMethod": "cash",
       "parentPortalPassword": "",
-      "ranking": 81
+      "ranking": 95
     },
     {
       "id": "trainee-1788449898119-750m",
@@ -3270,7 +3252,7 @@
       "createdByUserName": "مدير عام النظام",
       "initialPaymentMethod": "cash",
       "parentPortalPassword": "",
-      "ranking": 57
+      "ranking": 65
     },
     {
       "id": "trainee-1788450172521-h0zs",
@@ -3321,7 +3303,7 @@
       "createdByUserName": "مدير عام النظام",
       "initialPaymentMethod": "cash",
       "parentPortalPassword": "",
-      "ranking": 58,
+      "ranking": 66,
       "updatedByUserId": "user-admin",
       "updatedByUserName": "مدير عام النظام"
     },
@@ -3376,7 +3358,7 @@
       "updatedByUserName": "مدير عام النظام",
       "initialPaymentMethod": "cash",
       "parentPortalPassword": "",
-      "ranking": 59
+      "ranking": 67
     },
     {
       "id": "trainee-1787541849209-4xin8",
@@ -3391,7 +3373,7 @@
       "status": "active",
       "address": "",
       "groupId": "grp-1787351870532",
-      "ranking": 6,
+      "ranking": 9,
       "branchId": "branch-1",
       "courseId": "course-1787347401956",
       "fullName": "اسر محمد عصام ابو الخير",
@@ -3476,7 +3458,7 @@
       "updatedByUserName": "مدير عام النظام",
       "initialPaymentMethod": "cash",
       "parentPortalPassword": "",
-      "ranking": 44
+      "ranking": 54
     },
     {
       "id": "trainee-1789160240943-wwfv",
@@ -3486,11 +3468,11 @@
       "phone": "0100",
       "track": "",
       "gender": "male",
-      "points": 10,
+      "points": 25,
       "prefix": "A",
       "status": "active",
       "address": "",
-      "groupId": "grp-1787351870532",
+      "groupId": "grp-1787350488774",
       "branchId": "branch-1",
       "courseId": "course-1787347401956",
       "fullName": "ياسين محمد حسين",
@@ -3502,13 +3484,13 @@
       "groupName": "ICT4 - 3",
       "netAmount": 200,
       "trainerId": "trainer-1787349806643",
-      "updatedAt": "2026-09-15T14:06:19.160Z",
+      "updatedAt": "2026-09-20T16:51:08.237Z",
       "nationalId": "",
       "paidAmount": 0,
       "parentName": "محمد حسين",
       "parentPhone": "",
       "studentCode": "A037",
-      "totalPoints": 10,
+      "totalPoints": 25,
       "traineeCode": "A037",
       "exemptReason": "",
       "discountAmount": 0,
@@ -3520,7 +3502,7 @@
       "updatedByUserName": "مدير عام النظام",
       "initialPaymentMethod": "cash",
       "parentPortalPassword": "",
-      "ranking": 114
+      "ranking": 90
     },
     {
       "id": "trainee-1788449704942-pqx8",
@@ -3567,7 +3549,7 @@
       "updatedByUserName": "المدير العام (Super Admin)",
       "initialPaymentMethod": "cash",
       "parentPortalPassword": "",
-      "ranking": 27
+      "ranking": 35
     },
     {
       "id": "trainee-1787541849210-xqtko",
@@ -3582,7 +3564,7 @@
       "status": "active",
       "address": "",
       "groupId": "grp-1787431825818",
-      "ranking": 23,
+      "ranking": 31,
       "branchId": "branch-1",
       "courseId": "course-1787347508908",
       "fullName": "رمضان وائل مهدي الخضراوي",
@@ -3594,9 +3576,9 @@
       "createdAt": "2026-09-11T18:58:20.491Z",
       "feeAmount": 200,
       "groupName": "ICT6 - 2",
-      "netAmount": 200,
+      "netAmount": 150,
       "trainerId": "trainer-1787349806643",
-      "updatedAt": "2026-09-03T23:30:04.016Z",
+      "updatedAt": "2026-09-20T16:22:25.571Z",
       "nationalId": "",
       "paidAmount": 0,
       "parentName": "وائل مهدي الخضراوي",
@@ -3609,12 +3591,17 @@
       "isTestRecord": false,
       "siblingNames": [],
       "creditBalance": 0,
-      "discountAmount": 0,
+      "discountAmount": 50,
       "portalPassword": "",
-      "remainingAmount": 200,
+      "remainingAmount": 150,
       "registrationDate": "2026-09-11",
       "dataValidationStatus": "verified",
-      "parentPortalPassword": ""
+      "parentPortalPassword": "",
+      "initialPayment": 0,
+      "initialPaymentMethod": "cash",
+      "photoUrl": "",
+      "updatedByUserId": "user-admin",
+      "updatedByUserName": "مدير عام النظام"
     },
     {
       "id": "trainee-1787938303996",
@@ -3624,7 +3611,7 @@
       "phone": "01553471445",
       "track": "",
       "gender": "male",
-      "points": 20,
+      "points": 35,
       "prefix": "A",
       "status": "active",
       "address": "",
@@ -3649,7 +3636,7 @@
       "parentName": "إيناس جمال أمين ",
       "parentPhone": "01145811866",
       "studentCode": "A022",
-      "totalPoints": 20,
+      "totalPoints": 35,
       "traineeCode": "A022",
       "exemptReason": "",
       "isTestRecord": false,
@@ -3664,7 +3651,7 @@
       "dataValidationStatus": "verified",
       "initialPaymentMethod": "cash",
       "parentPortalPassword": "",
-      "ranking": 82
+      "ranking": 76
     },
     {
       "id": "trainee-1787541849209-pmfbt",
@@ -3674,12 +3661,12 @@
       "phone": "01067899283",
       "track": "",
       "gender": "male",
-      "points": 20,
+      "points": 55,
       "prefix": "A",
       "status": "active",
       "address": "",
       "groupId": "grp-1787432103884",
-      "ranking": 83,
+      "ranking": 29,
       "branchId": "branch-2",
       "courseId": "course-1787347401956",
       "fullName": "أغابي بيمن عزت",
@@ -3701,7 +3688,7 @@
       "siblingIds": [],
       "parentPhone": "01067899283",
       "studentCode": "A002",
-      "totalPoints": 20,
+      "totalPoints": 55,
       "traineeCode": "A002",
       "exemptReason": "",
       "isTestRecord": false,
@@ -3726,12 +3713,12 @@
       "phone": "01555724745",
       "track": "",
       "gender": "male",
-      "points": 50,
+      "points": 55,
       "prefix": "A",
       "status": "active",
       "address": "",
       "groupId": "grp-1787350487970",
-      "ranking": 28,
+      "ranking": 30,
       "branchId": "branch-1",
       "courseId": "course-1787347401956",
       "fullName": "شيم حامد احمد السيد",
@@ -3755,7 +3742,7 @@
       ],
       "parentPhone": "01144363810",
       "studentCode": "A007",
-      "totalPoints": 50,
+      "totalPoints": 55,
       "traineeCode": "A007",
       "exemptReason": "",
       "isTestRecord": false,
@@ -3774,7 +3761,7 @@
       "id": "trainee-1787361330810-d1if",
       "code": "D001",
       "grade": "الصف الأول الإعدادي",
-      "notes": "",
+      "notes": "ربط إخوة مع (لين محمد رمضان بخيت - A001، رفيف محمد رمضان بخيت - B001) - تم تطبيق خصم الأخوات",
       "phone": "01001500686",
       "track": "",
       "gender": "male",
@@ -3787,7 +3774,7 @@
       "branchId": "branch-1",
       "courseId": "course-1787347569318",
       "fullName": "مرام محمد رمضان بخيت",
-      "isExempt": false,
+      "isExempt": true,
       "photoUrl": "",
       "birthDate": "",
       "courseIds": [
@@ -3796,9 +3783,9 @@
       "createdAt": "2026-09-11T18:58:20.639Z",
       "feeAmount": 200,
       "groupName": "ICT - p1 - 2",
-      "netAmount": 200,
+      "netAmount": 0,
       "trainerId": "trainer-1787349806643",
-      "updatedAt": "2026-09-03T20:16:48.309Z",
+      "updatedAt": "2026-09-20T16:22:07.863Z",
       "nationalId": "",
       "paidAmount": 0,
       "parentName": "محمد رمضان بخيت",
@@ -3810,20 +3797,20 @@
       "studentCode": "D001",
       "totalPoints": 341,
       "traineeCode": "D001",
-      "exemptReason": "",
+      "exemptReason": "management_children",
       "isTestRecord": false,
       "siblingNames": [
         "لين محمد رمضان بخيت",
         "رفيف محمد رمضان بخيت"
       ],
       "creditBalance": 500,
-      "discountAmount": 0,
+      "discountAmount": 200,
       "initialPayment": 0,
       "portalPassword": "",
-      "remainingAmount": 200,
-      "updatedByUserId": "u-admin",
+      "remainingAmount": 0,
+      "updatedByUserId": "user-admin",
       "registrationDate": "2026-09-11",
-      "updatedByUserName": "المدير العام (Super Admin)",
+      "updatedByUserName": "مدير عام النظام",
       "dataValidationStatus": "verified",
       "initialPaymentMethod": "cash",
       "parentPortalPassword": ""
@@ -3836,12 +3823,12 @@
       "phone": "01151625616",
       "track": "",
       "gender": "male",
-      "points": 10,
+      "points": 8,
       "prefix": "A",
       "status": "active",
       "address": "",
       "groupId": "grp-1787350488774",
-      "ranking": 115,
+      "ranking": 125,
       "branchId": "branch-1",
       "courseId": "course-1787347401956",
       "fullName": "سما سراج الدين محمد لطفي علي",
@@ -3863,7 +3850,7 @@
       "siblingIds": [],
       "parentPhone": "01019291820",
       "studentCode": "A015",
-      "totalPoints": 10,
+      "totalPoints": 8,
       "traineeCode": "A015",
       "exemptReason": "",
       "isTestRecord": false,
@@ -3885,11 +3872,11 @@
       "phone": "01121541421",
       "track": "",
       "gender": "male",
-      "points": 30,
+      "points": 45,
       "prefix": "A",
       "status": "active",
       "address": "",
-      "groupId": "grp-1787350487970",
+      "groupId": "grp-1787350488774",
       "branchId": "branch-1",
       "courseId": "course-1787347401956",
       "fullName": "رونزا محمد سعد النجار",
@@ -3904,14 +3891,14 @@
       "groupName": "ICT4 - 1",
       "netAmount": 200,
       "trainerId": "trainer-1787349806643",
-      "updatedAt": "2026-09-03T12:43:25.229Z",
+      "updatedAt": "2026-09-20T16:44:19.643Z",
       "nationalId": "",
       "paidAmount": 0,
       "parentName": "محمد سعد النجار",
       "siblingIds": [],
       "parentPhone": "01121541421",
       "studentCode": "A013",
-      "totalPoints": 30,
+      "totalPoints": 45,
       "traineeCode": "A013",
       "exemptReason": "",
       "isTestRecord": false,
@@ -3921,12 +3908,14 @@
       "discountAmount": 0,
       "portalPassword": "",
       "remainingAmount": 200,
-      "updatedByUserId": "u-admin",
+      "updatedByUserId": "user-admin",
       "registrationDate": "2026-09-11",
-      "updatedByUserName": "المدير العام (Super Admin)",
+      "updatedByUserName": "مدير عام النظام",
       "dataValidationStatus": "needs_review",
       "parentPortalPassword": "",
-      "ranking": 65
+      "ranking": 40,
+      "initialPayment": 0,
+      "initialPaymentMethod": "cash"
     },
     {
       "id": "trainee-1787541849209-bgqwo",
@@ -3936,12 +3925,12 @@
       "phone": "01114692028",
       "track": "",
       "gender": "male",
-      "points": 40,
+      "points": 160,
       "prefix": "A",
       "status": "active",
       "address": "",
       "groupId": "grp-1787350488774",
-      "ranking": 60,
+      "ranking": 11,
       "branchId": "branch-1",
       "courseId": "course-1787347401956",
       "fullName": "مارسلينو مايكل رشدي فواد",
@@ -3963,7 +3952,7 @@
       "siblingIds": [],
       "parentPhone": "01151870626",
       "studentCode": "A014",
-      "totalPoints": 40,
+      "totalPoints": 160,
       "traineeCode": "A014",
       "exemptReason": "",
       "isTestRecord": false,
@@ -4030,7 +4019,7 @@
       "dataValidationStatus": "verified",
       "initialPaymentMethod": "cash",
       "parentPortalPassword": "",
-      "ranking": 14
+      "ranking": 22
     },
     {
       "id": "trainee-1787541849209-sguwt",
@@ -4040,12 +4029,12 @@
       "phone": "01067504968",
       "track": "",
       "gender": "male",
-      "points": 40,
+      "points": 45,
       "prefix": "A",
       "status": "active",
       "address": "",
       "groupId": "grp-1787350487970",
-      "ranking": 61,
+      "ranking": 41,
       "branchId": "branch-1",
       "courseId": "course-1787347401956",
       "fullName": "ارسانيوس بيشوى يوسف بشرى",
@@ -4066,7 +4055,7 @@
       "siblingIds": [],
       "parentPhone": "01016563881",
       "studentCode": "A004",
-      "totalPoints": 40,
+      "totalPoints": 45,
       "traineeCode": "A004",
       "exemptReason": "",
       "isTestRecord": false,
@@ -4091,19 +4080,19 @@
       "prefix": "A",
       "status": "active",
       "address": "",
-      "groupId": null,
+      "groupId": "",
       "branchId": "branch-1",
       "courseId": "course-1787347401956",
       "fullName": "محمد عبدالله رمضان بخيت",
-      "isExempt": false,
+      "isExempt": true,
       "photoUrl": "",
       "birthDate": "",
       "createdAt": "2026-09-11T18:58:21.037Z",
       "feeAmount": 200,
       "groupName": "",
-      "netAmount": 200,
+      "netAmount": 0,
       "trainerId": "trainer-1787349806643",
-      "updatedAt": "2026-09-03T21:30:30.706Z",
+      "updatedAt": "2026-09-20T16:21:20.988Z",
       "nationalId": "",
       "paidAmount": 0,
       "parentName": "عبدالله رمضان بخيت",
@@ -4112,24 +4101,24 @@
       "studentCode": "A005",
       "totalPoints": 30,
       "traineeCode": "A005",
-      "exemptReason": "",
+      "exemptReason": "management_children",
       "isTestRecord": false,
       "siblingNames": [],
       "creditBalance": 0,
-      "discountAmount": 0,
+      "discountAmount": 200,
       "initialPayment": 0,
       "portalPassword": "",
       "_lastAutoParent": "عبدالله رمضان بخيت",
       "createdByUserId": "user-admin",
-      "remainingAmount": 200,
-      "updatedByUserId": "u-admin",
+      "remainingAmount": 0,
+      "updatedByUserId": "user-admin",
       "registrationDate": "2026-09-11",
       "createdByUserName": "مدير عام النظام",
-      "updatedByUserName": "المدير العام (Super Admin)",
+      "updatedByUserName": "مدير عام النظام",
       "dataValidationStatus": "verified",
       "initialPaymentMethod": "cash",
       "parentPortalPassword": "",
-      "ranking": 66
+      "ranking": 80
     },
     {
       "id": "trainee-1787541849210-aqkav",
@@ -4144,7 +4133,7 @@
       "status": "active",
       "address": "",
       "groupId": "grp-1787431802246",
-      "ranking": 45,
+      "ranking": 55,
       "branchId": "branch-1",
       "courseId": "course-1787347508908",
       "fullName": "رودينا محمد جمال عبد السلام",
@@ -4192,7 +4181,7 @@
       "status": "active",
       "address": "",
       "groupId": "grp-1787433082510",
-      "ranking": 29,
+      "ranking": 36,
       "branchId": "branch-2",
       "courseId": "course-1787347508908",
       "fullName": "اسيل محمد شوقي عبدالحافظ",
@@ -4235,7 +4224,7 @@
       "phone": "01098185743",
       "track": "",
       "gender": "male",
-      "points": 60,
+      "points": 80,
       "status": "active",
       "address": "",
       "groupId": "grp-1787432635686",
@@ -4257,7 +4246,7 @@
       "siblingIds": [],
       "parentPhone": "01005443972",
       "studentCode": "B007",
-      "totalPoints": 60,
+      "totalPoints": 80,
       "traineeCode": "B007",
       "exemptReason": "",
       "siblingNames": [],
@@ -4271,7 +4260,7 @@
       "createdByUserName": "مدير عام النظام",
       "initialPaymentMethod": "cash",
       "parentPortalPassword": "",
-      "ranking": 22
+      "ranking": 16
     },
     {
       "id": "trainee-1787541849209-nk3i7",
@@ -4281,12 +4270,12 @@
       "phone": "01552274216",
       "track": "",
       "gender": "male",
-      "points": 70,
+      "points": 85,
       "prefix": "B",
       "status": "active",
       "address": "",
       "groupId": "grp-1787432635686",
-      "ranking": 15,
+      "ranking": 13,
       "branchId": "branch-2",
       "courseId": "course-1787347462419",
       "fullName": "ياسر عمار ياسر راشد",
@@ -4308,7 +4297,7 @@
       "siblingIds": [],
       "parentPhone": "01002933575",
       "studentCode": "B004",
-      "totalPoints": 70,
+      "totalPoints": 85,
       "traineeCode": "B004",
       "exemptReason": "",
       "isTestRecord": false,
@@ -4365,7 +4354,7 @@
       "createdByUserName": "مدير عام النظام",
       "initialPaymentMethod": "cash",
       "parentPortalPassword": "",
-      "ranking": 46
+      "ranking": 56
     },
     {
       "id": "trainee-1788355755634-ofcm",
@@ -4411,7 +4400,7 @@
       "createdByUserName": "مدير عام النظام",
       "initialPaymentMethod": "cash",
       "parentPortalPassword": "",
-      "ranking": 47
+      "ranking": 57
     },
     {
       "id": "trainee-1788349582919-h9x9",
@@ -4457,7 +4446,7 @@
       "createdByUserName": "مدير عام النظام",
       "initialPaymentMethod": "cash",
       "parentPortalPassword": "",
-      "ranking": 48
+      "ranking": 58
     },
     {
       "id": "trainee-1788351682285-1vs0",
@@ -4506,7 +4495,7 @@
       "updatedByUserName": "مدير عام النظام",
       "initialPaymentMethod": "cash",
       "parentPortalPassword": "",
-      "ranking": 49
+      "ranking": 59
     },
     {
       "id": "trainee-1788349656427-9f1p",
@@ -4552,7 +4541,7 @@
       "createdByUserName": "مدير عام النظام",
       "initialPaymentMethod": "cash",
       "parentPortalPassword": "",
-      "ranking": 50
+      "ranking": 60
     },
     {
       "id": "trainee-1788348803502-lln1",
@@ -4600,7 +4589,7 @@
       "updatedByUserName": "مدير عام النظام",
       "initialPaymentMethod": "cash",
       "parentPortalPassword": "",
-      "ranking": 51
+      "ranking": 61
     },
     {
       "id": "trainee-1788351434704-xse0",
@@ -4649,7 +4638,7 @@
       "updatedByUserName": "مدير عام النظام",
       "initialPaymentMethod": "cash",
       "parentPortalPassword": "",
-      "ranking": 52
+      "ranking": 62
     },
     {
       "id": "trainee-1788434693014-74k1",
@@ -4659,7 +4648,7 @@
       "phone": "01211522032",
       "track": "",
       "gender": "male",
-      "points": 80,
+      "points": 79,
       "prefix": "B",
       "status": "active",
       "address": "",
@@ -4681,7 +4670,7 @@
       "parentName": "حنا بدير جرجس",
       "parentPhone": "01211522032",
       "studentCode": "B015",
-      "totalPoints": 80,
+      "totalPoints": 79,
       "traineeCode": "B015",
       "exemptReason": "",
       "discountAmount": 0,
@@ -4694,7 +4683,7 @@
       "createdByUserName": "مدير عام النظام",
       "initialPaymentMethod": "cash",
       "parentPortalPassword": "",
-      "ranking": 10
+      "ranking": 18
     },
     {
       "id": "trainee-1788434372373-9lbi",
@@ -4704,7 +4693,7 @@
       "phone": "01275857083",
       "track": "",
       "gender": "male",
-      "points": 70,
+      "points": 71,
       "prefix": "B",
       "status": "active",
       "address": "",
@@ -4726,7 +4715,7 @@
       "parentName": "ثروت اسكاروس بولس",
       "parentPhone": "",
       "studentCode": "B014",
-      "totalPoints": 70,
+      "totalPoints": 71,
       "traineeCode": "B014",
       "exemptReason": "",
       "discountAmount": 0,
@@ -4739,7 +4728,7 @@
       "createdByUserName": "مدير عام النظام",
       "initialPaymentMethod": "cash",
       "parentPortalPassword": "",
-      "ranking": 16
+      "ranking": 20
     },
     {
       "id": "trainee-1788433811697-19bi",
@@ -4749,7 +4738,7 @@
       "phone": "01111449872",
       "track": "",
       "gender": "male",
-      "points": 70,
+      "points": 80,
       "prefix": "B",
       "status": "active",
       "address": "",
@@ -4771,7 +4760,7 @@
       "parentName": "عبدالحميد السعيد ابو سكينه",
       "parentPhone": "01111449872",
       "studentCode": "B011",
-      "totalPoints": 70,
+      "totalPoints": 80,
       "traineeCode": "B011",
       "exemptReason": "",
       "discountAmount": 0,
@@ -4799,7 +4788,7 @@
       "status": "active",
       "address": "",
       "groupId": "grp-1787358828709",
-      "ranking": 84,
+      "ranking": 96,
       "branchId": "branch-1",
       "courseId": "course-1787347569318",
       "fullName": "شنوده بيشوي نبيل كرم",
@@ -4887,7 +4876,7 @@
       "updatedByUserName": "مدير عام النظام",
       "initialPaymentMethod": "cash",
       "parentPortalPassword": "",
-      "ranking": 53
+      "ranking": 63
     },
     {
       "id": "trainee-1788276627580-qls2",
@@ -4897,7 +4886,7 @@
       "phone": "01091359082",
       "track": "",
       "gender": "male",
-      "points": 20,
+      "points": 14,
       "status": "active",
       "address": "",
       "groupId": "grp-1787432103884",
@@ -4921,7 +4910,7 @@
       ],
       "parentPhone": "01093188503",
       "studentCode": "A021",
-      "totalPoints": 20,
+      "totalPoints": 14,
       "traineeCode": "A021",
       "exemptReason": "",
       "siblingNames": [
@@ -4939,7 +4928,7 @@
       "updatedByUserName": "مدير عام النظام",
       "initialPaymentMethod": "cash",
       "parentPortalPassword": "",
-      "ranking": 85
+      "ranking": 100
     },
     {
       "id": "trainee-1788438411955-rotz",
@@ -4949,7 +4938,7 @@
       "phone": "01123626592",
       "track": "",
       "gender": "male",
-      "points": 30,
+      "points": 35,
       "prefix": "A",
       "status": "active",
       "address": "",
@@ -4971,7 +4960,7 @@
       "parentName": "كيرلس جرجس كامل",
       "parentPhone": "",
       "studentCode": "A026",
-      "totalPoints": 30,
+      "totalPoints": 35,
       "traineeCode": "A026",
       "exemptReason": "",
       "discountAmount": 0,
@@ -4984,7 +4973,7 @@
       "createdByUserName": "مدير عام النظام",
       "initialPaymentMethod": "cash",
       "parentPortalPassword": "",
-      "ranking": 67
+      "ranking": 77
     },
     {
       "id": "trainee-1788438199947-7k16",
@@ -4994,7 +4983,7 @@
       "phone": "01156148747",
       "track": "",
       "gender": "male",
-      "points": 30,
+      "points": 32,
       "prefix": "A",
       "status": "active",
       "address": "",
@@ -5016,7 +5005,7 @@
       "parentName": "مينا جرجس كامل",
       "parentPhone": "",
       "studentCode": "A024",
-      "totalPoints": 30,
+      "totalPoints": 32,
       "traineeCode": "A024",
       "exemptReason": "",
       "discountAmount": 0,
@@ -5031,7 +5020,7 @@
       "updatedByUserName": "مدير عام النظام",
       "initialPaymentMethod": "cash",
       "parentPortalPassword": "",
-      "ranking": 68
+      "ranking": 79
     },
     {
       "id": "trainee-1788445552384-3sxs",
@@ -5076,7 +5065,7 @@
       "createdByUserName": "مدير عام النظام",
       "initialPaymentMethod": "cash",
       "parentPortalPassword": "",
-      "ranking": 116
+      "ranking": 118
     },
     {
       "id": "trainee-1788445962647-bskx",
@@ -5121,7 +5110,7 @@
       "createdByUserName": "مدير عام النظام",
       "initialPaymentMethod": "cash",
       "parentPortalPassword": "",
-      "ranking": 117
+      "ranking": 119
     },
     {
       "id": "trainee-1788446345093-kr2y",
@@ -5166,7 +5155,7 @@
       "createdByUserName": "مدير عام النظام",
       "initialPaymentMethod": "cash",
       "parentPortalPassword": "",
-      "ranking": 118
+      "ranking": 120
     },
     {
       "id": "trainee-1788449807037-ogbg",
@@ -5219,7 +5208,7 @@
       "updatedByUserName": "مدير عام النظام",
       "initialPaymentMethod": "cash",
       "parentPortalPassword": "",
-      "ranking": 30
+      "ranking": 37
     },
     {
       "id": "trainee-1788355309014-jfeq",
@@ -5268,7 +5257,7 @@
       "updatedByUserName": "مدير عام النظام",
       "initialPaymentMethod": "cash",
       "parentPortalPassword": "",
-      "ranking": 5
+      "ranking": 6
     },
     {
       "id": "trainee-1788446195929-h3ag",
@@ -5319,7 +5308,7 @@
       "createdByUserName": "مدير عام النظام",
       "initialPaymentMethod": "cash",
       "parentPortalPassword": "",
-      "ranking": 69
+      "ranking": 81
     },
     {
       "fullName": "خالد السيد جلال حسين",
@@ -5352,10 +5341,10 @@
       "prefix": "A",
       "createdAt": "2026-09-15T15:16:08.926Z",
       "id": "trainee-1789485368926-zu73",
-      "totalPoints": 30,
-      "points": 30,
+      "totalPoints": 61,
+      "points": 61,
       "updatedAt": "2026-09-15T15:56:39.357Z",
-      "ranking": 70,
+      "ranking": 26,
       "isExempt": false
     },
     {
@@ -5389,10 +5378,10 @@
       "prefix": "A",
       "createdAt": "2026-09-15T15:20:34.147Z",
       "id": "trainee-1789485634147-kddv",
-      "totalPoints": 20,
-      "points": 20,
+      "totalPoints": 36,
+      "points": 36,
       "updatedAt": "2026-09-15T15:53:05.195Z",
-      "ranking": 86,
+      "ranking": 71,
       "isExempt": false
     },
     {
@@ -5432,9 +5421,9 @@
       "updatedByUserId": "user-admin",
       "updatedByUserName": "مدير عام النظام",
       "updatedAt": "2026-09-17T13:19:32.492Z",
-      "totalPoints": 20,
-      "points": 20,
-      "ranking": 87
+      "totalPoints": 35,
+      "points": 35,
+      "ranking": 78
     },
     {
       "fullName": "احمد ابراهيم احمد راجح",
@@ -5468,9 +5457,9 @@
       "createdAt": "2026-09-17T13:14:02.933Z",
       "id": "trainee-1789650842933-x01c",
       "isExempt": false,
-      "totalPoints": 20,
-      "points": 20,
-      "ranking": 88
+      "totalPoints": 21,
+      "points": 21,
+      "ranking": 91
     },
     {
       "fullName": "ادم ابراهيم بسيوني محمد بسيوني",
@@ -5509,9 +5498,9 @@
       "updatedByUserId": "user-admin",
       "updatedByUserName": "مدير عام النظام",
       "updatedAt": "2026-09-17T13:20:39.435Z",
-      "totalPoints": 30,
-      "points": 30,
-      "ranking": 71
+      "totalPoints": 45,
+      "points": 45,
+      "ranking": 42
     },
     {
       "fullName": "مراون حمدي مراد حسين",
@@ -5547,7 +5536,7 @@
       "isExempt": false,
       "totalPoints": 30,
       "points": 30,
-      "ranking": 72
+      "ranking": 82
     },
     {
       "fullName": "مالك هيثم حمدي شبل",
@@ -5581,10 +5570,10 @@
       "createdAt": "2026-09-19T16:09:07.681Z",
       "id": "trainee-1789834147680-4ay5",
       "isExempt": false,
-      "totalPoints": 30,
-      "points": 30,
+      "totalPoints": 28,
+      "points": 28,
       "updatedAt": "2026-09-19T16:09:31.692Z",
-      "ranking": 73
+      "ranking": 87
     },
     {
       "fullName": "رغد اسلام حلمي شاهين",
@@ -5618,10 +5607,10 @@
       "createdAt": "2026-09-19T16:10:46.748Z",
       "id": "trainee-1789834246748-4uel",
       "isExempt": false,
-      "totalPoints": 30,
-      "points": 30,
+      "totalPoints": 40,
+      "points": 40,
       "updatedAt": "2026-09-19T16:13:07.716Z",
-      "ranking": 74
+      "ranking": 68
     },
     {
       "fullName": "مريم السيد جلال حسين",
@@ -5658,7 +5647,7 @@
       "totalPoints": 30,
       "points": 30,
       "updatedAt": "2026-09-19T16:14:56.898Z",
-      "ranking": 75
+      "ranking": 83
     },
     {
       "fullName": "ادم ايمن فتحي عبدالهادي",
@@ -5692,10 +5681,10 @@
       "createdAt": "2026-09-19T16:13:39.983Z",
       "id": "trainee-1789834419983-6v0k",
       "isExempt": false,
-      "totalPoints": 30,
-      "points": 30,
+      "totalPoints": 28,
+      "points": 28,
       "updatedAt": "2026-09-19T16:15:01.124Z",
-      "ranking": 76
+      "ranking": 88
     },
     {
       "fullName": "حبيبة حمادة عبداللطيف احمد",
@@ -5734,9 +5723,9 @@
       "updatedByUserId": "user-admin",
       "updatedByUserName": "مدير عام النظام",
       "updatedAt": "2026-09-19T16:15:34.526Z",
-      "ranking": 89,
-      "totalPoints": 20,
-      "points": 20
+      "ranking": 69,
+      "totalPoints": 40,
+      "points": 40
     },
     {
       "fullName": "مصطفي محمود عبدالحي سيداحمد",
@@ -5770,9 +5759,9 @@
       "createdAt": "2026-09-19T16:16:38.041Z",
       "id": "trainee-1789834598041-bvbs",
       "isExempt": false,
-      "ranking": 90,
-      "totalPoints": 20,
-      "points": 20
+      "ranking": 28,
+      "totalPoints": 60,
+      "points": 60
     },
     {
       "fullName": "محمد رامي محمد ابراهيم",
@@ -5806,9 +5795,9 @@
       "createdAt": "2026-09-20T11:34:58.262Z",
       "id": "trainee-1789904098262-sukn",
       "isExempt": false,
-      "ranking": 119,
-      "totalPoints": 10,
-      "points": 10
+      "ranking": 84,
+      "totalPoints": 30,
+      "points": 30
     },
     {
       "fullName": "انس ضياءالدين محمد السيد",
@@ -5843,9 +5832,9 @@
       "prefix": "C",
       "createdAt": "2026-09-20T11:36:05.077Z",
       "id": "trainee-1789904165077-ndcd",
-      "totalPoints": 10,
-      "points": 10,
-      "ranking": 120
+      "totalPoints": 30,
+      "points": 30,
+      "ranking": 85
     },
     {
       "fullName": "محمد وليد اسماعيل عبداللطيف",
@@ -5879,9 +5868,9 @@
       "createdAt": "2026-09-20T12:26:45.244Z",
       "id": "trainee-1789907205244-ni91",
       "isExempt": false,
-      "totalPoints": 10,
-      "points": 10,
-      "ranking": 121
+      "totalPoints": 30,
+      "points": 30,
+      "ranking": 86
     },
     {
       "fullName": "عمر شريف احمد موسي",
@@ -5914,7 +5903,10 @@
       "prefix": "C",
       "createdAt": "2026-09-20T14:24:44.210Z",
       "id": "trainee-1789914284210-gwdh",
-      "isExempt": false
+      "isExempt": false,
+      "ranking": 70,
+      "totalPoints": 40,
+      "points": 40
     },
     {
       "fullName": "معتز محمد فؤاد الحاروني",
@@ -5947,7 +5939,235 @@
       "prefix": "C",
       "createdAt": "2026-09-20T14:26:12.994Z",
       "id": "trainee-1789914372994-nefk",
-      "isExempt": false
+      "isExempt": false,
+      "ranking": 97,
+      "totalPoints": 20,
+      "points": 20
+    },
+    {
+      "fullName": "اسر احمد رمزي محمد",
+      "code": "B024",
+      "phone": "01112986943",
+      "parentPhone": "01110101602",
+      "parentName": "احمد رمزي محمد",
+      "nationalId": "",
+      "birthDate": "",
+      "gender": "male",
+      "address": "",
+      "branchId": "branch-1",
+      "courseId": "course-1787347462419",
+      "groupId": "grp-1787431608023",
+      "trainerId": "trainer-1787349806643",
+      "feeAmount": 200,
+      "discountAmount": 0,
+      "initialPayment": 0,
+      "initialPaymentMethod": "cash",
+      "photoUrl": "",
+      "status": "active",
+      "notes": "",
+      "_lastAutoParent": "احمد رمزي محمد",
+      "grade": "الصف الخامس الابتدائي",
+      "netAmount": 200,
+      "paidAmount": 0,
+      "remainingAmount": 200,
+      "createdByUserId": "user-admin",
+      "createdByUserName": "مدير عام النظام",
+      "prefix": "B",
+      "createdAt": "2026-09-21T11:18:18.003Z",
+      "id": "trainee-1789989498003-bdu9",
+      "isExempt": false,
+      "ranking": 127,
+      "totalPoints": 5,
+      "points": 5
+    },
+    {
+      "fullName": "مريم امير ميخائيل ماضي",
+      "code": "B025",
+      "phone": "01028443831",
+      "parentPhone": "",
+      "parentName": "امير ميخائيل ماضي",
+      "nationalId": "",
+      "birthDate": "",
+      "gender": "male",
+      "address": "",
+      "branchId": "branch-1",
+      "courseId": "course-1787347462419",
+      "groupId": "grp-1787431608023",
+      "trainerId": "trainer-1787349806643",
+      "feeAmount": 200,
+      "discountAmount": 0,
+      "initialPayment": 0,
+      "initialPaymentMethod": "cash",
+      "photoUrl": "",
+      "status": "active",
+      "notes": "",
+      "_lastAutoParent": "امير ميخائيل ماضي",
+      "grade": "الصف الخامس الابتدائي",
+      "netAmount": 200,
+      "paidAmount": 0,
+      "remainingAmount": 200,
+      "createdByUserId": "user-admin",
+      "createdByUserName": "مدير عام النظام",
+      "prefix": "B",
+      "createdAt": "2026-09-21T11:19:37.819Z",
+      "id": "trainee-1789989577819-h2ek",
+      "isExempt": false,
+      "ranking": 121,
+      "totalPoints": 10,
+      "points": 10
+    },
+    {
+      "id": "trainee-1787957712994",
+      "code": "A018",
+      "grade": "الصف الرابع الابتدائي",
+      "notes": "",
+      "phone": "01100959725",
+      "track": "",
+      "gender": "male",
+      "points": 10,
+      "prefix": "A",
+      "status": "active",
+      "address": "",
+      "groupId": "grp-1787350488774",
+      "branchId": "branch-1",
+      "courseId": "crs-1787428009076",
+      "fullName": "انس محمد فتحي مبروك عبدربه",
+      "isExempt": false,
+      "photoUrl": "",
+      "birthDate": "",
+      "courseIds": [
+        "crs-1787428009076"
+      ],
+      "createdAt": "2026-09-11T18:58:20.904Z",
+      "feeAmount": 200,
+      "groupName": "ICT4 - 2",
+      "netAmount": 200,
+      "trainerId": "trainer-1787349870400",
+      "updatedAt": "2026-09-03T11:35:49.563Z",
+      "nationalId": "",
+      "paidAmount": 0,
+      "parentName": "محمد فتحي مبروك عبدربه",
+      "parentPhone": "01100959725",
+      "studentCode": "A018",
+      "totalPoints": 10,
+      "traineeCode": "A018",
+      "exemptReason": "",
+      "isTestRecord": false,
+      "creditBalance": 0,
+      "discountAmount": 0,
+      "portalPassword": "",
+      "remainingAmount": 200,
+      "registrationDate": "2026-09-11",
+      "dataValidationStatus": "verified",
+      "parentPortalPassword": "",
+      "ranking": 122
+    },
+    {
+      "fullName": "محمد علاء عاشور عابدين",
+      "code": "D036",
+      "phone": "01147870606",
+      "parentPhone": "",
+      "parentName": "علاء عاشور عابدين",
+      "nationalId": "",
+      "birthDate": "",
+      "gender": "male",
+      "address": "",
+      "branchId": "branch-1",
+      "courseId": "course-1787347569318",
+      "groupId": "grp-1787358828709",
+      "trainerId": "trainer-1787349806643",
+      "feeAmount": 200,
+      "discountAmount": 0,
+      "initialPayment": 0,
+      "initialPaymentMethod": "cash",
+      "photoUrl": "",
+      "status": "active",
+      "notes": "",
+      "_lastAutoParent": "علاء عاشور عابدين",
+      "grade": "الصف الأول الإعدادي",
+      "netAmount": 200,
+      "paidAmount": 0,
+      "remainingAmount": 200,
+      "createdByUserId": "user-admin",
+      "createdByUserName": "مدير عام النظام",
+      "prefix": "D",
+      "createdAt": "2026-09-21T14:33:24.274Z",
+      "id": "trainee-1790001204274-4i0i",
+      "isExempt": false,
+      "ranking": 129
+    },
+    {
+      "fullName": "عمر اسلام محمد علي الغول ",
+      "code": "B026",
+      "phone": "01067333408",
+      "parentPhone": "",
+      "parentName": "اسلام محمد علي الغول",
+      "nationalId": "",
+      "birthDate": "",
+      "gender": "male",
+      "address": "",
+      "branchId": "branch-2",
+      "courseId": "course-1787347462419",
+      "groupId": "grp-1787432635686",
+      "trainerId": "trainer-1787349806643",
+      "feeAmount": 250,
+      "discountAmount": 0,
+      "initialPayment": 0,
+      "initialPaymentMethod": "cash",
+      "photoUrl": "",
+      "status": "active",
+      "notes": "",
+      "_lastAutoParent": "اسلام محمد علي الغول",
+      "grade": "الصف الخامس الابتدائي",
+      "netAmount": 250,
+      "paidAmount": 0,
+      "remainingAmount": 250,
+      "createdByUserId": "user-admin",
+      "createdByUserName": "مدير عام النظام",
+      "prefix": "B",
+      "createdAt": "2026-09-22T16:13:30.339Z",
+      "id": "trainee-1790093610339-quc6",
+      "isExempt": false,
+      "ranking": 123,
+      "totalPoints": 10,
+      "points": 10
+    },
+    {
+      "fullName": "احمد وليد احمد سعد الجيشي",
+      "code": "B027",
+      "phone": "01030131664",
+      "parentPhone": "",
+      "parentName": "وليد احمد سعد الجيشي",
+      "nationalId": "",
+      "birthDate": "",
+      "gender": "male",
+      "address": "",
+      "branchId": "branch-2",
+      "courseId": "course-1787347462419",
+      "groupId": "grp-1787432635686",
+      "trainerId": "trainer-1787349806643",
+      "feeAmount": 250,
+      "discountAmount": 0,
+      "initialPayment": 0,
+      "initialPaymentMethod": "cash",
+      "photoUrl": "",
+      "status": "active",
+      "notes": "",
+      "_lastAutoParent": "وليد احمد سعد الجيشي",
+      "portalPassword": "",
+      "grade": "الصف الخامس الابتدائي",
+      "netAmount": 250,
+      "paidAmount": 0,
+      "remainingAmount": 250,
+      "createdByUserId": "user-admin",
+      "createdByUserName": "مدير عام النظام",
+      "prefix": "B",
+      "createdAt": "2026-09-22T16:32:56.037Z",
+      "id": "trainee-1790094776037-o3vp",
+      "isExempt": false,
+      "totalPoints": 8,
+      "points": 8,
+      "ranking": 126
     }
   ],
   "courses": [
@@ -7770,6 +7990,30 @@
     }
   ],
   "pointTransactions": [
+    {
+      "id": "pt-1790094917259-qwc4z",
+      "traineeId": "trainee-1790094776037-o3vp",
+      "groupId": "grp-1787432635686",
+      "branchId": "branch-2",
+      "points": -2,
+      "reason": "تنبيه انضباط",
+      "ruleId": "rule-manual",
+      "addedByUserId": "admin",
+      "addedByUserName": "المحاضر المشرف",
+      "createdAt": "2026-09-22T16:35:17.259Z"
+    },
+    {
+      "id": "pt-1790094915573-m4l7c",
+      "traineeId": "trainee-1790094776037-o3vp",
+      "groupId": "grp-1787432635686",
+      "branchId": "branch-2",
+      "points": 10,
+      "reason": "إبداع وتفوق استثنائي",
+      "ruleId": "rule-manual",
+      "addedByUserId": "admin",
+      "addedByUserName": "المحاضر المشرف",
+      "createdAt": "2026-09-22T16:35:15.573Z"
+    },
     {
       "id": "pt-1789772229833-wbugh",
       "traineeId": "trainee-1788355309014-jfeq",
@@ -11126,6 +11370,219 @@
       "questionText": "الماسح الضوئي (Scanner):",
       "questionType": "mcq",
       "correctAnswer": "إدخال الصور والرسوم للكمبيوتر"
+    },
+    {
+      "id": "q-pre-ict4-01",
+      "examId": "exam-1787463526231",
+      "questionType": "mcq",
+      "questionText": "يستخدم علماء الآثار جهاز ............ للبحث عن المعادن والأجسام المعدنية المدفونة تحت الأرض.",
+      "options": [
+        "مقياس المغناطيسية (Magnetometer)",
+        "نظام تحديد المواقع العالمي (GPS)",
+        "الرادار المخترق للأرض (GPR)",
+        "الطابعة ثلاثية الأبعاد"
+      ],
+      "correctAnswer": "مقياس المغناطيسية (Magnetometer)",
+      "explanation": "مقياس المغناطيسية يقيس المجال المغناطيسي ويكشف عن المعادن المدفونة في الأرض.",
+      "marks": 10
+    },
+    {
+      "id": "q-pre-ict4-02",
+      "examId": "exam-1787463526231",
+      "questionType": "mcq",
+      "questionText": "تعتبر ............ هي بمثابة العقل المتحكم في جهاز الكمبيوتر وتقوم بمعالجة كافة البيانات والتعليمات.",
+      "options": [
+        "وحدة المعالجة المركزية (CPU)",
+        "لوحة المفاتيح (Keyboard)",
+        "الشاشة (Monitor)",
+        "السماعات (Speakers)"
+      ],
+      "correctAnswer": "وحدة المعالجة المركزية (CPU)",
+      "explanation": "وحدة المعالجة المركزية CPU هي العقل المدبر للحاسوب لمعالجة البيانات والعمليات.",
+      "marks": 10
+    },
+    {
+      "id": "q-pre-ict4-03",
+      "examId": "exam-1787463526231",
+      "questionType": "mcq",
+      "questionText": "نظام تحديد المواقع العالمي (GPS) يعتمد على الاتصال المباشر بـ ............ لتحديد الأماكن بدقة فائقة.",
+      "options": [
+        "الأقمار الصناعية (Satellites)",
+        "جهاز الراوتر المنزلي",
+        "أبراج الكهرباء",
+        "الماسح الضوئي"
+      ],
+      "correctAnswer": "الأقمار الصناعية (Satellites)",
+      "explanation": "يعتمد GPS على شبكة من الأقمار الصناعية حول الأرض لتحديد الإحداثيات.",
+      "marks": 10
+    },
+    {
+      "id": "q-pre-ict4-04",
+      "examId": "exam-1787463526231",
+      "questionType": "mcq",
+      "questionText": "أي من البرامج التالية يُستخدم في إعداد وتقديم العروض التقديمية وتصميم الشرائح والمؤثرات البصرية؟",
+      "options": [
+        "Microsoft PowerPoint",
+        "Microsoft Excel",
+        "آلة حاسبة Calculator",
+        "مفكرة النصوص Notepad"
+      ],
+      "correctAnswer": "Microsoft PowerPoint",
+      "explanation": "برنامج الباوربوينت مخصص لإعداد العروض التقديمية والشرائح التفاعلية.",
+      "marks": 10
+    },
+    {
+      "id": "q-pre-ict4-05",
+      "examId": "exam-1787463526231",
+      "questionType": "mcq",
+      "questionText": "أي من الأجهزة التالية يُعتبر من أجهزة الإخراج (Output Unit) في الكمبيوتر؟",
+      "options": [
+        "مكبرات الصوت (Speakers)",
+        "الفأرة (Mouse)",
+        "لوحة المفاتيح (Keyboard)",
+        "الماسح الضوئي (Scanner)"
+      ],
+      "correctAnswer": "مكبرات الصوت (Speakers)",
+      "explanation": "السماعات تخرج الصوت للمستخدم بينما الفأرة والميكروفون أجهزة إدخال.",
+      "marks": 10
+    },
+    {
+      "id": "q-pre-ict4-06",
+      "examId": "exam-1787463526231",
+      "questionType": "true_false",
+      "questionText": "تتكون كلمة المرور القوية والآمنة من 8 خانات على الأقل وتجمع بين حروف وأرقام ورموز خاصة.",
+      "options": [
+        "صح",
+        "خطأ"
+      ],
+      "correctAnswer": "صح",
+      "explanation": "كلمات المرور المعقدة تحمي الحسابات من الاختراق وسرقة البيانات الشخصية.",
+      "marks": 10
+    },
+    {
+      "id": "q-pre-ict4-07",
+      "examId": "exam-1787463526231",
+      "questionType": "true_false",
+      "questionText": "التنمر عبر الإنترنت (Cyberbullying) ونشر الشائعات سلوك مقبول ومسموح به في شبكات التواصل.",
+      "options": [
+        "صح",
+        "خطأ"
+      ],
+      "correctAnswer": "خطأ",
+      "explanation": "التنمر الإلكتروني سلوك ضار وغير قانوني يجب الإبلاغ عنه وتجنبه تماماً.",
+      "marks": 10
+    },
+    {
+      "id": "q-pre-ict4-08",
+      "examId": "exam-1787463526231",
+      "questionType": "true_false",
+      "questionText": "عند مواجهة تجمد الشاشة أو عدم استجابة أحد البرامج، يمكن استخدام اختصار (Ctrl + Alt + Delete).",
+      "options": [
+        "صح",
+        "خطأ"
+      ],
+      "correctAnswer": "صح",
+      "explanation": "يفتح هذا الاختصار مدير المهام Task Manager لإنهاء البرامج العالقة وإعادة التنشيط.",
+      "marks": 10
+    },
+    {
+      "id": "q-pre-ict4-09",
+      "examId": "exam-1787463526231",
+      "questionType": "mcq",
+      "questionText": "للبحث بدقة عن جملة محددة بالنص في محركات البحث مثل Google، نضع الجملة بين: ............ ",
+      "options": [
+        "علامتي تنصيص \" \"",
+        "أقواس مربعة [ ]",
+        "علامة النجمة * *",
+        "إشارة الجمع +"
+      ],
+      "correctAnswer": "علامتي تنصيص \" \"",
+      "explanation": "علامتا التنصيص تحصر محرك البحث في إيجاد التطابق التام للجملة المكتوبة.",
+      "marks": 10
+    },
+    {
+      "id": "q-pre-ict4-10",
+      "examId": "exam-1787463526231",
+      "questionType": "true_false",
+      "questionText": "يجب استئذان صاحب المنشور أو الصورة وتوثيق المصدر قبل استخدامها تقديراً لحقوق الملكية الفكرية.",
+      "options": [
+        "صح",
+        "خطأ"
+      ],
+      "correctAnswer": "صح",
+      "explanation": "احترام حقوق الملكية الفكرية وقوانين النشر واجب أخلاقي وقانوني في العالم الرقمي.",
+      "marks": 10
+    },
+    {
+      "id": "q-hw-ict4-01",
+      "examId": "hw-scan-1787451229685",
+      "questionType": "mcq",
+      "questionText": "أي من الأجهزة التالية يُستخدم لمسح المستندات والصور الورقية وإدخالها للكمبيوتر؟",
+      "options": [
+        "الماسح الضوئي (Scanner)",
+        "الطابعة (Printer)",
+        "الشاشة (Monitor)",
+        "السماعات"
+      ],
+      "correctAnswer": "الماسح الضوئي (Scanner)",
+      "explanation": "الماسح الضوئي Scanner أداة إدخال لتحويل الورق إلى ملفات رقمية.",
+      "marks": 20
+    },
+    {
+      "id": "q-hw-ict4-02",
+      "examId": "hw-scan-1787451229685",
+      "questionType": "true_false",
+      "questionText": "يساعد برنامج Microsoft Excel في تنظيم البيانات وإنشاء الجداول الحسابية والرسوم البيانية.",
+      "options": [
+        "صح",
+        "خطأ"
+      ],
+      "correctAnswer": "صح",
+      "explanation": "الإكسيل برنامج الجداول الحسابية والعمليات الرياضية الشهير.",
+      "marks": 20
+    },
+    {
+      "id": "q-hw-ict4-03",
+      "examId": "hw-scan-1787451229685",
+      "questionType": "mcq",
+      "questionText": "تُقاس سرعة معالج الحاسوب بوحدة: ............",
+      "options": [
+        "الجيجاهرتز (GHz)",
+        "الكيلوجرام",
+        "المتر",
+        "اللتر"
+      ],
+      "correctAnswer": "الجيجاهرتز (GHz)",
+      "explanation": "يقاس تردد وحدة المعالجة المركزية بالهرتز ومضاعفاته كالجيجاهرتز.",
+      "marks": 20
+    },
+    {
+      "id": "q-hw-ict4-04",
+      "examId": "hw-scan-1787451229685",
+      "questionType": "true_false",
+      "questionText": "يجب عدم مشاركة كلمة المرور الخاصة بك أو معلوماتك الشخصية مع أي شخص غريب على الإنترنت.",
+      "options": [
+        "صح",
+        "خطأ"
+      ],
+      "correctAnswer": "صح",
+      "explanation": "حماية البيانات الشخصية ضرورية للأمان الرقمي وتفادي الاختراق.",
+      "marks": 20
+    },
+    {
+      "id": "q-hw-ict4-05",
+      "examId": "hw-scan-1787451229685",
+      "questionType": "mcq",
+      "questionText": "لتحريك المؤشر وتحديد العناصر والنقر على الأيقونات في واجهة الكمبيوتر نستخدم: ............",
+      "options": [
+        "الفأرة (Mouse)",
+        "الطابعة",
+        "الراوتر",
+        "الكاميرا"
+      ],
+      "correctAnswer": "الفأرة (Mouse)",
+      "explanation": "الفأرة Mouse هي وحدة الإشارة والتحكم الرئيسية في الواجهات الرسومية.",
+      "marks": 20
     }
   ],
   "examResults": [

@@ -1,11 +1,14 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useCenter } from '../context/CenterContext';
-import { Printer, X, Download, FileText, CheckCircle, QrCode, Sparkles } from 'lucide-react';
+import { Printer, X, Download, FileText, CheckCircle, QrCode, Sparkles, Trophy } from 'lucide-react';
 import QRCode from 'qrcode';
 import { CertificateTemplate } from '../types';
 import { OfficialSealBadge } from './OfficialSealBadge';
 import { AttendanceSheetReport } from './AttendanceSheetReport';
+import { SessionCelebrationOverlay } from './SessionCelebrationOverlay';
+import { audioService } from '../services/audioService';
+import confetti from 'canvas-confetti';
 
 const QRCodeImage: React.FC<{ value: string; size?: number; className?: string }> = ({ value, size = 64, className = '' }) => {
   const [dataUrl, setDataUrl] = useState<string>('');
@@ -23,6 +26,7 @@ const QRCodeImage: React.FC<{ value: string; size?: number; className?: string }
 export const PrintModal: React.FC = () => {
   const { printData, setPrintData, settings } = useCenter();
   const printContainerRef = useRef<HTMLDivElement>(null);
+  const [isCelebrationOpen, setIsCelebrationOpen] = useState(false);
 
   if (!printData) return null;
 
@@ -145,77 +149,104 @@ export const PrintModal: React.FC = () => {
     switch (printData.type) {
       case 'trainee_badge': {
         const { trainee, branchName, courseName } = printData.data;
+        const managerName = settings?.managerName || 'د. محمد رمضان بخيت';
+        const scanUrl = `${window.location.origin}/?view=student_portal&code=${trainee.code || ''}&action=checkin&source=badge_print`;
+
         return (
-          <div className="w-[360px] mx-auto bg-white text-slate-900 border-2 border-slate-800 rounded-2xl p-5 shadow-lg text-center font-sans print:shadow-none print:border-slate-800 relative overflow-hidden">
-            {/* Top decorative header */}
-            <div className="bg-slate-900 text-white -mx-5 -mt-5 p-4 mb-4 border-b-2 border-amber-500">
-              <div className="w-12 h-12 mx-auto bg-white rounded-full p-1 mb-1 shadow">
-                <img src="/logo.svg" alt="مركز النجاح" className="w-full h-full object-contain" />
+          <div className="w-[360px] mx-auto bg-white text-slate-900 border-2 border-amber-500 rounded-3xl shadow-xl font-sans print:shadow-none print:border-amber-500 relative overflow-hidden flex flex-col justify-between" dir="rtl">
+            {/* Lanyard punch slot guide */}
+            <div className="w-10 h-1.5 mx-auto mt-2 bg-slate-300 rounded-full print:bg-slate-400" />
+
+            {/* Top decorative header with Logo & Gold trim */}
+            <div className="bg-gradient-to-r from-slate-950 via-slate-900 to-indigo-950 text-white p-3.5 mt-1 border-y-2 border-amber-500 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-11 h-11 bg-white rounded-xl p-1 border border-amber-400 shadow flex items-center justify-center shrink-0">
+                  <img src="/logo.svg" alt="شعار المركز" className="w-full h-full object-contain" onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }} />
+                </div>
+                <div className="text-right">
+                  <h3 className="font-black text-xs sm:text-sm text-amber-400 leading-tight">النجاح للتدريب والاستشارات</h3>
+                  <p className="text-[9px] text-slate-200 font-bold mt-0.5">🌟 بطاقة العضوية والتدريب الرسمية الذكية</p>
+                </div>
               </div>
-              <h3 className="font-black text-sm tracking-wide text-amber-400">مركز النجاح للتدريب والاستشارات</h3>
-              <p className="text-[10px] text-slate-300">بطاقة متدرب معتمدة - ID CARD</p>
+              <span className="text-[8px] font-black bg-amber-500/20 text-amber-400 border border-amber-500/40 px-2 py-0.5 rounded-full">
+                2026/2027
+              </span>
             </div>
 
-            {/* Trainee Details */}
-            <div className="space-y-2 text-right text-xs">
-              <div className="flex items-center justify-between gap-3 bg-slate-50 p-2 rounded-xl border border-slate-200">
-                <div className="flex items-center gap-2">
+            {/* Photo & Code Banner */}
+            <div className="p-4 space-y-3">
+              <div className="flex items-center gap-3">
+                <div className="w-18 h-18 rounded-2xl border-2 border-amber-500 overflow-hidden bg-slate-100 flex items-center justify-center shrink-0 shadow-sm">
                   {trainee.photoUrl ? (
                     <img
                       src={trainee.photoUrl}
                       alt={trainee.fullName}
-                      className="w-12 h-12 rounded-xl object-cover border border-amber-500 shadow-sm"
+                      className="w-full h-full object-cover"
                     />
                   ) : (
-                    <div className="w-12 h-12 rounded-xl bg-amber-500 text-slate-950 font-black text-lg flex items-center justify-center shadow-sm">
-                      {trainee.fullName?.charAt(0)}
+                    <div className="w-full h-full bg-gradient-to-br from-amber-500 to-amber-600 text-slate-950 font-black text-xl flex flex-col items-center justify-center">
+                      <span>{trainee.fullName?.charAt(0) || 'م'}</span>
+                      <span className="text-[7px] font-bold mt-0.5 text-slate-900">الصورة قيد المزامنة</span>
                     </div>
                   )}
-                  <div className="text-right">
-                    <p className="text-[10px] text-slate-500">كود المتدرب</p>
-                    <p className="text-base font-black text-slate-900 font-mono tracking-wider">{trainee.code}</p>
-                  </div>
                 </div>
-                <div className="text-left bg-amber-100/80 border border-amber-300 px-2 py-1 rounded-lg">
-                  <div className="flex items-center gap-0.5 text-amber-600 justify-end">
-                    {Array.from({ length: Math.min(5, Math.max(1, Math.floor((trainee.totalPoints || trainee.points || 0) / 20) + 1)) }).map((_, i) => (
-                      <span key={i} className="text-xs">⭐</span>
-                    ))}
-                  </div>
-                  <p className="text-[9px] font-bold text-amber-900 mt-0.5">
-                    {trainee.totalPoints || trainee.points || 0} نقطة تميز
-                  </p>
+
+                <div className="flex-1 bg-slate-50 p-2.5 rounded-xl border border-slate-200 text-center">
+                  <span className="text-[9px] font-bold text-slate-500 block">كود المتدرب المعتمد</span>
+                  <span className="text-xl font-black text-amber-600 font-mono tracking-widest block">{trainee.code}</span>
+                  <span className="text-[8px] font-bold text-emerald-600 block mt-0.5">● عضوية مسجلة ومفعلة</span>
                 </div>
               </div>
 
-              <div className="flex justify-between border-b pb-1">
-                <span className="text-slate-500">الاسم:</span>
-                <span className="font-bold text-slate-900">{trainee.fullName}</span>
+              {/* Trainee Details Table */}
+              <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-1.5 text-right text-xs">
+                <div className="flex justify-between items-center border-b border-slate-200 pb-1">
+                  <span className="text-slate-500 text-[10px] font-bold">اسم المتدرب:</span>
+                  <span className="font-black text-slate-900 text-xs">{trainee.fullName}</span>
+                </div>
+                <div className="flex justify-between items-center border-b border-slate-200 pb-1">
+                  <span className="text-slate-500 text-[10px] font-bold">الصف / الدورة:</span>
+                  <span className="font-bold text-amber-700 text-xs">{courseName || 'الدورة التدريبية'}</span>
+                </div>
+                <div className="flex justify-between items-center border-b border-slate-200 pb-1">
+                  <span className="text-slate-500 text-[10px] font-bold">الفرع:</span>
+                  <span className="font-semibold text-slate-800 text-xs">{branchName || 'فرع النجاح'}</span>
+                </div>
+                {trainee.phone && (
+                  <div className="flex justify-between items-center border-b border-slate-200 pb-1">
+                    <span className="text-slate-500 text-[10px] font-bold">هاتف التواصل:</span>
+                    <span className="font-mono text-xs text-slate-900" dir="ltr">{trainee.phone}</span>
+                  </div>
+                )}
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-500 text-[10px] font-bold">تاريخ التسجيل:</span>
+                  <span className="font-mono text-[10px] text-slate-600">{trainee.registrationDate || '2026/2027'}</span>
+                </div>
               </div>
-              <div className="flex justify-between border-b pb-1">
-                <span className="text-slate-500">الدورة:</span>
-                <span className="font-bold text-slate-900">{courseName || 'عام'}</span>
-              </div>
-              <div className="flex justify-between border-b pb-1">
-                <span className="text-slate-500">الفرع:</span>
-                <span className="font-semibold text-slate-900">{branchName || 'فرع النجاح'}</span>
-              </div>
-              <div className="flex justify-between border-b pb-1">
-                <span className="text-slate-500">الهاتف:</span>
-                <span className="font-mono text-slate-900">{trainee.phone}</span>
-              </div>
-              <div className="flex justify-between pb-1">
-                <span className="text-slate-500">تاريخ التسجيل:</span>
-                <span className="font-mono text-slate-900">{trainee.registrationDate}</span>
+
+              {/* QR Code & Director Signature */}
+              <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-between gap-2">
+                <div className="flex flex-col items-center shrink-0 bg-white p-1 rounded-lg border border-amber-400">
+                  <QRCodeImage value={scanUrl} size={56} />
+                  <span className="text-[6.5px] font-bold text-slate-900 mt-0.5">مسح للحضور والملف</span>
+                </div>
+
+                <div className="flex-1 text-center">
+                  <span className="text-[8px] font-bold text-slate-500 block">مدير عام المركز</span>
+                  <span className="text-[11px] font-black text-amber-600 block mt-0.5">{managerName}</span>
+                  <svg className="w-20 h-5 mx-auto mt-0.5" viewBox="0 0 140 40" fill="none">
+                    <path d="M10 25 C30 5, 45 35, 70 15 C95 -5, 110 30, 130 18" stroke="#0284c7" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+                    <path d="M40 32 C60 28, 85 32, 115 28" stroke="#0284c7" strokeWidth="1.6" strokeLinecap="round" />
+                  </svg>
+                  <span className="text-[7px] font-bold text-emerald-600 block">✓ معتمد رسمياً</span>
+                </div>
               </div>
             </div>
 
-            {/* Barcode/QR Simulation */}
-            <div className="mt-4 pt-3 border-t border-dashed border-slate-300">
-              <div className="font-mono text-[9px] tracking-widest text-slate-400 mb-1">
-                |||||| | |||||||| |||| | ||||||
-              </div>
-              <p className="text-[9px] text-slate-400">يرجى إبراز هذه البطاقة عند الدخول للقاعات والمعامل</p>
+            {/* Bottom Footer Strip */}
+            <div className="bg-slate-900 text-slate-300 px-4 py-2 text-[8px] font-bold flex justify-between items-center border-t border-amber-500">
+              <span>النجاح للتدريب والاستشارات © 2026/2027</span>
+              <span className="text-amber-400">معتمد ★ SMART ID</span>
             </div>
           </div>
         );
@@ -617,6 +648,31 @@ export const PrintModal: React.FC = () => {
             <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100">{printData.title}</h3>
           </div>
           <div className="flex items-center gap-2">
+            {printData.type === 'attendance' && (
+              <button
+                type="button"
+                onClick={() => {
+                  setIsCelebrationOpen(true);
+                  audioService.playClapping(3.5);
+                  const trainees = printData.data?.trainees || [];
+                  const top = [...trainees].sort((a: any, b: any) => (b.points || b.totalPoints || 0) - (a.points || a.totalPoints || 0))[0];
+                  const topName = top?.fullName || top?.name;
+                  if (topName) {
+                    audioService.playWinnerAnnouncement(topName, `topbar_${Date.now()}`);
+                  } else {
+                    audioService.playSessionEndFanfare();
+                  }
+                  try {
+                    confetti({ particleCount: 90, spread: 70, origin: { y: 0.6 } });
+                  } catch {}
+                }}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-purple-600 via-pink-600 to-amber-500 hover:from-purple-500 hover:to-amber-400 text-white font-black text-xs shadow-lg shadow-purple-500/25 transition-all active:scale-95 cursor-pointer animate-pulse"
+                title="إنهاء الحصة وإطلاق احتفال ختام المحاضرة وتتويج النجوم والأبطال بالصوت والكونفيتي"
+              >
+                <Trophy className="w-4 h-4 text-amber-300 fill-amber-300" />
+                <span>🎉 إنهاء الحصة واحتفال النجوم</span>
+              </button>
+            )}
             <button
               onClick={handleDirectPrint}
               className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-400 hover:brightness-110 text-slate-950 font-black text-xs shadow-md transition-all active:scale-95"
@@ -639,6 +695,31 @@ export const PrintModal: React.FC = () => {
           {renderContent()}
         </div>
       </div>
+
+      {/* Celebration Ceremony Overlay */}
+      {isCelebrationOpen && printData.type === 'attendance' && (
+        <SessionCelebrationOverlay
+          isOpen={isCelebrationOpen}
+          onClose={() => setIsCelebrationOpen(false)}
+          sessionTitle={`ختام محاضرة ${printData.data?.courseName || 'المحاضرة'}`}
+          groupName={printData.data?.groupName || 'المجموعة التدريبية'}
+          courseName={printData.data?.courseName || 'الدورة التدريبية'}
+          starWinnerName={
+            (() => {
+              const trainees = printData.data?.trainees || [];
+              const top = [...trainees].sort((a: any, b: any) => (b.points || b.totalPoints || 0) - (a.points || a.totalPoints || 0))[0];
+              return top?.fullName || top?.name || 'بطل المحاضرة';
+            })()
+          }
+          starWinnerPoints={
+            (() => {
+              const trainees = printData.data?.trainees || [];
+              const top = [...trainees].sort((a: any, b: any) => (b.points || b.totalPoints || 0) - (a.points || a.totalPoints || 0))[0];
+              return top?.points || top?.totalPoints || 0;
+            })()
+          }
+        />
+      )}
     </div>
   );
 

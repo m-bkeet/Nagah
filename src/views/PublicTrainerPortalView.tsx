@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { captureElementToCanvas } from '../utils/captureUtils';
 import {
   GraduationCap,
   Users,
@@ -122,6 +123,7 @@ export const PublicTrainerPortalView: React.FC<PublicTrainerPortalViewProps> = (
     const nextState = !isLabActive;
     setTrainerLabSessionState(trainer.branchId || 'b1', trainer.name, nextState, 'المعمل الرئيسي');
     setIsLabActive(nextState);
+    api.setLabStatus({ isOpen: nextState, branchId: trainer.branchId || 'b1', trainerName: trainer.name, roomName: 'المعمل الرئيسي' }).catch(() => {});
 
     try {
       await api.sendBulkDeviceCommand({
@@ -286,10 +288,11 @@ export const PublicTrainerPortalView: React.FC<PublicTrainerPortalViewProps> = (
     }
   };
 
-  // Live message polling every 4s
+  // Live message fetching on mount & active window focus (Zero background polling)
   useEffect(() => {
     if (!trainer?.id) return;
-    const interval = setInterval(async () => {
+    const fetchPortalData = async () => {
+      if (typeof document !== 'undefined' && document.hidden) return;
       try {
         const res = await fetch(`/api/trainer-portal/data/${trainer.id}`);
         if (res.ok) {
@@ -299,8 +302,14 @@ export const PublicTrainerPortalView: React.FC<PublicTrainerPortalViewProps> = (
           }
         }
       } catch (e) {}
-    }, 4000);
-    return () => clearInterval(interval);
+    };
+
+    const handleFocus = () => fetchPortalData();
+    window.addEventListener('focus', handleFocus);
+
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+    };
   }, [trainer?.id]);
 
   const handleSendTrainerDirectReply = async (targetTraineeId: string) => {
@@ -1590,24 +1599,26 @@ export const PublicTrainerPortalView: React.FC<PublicTrainerPortalViewProps> = (
                           </div>
                           
                           <button
-                            onClick={() => {
+                            onClick={async () => {
                               showToast('جاري استخراج سند الصرف المعتمد...', 'info');
-                              setTimeout(() => {
-                                const el = document.getElementById('voucher-' + idx);
-                                if (el) {
-                                  el.style.display = 'block';
-                                  import('html2canvas').then(({ default: html2canvas }) => {
-                                    html2canvas(el, { scale: 2, useCORS: true }).then(canvas => {
-                                      const link = document.createElement('a');
-                                      link.download = `Voucher-${idx}.png`;
-                                      link.href = canvas.toDataURL('image/png');
-                                      link.click();
-                                      el.style.display = 'none';
-                                      showToast('تم تحميل سند الصرف بنجاح', 'success');
-                                    });
-                                  });
+                              const el = document.getElementById('voucher-' + idx);
+                              if (el) {
+                                el.style.display = 'block';
+                                try {
+                                  const canvas = await captureElementToCanvas(el, { scale: 2, backgroundColor: '#ffffff' });
+                                  if (canvas) {
+                                    const link = document.createElement('a');
+                                    link.download = `Voucher-${idx}.png`;
+                                    link.href = canvas.toDataURL('image/png');
+                                    link.click();
+                                    showToast('تم تحميل سند الصرف بنجاح', 'success');
+                                  }
+                                } catch (e) {
+                                  showToast('فشل تصدير سند الصرف', 'error');
+                                } finally {
+                                  el.style.display = 'none';
                                 }
-                              }, 500);
+                              }
                             }}
                             className="flex items-center justify-center gap-2 px-4 py-2 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-500/10 dark:hover:bg-indigo-500/20 text-indigo-700 dark:text-indigo-400 font-bold rounded-lg transition-colors border border-indigo-200 dark:border-indigo-500/20 shadow-xs"
                           >

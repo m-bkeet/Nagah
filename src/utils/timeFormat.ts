@@ -12,6 +12,31 @@ export const formatTimeAMPM = (timeStr: string): string => {
   return `${formattedHours}:${minutes} ${ampm}`;
 };
 
+export const formatArabicDate = (dateStr: string): string => {
+  if (!dateStr) return '';
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return dateStr;
+    const days = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
+    const months = [
+      'يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو',
+      'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'
+    ];
+    const dayName = days[d.getDay()];
+    const day = d.getDate();
+    const monthName = months[d.getMonth()];
+    const year = d.getFullYear();
+    return `${dayName} ${day} ${monthName} ${year}`;
+  } catch {
+    return dateStr;
+  }
+};
+
+export const formatArabicTime = (timeStr?: string): string => {
+  if (!timeStr) return '';
+  return formatTimeAMPM(timeStr);
+};
+
 export const timeToMinutes = (timeStr: string): number => {
   if (!timeStr) return 0;
   const str = timeStr.trim().toUpperCase();

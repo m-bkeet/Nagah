@@ -27,6 +27,7 @@ export const DuplicatesAuditModal: React.FC<DuplicatesAuditModalProps> = ({
 
   // Group trainees by normalized name and detect duplicates vs siblings
   const auditGroups = useMemo(() => {
+    if (!isOpen || !trainees || trainees.length === 0) return [];
     const nameMap: Record<string, Trainee[]> = {};
 
     // 1. Group by exact normalized full name

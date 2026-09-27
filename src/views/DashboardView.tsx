@@ -16,17 +16,39 @@ interface DashboardViewProps {
 }
 
 export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
-  const { activeBranchId, branches, refreshKey, settings, showToast, refreshAll, isTrainerLabActive, toggleTrainerLabSession, selectedDate, setSelectedDate, showDateStatsModal, setShowDateStatsModal } = useCenter();
+  const { 
+    activeBranchId, 
+    branches, 
+    refreshKey, 
+    settings, 
+    showToast, 
+    refreshAll, 
+    isTrainerLabActive, 
+    toggleTrainerLabSession, 
+    selectedDate, 
+    setSelectedDate, 
+    showDateStatsModal, 
+    setShowDateStatsModal,
+    trainees: ctxTrainees,
+    courses: ctxCourses,
+    groups: ctxGroups
+  } = useCenter();
   const [showRev, setShowRev] = useState(false);
   const [showExp, setShowExp] = useState(false);
   const [showTres, setShowTres] = useState(false);
   const [dateStatsData, setDateStatsData] = useState<any>(null);
-  const [trainees, setTrainees] = useState<Trainee[]>([]);
-  const [courses, setCourses] = useState<Course[]>([]);
-  const [groups, setGroups] = useState<Group[]>([]);
+  const [trainees, setTrainees] = useState<Trainee[]>(() => {
+    const list = ctxTrainees || [];
+    return activeBranchId !== 'all' ? list.filter(t => t.branchId === activeBranchId) : list;
+  });
+  const [courses, setCourses] = useState<Course[]>(() => ctxCourses || []);
+  const [groups, setGroups] = useState<Group[]>(() => {
+    const list = ctxGroups || [];
+    return activeBranchId !== 'all' ? list.filter(g => g.branchId === activeBranchId) : list;
+  });
   const [financeSummary, setFinanceSummary] = useState<any>(null);
   const [todayAttendanceCount, setTodayAttendanceCount] = useState<number>(0);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState<boolean>(() => !ctxTrainees || ctxTrainees.length === 0);
   const [showHonorModal, setShowHonorModal] = useState(false);
   const [selectedTrainee, setSelectedTrainee] = useState<any>(null);
   const [showCelebration, setShowCelebration] = useState(false);
@@ -34,31 +56,33 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
 
   const activeBranch = branches.find(b => b.id === activeBranchId);
 
-  const initialFetchRef = useRef(false);
+  useEffect(() => {
+    if (ctxTrainees && ctxTrainees.length > 0) {
+      setTrainees(activeBranchId !== 'all' ? ctxTrainees.filter(t => t.branchId === activeBranchId) : ctxTrainees);
+      setIsLoading(false);
+    }
+  }, [ctxTrainees, activeBranchId]);
 
   useEffect(() => {
-    const isFirst = !initialFetchRef.current;
-    if (isFirst) {
-      initialFetchRef.current = true;
+    if (ctxCourses && ctxCourses.length > 0) setCourses(ctxCourses);
+  }, [ctxCourses]);
+
+  useEffect(() => {
+    if (ctxGroups && ctxGroups.length > 0) {
+      setGroups(activeBranchId !== 'all' ? ctxGroups.filter(g => g.branchId === activeBranchId) : ctxGroups);
     }
-    fetchData(isFirst);
+  }, [ctxGroups, activeBranchId]);
+
+  useEffect(() => {
+    fetchData();
   }, [activeBranchId, refreshKey, selectedDate]);
 
-  const fetchData = async (showFullLoading = false) => {
+  const fetchData = async () => {
     try {
-      if (showFullLoading || trainees.length === 0) {
-        setIsLoading(true);
-      }
-      const [trRes, crRes, grRes, fnRes, attRes] = await Promise.allSettled([
-        api.getTrainees(activeBranchId !== 'all' ? { branchId: activeBranchId } : {}),
-        api.getCourses(),
-        api.getGroups(),
+      const [fnRes, attRes] = await Promise.allSettled([
         api.getFinanceSummary(activeBranchId !== 'all' ? { branchId: activeBranchId } : {}),
         api.getAttendance({ date: selectedDate })
       ]);
-      if (trRes.status === 'fulfilled') setTrainees(Array.isArray(trRes.value) ? trRes.value : ((trRes.value as any)?.data && Array.isArray((trRes.value as any).data) ? (trRes.value as any).data : []));
-      if (crRes.status === 'fulfilled') setCourses(Array.isArray(crRes.value) ? crRes.value : ((crRes.value as any)?.data && Array.isArray((crRes.value as any).data) ? (crRes.value as any).data : []));
-      if (grRes.status === 'fulfilled') setGroups(Array.isArray(grRes.value) ? grRes.value : ((grRes.value as any)?.data && Array.isArray((grRes.value as any).data) ? (grRes.value as any).data : []));
       if (fnRes.status === 'fulfilled') setFinanceSummary(fnRes.value || null);
       if (attRes.status === 'fulfilled' && Array.isArray(attRes.value)) {
         const presentCount = attRes.value.filter((a: any) => a.status === 'present' || a.status === 'late').length;

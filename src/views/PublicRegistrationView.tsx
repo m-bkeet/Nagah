@@ -2,7 +2,7 @@ import { api } from '../services/api';
 import { Camera, Upload, Send, CheckCircle2, User, Phone, MapPin, BookOpen, Layers, Copy, ArrowRight, ShieldCheck, QrCode, Share2, Sparkles, RefreshCw, Download, Printer, Award, Lock, MessageSquare } from "lucide-react";
 import React, { useState, useRef, useEffect } from "react";
 import QRCode from 'qrcode';
-import html2canvas from 'html2canvas';
+import { captureElementToCanvas } from '../utils/captureUtils';
 import { uploadFile } from '../lib/storage';
 import { cloudDb } from '../services/cloudDatabase';
 import { ThemeQuickSwitcher } from '../components/ThemeQuickSwitcher';
@@ -199,11 +199,11 @@ export const PublicRegistrationView: React.FC<PublicRegistrationViewProps> = ({ 
         // Wait a bit to ensure everything is rendered
         await new Promise(resolve => setTimeout(resolve, 500));
         
-        const canvas = await html2canvas(cardElementRef.current, {
+        const canvas = await captureElementToCanvas(cardElementRef.current, {
           scale: 2,
-          backgroundColor: "#090d16",
-          useCORS: true
+          backgroundColor: "#090d16"
         });
+        if (!canvas) throw new Error('Card capture failed');
         
         const dataUrl = canvas.toDataURL("image/png");
         

@@ -7,6 +7,7 @@ import {
   Edit,
   Award,
   CheckCircle,
+  CheckCircle2,
   XCircle,
   HelpCircle,
   Sparkles,
@@ -46,7 +47,11 @@ import {
   Sliders,
   CheckSquare,
   Flame,
-  Globe
+  Globe,
+  Crown,
+  Trophy,
+  Share2,
+  Copy
 } from 'lucide-react';
 import {
   Exam,
@@ -62,17 +67,43 @@ import {
   Group
 } from '../types';
 import { AIHomeworkScannerModal } from '../components/AIHomeworkScannerModal';
+import { AIExamUploadModal } from '../components/AIExamUploadModal';
+import { GroupManualGradeModal } from '../components/GroupManualGradeModal';
+import { LectureExcellenceCertificateModal, LectureCertificateInitialData } from '../components/LectureExcellenceCertificateModal';
+import { ExamQuestionsEditorModal } from '../components/ExamQuestionsEditorModal';
+import { ClearTraineeExamModal } from '../components/ClearTraineeExamModal';
+import { PublicInteractiveExamView } from './PublicInteractiveExamView';
+import { getCurriculumExamQuestions } from '../data/ictCurriculumQuestions';
 
 export const ExamsView: React.FC = () => {
-  const { activeBranchId, showToast, refreshKey } = useCenter();
+  const { 
+    activeBranchId, 
+    showToast, 
+    refreshKey,
+    courses: ctxCourses,
+    trainees: ctxTrainees,
+    groups: ctxGroups
+  } = useCenter();
 
-  // Primary Data
+  // Primary Data - Initialized from unified context for 0ms instant display
   const [exams, setExams] = useState<Exam[]>([]);
-  const [courses, setCourses] = useState<Course[]>([]);
-  const [trainees, setTrainees] = useState<Trainee[]>([]);
-  const [groups, setGroups] = useState<Group[]>([]);
+  const [courses, setCourses] = useState<Course[]>(() => ctxCourses || []);
+  const [trainees, setTrainees] = useState<Trainee[]>(() => ctxTrainees || []);
+  const [groups, setGroups] = useState<Group[]>(() => ctxGroups || []);
   const [questionBank, setQuestionBank] = useState<QuestionBankItem[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    if (ctxCourses && ctxCourses.length > 0) setCourses(ctxCourses);
+  }, [ctxCourses]);
+
+  useEffect(() => {
+    if (ctxTrainees && ctxTrainees.length > 0) setTrainees(ctxTrainees);
+  }, [ctxTrainees]);
+
+  useEffect(() => {
+    if (ctxGroups && ctxGroups.length > 0) setGroups(ctxGroups);
+  }, [ctxGroups]);
 
   // Active Tab: 'exams' | 'bank' | 'builder' | 'kiosk' | 'proctoring' | 'analytics'
   const [activeTab, setActiveTab] = useState<'exams' | 'bank' | 'builder' | 'kiosk' | 'proctoring' | 'analytics'>('exams');
@@ -83,6 +114,8 @@ export const ExamsView: React.FC = () => {
   const [examQuestions, setExamQuestions] = useState<ExamQuestion[]>([]);
   const [examSubmissions, setExamSubmissions] = useState<StudentExamSubmission[]>([]);
   const [proctorViolations, setProctorViolations] = useState<ProctorViolationEvent[]>([]);
+  const [selectedExamResults, setSelectedExamResults] = useState<any[]>([]);
+  const [isLoadingResults, setIsLoadingResults] = useState<boolean>(false);
 
   // Filter States
   const [searchQuery, setSearchQuery] = useState('');
@@ -94,8 +127,20 @@ export const ExamsView: React.FC = () => {
   const [isAddQuestionModalOpen, setIsAddQuestionModalOpen] = useState(false);
   const [isAiGeneratorModalOpen, setIsAiGeneratorModalOpen] = useState(false);
   const [isAiScannerModalOpen, setIsAiScannerModalOpen] = useState(false);
+  const [isAiExamUploadOpen, setIsAiExamUploadOpen] = useState(false);
+  const [isGroupManualGradeOpen, setIsGroupManualGradeOpen] = useState(false);
+  const [isCertificateModalOpen, setIsCertificateModalOpen] = useState(false);
+  const [certificateInitialData, setCertificateInitialData] = useState<LectureCertificateInitialData | undefined>(undefined);
+  const [shareModalExam, setShareModalExam] = useState<Exam | null>(null);
+  const [shareModalCopied, setShareModalCopied] = useState(false);
   const [isSubmissionViewModalOpen, setIsSubmissionViewModalOpen] = useState(false);
   const [activeSubmission, setActiveSubmission] = useState<StudentExamSubmission | null>(null);
+
+  // Question Editor & Clear Trainee Attempts Modals
+  const [isQuestionsEditorOpen, setIsQuestionsEditorOpen] = useState(false);
+  const [editorTargetExam, setEditorTargetExam] = useState<Exam | null>(null);
+  const [isClearTraineeModalOpen, setIsClearTraineeModalOpen] = useState(false);
+  const [studentPreviewExam, setStudentPreviewExam] = useState<Exam | null>(null);
 
   // AI Question Generator Form
   const [aiGenCourseId, setAiGenCourseId] = useState('');
@@ -229,17 +274,11 @@ export const ExamsView: React.FC = () => {
   }, [activeTab, kioskExam]);
 
   const loadData = async () => {
-    setIsLoading(true);
     try {
-      const [fetchedExams, fetchedCourses, fetchedTrainees, fetchedQB] = await Promise.all([
+      const [fetchedExams, fetchedQB] = await Promise.all([
         api.getExams().catch(() => []),
-        api.getCourses().catch(() => []),
-        api.getTrainees().catch(() => []),
         api.getQuestionBank().catch(() => [])
       ]);
-
-      setCourses(fetchedCourses || []);
-      setTrainees(fetchedTrainees || []);
 
       const qbData = Array.isArray(fetchedQB) ? fetchedQB : [];
       setQuestionBank(qbData);
@@ -256,6 +295,19 @@ export const ExamsView: React.FC = () => {
       showToast('حدث خطأ أثناء تحميل بيانات منظومة الاختبارات', 'error');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const loadExamResults = async (examId: string) => {
+    if (!examId) return;
+    setIsLoadingResults(true);
+    try {
+      const fetched = await api.getExamResults(examId).catch(() => []);
+      setSelectedExamResults(Array.isArray(fetched) ? fetched : []);
+    } catch (e) {
+      setSelectedExamResults([]);
+    } finally {
+      setIsLoadingResults(false);
     }
   };
 
@@ -327,6 +379,28 @@ export const ExamsView: React.FC = () => {
       showToast('تم حذف الاختبار بنجاح', 'success');
     } catch (e) {
       showToast('خطأ أثناء الحذف', 'error');
+    }
+  };
+
+  const handleDeleteResult = async (resultId: string) => {
+    if (!window.confirm('هل أنت متأكد من حذف نتيجة هذا الطالب نهائياً من سجلات الاختبار؟')) return;
+    try {
+      await api.deleteExamResult(selectedExamId, resultId);
+      setSelectedExamResults(prev => prev.filter(r => r.id !== resultId));
+      showToast('تم حذف نتيجة ومحاولة الطالب بنجاح ✅', 'success');
+    } catch (e: any) {
+      showToast(e.message || 'فشل حذف النتيجة', 'error');
+    }
+  };
+
+  const handleResetResult = async (resultId: string) => {
+    if (!window.confirm('هل ترغب في إعادة ضبط المحاولة لهذا الطالب؟ سيتم تفريغ نتيجته ليتمكن من التقدم للاختبار من جديد.')) return;
+    try {
+      await api.resetExamResult(selectedExamId, resultId);
+      setSelectedExamResults(prev => prev.filter(r => r.id !== resultId));
+      showToast('تمت إعادة ضبط محاولة الطالب بنجاح، ويمكنه الآن إعادة الاختبار 🔄', 'success');
+    } catch (e: any) {
+      showToast(e.message || 'فشل إعادة ضبط المحاولة', 'error');
     }
   };
 
@@ -408,11 +482,42 @@ export const ExamsView: React.FC = () => {
   };
 
   // ----------------------------------------------------
+  // Mock Exam Questions Fallback Generator (Ministry ICT Curriculum)
+  // ----------------------------------------------------
+  const getMockExamQuestions = (examId: string, examTitle?: string): ExamQuestion[] => {
+    const isLang = examTitle?.toLowerCase().includes('lang') || examTitle?.toLowerCase().includes('لغات') || examTitle?.toLowerCase().includes('english');
+    const isGrade45 = examTitle?.includes('رابع') || examTitle?.includes('خامس') || examTitle?.includes('primary 4') || examTitle?.includes('primary 5');
+    const isPrep = examTitle?.includes('إعدادي') || examTitle?.includes('prep');
+    
+    const gradeKey = isPrep ? 'إعدادي' : (isGrade45 ? 'رابع' : 'سادس');
+    return getCurriculumExamQuestions(gradeKey, isLang ? 'en' : 'ar', examId);
+  };
+
+  // ----------------------------------------------------
   // Student Kiosk Actions & Code Execution Runner
   // ----------------------------------------------------
-  const handleLaunchStudentKiosk = (exam: Exam) => {
+  const handleLaunchStudentKiosk = async (exam: Exam) => {
     setKioskExam(exam);
-    const questions = getMockExamQuestions(exam.id);
+    
+    // Check if questions are already in state for this exam, or fetch them, or fallback to mock
+    let questions: ExamQuestion[] = [];
+    if (selectedExamId === exam.id && examQuestions.length > 0) {
+      questions = [...examQuestions];
+    } else {
+      try {
+        const fetched = await api.getExamQuestions(exam.id).catch(() => []);
+        if (Array.isArray(fetched) && fetched.length > 0) {
+          questions = fetched;
+        }
+      } catch (err) {
+        // Fallback to mock questions
+      }
+    }
+
+    if (!questions || questions.length === 0) {
+      questions = getMockExamQuestions(exam.id, exam.title);
+    }
+
     setKioskQuestions(questions);
     setKioskCurrentIndex(0);
     setKioskRemainingSeconds((exam.durationMinutes || 45) * 60);
@@ -593,25 +698,41 @@ export const ExamsView: React.FC = () => {
         {/* Quick Action Controls */}
         <div className="flex flex-wrap items-center gap-2">
           <button
+            onClick={() => setIsAiExamUploadOpen(true)}
+            className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-xl text-sm font-bold shadow-md shadow-blue-500/25 transition-all cursor-pointer"
+          >
+            <Sparkles className="w-4 h-4 text-amber-300" />
+            <span>تحويل صورة / PDF لاختبار تفاعلي 🤖📄</span>
+          </button>
+
+          <button
+            onClick={() => setIsGroupManualGradeOpen(true)}
+            className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-xl text-sm font-bold shadow-md shadow-emerald-500/25 transition-all cursor-pointer"
+          >
+            <Award className="w-4 h-4 text-amber-300" />
+            <span>رصد درجات يدوي لمجموعة 📋✍️</span>
+          </button>
+
+          <button
             onClick={() => setIsAddExamModalOpen(true)}
-            className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-medium shadow-sm transition-all"
+            className="flex items-center gap-2 px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-sm font-medium shadow-sm transition-all"
           >
             <Plus className="w-4 h-4" />
-            <span>إنشاء اختبار محمي جديد</span>
+            <span>إنشاء اختبار محمي</span>
           </button>
           <button
             onClick={() => setIsAiGeneratorModalOpen(true)}
-            className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white rounded-xl text-sm font-medium shadow-sm transition-all"
+            className="flex items-center gap-2 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-xl text-sm font-medium transition-all"
           >
-            <Sparkles className="w-4 h-4" />
-            <span>توليد أسئلة بالـ AI</span>
+            <Sparkles className="w-4 h-4 text-purple-600" />
+            <span>توليد أسئلة</span>
           </button>
           <button
             onClick={() => setIsAiScannerModalOpen(true)}
-            className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-medium shadow-sm transition-all"
+            className="flex items-center gap-2 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-xl text-sm font-medium transition-all"
           >
-            <ScanLine className="w-4 h-4" />
-            <span>ماسح الإجابات ورقمياً</span>
+            <ScanLine className="w-4 h-4 text-emerald-600" />
+            <span>ماسح الورق</span>
           </button>
         </div>
       </div>
@@ -779,6 +900,17 @@ export const ExamsView: React.FC = () => {
                     <span>{exam.totalMarks} درجة (النجاح: {exam.passingMarks})</span>
                   </div>
 
+                  <div
+                    className={`flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-lg font-bold ${
+                      (exam.questionsCount || 0) > 0
+                        ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
+                        : 'bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'
+                    }`}
+                  >
+                    <CheckSquare className="w-3.5 h-3.5" />
+                    <span>{(exam.questionsCount || 0) > 0 ? `${exam.questionsCount} أسئلة تفاعلية ✅` : '0 أسئلة (قيد التجهيز) ⚠️'}</span>
+                  </div>
+
                   {exam.policy?.lockdownLabMode && (
                     <div className="flex items-center gap-1 text-xs text-purple-700 bg-purple-50 dark:bg-purple-900/30 dark:text-purple-300 px-2.5 py-1 rounded-lg font-medium">
                       <Lock className="w-3.5 h-3.5" />
@@ -796,13 +928,43 @@ export const ExamsView: React.FC = () => {
 
                 {/* Action Toolbar */}
                 <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      onClick={() => {
+                        setEditorTargetExam(exam);
+                        setIsQuestionsEditorOpen(true);
+                      }}
+                      className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 shadow-sm cursor-pointer"
+                      title="معاينة أسئلة هذا الاختبار وتعديلها وإضافة أسئلة جديدة"
+                    >
+                      <Edit className="w-3.5 h-3.5" />
+                      <span>معاينة وتعديل الأسئلة 📝</span>
+                    </button>
+
+                    <button
+                      onClick={() => setStudentPreviewExam(exam)}
+                      className="px-3 py-1.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 text-slate-950 text-xs font-extrabold rounded-lg transition-colors flex items-center gap-1.5 shadow-sm cursor-pointer"
+                      title="تجربة الاختبار كما يراه الطالب في وضع تجريبي دون التأثير على الدرجات"
+                    >
+                      <Eye className="w-3.5 h-3.5" />
+                      <span>معاينة كطالب (تجريبي) 🎓</span>
+                    </button>
+
+                    <button
+                      onClick={() => setShareModalExam(exam)}
+                      className="px-3 py-1.5 bg-purple-50 dark:bg-purple-900/30 hover:bg-purple-100 text-purple-600 dark:text-purple-300 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 shadow-sm cursor-pointer"
+                      title="مشاركة رابط الاختبار التفاعلي للطلاب عبر الواتساب"
+                    >
+                      <Globe className="w-3.5 h-3.5" />
+                      <span>رابط الاختبار 🔗</span>
+                    </button>
+
                     <button
                       onClick={() => {
                         setSelectedExamId(exam.id);
                         setActiveTab('proctoring');
                       }}
-                      className="px-3 py-1.5 bg-blue-50 dark:bg-blue-900/30 hover:bg-blue-100 text-blue-600 dark:text-blue-300 text-xs font-semibold rounded-lg transition-colors flex items-center gap-1.5"
+                      className="px-3 py-1.5 bg-blue-50 dark:bg-blue-900/30 hover:bg-blue-100 text-blue-600 dark:text-blue-300 text-xs font-semibold rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer"
                     >
                       <Monitor className="w-3.5 h-3.5" />
                       <span>المراقبة الحية</span>
@@ -810,21 +972,23 @@ export const ExamsView: React.FC = () => {
 
                     <button
                       onClick={() => handleLaunchStudentKiosk(exam)}
-                      className="px-3 py-1.5 bg-emerald-50 dark:bg-emerald-900/30 hover:bg-emerald-100 text-emerald-600 dark:text-emerald-300 text-xs font-semibold rounded-lg transition-colors flex items-center gap-1.5"
+                      className="px-3 py-1.5 bg-emerald-50 dark:bg-emerald-900/30 hover:bg-emerald-100 text-emerald-600 dark:text-emerald-300 text-xs font-semibold rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer"
                     >
                       <Terminal className="w-3.5 h-3.5" />
-                      <span>تشغيل كشك الطالب</span>
+                      <span>كشك المعمل</span>
                     </button>
                   </div>
 
                   <button
                     onClick={() => {
                       setSelectedExamId(exam.id);
+                      setSelectedExam(exam);
+                      loadExamResults(exam.id);
                       setActiveTab('analytics');
                     }}
-                    className="text-xs text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 font-medium flex items-center gap-1"
+                    className="text-xs text-blue-600 dark:text-blue-400 hover:underline font-bold flex items-center gap-1 cursor-pointer"
                   >
-                    <span>النتائج والتحليلات</span>
+                    <span>كشف الدرجات والنتائج</span>
                     <BarChart3 className="w-3.5 h-3.5" />
                   </button>
                 </div>
@@ -986,21 +1150,21 @@ export const ExamsView: React.FC = () => {
       {/* TAB 3: STUDENT LOCKDOWN KIOSK (CANVAS / SANDBOX) */}
       {/* ---------------------------------------------------- */}
       {activeTab === 'kiosk' && (
-        <div className="bg-slate-950 text-slate-100 rounded-3xl p-6 space-y-6 shadow-2xl border border-slate-800 min-h-[80vh]">
+        <div className="bg-white dark:bg-slate-950 text-slate-800 dark:text-slate-100 rounded-3xl p-6 space-y-6 shadow-2xl border border-slate-200 dark:border-slate-800 min-h-[80vh]">
           {/* Header Bar */}
-          <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-slate-800">
+          <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-slate-200 dark:border-slate-800">
             <div className="flex items-center gap-3">
-              <div className="p-2.5 bg-emerald-500/20 text-emerald-400 rounded-xl border border-emerald-500/30">
+              <div className="p-2.5 bg-emerald-500/10 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 rounded-xl border border-emerald-500/20 dark:border-emerald-500/30">
                 <Shield className="w-6 h-6" />
               </div>
               <div>
                 <div className="flex items-center gap-2">
-                  <h2 className="text-lg font-bold text-white">{kioskExam?.title || 'بيئة اختبار الطالب المحمية'}</h2>
-                  <span className="px-2 py-0.5 text-xs bg-purple-500/20 text-purple-300 rounded border border-purple-500/30">
+                  <h2 className="text-lg font-bold text-slate-900 dark:text-white">{kioskExam?.title || 'بيئة اختبار الطالب المحمية'}</h2>
+                  <span className="px-2 py-0.5 text-xs bg-purple-100 dark:bg-purple-500/20 text-purple-700 dark:text-purple-300 rounded border border-purple-300 dark:border-purple-500/30 font-bold">
                     وضع الحظر الأمني 🔒
                   </span>
                 </div>
-                <p className="text-xs text-slate-400 mt-0.5">طالب المعمل: أحمد محمود | الحاسوب: LAB-WIN-01</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">طالب المعمل: أحمد محمود | الحاسوب: LAB-WIN-01</p>
               </div>
             </div>
 
@@ -1313,37 +1477,379 @@ export const ExamsView: React.FC = () => {
       )}
 
       {/* ---------------------------------------------------- */}
-      {/* TAB 5: AI GRADINGS & ANALYTICS */}
+      {/* TAB 5: AI GRADINGS, LIVE RESULTS & CERTIFICATES */}
       {/* ---------------------------------------------------- */}
       {activeTab === 'analytics' && (
         <div className="space-y-6">
-          <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-4">
-            <h3 className="text-lg font-bold text-slate-900 dark:text-white">تحليلات الأداء والتصحيح بالذكاء الاصطناعي</h3>
-            <p className="text-sm text-slate-500 dark:text-slate-400">
-              تقارير مفصلة لكل اختبار تشمل أخطاء الأكواد الشائعة، التقييم التلقائي وإصدار الشهادات بنقرة واحدة.
-            </p>
+          {/* Top Exam Selector & Actions Bar */}
+          <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200 dark:border-slate-700 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
+              <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                اختر الاختبار لعرض نتائجه ورصد درجاته:
+              </label>
+              <select
+                value={selectedExamId}
+                onChange={e => {
+                  const id = e.target.value;
+                  setSelectedExamId(id);
+                  const found = exams.find(ex => ex.id === id);
+                  setSelectedExam(found || null);
+                  loadExamResults(id);
+                }}
+                className="p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                {exams.map(ex => (
+                  <option key={ex.id} value={ex.id}>
+                    {ex.title} ({ex.totalMarks} درجة)
+                  </option>
+                ))}
+              </select>
+            </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
-              <div className="p-4 bg-blue-50 dark:bg-blue-950/30 rounded-xl border border-blue-200 dark:border-blue-900">
-                <p className="font-bold text-blue-900 dark:text-blue-300 text-sm">مستويات التفوق بالفرع</p>
-                <div className="mt-3 space-y-2">
-                  <div className="flex justify-between text-xs font-medium">
-                    <span>ممتاز (أعلى من 90%)</span>
-                    <span className="font-bold text-emerald-600">65% من الطلاب</span>
-                  </div>
-                  <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2">
-                    <div className="bg-emerald-500 h-2 rounded-full w-[65%]" />
-                  </div>
-                </div>
-              </div>
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+              <button
+                onClick={() => setIsGroupManualGradeOpen(true)}
+                className="px-3.5 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+              >
+                <Award className="w-3.5 h-3.5 text-amber-300" />
+                <span>رصد يدوي للمجموعة ✍️</span>
+              </button>
 
-              <div className="p-4 bg-purple-50 dark:bg-purple-950/30 rounded-xl border border-purple-200 dark:border-purple-900">
-                <p className="font-bold text-purple-900 dark:text-purple-300 text-sm">الشهادات الصادرة تلقائياً</p>
-                <p className="text-2xl font-bold text-purple-700 dark:text-purple-300 mt-2">142 شهادة إتمام</p>
-                <p className="text-xs text-slate-500 mt-1">ربط مباشر مع وحدة الشهادات الرقمية للمركز</p>
-              </div>
+              <button
+                onClick={() => loadExamResults(selectedExamId)}
+                className="px-3 py-2 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isLoadingResults ? 'animate-spin' : ''}`} />
+                <span>تحديث النتائج</span>
+              </button>
             </div>
           </div>
+
+          {/* Exam Summary Stats */}
+          {(() => {
+            const curExam = exams.find(e => e.id === selectedExamId) || selectedExam;
+            const totMarks = curExam?.totalMarks || 100;
+            const validResults = selectedExamResults.filter(r => r.score !== undefined && !isNaN(Number(r.score)));
+            const avg = validResults.length > 0 ? Math.round(validResults.reduce((s, r) => s + Number(r.score), 0) / validResults.length) : 0;
+            const topScore = validResults.length > 0 ? Math.max(...validResults.map(r => Number(r.score))) : 0;
+            const passedCount = validResults.filter(r => Number(r.score) >= (curExam?.passingMarks || 60)).length;
+            const passPercent = validResults.length > 0 ? Math.round((passedCount / validResults.length) * 100) : 0;
+
+            // Find top student
+            const topStudentResult = validResults.find(r => Number(r.score) === topScore && topScore > 0);
+            const topTraineeObj = topStudentResult ? trainees.find(t => t.id === topStudentResult.traineeId) : null;
+
+            return (
+              <div className="space-y-6">
+                {/* Stats Cards */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
+                  <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 text-center">
+                    <span className="text-[11px] text-slate-500 dark:text-slate-400 block font-medium">عدد المختبرين</span>
+                    <span className="text-2xl font-black text-slate-900 dark:text-white mt-1 block">{validResults.length}</span>
+                  </div>
+
+                  <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 text-center">
+                    <span className="text-[11px] text-slate-500 dark:text-slate-400 block font-medium">متوسط درجات الاختبار</span>
+                    <span className="text-2xl font-black text-blue-600 dark:text-blue-400 mt-1 block">{avg} / {totMarks}</span>
+                  </div>
+
+                  <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 text-center">
+                    <span className="text-[11px] text-slate-500 dark:text-slate-400 block font-medium">أعلى درجة محققة 🎯</span>
+                    <span className="text-2xl font-black text-emerald-600 dark:text-emerald-400 mt-1 block">{topScore} / {totMarks}</span>
+                  </div>
+
+                  <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 text-center">
+                    <span className="text-[11px] text-slate-500 dark:text-slate-400 block font-medium">نسبة النجاح</span>
+                    <span className="text-2xl font-black text-purple-600 dark:text-purple-400 mt-1 block">{passPercent}%</span>
+                  </div>
+                </div>
+
+                {/* 1st Place Podium Banner */}
+                {topStudentResult && (
+                  <div className="bg-gradient-to-r from-amber-500 via-amber-600 to-yellow-500 p-5 rounded-3xl text-slate-950 shadow-xl flex flex-col sm:flex-row items-center justify-between gap-4 animate-in fade-in">
+                    <div className="flex items-center gap-4 text-right">
+                      <div className="w-14 h-14 rounded-2xl bg-white/30 backdrop-blur border border-white/40 flex items-center justify-center text-3xl shadow-inner shrink-0">
+                        🥇
+                      </div>
+                      <div>
+                        <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 bg-slate-950/20 rounded-full text-slate-950 text-xs font-black mb-1">
+                          <Crown className="w-3.5 h-3.5 text-yellow-200" />
+                          <span>المركز الأول على الاختبار</span>
+                        </div>
+                        <h4 className="text-lg font-black text-slate-950 leading-tight">
+                          {topStudentResult.traineeName || topTraineeObj?.fullName}
+                        </h4>
+                        <p className="text-xs font-bold text-slate-900/80">
+                          الدرجة المحققة: {topStudentResult.score} من {topStudentResult.totalMarks || totMarks} ({topStudentResult.percentage}%) • كود: {topStudentResult.traineeCode || topTraineeObj?.code}
+                        </p>
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={() => {
+                        const trName = topStudentResult.traineeName || topTraineeObj?.fullName || 'المتدرب الأول';
+                        const course = courses.find(c => c.id === curExam?.courseId);
+                        setCertificateInitialData({
+                          traineeId: topStudentResult.traineeId,
+                          traineeName: trName,
+                          traineeCode: topStudentResult.traineeCode || topTraineeObj?.code,
+                          traineePhoto: topTraineeObj?.photoUrl,
+                          traineePhone: topTraineeObj?.phone,
+                          courseName: course?.name || 'الدورة التدريبية',
+                          lectureTitle: `اختبار التقييم: ${curExam?.title}`,
+                          awardTitle: 'نجم الاختبار والمركز الأول 🥇🏆',
+                          points: 30,
+                          stars: 5
+                        });
+                        setIsCertificateModalOpen(true);
+                      }}
+                      className="px-5 py-3 bg-slate-950 hover:bg-slate-900 text-amber-300 font-extrabold text-xs rounded-2xl shadow-xl flex items-center gap-2 transition-all cursor-pointer active:scale-95 shrink-0"
+                    >
+                      <Trophy className="w-4 h-4 text-amber-400" />
+                      <span>إصدار شهادة تقدير للمركز الأول 📜✨</span>
+                    </button>
+                  </div>
+                )}
+
+                {/* Submissions & Grades Table */}
+                <div className="bg-white dark:bg-slate-800 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
+                  <div className="p-4 sm:p-5 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+                    <div>
+                      <h4 className="font-bold text-slate-900 dark:text-white text-base">
+                        كشف نتائج وتسليمات الطلاب ({selectedExamResults.length} طالب)
+                      </h4>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                        يتم رصد نتائج الاختبارات المحلولة ذاتياً عبر الرابط أو المرصودة يدوياً فوراً
+                      </p>
+                    </div>
+
+                    {selectedExam && (
+                      <button
+                        onClick={() => setShareModalExam(selectedExam)}
+                        className="px-3.5 py-1.5 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-300 rounded-xl text-xs font-bold flex items-center gap-1.5 hover:bg-blue-100 transition-colors"
+                      >
+                        <Share2 className="w-3.5 h-3.5" />
+                        <span>رابط الاختبار للطلاب 🔗</span>
+                      </button>
+                    )}
+                  </div>
+
+                  {selectedExamResults.length === 0 ? (
+                    <div className="text-center py-12 text-slate-400 space-y-3">
+                      <Award className="w-12 h-12 mx-auto text-slate-300 dark:text-slate-600" />
+                      <p className="text-sm font-bold">لم يتم تسجيل نتائج لهذا الاختبار بعد</p>
+                      <p className="text-xs text-slate-500 max-w-sm mx-auto">
+                        شارك رابط الاختبار مع الطلاب ليقوموا بحله عبر هواتفهم وتصلك الدرجات فوراً، أو استخدم "رصد يدوي للمجموعة".
+                      </p>
+                      <div className="flex items-center justify-center gap-3 pt-2">
+                        {selectedExam && (
+                          <button
+                            onClick={() => setShareModalExam(selectedExam)}
+                            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-colors"
+                          >
+                            مشاركة رابط الاختبار للطلاب 🔗
+                          </button>
+                        )}
+                        <button
+                          onClick={() => setIsGroupManualGradeOpen(true)}
+                          className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-colors"
+                        >
+                          رصد درجات يدوياً 📋
+                        </button>
+                        <button
+                          onClick={() => setIsClearTraineeModalOpen(true)}
+                          className="px-4 py-2 bg-red-50 dark:bg-red-950/40 hover:bg-red-100 text-red-600 dark:text-red-300 border border-red-200 dark:border-red-800 rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer"
+                          title="تصفير ومسح محاولات طالب تجريبية (مثل حذف تجربة لين أو أي طالب)"
+                        >
+                          <RotateCcw className="w-3.5 h-3.5" />
+                          <span>تصفير ومسح محاولات طالب 🔄</span>
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto space-y-3">
+                      {/* Top Action Bar for existing results */}
+                      <div className="flex flex-wrap items-center justify-between gap-2 p-2 bg-slate-50 dark:bg-slate-800/50 rounded-xl">
+                        <span className="text-xs text-slate-500 font-bold pr-2">
+                          إجمالي المسجلين في هذا الاختبار: {selectedExamResults.length} متدرب
+                        </span>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => setIsClearTraineeModalOpen(true)}
+                            className="px-3 py-1.5 bg-red-50 dark:bg-red-950/40 hover:bg-red-100 text-red-600 dark:text-red-300 border border-red-200 dark:border-red-800 rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer"
+                            title="تصفير ومسح محاولات طالب تجريبية أو خاطئة (مثل حذف تجربة لين)"
+                          >
+                            <RotateCcw className="w-3.5 h-3.5" />
+                            <span>تصفير / مسح محاولات طالب (حذف تجربة) 🔄</span>
+                          </button>
+                          <button
+                            onClick={() => setIsGroupManualGradeOpen(true)}
+                            className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition-colors"
+                          >
+                            رصد يدوي 📋
+                          </button>
+                        </div>
+                      </div>
+
+                      <table className="w-full text-right border-collapse text-xs">
+                        <thead>
+                          <tr className="border-b border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 font-bold bg-slate-50/50 dark:bg-slate-800/30">
+                            <th className="p-3 w-12 text-center">#</th>
+                            <th className="p-3">اسم المتدرب</th>
+                            <th className="p-3">كود الطالب</th>
+                            <th className="p-3">الدرجة المحققة</th>
+                            <th className="p-3 text-center">النسبة والتقدير</th>
+                            <th className="p-3">طريقة التسليم والملاحظات</th>
+                            <th className="p-3 text-center w-36">شهادة التقدير</th>
+                            <th className="p-3 text-center w-24">إجراءات التحكم</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                          {selectedExamResults.map((res, rIdx) => {
+                            const scoreNum = Number(res.score) || 0;
+                            const tot = Number(res.totalMarks) || totMarks;
+                            const pct = res.percentage !== undefined ? res.percentage : Math.round((scoreNum / Math.max(tot, 1)) * 100);
+                            const passScore = curExam?.passingMarks || Math.round(tot * 0.6);
+                            const isPassed = scoreNum >= passScore && res.rating !== 'راسب';
+                            const isTop = rIdx === 0 && scoreNum > 0 && isPassed;
+                            const traineeObj = trainees.find(t => t.id === res.traineeId);
+
+                            return (
+                              <tr
+                                key={res.id || rIdx}
+                                className={`hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors ${
+                                  isTop ? 'bg-amber-50/30 dark:bg-amber-950/10' : ''
+                                }`}
+                              >
+                                <td className="p-3 text-center font-bold text-slate-400">
+                                  {isTop ? '🥇' : rIdx === 1 && isPassed ? '🥈' : rIdx === 2 && isPassed ? '🥉' : rIdx + 1}
+                                </td>
+
+                                <td className="p-3">
+                                  <div className="flex items-center gap-2">
+                                    {traineeObj?.photoUrl ? (
+                                      <img src={traineeObj.photoUrl} alt="" className="w-7 h-7 rounded-lg object-cover" />
+                                    ) : (
+                                      <div className="w-7 h-7 rounded-lg bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 flex items-center justify-center font-bold text-xs">
+                                        {(res.traineeName || 'ط').charAt(0)}
+                                      </div>
+                                    )}
+                                    <span className="font-bold text-slate-900 dark:text-white">
+                                      {res.traineeName || traineeObj?.fullName || 'متدرب'}
+                                    </span>
+                                  </div>
+                                </td>
+
+                                <td className="p-3 font-mono text-slate-500">
+                                  {res.traineeCode || traineeObj?.code || '—'}
+                                </td>
+
+                                <td className="p-3 font-bold text-slate-900 dark:text-white">
+                                  <span className={`text-sm ${isPassed ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500'}`}>
+                                    {scoreNum}
+                                  </span>
+                                  <span className="text-slate-400 text-xs"> / {tot}</span>
+                                </td>
+
+                                <td className="p-3 text-center">
+                                  <span
+                                    className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                      pct >= 90
+                                        ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300'
+                                        : pct >= 80
+                                        ? 'bg-blue-100 text-blue-800 dark:bg-blue-950/50 dark:text-blue-300'
+                                        : pct >= 65
+                                        ? 'bg-teal-100 text-teal-800 dark:bg-teal-950/50 dark:text-teal-300'
+                                        : isPassed
+                                        ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300'
+                                        : 'bg-red-100 text-red-800 dark:bg-red-950/50 dark:text-red-300'
+                                    }`}
+                                  >
+                                    {isPassed ? (res.rating || 'ناجح') : 'راسب'} ({pct}%)
+                                  </span>
+                                </td>
+
+                                <td className="p-3 text-slate-500 text-[11px]">
+                                  {res.notes || 'تسليم إلكتروني تفاعلي'}
+                                </td>
+
+                                {/* Certificate Column - NEVER ISSUE A CERTIFICATE FOR A FAILED TEST */}
+                                <td className="p-3 text-center">
+                                  {isPassed ? (
+                                    <button
+                                      onClick={() => {
+                                        const course = courses.find(c => c.id === curExam?.courseId);
+                                        setCertificateInitialData({
+                                          traineeId: res.traineeId,
+                                          traineeName: res.traineeName || traineeObj?.fullName,
+                                          traineeCode: res.traineeCode || traineeObj?.code,
+                                          traineePhoto: traineeObj?.photoUrl,
+                                          traineePhone: traineeObj?.phone,
+                                          courseName: course?.name || 'الدورة التدريبية',
+                                          lectureTitle: `اختبار: ${curExam?.title}`,
+                                          awardTitle: isTop ? 'نجم الاختبار والمركز الأول 🥇🏆' : 'شهادة تميز في الاختبار 📜🌟',
+                                          points: isTop ? 30 : 20,
+                                          stars: isTop ? 5 : 4
+                                        });
+                                        setIsCertificateModalOpen(true);
+                                      }}
+                                      className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 mx-auto transition-all shadow-sm cursor-pointer ${
+                                        isTop
+                                          ? 'bg-gradient-to-r from-amber-500 to-yellow-500 text-slate-950 font-black shadow-amber-500/20'
+                                          : 'bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 hover:bg-purple-100'
+                                      }`}
+                                    >
+                                      <Trophy className="w-3.5 h-3.5" />
+                                      <span>{isTop ? 'شهادة الأول 🥇' : 'شهادة تقدير 📜'}</span>
+                                    </button>
+                                  ) : (
+                                    <div className="flex flex-col items-center justify-center gap-1">
+                                      <span className="text-[10px] text-red-600 dark:text-red-400 font-bold bg-red-50 dark:bg-red-950/40 px-2 py-0.5 rounded-full">
+                                        لم يجتز (لا تصدر شهادة)
+                                      </span>
+                                      <button
+                                        onClick={() => handleResetResult(res.id)}
+                                        className="text-[10px] text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-0.5 font-bold cursor-pointer"
+                                        title="إعادة ضبط المحاولة للطالب ليعيد الاختبار"
+                                      >
+                                        <RotateCcw className="w-3 h-3" />
+                                        <span>إعادة الاختبار 🔄</span>
+                                      </button>
+                                    </div>
+                                  )}
+                                </td>
+
+                                {/* Control Actions Column */}
+                                <td className="p-3 text-center">
+                                  <div className="flex items-center justify-center gap-1.5">
+                                    <button
+                                      onClick={() => handleResetResult(res.id)}
+                                      className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-slate-750 rounded-lg transition-colors cursor-pointer"
+                                      title="إعادة ضبط المحاولة للطالب وتفريغ النتيجة"
+                                    >
+                                      <RotateCcw className="w-4 h-4" />
+                                    </button>
+
+                                    <button
+                                      onClick={() => handleDeleteResult(res.id)}
+                                      className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-slate-750 rounded-lg transition-colors cursor-pointer"
+                                      title="حذف نتيجة ومحاولة هذا الطالب نهائياً"
+                                    >
+                                      <Trash2 className="w-4 h-4" />
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
         </div>
       )}
 
@@ -1620,6 +2126,274 @@ export const ExamsView: React.FC = () => {
             loadData();
           }}
         />
+      )}
+
+      {/* ---------------------------------------------------- */}
+      {/* MODAL 4: AI EXAM UPLOAD (PDF & IMAGES) MODAL */}
+      {/* ---------------------------------------------------- */}
+      {isAiExamUploadOpen && (
+        <AIExamUploadModal
+          isOpen={isAiExamUploadOpen}
+          onClose={() => setIsAiExamUploadOpen(false)}
+          courses={courses}
+          groups={groups}
+          onExamCreated={(newExam) => {
+            setExams(prev => [newExam, ...prev.filter(e => e.id !== newExam.id)]);
+            setSelectedExamId(newExam.id);
+            setSelectedExam(newExam);
+            setActiveTab('exams');
+            showToast('تم إنشاء ونشر الاختبار التفاعلي بنجاح', 'success');
+          }}
+        />
+      )}
+
+      {/* ---------------------------------------------------- */}
+      {/* MODAL 5: GROUP MANUAL GRADING & ATTENDANCE MODAL */}
+      {/* ---------------------------------------------------- */}
+      {isGroupManualGradeOpen && (
+        <GroupManualGradeModal
+          isOpen={isGroupManualGradeOpen}
+          onClose={() => setIsGroupManualGradeOpen(false)}
+          courses={courses}
+          groups={groups}
+          trainees={trainees}
+          exams={exams}
+          onGradesSaved={() => {
+            loadData();
+            if (selectedExamId) {
+              loadExamResults(selectedExamId);
+            }
+          }}
+          onIssueCertificate={(tr, info) => {
+            setCertificateInitialData({
+              traineeId: tr.id,
+              traineeName: tr.fullName,
+              traineeCode: tr.code,
+              traineePhoto: tr.photoUrl,
+              traineePhone: tr.phone,
+              courseName: info.courseName,
+              groupName: info.groupName,
+              lectureTitle: `اختبار التقييم: ${info.title}`,
+              awardTitle: info.rank === 1 ? 'نجم الاختبار والمركز الأول 🥇🏆' : 'شهادة تميز وتفوق في الاختبار 🌟📜',
+              points: info.rank === 1 ? 30 : 20,
+              stars: info.rank === 1 ? 5 : 4
+            });
+            setIsCertificateModalOpen(true);
+          }}
+        />
+      )}
+
+      {/* ---------------------------------------------------- */}
+      {/* MODAL 6: LECTURE / EXAM EXCELLENCE CERTIFICATE MODAL */}
+      {/* ---------------------------------------------------- */}
+      {isCertificateModalOpen && (
+        <LectureExcellenceCertificateModal
+          isOpen={isCertificateModalOpen}
+          onClose={() => {
+            setIsCertificateModalOpen(false);
+            setCertificateInitialData(undefined);
+          }}
+          initialData={certificateInitialData}
+          onCertificateIssued={() => {
+            showToast('تم إصدار واعتماد شهادة التقدير بنجاح! 🎓✨', 'success');
+          }}
+        />
+      )}
+
+      {/* ---------------------------------------------------- */}
+      {/* MODAL 7: SHARE EXAM DIRECT LINK MODAL */}
+      {/* ---------------------------------------------------- */}
+      {shareModalExam && (
+        <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-lg w-full p-6 shadow-2xl space-y-5 animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2.5 bg-purple-100 dark:bg-purple-950/50 text-purple-600 dark:text-purple-400 rounded-2xl">
+                  <Share2 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-base text-slate-900 dark:text-white">
+                    مشاركة رابط الاختبار التفاعلي للطلاب
+                  </h3>
+                  <p className="text-xs text-slate-500">{shareModalExam.title}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setShareModalExam(null);
+                  setShareModalCopied(false);
+                }}
+                className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-right">
+              {/* Questions Readiness Badge */}
+              {(shareModalExam.questionsCount || 0) > 0 ? (
+                <div className="p-3 bg-emerald-50 dark:bg-emerald-950/25 border border-emerald-300 dark:border-emerald-800 rounded-2xl flex items-center justify-between gap-2 text-xs text-emerald-800 dark:text-emerald-200">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span className="font-bold">الاختبار جاهز بنسبة 100%: يحتوي على {shareModalExam.questionsCount} سؤالاً تفاعلياً 🎯</span>
+                  </div>
+                  <span className="text-[11px] bg-emerald-100 dark:bg-emerald-900/60 px-2 py-0.5 rounded-full font-mono font-bold">
+                    {shareModalExam.totalMarks} درجة
+                  </span>
+                </div>
+              ) : (
+                <div className="p-3.5 bg-amber-50 dark:bg-amber-950/30 border border-amber-300 dark:border-amber-800 rounded-2xl text-xs text-amber-900 dark:text-amber-200 space-y-2">
+                  <div className="flex items-center gap-2 font-bold text-amber-700 dark:text-amber-300">
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    <span>تنبيه: هذا الاختبار لا يحتوي على أي أسئلة بعد (0 أسئلة)</span>
+                  </div>
+                  <p className="text-[11px] leading-relaxed text-slate-600 dark:text-slate-400">
+                    لن يتمكن الطلاب من بدء الحل إلا بعد إضافة أو توليد أسئلة لهذا الاختبار. يمكنك توليدها فوراً بالذكاء الاصطناعي أو تحويلها من صورة/PDF.
+                  </p>
+                  <button
+                    onClick={() => {
+                      setShareModalExam(null);
+                      setIsAiScannerModalOpen(true);
+                    }}
+                    className="w-full py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow"
+                  >
+                    <Sparkles className="w-3.5 h-3.5" />
+                    <span>توليد أسئلة تفاعلية الآن بالذكاء الاصطناعي 🤖</span>
+                  </button>
+                </div>
+              )}
+
+              <div className="p-4 bg-purple-50 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-900 rounded-2xl space-y-1.5 text-xs text-purple-900 dark:text-purple-200">
+                <p className="font-bold flex items-center gap-1.5">
+                  <Sparkles className="w-4 h-4 text-purple-500" />
+                  <span>دخول فوري بدون تسجيل دخول مسبق:</span>
+                </p>
+                <p className="text-slate-600 dark:text-slate-400 leading-relaxed">
+                  يكفي أن يفتح الطالب الرابط على هاتفه أو حاسوبه، ويدخل كوده التعريفي (أو اسمه) ثم يحل الأسئلة التفاعلية وتظهر نتيجته فوراً وتترصد في كشف درجاتك!
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  الرابط المباشر للاختبار
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    readOnly
+                    value={`${window.location.origin}/?view=interactive-exam&examId=${shareModalExam.id}`}
+                    className="flex-1 p-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-mono text-slate-700 dark:text-slate-300 select-all"
+                  />
+                  <button
+                    onClick={() => {
+                      const link = `${window.location.origin}/?view=interactive-exam&examId=${shareModalExam.id}`;
+                      navigator.clipboard.writeText(link);
+                      setShareModalCopied(true);
+                      showToast('تم نسخ رابط الاختبار إلى الحافظة بنجاح 📋', 'success');
+                      setTimeout(() => setShareModalCopied(false), 3000);
+                    }}
+                    className={`px-4 py-3 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                      shareModalCopied
+                        ? 'bg-emerald-600 text-white shadow-md shadow-emerald-500/25'
+                        : 'bg-blue-600 hover:bg-blue-700 text-white'
+                    }`}
+                  >
+                    {shareModalCopied ? (
+                      <>
+                        <Check className="w-4 h-4" />
+                        <span>تم النسخ!</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-4 h-4" />
+                        <span>نسخ الرابط</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row items-center gap-2.5 pt-2">
+              <a
+                href={`https://api.whatsapp.com/send?text=${encodeURIComponent(
+                  `السلام عليكم، إليكم رابط الاختبار التفاعلي: "${shareModalExam.title}"\nيمكنكم الدخول عبر الرابط وكتابة كود الطالب والبدء فوراً:\n${window.location.origin}/?view=interactive-exam&examId=${shareModalExam.id}\nبالتوفيق للجميع! 🌟`
+                )}`}
+                target="_blank"
+                rel="noreferrer"
+                className="w-full sm:flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl flex items-center justify-center gap-2 shadow-md shadow-emerald-600/20 transition-all"
+              >
+                <Send className="w-4 h-4" />
+                <span>إرسال عبر واتساب للمجموعة 📱</span>
+              </a>
+
+              <a
+                href={`/?view=interactive-exam&examId=${shareModalExam.id}`}
+                target="_blank"
+                rel="noreferrer"
+                className="w-full sm:w-auto px-4 py-3 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition-colors"
+              >
+                <ExternalLink className="w-4 h-4" />
+                <span>معاينة كطالب</span>
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ---------------------------------------------------- */}
+      {/* MODAL: EXAM QUESTIONS & SETTINGS EDITOR */}
+      {/* ---------------------------------------------------- */}
+      {isQuestionsEditorOpen && editorTargetExam && (
+        <ExamQuestionsEditorModal
+          exam={editorTargetExam}
+          isOpen={isQuestionsEditorOpen}
+          onClose={() => {
+            setIsQuestionsEditorOpen(false);
+            setEditorTargetExam(null);
+          }}
+          onQuestionsUpdated={() => {
+            loadData();
+            if (selectedExamId) {
+              loadExamQuestions(selectedExamId);
+            }
+          }}
+          onLaunchStudentPreview={(targetExam) => {
+            setStudentPreviewExam(targetExam);
+          }}
+          showToast={showToast}
+        />
+      )}
+
+      {/* ---------------------------------------------------- */}
+      {/* MODAL: CLEAR & RESET TRAINEE ATTEMPTS */}
+      {/* ---------------------------------------------------- */}
+      {isClearTraineeModalOpen && (
+        <ClearTraineeExamModal
+          isOpen={isClearTraineeModalOpen}
+          onClose={() => setIsClearTraineeModalOpen(false)}
+          trainees={trainees}
+          onCleared={() => {
+            if (selectedExamId) {
+              loadExamResults(selectedExamId);
+            }
+            loadData();
+          }}
+          showToast={showToast}
+        />
+      )}
+
+      {/* ---------------------------------------------------- */}
+      {/* MODAL: INTERACTIVE STUDENT PREVIEW OVERLAY */}
+      {/* ---------------------------------------------------- */}
+      {studentPreviewExam && (
+        <div className="fixed inset-0 z-50 overflow-y-auto">
+          <PublicInteractiveExamView
+            directExamId={studentPreviewExam.id}
+            isPreviewMode={true}
+            onBack={() => setStudentPreviewExam(null)}
+          />
+        </div>
       )}
     </div>
   );

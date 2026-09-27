@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   Share2, X, Download, Printer, CheckCircle2, ShieldCheck, Zap, QrCode, Copy, ExternalLink, MessageCircle, Lock, Unlock, RefreshCw
 } from 'lucide-react';
-import html2canvas from 'html2canvas';
+import { captureElementToCanvas } from '../utils/captureUtils';
 import QRCode from 'qrcode';
 import { getPublicRegistrationUrl } from '../utils/urlHelper';
 
@@ -155,7 +155,8 @@ export const WhatsAppShareModal: React.FC<ShareModalProps> = ({
     const element = document.getElementById('branded-card-preview');
     if (!element) return;
     try {
-      const canvas = await html2canvas(element, { scale: 2, backgroundColor: '#090d16' });
+      const canvas = await captureElementToCanvas(element, { scale: 2, backgroundColor: '#090d16' });
+      if (!canvas) throw new Error('Canvas capture failed');
       const dataUrl = canvas.toDataURL('image/jpeg', 0.95);
       const link = document.createElement('a');
       link.href = dataUrl;
@@ -171,7 +172,8 @@ export const WhatsAppShareModal: React.FC<ShareModalProps> = ({
     const element = document.getElementById('branded-card-preview');
     if (!element) return;
     try {
-      const canvas = await html2canvas(element, { scale: 2, backgroundColor: '#090d16' });
+      const canvas = await captureElementToCanvas(element, { scale: 2, backgroundColor: '#090d16' });
+      if (!canvas) throw new Error('Canvas capture failed');
       const imgData = canvas.toDataURL('image/jpeg', 0.95);
       const printWindow = window.open('', '_blank');
       if (printWindow) {

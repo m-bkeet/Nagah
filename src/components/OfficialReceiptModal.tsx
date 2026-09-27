@@ -1,6 +1,6 @@
 import React, { useRef } from 'react';
 import { X, Printer, Download, Share2, CheckCircle2, ShieldCheck, Building2, Calendar, CreditCard, User, Receipt, FileText, Phone, Clock, HardDrive, Check } from 'lucide-react';
-import html2canvas from 'html2canvas';
+import { captureElementToCanvas } from '../utils/captureUtils';
 import { Payment } from '../types';
 import { numberToArabicWords } from '../utils/numberToArabicWords';
 
@@ -116,11 +116,11 @@ export const OfficialReceiptModal: React.FC<OfficialReceiptModalProps> = ({
   const handleDownloadImage = async () => {
     if (!receiptRef.current) return;
     try {
-      const canvas = await html2canvas(receiptRef.current, {
+      const canvas = await captureElementToCanvas(receiptRef.current, {
         scale: 2,
-        useCORS: true,
         backgroundColor: '#0f172a'
       });
+      if (!canvas) return;
       const image = canvas.toDataURL('image/png');
       const link = document.createElement('a');
       link.href = image;

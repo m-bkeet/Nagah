@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../services/api';
+import { isTrainerSessionActive } from '../utils/labSecurity';
 import { ThemeQuickSwitcher } from '../components/ThemeQuickSwitcher';
 import { 
   Award, 
@@ -52,6 +53,39 @@ export const StudentKioskView: React.FC = () => {
     gamePin?: string;
   } | null>(null);
 
+  // Master Lab Lock & Access Control State
+  const [isLabLocked, setIsLabLocked] = useState<boolean>(() => !isTrainerSessionActive());
+
+  useEffect(() => {
+    let isMounted = true;
+    const fetchStatus = async () => {
+      try {
+        const res = await api.getLabStatus();
+        if (isMounted && res) {
+          setIsLabLocked(!res.isOpen);
+        }
+      } catch {
+        if (isMounted) setIsLabLocked(!isTrainerSessionActive());
+      }
+    };
+    fetchStatus();
+
+    const handleLabEvent = (e: any) => {
+      if (e.detail?.isActive !== undefined) {
+        setIsLabLocked(!e.detail.isActive);
+      }
+    };
+    window.addEventListener('nagah_lab_session_changed', handleLabEvent);
+    window.addEventListener('storage', () => setIsLabLocked(!isTrainerSessionActive()));
+    const interval = setInterval(fetchStatus, 4000);
+
+    return () => {
+      isMounted = false;
+      window.removeEventListener('nagah_lab_session_changed', handleLabEvent);
+      clearInterval(interval);
+    };
+  }, []);
+
   // Poll for trainer's quick question
   useEffect(() => {
     let isMounted = true;
@@ -95,13 +129,9 @@ export const StudentKioskView: React.FC = () => {
     };
     window.addEventListener('focus', handleWindowFocus);
 
-    // Lightweight fallback interval (25 seconds, only runs if window is active)
-    const interval = setInterval(checkQuickQuestion, 25000);
-
     return () => {
       isMounted = false;
       window.removeEventListener('focus', handleWindowFocus);
-      clearInterval(interval);
     };
   }, [currentTrainee]);
 
@@ -178,6 +208,34 @@ export const StudentKioskView: React.FC = () => {
       setIsSubmittingAnswer(false);
     }
   };
+
+  // If Lab is locked by trainer, prevent any student entry or interaction!
+  if (isLabLocked) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-white flex flex-col justify-center items-center p-6 text-center select-none font-sans" dir="rtl">
+        <div className="max-w-md w-full bg-slate-900/95 border-2 border-rose-500/50 rounded-3xl p-8 shadow-2xl backdrop-blur-xl space-y-6 animate-in fade-in zoom-in-95 duration-200">
+          <div className="w-20 h-20 rounded-3xl bg-rose-500/20 border border-rose-500/40 text-rose-400 flex items-center justify-center text-4xl mx-auto shadow-inner animate-pulse">
+            🔒
+          </div>
+          <div className="space-y-2">
+            <span className="px-3 py-1 bg-rose-500/20 text-rose-300 border border-rose-500/30 text-xs font-black rounded-full inline-block">
+              المعمل مغلق حالياً
+            </span>
+            <h2 className="text-xl sm:text-2xl font-black text-white">
+              تم إغلاق المعمل بقرار المحاضر المشرف
+            </h2>
+            <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
+              وفقاً لقواعد الجلسة، تم حظر الدخول وقفل شاشات الأجهزة. سيعمل الجهاز تلقائياً فور قيام المحاضر بفتح المعمل من جهازه بالقاعة.
+            </p>
+          </div>
+          <div className="pt-4 border-t border-slate-800 flex items-center justify-center gap-2 text-xs text-slate-400">
+            <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-ping" />
+            <span>في انتظار فتح المعمل من قبل المحاضر...</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // If not logged in, show the clean, welcoming Lab Check-in Screen
   if (!currentTrainee) {

@@ -26,7 +26,7 @@ function getDb() {
     return null;
   }
 }
-function withTimeout(promise, ms = 8e3) {
+function withTimeout(promise, ms = 12e3) {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error("FIRESTORE_TIMEOUT")), ms);
     promise.then(
@@ -96,31 +96,42 @@ async function saveCollectionToFirestore(collectionName, rawItems) {
         isSplit: false,
         totalParts: 1,
         updatedAt: now
-      }, { merge: true }), 6e3);
+      }, { merge: true }), 1e4);
     } else {
       const totalParts = Math.ceil(serialized.length / CHUNK_SIZE);
       const partPromises = [];
       for (let i = 0; i < totalParts; i++) {
         const chunk = serialized.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE);
         const partRef = doc(db2, "nagah_store", `${collectionName}_p${i + 1}`);
-        partPromises.push(withTimeout(setDoc(partRef, { payload: chunk, part: i + 1, totalParts, updatedAt: now }, { merge: true }), 6e3));
+        partPromises.push(withTimeout(setDoc(partRef, { payload: chunk, part: i + 1, totalParts, updatedAt: now }, { merge: true }), 1e4));
       }
       await Promise.all(partPromises);
-      await withTimeout(setDoc(docRef, { isSplit: true, totalParts, updatedAt: now }, { merge: true }), 6e3);
+      await withTimeout(setDoc(docRef, { isSplit: true, totalParts, updatedAt: now }, { merge: true }), 1e4);
+    }
+    try {
+      const metaRef = doc(db2, "nagah_store", "sync_meta");
+      await setDoc(metaRef, {
+        lastUpdatedCollection: collectionName,
+        lastCollection: collectionName,
+        updatedAt: now,
+        version: now
+      }, { merge: true });
+    } catch (metaErr) {
+      console.warn("[FirestoreStorage] sync_meta write notice:", metaErr);
     }
     collectionHashes.set(collectionName, newHash);
     isQuotaExceeded = false;
     return true;
   } catch (err) {
     const errMsg = err?.message || String(err);
-    if (errMsg.includes("RESOURCE_EXHAUSTED") || errMsg.includes("Quota limit exceeded") || errMsg.includes("8") || errMsg.includes("FIRESTORE_TIMEOUT")) {
+    if (errMsg.includes("RESOURCE_EXHAUSTED") || errMsg.includes("Quota limit exceeded")) {
       isQuotaExceeded = true;
       quotaExceededNoticeTime = now;
-      console.warn(`[FirestoreStorage] Cloud Firestore Quota reached or paused. Active local persistence handles all operations smoothly.`);
+      console.warn(`[FirestoreStorage] Cloud Firestore Quota reached. Backing off for 30s.`);
     } else {
-      console.warn(`[FirestoreStorage] Non-critical save note for ${collectionName}:`, errMsg);
+      console.warn(`[FirestoreStorage] Note for ${collectionName}:`, errMsg);
     }
-    return true;
+    return false;
   }
 }
 async function loadCollectionFromFirestore(collectionName) {
@@ -135,13 +146,13 @@ async function loadCollectionFromFirestore(collectionName) {
   }
   try {
     const docRef = doc(db2, "nagah_store", collectionName);
-    const snap = await withTimeout(getDoc(docRef), 6e3);
+    const snap = await withTimeout(getDoc(docRef), 1e4);
     if (!snap.exists()) return null;
     const data = snap.data();
     if (data?.isSplit) {
       const totalParts = data.totalParts || 2;
       const partSnaps = await Promise.all(
-        Array.from({ length: totalParts }, (_, i) => withTimeout(getDoc(doc(db2, "nagah_store", `${collectionName}_p${i + 1}`)), 6e3))
+        Array.from({ length: totalParts }, (_, i) => withTimeout(getDoc(doc(db2, "nagah_store", `${collectionName}_p${i + 1}`)), 1e4))
       );
       const fullStr = partSnaps.map((s) => s.data()?.payload || "").join("");
       return fullStr ? JSON.parse(fullStr) : null;
@@ -152,7 +163,7 @@ async function loadCollectionFromFirestore(collectionName) {
     return null;
   } catch (err) {
     const errMsg = err?.message || String(err);
-    if (errMsg.includes("RESOURCE_EXHAUSTED") || errMsg.includes("Quota limit exceeded") || errMsg.includes("8")) {
+    if (errMsg.includes("RESOURCE_EXHAUSTED") || errMsg.includes("Quota limit exceeded")) {
       isQuotaExceeded = true;
       quotaExceededNoticeTime = now;
     }
@@ -202,7 +213,7 @@ async function saveFullDbToFirestore2(dbData, immediate = false) {
       debouncedSyncTimer = null;
     }
     try {
-      await withTimeout(executeSync(), 5e3);
+      await withTimeout(executeSync(), 12e3);
     } catch (err) {
     }
     return;
@@ -216,13 +227,13 @@ async function saveFullDbToFirestore2(dbData, immediate = false) {
       await executeSync();
     } catch (e) {
     }
-  }, 15e3);
+  }, 500);
 }
-async function allocateNextTraineeCode(prefix = "A", localTrainees = []) {
+async function allocateNextTraineeCode(prefix = "A", localTrainees = [], groupId, freedCodesList = []) {
   const pfx = (prefix || "A").toUpperCase().trim().slice(0, 3);
   const regex = new RegExp(`^${pfx}-?(\\d+)$`, "i");
-  let maxNum = 0;
   const usedCodes = /* @__PURE__ */ new Set();
+  const usedNumbers = /* @__PURE__ */ new Set();
   if (Array.isArray(localTrainees)) {
     for (const t of localTrainees) {
       if (t && t.code) {
@@ -231,7 +242,7 @@ async function allocateNextTraineeCode(prefix = "A", localTrainees = []) {
         const m = c.match(regex);
         if (m) {
           const num = parseInt(m[1], 10);
-          if (!isNaN(num) && num > maxNum) maxNum = num;
+          if (!isNaN(num)) usedNumbers.add(num);
         }
       }
     }
@@ -239,27 +250,16 @@ async function allocateNextTraineeCode(prefix = "A", localTrainees = []) {
   const db2 = getDb();
   if (db2) {
     try {
-      const traineesDocRef = doc(db2, "nagah_store", "trainees");
-      const snap = await withTimeout(getDoc(traineesDocRef), 4e3);
-      if (snap.exists()) {
-        const raw = snap.data();
-        let remoteList = [];
-        if (raw?.payload) {
-          try {
-            remoteList = JSON.parse(raw.payload);
-          } catch {
-          }
-        }
-        if (Array.isArray(remoteList)) {
-          for (const t of remoteList) {
-            if (t && t.code) {
-              const c = String(t.code).trim().toUpperCase();
-              usedCodes.add(c);
-              const m = c.match(regex);
-              if (m) {
-                const num = parseInt(m[1], 10);
-                if (!isNaN(num) && num > maxNum) maxNum = num;
-              }
+      const remoteList = await loadCollectionFromFirestore("trainees");
+      if (Array.isArray(remoteList)) {
+        for (const t of remoteList) {
+          if (t && t.code) {
+            const c = String(t.code).trim().toUpperCase();
+            usedCodes.add(c);
+            const m = c.match(regex);
+            if (m) {
+              const num = parseInt(m[1], 10);
+              if (!isNaN(num)) usedNumbers.add(num);
             }
           }
         }
@@ -267,38 +267,68 @@ async function allocateNextTraineeCode(prefix = "A", localTrainees = []) {
     } catch (e) {
       console.warn("[allocateNextTraineeCode] remote trainees scan notice:", e);
     }
+  }
+  if (groupId && Array.isArray(freedCodesList)) {
+    const groupFreed = freedCodesList.find(
+      (f) => f && f.code && f.groupId === groupId && (f.prefix?.toUpperCase() === pfx || f.code.toUpperCase().startsWith(pfx)) && !usedCodes.has(f.code.toUpperCase())
+    );
+    if (groupFreed) {
+      const code = groupFreed.code.toUpperCase();
+      console.log(`[allocateNextTraineeCode] Reusing freed code ${code} for group ${groupId}`);
+      return code;
+    }
+  }
+  if (Array.isArray(freedCodesList)) {
+    const prefixFreed = freedCodesList.find(
+      (f) => f && f.code && (f.prefix?.toUpperCase() === pfx || f.code.toUpperCase().startsWith(pfx)) && !usedCodes.has(f.code.toUpperCase())
+    );
+    if (prefixFreed) {
+      const code = prefixFreed.code.toUpperCase();
+      console.log(`[allocateNextTraineeCode] Reusing freed code ${code} for prefix ${pfx}`);
+      return code;
+    }
+  }
+  let candidateNum = 1;
+  while (usedNumbers.has(candidateNum)) {
+    candidateNum++;
+  }
+  let candidate = `${pfx}${String(candidateNum).padStart(3, "0")}`;
+  while (usedCodes.has(candidate.toUpperCase())) {
+    candidateNum++;
+    candidate = `${pfx}${String(candidateNum).padStart(3, "0")}`;
+  }
+  if (db2) {
     try {
       const counterRef = doc(db2, "nagah_store", "code_counters");
-      const counterSnap = await withTimeout(getDoc(counterRef), 4e3);
+      const counterSnap = await withTimeout(getDoc(counterRef), 3e3);
       let countersMap = {};
       if (counterSnap.exists()) {
         countersMap = counterSnap.data()?.counters || {};
       }
       const existingVal = Number(countersMap[pfx]) || 0;
-      if (existingVal > maxNum) {
-        maxNum = existingVal;
+      if (candidateNum > existingVal) {
+        countersMap[pfx] = candidateNum;
+        await withTimeout(setDoc(counterRef, { counters: countersMap, updatedAt: (/* @__PURE__ */ new Date()).toISOString() }, { merge: true }), 3e3);
       }
-      let nextNum2 = maxNum + 1;
-      let candidate2 = `${pfx}${String(nextNum2).padStart(3, "0")}`;
-      while (usedCodes.has(candidate2.toUpperCase())) {
-        nextNum2++;
-        candidate2 = `${pfx}${String(nextNum2).padStart(3, "0")}`;
-      }
-      countersMap[pfx] = nextNum2;
-      await withTimeout(setDoc(counterRef, { counters: countersMap, updatedAt: (/* @__PURE__ */ new Date()).toISOString() }, { merge: true }), 4e3);
-      console.log(`[allocateNextTraineeCode] Allocated persistent unique code ${candidate2} (prefix: ${pfx}, nextNum: ${nextNum2})`);
-      return candidate2;
     } catch (e) {
       console.warn("[allocateNextTraineeCode] Firestore code_counters update notice:", e);
     }
   }
-  let nextNum = maxNum + 1;
-  let candidate = `${pfx}${String(nextNum).padStart(3, "0")}`;
-  while (usedCodes.has(candidate.toUpperCase())) {
-    nextNum++;
-    candidate = `${pfx}${String(nextNum).padStart(3, "0")}`;
-  }
+  console.log(`[allocateNextTraineeCode] Allocated unique code ${candidate} (prefix: ${pfx}, num: ${candidateNum})`);
   return candidate;
+}
+async function getSyncMeta() {
+  const db2 = getDb();
+  if (!db2) return null;
+  try {
+    const metaRef = doc(db2, "nagah_store", "sync_meta");
+    const snap = await withTimeout(getDoc(metaRef), 3e3);
+    if (snap.exists()) {
+      return snap.data();
+    }
+  } catch (e) {
+  }
+  return null;
 }
 async function loadFullDbFromFirestore() {
   const collections = [
@@ -335,21 +365,25 @@ async function loadFullDbFromFirestore() {
   ];
   const result = {};
   let loadedCount = 0;
-  const loadTasks = await Promise.all(
-    collections.map(async (col) => {
-      try {
-        const data = await loadCollectionFromFirestore(col);
-        return { col, data };
-      } catch (e) {
-        return { col, data: null };
+  const batchSize = 6;
+  for (let i = 0; i < collections.length; i += batchSize) {
+    const batch = collections.slice(i, i + batchSize);
+    const batchTasks = await Promise.all(
+      batch.map(async (col) => {
+        try {
+          const data = await loadCollectionFromFirestore(col);
+          return { col, data };
+        } catch (e) {
+          return { col, data: null };
+        }
+      })
+    );
+    for (const { col, data } of batchTasks) {
+      if (data !== null) {
+        result[col] = data;
+        collectionHashes.set(col, hashPayload(data));
+        loadedCount++;
       }
-    })
-  );
-  for (const { col, data } of loadTasks) {
-    if (data !== null) {
-      result[col] = data;
-      collectionHashes.set(col, hashPayload(data));
-      loadedCount++;
     }
   }
   return loadedCount > 0 ? result : null;
@@ -382,7 +416,7 @@ var init_firestoreStorage = __esm({
     collectionHashes = /* @__PURE__ */ new Map();
     isQuotaExceeded = false;
     quotaExceededNoticeTime = 0;
-    QUOTA_BACKOFF_MS = 15 * 60 * 1e3;
+    QUOTA_BACKOFF_MS = 30 * 1e3;
     TRANSIENT_COLLECTIONS = /* @__PURE__ */ new Set([
       "devices",
       "deviceCommands",
@@ -462,6 +496,7 @@ var init_db = __esm({
       { id: "rule-5", title: "\u0645\u062E\u0627\u0644\u0641\u0629 \u0623\u0648 \u062A\u0623\u062E\u064A\u0631", pointValue: -10, ruleType: "violation", description: "\u0627\u0644\u062A\u0623\u062E\u064A\u0631 \u0623\u0648 \u0639\u062F\u0645 \u0627\u0644\u0627\u0644\u062A\u0632\u0627\u0645 \u0628\u0642\u0648\u0627\u0639\u062F \u0627\u0644\u0642\u0627\u0639\u0629", isActive: true }
     ];
     initialData = {
+      freedTraineeCodes: [],
       devices: [],
       traineeScreenshots: [],
       computerLabs: [],
@@ -3924,6 +3959,7 @@ var init_db = __esm({
         this.isFirestoreHydrated = false;
         this.lastHydrationTime = 0;
         this.lastHydrationAttemptTime = 0;
+        this.lastRemoteSyncMetaTime = 0;
         this.hydrationPromise = null;
         this.ensureDataDir();
         this.data = this.loadData();
@@ -3950,8 +3986,6 @@ var init_db = __esm({
           let existing = null;
           if (id && byId.has(id)) {
             existing = byId.get(id);
-          } else if (code && byCode.has(code)) {
-            existing = byCode.get(code);
           } else if (normName && byNormName.has(normName)) {
             const candidate = byNormName.get(normName);
             const cPhone = cleanPhone(candidate.phone);
@@ -3959,6 +3993,14 @@ var init_db = __esm({
             const samePhone = phone && (phone === cPhone || phone === cParentPhone) || parentPhone && (parentPhone === cPhone || parentPhone === cParentPhone);
             const sameGroupOrCourse = t.groupId && candidate.groupId && t.groupId === candidate.groupId || t.courseId && candidate.courseId && t.courseId === candidate.courseId;
             if (samePhone || sameGroupOrCourse || !phone && !parentPhone && !cPhone && !cParentPhone) {
+              existing = candidate;
+            }
+          } else if (code && byCode.has(code)) {
+            const candidate = byCode.get(code);
+            const candNorm = normArabic(candidate.fullName || candidate.name);
+            const sameName = candNorm && normName && candNorm === normName;
+            const sameNatId = t.nationalId && candidate.nationalId && String(t.nationalId).trim() === String(candidate.nationalId).trim();
+            if (sameName || sameNatId) {
               existing = candidate;
             }
           }
@@ -3984,9 +4026,13 @@ var init_db = __esm({
             });
           } else {
             const record = { ...t };
+            if (code && byCode.has(code)) {
+              const suffix = Math.random().toString(36).substring(2, 5).toUpperCase();
+              record.code = `${code}-${suffix}`;
+            }
             result.push(record);
             if (id) byId.set(id, record);
-            if (code) byCode.set(code, record);
+            if (record.code) byCode.set(record.code, record);
             if (normName) byNormName.set(normName, record);
           }
         }
@@ -3994,29 +4040,50 @@ var init_db = __esm({
       }
       async ensureHydrated(force = false) {
         const now = Date.now();
-        if (!force && now - this.lastHydrationAttemptTime < 15 * 60 * 1e3) {
+        const CACHE_TTL_MS = 2500;
+        if (!force && this.isFirestoreHydrated && now - this.lastHydrationTime < CACHE_TTL_MS) {
           return;
         }
-        if (!force && this.isFirestoreHydrated && now - this.lastHydrationTime < 60 * 60 * 1e3) {
-          return;
-        }
-        if (this.hydrationPromise && !force) {
+        if (this.hydrationPromise) {
           return this.hydrationPromise;
         }
         this.lastHydrationAttemptTime = now;
         this.hydrationPromise = (async () => {
           this.lastHydrationTime = Date.now();
           try {
+            const meta = await getSyncMeta();
+            const remoteTime = meta?.updatedAt || 0;
+            if (this.isFirestoreHydrated && remoteTime > 0 && remoteTime <= this.lastRemoteSyncMetaTime && !force) {
+              return;
+            }
+            if (this.isFirestoreHydrated && meta?.lastCollection === "trainees" && remoteTime > this.lastRemoteSyncMetaTime) {
+              const remoteTrainees = await loadCollectionFromFirestore("trainees");
+              if (Array.isArray(remoteTrainees) && remoteTrainees.length > 0) {
+                console.log("[DB] Fast-hydrated trainees from Firestore! Count:", remoteTrainees.length);
+                const current = this.data || {};
+                const coursesList = Array.isArray(current.courses) ? current.courses : [];
+                const deduplicated = this.deduplicateTrainees(remoteTrainees);
+                current.trainees = deduplicated.map((t) => ({
+                  ...t,
+                  ...calculateTraineeFeeAndFinancials(t, coursesList)
+                }));
+                this.lastRemoteSyncMetaTime = remoteTime;
+                return;
+              }
+            }
             const remoteData = await loadFullDbFromFirestore();
             if (remoteData && Object.keys(remoteData).length > 0) {
-              console.log("[DB] Hydrated from Firestore! Collections loaded:", Object.keys(remoteData));
+              console.log("[DB] Hydrated from Firestore! Collections loaded:", Object.keys(remoteData).length);
               const current = this.data || {};
               const merged = { ...current };
               for (const [key, val] of Object.entries(remoteData)) {
                 if (Array.isArray(val)) {
                   if (key === "trainees") {
-                    const combined = [...val, ...Array.isArray(merged[key]) ? merged[key] : []];
-                    merged[key] = this.deduplicateTrainees(combined);
+                    const remoteList = Array.isArray(val) ? val : [];
+                    const localList = Array.isArray(merged[key]) ? merged[key] : [];
+                    const remoteIdSet = new Set(remoteList.map((t) => t.id || t.code).filter(Boolean));
+                    const localOnly = localList.filter((t) => t && t.id && !remoteIdSet.has(t.id) && (!t.code || !remoteIdSet.has(t.code)));
+                    merged[key] = this.deduplicateTrainees([...remoteList, ...localOnly]);
                   } else if (Array.isArray(merged[key]) && merged[key].length > 0) {
                     const remoteMap = new Map(val.map((item) => [item.id, item]));
                     for (const localItem of merged[key]) {
@@ -4038,15 +4105,13 @@ var init_db = __esm({
               if (Array.isArray(merged.trainees)) {
                 const coursesList = Array.isArray(merged.courses) ? merged.courses : [];
                 const deduplicated = this.deduplicateTrainees(merged.trainees);
-                merged.trainees = deduplicated.map((t) => {
-                  const fin = calculateTraineeFeeAndFinancials(t, coursesList);
-                  return {
-                    ...t,
-                    ...fin
-                  };
-                });
+                merged.trainees = deduplicated.map((t) => ({
+                  ...t,
+                  ...calculateTraineeFeeAndFinancials(t, coursesList)
+                }));
               }
               this.data = merged;
+              this.lastRemoteSyncMetaTime = remoteTime || Date.now();
             }
           } catch (err) {
             console.warn("[DB] Firestore hydration notice:", err);
@@ -4291,8 +4356,8 @@ var init_db = __esm({
         if (norm.includes("\u0633\u0627\u062F\u0633") || norm.includes("\u0633\u0627\u062F\u0633\u0647") || norm.includes("\u0633\u0627\u062A\u0647") || norm.includes("6\u0627\u0628\u062A\u062F\u0627\u0626\u064A") || norm.includes("\u0627\u0628\u062A\u062F\u0627\u0626\u064A6") || norm.includes("ict6") || norm.includes("grade6") || norm.includes("primary6") || norm === "6" || norm === "\u0635\u06416") return "C";
         return this.data.settings.traineeCodePrefix || "A";
       }
-      getNextTraineeCode(prefixOrGrade) {
-        console.log("[DB] getNextTraineeCode: prefixOrGrade=", prefixOrGrade);
+      getNextTraineeCode(prefixOrGrade, groupId) {
+        console.log("[DB] getNextTraineeCode: prefixOrGrade=", prefixOrGrade, "groupId=", groupId);
         let p = "A";
         if (prefixOrGrade && prefixOrGrade.length === 1 && /[A-Za-z0-9\u0600-\u06FF]/.test(prefixOrGrade)) {
           p = prefixOrGrade.toUpperCase();
@@ -4301,23 +4366,51 @@ var init_db = __esm({
         } else {
           p = this.data.settings.traineeCodePrefix || "A";
         }
-        console.log("[DB] getNextTraineeCode: p=", p);
         const len = this.data.settings.autoCodeLength || 3;
-        let maxNum = 0;
-        const regex = new RegExp(`^${p}(\\d+)$`, "i");
-        for (const t of this.data.trainees) {
-          const match = t.code?.trim().match(regex);
-          if (match) {
-            const num = parseInt(match[1], 10);
-            if (num > maxNum) {
-              maxNum = num;
+        const usedCodes = /* @__PURE__ */ new Set();
+        const usedNums = /* @__PURE__ */ new Set();
+        const regex = new RegExp(`^${p}-?(\\d+)$`, "i");
+        for (const t of this.data.trainees || []) {
+          if (t && t.code) {
+            const c = String(t.code).trim().toUpperCase();
+            usedCodes.add(c);
+            const match = c.match(regex);
+            if (match) {
+              const num = parseInt(match[1], 10);
+              if (!isNaN(num)) usedNums.add(num);
             }
           }
         }
-        const nextNum = maxNum + 1;
-        const result = `${p}${String(nextNum).padStart(len, "0")}`;
-        console.log("[DB] getNextTraineeCode: result=", result);
-        return result;
+        const freedList = this.data.freedTraineeCodes || [];
+        if (groupId && Array.isArray(freedList)) {
+          const groupFreed = freedList.find(
+            (f) => f && f.code && f.groupId === groupId && (f.prefix?.toUpperCase() === p || f.code.toUpperCase().startsWith(p)) && !usedCodes.has(f.code.toUpperCase())
+          );
+          if (groupFreed) {
+            console.log("[DB] getNextTraineeCode: Reusing group freed code=", groupFreed.code);
+            return groupFreed.code.toUpperCase();
+          }
+        }
+        if (Array.isArray(freedList)) {
+          const prefixFreed = freedList.find(
+            (f) => f && f.code && (f.prefix?.toUpperCase() === p || f.code.toUpperCase().startsWith(p)) && !usedCodes.has(f.code.toUpperCase())
+          );
+          if (prefixFreed) {
+            console.log("[DB] getNextTraineeCode: Reusing prefix freed code=", prefixFreed.code);
+            return prefixFreed.code.toUpperCase();
+          }
+        }
+        let candidateNum = 1;
+        while (usedNums.has(candidateNum)) {
+          candidateNum++;
+        }
+        let candidate = `${p}${String(candidateNum).padStart(len, "0")}`;
+        while (usedCodes.has(candidate.toUpperCase())) {
+          candidateNum++;
+          candidate = `${p}${String(candidateNum).padStart(len, "0")}`;
+        }
+        console.log("[DB] getNextTraineeCode: allocated candidate=", candidate);
+        return candidate;
       }
       recalculateTraineeRankings() {
         try {
@@ -4761,8 +4854,8 @@ init_db();
 init_firestoreStorage();
 function createRepo(key) {
   return {
-    async getAll() {
-      await db.ensureHydrated();
+    async getAll(forceFresh = false) {
+      await db.ensureHydrated(forceFresh);
       const memData = db.getData();
       if (!memData || !Array.isArray(memData[key])) {
         return [];
@@ -5227,12 +5320,19 @@ async function handlePublicRegister(req, res) {
     const allCourses = await CourseRepo.getAll();
     const allGroups = await GroupRepo.getAll();
     const allBranches = await BranchRepo.getAll();
+    const cleanNationalId = String(data.nationalId || "").trim();
     const existingTrainee = allTrainees.find((t) => {
       const tPhoneDigits = String(t.phone || "").replace(/\D/g, "").slice(-10);
+      const tParentPhoneDigits = String(t.parentPhone || "").replace(/\D/g, "").slice(-10);
       const normExistingName = normalizeArabicFull(t.fullName || "");
-      const sameStudentPhone = phoneDigits && phoneDigits.length >= 8 && tPhoneDigits && tPhoneDigits === phoneDigits;
-      const sameNormalizedName = normInputName && normExistingName && normInputName === normExistingName;
-      return sameStudentPhone || sameNormalizedName;
+      if (cleanNationalId && cleanNationalId.length >= 10 && t.nationalId && String(t.nationalId).trim() === cleanNationalId) {
+        return true;
+      }
+      const sameName = normInputName && normExistingName && normInputName === normExistingName;
+      if (!sameName) return false;
+      const samePhone = phoneDigits && phoneDigits.length >= 8 && (phoneDigits === tPhoneDigits || phoneDigits === tParentPhoneDigits) || parentPhoneDigits && parentPhoneDigits.length >= 8 && (parentPhoneDigits === tPhoneDigits || parentPhoneDigits === tParentPhoneDigits);
+      const sameGrade = grade && t.grade && String(t.grade).trim().toLowerCase() === grade.toLowerCase();
+      return samePhone || sameGrade;
     });
     if (existingTrainee) {
       const existingCourse = allCourses.find((c) => c.id === existingTrainee.courseId);
@@ -7405,6 +7505,67 @@ var GEMINI_MODEL_CASCADE = [
   "gemini-flash-latest",
   "gemini-3.1-pro-preview"
 ];
+function createWavFromPcm(pcmData, sampleRate = 24e3, numChannels = 1, bitsPerSample = 16) {
+  if (pcmData.length >= 12 && pcmData.toString("ascii", 0, 4) === "RIFF" && pcmData.toString("ascii", 8, 12) === "WAVE") {
+    return pcmData;
+  }
+  const byteRate = sampleRate * numChannels * (bitsPerSample / 8);
+  const blockAlign = numChannels * (bitsPerSample / 8);
+  const dataSize = pcmData.length;
+  const header = Buffer.alloc(44);
+  header.write("RIFF", 0);
+  header.writeUInt32LE(36 + dataSize, 4);
+  header.write("WAVE", 8);
+  header.write("fmt ", 12);
+  header.writeUInt32LE(16, 16);
+  header.writeUInt16LE(1, 20);
+  header.writeUInt16LE(numChannels, 22);
+  header.writeUInt32LE(sampleRate, 24);
+  header.writeUInt32LE(byteRate, 28);
+  header.writeUInt16LE(blockAlign, 32);
+  header.writeUInt16LE(bitsPerSample, 34);
+  header.write("data", 36);
+  header.writeUInt32LE(dataSize, 40);
+  return Buffer.concat([header, pcmData]);
+}
+async function generateGeminiSpeechAudio(params) {
+  if (!process.env.GEMINI_API_KEY) {
+    return { success: false, error: "GEMINI_API_KEY is not configured" };
+  }
+  const ai = getAI();
+  const voice = params.voiceName || "Puck";
+  const prompt = params.promptStyle ? `${params.promptStyle}
+${params.text}` : `\u0627\u0646\u0637\u0642 \u0647\u0630\u0647 \u0627\u0644\u0639\u0628\u0627\u0631\u0629 \u0628\u0635\u0648\u062A \u0645\u0630\u064A\u0639 \u0625\u0630\u0627\u0639\u064A \u0645\u0635\u0631\u064A \u062D\u0645\u0627\u0633\u064A\u060C \u062F\u0627\u0641\u0626 \u0648\u0645\u0628\u0647\u062C \u0648\u0637\u0628\u064A\u0639\u064A \u062C\u062F\u0627\u064B \u0628\u0646\u0628\u0631\u0629 \u0627\u062D\u062A\u0641\u0627\u0644\u064A\u0629 \u062D\u0642\u064A\u0642\u064A\u0629 \u0648\u0628\u0644\u0647\u062C\u0629 \u0645\u0635\u0631\u064A\u0629 \u0623\u0635\u064A\u0644\u0629 \u0648\u0627\u0636\u062D\u0629: "${params.text}"`;
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-3.1-flash-tts-preview",
+      contents: [{ parts: [{ text: prompt }] }],
+      config: {
+        responseModalities: ["AUDIO"],
+        speechConfig: {
+          voiceConfig: {
+            prebuiltVoiceConfig: { voiceName: voice }
+          }
+        }
+      }
+    });
+    const audioPart = response.candidates?.[0]?.content?.parts?.[0];
+    const rawData = audioPart?.inlineData?.data;
+    if (rawData) {
+      const rawBuf = Buffer.from(rawData, "base64");
+      const wavBuf = createWavFromPcm(rawBuf, 24e3, 1, 16);
+      return {
+        success: true,
+        audioBase64: wavBuf.toString("base64"),
+        mimeType: "audio/wav"
+      };
+    }
+    return { success: false, error: "No audio data returned by model" };
+  } catch (err) {
+    console.warn("[Gemini TTS] TTS generation attempt failed:", err?.message || err);
+    return { success: false, error: err?.message || "TTS generation error" };
+  }
+}
 async function generateWithModelCascade(params) {
   if (!process.env.GEMINI_API_KEY) {
     return { text: null, modelUsed: null };
@@ -10395,44 +10556,65 @@ apiRouter.post("/branches/:id/duplicate", async (req, res) => {
 });
 apiRouter.get("/trainees/next-code", async (req, res) => {
   try {
-    const { prefix, courseId, grade, excludeId } = req.query;
+    const { prefix, courseId, grade, groupId, excludeId } = req.query;
     let targetPrefix = typeof prefix === "string" ? prefix : "";
+    let targetGroupId = typeof groupId === "string" && groupId ? groupId : void 0;
+    if (targetGroupId && !targetPrefix && !courseId && !grade) {
+      const groups = await GroupRepo.getAll();
+      const grp = groups.find((g) => g.id === targetGroupId);
+      if (grp) {
+        if (grp.courseId) {
+          const courses = await CourseRepo.getAll();
+          const course = courses.find((c) => c.id === grp.courseId);
+          if (course) {
+            targetPrefix = db.getPrefixForGradeOrCourse(course.name || course.grade || "");
+          }
+        } else if (grp.grade) {
+          targetPrefix = db.getPrefixForGradeOrCourse(grp.grade);
+        }
+      }
+    }
     if (!targetPrefix && typeof courseId === "string" && courseId) {
       const courses = await CourseRepo.getAll();
       const course = courses.find((c) => c.id === courseId);
       if (course) {
-        targetPrefix = db.getPrefixForGradeOrCourse(course.name);
+        targetPrefix = db.getPrefixForGradeOrCourse(course.name || course.grade || "");
       }
     }
     if (!targetPrefix && typeof grade === "string" && grade) {
       targetPrefix = db.getPrefixForGradeOrCourse(grade);
     }
     const resolvedPrefix = targetPrefix ? targetPrefix.length === 1 ? targetPrefix.toUpperCase() : db.getPrefixForGradeOrCourse(targetPrefix) : db.getData().settings?.traineeCodePrefix || "A";
-    const allTrainees = await TraineeRepo.getAll();
+    let allTrainees = await TraineeRepo.getAll();
+    if (excludeId && typeof excludeId === "string") {
+      allTrainees = allTrainees.filter((t) => t && t.id !== excludeId);
+    }
     const pfx = (resolvedPrefix || "A").toUpperCase();
-    const regex = new RegExp(`^${pfx}-?(\\d+)$`, "i");
-    let maxNum = 0;
-    allTrainees.forEach((t) => {
-      if (t.code && (!excludeId || t.id !== excludeId)) {
-        const match = String(t.code).trim().match(regex);
-        if (match) {
-          const num = parseInt(match[1], 10);
-          if (!isNaN(num) && num > maxNum) {
-            maxNum = num;
-          }
-        }
-      }
+    const freedList = db.getData().freedTraineeCodes || [];
+    const code = await allocateNextTraineeCode(pfx, allTrainees, targetGroupId, freedList);
+    const numMatch = code.match(/\d+$/);
+    const nextNum = numMatch ? parseInt(numMatch[0], 10) : 1;
+    const freedSlot = freedList.find((f) => f && f.code && f.code.toUpperCase() === code.toUpperCase());
+    const isRecycled = Boolean(freedSlot);
+    res.json({
+      code,
+      prefix: pfx,
+      nextNumber: nextNum,
+      isRecycled,
+      freedSlotInfo: freedSlot ? {
+        originalGroupId: freedSlot.groupId,
+        previousTraineeName: freedSlot.traineeName,
+        freedAt: freedSlot.freedAt
+      } : null
     });
-    const nextNum = maxNum + 1;
-    const code = `${pfx}${String(nextNum).padStart(3, "0")}`;
-    res.json({ code, prefix: pfx, nextNumber: nextNum });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 apiRouter.get("/trainees", authMiddleware, async (req, res) => {
   try {
-    let list = await TraineeRepo.getAll();
+    const isFresh = req.query.fresh === "true" || req.headers["x-fresh"] === "true";
+    let list = await TraineeRepo.getAll(isFresh);
     list = db.deduplicateTrainees(list);
     const user = req.user;
     if (user) {
@@ -10512,12 +10694,14 @@ apiRouter.post("/trainees", async (req, res) => {
     const recentDuplicate = list.find((t) => {
       const tNormName = normalizeArabic(t.fullName);
       const sameName = tNormName === normName;
+      if (!sameName) return false;
       const tPhone = String(t.phone || "").replace(/[^0-9]/g, "").slice(-10);
       const tParentPhone = String(t.parentPhone || "").replace(/[^0-9]/g, "").slice(-10);
       const sameStudentPhone = normPhone && tPhone && tPhone === normPhone;
       const sameParentPhone = normParentPhone && tParentPhone && tParentPhone === normParentPhone;
+      const sameNatId = data.nationalId && t.nationalId && String(data.nationalId).trim().length >= 10 && String(t.nationalId).trim() === String(data.nationalId).trim();
       const createdInDoubleTapWindow = t.createdAt && Date.now() - new Date(t.createdAt).getTime() < 8e3;
-      if (sameName && (sameStudentPhone || sameParentPhone || createdInDoubleTapWindow)) {
+      if (sameStudentPhone || sameParentPhone || sameNatId || createdInDoubleTapWindow) {
         return true;
       }
       return false;
@@ -10531,28 +10715,33 @@ apiRouter.post("/trainees", async (req, res) => {
       });
     }
     let code = data.code?.trim()?.toUpperCase();
+    let prefix = "A";
+    try {
+      const course = await CourseRepo.getById(data.courseId || "");
+      if (course && course.grade) {
+        prefix = db.getPrefixForGradeOrCourse(course.grade);
+      } else if (data.grade) {
+        prefix = db.getPrefixForGradeOrCourse(data.grade);
+      }
+    } catch (e) {
+      console.warn("Could not determine grade prefix, using fallback", e);
+    }
+    prefix = (prefix || "A").toUpperCase();
+    const freedList = db.getData().freedTraineeCodes || [];
     if (code) {
       const duplicate = list.find((t) => t.code && String(t.code).trim().toUpperCase() === code);
       if (duplicate) {
-        return res.status(400).json({
-          success: false,
-          error: `\u0643\u0648\u062F \u0627\u0644\u0637\u0627\u0644\u0628 (${code}) \u0645\u0633\u062A\u062E\u062F\u0645 \u0628\u0627\u0644\u0641\u0639\u0644 \u0644\u0644\u0637\u0627\u0644\u0628 "${duplicate.fullName}". \u064A\u0631\u062C\u0649 \u0625\u062F\u062E\u0627\u0644 \u0643\u0648\u062F \u0641\u0631\u064A\u062F \u0623\u0648 \u062A\u0631\u0643 \u0627\u0644\u062E\u0627\u0646\u0629 \u0641\u0627\u0631\u063A\u0629 \u0644\u0644\u062A\u0648\u0644\u064A\u062F \u0627\u0644\u062A\u0644\u0642\u0627\u0626\u064A.`
-        });
+        console.warn(`[Trainee] Code ${code} already in use by "${duplicate.fullName}". Automatically allocating recycled or fresh unique code.`);
+        code = await allocateNextTraineeCode(prefix, list, data.groupId, freedList);
       }
     } else {
-      let prefix = "A";
-      try {
-        const course = await CourseRepo.getById(data.courseId || "");
-        if (course && course.grade) {
-          prefix = db.getPrefixForGradeOrCourse(course.grade);
-        } else if (data.grade) {
-          prefix = db.getPrefixForGradeOrCourse(data.grade);
-        }
-      } catch (e) {
-        console.warn("Could not determine grade prefix, using fallback", e);
-      }
-      prefix = (prefix || "A").toUpperCase();
-      code = await allocateNextTraineeCode(prefix, list);
+      code = await allocateNextTraineeCode(prefix, list, data.groupId, freedList);
+    }
+    const memData = db.getData();
+    if (Array.isArray(memData.freedTraineeCodes)) {
+      memData.freedTraineeCodes = memData.freedTraineeCodes.filter(
+        (f) => f && f.code && f.code.toUpperCase() !== code.toUpperCase()
+      );
     }
     const traineeId = "trainee-" + Date.now() + "-" + Math.random().toString(36).substr(2, 4);
     const feeAmount = Number(data.feeAmount) || 0;
@@ -10563,14 +10752,17 @@ apiRouter.post("/trainees", async (req, res) => {
     const created = await TraineeRepo.create(traineeId, {
       ...data,
       code,
-      prefix: code.match(/^([a-zA-Z]+)/)?.[1]?.toUpperCase() || "A",
+      prefix: code.match(/^([a-zA-Z]+)/)?.[1]?.toUpperCase() || prefix || "A",
       feeAmount,
       discountAmount,
       netAmount,
       paidAmount,
       remainingAmount,
+      totalPoints: 0,
+      attendanceRate: 100,
       createdAt: (/* @__PURE__ */ new Date()).toISOString()
     });
+    db.saveImmediate();
     res.json({ success: true, trainee: created });
   } catch (e) {
     res.status(500).json({ success: false, error: e.message });
@@ -10764,33 +10956,198 @@ apiRouter.post(["/student/update-photo", "/trainees/update-photo"], async (req, 
     res.status(500).json({ success: false, error: err.message });
   }
 });
-apiRouter.delete("/trainees/:id", async (req, res) => {
+async function purgeCompleteTraineeData(traineeId) {
   try {
-    const { id } = req.params;
-    const trainee = await TraineeRepo.getById(id);
-    if (!trainee) return res.status(404).json({ success: false, error: "\u0627\u0644\u0645\u062A\u062F\u0631\u0628 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F" });
-    await TraineeRepo.delete(id);
     const memData = db.getData();
-    if (memData && Array.isArray(memData.trainees)) {
-      const idx = memData.trainees.findIndex((t) => t.id === id);
-      if (idx >= 0) {
-        memData.trainees.splice(idx, 1);
+    const trainee = await TraineeRepo.getById(traineeId) || (memData.trainees || []).find((t) => t && t.id === traineeId);
+    if (!trainee) return { success: false, error: "\u0627\u0644\u0645\u062A\u062F\u0631\u0628 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F" };
+    const traineeCode = trainee.code ? String(trainee.code).trim().toUpperCase() : "";
+    const traineeName = trainee.fullName || trainee.name || "\u0645\u062A\u062F\u0631\u0628";
+    const groupId = trainee.groupId || "";
+    const courseId = trainee.courseId || "";
+    const grade = trainee.grade || "";
+    const branchId = trainee.branchId || "";
+    const prefix = trainee.prefix || (traineeCode ? traineeCode.match(/^[A-Za-z]+/)?.[0]?.toUpperCase() : "") || "A";
+    if (traineeCode) {
+      if (!Array.isArray(memData.freedTraineeCodes)) {
+        memData.freedTraineeCodes = [];
       }
+      memData.freedTraineeCodes = memData.freedTraineeCodes.filter((f) => f && f.code && f.code.toUpperCase() !== traineeCode);
+      memData.freedTraineeCodes.unshift({
+        code: traineeCode,
+        prefix,
+        groupId,
+        courseId,
+        grade,
+        branchId,
+        freedAt: (/* @__PURE__ */ new Date()).toISOString(),
+        traineeName
+      });
+    }
+    await TraineeRepo.delete(traineeId);
+    if (Array.isArray(memData.trainees)) {
+      memData.trainees = memData.trainees.filter((t) => t && t.id !== traineeId);
+    }
+    const paymentsToDelete = (memData.payments || []).filter(
+      (p) => p && (p.traineeId === traineeId || traineeCode && p.traineeCode === traineeCode)
+    );
+    for (const p of paymentsToDelete) {
+      try {
+        await PaymentRepo.delete(p.id);
+      } catch {
+      }
+    }
+    if (Array.isArray(memData.payments)) {
+      memData.payments = memData.payments.filter(
+        (p) => p && p.traineeId !== traineeId && (!traineeCode || p.traineeCode !== traineeCode)
+      );
+    }
+    const attendanceToDelete = (memData.attendance || []).filter(
+      (a) => a && (a.traineeId === traineeId || traineeCode && a.traineeCode === traineeCode)
+    );
+    for (const a of attendanceToDelete) {
+      try {
+        await AttendanceRepo.delete(a.id);
+      } catch {
+      }
+    }
+    if (Array.isArray(memData.attendance)) {
+      memData.attendance = memData.attendance.filter(
+        (a) => a && a.traineeId !== traineeId && (!traineeCode || a.traineeCode !== traineeCode)
+      );
+    }
+    const pointsToDelete = (memData.pointTransactions || []).filter(
+      (pt) => pt && pt.traineeId === traineeId
+    );
+    for (const pt of pointsToDelete) {
+      try {
+        await PointTransactionRepo.delete(pt.id);
+      } catch {
+      }
+    }
+    if (Array.isArray(memData.pointTransactions)) {
+      memData.pointTransactions = memData.pointTransactions.filter(
+        (pt) => pt && pt.traineeId !== traineeId
+      );
+    }
+    const examResultsToDelete = (memData.examResults || []).filter(
+      (er) => er && er.traineeId === traineeId
+    );
+    for (const er of examResultsToDelete) {
+      try {
+        await ExamResultRepo.delete(er.id);
+      } catch {
+      }
+    }
+    if (Array.isArray(memData.examResults)) {
+      memData.examResults = memData.examResults.filter(
+        (er) => er && er.traineeId !== traineeId
+      );
+    }
+    const submissionsToDelete = (memData.homeworkSubmissions || []).filter(
+      (hs) => hs && hs.traineeId === traineeId
+    );
+    for (const hs of submissionsToDelete) {
+      try {
+        await HomeworkSubmissionRepo.delete(hs.id);
+      } catch {
+      }
+    }
+    if (Array.isArray(memData.homeworkSubmissions)) {
+      memData.homeworkSubmissions = memData.homeworkSubmissions.filter(
+        (hs) => hs && hs.traineeId !== traineeId
+      );
+    }
+    if (Array.isArray(memData.traineeBadges)) {
+      memData.traineeBadges = memData.traineeBadges.filter((tb) => tb && tb.traineeId !== traineeId);
+    }
+    if (Array.isArray(memData.portalMessages)) {
+      memData.portalMessages = memData.portalMessages.filter(
+        (pm) => pm && pm.traineeId !== traineeId && pm.senderId !== traineeId
+      );
+    }
+    if (Array.isArray(memData.traineeScreenshots)) {
+      memData.traineeScreenshots = memData.traineeScreenshots.filter((s) => s && s.traineeId !== traineeId);
+    }
+    if (Array.isArray(memData.devices)) {
+      memData.devices.forEach((d) => {
+        if (d && (d.currentTraineeId === traineeId || traineeCode && d.currentTraineeCode === traineeCode)) {
+          d.currentTraineeId = null;
+          d.currentTraineeCode = null;
+          d.currentTraineeName = null;
+          d.currentTraineePhoto = null;
+          d.status = "idle";
+        }
+      });
+    }
+    if (Array.isArray(memData.groups)) {
+      memData.groups.forEach((g) => {
+        if (g && Array.isArray(g.traineeIds)) {
+          g.traineeIds = g.traineeIds.filter((tid) => tid !== traineeId);
+        }
+      });
+    }
+    if (Array.isArray(memData.users)) {
+      const studentUsers = memData.users.filter(
+        (u) => u && (u.traineeId === traineeId || u.role === "student" && traineeCode && u.username === traineeCode)
+      );
+      for (const u of studentUsers) {
+        try {
+          await UserRepo.delete(u.id);
+        } catch {
+        }
+      }
+      memData.users = memData.users.filter(
+        (u) => u && u.traineeId !== traineeId && !(u.role === "student" && traineeCode && u.username === traineeCode)
+      );
     }
     db.saveImmediate();
     TraineeRepo.invalidateCache();
+    PaymentRepo.invalidateCache();
+    AttendanceRepo.invalidateCache();
+    PointTransactionRepo.invalidateCache();
+    ExamResultRepo.invalidateCache();
+    HomeworkSubmissionRepo.invalidateCache();
+    UserRepo.invalidateCache();
     try {
-      await adminDb.collection("trainees").doc(id).delete();
-    } catch {
+      const batch = adminDb.batch();
+      batch.delete(adminDb.collection("trainees").doc(traineeId));
+      paymentsToDelete.forEach((p) => batch.delete(adminDb.collection("payments").doc(p.id)));
+      attendanceToDelete.forEach((a) => batch.delete(adminDb.collection("attendance").doc(a.id)));
+      pointsToDelete.forEach((pt) => batch.delete(adminDb.collection("pointTransactions").doc(pt.id)));
+      examResultsToDelete.forEach((er) => batch.delete(adminDb.collection("examResults").doc(er.id)));
+      submissionsToDelete.forEach((hs) => batch.delete(adminDb.collection("homeworkSubmissions").doc(hs.id)));
+      await batch.commit();
+    } catch (fsErr) {
+      console.warn("[purgeCompleteTraineeData] Firestore batch commit notice:", fsErr);
     }
     db.logAudit({
       userId: "admin",
       userName: "\u0645\u062F\u064A\u0631 \u0627\u0644\u0646\u0638\u0627\u0645",
-      action: "\u062D\u0630\u0641 \u0645\u062A\u062F\u0631\u0628",
+      action: "\u062D\u0630\u0641 \u0648\u062A\u0635\u0641\u064A\u0629 \u0645\u062A\u062F\u0631\u0628 \u0628\u0627\u0644\u0643\u0627\u0645\u0644 \u0648\u062A\u062F\u0648\u064A\u0631 \u0627\u0644\u0643\u0648\u062F",
       entity: "\u0627\u0644\u0645\u062A\u062F\u0631\u0628\u064A\u0646",
-      details: `\u062A\u0645 \u062D\u0630\u0641 \u0627\u0644\u0645\u062A\u062F\u0631\u0628 ${trainee.fullName || trainee.name} (${id}) \u0646\u0647\u0627\u0626\u064A\u0627\u064B`
+      entityId: traineeId,
+      details: `\u062A\u0645 \u062D\u0630\u0641 \u0627\u0644\u0645\u062A\u062F\u0631\u0628 ${traineeName} (${traineeId}) \u0648\u0643\u0627\u0641\u0629 \u0633\u062C\u0644\u0627\u062A\u0647 \u0648\u062A\u0641\u0631\u064A\u063A \u0627\u0644\u0643\u0648\u062F (${traineeCode}) \u0644\u0644\u0641\u0635\u0644/\u0627\u0644\u0645\u062C\u0645\u0648\u0639\u0629 \u0628\u0646\u062C\u0627\u062D`
     });
-    res.json({ success: true, message: "\u062A\u0645 \u062D\u0630\u0641 \u0627\u0644\u0645\u062A\u062F\u0631\u0628 \u0628\u0646\u062C\u0627\u062D" });
+    return { success: true, trainee, recycledCode: traineeCode };
+  } catch (err) {
+    console.error("[purgeCompleteTraineeData] error:", err);
+    return { success: false, error: err.message };
+  }
+}
+apiRouter.delete("/trainees/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await purgeCompleteTraineeData(id);
+    if (!result.success) {
+      return res.status(404).json({ success: false, error: result.error || "\u0627\u0644\u0645\u062A\u062F\u0631\u0628 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F" });
+    }
+    res.json({
+      success: true,
+      message: `\u062A\u0645 \u062D\u0630\u0641 \u0627\u0644\u0645\u062A\u062F\u0631\u0628 (${result.trainee?.fullName || result.trainee?.name}) \u0648\u0643\u0627\u0641\u0629 \u0628\u064A\u0627\u0646\u0627\u062A\u0647 \u0648\u0633\u062C\u0644\u0627\u062A\u0647 \u0646\u0647\u0627\u0626\u064A\u0627\u064B\u060C \u0648\u062A\u0645 \u0625\u062A\u0627\u062D\u0629 \u0627\u0644\u0643\u0648\u062F (${result.recycledCode}) \u0644\u064A\u0623\u062E\u0630 \u0645\u0643\u0627\u0646\u0647 \u0623\u064A \u0645\u062A\u062F\u0631\u0628 \u062C\u062F\u064A\u062F \u0641\u064A \u0646\u0641\u0633 \u0627\u0644\u0641\u0635\u0644`,
+      recycledCode: result.recycledCode,
+      trainee: result.trainee
+    });
   } catch (e) {
     res.status(500).json({ success: false, error: e.message });
   }
@@ -10842,33 +11199,22 @@ apiRouter.post("/trainees/bulk-delete", async (req, res) => {
     const { ids } = req.body;
     if (!ids || !Array.isArray(ids) || ids.length === 0) return res.status(400).json({ error: "\u0627\u0644\u0645\u0639\u0631\u0641\u0627\u062A \u063A\u064A\u0631 \u0635\u0627\u0644\u062D\u0629" });
     let count = 0;
-    const memData = db.getData();
+    const recycledCodes = [];
     for (const id of ids) {
-      await TraineeRepo.delete(id);
-      if (memData && Array.isArray(memData.trainees)) {
-        const idx = memData.trainees.findIndex((t) => t.id === id);
-        if (idx >= 0) {
-          memData.trainees.splice(idx, 1);
-        }
+      const purgeRes = await purgeCompleteTraineeData(id);
+      if (purgeRes.success) {
+        count++;
+        if (purgeRes.recycledCode) recycledCodes.push(purgeRes.recycledCode);
       }
-      count++;
-    }
-    db.saveImmediate();
-    TraineeRepo.invalidateCache();
-    try {
-      const batch = adminDb.batch();
-      ids.forEach((id) => batch.delete(adminDb.collection("trainees").doc(id)));
-      await batch.commit();
-    } catch {
     }
     db.logAudit({
       userId: "admin",
       userName: "\u0645\u062F\u064A\u0631 \u0627\u0644\u0646\u0638\u0627\u0645",
-      action: "\u062D\u0630\u0641 \u0645\u062A\u062F\u0631\u0628\u064A\u0646 \u0628\u0627\u0644\u062C\u0645\u0644\u0629",
+      action: "\u062D\u0630\u0641 \u0645\u062A\u062F\u0631\u0628\u064A\u0646 \u0628\u0627\u0644\u062C\u0645\u0644\u0629 \u0648\u062A\u062F\u0648\u064A\u0631 \u0627\u0644\u0623\u0643\u0648\u0627\u062F",
       entity: "\u0627\u0644\u0645\u062A\u062F\u0631\u0628\u064A\u0646",
-      details: `\u062A\u0645 \u062D\u0630\u0641 ${count} \u0645\u062A\u062F\u0631\u0628 \u0628\u0646\u062C\u0627\u062D`
+      details: `\u062A\u0645 \u0645\u0633\u062D \u0648\u062A\u0635\u0641\u064A\u0629 ${count} \u0645\u062A\u062F\u0631\u0628 \u0648\u0633\u062C\u0644\u0627\u062A\u0647\u0645 \u0648\u0625\u062A\u0627\u062D\u0629 ${recycledCodes.length} \u0643\u0648\u062F \u0644\u0644\u0641\u0635\u0648\u0644 \u0627\u0644\u0645\u0642\u0627\u0628\u0644\u0629 \u0628\u0646\u062C\u0627\u062D`
     });
-    res.json({ success: true, count });
+    res.json({ success: true, count, recycledCodes });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -18136,7 +18482,37 @@ apiRouter.post("/gemini/generate", async (req, res) => {
   }
 });
 apiRouter.post("/gemini/tts", async (req, res) => {
-  res.json({ success: false, fallback: true, message: "Gemini direct audio fallback activated" });
+  try {
+    const { text, promptStyle, voiceName } = req.body || {};
+    if (!text || typeof text !== "string" || !text.trim()) {
+      return res.status(400).json({ success: false, error: "Text is required for TTS" });
+    }
+    const ttsResult = await generateGeminiSpeechAudio({
+      text: text.trim(),
+      promptStyle,
+      voiceName: voiceName || "Puck"
+    });
+    if (ttsResult.success && ttsResult.audioBase64) {
+      return res.json({
+        success: true,
+        audio: ttsResult.audioBase64,
+        audioBase64: ttsResult.audioBase64,
+        mimeType: ttsResult.mimeType || "audio/wav"
+      });
+    }
+    return res.json({
+      success: false,
+      fallback: true,
+      error: ttsResult.error || "Gemini TTS unavailable, fallback activated"
+    });
+  } catch (err) {
+    console.warn("[Gemini TTS Route Error]:", err?.message || err);
+    return res.json({
+      success: false,
+      fallback: true,
+      error: err?.message || "Internal error during speech generation"
+    });
+  }
 });
 apiRouter.post("/ai/trainer-assistant", async (req, res) => {
   try {
@@ -18572,6 +18948,7 @@ var MigrationManager = class {
 var migrationManager = new MigrationManager();
 
 // server/api-entry.ts
+init_db();
 var app = express3();
 app.use((req, res, next) => {
   if (req.url && req.url.length > 1) {
@@ -18659,10 +19036,16 @@ app.use((req, res, next) => {
   next();
 });
 app.use(express3.urlencoded({ extended: true, limit: "50mb" }));
+app.use((req, res, next) => {
+  if (req.method === "GET" && !req.url.includes("/export") && !req.url.includes("/backup")) {
+    res.setHeader("Cache-Control", "public, max-age=15, stale-while-revalidate=30");
+  }
+  next();
+});
 app.use(async (req, res, next) => {
   try {
-    const { db: db2 } = await Promise.resolve().then(() => (init_db(), db_exports));
-    await db2.ensureHydrated();
+    const isFresh = req.query?.fresh === "true" || req.headers?.["x-fresh"] === "true";
+    await db.ensureHydrated(isFresh);
   } catch (e) {
     console.warn("[Hydration Middleware Notice]", e);
   }

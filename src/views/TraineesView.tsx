@@ -5,7 +5,6 @@ import { getVodafoneCashUssdCode, executeVodafoneCashPayment, executeInstaPayPay
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import * as XLSX from 'xlsx';
-import html2canvas from 'html2canvas';
 import { useCenter, deduplicateTraineeList } from '../context/CenterContext';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../services/api';
@@ -81,7 +80,11 @@ import {
   RefreshCw,
   Database,
   Check,
-  Loader2
+  Loader2,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight
  } from 'lucide-react';
 import { Trainee, Course, Group, Trainer, Branch, PaymentMethod } from '../types';
 import { StudentPhotoCropperModal } from '../components/StudentPhotoCropperModal';
@@ -257,6 +260,22 @@ export const TraineesView: React.FC = () => {
     return result;
   }, [trainees, selectedBranch, selectedCourse, selectedGroup, selectedTrainer, selectedStatus, selectedPaymentStatus, searchQuery, sortBy]);
 
+  // Pagination State for instant rendering without freezing UI
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [pageSize, setPageSize] = useState<number>(30);
+
+  // Reset to page 1 whenever filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [selectedBranch, selectedCourse, selectedGroup, selectedTrainer, selectedStatus, selectedPaymentStatus, searchQuery, sortBy]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredTrainees.length / (pageSize || 30)));
+  const paginatedTrainees = React.useMemo(() => {
+    if (pageSize >= 9999) return filteredTrainees;
+    const start = (currentPage - 1) * pageSize;
+    return filteredTrainees.slice(start, start + pageSize);
+  }, [filteredTrainees, currentPage, pageSize]);
+
   // Modals
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -395,8 +414,11 @@ export const TraineesView: React.FC = () => {
   }, [activeBranchId]);
 
   useEffect(() => {
-    refreshCoreData(false);
-  }, [refreshKey, refreshCoreData]);
+    // Only fetch if core trainees data is completely empty
+    if (!trainees || trainees.length === 0) {
+      refreshCoreData(false);
+    }
+  }, [refreshKey]);
 
   const loadData = useCallback(async (force = true) => {
     await refreshCoreData(force);
@@ -426,12 +448,13 @@ export const TraineesView: React.FC = () => {
     });
   }, [formData.fullName, formData.parentName, formData.parentPhone, trainees, activeTrainee]);
 
-  const fetchCodeForCourse = async (courseId?: string, targetGrade?: string) => {
-    if (!courseId && !targetGrade) return;
+  const fetchCodeForCourse = async (courseId?: string, targetGrade?: string, targetGroupId?: string) => {
+    if (!courseId && !targetGrade && !targetGroupId) return;
     setIsGeneratingCode(true);
     try {
       const g = targetGrade || formData.grade;
       const cId = courseId || formData.courseId;
+      const grpId = targetGroupId || formData.groupId;
       let matchedCourse = (courses || []).find(c => c.id === cId);
       if (g && !matchedCourse) {
         matchedCourse = (courses || []).find(c => 
@@ -439,15 +462,26 @@ export const TraineesView: React.FC = () => {
           c.grade === g
         );
       }
-      const res = await api.getNextTraineeCode({ courseId: matchedCourse?.id || cId, grade: g });
+      const res = await api.getNextTraineeCode({ courseId: matchedCourse?.id || cId, grade: g, groupId: grpId });
       if (res && res.code) {
         const resPrefix = res.prefix || '';
         setFormData((prev: any) => {
           const currentCode = prev.code || '';
           const currentPrefix = currentCode.replace(/[0-9]/g, '').toUpperCase().trim();
           
+          if (res.isRecycled) {
+            setCodeRegenNotice(`🔄 تم تخصيص الكود الشاغر (${res.code}) من متدرب محذوف ليأخذ مكانه في الفصل ببيانات جديدة كلياً ونظيفة.`);
+            return {
+              ...prev,
+              grade: g || prev.grade,
+              code: res.code,
+              courseId: matchedCourse ? matchedCourse.id : prev.courseId,
+              feeAmount: matchedCourse ? matchedCourse.feeAmount : prev.feeAmount
+            };
+          }
+
           if (resPrefix && currentPrefix === resPrefix && currentCode.length > resPrefix.length) {
-            setCodeRegenNotice(`بادئة الكود الحالية (${currentPrefix}) متوافقة بالفعل مع الصف، لم يتم تغيير التسلسل.`);
+            setCodeRegenNotice(`بادئة الكود الحالية (${currentPrefix}) متوافقة بالفعل مع الصف.`);
             return {
               ...prev,
               grade: g || prev.grade,
@@ -455,7 +489,7 @@ export const TraineesView: React.FC = () => {
               feeAmount: matchedCourse ? matchedCourse.feeAmount : prev.feeAmount
             };
           } else {
-            if (g) setCodeRegenNotice(`تم تحديث كود الطالب تلقائياً ليتوافق مع ${g}: (${res.code})`);
+            if (g) setCodeRegenNotice(`تم تحديد كود المتدرب تلقائياً: (${res.code})`);
             return {
               ...prev,
               grade: g || prev.grade,
@@ -776,13 +810,17 @@ export const TraineesView: React.FC = () => {
     if (!deleteConfirm?.trainee) return;
     const targetId = deleteConfirm.trainee.id;
     try {
-      await api.deleteTrainee(targetId);
+      const res = await api.deleteTrainee(targetId);
       setTrainees(prev => {
         const next = prev.filter(t => t.id !== targetId);
         try { localStorage.setItem('nagah_trainees', JSON.stringify(next)); } catch {}
         return next;
       });
-      showToast('تم حذف المتدرب بنجاح', 'info');
+      if (res && res.recycledCode) {
+        showToast(`تم مسح المتدرب وكافة بياناته نهائياً، وتفريغ الكود (${res.recycledCode}) ليأخذ مكانه أي طالب جديد في نفس الفصل 🔄`, 'success');
+      } else {
+        showToast(res?.message || 'تم حذف المتدرب بنجاح', 'info');
+      }
       setDeleteConfirm(null);
       await loadData();
     } catch (err: any) {
@@ -2016,7 +2054,7 @@ export const TraineesView: React.FC = () => {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {filteredTrainees.map((t) => {
+            {paginatedTrainees.map((t) => {
               const branch = branches.find((b) => b.id === t.branchId);
               const course = courses.find((c) => c.id === t.courseId);
               const group = groups.find((g) => g.id === t.groupId);
@@ -2326,7 +2364,7 @@ export const TraineesView: React.FC = () => {
                     </td>
                   </tr>
                 ) : (
-                  filteredTrainees.map((t) => {
+                  paginatedTrainees.map((t) => {
                     const branch = branches.find((b) => b.id === t.branchId);
                     const course = courses.find((c) => c.id === t.courseId);
                     const group = groups.find((g) => g.id === t.groupId);
@@ -2577,6 +2615,113 @@ export const TraineesView: React.FC = () => {
               </tbody>
             </table>
           </div>
+        </div>
+      )}
+
+      {/* Pagination Controls & Record Range Counter */}
+      {filteredTrainees.length > 0 && (
+        <div className="bg-white/80 dark:bg-slate-800/60 border border-slate-200/90 dark:border-slate-700/70 p-3 sm:p-4 rounded-2xl shadow-sm backdrop-blur-xl flex flex-wrap items-center justify-between gap-3 text-xs">
+          {/* Left / Info & Page Size */}
+          <div className="flex items-center gap-3 flex-wrap">
+            <span className="text-slate-600 dark:text-slate-400 font-bold">
+              عرض{' '}
+              <span className="text-amber-600 dark:text-amber-400 font-black">
+                {Math.min(filteredTrainees.length, (currentPage - 1) * pageSize + 1)}
+              </span>
+              {' - '}
+              <span className="text-amber-600 dark:text-amber-400 font-black">
+                {Math.min(filteredTrainees.length, currentPage * pageSize)}
+              </span>
+              {' '}من إجمالي{' '}
+              <span className="text-slate-900 dark:text-slate-100 font-black">
+                {filteredTrainees.length}
+              </span>
+              {' '}متدرب
+            </span>
+
+            <div className="flex items-center gap-1.5 border-r border-slate-200 dark:border-slate-700 pr-3 mr-1">
+              <span className="text-slate-500 dark:text-slate-400 text-[11px]">في الصفحة:</span>
+              <select
+                value={pageSize}
+                onChange={(e) => {
+                  setPageSize(Number(e.target.value));
+                  setCurrentPage(1);
+                }}
+                className="bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1 text-xs font-bold text-slate-800 dark:text-slate-200 focus:outline-none focus:border-amber-500"
+              >
+                <option value={15}>15</option>
+                <option value={30}>30</option>
+                <option value={60}>60</option>
+                <option value={100}>100</option>
+                <option value={99999}>الكل</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Right / Pagination Navigation Buttons */}
+          {totalPages > 1 && (
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setCurrentPage(1)}
+                disabled={currentPage === 1}
+                className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white disabled:opacity-40 disabled:pointer-events-none transition-colors"
+                title="الصفحة الأولى"
+              >
+                <ChevronsRight className="w-4 h-4" />
+              </button>
+
+              <button
+                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                disabled={currentPage === 1}
+                className="px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white disabled:opacity-40 disabled:pointer-events-none flex items-center gap-1 font-bold transition-colors"
+              >
+                <ChevronRight className="w-4 h-4" />
+                <span className="hidden sm:inline">السابق</span>
+              </button>
+
+              <div className="flex items-center gap-1 px-1">
+                {Array.from({ length: totalPages }, (_, i) => i + 1)
+                  .filter(p => p === 1 || p === totalPages || Math.abs(p - currentPage) <= 1)
+                  .map((p, idx, arr) => {
+                    const prevP = arr[idx - 1];
+                    const showEllipsis = prevP && p - prevP > 1;
+                    return (
+                      <React.Fragment key={p}>
+                        {showEllipsis && <span className="px-1 text-slate-400">...</span>}
+                        <button
+                          onClick={() => setCurrentPage(p)}
+                          className={`w-7 h-7 rounded-lg text-xs font-bold transition-all ${
+                            currentPage === p
+                              ? 'bg-amber-500 text-slate-950 font-black shadow-xs'
+                              : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                          }`}
+                        >
+                          {p}
+                        </button>
+                      </React.Fragment>
+                    );
+                  })}
+              </div>
+
+              <button
+                onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                disabled={currentPage === totalPages}
+                className="px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white disabled:opacity-40 disabled:pointer-events-none flex items-center gap-1 font-bold transition-colors"
+              >
+                <span className="hidden sm:inline">التالي</span>
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+
+              <button
+                onClick={() => setCurrentPage(totalPages)}
+                disabled={currentPage === totalPages}
+                className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white disabled:opacity-40 disabled:pointer-events-none transition-colors"
+                title="الصفحة الأخيرة"
+              >
+                <ChevronsLeft className="w-4 h-4" />
+              </button>
+            </div>
+          )}
         </div>
       )}
 
@@ -2954,8 +3099,12 @@ export const TraineesView: React.FC = () => {
                           trainerId: selGroup.trainerId || formData.trainerId,
                           feeAmount: selGroup.feeAmount !== undefined && selGroup.feeAmount !== null ? selGroup.feeAmount : (selCourse ? selCourse.feeAmount : formData.feeAmount)
                         });
+                        fetchCodeForCourse(selGroup.courseId || formData.courseId, selGroup.grade || formData.grade, gid);
                       } else {
                         setFormData({ ...formData, groupId: gid });
+                        if (gid) {
+                          fetchCodeForCourse(formData.courseId, formData.grade, gid);
+                        }
                       }
                     }}
                     className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-amber-500 text-xs shadow-xs"
@@ -5001,97 +5150,117 @@ export const TraineesView: React.FC = () => {
       )}
 
       {/* Share Registration Modal */}
-      <ShareRegistrationModal
-        isOpen={isShareModalOpen}
-        onClose={() => setIsShareModalOpen(false)}
-      />
+      {isShareModalOpen && (
+        <ShareRegistrationModal
+          isOpen={isShareModalOpen}
+          onClose={() => setIsShareModalOpen(false)}
+        />
+      )}
 
       {/* Student Promotion & Upgrade Modal for New Academic Year */}
-      <StudentPromotionModal
-        isOpen={isPromotionModalOpen}
-        onClose={() => setIsPromotionModalOpen(false)}
-        branches={branches}
-        selectedBranch={selectedBranch}
-        onSuccess={() => {
-          loadData();
-          showToast('🎉 تم تصعيد وترقية الطلاب وتحديث المجموعات للعام الدراسي الجديد بنجاح!', 'success');
-        }}
-      />
+      {isPromotionModalOpen && (
+        <StudentPromotionModal
+          isOpen={isPromotionModalOpen}
+          onClose={() => setIsPromotionModalOpen(false)}
+          branches={branches}
+          selectedBranch={selectedBranch}
+          onSuccess={() => {
+            loadData();
+            showToast('🎉 تم تصعيد وترقية الطلاب وتحديث المجموعات للعام الدراسي الجديد بنجاح!', 'success');
+          }}
+        />
+      )}
 
       {/* Trainee Official Digital ID Card Modal */}
-      <TraineeDigitalCardModal
-        isOpen={!!selectedDigitalCardTrainee}
-        onClose={() => setSelectedDigitalCardTrainee(null)}
-        trainee={selectedDigitalCardTrainee}
-        course={courses.find(c => c.id === selectedDigitalCardTrainee?.courseId)}
-        group={groups.find(g => g.id === selectedDigitalCardTrainee?.groupId)}
-        branch={branches.find(b => b.id === selectedDigitalCardTrainee?.branchId)}
-      />
+      {!!selectedDigitalCardTrainee && (
+        <TraineeDigitalCardModal
+          isOpen={!!selectedDigitalCardTrainee}
+          onClose={() => setSelectedDigitalCardTrainee(null)}
+          trainee={selectedDigitalCardTrainee}
+          course={courses.find(c => c.id === selectedDigitalCardTrainee?.courseId)}
+          group={groups.find(g => g.id === selectedDigitalCardTrainee?.groupId)}
+          branch={branches.find(b => b.id === selectedDigitalCardTrainee?.branchId)}
+          onPhotoUpdated={(traineeId, newPhotoUrl) => {
+            setTrainees(prev => prev.map(t => t.id === traineeId ? { ...t, photoUrl: newPhotoUrl } : t));
+            if (selectedDigitalCardTrainee && selectedDigitalCardTrainee.id === traineeId) {
+              setSelectedDigitalCardTrainee(prev => prev ? { ...prev, photoUrl: newPhotoUrl } : null);
+            }
+          }}
+        />
+      )}
 
       {/* AI Homework & Exam Scanner Modal */}
-      <AIHomeworkScannerModal
-        isOpen={isAiScannerModalOpen}
-        onClose={() => {
-          setIsAiScannerModalOpen(false);
-          setScannerTraineeId(undefined);
-        }}
-        defaultTraineeId={scannerTraineeId}
-        onGradeSaved={() => {
-          loadData();
-        }}
-      />
+      {isAiScannerModalOpen && (
+        <AIHomeworkScannerModal
+          isOpen={isAiScannerModalOpen}
+          onClose={() => {
+            setIsAiScannerModalOpen(false);
+            setScannerTraineeId(undefined);
+          }}
+          defaultTraineeId={scannerTraineeId}
+          onGradeSaved={() => {
+            loadData();
+          }}
+        />
+      )}
 
       {/* Student Photo Crop & AI Dress-Up Studio Modal */}
-      <StudentPhotoCropperModal
-        isOpen={isPhotoStudioOpen}
-        onClose={() => setIsPhotoStudioOpen(false)}
-        initialImage={formData.photoUrl}
-        studentName={formData.fullName || 'المتدرب'}
-        onSavePhoto={async (finalPhoto) => {
-          try {
-            const res = await fetch('/api/upload', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ fileData: finalPhoto, fileName: 'cropped-photo.jpg' })
-            });
-            const data = await res.json();
-            if (res.ok && data.success) {
-              setFormData((prev: any) => ({ ...prev, photoUrl: data.url }));
-            } else {
+      {isPhotoStudioOpen && (
+        <StudentPhotoCropperModal
+          isOpen={isPhotoStudioOpen}
+          onClose={() => setIsPhotoStudioOpen(false)}
+          initialImage={formData.photoUrl}
+          studentName={formData.fullName || 'المتدرب'}
+          onSavePhoto={async (finalPhoto) => {
+            try {
+              const res = await fetch('/api/upload', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ fileData: finalPhoto, fileName: 'cropped-photo.jpg' })
+              });
+              const data = await res.json();
+              if (res.ok && data.success) {
+                setFormData((prev: any) => ({ ...prev, photoUrl: data.url }));
+              } else {
+                setFormData((prev: any) => ({ ...prev, photoUrl: finalPhoto }));
+              }
+            } catch(e) {
               setFormData((prev: any) => ({ ...prev, photoUrl: finalPhoto }));
             }
-          } catch(e) {
-            setFormData((prev: any) => ({ ...prev, photoUrl: finalPhoto }));
-          }
-          showToast('تمت معالجة وحفظ صورة المتدرب بنجاح ✨', 'success');
-        }}
-      />
+            showToast('تمت معالجة وحفظ صورة المتدرب بنجاح ✨', 'success');
+          }}
+        />
+      )}
 
       {/* Student Cards & WhatsApp Broadcast Modal */}
-      <StudentCardsBroadcastModal
-        isOpen={isBroadcastModalOpen}
-        onClose={() => {
-          setIsBroadcastModalOpen(false);
-          setBroadcastTargetTrainee(null);
-        }}
-        trainees={trainees}
-        courses={courses}
-        groups={groups}
-        branches={branches}
-        initialSelectedTrainee={broadcastTargetTrainee}
-        initialGroupId={selectedGroup !== 'all' ? selectedGroup : undefined}
-        initialCourseId={selectedCourse !== 'all' ? selectedCourse : undefined}
-        initialBranchId={selectedBranch !== 'all' ? selectedBranch : undefined}
-        onShowToast={showToast}
-        onRefreshData={loadData}
-      />
+      {isBroadcastModalOpen && (
+        <StudentCardsBroadcastModal
+          isOpen={isBroadcastModalOpen}
+          onClose={() => {
+            setIsBroadcastModalOpen(false);
+            setBroadcastTargetTrainee(null);
+          }}
+          trainees={trainees}
+          courses={courses}
+          groups={groups}
+          branches={branches}
+          initialSelectedTrainee={broadcastTargetTrainee}
+          initialGroupId={selectedGroup !== 'all' ? selectedGroup : undefined}
+          initialCourseId={selectedCourse !== 'all' ? selectedCourse : undefined}
+          initialBranchId={selectedBranch !== 'all' ? selectedBranch : undefined}
+          onShowToast={showToast}
+          onRefreshData={loadData}
+        />
+      )}
 
       {/* Google Sheets Hub Modal */}
-      <GoogleSheetsHubModal
-        isOpen={isGoogleSheetsModalOpen}
-        onClose={() => setIsGoogleSheetsModalOpen(false)}
-        defaultTab="export"
-      />
+      {isGoogleSheetsModalOpen && (
+        <GoogleSheetsHubModal
+          isOpen={isGoogleSheetsModalOpen}
+          onClose={() => setIsGoogleSheetsModalOpen(false)}
+          defaultTab="export"
+        />
+      )}
 
       {/* Student Code Audit & Bulk Grade Alignment Modal */}
       {isCodeAuditModalOpen && (
@@ -5241,12 +5410,14 @@ export const TraineesView: React.FC = () => {
       )}
 
       {/* Duplicates & Arabic Normalization Audit Modal */}
-      <DuplicatesAuditModal
-        isOpen={isDuplicatesModalOpen}
-        onClose={() => setIsDuplicatesModalOpen(false)}
-        trainees={trainees}
-        onRefresh={loadData}
-      />
+      {isDuplicatesModalOpen && (
+        <DuplicatesAuditModal
+          isOpen={isDuplicatesModalOpen}
+          onClose={() => setIsDuplicatesModalOpen(false)}
+          trainees={trainees}
+          onRefresh={loadData}
+        />
+      )}
 
     </div>
   );

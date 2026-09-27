@@ -106,7 +106,7 @@ function sanitizeForFirestore(collectionName: string, items: any): any {
   return items;
 }
 
-export async function saveCollectionToFirestore(collectionName: string, rawItems: any): Promise<boolean> {
+export async function saveCollectionToFirestore(collectionName: string, rawItems: any, updateSyncMeta = true): Promise<boolean> {
   // 1. Skip transient, high-frequency collections to preserve quota
   if (TRANSIENT_COLLECTIONS.has(collectionName)) {
     return true;
@@ -152,17 +152,19 @@ export async function saveCollectionToFirestore(collectionName: string, rawItems
       await withTimeout(setDoc(docRef, { isSplit: true, totalParts, updatedAt: now }, { merge: true }), 10000);
     }
 
-    // Update global sync heartbeat in Firestore for real-time client notice
-    try {
-      const metaRef = doc(db, 'nagah_store', 'sync_meta');
-      await setDoc(metaRef, { 
-        lastUpdatedCollection: collectionName, 
-        lastCollection: collectionName,
-        updatedAt: now,
-        version: now
-      }, { merge: true });
-    } catch (metaErr) {
-      console.warn('[FirestoreStorage] sync_meta write notice:', metaErr);
+    // Update global sync heartbeat in Firestore for real-time client notice if requested
+    if (updateSyncMeta) {
+      try {
+        const metaRef = doc(db, 'nagah_store', 'sync_meta');
+        await setDoc(metaRef, { 
+          lastUpdatedCollection: collectionName, 
+          lastCollection: collectionName,
+          updatedAt: now,
+          version: now
+        }, { merge: true });
+      } catch (metaErr) {
+        console.warn('[FirestoreStorage] sync_meta write notice:', metaErr);
+      }
     }
 
     collectionHashes.set(collectionName, newHash);
@@ -247,9 +249,26 @@ export async function saveFullDbToFirestore(dbData: any, immediate = false): Pro
 
     const tasks = coreCollections
       .filter(k => current[k] !== undefined)
-      .map(k => saveCollectionToFirestore(k, current[k]));
+      .map(k => saveCollectionToFirestore(k, current[k], false));
 
-    await Promise.all(tasks);
+    const results = await Promise.all(tasks);
+    const anyWritten = results.some(r => r === true);
+
+    // If at least one collection actually changed, write a single sync_meta heartbeat
+    if (anyWritten) {
+      try {
+        const db = getDb();
+        if (db) {
+          const metaRef = doc(db, 'nagah_store', 'sync_meta');
+          await setDoc(metaRef, { 
+            updatedAt: Date.now(),
+            version: Date.now()
+          }, { merge: true });
+        }
+      } catch (metaErr) {
+        console.warn('[FirestoreStorage] sync_meta batch write notice:', metaErr);
+      }
+    }
   };
 
   // On serverless or immediate calls, execute right away
@@ -283,12 +302,14 @@ export async function saveFullDbToFirestore(dbData: any, immediate = false): Pro
 
 export async function allocateNextTraineeCode(
   prefix: string = 'A',
-  localTrainees: any[] = []
+  localTrainees: any[] = [],
+  groupId?: string,
+  freedCodesList: Array<{ code: string; prefix?: string; groupId?: string }> = []
 ): Promise<string> {
   const pfx = (prefix || 'A').toUpperCase().trim().slice(0, 3);
   const regex = new RegExp(`^${pfx}-?(\\d+)$`, 'i');
-  let maxNum = 0;
   const usedCodes = new Set<string>();
+  const usedNumbers = new Set<number>();
 
   // 1. Scan in-memory trainees
   if (Array.isArray(localTrainees)) {
@@ -299,7 +320,7 @@ export async function allocateNextTraineeCode(
         const m = c.match(regex);
         if (m) {
           const num = parseInt(m[1], 10);
-          if (!isNaN(num) && num > maxNum) maxNum = num;
+          if (!isNaN(num)) usedNumbers.add(num);
         }
       }
     }
@@ -318,7 +339,7 @@ export async function allocateNextTraineeCode(
             const m = c.match(regex);
             if (m) {
               const num = parseInt(m[1], 10);
-              if (!isNaN(num) && num > maxNum) maxNum = num;
+              if (!isNaN(num)) usedNumbers.add(num);
             }
           }
         }
@@ -326,44 +347,69 @@ export async function allocateNextTraineeCode(
     } catch (e) {
       console.warn('[allocateNextTraineeCode] remote trainees scan notice:', e);
     }
+  }
 
-    // 3. Consult persistent atomic counter in nagah_store/code_counters
+  // Priority 1: Check freed codes recorded for this exact group/class
+  if (groupId && Array.isArray(freedCodesList)) {
+    const groupFreed = freedCodesList.find(f => 
+      f && f.code && 
+      f.groupId === groupId && 
+      (f.prefix?.toUpperCase() === pfx || f.code.toUpperCase().startsWith(pfx)) &&
+      !usedCodes.has(f.code.toUpperCase())
+    );
+    if (groupFreed) {
+      const code = groupFreed.code.toUpperCase();
+      console.log(`[allocateNextTraineeCode] Reusing freed code ${code} for group ${groupId}`);
+      return code;
+    }
+  }
+
+  // Priority 2: Check freed codes matching prefix
+  if (Array.isArray(freedCodesList)) {
+    const prefixFreed = freedCodesList.find(f => 
+      f && f.code && 
+      (f.prefix?.toUpperCase() === pfx || f.code.toUpperCase().startsWith(pfx)) &&
+      !usedCodes.has(f.code.toUpperCase())
+    );
+    if (prefixFreed) {
+      const code = prefixFreed.code.toUpperCase();
+      console.log(`[allocateNextTraineeCode] Reusing freed code ${code} for prefix ${pfx}`);
+      return code;
+    }
+  }
+
+  // Priority 3: Numerical gap detection (find the lowest unused number starting at 1)
+  let candidateNum = 1;
+  while (usedNumbers.has(candidateNum)) {
+    candidateNum++;
+  }
+
+  let candidate = `${pfx}${String(candidateNum).padStart(3, '0')}`;
+  while (usedCodes.has(candidate.toUpperCase())) {
+    candidateNum++;
+    candidate = `${pfx}${String(candidateNum).padStart(3, '0')}`;
+  }
+
+  // 4. Update persistent atomic counter in Firestore without blocking recycled gaps
+  if (db) {
     try {
       const counterRef = doc(db, 'nagah_store', 'code_counters');
-      const counterSnap = await withTimeout(getDoc(counterRef), 4000);
+      const counterSnap = await withTimeout(getDoc(counterRef), 3000);
       let countersMap: Record<string, number> = {};
       if (counterSnap.exists()) {
         countersMap = counterSnap.data()?.counters || {};
       }
       const existingVal = Number(countersMap[pfx]) || 0;
-      if (existingVal > maxNum) {
-        maxNum = existingVal;
+      if (candidateNum > existingVal) {
+        countersMap[pfx] = candidateNum;
+        await withTimeout(setDoc(counterRef, { counters: countersMap, updatedAt: new Date().toISOString() }, { merge: true }), 3000);
       }
-
-      let nextNum = maxNum + 1;
-      let candidate = `${pfx}${String(nextNum).padStart(3, '0')}`;
-      while (usedCodes.has(candidate.toUpperCase())) {
-        nextNum++;
-        candidate = `${pfx}${String(nextNum).padStart(3, '0')}`;
-      }
-
-      countersMap[pfx] = nextNum;
-      await withTimeout(setDoc(counterRef, { counters: countersMap, updatedAt: new Date().toISOString() }, { merge: true }), 4000);
-
-      console.log(`[allocateNextTraineeCode] Allocated persistent unique code ${candidate} (prefix: ${pfx}, nextNum: ${nextNum})`);
-      return candidate;
     } catch (e) {
       console.warn('[allocateNextTraineeCode] Firestore code_counters update notice:', e);
     }
   }
 
-  // Fallback if Firestore counter doc could not be reached
-  let nextNum = maxNum + 1;
-  let candidate = `${pfx}${String(nextNum).padStart(3, '0')}`;
-  while (usedCodes.has(candidate.toUpperCase())) {
-    nextNum++;
-    candidate = `${pfx}${String(nextNum).padStart(3, '0')}`;
-  }
+  console.log(`[allocateNextTraineeCode] Allocated unique code ${candidate} (prefix: ${pfx}, num: ${candidateNum})`);
   return candidate;
 }
 

@@ -1,0 +1,8 @@
+User-agent: *
+Disallow: /api/
+Disallow: /agent/
+Disallow: /health
+Disallow: /kiosk
+Disallow: /lab
+
+Allow: /

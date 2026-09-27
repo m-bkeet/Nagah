@@ -77,13 +77,15 @@ export const ReportsView: React.FC = () => {
   return (
     <div className="space-y-5">
       {/* Header */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-slate-800/60 border border-slate-700/70 p-4 rounded-2xl backdrop-blur-md">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-5 sm:p-6 rounded-3xl shadow-xs">
         <div>
-          <h2 className="text-lg font-black text-slate-100 flex items-center gap-2">
-            <FileSpreadsheet className="w-5 h-5 text-amber-400" />
-            مركز التقارير الشاملة والتحليلات البيانية (17 تقرير تفصيلي)
+          <h2 className="text-xl font-black text-slate-900 dark:text-white flex items-center gap-2.5">
+            <div className="w-10 h-10 rounded-xl bg-amber-50 dark:bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center border border-amber-200 dark:border-amber-500/30">
+              <FileSpreadsheet className="w-5 h-5" />
+            </div>
+            <span>مركز التقارير الشاملة والتحليلات البيانية (17 تقرير تفصيلي)</span>
           </h2>
-          <p className="text-xs text-slate-400 mt-0.5">
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 font-medium">
             تقارير مالية، أكاديمية، إدارية، وتقنية مع دعم كامل للطباعة والتصدير
           </p>
         </div>
@@ -91,9 +93,9 @@ export const ReportsView: React.FC = () => {
         <div className="flex items-center gap-2">
           <button
             onClick={handlePrint}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs shadow-md transition-all"
+            className="flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs sm:text-sm shadow-md shadow-amber-500/20 active:scale-95 transition-all cursor-pointer border border-amber-400"
           >
-            <Printer className="w-4 h-4" />
+            <Printer className="w-4 h-4 text-slate-950" />
             <span>طباعة التقرير الحالي</span>
           </button>
         </div>
@@ -101,28 +103,33 @@ export const ReportsView: React.FC = () => {
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-5">
         {/* Left 1 Col: Reports Catalog */}
-        <div className="bg-slate-800/80 border border-slate-700/80 rounded-2xl p-4 shadow-xl backdrop-blur-md space-y-2">
-          <h3 className="font-bold text-xs text-slate-400 uppercase tracking-wider mb-2">
-            فهرس التقارير المتاحة
-          </h3>
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-4 shadow-xs space-y-2">
+          <div className="px-2 py-1 mb-2 border-b border-slate-100 dark:border-slate-800">
+            <h3 className="font-black text-xs text-slate-700 dark:text-slate-300">
+              فهرس التقارير المتاحة
+            </h3>
+            <span className="text-[10px] text-slate-400 block mt-0.5">اختر التقرير لعرضه وتصديره</span>
+          </div>
 
-          <div className="space-y-1 max-h-[600px] overflow-y-auto pr-1">
+          <div className="space-y-1.5 max-h-[600px] overflow-y-auto pr-1">
             {reportCatalog.map((r) => {
               const isSel = selectedReport === r.id;
               return (
                 <button
                   key={r.id}
                   onClick={() => setSelectedReport(r.id)}
-                  className={`w-full text-right p-2.5 rounded-xl text-xs font-semibold transition-all flex items-center justify-between ${
+                  className={`w-full text-right p-3 rounded-2xl text-xs font-bold transition-all flex items-center justify-between cursor-pointer border ${
                     isSel
-                      ? 'bg-amber-500 text-slate-950 font-bold shadow'
-                      : 'text-slate-300 hover:bg-slate-700/60'
+                      ? 'bg-amber-500 text-slate-950 font-black shadow-md border-amber-400 shadow-amber-500/10'
+                      : 'bg-slate-50/70 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200/70 dark:border-slate-800'
                   }`}
                 >
                   <span className="truncate">{r.title}</span>
                   <span
-                    className={`text-[9px] px-1.5 py-0.5 rounded font-bold mr-1 ${
-                      isSel ? 'bg-slate-950 text-amber-300' : 'bg-slate-900 text-slate-400'
+                    className={`text-[10px] px-2 py-0.5 rounded-full font-black mr-1 shrink-0 ${
+                      isSel
+                        ? 'bg-slate-950 text-amber-300'
+                        : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700'
                     }`}
                   >
                     {r.category}
@@ -134,33 +141,37 @@ export const ReportsView: React.FC = () => {
         </div>
 
         {/* Right 3 Cols: Active Report View */}
-        <div className="lg:col-span-3 bg-slate-800/80 border border-slate-700/80 rounded-2xl p-5 shadow-xl backdrop-blur-md space-y-4">
-          <div className="flex items-center justify-between pb-3 border-b border-slate-700">
+        <div className="lg:col-span-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 sm:p-6 shadow-xs space-y-5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-200 dark:border-slate-800">
             <div>
-              <h3 className="font-bold text-base text-slate-100">
+              <h3 className="font-black text-lg text-slate-900 dark:text-white">
                 {reportCatalog.find((r) => r.id === selectedReport)?.title}
               </h3>
-              <p className="text-xs text-slate-400 mt-0.5">
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 font-medium">
                 تاريخ الاستخراج: {new Date().toLocaleDateString('ar-EG')} - الفرع:{' '}
                 {branches.find((b) => b.id === activeBranchId)?.name || 'جميع الفروع'}
               </p>
             </div>
 
-            <span className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-xs font-bold px-3 py-1 rounded-full">
+            <span className="bg-emerald-50 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-500/30 text-xs font-black px-3.5 py-1.5 rounded-full self-start sm:self-auto flex items-center gap-1.5 shadow-xs">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
               بيانات حية ومحدثة ⚡
             </span>
           </div>
 
           {isLoading ? (
-            <div className="py-20 text-center text-slate-400">جاري تجميع وحساب بيانات التقرير...</div>
+            <div className="py-20 text-center text-slate-500 dark:text-slate-400 font-bold text-sm">
+              <div className="w-8 h-8 border-3 border-amber-500 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+              جاري تجميع وحساب بيانات التقرير...
+            </div>
           ) : reportData ? (
             <div className="space-y-4">
               {/* Financial KPI preview if financial */}
               {reportData.summary && (
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                   {Object.entries(reportData.summary).map(([key, val]: any, i) => (
-                    <div key={i} className="p-3.5 bg-slate-900/70 border border-slate-700/70 rounded-xl">
-                      <span className="text-[11px] text-slate-400 block mb-1">
+                    <div key={i} className="p-4 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xs">
+                      <span className="text-[11px] text-slate-500 dark:text-slate-400 block mb-1 font-bold">
                         {key === 'totalRevenue'
                           ? 'إجمالي الإيرادات'
                           : key === 'totalExpenses'
@@ -171,7 +182,7 @@ export const ReportsView: React.FC = () => {
                           ? 'مستحقات المدربين'
                           : key}
                       </span>
-                      <span className="font-black text-lg font-mono text-amber-300">
+                      <span className="font-black text-xl font-mono text-slate-900 dark:text-amber-400">
                         {typeof val === 'number' ? val.toLocaleString() + ' ج.م' : val}
                       </span>
                     </div>
@@ -180,47 +191,47 @@ export const ReportsView: React.FC = () => {
               )}
 
               {/* Data Table */}
-              <div className="border border-slate-700 rounded-xl overflow-hidden">
+              <div className="border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-xs">
                 <table className="w-full text-right text-xs">
-                  <thead className="bg-slate-900 text-slate-300 font-bold border-b border-slate-700">
+                  <thead className="bg-slate-100 dark:bg-slate-950 text-slate-800 dark:text-slate-200 font-black border-b border-slate-200 dark:border-slate-800">
                     <tr>
                       {reportData.columns?.map((col: string, idx: number) => (
-                        <th key={idx} className="p-3">
+                        <th key={idx} className="p-3.5">
                           {col}
                         </th>
                       )) || (
                         <>
-                          <th className="p-3">البيان</th>
-                          <th className="p-3">القيمة</th>
-                          <th className="p-3">التاريخ</th>
-                          <th className="p-3">الملاحظات</th>
+                          <th className="p-3.5">البيان</th>
+                          <th className="p-3.5">القيمة</th>
+                          <th className="p-3.5">التاريخ</th>
+                          <th className="p-3.5">الملاحظات</th>
                         </>
                       )}
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-700/60 text-slate-200">
+                  <tbody className="divide-y divide-slate-200 dark:divide-slate-800 text-slate-800 dark:text-slate-200 bg-white dark:bg-slate-900">
                     {reportData.rows && reportData.rows.length > 0 ? (
                       reportData.rows.map((row: any, rIdx: number) => (
-                        <tr key={rIdx} className="hover:bg-slate-700/30">
+                        <tr key={rIdx} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
                           {Array.isArray(row) ? (
                             row.map((cell: any, cIdx: number) => (
-                              <td key={cIdx} className="p-3 font-mono">
+                              <td key={cIdx} className="p-3.5 font-mono">
                                 {cell}
                               </td>
                             ))
                           ) : (
                             <>
-                              <td className="p-3 font-bold">{row.title || row.name || '-'}</td>
-                              <td className="p-3 font-mono text-amber-400">{row.value || row.amount || '-'}</td>
-                              <td className="p-3 font-mono text-slate-400">{row.date || '-'}</td>
-                              <td className="p-3 text-slate-400">{row.notes || '-'}</td>
+                              <td className="p-3.5 font-bold text-slate-900 dark:text-white">{row.title || row.name || '-'}</td>
+                              <td className="p-3.5 font-mono font-black text-amber-600 dark:text-amber-400">{row.value || row.amount || '-'}</td>
+                              <td className="p-3.5 font-mono text-slate-500 dark:text-slate-400">{row.date || '-'}</td>
+                              <td className="p-3.5 text-slate-600 dark:text-slate-400">{row.notes || '-'}</td>
                             </>
                           )}
                         </tr>
                       ))
                     ) : (
                       <tr>
-                        <td colSpan={4} className="p-8 text-center text-slate-400">
+                        <td colSpan={4} className="p-10 text-center text-slate-500 dark:text-slate-400 font-bold">
                           سجلات التقرير جاهزة ومكتملة.
                         </td>
                       </tr>
@@ -230,7 +241,7 @@ export const ReportsView: React.FC = () => {
               </div>
             </div>
           ) : (
-            <div className="py-20 text-center text-slate-400">لا توجد بيانات متاحة لهذا التقرير حالياً.</div>
+            <div className="py-20 text-center text-slate-500 dark:text-slate-400 font-bold">لا توجد بيانات متاحة لهذا التقرير حالياً.</div>
           )}
         </div>
       </div>

@@ -68,6 +68,16 @@ export interface DatabaseSchema {
   traineeBadges?: any[];
   traineeEvaluations?: any[];
   homeworkSubmissions?: any[];
+  freedTraineeCodes?: Array<{
+    code: string;
+    prefix: string;
+    groupId?: string;
+    courseId?: string;
+    grade?: string;
+    branchId?: string;
+    freedAt: string;
+    traineeName?: string;
+  }>;
   computerLabs?: ComputerLab[];
   googleDriveSync?: any;
   studentPosts?: any[];
@@ -102,6 +112,7 @@ const defaultPointRules: PointRule[] = [
 ];
 
 const initialData: DatabaseSchema = {
+  freedTraineeCodes: [],
   devices: [],
   traineeScreenshots: [],
   computerLabs: [],
@@ -2418,6 +2429,148 @@ const initialData: DatabaseSchema = {
 ],
   questions: [
     {
+      "id": "q-pre-ict4-01",
+      "examId": "exam-1787463526231",
+      "questionType": "mcq",
+      "questionText": "يستخدم علماء الآثار جهاز ............ للبحث عن المعادن والأجسام المعدنية المدفونة تحت الأرض.",
+      "options": [
+        "مقياس المغناطيسية (Magnetometer)",
+        "نظام تحديد المواقع العالمي (GPS)",
+        "الرادار المخترق للأرض (GPR)",
+        "الطابعة ثلاثية الأبعاد"
+      ],
+      "correctAnswer": "مقياس المغناطيسية (Magnetometer)",
+      "explanation": "مقياس المغناطيسية يقيس المجال المغناطيسي ويكشف عن المعادن المدفونة في الأرض.",
+      "marks": 10
+    },
+    {
+      "id": "q-pre-ict4-02",
+      "examId": "exam-1787463526231",
+      "questionType": "mcq",
+      "questionText": "تعتبر ............ هي بمثابة العقل المتحكم في جهاز الكمبيوتر وتقوم بمعالجة كافة البيانات والتعليمات.",
+      "options": [
+        "وحدة المعالجة المركزية (CPU)",
+        "لوحة المفاتيح (Keyboard)",
+        "الشاشة (Monitor)",
+        "السماعات (Speakers)"
+      ],
+      "correctAnswer": "وحدة المعالجة المركزية (CPU)",
+      "explanation": "وحدة المعالجة المركزية CPU هي العقل المدبر للحاسوب لمعالجة البيانات والعمليات.",
+      "marks": 10
+    },
+    {
+      "id": "q-pre-ict4-03",
+      "examId": "exam-1787463526231",
+      "questionType": "mcq",
+      "questionText": "نظام تحديد المواقع العالمي (GPS) يعتمد على الاتصال المباشر بـ ............ لتحديد الأماكن بدقة فائقة.",
+      "options": [
+        "الأقمار الصناعية (Satellites)",
+        "جهاز الراوتر المنزلي",
+        "أبراج الكهرباء",
+        "الماسح الضوئي"
+      ],
+      "correctAnswer": "الأقمار الصناعية (Satellites)",
+      "explanation": "يعتمد GPS على شبكة من الأقمار الصناعية حول الأرض لتحديد الإحداثيات.",
+      "marks": 10
+    },
+    {
+      "id": "q-pre-ict4-04",
+      "examId": "exam-1787463526231",
+      "questionType": "mcq",
+      "questionText": "أي من البرامج التالية يُستخدم في إعداد وتقديم العروض التقديمية وتصميم الشرائح والمؤثرات البصرية؟",
+      "options": [
+        "Microsoft PowerPoint",
+        "Microsoft Excel",
+        "آلة حاسبة Calculator",
+        "مفكرة النصوص Notepad"
+      ],
+      "correctAnswer": "Microsoft PowerPoint",
+      "explanation": "برنامج الباوربوينت مخصص لإعداد العروض التقديمية والشرائح التفاعلية.",
+      "marks": 10
+    },
+    {
+      "id": "q-pre-ict4-05",
+      "examId": "exam-1787463526231",
+      "questionType": "mcq",
+      "questionText": "أي من الأجهزة التالية يُعتبر من أجهزة الإخراج (Output Unit) في الكمبيوتر؟",
+      "options": [
+        "مكبرات الصوت (Speakers)",
+        "الفأرة (Mouse)",
+        "لوحة المفاتيح (Keyboard)",
+        "الماسح الضوئي (Scanner)"
+      ],
+      "correctAnswer": "مكبرات الصوت (Speakers)",
+      "explanation": "السماعات تخرج الصوت للمستخدم بينما الفأرة والميكروفون أجهزة إدخال.",
+      "marks": 10
+    },
+    {
+      "id": "q-pre-ict4-06",
+      "examId": "exam-1787463526231",
+      "questionType": "true_false",
+      "questionText": "تتكون كلمة المرور القوية والآمنة من 8 خانات على الأقل وتجمع بين حروف وأرقام ورموز خاصة.",
+      "options": [
+        "صح",
+        "خطأ"
+      ],
+      "correctAnswer": "صح",
+      "explanation": "كلمات المرور المعقدة تحمي الحسابات من الاختراق وسرقة البيانات الشخصية.",
+      "marks": 10
+    },
+    {
+      "id": "q-pre-ict4-07",
+      "examId": "exam-1787463526231",
+      "questionType": "true_false",
+      "questionText": "التنمر عبر الإنترنت (Cyberbullying) ونشر الشائعات سلوك مقبول ومسموح به في شبكات التواصل.",
+      "options": [
+        "صح",
+        "خطأ"
+      ],
+      "correctAnswer": "خطأ",
+      "explanation": "التنمر الإلكتروني سلوك ضار وغير قانوني يجب الإبلاغ عنه وتجنبه تماماً.",
+      "marks": 10
+    },
+    {
+      "id": "q-pre-ict4-08",
+      "examId": "exam-1787463526231",
+      "questionType": "true_false",
+      "questionText": "عند مواجهة تجمد الشاشة أو عدم استجابة أحد البرامج، يمكن استخدام اختصار (Ctrl + Alt + Delete).",
+      "options": [
+        "صح",
+        "خطأ"
+      ],
+      "correctAnswer": "صح",
+      "explanation": "يفتح هذا الاختصار مدير المهام Task Manager لإنهاء البرامج العالقة وإعادة التنشيط.",
+      "marks": 10
+    },
+    {
+      "id": "q-pre-ict4-09",
+      "examId": "exam-1787463526231",
+      "questionType": "mcq",
+      "questionText": "للبحث بدقة عن جملة محددة بالنص في محركات البحث مثل Google، نضع الجملة بين: ............ ",
+      "options": [
+        "علامتي تنصيص \" \"",
+        "أقواس مربعة [ ]",
+        "علامة النجمة * *",
+        "إشارة الجمع +"
+      ],
+      "correctAnswer": "علامتي تنصيص \" \"",
+      "explanation": "علامتا التنصيص تحصر محرك البحث في إيجاد التطابق التام للجملة المكتوبة.",
+      "marks": 10
+    },
+    {
+      "id": "q-pre-ict4-10",
+      "examId": "exam-1787463526231",
+      "questionType": "true_false",
+      "questionText": "يجب استئذان صاحب المنشور أو الصورة وتوثيق المصدر قبل استخدامها تقديراً لحقوق الملكية الفكرية.",
+      "options": [
+        "صح",
+        "خطأ"
+      ],
+      "correctAnswer": "صح",
+      "explanation": "احترام حقوق الملكية الفكرية وقوانين النشر واجب أخلاقي وقانوني في العالم الرقمي.",
+      "marks": 10
+    },
+    {
         "id": "q-1787446743699-0-m40",
         "examId": "exam-1787446743699",
         "questionType": "mcq",
@@ -4120,8 +4273,8 @@ class DatabaseManager {
     return this.data.settings.traineeCodePrefix || 'A';
   }
 
-  public getNextTraineeCode(prefixOrGrade?: string): string {
-    console.log('[DB] getNextTraineeCode: prefixOrGrade=', prefixOrGrade);
+  public getNextTraineeCode(prefixOrGrade?: string, groupId?: string): string {
+    console.log('[DB] getNextTraineeCode: prefixOrGrade=', prefixOrGrade, 'groupId=', groupId);
     let p = 'A';
     if (prefixOrGrade && prefixOrGrade.length === 1 && /[A-Za-z0-9\u0600-\u06FF]/.test(prefixOrGrade)) {
       p = prefixOrGrade.toUpperCase();
@@ -4130,25 +4283,66 @@ class DatabaseManager {
     } else {
       p = this.data.settings.traineeCodePrefix || 'A';
     }
-    console.log('[DB] getNextTraineeCode: p=', p);
     const len = this.data.settings.autoCodeLength || 3;
     
-    // Find all numbers with matching prefix
-    let maxNum = 0;
-    const regex = new RegExp(`^${p}(\\d+)$`, 'i');
-    for (const t of this.data.trainees) {
-      const match = t.code?.trim().match(regex);
-      if (match) {
-        const num = parseInt(match[1], 10);
-        if (num > maxNum) {
-          maxNum = num;
+    const usedCodes = new Set<string>();
+    const usedNums = new Set<number>();
+    const regex = new RegExp(`^${p}-?(\\d+)$`, 'i');
+
+    for (const t of this.data.trainees || []) {
+      if (t && t.code) {
+        const c = String(t.code).trim().toUpperCase();
+        usedCodes.add(c);
+        const match = c.match(regex);
+        if (match) {
+          const num = parseInt(match[1], 10);
+          if (!isNaN(num)) usedNums.add(num);
         }
       }
     }
-    const nextNum = maxNum + 1;
-    const result = `${p}${String(nextNum).padStart(len, '0')}`;
-    console.log('[DB] getNextTraineeCode: result=', result);
-    return result;
+
+    // 1. Check if there are any freed codes explicitly recorded for this group/class
+    const freedList = this.data.freedTraineeCodes || [];
+    if (groupId && Array.isArray(freedList)) {
+      const groupFreed = freedList.find(f => 
+        f && f.code && 
+        f.groupId === groupId && 
+        (f.prefix?.toUpperCase() === p || f.code.toUpperCase().startsWith(p)) &&
+        !usedCodes.has(f.code.toUpperCase())
+      );
+      if (groupFreed) {
+        console.log('[DB] getNextTraineeCode: Reusing group freed code=', groupFreed.code);
+        return groupFreed.code.toUpperCase();
+      }
+    }
+
+    // 2. Check if any freed code exists for this prefix
+    if (Array.isArray(freedList)) {
+      const prefixFreed = freedList.find(f => 
+        f && f.code && 
+        (f.prefix?.toUpperCase() === p || f.code.toUpperCase().startsWith(p)) &&
+        !usedCodes.has(f.code.toUpperCase())
+      );
+      if (prefixFreed) {
+        console.log('[DB] getNextTraineeCode: Reusing prefix freed code=', prefixFreed.code);
+        return prefixFreed.code.toUpperCase();
+      }
+    }
+
+    // 3. Gap detection: find the smallest positive integer n >= 1 not currently used in sequence
+    let candidateNum = 1;
+    while (usedNums.has(candidateNum)) {
+      candidateNum++;
+    }
+
+    let candidate = `${p}${String(candidateNum).padStart(len, '0')}`;
+    while (usedCodes.has(candidate.toUpperCase())) {
+      candidateNum++;
+      candidate = `${p}${String(candidateNum).padStart(len, '0')}`;
+    }
+
+    console.log('[DB] getNextTraineeCode: allocated candidate=', candidate);
+    return candidate;
   }
 
   public recalculateTraineeRankings() {

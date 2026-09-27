@@ -18,7 +18,7 @@ import { KahootGameModal } from '../components/homeworks/KahootGameModal';
 import { VoiceSummaryRecorderModal } from '../components/homeworks/VoiceSummaryRecorderModal';
 import { LectureRecapManager } from '../components/homeworks/LectureRecapManager';
 import { ThemeQuickSwitcher } from '../components/ThemeQuickSwitcher';
-import html2canvas from 'html2canvas';
+import { captureElementToCanvas } from '../utils/captureUtils';
 import {
   BookOpen,
   Award,
@@ -419,20 +419,25 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
     window.addEventListener('nagah_queue_updated' as any, handleQueueChange);
     window.addEventListener('nagah_failover_active' as any, handleFailoverChange);
 
-    const interval = setInterval(() => {
-      setIsOnline(navigator.onLine);
-      if (navigator.onLine) {
-        resilientOfflineService.processSyncQueue().then(res => {
+    const handleOnline = () => {
+      setIsOnline(true);
+      if (resilientOfflineService.getQueue().length > 0) {
+        resilientOfflineService.processSyncQueue().then(() => {
           setQueueCount(resilientOfflineService.getQueue().length);
         });
       }
-    }, 12000);
+    };
+    const handleOffline = () => setIsOnline(false);
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
 
     return () => {
       window.removeEventListener('nagah_network_status' as any, handleConnectionChange);
       window.removeEventListener('nagah_queue_updated' as any, handleQueueChange);
       window.removeEventListener('nagah_failover_active' as any, handleFailoverChange);
-      clearInterval(interval);
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
     };
   }, []);
 
@@ -487,7 +492,7 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
     }
   };
 
-  // Download Certificate as PNG image using html2canvas
+  // Download Certificate as PNG image using captureElementToCanvas
   const handleDownloadCertImage = async (certId: string, certName: string) => {
     const el = document.getElementById(`cert-card-${certId}`);
     if (!el) {
@@ -495,7 +500,8 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
       return;
     }
     try {
-      const canvas = await html2canvas(el, { scale: 2, useCORS: true, backgroundColor: '#ffffff' });
+      const canvas = await captureElementToCanvas(el, { scale: 2, backgroundColor: '#ffffff' });
+      if (!canvas) throw new Error('Capture failed');
       const imgData = canvas.toDataURL('image/png');
       const link = document.createElement('a');
       link.href = imgData;
@@ -3445,18 +3451,24 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
             {/* TAB: AI LANGUAGE LAB (STUDENT EXPERIENCE) */}
             {activeTab === 'language_lab' && student && (
               <div className="animate-in fade-in duration-300">
-                {!isTrainerLabSessionActive && (
-                  <div className="p-6 bg-rose-950/80 border-2 border-rose-500/60 rounded-3xl text-center space-y-3 mb-6 shadow-2xl animate-pulse">
-                    <div className="w-14 h-14 bg-rose-500/20 text-rose-400 rounded-2xl border border-rose-500/40 flex items-center justify-center text-2xl mx-auto">
-                      ⛔
+                {!isTrainerLabSessionActive ? (
+                  <div className="p-8 bg-slate-900 border-2 border-rose-500/50 rounded-3xl text-center space-y-4 my-6 shadow-2xl">
+                    <div className="w-16 h-16 bg-rose-500/20 text-rose-400 rounded-3xl border border-rose-500/40 flex items-center justify-center text-3xl mx-auto shadow-inner">
+                      🔒
                     </div>
-                    <h3 className="text-base font-black text-rose-100">دخول المعمل محظور حالياً - جاري انتظار فتح المدرب للجلسة</h3>
-                    <p className="text-xs text-rose-200 max-w-xl mx-auto leading-relaxed">
-                      وفقاً لمعايير الأمان المتبعة في مركز النجاح، لا يمكنك إجراء ممارسة المعمل أو تسجيل الحضور تلقائياً من المنزل حتى يقوم المحاضر المشرف بفتح برنامجه وجهازه المباشر بقاعة الفرع.
+                    <div className="space-y-1">
+                      <span className="px-3 py-1 bg-rose-500/20 text-rose-300 border border-rose-500/30 text-xs font-black rounded-full inline-block">
+                        المعمل مغلق حالياً
+                      </span>
+                      <h3 className="text-lg font-black text-white">المعمل مغلق بقرار المحاضر المشرف</h3>
+                    </div>
+                    <p className="text-xs text-rose-200 max-w-lg mx-auto leading-relaxed">
+                      وفقاً لمعايير الأمان وقواعد مركز النجاح، تم إغلاق المعمل وقفل التمارين. يمكنك استخدام المعمل فور قيام المحاضر بفتحه وتفعيل الجلسة بالقاعة.
                     </p>
                   </div>
+                ) : (
+                  <StudentLanguageLabView student={student as any} />
                 )}
-                <StudentLanguageLabView student={student as any} />
               </div>
             )}
           </div>

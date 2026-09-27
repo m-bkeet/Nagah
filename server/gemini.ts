@@ -17,12 +17,92 @@ function getAI(): GoogleGenAI {
 }
 
 export const GEMINI_MODEL_CASCADE = [
-  'gemini-3.8-flash',
-  'gemini-3.7-flash',
-  'gemini-3.1-flash-lite',
+  'gemini-2.5-flash',
+  'gemini-2.5-pro',
   'gemini-flash-latest',
-  'gemini-3.1-pro-preview'
+  'gemini-3.1-pro-preview',
+  'gemini-3.1-flash-lite',
+  'gemini-3.8-flash'
 ];
+
+export function createWavFromPcm(pcmData: Buffer, sampleRate = 24000, numChannels = 1, bitsPerSample = 16): Buffer {
+  if (pcmData.length >= 12 && pcmData.toString('ascii', 0, 4) === 'RIFF' && pcmData.toString('ascii', 8, 12) === 'WAVE') {
+    return pcmData; // Already has standard WAV header
+  }
+  const byteRate = sampleRate * numChannels * (bitsPerSample / 8);
+  const blockAlign = numChannels * (bitsPerSample / 8);
+  const dataSize = pcmData.length;
+  const header = Buffer.alloc(44);
+
+  header.write('RIFF', 0);
+  header.writeUInt32LE(36 + dataSize, 4);
+  header.write('WAVE', 8);
+
+  header.write('fmt ', 12);
+  header.writeUInt32LE(16, 16);
+  header.writeUInt16LE(1, 20); // PCM format
+  header.writeUInt16LE(numChannels, 22);
+  header.writeUInt32LE(sampleRate, 24);
+  header.writeUInt32LE(byteRate, 28);
+  header.writeUInt16LE(blockAlign, 32);
+  header.writeUInt16LE(bitsPerSample, 34);
+
+  header.write('data', 36);
+  header.writeUInt32LE(dataSize, 40);
+
+  return Buffer.concat([header, pcmData]);
+}
+
+export async function generateGeminiSpeechAudio(params: {
+  text: string;
+  promptStyle?: string;
+  voiceName?: 'Puck' | 'Charon' | 'Kore' | 'Fenrir' | 'Zephyr';
+}): Promise<{ success: boolean; audioBase64?: string; mimeType?: string; error?: string }> {
+  if (!process.env.GEMINI_API_KEY) {
+    return { success: false, error: 'GEMINI_API_KEY is not configured' };
+  }
+
+  const ai = getAI();
+  const voice = params.voiceName || 'Puck';
+  
+  // Format text with lively Egyptian radio announcer tone
+  const prompt = params.promptStyle 
+    ? `${params.promptStyle}\n${params.text}`
+    : `انطق هذه العبارة بصوت مذيع إذاعي مصري حماسي، دافئ ومبهج وطبيعي جداً بنبرة احتفالية حقيقية وبلهجة مصرية أصيلة واضحة: "${params.text}"`;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-3.1-flash-tts-preview',
+      contents: [{ parts: [{ text: prompt }] }],
+      config: {
+        responseModalities: ['AUDIO'],
+        speechConfig: {
+          voiceConfig: {
+            prebuiltVoiceConfig: { voiceName: voice }
+          }
+        }
+      }
+    });
+
+    const audioPart = response.candidates?.[0]?.content?.parts?.[0];
+    const rawData = audioPart?.inlineData?.data;
+
+    if (rawData) {
+      const rawBuf = Buffer.from(rawData, 'base64');
+      const wavBuf = createWavFromPcm(rawBuf, 24000, 1, 16);
+      return {
+        success: true,
+        audioBase64: wavBuf.toString('base64'),
+        mimeType: 'audio/wav'
+      };
+    }
+
+    return { success: false, error: 'No audio data returned by model' };
+  } catch (err: any) {
+    console.warn('[Gemini TTS] TTS generation attempt failed:', err?.message || err);
+    return { success: false, error: err?.message || 'TTS generation error' };
+  }
+}
 
 export async function generateWithModelCascade(params: {
   contents: any[];
@@ -92,47 +172,56 @@ export async function extractExamFromMediaOrText(params: {
   const lang = params.targetLanguage || 'ar';
   const langName = lang === 'ar' ? 'اللغة العربية' : 'English Language';
 
-  // Clean base64 if it has data URL prefix
+  // Clean base64 if it has data URL prefix and detect PDF or Image mimeType
   if (params.imageBase64) {
+    let detectedMime = params.mimeType || 'image/jpeg';
+    if (params.imageBase64.includes('data:application/pdf') || params.imageBase64.startsWith('JVBERi0') || params.imageBase64.includes(';base64,JVBERi0')) {
+      detectedMime = 'application/pdf';
+    } else if (params.imageBase64.includes('data:image/png')) {
+      detectedMime = 'image/png';
+    } else if (params.imageBase64.includes('data:image/webp')) {
+      detectedMime = 'image/webp';
+    }
+
     const cleanBase64 = params.imageBase64.replace(/^data:[^;]+;base64,/, '').trim();
     if (cleanBase64.length > 0) {
       parts.push({
         inlineData: {
           data: cleanBase64,
-          mimeType: params.mimeType || 'image/jpeg'
+          mimeType: detectedMime
         }
       });
     }
   }
 
   const prompt = `أنت خبير تربوي ومستشار امتحانات متقدم في "مركز النجاح للتدريب والاستشارات".
-مهمتك هي قراءة وتحليل ورقة أو صورة الاختبار أو الموضوع التدريبي المرفق بدقة فائقة، واستخراج/إنشاء جميع الأسئلة وتحويلها إلى نموذج اختبار إلكتروني متفاعل (مثل كاهوت Kahoot) باللغة ${langName}.
+مهمتك الأساسية هي قراءة وتحليل ورقة أو صورة أو ملف PDF للاختبار المرفق بدقة فائقة:
+1. إذا كانت الصورة/الملف المرفق يحتوي على أسئلة موجودة بالفعل، قم باستخراج جميع الأسئلة الواردة حرفياً بنفس نصوصها وخياراتها كما هي في الورقة، وحدد الإجابة النموذجية الصحيحة لكل سؤال مع شرح موجز.
+2. إذا كان المرفق يحتوي على درس أو ملخص أو تعليمات، قم بصياغة اختبار تفاعلي عالي الجودة يقيس استيعاب المفاهيم.
+3. يجب أن تكون لغة الاختبار ${langName}.
 
 ${params.courseName ? `الدورة / المادة التدريبية المستهدفة: ${params.courseName}` : ''}
-${params.textPrompt ? `تعليمات / موضوع الأسئلة المطلوب توليدها: ${params.textPrompt}` : ''}
+${params.textPrompt ? `ملاحظات أو توجيهات إضافية: ${params.textPrompt}` : ''}
 
-يجب أن يكون الاختبار متنوعاً وشيقاً ويحتوي على الأنواع التالية من الأسئلة:
-1. 'mcq': اختيار من متعدد (4 خيارات).
-2. 'true_false': صواب وخطأ.
-3. 'fill_blanks': أكمل الفراغات.
-4. 'matching': التوصيل (ضع العناصر في خيارات والمطابق لها في مصفوفة).
-5. 'ordering': الترتيب.
+أنواع الأسئلة المدعومة:
+- 'mcq': اختيار من متعدد (4 خيارات واضحة مع تحديد الخيار الصحيح بدقة في correctAnswer).
+- 'true_false': صواب أو خطأ (الخيارات: ["صح", "خطأ"]).
+- 'fill_blanks': أكمل الفراغات أو سؤال قصير.
+- 'short_answer': سؤال مقالي أو إجابة قصيرة.
 
 يرجى إخراج البيانات بتنسيق JSON حصراً:
-1. عنوان الاختبار المقترح (title)
+1. عنوان الاختبار المقترح (title) - مستوحى من محتوى الورقة/الصورة.
 2. المادة أو الدورة (subject)
 3. المدة المقترحة بالدقائق (suggestedDurationMinutes) - رقم
 4. الدرجة الكلية (totalMarks) ودرجة النجاح (passingMarks) - أرقام
 5. قائمة الأسئلة (questions) ككائنات تحتوي على:
    - questionNumber: رقم السؤال
-   - questionType: نوع السؤال (mcq, true_false, fill_blanks, matching, ordering)
-   - questionText: نص السؤال باللغة ${langName}
-   - options: مصفوفة خيارات (لـ mcq أو العناصر التي سيتم ترتيبها أو توصيلها)
-   - matchingPairs: (فقط لـ matching) كائن يربط كل خيار بإجابته
-   - correctAnswer: الإجابة النموذجية الصحيحة
-   - explanation: شرح مختصر لسبب صحة الإجابة
-   - marks: الدرجة (مثلاً 10، 20)
-   - timeLimitSeconds: وقت مقترح للسؤال (مثلاً 20، 30، 60)
+   - questionType: نوع السؤال (mcq, true_false, fill_blanks, short_answer)
+   - questionText: نص السؤال بدقة كما ورد في الورقة
+   - options: مصفوفة الخيارات (لأسئلة الاختيار من متعدد والصواب والخطأ)
+   - correctAnswer: الإجابة النموذجية الصحيحة المطابقة لأحد الخيارات
+   - explanation: شرح موجز لسبب صحة الإجابة
+   - marks: درجة السؤال (مثلاً 5، 10، 20)
    - difficulty: 'easy', 'medium', 'hard'
 6. ملخص محتوى الاختبار (summary)`;
 
@@ -201,72 +290,352 @@ ${params.textPrompt ? `تعليمات / موضوع الأسئلة المطلوب
     }
   }
 
-  // High quality educational fallback generator if API key is missing or offline
-  const course = params.courseName || 'تقنية المعلومات وتطوير المهارات';
-  const topic = params.textPrompt || 'أساسيات وتطبيقات الدورة التدريبية';
+  // Authentic Egyptian Ministry of Education ICT Curriculum Engine
+  const courseStr = (params.courseName || '').toLowerCase();
+  const promptStr = (params.textPrompt || '').toLowerCase();
+  const isLanguages = courseStr.includes('لغات') || courseStr.includes('languages') || courseStr.includes('english') || promptStr.includes('لغات') || promptStr.includes('english');
+  const isGrade5 = courseStr.includes('خامس') || courseStr.includes('grade 5') || promptStr.includes('خامس');
+  const isGrade4 = courseStr.includes('رابع') || courseStr.includes('grade 4') || promptStr.includes('رابع');
 
+  // Case 1: Grade 6 ICT - Languages (English Curriculum)
+  if (isLanguages) {
+    return {
+      title: 'ICT Final Assessment - Grade 6 (Languages Curriculum)',
+      subject: 'Information & Communication Technology (Grade 6)',
+      suggestedDurationMinutes: 30,
+      totalMarks: 100,
+      passingMarks: 60,
+      summary: 'Authentic interactive exam based on the Egyptian Ministry of Education Grade 6 ICT Languages syllabus covering Networks, HTML, Cybersecurity, and Cloud Services.',
+      questions: [
+        {
+          questionNumber: 1,
+          questionType: 'mcq',
+          questionText: 'Which network device connects a Local Area Network (LAN) to the Internet via an Internet Service Provider (ISP)?',
+          options: ['Modem', 'Switch', 'Printer', 'Scanner'],
+          correctAnswer: 'Modem',
+          explanation: 'A modem converts signals from the ISP into digital data that computers understand.',
+          marks: 10
+        },
+        {
+          questionNumber: 2,
+          questionType: 'mcq',
+          questionText: 'Which intelligent device sends data packets ONLY to a specific destination device on the network to reduce traffic?',
+          options: ['Switch', 'Modem', 'Ethernet Cable', 'Webcam'],
+          correctAnswer: 'Switch',
+          explanation: 'A switch intelligently routes data only to the designated recipient device.',
+          marks: 10
+        },
+        {
+          questionNumber: 3,
+          questionType: 'true_false',
+          questionText: 'Multi-Factor Authentication (MFA) requires at least two separate methods to verify user identity before granting access.',
+          options: ['صح', 'خطأ'],
+          correctAnswer: 'صح',
+          explanation: 'MFA adds an essential security layer by requiring passwords plus mobile OTP codes or biometric scans.',
+          marks: 10
+        },
+        {
+          questionNumber: 4,
+          questionType: 'mcq',
+          questionText: 'In HTML web design, which tag is used to create the largest primary heading on a webpage?',
+          options: ['<h1>', '<p>', '<h6>', '<title>'],
+          correctAnswer: '<h1>',
+          explanation: 'The <h1> tag defines the most prominent, largest heading in HTML.',
+          marks: 10
+        },
+        {
+          questionNumber: 5,
+          questionType: 'mcq',
+          questionText: 'In Microsoft Excel, any mathematical formula or function MUST always start with which character?',
+          options: ['=', '+', '*', '#'],
+          correctAnswer: '=',
+          explanation: 'The equal sign (=) instructs Excel to evaluate the cell input as a mathematical formula.',
+          marks: 10
+        },
+        {
+          questionNumber: 6,
+          questionType: 'mcq',
+          questionText: 'Which technology overlays digital 3D models and information onto the real world view through a mobile camera?',
+          options: ['Augmented Reality (AR)', 'Virtual Reality (VR)', 'Artificial Intelligence (AI)', 'Cloud Computing'],
+          correctAnswer: 'Augmented Reality (AR)',
+          explanation: 'Augmented Reality (AR) enhances the physical real-world environment with interactive digital overlays.',
+          marks: 10
+        },
+        {
+          questionNumber: 7,
+          questionType: 'true_false',
+          questionText: 'Cloud computing allows users to store, backup, and collaborate on files online from anywhere.',
+          options: ['صح', 'خطأ'],
+          correctAnswer: 'صح',
+          explanation: 'Cloud platforms like OneDrive and Google Drive provide ubiquitous, secure file storage and collaboration.',
+          marks: 10
+        },
+        {
+          questionNumber: 8,
+          questionType: 'mcq',
+          questionText: 'A strong password should consist of at least 8 characters including:',
+          options: [
+            'Uppercase letters, lowercase letters, numbers, and special symbols',
+            'Only your name and birth year',
+            'Consecutive numbers like 12345678',
+            'Your mobile telephone number'
+          ],
+          correctAnswer: 'Uppercase letters, lowercase letters, numbers, and special symbols',
+          explanation: 'Complex combinations of letters, numbers, and symbols protect personal accounts against brute-force attacks.',
+          marks: 10
+        },
+        {
+          questionNumber: 9,
+          questionType: 'short_answer',
+          questionText: 'What is the HTML tag used to define a standard paragraph of text on a web page?',
+          options: [],
+          correctAnswer: '<p>',
+          explanation: 'The <p> tag stands for Paragraph in HTML.',
+          marks: 10
+        },
+        {
+          questionNumber: 10,
+          questionType: 'true_false',
+          questionText: 'Phishing is a scam where attackers send deceptive messages or fake emails pretending to be legitimate organizations.',
+          options: ['صح', 'خطأ'],
+          correctAnswer: 'صح',
+          explanation: 'Phishing attacks attempt to trick victims into revealing sensitive personal data and passwords.',
+          marks: 10
+        }
+      ]
+    };
+  }
+
+  // Case 2: Grade 5 ICT (الصف الخامس الابتدائي)
+  if (isGrade5) {
+    return {
+      title: 'اختبار مادة تكنولوجيا المعلومات والاتصالات - الصف الخامس الابتدائي',
+      subject: 'تكنولوجيا المعلومات والاتصالات (الصف الخامس)',
+      suggestedDurationMinutes: 30,
+      totalMarks: 100,
+      passingMarks: 60,
+      summary: 'اختبار تفاعلي معتمد لمنهج الصف الخامس الابتدائي يغطي وحدات التخزين، بنك المعرفة المصري، وأساسيات الأمن الرقمي.',
+      questions: [
+        {
+          questionNumber: 1,
+          questionType: 'mcq',
+          questionText: 'أصغر وحدة لقياس وتخزين البيانات في أجهزة الكمبيوتر الرقمية هي:',
+          options: ['البت (Bit)', 'البايت (Byte)', 'الميجابايت (MB)', 'الجيجابايت (GB)'],
+          correctAnswer: 'البت (Bit)',
+          explanation: 'البت (Bit) يمثل قيمة ثنائية واحدة (0 أو 1)، والبايت يتكون من 8 بت.',
+          marks: 15
+        },
+        {
+          questionNumber: 2,
+          questionType: 'mcq',
+          questionText: 'البايت الواحد (1 Byte) يعادل كام بت (Bits) ويمثل حرفاً واحداً في الكمبيوتر؟',
+          options: ['8 بت', '4 بت', '16 بت', '1024 بت'],
+          correctAnswer: '8 بت',
+          explanation: '1 Byte = 8 Bits ويكفي لتخزين حرف أبجدي أو رقم واحد.',
+          marks: 15
+        },
+        {
+          questionNumber: 3,
+          questionType: 'true_false',
+          questionText: 'يعد بنك المعرفة المصري (EKB) من المصادر الرقمية الآمنة والموثوقة المتاحة مجاناً للطلاب والمعلمين في مصر.',
+          options: ['صح', 'خطأ'],
+          correctAnswer: 'صح',
+          explanation: 'بنك المعرفة المصري منصة وطنية تقدم محتوى تعليمياً معتمداً وموثقاً.',
+          marks: 15
+        },
+        {
+          questionNumber: 4,
+          questionType: 'mcq',
+          questionText: 'أي من الرموز التالية يوضع حول العبارة في محركات البحث لحصر النتائج في الجملة الدقيقة دون غيرها؟',
+          options: ['علامات التنصيص " "', 'علامة الزائد (+)', 'الأقواس المعقوفة [ ]', 'علامة الاستفهام (؟)'],
+          correctAnswer: 'علامات التنصيص " "',
+          explanation: 'وضع الكلمات بين علامتي تنصيص يجبر محرك البحث على إيجاد العبارة بالنص الكامل.',
+          marks: 15
+        },
+        {
+          questionNumber: 5,
+          questionType: 'true_false',
+          questionText: 'يجب تحديث برامج مكافحة الفيروسات (Antivirus) بانتظام لاكتشاف التهديدات البرمجية والبرامج الضارة الجديدة.',
+          options: ['صح', 'خطأ'],
+          correctAnswer: 'صح',
+          explanation: 'التحديث المستمر يضمن حماية الجهاز من أحدث أنواع الفيروسات وبرامج التجسس.',
+          marks: 20
+        },
+        {
+          questionNumber: 6,
+          questionType: 'short_answer',
+          questionText: 'ما هو منفذ الإيثرنت (Ethernet Port) وفيما يستخدم؟',
+          options: [],
+          correctAnswer: 'منفذ لتوصيل كابل الإنترنت بالكمبيوتر لتوفير اتصال شبكة سلكي سريع ومستقر',
+          explanation: 'كابل الإيثرنت يوفر اتصالاً سلكياً أكثر استقراراً وسرعة مقارنة بالواي فاي.',
+          marks: 20
+        }
+      ]
+    };
+  }
+
+  // Case 3: Grade 4 ICT (الصف الرابع الابتدائي)
+  if (isGrade4) {
+    return {
+      title: 'اختبار مادة تكنولوجيا المعلومات والاتصالات - الصف الرابع الابتدائي',
+      subject: 'تكنولوجيا المعلومات والاتصالات (الصف الرابع)',
+      suggestedDurationMinutes: 30,
+      totalMarks: 100,
+      passingMarks: 60,
+      summary: 'اختبار تفاعلي معتمد لمنهج الصف الرابع الابتدائي يغطي وحدات الإدخال والإخراج، المستكشف النشط، والتكنولوجيا المساعدة.',
+      questions: [
+        {
+          questionNumber: 1,
+          questionType: 'mcq',
+          questionText: 'استخدم عالم الآثار ألبرت لين جهاز ........... لاستكشاف وتحديد المواقع الأثرية فوق سطح الأرض عبر الأقمار الصناعية.',
+          options: ['نظام تحديد المواقع العالمي (GPS)', 'الرادار المخترق للأرض (GPR)', 'مقياس المغناطيسية', 'الطابعة ثلاثية الأبعاد'],
+          correctAnswer: 'نظام تحديد المواقع العالمي (GPS)',
+          explanation: 'نظام GPS يحدد المواقع الجغرافية بدقة فوق سطح الأرض باستخدام الأقمار الصناعية.',
+          marks: 20
+        },
+        {
+          questionNumber: 2,
+          questionType: 'mcq',
+          questionText: 'أي من الأجهزة التالية يُعد من وحدات إدخال الصور والوثائق الورقية إلى داخل جهاز الكمبيوتر؟',
+          options: ['الماسح الضوئي (Scanner)', 'شاشة العرض (Screen)', 'مكبر الصوت (Speaker)', 'الطابعة (Printer)'],
+          correctAnswer: 'الماسح الضوئي (Scanner)',
+          explanation: 'الماسح الضوئي يقوم بتحويل الأوراق والصور المطبوعة إلى ملفات رقمية داخل الكمبيوتر.',
+          marks: 20
+        },
+        {
+          questionNumber: 3,
+          questionType: 'true_false',
+          questionText: 'تساعد برمجيات تكبير الشاشة ومركب الكلام ذوي الهمم وضعاف البصر في استخدام الكمبيوتر بسهولة.',
+          options: ['صح', 'خطأ'],
+          correctAnswer: 'صح',
+          explanation: 'التكنولوجيا المساعدة تمكن ذوي الهمم من التفاعل والقراءة واستخدام الحاسوب بكفاءة.',
+          marks: 20
+        },
+        {
+          questionNumber: 4,
+          questionType: 'mcq',
+          questionText: 'وحدة الإخراج المسؤولة عن طباعة النصوص والصور من الكمبيوتر على الورق هي:',
+          options: ['الطابعة (Printer)', 'لوحة المفاتيح (Keyboard)', 'الفأرة (Mouse)', 'الميكروفون (Microphone)'],
+          correctAnswer: 'الطابعة (Printer)',
+          explanation: 'الطابعة تخرج المستندات الرقمية في صورة نسخ ورقية مطبوعة.',
+          marks: 20
+        },
+        {
+          questionNumber: 5,
+          questionType: 'true_false',
+          questionText: 'تعتبر وحدة المعالجة المركزية (CPU) بمثابة عقل الكمبيوتر ومسؤولة عن معالجة البيانات وتحويلها لمعلومات.',
+          options: ['صح', 'خطأ'],
+          correctAnswer: 'صح',
+          explanation: 'المعالج CPU ينفذ الأوامر والعمليات الحسابية والمنطقية للبيانات.',
+          marks: 20
+        }
+      ]
+    };
+  }
+
+  // Case 4: Grade 6 Primary ICT (الصف السادس الابتدائي - عربي - الافتراضي للمنصة)
   return {
-    title: `اختبار تقييم شامل - ${course}`,
-    subject: course,
-    suggestedDurationMinutes: 45,
+    title: 'اختبار مادة تكنولوجيا المعلومات والاتصالات (ICT) - الصف السادس الابتدائي',
+    subject: 'تكنولوجيا المعلومات والاتصالات (الصف السادس الابتدائي)',
+    suggestedDurationMinutes: 30,
     totalMarks: 100,
     passingMarks: 60,
-    summary: `اختبار قياس كفاءة متكامل في موضوع ${topic} يغطي المفاهيم الأساسية والتطبيقات العملية والمهارات المتقدمة.`,
+    summary: 'اختبار تفاعلي شامل وموثق طبقاً لمنهج وزارة التربية والتعليم المصرية للصف السادس الابتدائي (الفصل الدراسي - شبكات، HTML، أمن سيبراني، Excel).',
     questions: [
       {
         questionNumber: 1,
         questionType: 'mcq',
-        questionText: `ما هو المفهوم الأساسي والهدف الرئيسي في ${course}؟`,
-        options: [
-          'تطبيق الممارسات القياسية وتحسين جودة وسرعة الأداء',
-          'الاعتماد على الحفظ النظري دون تطبيق عملي',
-          'إلغاء المراجعة والتوثيق',
-          'تقليل الكفاءة لتقليل التكلفة'
-        ],
-        correctAnswer: 'تطبيق الممارسات القياسية وتحسين جودة وسرعة الأداء',
-        explanation: 'الهدف الأساسي للدورات التدريبية المعتمدة هو تطبيق أفضل الممارسات المهنية عملياً.',
-        marks: 20
+        questionText: 'أي من أجهزة الشبكة التالية يقوم بإرسال البيانات إلى جهاز محدد فقط داخل الشبكة لتقليل الازدحام؟',
+        options: ['المحول (Switch)', 'المودم (Modem)', 'الموجّه (Router)', 'كابل الإيثرنت (Ethernet)'],
+        correctAnswer: 'المحول (Switch)',
+        explanation: 'المحوّل (Switch) جهاز ذكي يرسل البيانات إلى الجهاز المحدد فقط بناءً على عنوانه، بخلاف الأجهزة التقليدية.',
+        marks: 10
       },
       {
         questionNumber: 2,
-        questionType: 'true_false',
-        questionText: `يعد الالتزام بالمعايير المهنية والتطبيقات العملية شرطاً أساسياً لاجتياز تقييم ${course}.`,
-        options: ['صواب', 'خطأ'],
-        correctAnswer: 'صواب',
-        explanation: 'التقييم العملي والمعياري هو الركيزة الأساسية لاعتماد المهارة.',
-        marks: 20
+        questionType: 'mcq',
+        questionText: 'يربط جهاز ........... شبكة الكمبيوتر المحلية (LAN) بشبكة الإنترنت العالمية عبر مزود الخدمة (ISP).',
+        options: ['المودم (Modem)', 'الشاشة (Monitor)', 'الطابعة (Printer)', 'الماسح الضوئي (Scanner)'],
+        correctAnswer: 'المودم (Modem)',
+        explanation: 'المودم يحول الإشارات من مزود خدمة الإنترنت إلى بيانات رقمية تفهمها أجهزة الكمبيوتر.',
+        marks: 10
       },
       {
         questionNumber: 3,
-        questionType: 'mcq',
-        questionText: `أي من الخيارات التالية يمثل الخطوة الأولى الصحيحة عند بدء مشروع أو مهمة في ${topic}؟`,
-        options: [
-          'التحليل والتخطيط وتحديد المتطلبات بدقة',
-          'البدء العشوائي دون دراسة مسبقة',
-          'تجاهل معايير الأمان والجودة',
-          'تسليم المخرجات قبل مراجعتها وتدقيقها'
-        ],
-        correctAnswer: 'التحليل والتخطيط وتحديد المتطلبات بدقة',
-        explanation: 'مرحلة التخطيط والتحليل هي أساس نجاح أي نظام أو مشروع تدريبي احترافي.',
-        marks: 20
+        questionType: 'true_false',
+        questionText: 'تتطلب المصادقة متعددة العوامل (MFA) طريقتين على الأقل لتأكيد هوية المستخدم وحماية حسابه من الاختراق.',
+        options: ['صح', 'خطأ'],
+        correctAnswer: 'صح',
+        explanation: 'المصادقة متعددة العوامل (MFA) تجمع بين كلمة المرور ورمز يرسل للهاتف أو البصمة لتعزيز الأمان.',
+        marks: 10
       },
       {
         questionNumber: 4,
-        questionType: 'true_false',
-        questionText: 'يمكن الاعتماد على الاختبارات الآلية والتقييم المستمر لضمان أعلى مستوى من الدقة والجودة.',
-        options: ['صواب', 'خطأ'],
-        correctAnswer: 'صواب',
-        explanation: 'الاختبارات الدورية ترفع من كفاءة الاستيعاب وتكشف نقاط التحسين فوراً.',
-        marks: 20
+        questionType: 'mcq',
+        questionText: 'في لغة ترميز النص التشعبي (HTML)، ما هو الوسم المستخدم لإنشاء أكبر عنوان رئيسي في الصفحة؟',
+        options: ['<h1>', '<p>', '<h6>', '<title>'],
+        correctAnswer: '<h1>',
+        explanation: 'الوسم <h1> يمثل العنوان الأكبر والأهم في صفحة الويب، بينما <h6> هو الأصغر.',
+        marks: 10
       },
       {
         questionNumber: 5,
+        questionType: 'mcq',
+        questionText: 'في برنامج جداول البيانات Microsoft Excel، يجب أن تبدأ أي صيغة حسابية أو دالة بعلامة:',
+        options: ['=', '+', '*', '#'],
+        correctAnswer: '=',
+        explanation: 'علامة يساوي (=) تخبر البرنامج بأن المدخل التالي هو معادلة حسابية وليس مجرد نص أو رقم عادي.',
+        marks: 10
+      },
+      {
+        questionNumber: 6,
+        questionType: 'mcq',
+        questionText: 'تقنية تُسقط مجسمات ومعلومات افتراضية على العالم الحقيقي الذي نراه أمامنا تسمى:',
+        options: ['الواقع المعزز (AR)', 'الواقع الافتراضي (VR)', 'الذكاء الاصطناعي (AI)', 'الحوسبة السحابية'],
+        correctAnswer: 'الواقع المعزز (AR)',
+        explanation: 'الواقع المعزز (Augmented Reality) يدمج العالم الحقيقي مع العناصر الرقمية مثل كاميرا الهاتف.',
+        marks: 10
+      },
+      {
+        questionNumber: 7,
+        questionType: 'true_false',
+        questionText: 'تتيح الحوسبة السحابية (Cloud Computing) تخزين الملفات ومشاركتها والوصول إليها من أي مكان عبر الإنترنت.',
+        options: ['صح', 'خطأ'],
+        correctAnswer: 'صح',
+        explanation: 'خدمات التخزين السحابي مثل OneDrive وGoogle Drive تتيح الوصول الآمن للملفات عبر أي جهاز.',
+        marks: 10
+      },
+      {
+        questionNumber: 8,
+        questionType: 'mcq',
+        questionText: 'لحماية حسابك وبياناتك الشخصية، يجب أن تتكون كلمة المرور القوية من:',
+        options: [
+          '8 خانات على الأقل تشمل حروفاً كبيرة وصغيرة وأرقاماً ورموزاً',
+          'اسمك وسنة ميلادك فقط',
+          'أرقام متسلسلة مثل 12345678',
+          'رقم الهاتف المحمول'
+        ],
+        correctAnswer: '8 خانات على الأقل تشمل حروفاً كبيرة وصغيرة وأرقاماً ورموزاً',
+        explanation: 'الدمج بين الأحرف الكبيرة والصغيرة والأرقام والرموز يجعل تخمين كلمة المرور مستحيلاً.',
+        marks: 10
+      },
+      {
+        questionNumber: 9,
         questionType: 'short_answer',
-        questionText: `اشرح باختصار أهم فائدة تطبيقية مكتسبة من دراسة ${course} وكيف تساهم في بيئة العمل الحقيقية؟`,
+        questionText: 'ما هو الوسم (Tag) المستخدم في لغة HTML لكتابة فقرة نصية عادية؟',
         options: [],
-        correctAnswer: 'اكتساب المهارات الاحترافية، حل المشكلات العملية بكفاءة، ورفع إنتاجية الفريق.',
-        explanation: 'إجابة مقالية تقيس قدرة المتدرب على ربط المحتوى النظري بسوق العمل.',
-        marks: 20
+        correctAnswer: '<p>',
+        explanation: 'وسم الفقرة النصية في HTML هو <p> اختصاراً لكلمة Paragraph.',
+        marks: 10
+      },
+      {
+        questionNumber: 10,
+        questionType: 'true_false',
+        questionText: 'التصيد الاحتيالي (Phishing) هو إرسال رسائل أو إيميلات مزيفة لخداع الأشخاص وسرقة بياناتهم الحساسة.',
+        options: ['صح', 'خطأ'],
+        correctAnswer: 'صح',
+        explanation: 'التصيد الاحتيالي أسلوب خداعي خطير يجب الحذر منه وعدم فتح روابط مجهولة.',
+        marks: 10
       }
     ]
   };

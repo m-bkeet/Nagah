@@ -32,10 +32,13 @@ import {
   LayoutGrid,
   List,
   CheckSquare,
-  Video
+  Video,
+  Trophy,
+  Crown
 } from 'lucide-react';
 import { Group, Course, Trainer, Branch, Trainee } from '../types';
 import { CourseGroupMaterialsModal } from '../components/CourseGroupMaterialsModal';
+import { SessionCeremonyModal } from '../components/SessionCeremonyModal';
 import { LabScheduleView } from './LabScheduleView';
 
 interface GroupsViewProps {
@@ -43,16 +46,51 @@ interface GroupsViewProps {
 }
 
 export const GroupsView: React.FC<GroupsViewProps> = ({ onNavigate }) => {
-  const { branches, activeBranchId, showToast, refreshKey } = useCenter();
-  const [groups, setGroups] = useState<Group[]>([]);
-  const [courses, setCourses] = useState<Course[]>([]);
-  const [trainers, setTrainers] = useState<Trainer[]>([]);
-  const [trainees, setTrainees] = useState<Trainee[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const { 
+    branches, 
+    activeBranchId, 
+    showToast, 
+    refreshKey,
+    groups: ctxGroups,
+    courses: ctxCourses,
+    trainers: ctxTrainers,
+    trainees: ctxTrainees
+  } = useCenter();
+  const [groups, setGroups] = useState<Group[]>(() => {
+    const list = ctxGroups || [];
+    return activeBranchId !== 'all' ? list.filter(g => g.branchId === activeBranchId) : list;
+  });
+  const [courses, setCourses] = useState<Course[]>(() => ctxCourses || []);
+  const [trainers, setTrainers] = useState<Trainer[]>(() => ctxTrainers || []);
+  const [trainees, setTrainees] = useState<Trainee[]>(() => ctxTrainees || []);
+  const [isLoading, setIsLoading] = useState<boolean>(() => !ctxGroups || ctxGroups.length === 0);
+
+  useEffect(() => {
+    if (ctxGroups && ctxGroups.length > 0) {
+      setGroups(activeBranchId !== 'all' ? ctxGroups.filter(g => g.branchId === activeBranchId) : ctxGroups);
+      setIsLoading(false);
+    }
+  }, [ctxGroups, activeBranchId]);
+
+  useEffect(() => {
+    if (ctxCourses && ctxCourses.length > 0) setCourses(ctxCourses);
+  }, [ctxCourses]);
+
+  useEffect(() => {
+    if (ctxTrainers && ctxTrainers.length > 0) setTrainers(ctxTrainers);
+  }, [ctxTrainers]);
+
+  useEffect(() => {
+    if (ctxTrainees && ctxTrainees.length > 0) setTrainees(ctxTrainees);
+  }, [ctxTrainees]);
 
   // Curriculum & Google Drive Modal state
   const [isMaterialsModalOpen, setIsMaterialsModalOpen] = useState(false);
   const [selectedGroupForMaterials, setSelectedGroupForMaterials] = useState<Group | null>(null);
+
+  // Podium Ceremony Modal state
+  const [isCeremonyModalOpen, setIsCeremonyModalOpen] = useState(false);
+  const [ceremonyGroupId, setCeremonyGroupId] = useState<string>('all');
 
   // Search & Filter state
   const [searchQuery, setSearchQuery] = useState('');
@@ -189,11 +227,16 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ onNavigate }) => {
   ]));
 
   useEffect(() => {
-    loadData();
+    // Only fetch from server if context data is not yet loaded
+    if (!ctxGroups || ctxGroups.length === 0) {
+      loadData();
+    }
   }, [activeBranchId, refreshKey]);
 
   const loadData = async () => {
-    setIsLoading(true);
+    if (!ctxGroups || ctxGroups.length === 0) {
+      setIsLoading(true);
+    }
     try {
       const safeCall = async <T,>(p: Promise<T>): Promise<T | null> => {
         try { return await p; } catch (e) { console.warn('[GroupsView] API fetch warning:', e); return null; }
@@ -1061,6 +1104,18 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ onNavigate }) => {
                       <Video className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
                     </button>
 
+                    {/* Podium Ceremony */}
+                    <button
+                      onClick={() => {
+                        setCeremonyGroupId(g.id);
+                        setIsCeremonyModalOpen(true);
+                      }}
+                      className="p-2 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-700 hover:text-amber-800 border border-amber-200/80 shadow-xs dark:bg-slate-800 dark:hover:bg-amber-500/20 dark:text-slate-300 dark:hover:text-amber-400 dark:border-slate-700 dark:shadow-none transition-colors cursor-pointer"
+                      title="حفل ومنصة تتويج نجوم المجموعة 🏆"
+                    >
+                      <Trophy className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+                    </button>
+
                     {/* Print Roster */}
                     <button
                       onClick={() => {
@@ -1227,6 +1282,17 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ onNavigate }) => {
                             title="بدء قاعة Google Meet للمجموعة"
                           >
                             <Video className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
+                          </button>
+
+                          <button
+                            onClick={() => {
+                              setCeremonyGroupId(g.id);
+                              setIsCeremonyModalOpen(true);
+                            }}
+                            className="p-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200/80 shadow-xs dark:bg-slate-800 dark:hover:bg-amber-500/20 dark:text-slate-300 dark:hover:text-amber-400 dark:border-slate-700 dark:shadow-none cursor-pointer"
+                            title="حفل ومنصة تتويج نجوم المجموعة 🏆"
+                          >
+                            <Trophy className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
                           </button>
 
                           <button
@@ -2561,16 +2627,32 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ onNavigate }) => {
             )}
 
             <div className="pt-4 border-t border-slate-200 dark:border-slate-800 flex justify-between items-center mt-4">
-              <button
-                onClick={() => {
-                  setIsTraineesModalOpen(false);
-                  setIsPrintRosterModalOpen(true);
-                }}
-                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer"
-              >
-                <Printer className="w-3.5 h-3.5" />
-                <span>طباعة كشف الحضور</span>
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsTraineesModalOpen(false);
+                    setCeremonyGroupId(activeGroup.id);
+                    setIsCeremonyModalOpen(true);
+                  }}
+                  className="px-4 py-2 bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-slate-950 font-black border border-amber-300 rounded-xl text-xs flex items-center gap-1.5 transition-all shadow-sm cursor-pointer"
+                  title="حفل ومنصة تتويج نجوم وأبطال هذه المجموعة"
+                >
+                  <Trophy className="w-3.5 h-3.5 text-slate-950" />
+                  <span>منصة التتويج 🏆</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setIsTraineesModalOpen(false);
+                    setIsPrintRosterModalOpen(true);
+                  }}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer"
+                >
+                  <Printer className="w-3.5 h-3.5" />
+                  <span>طباعة كشف الحضور</span>
+                </button>
+              </div>
 
               <button
                 type="button"
@@ -2775,6 +2857,21 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ onNavigate }) => {
           onUpdated={(updatedGroup) => {
             setSelectedGroupForMaterials(updatedGroup as Group);
             setGroups(prev => prev.map(g => g.id === updatedGroup.id ? (updatedGroup as Group) : g));
+          }}
+        />
+      )}
+
+      {/* Podium Ceremony Modal */}
+      {isCeremonyModalOpen && (
+        <SessionCeremonyModal
+          trainees={trainees}
+          groups={groups}
+          initialGroupId={ceremonyGroupId !== 'all' ? ceremonyGroupId : undefined}
+          initialAttendeesOnly={false}
+          onClose={() => setIsCeremonyModalOpen(false)}
+          onAwardBonus={(traineeId, points, reason) => {
+            api.addPoints({ traineeId, points, reason }).catch(console.error);
+            api.getTrainees().then(setTrainees).catch(console.error);
           }}
         />
       )}

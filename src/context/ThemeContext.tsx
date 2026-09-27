@@ -38,10 +38,10 @@ export interface ThemeConfig {
 export const AVAILABLE_THEMES: ThemeConfig[] = [
   {
     id: 'light_mode',
-    name: 'الوضع الملكي النهاري',
-    nameEn: 'Royal Light Mode',
+    name: 'الوضع النهاري',
+    nameEn: 'Light Mode',
     category: 'light',
-    description: 'تصميم ناصع البياض ومشرق بنقاء الحرير الأبيض واللمسات البنفسجية والذهبية المضيئة وخلفيات خالية تماماً من الكتمة والقتامة.',
+    description: 'تصميم ناصع ومشرق بنقاء متكامل وتناسق بصري مريح للعين.',
     isDefault: true,
     isDark: false,
     colors: {
@@ -71,10 +71,10 @@ export const AVAILABLE_THEMES: ThemeConfig[] = [
   },
   {
     id: 'dark_mode',
-    name: 'الوضع الملكي الليلي',
-    nameEn: 'Royal Dark Mode',
+    name: 'الوضع الليلي',
+    nameEn: 'Dark Mode',
     category: 'dark',
-    description: 'وضع ليلي ملكي مريح للعين يجمع بين درجات الفخامة الداكنة، والبنفسجي الملكي، والتذهيب الفاخر مع تباين عالي الجودة.',
+    description: 'وضع ليلي مريح للعين يجمع بين درجات هادئة وتباين عالي الجودة للقراءة.',
     isDefault: false,
     isDark: true,
     colors: {

@@ -263,7 +263,7 @@ export const api = {
     }),
 
   // Trainees
-  getNextTraineeCode: (params?: { prefix?: string; courseId?: string; grade?: string; excludeId?: string } | string) => {
+  getNextTraineeCode: (params?: { prefix?: string; courseId?: string; grade?: string; groupId?: string; excludeId?: string } | string) => {
     let query = '';
     if (typeof params === 'string') {
       query = `?prefix=${encodeURIComponent(params)}`;
@@ -272,10 +272,11 @@ export const api = {
       if (params.prefix) q.set('prefix', params.prefix);
       if (params.courseId) q.set('courseId', params.courseId);
       if (params.grade) q.set('grade', params.grade);
+      if (params.groupId) q.set('groupId', params.groupId);
       if (params.excludeId) q.set('excludeId', params.excludeId);
       query = `?${q.toString()}`;
     }
-    return request<{ code: string; prefix?: string; nextNumber?: number }>(`/trainees/next-code${query}`);
+    return request<{ code: string; prefix?: string; nextNumber?: number; isRecycled?: boolean; freedSlotInfo?: any }>(`/trainees/next-code${query}`);
   },
   previewCodeFix: () =>
     request<{
@@ -358,7 +359,7 @@ export const api = {
       method: 'PUT',
       body: JSON.stringify(traineeData)
     }),
-  deleteTrainee: (id: string) => request<{success: boolean}>(`/trainees/${id}`, { method: 'DELETE' }),
+  deleteTrainee: (id: string) => request<{ success: boolean; message?: string; recycledCode?: string; trainee?: any }>(`/trainees/${id}`, { method: 'DELETE' }),
   bulkAssignGroup: (ids: string[], groupId: string) =>
     request<{ success: boolean; count: number }>("/trainees/bulk-assign-group", {
       method: "POST",
@@ -743,6 +744,24 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(data)
     }),
+  getPublicExam: (examId: string) => request<{ success: boolean; exam: any; questions: any[] }>(`/public/exams/${examId}`),
+  lookupPublicTrainee: (code: string) => request<{ found: boolean; trainee?: any }>(`/public/trainees/lookup?code=${encodeURIComponent(code)}`),
+  submitPublicExam: (examId: string, data: { traineeCode?: string; traineeName?: string; answers: Record<string, string>; timeSpentSeconds?: number }) =>
+    request<{
+      success: boolean;
+      result: any;
+      score: number;
+      totalMarks: number;
+      percentage: number;
+      rating: string;
+      passed: boolean;
+      answerReview: any[];
+      traineeName: string;
+      traineeCode: string;
+    }>(`/public/exams/${examId}/submit`, {
+      method: 'POST',
+      body: JSON.stringify(data)
+    }),
   getExamQuestions: (examId: string) => request<ExamQuestion[]>(`/exams/${examId}/questions`),
   addExamQuestion: (examId: string, qData: Partial<ExamQuestion>) =>
     request<{ success: boolean; question: ExamQuestion }>(`/exams/${examId}/questions`, {
@@ -773,6 +792,24 @@ export const api = {
     request<{ success: boolean }>(`/exams/${examId}/questions/${questionId}`, {
       method: 'DELETE'
     }),
+  updateExamQuestion: (examId: string, questionId: string, qData: Partial<ExamQuestion>) =>
+    request<{ success: boolean; question: ExamQuestion }>(`/exams/${examId}/questions/${questionId}`, {
+      method: 'PUT',
+      body: JSON.stringify(qData)
+    }),
+  deleteExamResult: (examId: string, resultId: string) =>
+    request<{ success: boolean; message: string }>(`/exams/${examId}/results/${resultId}`, {
+      method: 'DELETE'
+    }),
+  resetExamResult: (examId: string, resultId: string) =>
+    request<{ success: boolean; message: string }>(`/exams/${examId}/results/${resultId}/reset`, {
+      method: 'POST'
+    }),
+  clearTraineeExamResults: (data: { traineeId?: string; traineeCode?: string; traineeName?: string }) =>
+    request<{ success: boolean; message: string }>('/exams/clear-trainee-results', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    }),
   generateAIQuestions: (data: { courseId?: string; courseName?: string; topic?: string; difficulty: string; count: number; questionTypes: string[] }) =>
     request<{ success: boolean; questions: any[] }>('/ai/generate-exam-questions', {
       method: 'POST',
@@ -799,6 +836,17 @@ export const api = {
       totalCount: number;
       results: { input: string; expectedOutput: string; actualOutput: string; passed: boolean; error?: string }[];
     }>('/exams/run-code-test-cases', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    }),
+
+  // Master Lab Lock & Access Control
+  getLabStatus: (branchId?: string) =>
+    request<{ success: boolean; isOpen: boolean; branchId?: string; trainerName?: string; roomName?: string; updatedAt: string }>(
+      `/lab/status${branchId ? `?branchId=${encodeURIComponent(branchId)}` : ''}`
+    ),
+  setLabStatus: (data: { isOpen: boolean; branchId?: string; trainerName?: string; roomName?: string }) =>
+    request<{ success: boolean; isOpen: boolean; branchId?: string; trainerName?: string; roomName?: string; updatedAt: string }>('/lab/status', {
       method: 'POST',
       body: JSON.stringify(data)
     }),

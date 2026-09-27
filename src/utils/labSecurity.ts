@@ -31,7 +31,27 @@ export function getActiveTrainerSessions(): Record<string, ActiveLabSession> {
  * Checks whether a trainer has an active, open device session for a specific branch or globally
  */
 export function isTrainerSessionActive(branchId?: string): boolean {
-  return true; // Always allow active lab sessions during live classes
+  if (typeof window === 'undefined') return false;
+  const sessions = getActiveTrainerSessions();
+  
+  if (branchId && branchId !== 'all') {
+    if (sessions[branchId] !== undefined) {
+      return Boolean(sessions[branchId]?.isActive);
+    }
+  }
+
+  // Check fallback global key if set
+  const globalFlag = localStorage.getItem('nagah_lab_is_open');
+  if (globalFlag === 'false') return false;
+
+  // Check if any branch session is explicitly active
+  const anyActive = Object.values(sessions).some(s => s && s.isActive);
+  if (Object.keys(sessions).length > 0) {
+    return anyActive;
+  }
+
+  // Default: if never toggled, return true, but if explicitly set to false in localStorage, respect false
+  return globalFlag !== 'false';
 }
 
 /**
@@ -45,20 +65,22 @@ export function setTrainerLabSessionState(
 ): void {
   if (typeof window === 'undefined') return;
   const sessions = getActiveTrainerSessions();
+  const nextActive = Boolean(isActive);
 
   sessions[branchId] = {
     branchId,
     trainerName,
     roomName,
     activatedAt: new Date().toISOString(),
-    isActive: true,
+    isActive: nextActive,
     trainerIp: window.location.hostname
   };
 
   localStorage.setItem(STORAGE_KEY_LAB_SESSIONS, JSON.stringify(sessions));
+  localStorage.setItem('nagah_lab_is_open', nextActive ? 'true' : 'false');
 
   window.dispatchEvent(new CustomEvent('nagah_lab_session_changed', {
-    detail: { branchId, isActive: true, trainerName, roomName }
+    detail: { branchId, isActive: nextActive, trainerName, roomName }
   }));
 }
 
@@ -66,8 +88,15 @@ export function setTrainerLabSessionState(
  * Verifies if a student is allowed to enter the lab, open a hall, or register attendance
  */
 export function verifyStudentLabEntryAllowed(branchId?: string): { allowed: boolean; reasonArabic: string } {
+  const active = isTrainerSessionActive(branchId);
+  if (active) {
+    return {
+      allowed: true,
+      reasonArabic: '✅ المعمل مفتوح ومتاح لجميع الطلاب بالفرع الآن.'
+    };
+  }
   return {
-    allowed: true,
-    reasonArabic: '✅ المعمل مفتوح ومتاح لجميع الطلاب بالفرع الآن.'
+    allowed: false,
+    reasonArabic: '🔒 المعمل مغلق حالياً بقرار المحاضر المشرف. لا يمكن الدخول أو بدء الأنشطة حتى يقوم المدرب بفتح المعمل.'
   };
 }

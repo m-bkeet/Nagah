@@ -44,7 +44,16 @@ interface FinanceViewProps {
 }
 
 export const FinanceView: React.FC<FinanceViewProps> = ({ initialTab }) => {
-  const { branches, activeBranchId, showToast, setPrintData, refreshKey, openAiModal } = useCenter();
+  const { 
+    branches, 
+    activeBranchId, 
+    showToast, 
+    setPrintData, 
+    refreshKey, 
+    openAiModal,
+    trainees: ctxTrainees,
+    courses: ctxCourses
+  } = useCenter();
   const { user, canAccess } = useAuth();
   const [activeTab, setActiveTab] = useState<'groupCollection' | 'payments' | 'expenses' | 'pendingProofs' | 'settlements' | 'exemptions'>(
     initialTab || 'groupCollection'
@@ -53,8 +62,21 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ initialTab }) => {
   const [payments, setPayments] = useState<Payment[]>([]);
   const [pendingProofs, setPendingProofs] = useState<Payment[]>([]);
   const [settlements, setSettlements] = useState<TrainerSettlement[]>([]);
-  const [trainees, setTrainees] = useState<Trainee[]>([]);
-  const [courses, setCourses] = useState<Course[]>([]);
+  const [trainees, setTrainees] = useState<Trainee[]>(() => {
+    const list = ctxTrainees || [];
+    return activeBranchId !== 'all' ? list.filter(t => t.branchId === activeBranchId) : list;
+  });
+  const [courses, setCourses] = useState<Course[]>(() => ctxCourses || []);
+
+  useEffect(() => {
+    if (ctxTrainees && ctxTrainees.length > 0) {
+      setTrainees(activeBranchId !== 'all' ? ctxTrainees.filter(t => t.branchId === activeBranchId) : ctxTrainees);
+    }
+  }, [ctxTrainees, activeBranchId]);
+
+  useEffect(() => {
+    if (ctxCourses && ctxCourses.length > 0) setCourses(ctxCourses);
+  }, [ctxCourses]);
   const [summary, setSummary] = useState<any>({
     totalRevenue: 0,
     totalExpenses: 0,
@@ -192,20 +214,16 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ initialTab }) => {
     setIsLoading(true);
     try {
       const branchParam = activeBranchId !== 'all' ? { branchId: activeBranchId } : {};
-      const [sumRes, payRes, pendingRes, setRes, traRes, couRes] = await Promise.all([
+      const [sumRes, payRes, pendingRes, setRes] = await Promise.all([
         api.getFinanceSummary(branchParam),
         api.getPayments(branchParam),
         api.getPendingPaymentProofs(),
-        api.getTrainerSettlements(branchParam),
-        api.getTrainees(branchParam),
-        api.getCourses()
+        api.getTrainerSettlements(branchParam)
       ]);
       setSummary(sumRes);
       setPayments(payRes);
       setPendingProofs(pendingRes || []);
       setSettlements(setRes);
-      setTrainees(traRes);
-      setCourses(couRes);
     } catch (err: any) {
       showToast(err.message || 'فشل تحميل بيانات الخزينة', 'error');
     } finally {

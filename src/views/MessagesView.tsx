@@ -27,10 +27,38 @@ import {
 import { Trainee, Group } from '../types';
 
 export const MessagesView: React.FC = () => {
-  const { activeBranchId, showToast, refreshKey } = useCenter();
+  const { 
+    activeBranchId, 
+    showToast, 
+    refreshKey,
+    trainees: ctxTrainees,
+    groups: ctxGroups
+  } = useCenter();
   const [activeSubTab, setActiveSubTab] = useState<'inbox' | 'send'>('inbox');
-  const [trainees, setTrainees] = useState<Trainee[]>([]);
-  const [groups, setGroups] = useState<Group[]>([]);
+  const [trainees, setTrainees] = useState<Trainee[]>(() => {
+    const list = ctxTrainees || [];
+    return activeBranchId !== 'all' ? list.filter(t => t.branchId === activeBranchId) : list;
+  });
+  const [groups, setGroups] = useState<Group[]>(() => {
+    const list = ctxGroups || [];
+    return activeBranchId !== 'all' ? list.filter(g => g.branchId === activeBranchId) : list;
+  });
+
+  useEffect(() => {
+    if (ctxTrainees && ctxTrainees.length > 0) {
+      const filteredT = activeBranchId !== 'all' ? ctxTrainees.filter(t => t.branchId === activeBranchId) : ctxTrainees;
+      setTrainees(filteredT);
+      if (filteredT.length > 0 && !selectedTraineeId) setSelectedTraineeId(filteredT[0].id);
+    }
+  }, [ctxTrainees, activeBranchId]);
+
+  useEffect(() => {
+    if (ctxGroups && ctxGroups.length > 0) {
+      const filteredG = activeBranchId !== 'all' ? ctxGroups.filter(g => g.branchId === activeBranchId) : ctxGroups;
+      setGroups(filteredG);
+      if (filteredG.length > 0 && !selectedGroupId) setSelectedGroupId(filteredG[0].id);
+    }
+  }, [ctxGroups, activeBranchId]);
   
   // Send Composer State
   const [selectedTarget, setSelectedTarget] = useState<'all' | 'group' | 'single'>('single');
@@ -87,7 +115,9 @@ export const MessagesView: React.FC = () => {
   ];
 
   useEffect(() => {
-    loadData();
+    if (!ctxTrainees || ctxTrainees.length === 0) {
+      loadData();
+    }
     loadInboxMessages();
   }, [activeBranchId, refreshKey]);
 

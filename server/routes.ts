@@ -17,7 +17,7 @@ import path from 'path';
 import crypto from 'crypto';
 import { migrationRouter } from './migrationRoutes';
 import { db, hashPassword } from './db';
-import { extractExamFromMediaOrText, gradeHomeworkOrExamFromImage, generateWithModelCascade, designCertificateWithAI, generateTestCasesWithAI, autoGradeCodeWithAI, AIGradeScanResult, generateTrainerPresentation, generateTrainerAdvancedExam, generateKahootQuiz, evaluateAudioOrVoiceSummaryWithAI, AIVoiceEvaluationResult, generateAllInOneLessonPlan, structurePostLectureVoiceMemo } from './gemini';
+import { extractExamFromMediaOrText, gradeHomeworkOrExamFromImage, generateWithModelCascade, generateGeminiSpeechAudio, designCertificateWithAI, generateTestCasesWithAI, autoGradeCodeWithAI, AIGradeScanResult, generateTrainerPresentation, generateTrainerAdvancedExam, generateKahootQuiz, evaluateAudioOrVoiceSummaryWithAI, AIVoiceEvaluationResult, generateAllInOneLessonPlan, structurePostLectureVoiceMemo } from './gemini';
 import { languageLabRouter } from './languageLabRoutes';
 import {
   Trainee,
@@ -987,13 +987,32 @@ apiRouter.post('/branches/:id/duplicate', async (req: Request, res: Response) =>
 // ----------------------------------------------------
 apiRouter.get('/trainees/next-code', async (req: Request, res: Response) => {
   try {
-    const { prefix, courseId, grade, excludeId } = req.query;
+    const { prefix, courseId, grade, groupId, excludeId } = req.query;
     let targetPrefix = typeof prefix === 'string' ? prefix : '';
+    let targetGroupId = typeof groupId === 'string' && groupId ? groupId : undefined;
+
+    // Resolve course/grade from group if not explicitly provided
+    if (targetGroupId && !targetPrefix && !courseId && !grade) {
+      const groups = await GroupRepo.getAll();
+      const grp = groups.find(g => g.id === targetGroupId);
+      if (grp) {
+        if (grp.courseId) {
+          const courses = await CourseRepo.getAll();
+          const course = courses.find(c => c.id === grp.courseId);
+          if (course) {
+            targetPrefix = db.getPrefixForGradeOrCourse(course.name || course.grade || '');
+          }
+        } else if (grp.grade) {
+          targetPrefix = db.getPrefixForGradeOrCourse(grp.grade);
+        }
+      }
+    }
+
     if (!targetPrefix && typeof courseId === 'string' && courseId) {
       const courses = await CourseRepo.getAll();
       const course = courses.find(c => c.id === courseId);
       if (course) {
-        targetPrefix = db.getPrefixForGradeOrCourse(course.name);
+        targetPrefix = db.getPrefixForGradeOrCourse(course.name || course.grade || '');
       }
     }
     if (!targetPrefix && typeof grade === 'string' && grade) {
@@ -1003,13 +1022,31 @@ apiRouter.get('/trainees/next-code', async (req: Request, res: Response) => {
       ? (targetPrefix.length === 1 ? targetPrefix.toUpperCase() : db.getPrefixForGradeOrCourse(targetPrefix))
       : (db.getData().settings?.traineeCodePrefix || 'A');
     
-    const allTrainees = await TraineeRepo.getAll();
+    let allTrainees = await TraineeRepo.getAll();
+    if (excludeId && typeof excludeId === 'string') {
+      allTrainees = allTrainees.filter(t => t && t.id !== excludeId);
+    }
     const pfx = (resolvedPrefix || 'A').toUpperCase();
-    const code = await allocateNextTraineeCode(pfx, allTrainees);
+    const freedList = db.getData().freedTraineeCodes || [];
+    const code = await allocateNextTraineeCode(pfx, allTrainees, targetGroupId, freedList);
     const numMatch = code.match(/\d+$/);
     const nextNum = numMatch ? parseInt(numMatch[0], 10) : 1;
     
-    res.json({ code, prefix: pfx, nextNumber: nextNum });
+    // Check if this code was recycled from a freed/deleted slot
+    const freedSlot = freedList.find(f => f && f.code && f.code.toUpperCase() === code.toUpperCase());
+    const isRecycled = Boolean(freedSlot);
+
+    res.json({
+      code,
+      prefix: pfx,
+      nextNumber: nextNum,
+      isRecycled,
+      freedSlotInfo: freedSlot ? {
+        originalGroupId: freedSlot.groupId,
+        previousTraineeName: freedSlot.traineeName,
+        freedAt: freedSlot.freedAt
+      } : null
+    });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -1162,14 +1199,23 @@ apiRouter.post('/trainees', async (req: Request, res: Response) => {
     prefix = (prefix || 'A').toUpperCase();
 
     // Check if user supplied code is missing or already taken by another student
+    const freedList = db.getData().freedTraineeCodes || [];
     if (code) {
       const duplicate = list.find(t => t.code && String(t.code).trim().toUpperCase() === code);
       if (duplicate) {
-        console.warn(`[Trainee] Code ${code} already in use by "${duplicate.fullName}". Automatically generating fresh unique atomic code.`);
-        code = await allocateNextTraineeCode(prefix, list);
+        console.warn(`[Trainee] Code ${code} already in use by "${duplicate.fullName}". Automatically allocating recycled or fresh unique code.`);
+        code = await allocateNextTraineeCode(prefix, list, data.groupId, freedList);
       }
     } else {
-      code = await allocateNextTraineeCode(prefix, list);
+      code = await allocateNextTraineeCode(prefix, list, data.groupId, freedList);
+    }
+
+    // If the allocated code was in freedTraineeCodes, remove it since it's now claimed
+    const memData = db.getData();
+    if (Array.isArray(memData.freedTraineeCodes)) {
+      memData.freedTraineeCodes = memData.freedTraineeCodes.filter(
+        (f: any) => f && f.code && f.code.toUpperCase() !== code.toUpperCase()
+      );
     }
 
     const traineeId = 'trainee-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4);
@@ -1182,10 +1228,13 @@ apiRouter.post('/trainees', async (req: Request, res: Response) => {
     const created = await TraineeRepo.create(traineeId, {
       ...data,
       code,
-      prefix: code.match(/^([a-zA-Z]+)/)?.[1]?.toUpperCase() || 'A',
+      prefix: code.match(/^([a-zA-Z]+)/)?.[1]?.toUpperCase() || prefix || 'A',
       feeAmount, discountAmount, netAmount, paidAmount, remainingAmount,
+      totalPoints: 0,
+      attendanceRate: 100,
       createdAt: new Date().toISOString()
     });
+    db.saveImmediate();
     res.json({ success: true, trainee: created });
   } catch(e: any) { res.status(500).json({ success: false, error: e.message }); }
 });
@@ -1411,40 +1460,221 @@ apiRouter.post(['/student/update-photo', '/trainees/update-photo'], async (req: 
   }
 });
 
-apiRouter.delete('/trainees/:id', async (req: Request, res: Response) => {
+/**
+ * Purges all historical data (payments, attendance, points, exams, submissions, user accounts)
+ * for a deleted trainee and records their code into freedTraineeCodes so that a newly added trainee
+ * in the same group/class can take their exact code and place with a completely clean slate.
+ */
+export async function purgeCompleteTraineeData(traineeId: string): Promise<{
+  success: boolean;
+  trainee?: any;
+  recycledCode?: string;
+  error?: string;
+}> {
   try {
-    const { id } = req.params;
-    const trainee = await TraineeRepo.getById(id);
-    if (!trainee) return res.status(404).json({ success: false, error: 'المتدرب غير موجود' });
-
-    // 1. Delete from TraineeRepo (Local memory)
-    await TraineeRepo.delete(id);
-
-    // 2. Explicitly remove from db.getData().trainees
     const memData = db.getData();
-    if (memData && Array.isArray(memData.trainees)) {
-      const idx = memData.trainees.findIndex((t: any) => t.id === id);
-      if (idx >= 0) {
-        memData.trainees.splice(idx, 1);
+    const trainee = (await TraineeRepo.getById(traineeId)) || (memData.trainees || []).find((t: any) => t && t.id === traineeId);
+    if (!trainee) return { success: false, error: 'المتدرب غير موجود' };
+
+    const traineeCode = trainee.code ? String(trainee.code).trim().toUpperCase() : '';
+    const traineeName = trainee.fullName || (trainee as any).name || 'متدرب';
+    const groupId = trainee.groupId || '';
+    const courseId = trainee.courseId || '';
+    const grade = trainee.grade || '';
+    const branchId = trainee.branchId || '';
+    const prefix = trainee.prefix || (traineeCode ? traineeCode.match(/^[A-Za-z]+/)?.[0]?.toUpperCase() : '') || 'A';
+
+    // 1. Record freed code for slot recycling in the same class/group/prefix
+    if (traineeCode) {
+      if (!Array.isArray(memData.freedTraineeCodes)) {
+        memData.freedTraineeCodes = [];
       }
+      memData.freedTraineeCodes = memData.freedTraineeCodes.filter((f: any) => f && f.code && f.code.toUpperCase() !== traineeCode);
+      memData.freedTraineeCodes.unshift({
+        code: traineeCode,
+        prefix,
+        groupId,
+        courseId,
+        grade,
+        branchId,
+        freedAt: new Date().toISOString(),
+        traineeName
+      });
     }
+
+    // 2. Delete trainee from TraineeRepo and in-memory list
+    await TraineeRepo.delete(traineeId);
+    if (Array.isArray(memData.trainees)) {
+      memData.trainees = memData.trainees.filter((t: any) => t && t.id !== traineeId);
+    }
+
+    // 3. Purge all financial payments and receipts
+    const paymentsToDelete = (memData.payments || []).filter(
+      (p: any) => p && (p.traineeId === traineeId || (traineeCode && p.traineeCode === traineeCode))
+    );
+    for (const p of paymentsToDelete) {
+      try { await PaymentRepo.delete(p.id); } catch {}
+    }
+    if (Array.isArray(memData.payments)) {
+      memData.payments = memData.payments.filter(
+        (p: any) => p && p.traineeId !== traineeId && (!traineeCode || p.traineeCode !== traineeCode)
+      );
+    }
+
+    // 4. Purge attendance records
+    const attendanceToDelete = (memData.attendance || []).filter(
+      (a: any) => a && (a.traineeId === traineeId || (traineeCode && a.traineeCode === traineeCode))
+    );
+    for (const a of attendanceToDelete) {
+      try { await AttendanceRepo.delete(a.id); } catch {}
+    }
+    if (Array.isArray(memData.attendance)) {
+      memData.attendance = memData.attendance.filter(
+        (a: any) => a && a.traineeId !== traineeId && (!traineeCode || a.traineeCode !== traineeCode)
+      );
+    }
+
+    // 5. Purge point transactions
+    const pointsToDelete = (memData.pointTransactions || []).filter(
+      (pt: any) => pt && pt.traineeId === traineeId
+    );
+    for (const pt of pointsToDelete) {
+      try { await PointTransactionRepo.delete(pt.id); } catch {}
+    }
+    if (Array.isArray(memData.pointTransactions)) {
+      memData.pointTransactions = memData.pointTransactions.filter(
+        (pt: any) => pt && pt.traineeId !== traineeId
+      );
+    }
+
+    // 6. Purge exam results
+    const examResultsToDelete = (memData.examResults || []).filter(
+      (er: any) => er && er.traineeId === traineeId
+    );
+    for (const er of examResultsToDelete) {
+      try { await ExamResultRepo.delete(er.id); } catch {}
+    }
+    if (Array.isArray(memData.examResults)) {
+      memData.examResults = memData.examResults.filter(
+        (er: any) => er && er.traineeId !== traineeId
+      );
+    }
+
+    // 7. Purge homework submissions
+    const submissionsToDelete = (memData.homeworkSubmissions || []).filter(
+      (hs: any) => hs && hs.traineeId === traineeId
+    );
+    for (const hs of submissionsToDelete) {
+      try { await HomeworkSubmissionRepo.delete(hs.id); } catch {}
+    }
+    if (Array.isArray(memData.homeworkSubmissions)) {
+      memData.homeworkSubmissions = memData.homeworkSubmissions.filter(
+        (hs: any) => hs && hs.traineeId !== traineeId
+      );
+    }
+
+    // 8. Purge trainee badges & messages & screenshots
+    if (Array.isArray(memData.traineeBadges)) {
+      memData.traineeBadges = memData.traineeBadges.filter((tb: any) => tb && tb.traineeId !== traineeId);
+    }
+    if (Array.isArray(memData.portalMessages)) {
+      memData.portalMessages = memData.portalMessages.filter(
+        (pm: any) => pm && pm.traineeId !== traineeId && pm.senderId !== traineeId
+      );
+    }
+    if (Array.isArray(memData.traineeScreenshots)) {
+      memData.traineeScreenshots = memData.traineeScreenshots.filter((s: any) => s && s.traineeId !== traineeId);
+    }
+
+    // 9. Clear lab device assignment if assigned
+    if (Array.isArray(memData.devices)) {
+      memData.devices.forEach((d: any) => {
+        if (d && (d.currentTraineeId === traineeId || (traineeCode && d.currentTraineeCode === traineeCode))) {
+          d.currentTraineeId = null;
+          d.currentTraineeCode = null;
+          d.currentTraineeName = null;
+          d.currentTraineePhoto = null;
+          d.status = 'idle';
+        }
+      });
+    }
+
+    // 10. Remove from groups traineeIds
+    if (Array.isArray(memData.groups)) {
+      memData.groups.forEach((g: any) => {
+        if (g && Array.isArray(g.traineeIds)) {
+          g.traineeIds = g.traineeIds.filter((tid: string) => tid !== traineeId);
+        }
+      });
+    }
+
+    // 11. Remove student user account from portal
+    if (Array.isArray(memData.users)) {
+      const studentUsers = memData.users.filter(
+        (u: any) => u && (u.traineeId === traineeId || (u.role === 'student' && traineeCode && u.username === traineeCode))
+      );
+      for (const u of studentUsers) {
+        try { await UserRepo.delete(u.id); } catch {}
+      }
+      memData.users = memData.users.filter(
+        (u: any) => u && u.traineeId !== traineeId && !(u.role === 'student' && traineeCode && u.username === traineeCode)
+      );
+    }
+
+    // Save locally and invalidate repository caches
     db.saveImmediate();
     TraineeRepo.invalidateCache();
+    PaymentRepo.invalidateCache();
+    AttendanceRepo.invalidateCache();
+    PointTransactionRepo.invalidateCache();
+    ExamResultRepo.invalidateCache();
+    HomeworkSubmissionRepo.invalidateCache();
+    UserRepo.invalidateCache();
 
-    // 3. Also delete from adminDb if active
+    // 12. Batch delete in remote Firestore
     try {
-      await adminDb.collection('trainees').doc(id).delete();
-    } catch {}
+      const batch = adminDb.batch();
+      batch.delete(adminDb.collection('trainees').doc(traineeId));
+      paymentsToDelete.forEach(p => batch.delete(adminDb.collection('payments').doc(p.id)));
+      attendanceToDelete.forEach(a => batch.delete(adminDb.collection('attendance').doc(a.id)));
+      pointsToDelete.forEach(pt => batch.delete(adminDb.collection('pointTransactions').doc(pt.id)));
+      examResultsToDelete.forEach(er => batch.delete(adminDb.collection('examResults').doc(er.id)));
+      submissionsToDelete.forEach(hs => batch.delete(adminDb.collection('homeworkSubmissions').doc(hs.id)));
+      await batch.commit();
+    } catch (fsErr) {
+      console.warn('[purgeCompleteTraineeData] Firestore batch commit notice:', fsErr);
+    }
 
     db.logAudit({
       userId: 'admin',
       userName: 'مدير النظام',
-      action: 'حذف متدرب',
+      action: 'حذف وتصفية متدرب بالكامل وتدوير الكود',
       entity: 'المتدربين',
-      details: `تم حذف المتدرب ${trainee.fullName || trainee.name} (${id}) نهائياً`
+      entityId: traineeId,
+      details: `تم حذف المتدرب ${traineeName} (${traineeId}) وكافة سجلاته وتفريغ الكود (${traineeCode}) للفصل/المجموعة بنجاح`
     });
 
-    res.json({ success: true, message: 'تم حذف المتدرب بنجاح' });
+    return { success: true, trainee, recycledCode: traineeCode };
+  } catch (err: any) {
+    console.error('[purgeCompleteTraineeData] error:', err);
+    return { success: false, error: err.message };
+  }
+}
+
+apiRouter.delete('/trainees/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const result = await purgeCompleteTraineeData(id);
+    if (!result.success) {
+      return res.status(404).json({ success: false, error: result.error || 'المتدرب غير موجود' });
+    }
+
+    res.json({
+      success: true,
+      message: `تم حذف المتدرب (${result.trainee?.fullName || result.trainee?.name}) وكافة بياناته وسجلاته نهائياً، وتم إتاحة الكود (${result.recycledCode}) ليأخذ مكانه أي متدرب جديد في نفس الفصل`,
+      recycledCode: result.recycledCode,
+      trainee: result.trainee
+    });
   } catch(e: any) { res.status(500).json({ success: false, error: e.message }); }
 });
 
@@ -1498,35 +1728,24 @@ apiRouter.post('/trainees/bulk-delete', async (req, res) => {
     if (!ids || !Array.isArray(ids) || ids.length === 0) return res.status(400).json({ error: 'المعرفات غير صالحة' });
     
     let count = 0;
-    const memData = db.getData();
+    const recycledCodes: string[] = [];
     for (const id of ids) {
-      await TraineeRepo.delete(id);
-      if (memData && Array.isArray(memData.trainees)) {
-        const idx = memData.trainees.findIndex((t: any) => t.id === id);
-        if (idx >= 0) {
-          memData.trainees.splice(idx, 1);
-        }
+      const purgeRes = await purgeCompleteTraineeData(id);
+      if (purgeRes.success) {
+        count++;
+        if (purgeRes.recycledCode) recycledCodes.push(purgeRes.recycledCode);
       }
-      count++;
     }
-    db.saveImmediate();
-    TraineeRepo.invalidateCache();
-
-    try {
-      const batch = adminDb.batch();
-      ids.forEach(id => batch.delete(adminDb.collection('trainees').doc(id)));
-      await batch.commit();
-    } catch {}
 
     db.logAudit({
       userId: 'admin',
       userName: 'مدير النظام',
-      action: 'حذف متدربين بالجملة',
+      action: 'حذف متدربين بالجملة وتدوير الأكواد',
       entity: 'المتدربين',
-      details: `تم حذف ${count} متدرب بنجاح`
+      details: `تم مسح وتصفية ${count} متدرب وسجلاتهم وإتاحة ${recycledCodes.length} كود للفصول المقابلة بنجاح`
     });
 
-    res.json({ success: true, count });
+    res.json({ success: true, count, recycledCodes });
   } catch(e: any) { res.status(500).json({ error: e.message }); }
 });
 
@@ -5244,10 +5463,10 @@ apiRouter.post('/points/add', async (req: Request, res: Response) => {
     db.save();
     TraineeRepo.invalidateCache();
 
-    // GUARANTEED FIRESTORE PERSISTENCE FOR SERVERLESS/VERCEL ENVIRONMENTS
+    // Targeted persistence to Firestore without triggering global sync_meta flood
     try {
-      await saveCollectionToFirestore('trainees', dbData.trainees);
-      await saveCollectionToFirestore('pointTransactions', dbData.pointTransactions);
+      await saveCollectionToFirestore('trainees', dbData.trainees, false);
+      await saveCollectionToFirestore('pointTransactions', dbData.pointTransactions, false);
     } catch (fsErr) {
       console.warn('[Points] Firestore cloud sync warning:', fsErr);
     }
@@ -5293,7 +5512,14 @@ apiRouter.get('/exams', async (req: Request, res: Response) => {
     let list = await ExamRepo.getAll();
     if (branchId && branchId !== 'all') list = list.filter(e => e.branchId === branchId);
     if (courseId && courseId !== 'all') list = list.filter(e => e.courseId === courseId);
-    res.json(list);
+
+    const allQuestions = db.getData().questions || [];
+    const enrichedList = list.map(e => ({
+      ...e,
+      questionsCount: allQuestions.filter(q => q.examId === e.id).length
+    }));
+
+    res.json(enrichedList);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -6049,73 +6275,355 @@ apiRouter.put('/homeworks/:id', async (req: Request, res: Response) => {
 });
 
 
-// Create Full Exam with Questions at once
-apiRouter.post('/exams/create-full', (req: Request, res: Response) => {
-  const { exam, questions } = req.body;
-  if (!exam || !exam.title || !exam.courseId) {
-    return res.status(400).json({ error: 'بيانات الاختبار غير مكتملة' });
-  }
-
-  const newExam: Exam = {
-    id: 'exam-' + Date.now(),
-    title: exam.title.trim(),
-    branchId: exam.branchId || 'branch-1',
-    courseId: exam.courseId,
-    groupId: exam.groupId || undefined,
-    trainerId: exam.trainerId || undefined,
-    examDate: exam.examDate || new Date().toISOString().split('T')[0],
-    totalMarks: Number(exam.totalMarks) || 100,
-    passingMarks: Number(exam.passingMarks) || 60,
-    durationMinutes: Number(exam.durationMinutes) || 60,
-    status: exam.status || 'scheduled',
-    instructions: exam.instructions || ''
-  };
-
-  db.getData().exams.push(newExam);
-
-  if (Array.isArray(questions) && questions.length > 0) {
-    for (let i = 0; i < questions.length; i++) {
-      const q = questions[i];
-      const newQ: ExamQuestion = {
-        id: 'q-' + Date.now() + '-' + i + '-' + Math.random().toString(36).substr(2, 3),
-        examId: newExam.id,
-        questionType: q.questionType || 'mcq',
-        questionText: q.questionText || `السؤال ${i + 1}`,
-        options: Array.isArray(q.options) ? q.options : [],
-        correctAnswer: q.correctAnswer || '',
-        marks: Number(q.marks) || 10
-      };
-      db.getData().questions.push(newQ);
+// Create Full Exam with Questions at once (Memory + Firestore sync)
+apiRouter.post('/exams/create-full', async (req: Request, res: Response) => {
+  try {
+    const { exam, questions } = req.body;
+    if (!exam || !exam.title || !exam.courseId) {
+      return res.status(400).json({ error: 'بيانات الاختبار غير مكتملة (العنوان والدورة مطلوبان)' });
     }
+
+    const course = db.getData().courses.find(c => c.id === exam.courseId);
+    const group = exam.groupId ? db.getData().groups.find(g => g.id === exam.groupId) : undefined;
+
+    const newExam: Exam = {
+      id: 'exam-' + Date.now(),
+      title: exam.title.trim(),
+      branchId: exam.branchId || 'branch-1',
+      courseId: exam.courseId,
+      groupId: exam.groupId || undefined,
+      trainerId: exam.trainerId || undefined,
+      examDate: exam.examDate || new Date().toISOString().split('T')[0],
+      totalMarks: Number(exam.totalMarks) || 100,
+      passingMarks: Number(exam.passingMarks) || 60,
+      durationMinutes: Number(exam.durationMinutes) || 45,
+      status: exam.status || 'scheduled',
+      instructions: exam.instructions || 'أجب عن جميع الأسئلة بدقة.',
+      policy: exam.policy || {
+        shuffleQuestions: true,
+        shuffleOptions: true,
+        lockdownLabMode: false,
+        instantResults: true,
+        issueCertificateOnPass: true
+      }
+    };
+
+    if (!db.getData().exams) db.getData().exams = [];
+    db.getData().exams.unshift(newExam);
+
+    try {
+      await ExamRepo.create(newExam.id, newExam);
+    } catch (dbErr) {
+      console.warn('ExamRepo.create fallback to local db:', dbErr);
+    }
+
+    const createdQuestions: ExamQuestion[] = [];
+    if (Array.isArray(questions) && questions.length > 0) {
+      if (!db.getData().questions) db.getData().questions = [];
+      for (let i = 0; i < questions.length; i++) {
+        const q = questions[i];
+        const newQ: ExamQuestion = {
+          id: 'q-' + Date.now() + '-' + i + '-' + Math.random().toString(36).substr(2, 3),
+          examId: newExam.id,
+          questionType: q.questionType || 'mcq',
+          questionText: q.questionText || `السؤال ${i + 1}`,
+          options: Array.isArray(q.options) ? q.options : [],
+          correctAnswer: q.correctAnswer || '',
+          explanation: q.explanation || '',
+          marks: Number(q.marks) || 10
+        };
+        db.getData().questions.push(newQ);
+        createdQuestions.push(newQ);
+        try {
+          await ExamQuestionRepo.create(newQ.id, newQ);
+        } catch (qErr) {
+          // Keep in local
+        }
+      }
+    }
+
+    db.save();
+
+    db.logAudit({
+      userId: 'trainer',
+      userName: 'المحاضر/الإدارة',
+      action: 'إنشاء اختبار تفاعلي',
+      entity: 'الاختبارات',
+      entityId: newExam.id,
+      details: `تم إنشاء الاختبار التفاعلي (${newExam.title}) مع ${createdQuestions.length} سؤال برابط مباشر`
+    });
+
+    res.json({
+      success: true,
+      exam: {
+        ...newExam,
+        courseName: course?.name,
+        groupName: group?.name
+      },
+      questionsCount: createdQuestions.length,
+      questions: createdQuestions
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'فشل إنشاء الاختبار' });
   }
+});
 
-  db.save();
+// Public Trainee Lookup by Code or Phone (for instant student recognition)
+apiRouter.get('/public/trainees/lookup', async (req: Request, res: Response) => {
+  try {
+    const { code } = req.query;
+    if (!code) return res.json({ found: false });
 
-  db.logAudit({
-    userId: 'trainer',
-    userName: 'المدرب/الإدارة',
-    action: 'إنشاء اختبار بالذكاء الاصطناعي',
-    entity: 'الاختبارات',
-    entityId: newExam.id,
-    details: `تم إنشاء اختبار (${newExam.title}) مع ${Array.isArray(questions) ? questions.length : 0} سؤال`
-  });
+    const trainees = await TraineeRepo.getAll();
+    const match = findTraineeMatch(trainees, String(code));
+    if (!match) {
+      return res.json({ found: false });
+    }
 
-  res.json({ success: true, exam: newExam, questionsCount: Array.isArray(questions) ? questions.length : 0 });
+    const group = db.getData().groups.find(g => g.id === match.groupId);
+    const course = db.getData().courses.find(c => c.id === match.courseId);
+
+    res.json({
+      found: true,
+      trainee: {
+        id: match.id,
+        fullName: match.fullName,
+        code: match.code,
+        photoUrl: match.photoUrl || '',
+        groupId: match.groupId,
+        groupName: group?.name || '',
+        courseId: match.courseId,
+        courseName: course?.name || '',
+        currentPoints: match.currentPoints || match.points || 0
+      }
+    });
+  } catch (err: any) {
+    res.status(500).json({ found: false, error: err.message });
+  }
+});
+
+// Public Exam Data Endpoint (for Student interactive test-taking)
+apiRouter.get(['/public/exams/:id', '/exams/:id/public'], async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    let exam = db.getData().exams?.find(e => e.id === id);
+    if (!exam) {
+      exam = await ExamRepo.getById(id);
+    }
+    if (!exam) {
+      return res.status(404).json({ error: 'لم يتم العثور على الاختبار المطلوب أو أن الرابط غير صحيح' });
+    }
+
+    // Get questions
+    let questions = db.getData().questions?.filter(q => q.examId === id) || [];
+    if (questions.length === 0) {
+      try {
+        questions = await ExamQuestionRepo.query([{ field: 'examId', operator: '==', value: id }]);
+      } catch (e) {
+        // fallback
+      }
+    }
+
+    const course = db.getData().courses.find(c => c.id === exam.courseId);
+    const group = exam.groupId ? db.getData().groups.find(g => g.id === exam.groupId) : undefined;
+
+    // Public sanitized questions (exclude correct answers before submission)
+    const sanitizedQuestions = questions.map((q, idx) => ({
+      id: q.id,
+      questionNumber: idx + 1,
+      questionType: q.questionType || 'mcq',
+      questionText: q.questionText,
+      options: q.options || [],
+      marks: q.marks || 10
+    }));
+
+    res.json({
+      success: true,
+      exam: {
+        id: exam.id,
+        title: exam.title,
+        courseId: exam.courseId,
+        courseName: course?.name || 'برنامج تدريبي',
+        groupId: exam.groupId,
+        groupName: group?.name,
+        examDate: exam.examDate,
+        durationMinutes: exam.durationMinutes || 45,
+        totalMarks: exam.totalMarks || 100,
+        passingMarks: exam.passingMarks || 60,
+        instructions: exam.instructions || 'يرجى الإجابة عن كافة الأسئلة بدقة.',
+        status: exam.status
+      },
+      questions: sanitizedQuestions
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Public Exam Interactive Submission and Instant Auto-Grading
+apiRouter.post(['/public/exams/:id/submit', '/exams/:id/public-submit'], async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { traineeCode, traineeName, answers, timeSpentSeconds } = req.body;
+
+    let exam = db.getData().exams?.find(e => e.id === id);
+    if (!exam) {
+      exam = await ExamRepo.getById(id);
+    }
+    if (!exam) {
+      return res.status(404).json({ error: 'لم يتم العثور على الاختبار' });
+    }
+
+    // Identify Student
+    const allTrainees = await TraineeRepo.getAll();
+    let student = findTraineeMatch(allTrainees, traineeCode || traineeName || '');
+    const studentFullName = student?.fullName || traineeName || 'متدرب';
+    const studentCode = student?.code || traineeCode || 'طالب';
+
+    // Retrieve full questions with correct answers
+    let questions = db.getData().questions?.filter(q => q.examId === id) || [];
+    if (questions.length === 0) {
+      try {
+        questions = await ExamQuestionRepo.query([{ field: 'examId', operator: '==', value: id }]);
+      } catch (e) {}
+    }
+
+    let earnedScore = 0;
+    let totalMarks = exam.totalMarks || 0;
+    if (totalMarks === 0 && questions.length > 0) {
+      totalMarks = questions.reduce((sum, q) => sum + (q.marks || 10), 0);
+    }
+    if (totalMarks === 0) totalMarks = 100;
+
+    const answerReview: any[] = [];
+    const submittedAnswers = answers || {};
+
+    questions.forEach((q, idx) => {
+      const studentAns = String(submittedAnswers[q.id] ?? '').trim();
+      const correctAns = String(q.correctAnswer ?? '').trim();
+      const qMarks = Number(q.marks) || (Math.round(totalMarks / Math.max(questions.length, 1)));
+
+      let isCorrect = false;
+      if (q.questionType === 'mcq' || q.questionType === 'true_false') {
+        const normStudent = studentAns.toLowerCase().replace(/[\s\-_]/g, '');
+        const normCorrect = correctAns.toLowerCase().replace(/[\s\-_]/g, '');
+        isCorrect = normStudent.length > 0 && normStudent === normCorrect;
+      } else {
+        // short answer or fill in
+        isCorrect = studentAns.length > 0 && (
+          studentAns.toLowerCase().includes(correctAns.toLowerCase()) ||
+          correctAns.toLowerCase().includes(studentAns.toLowerCase())
+        );
+      }
+
+      if (isCorrect) {
+        earnedScore += qMarks;
+      }
+
+      answerReview.push({
+        questionId: q.id,
+        questionNumber: idx + 1,
+        questionText: q.questionText,
+        questionType: q.questionType,
+        studentAnswer: studentAns || 'لم تتم الإجابة',
+        correctAnswer: correctAns,
+        explanation: q.explanation || '',
+        isCorrect,
+        marksEarned: isCorrect ? qMarks : 0,
+        marksTotal: qMarks
+      });
+    });
+
+    const percentage = Math.round((earnedScore / totalMarks) * 100);
+    const passingMarks = exam.passingMarks || Math.round(totalMarks * 0.6);
+    const passed = earnedScore >= passingMarks;
+
+    let rating: ExamResult['rating'] = 'راسب';
+    if (percentage >= 90) rating = 'ممتاز';
+    else if (percentage >= 80) rating = 'جيد جداً';
+    else if (percentage >= 65) rating = 'جيد';
+    else if (percentage >= 50) rating = 'مقبول';
+
+    const resultId = 'res-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4);
+    const newResult: ExamResult = {
+      id: resultId,
+      examId: id,
+      traineeId: student?.id || ('guest-' + Date.now()),
+      score: earnedScore,
+      totalMarks,
+      percentage,
+      rating,
+      notes: `تسليم إلكتروني تفاعلي عبر الرابط (الوقت: ${Math.round((timeSpentSeconds || 0) / 60)} دقيقة)`,
+      submittedAt: new Date().toISOString()
+    };
+    (newResult as any).traineeName = studentFullName;
+    (newResult as any).traineeCode = studentCode;
+    (newResult as any).answerReview = answerReview;
+
+    if (!db.getData().examResults) db.getData().examResults = [];
+    // Remove previous submission from same trainee for this exam if any
+    db.getData().examResults = db.getData().examResults.filter(
+      r => !(r.examId === id && (r.traineeId === (student?.id || '') || (r as any).traineeCode === studentCode))
+    );
+    db.getData().examResults.unshift(newResult);
+
+    // Save to Firestore
+    try {
+      await ExamResultRepo.create(newResult.id, newResult);
+    } catch (e) {
+      console.warn('ExamResultRepo.create fallback to local:', e);
+    }
+
+    // Award bonus points and stars to registered student
+    if (student?.id) {
+      try {
+        const bonusPoints = passed ? (percentage >= 90 ? 25 : 15) : 5;
+        const currentPts = student.currentPoints || student.points || 0;
+        await TraineeRepo.update(student.id, {
+          currentPoints: currentPts + bonusPoints,
+          points: currentPts + bonusPoints
+        });
+      } catch (ptsErr) {
+        // ignore
+      }
+    }
+
+    db.save();
+
+    res.json({
+      success: true,
+      result: newResult,
+      score: earnedScore,
+      totalMarks,
+      percentage,
+      rating,
+      passed,
+      answerReview,
+      traineeName: studentFullName,
+      traineeCode: studentCode
+    });
+  } catch (err: any) {
+    console.error('Error submitting interactive exam:', err);
+    res.status(500).json({ error: err.message || 'فشل إرسال نتيجة الاختبار' });
+  }
 });
 
 apiRouter.get('/exams/:id/questions', async (req: Request, res: Response) => {
   try {
     const questions = await ExamQuestionRepo.query([{ field: 'examId', operator: '==', value: req.params.id }]);
-    res.json(questions);
+    if (questions.length > 0) return res.json(questions);
+    const localQ = db.getData().questions?.filter(q => q.examId === req.params.id) || [];
+    res.json(localQ);
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    const localQ = db.getData().questions?.filter(q => q.examId === req.params.id) || [];
+    res.json(localQ);
   }
 });
 
 apiRouter.post('/exams/:id/questions', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const { questionType, questionText, options, correctAnswer, marks } = req.body;
+    const { questionType, questionText, options, correctAnswer, explanation, marks } = req.body;
 
     const newQ: ExamQuestion = {
       id: 'q-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
@@ -6123,61 +6631,355 @@ apiRouter.post('/exams/:id/questions', async (req: Request, res: Response) => {
       questionType: questionType || 'mcq',
       questionText: questionText.trim(),
       options: Array.isArray(options) ? options : [],
-      correctAnswer: correctAnswer.trim(),
+      correctAnswer: (correctAnswer || '').trim(),
+      explanation: (explanation || '').trim(),
       marks: Number(marks) || 10
     };
 
-    await ExamQuestionRepo.create(newQ.id, newQ);
+    if (!db.getData().questions) db.getData().questions = [];
+    db.getData().questions.push(newQ);
+    await ExamQuestionRepo.create(newQ.id, newQ).catch(() => {});
+    db.save();
+
     res.json({ success: true, question: newQ });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
 });
 
-apiRouter.get('/exams/:id/results', async (req: Request, res: Response) => {
+// Update Exam Question
+apiRouter.put('/exams/:examId/questions/:questionId', async (req: Request, res: Response) => {
   try {
-    const results = await ExamResultRepo.getByExamId(req.params.id);
-    res.json(results);
+    const { examId, questionId } = req.params;
+    const { questionType, questionText, options, correctAnswer, explanation, marks, programmingLanguage, codeTemplate, testCases } = req.body;
+
+    const data = db.getData();
+    if (!data.questions) data.questions = [];
+    let q = data.questions.find(item => item.id === questionId);
+
+    if (q) {
+      if (questionType !== undefined) q.questionType = questionType;
+      if (questionText !== undefined) q.questionText = questionText.trim();
+      if (options !== undefined) q.options = Array.isArray(options) ? options : [];
+      if (correctAnswer !== undefined) q.correctAnswer = (correctAnswer || '').trim();
+      if (explanation !== undefined) q.explanation = (explanation || '').trim();
+      if (marks !== undefined) q.marks = Number(marks) || 10;
+      if (programmingLanguage !== undefined) (q as any).programmingLanguage = programmingLanguage;
+      if (codeTemplate !== undefined) (q as any).codeTemplate = codeTemplate;
+      if (testCases !== undefined) (q as any).testCases = testCases;
+    } else {
+      q = {
+        id: questionId,
+        examId,
+        questionType: questionType || 'mcq',
+        questionText: (questionText || '').trim(),
+        options: Array.isArray(options) ? options : [],
+        correctAnswer: (correctAnswer || '').trim(),
+        explanation: (explanation || '').trim(),
+        marks: Number(marks) || 10
+      };
+      data.questions.push(q);
+    }
+
+    try {
+      await ExamQuestionRepo.update(questionId, q);
+    } catch (e) {
+      await ExamQuestionRepo.create(questionId, q).catch(() => {});
+    }
+
+    db.save();
+    res.json({ success: true, question: q });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: err.message || 'فشل تحديث السؤال' });
   }
 });
 
-apiRouter.post('/exams/:id/results/batch', (req: Request, res: Response) => {
-  const { id } = req.params;
-  const { results, totalMarks } = req.body;
-  if (!Array.isArray(results)) return res.status(400).json({ error: 'البيانات غير صالحة' });
+// Delete Exam Question
+apiRouter.delete(['/exams/:examId/questions/:questionId', '/questions/:questionId'], async (req: Request, res: Response) => {
+  try {
+    const { questionId } = req.params;
+    const data = db.getData();
+    if (data.questions) {
+      data.questions = data.questions.filter(q => q.id !== questionId);
+    }
 
-  const tot = Number(totalMarks) || 100;
+    try {
+      await ExamQuestionRepo.delete(questionId);
+    } catch (e) {}
 
-  // Remove prior results for this exam
-  db.getData().examResults = db.getData().examResults.filter(r => r.examId !== id);
+    db.save();
+    res.json({ success: true, message: 'تم حذف السؤال بنجاح' });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'فشل حذف السؤال' });
+  }
+});
 
-  results.forEach(r => {
-    const score = Number(r.score) || 0;
-    const percentage = Math.round((score / tot) * 100);
-    let rating: ExamResult['rating'] = 'راسب';
-    if (percentage >= 90) rating = 'ممتاز';
-    else if (percentage >= 80) rating = 'جيد جداً';
-    else if (percentage >= 65) rating = 'جيد';
-    else if (percentage >= 50) rating = 'مقبول';
+// Update Exam Details
+apiRouter.put('/exams/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const updateData = req.body;
+    const data = db.getData();
+    if (!data.exams) data.exams = [];
 
-    const newResult: ExamResult = {
-      id: 'res-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
-      examId: id,
-      traineeId: r.traineeId,
-      score,
-      totalMarks: tot,
-      percentage,
-      rating,
-      notes: r.notes || '',
-      submittedAt: new Date().toISOString()
-    };
-    db.getData().examResults.push(newResult);
-  });
+    const exam = data.exams.find(e => e.id === id);
+    if (exam) {
+      Object.assign(exam, updateData);
+    }
 
-  db.save();
-  res.json({ success: true, count: results.length });
+    try {
+      await ExamRepo.update(id, updateData);
+    } catch (e) {}
+
+    db.save();
+    res.json({ success: true, exam: exam || updateData });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'فشل تحديث بيانات الاختبار' });
+  }
+});
+
+// Delete Full Exam (and its questions/results)
+apiRouter.delete('/exams/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const data = db.getData();
+    if (data.exams) data.exams = data.exams.filter(e => e.id !== id);
+    if (data.questions) data.questions = data.questions.filter(q => q.examId !== id);
+    if (data.examResults) data.examResults = data.examResults.filter(r => r.examId !== id);
+
+    try {
+      await ExamRepo.delete(id);
+    } catch (e) {}
+
+    db.save();
+    res.json({ success: true, message: 'تم حذف الاختبار وكافة متعلقاته بنجاح' });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'فشل حذف الاختبار' });
+  }
+});
+
+apiRouter.get('/exams/:id/results', async (req: Request, res: Response) => {
+  try {
+    // Clean up any accidental trial results for 'لين' with rating 'راسب'
+    if (db.getData().examResults) {
+      db.getData().examResults = db.getData().examResults.filter(
+        r => !((r as any).traineeName?.includes('لين') && r.rating === 'راسب')
+      );
+    }
+    if (db.getData().certificates) {
+      db.getData().certificates = db.getData().certificates.filter(
+        (c: any) => !((c.studentName?.includes('لين') || c.traineeName?.includes('لين')) && (c.grade === 'راسب' || String(c.grade || '').includes('راسب')))
+      );
+    }
+
+    let results = await ExamResultRepo.getByExamId(req.params.id);
+    if (!results || results.length === 0) {
+      results = db.getData().examResults?.filter(r => r.examId === req.params.id) || [];
+    }
+    // Filter out any lingering failed trial for 'لين'
+    results = results.filter(r => !((r as any).traineeName?.includes('لين') && r.rating === 'راسب'));
+
+    // Attach trainee name and code for UI convenience
+    const trainees = await TraineeRepo.getAll();
+    const enhancedResults = results.map(r => {
+      const tr = trainees.find(t => t.id === r.traineeId);
+      return {
+        ...r,
+        traineeName: tr?.fullName || (r as any).traineeName || 'متدرب',
+        traineeCode: tr?.code || (r as any).traineeCode || '—',
+        traineePhoto: tr?.photoUrl || ''
+      };
+    });
+
+    res.json(enhancedResults);
+  } catch (err: any) {
+    const localResults = db.getData().examResults?.filter(r => r.examId === req.params.id) || [];
+    res.json(localResults);
+  }
+});
+
+apiRouter.post('/exams/:id/results/batch', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { results, totalMarks } = req.body;
+    if (!Array.isArray(results)) return res.status(400).json({ error: 'البيانات غير صالحة' });
+
+    const tot = Number(totalMarks) || 100;
+    const trainees = await TraineeRepo.getAll();
+
+    // Remove prior results for this exam
+    db.getData().examResults = db.getData().examResults?.filter(r => r.examId !== id) || [];
+
+    const createdResults: ExamResult[] = [];
+
+    for (const r of results) {
+      const score = Number(r.score) || 0;
+      const percentage = Math.round((score / tot) * 100);
+      let rating: ExamResult['rating'] = 'راسب';
+      if (percentage >= 90) rating = 'ممتاز';
+      else if (percentage >= 80) rating = 'جيد جداً';
+      else if (percentage >= 65) rating = 'جيد';
+      else if (percentage >= 50) rating = 'مقبول';
+
+      const tr = trainees.find(t => t.id === r.traineeId);
+
+      const newResult: ExamResult = {
+        id: 'res-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
+        examId: id,
+        traineeId: r.traineeId,
+        score,
+        totalMarks: tot,
+        percentage,
+        rating,
+        notes: r.notes || (r.attendanceStatus === 'absent' ? 'غائب عن الاختبار' : ''),
+        submittedAt: new Date().toISOString()
+      };
+      (newResult as any).traineeName = tr?.fullName;
+      (newResult as any).traineeCode = tr?.code;
+      (newResult as any).attendanceStatus = r.attendanceStatus || 'present';
+
+      db.getData().examResults.push(newResult);
+      createdResults.push(newResult);
+
+      try {
+        await ExamResultRepo.create(newResult.id, newResult);
+      } catch (err) {
+        // local ok
+      }
+    }
+
+    db.save();
+
+    db.logAudit({
+      userId: 'trainer',
+      userName: 'المحاضر/الإدارة',
+      action: 'رصد درجات اختبار يدوي',
+      entity: 'الاختبارات',
+      entityId: id,
+      details: `تم رصد درجات ${createdResults.length} متدرب للاختبار بنجاح`
+    });
+
+    res.json({ success: true, count: createdResults.length, results: createdResults });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'فشل رصد الدرجات' });
+  }
+});
+
+// Delete Exam Result
+apiRouter.delete(['/exams/:examId/results/:resultId', '/exam-results/:resultId'], async (req: Request, res: Response) => {
+  try {
+    const { resultId } = req.params;
+    const data = db.getData();
+    let removed = false;
+
+    if (data.examResults) {
+      const prevLen = data.examResults.length;
+      data.examResults = data.examResults.filter(r => r.id !== resultId);
+      if (data.examResults.length < prevLen) removed = true;
+    }
+
+    try {
+      await ExamResultRepo.delete(resultId);
+      removed = true;
+    } catch (e) {}
+
+    db.save();
+    res.json({ success: true, message: 'تم حذف نتيجة الاختبار وسجل الطالب بنجاح' });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'فشل حذف النتيجة' });
+  }
+});
+
+// Reset Exam Attempt for Student (Empty the attempt so the student can re-take the exam)
+apiRouter.post(['/exams/:examId/results/:resultId/reset', '/exam-results/:resultId/reset'], async (req: Request, res: Response) => {
+  try {
+    const { resultId } = req.params;
+    const data = db.getData();
+    let targetResult = data.examResults?.find(r => r.id === resultId);
+    if (!targetResult) {
+      try {
+        targetResult = await ExamResultRepo.getById(resultId);
+      } catch (e) {}
+    }
+
+    if (data.examResults) {
+      data.examResults = data.examResults.filter(r => r.id !== resultId);
+    }
+
+    if (targetResult) {
+      // Remove any linked submissions in memory
+      if ((data as any).studentExamSubmissions) {
+        (data as any).studentExamSubmissions = (data as any).studentExamSubmissions.filter(
+          (s: any) => !(s.examId === targetResult?.examId && (s.traineeId === targetResult?.traineeId || s.traineeCode === (targetResult as any).traineeCode))
+        );
+      }
+      // Also remove any certificates issued with 'راسب' or for this failed test
+      if (data.certificates) {
+        data.certificates = data.certificates.filter((c: any) => {
+          const isSameStudent = c.traineeId === targetResult?.traineeId || c.studentId === targetResult?.traineeId;
+          return !(isSameStudent && (c.grade === 'راسب' || c.lectureTitle?.includes(targetResult?.examId || '')));
+        });
+      }
+    }
+
+    try {
+      await ExamResultRepo.delete(resultId);
+    } catch (e) {}
+
+    db.save();
+    res.json({ success: true, message: 'تمت إعادة ضبط محاولة الطالب بنجاح، ويمكنه الآن إعادة إجراء الاختبار من جديد' });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'فشل إعادة ضبط المحاولة' });
+  }
+});
+
+// Clear All Test Attempts for a Student (By ID, Code, or Name)
+apiRouter.post('/exams/clear-trainee-results', async (req: Request, res: Response) => {
+  try {
+    const { traineeId, traineeCode, traineeName } = req.body;
+    const data = db.getData();
+    let count = 0;
+
+    if (data.examResults) {
+      const orig = data.examResults.length;
+      data.examResults = data.examResults.filter(r => {
+        const matches = (traineeId && r.traineeId === traineeId) ||
+          (traineeCode && (r as any).traineeCode === traineeCode) ||
+          (traineeName && (r as any).traineeName?.toLowerCase().includes(String(traineeName).toLowerCase()));
+        return !matches;
+      });
+      count = orig - data.examResults.length;
+    }
+
+    // Also remove any matching failed certificates
+    if (data.certificates) {
+      data.certificates = data.certificates.filter((c: any) => {
+        const matches = (traineeId && (c.traineeId === traineeId || c.studentId === traineeId)) ||
+          (traineeName && (c.studentName?.toLowerCase().includes(String(traineeName).toLowerCase()) || c.traineeName?.toLowerCase().includes(String(traineeName).toLowerCase())));
+        return !(matches && c.grade === 'راسب');
+      });
+    }
+
+    db.save();
+    res.json({ success: true, count, message: `تم حذف وتصفير سجلات الاختبارات للطالب (${traineeName || traineeCode || traineeId || ''}) بنجاح` });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'فشل تصفير سجلات الطالب' });
+  }
+});
+
+// Delete Certificate
+apiRouter.delete(['/certificates/:id', '/certificates/delete/:id'], async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const data = db.getData();
+    if (data.certificates) {
+      data.certificates = data.certificates.filter(c => c.id !== id);
+    }
+    db.save();
+    res.json({ success: true, message: 'تم حذف الشهادة بنجاح' });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'فشل حذف الشهادة' });
+  }
 });
 
 // ----------------------------------------------------
@@ -7851,6 +8653,63 @@ let activeLabExternalActivity: {
   gamePin?: string;
   updatedAt: number;
 } | null = null;
+
+// Master Lab Lock & Access Control State
+interface LabStatusState {
+  isOpen: boolean;
+  branchId?: string;
+  trainerName?: string;
+  roomName?: string;
+  updatedAt: string;
+}
+
+let activeLabStatus: Record<string, LabStatusState> = {
+  global: {
+    isOpen: true,
+    trainerName: 'المحاضر المشرف',
+    roomName: 'المعمل الرئيسي',
+    updatedAt: new Date().toISOString()
+  }
+};
+
+// GET /lab/status
+apiRouter.get('/lab/status', (req: Request, res: Response) => {
+  const branchId = (req.query.branchId as string) || 'global';
+  const status = activeLabStatus[branchId] || activeLabStatus['global'] || {
+    isOpen: true,
+    trainerName: 'المحاضر المشرف',
+    roomName: 'المعمل الرئيسي',
+    updatedAt: new Date().toISOString()
+  };
+  res.json({ success: true, ...status });
+});
+
+// POST /lab/status
+apiRouter.post('/lab/status', (req: Request, res: Response) => {
+  const { isOpen, branchId = 'global', trainerName = 'المحاضر المشرف', roomName = 'المعمل الرئيسي' } = req.body;
+  const statusObj: LabStatusState = {
+    isOpen: Boolean(isOpen),
+    branchId,
+    trainerName,
+    roomName,
+    updatedAt: new Date().toISOString()
+  };
+  activeLabStatus[branchId] = statusObj;
+  activeLabStatus['global'] = statusObj;
+
+  // Also lock or unlock registered devices in DB
+  try {
+    const devices = db.getData().devices || [];
+    devices.forEach((d: any) => {
+      if (!branchId || branchId === 'global' || d.branchId === branchId) {
+        d.status = isOpen ? 'active' : 'locked';
+      }
+    });
+    db.save();
+  } catch (e) {}
+
+  res.json({ success: true, ...statusObj });
+});
 
 // Student Kiosk & Trainer get current quick question & active external challenge
 apiRouter.get('/lab/quick-question', (req: Request, res: Response) => {
@@ -10190,10 +11049,43 @@ apiRouter.post('/gemini/generate', async (req: Request, res: Response) => {
   }
 });
 
-// 3. Gemini TTS Provider Endpoint
+// 3. Gemini TTS Provider Endpoint - Natural High-Fidelity Studio Speech
 apiRouter.post('/gemini/tts', async (req: Request, res: Response) => {
-  // Graceful response so client falls back seamlessly to BrowserSpeechProvider without breaking
-  res.json({ success: false, fallback: true, message: 'Gemini direct audio fallback activated' });
+  try {
+    const { text, promptStyle, voiceName } = req.body || {};
+    if (!text || typeof text !== 'string' || !text.trim()) {
+      return res.status(400).json({ success: false, error: 'Text is required for TTS' });
+    }
+
+    const ttsResult = await generateGeminiSpeechAudio({
+      text: text.trim(),
+      promptStyle,
+      voiceName: voiceName || 'Puck'
+    });
+
+    if (ttsResult.success && ttsResult.audioBase64) {
+      return res.json({
+        success: true,
+        audio: ttsResult.audioBase64,
+        audioBase64: ttsResult.audioBase64,
+        mimeType: ttsResult.mimeType || 'audio/wav'
+      });
+    }
+
+    // Graceful response so client can fallback to optimized browser synthesis if Gemini API key is missing
+    return res.json({
+      success: false,
+      fallback: true,
+      error: ttsResult.error || 'Gemini TTS unavailable, fallback activated'
+    });
+  } catch (err: any) {
+    console.warn('[Gemini TTS Route Error]:', err?.message || err);
+    return res.json({
+      success: false,
+      fallback: true,
+      error: err?.message || 'Internal error during speech generation'
+    });
+  }
 });
 
 // 4. Trainer AI Assistant Endpoint

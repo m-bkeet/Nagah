@@ -107,6 +107,7 @@ export const AIHomeworkScannerModal: React.FC<AIHomeworkScannerModalProps> = ({
   const [facingMode, setFacingMode] = useState<'environment' | 'user'>('environment');
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const cameraCaptureRef = useRef<HTMLInputElement | null>(null);
 
   // AI Evaluation Results
   const [analysisResult, setAnalysisResult] = useState<any>(null);
@@ -126,21 +127,30 @@ export const AIHomeworkScannerModal: React.FC<AIHomeworkScannerModalProps> = ({
     }
   }, [defaultCourseId, defaultTraineeId, traineesList]);
 
-  // Start / Stop Camera
+  // Start / Stop Camera with resilient fallback
   const startCamera = async () => {
     try {
       setIsCameraActive(true);
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: facingMode, width: { ideal: 1920 }, height: { ideal: 1080 } }
-      });
+      let stream: MediaStream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: facingMode, width: { ideal: 1280 }, height: { ideal: 720 } }
+        });
+      } catch (err1) {
+        stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      }
+
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         videoRef.current.play();
       }
     } catch (err: any) {
-      console.error('Camera access error:', err);
-      showToast('تعذر فتح الكاميرا، يرجى السماح بالوصول أو اختيار صورة من الملفات', 'error');
+      console.warn('Camera access error, opening native camera directly:', err);
       setIsCameraActive(false);
+      showToast('جاري فتح كاميرا الجهاز المباشرة...', 'info');
+      setTimeout(() => {
+        cameraCaptureRef.current?.click();
+      }, 300);
     }
   };
 
@@ -177,18 +187,60 @@ export const AIHomeworkScannerModal: React.FC<AIHomeworkScannerModalProps> = ({
     }
   };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const processImageFile = async (file: File): Promise<string> => {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const resultStr = e.target?.result as string;
+        if (!resultStr) {
+          resolve('');
+          return;
+        }
+
+        const img = new Image();
+        img.onload = () => {
+          const maxDim = 1600;
+          let width = img.width;
+          let height = img.height;
+          if (width > maxDim || height > maxDim) {
+            if (width > height) {
+              height = Math.round((height * maxDim) / width);
+              width = maxDim;
+            } else {
+              width = Math.round((width * maxDim) / height);
+              height = maxDim;
+            }
+          }
+
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(img, 0, 0, width, height);
+            resolve(canvas.toDataURL('image/jpeg', 0.85));
+          } else {
+            resolve(resultStr);
+          }
+        };
+        img.onerror = () => resolve(resultStr);
+        img.src = resultStr;
+      };
+      reader.onerror = () => resolve('');
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const dataUrl = event.target?.result as string;
+    const dataUrl = await processImageFile(file);
+    if (dataUrl) {
       setImagePreview(dataUrl);
       setImageBase64(dataUrl);
       stopCamera();
-    };
-    reader.readAsDataURL(file);
+    }
   };
 
   // Perform AI Grading Scan
@@ -580,25 +632,42 @@ export const AIHomeworkScannerModal: React.FC<AIHomeworkScannerModalProps> = ({
                     <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
                       <button
                         type="button"
-                        onClick={startCamera}
-                        className="px-5 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white text-sm font-bold rounded-2xl shadow-md flex items-center gap-2 transition-transform active:scale-95"
+                        onClick={() => cameraCaptureRef.current?.click()}
+                        className="px-5 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white text-sm font-bold rounded-2xl shadow-md flex items-center gap-2 transition-transform active:scale-95 cursor-pointer"
                       >
-                        <Camera className="w-4 h-4" />
-                        فتح كاميرا الهاتف / الكمبيوتر
+                        <Camera className="w-4 h-4 text-amber-200" />
+                        <span>تصوير فوري بالكاميرا 📸</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={startCamera}
+                        className="px-4 py-2.5 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 text-slate-700 dark:text-slate-200 text-sm font-bold rounded-2xl shadow-sm flex items-center gap-2 transition-transform active:scale-95 cursor-pointer"
+                      >
+                        <Video className="w-4 h-4 text-purple-600" />
+                        <span>كاميرا الويب المباشرة</span>
                       </button>
 
                       <button
                         type="button"
                         onClick={() => fileInputRef.current?.click()}
-                        className="px-5 py-2.5 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 border border-slate-300 dark:border-slate-600 text-sm font-bold rounded-2xl shadow-sm flex items-center gap-2 transition-transform active:scale-95"
+                        className="px-5 py-2.5 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 border border-slate-300 dark:border-slate-600 text-sm font-bold rounded-2xl shadow-sm flex items-center gap-2 transition-transform active:scale-95 cursor-pointer"
                       >
                         <Upload className="w-4 h-4" />
-                        رفع صورة من الملفات
+                        <span>رفع صورة من الملفات</span>
                       </button>
                     </div>
                   </div>
                 )}
 
+                <input
+                  ref={cameraCaptureRef}
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  onChange={handleFileUpload}
+                  className="hidden"
+                />
                 <input
                   ref={fileInputRef}
                   type="file"

@@ -11,6 +11,7 @@ import {
   Layers,
   Users2,
   CalendarCheck2,
+  CalendarDays,
   Wallet,
   Receipt,
   Star,
@@ -95,7 +96,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'groups', label: 'المجموعات التدريبية', icon: Users2, roles: ['super_admin', 'branch_manager', 'admin_staff', 'receptionist', 'trainer'] },
     { id: 'interactive', label: 'الجلسات التفاعلية', icon: CalendarCheck2, roles: ['super_admin', 'branch_manager', 'admin_staff', 'trainer', 'general_manager'] },
     { id: 'finance', label: 'الخزنة والحسابات', icon: Wallet, roles: ['super_admin', 'branch_manager', 'admin_staff', 'accountant'] },
-    { id: 'points', label: 'نقاط التميز', icon: Star, roles: ['super_admin', 'branch_manager', 'admin_staff', 'trainer'] },
+    { id: 'points', label: 'لوحة التميز', icon: Star, roles: ['super_admin', 'branch_manager', 'admin_staff', 'trainer'] },
     { id: 'exams', label: 'الاختبارات والدرجات', icon: FileSpreadsheet, roles: ['super_admin', 'branch_manager', 'admin_staff', 'trainer'] },
     { id: 'homeworks', label: 'الواجبات والتكاليف', icon: CheckSquare, roles: ['super_admin', 'branch_manager', 'admin_staff', 'trainer'] },
     { id: 'messages', label: 'الرسائل والتواصل', icon: MessageSquare, roles: ['super_admin', 'branch_manager', 'admin_staff', 'receptionist'] },
@@ -153,21 +154,21 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 onClick={() => handleNav(item.id)}
                 className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl font-bold text-xs transition-all text-right group cursor-pointer ${
                   isActive
-                    ? 'bg-gradient-to-r from-purple-600 via-purple-700 to-indigo-700 text-white shadow-lg shadow-purple-600/30 border border-purple-400 font-black dark:bg-gradient-to-r dark:from-purple-600/40 dark:to-indigo-600/30 dark:text-purple-200 dark:border-purple-400/60'
-                    : 'text-slate-800 hover:text-purple-700 hover:bg-purple-50 dark:text-slate-300 dark:hover:text-white dark:hover:bg-slate-800/80 border border-transparent font-bold'
+                    ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20 border border-amber-400 font-black dark:bg-amber-500 dark:text-slate-950 dark:border-amber-400'
+                    : 'text-slate-700 hover:text-amber-700 hover:bg-amber-50/80 dark:text-slate-300 dark:hover:text-white dark:hover:bg-slate-800/80 border border-transparent font-bold'
                 }`}
                 title={isCollapsed ? item.label : undefined}
               >
                 <Icon
                   className={`w-4 h-4 shrink-0 transition-colors ${
-                    isActive ? 'text-white dark:text-purple-200 stroke-[2.5]' : 'text-slate-600 group-hover:text-purple-600 dark:text-slate-400 dark:group-hover:text-purple-300 stroke-2'
+                    isActive ? 'text-slate-950 dark:text-slate-950 stroke-[2.5]' : 'text-slate-500 group-hover:text-amber-600 dark:text-slate-400 dark:group-hover:text-amber-400 stroke-2'
                   }`}
                 />
                 {!isCollapsed && (
                   <span className="truncate leading-none tracking-wide text-current">{item.label}</span>
                 )}
                 {!isCollapsed && isActive && (
-                  <div className="mr-auto w-1.5 h-1.5 rounded-full bg-white dark:bg-purple-300 animate-pulse" />
+                  <div className="mr-auto w-1.5 h-1.5 rounded-full bg-slate-950 dark:bg-slate-950 animate-pulse" />
                 )}
               </button>
             );

@@ -12,7 +12,7 @@ export class GeminiTTSProvider {
    */
   public async speak(
     text: string,
-    options?: { promptStyle?: string; signal?: AbortSignal }
+    options?: { promptStyle?: string; voiceName?: string; signal?: AbortSignal }
   ): Promise<HTMLAudioElement | null> {
     try {
       const res = await fetch('/api/gemini/tts', {
@@ -20,7 +20,8 @@ export class GeminiTTSProvider {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           text,
-          promptStyle: options?.promptStyle
+          promptStyle: options?.promptStyle,
+          voiceName: options?.voiceName || 'Puck'
         }),
         signal: options?.signal
       });
@@ -420,9 +421,9 @@ export class AudioController {
   }
 
   /**
-   * Speak arbitrary text
+   * Speak arbitrary text with Gemini Studio TTS or graceful fallback
    */
-  public async speakText(text: string, options?: { promptStyle?: string; eventId?: string }): Promise<void> {
+  public async speakText(text: string, options?: { promptStyle?: string; voiceName?: string; eventId?: string }): Promise<void> {
     this.stopAll();
 
     if (options?.eventId) {
@@ -435,8 +436,11 @@ export class AudioController {
     }
 
     const abortCtrl = this.createAbortController();
+    const promptStyle = options?.promptStyle || `انطق هذه الجملة بصوت مذيع إذاعي مصري حماسي، مبهج، دافئ وطبيعي 100% بدون أي تصنع: "${text}"`;
+    
     const geminiAudio = await this.geminiProvider.speak(text, {
-      promptStyle: options?.promptStyle,
+      promptStyle,
+      voiceName: options?.voiceName || 'Puck',
       signal: abortCtrl.signal
     });
 
@@ -447,12 +451,38 @@ export class AudioController {
       try {
         await geminiAudio.play();
         return;
-      } catch (e) {}
+      } catch (e) {
+        console.warn('[AudioController] Gemini Audio element play error, falling back:', e);
+      }
     }
 
     if (!abortCtrl.signal.aborted) {
       await this.browserProvider.speak(text, { signal: abortCtrl.signal });
     }
+  }
+
+  /**
+   * Announce Podium Ceremony Step (3rd, 2nd, 1st place) in warm, authentic Egyptian celebration tone
+   */
+  public async speakCeremonyReveal(rank: 1 | 2 | 3, traineeName: string, options?: { voiceName?: string; isMuted?: boolean }): Promise<void> {
+    if (options?.isMuted) return;
+
+    let naturalText = '';
+    if (rank === 3) {
+      naturalText = `المركز الثالث في جلسة اليوم مع المتدرب المتميز... ${traineeName}! مجهود علمي مشرف وأداء رائع، تحية وتقدير لتفوقه!`;
+    } else if (rank === 2) {
+      naturalText = `المركز الثاني والتفوق المستحق مع المتدرب... ${traineeName}! أداء علمي رفيع وتألق مستمر، مبارك هذا الإنجاز!`;
+    } else {
+      naturalText = `المركز الأول وبطل التميز في جلسة اليوم... المتدرب المتميز... ${traineeName}! مبارك المركز الأول وصدارة لوحة الشرف!`;
+    }
+
+    const promptStyle = `أنت مذيع مصري موهوب في حفل تكريم وتتويج للطلاب والشباب في مركز تدريب. انطق بحماس بهيج وفرحة حقيقية ولهجة مصرية أصيلة واضحة ودافئة 100% النص التالي: "${naturalText}"`;
+
+    await this.speakText(naturalText, {
+      promptStyle,
+      voiceName: options?.voiceName || 'Puck',
+      eventId: `ceremony_rank_${rank}_${traineeName}`
+    });
   }
 
   /**

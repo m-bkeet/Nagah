@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useCenter } from '../context/CenterContext';
 import { api } from '../services/api';
 import { SessionCeremonyModal } from '../components/SessionCeremonyModal';
+import { SocialPublishingStudioModal } from '../components/SocialPublishingStudioModal';
 import {
   Trophy,
   Award,
@@ -25,16 +26,31 @@ import {
   Target,
   RefreshCw,
   Printer,
-  ChevronDown
+  ChevronDown,
+  Share2,
+  Send
 } from 'lucide-react';
 import { Trainee, PointTransaction, Group } from '../types';
 
 export const PointsView: React.FC = () => {
-  const { activeBranchId, showToast, refreshKey } = useCenter();
-  const [trainees, setTrainees] = useState<Trainee[]>([]);
-  const [groups, setGroups] = useState<Group[]>([]);
+  const { 
+    activeBranchId, 
+    showToast, 
+    refreshKey,
+    trainees: ctxTrainees,
+    groups: ctxGroups
+  } = useCenter();
+  const [trainees, setTrainees] = useState<Trainee[]>(() => {
+    const list = ctxTrainees || [];
+    const filtered = activeBranchId !== 'all' ? list.filter(t => t.branchId === activeBranchId) : list;
+    return filtered.slice().sort((a, b) => (b.points || 0) - (a.points || 0));
+  });
+  const [groups, setGroups] = useState<Group[]>(() => {
+    const list = ctxGroups || [];
+    return activeBranchId !== 'all' ? list.filter(g => g.branchId === activeBranchId) : list;
+  });
   const [transactions, setTransactions] = useState<PointTransaction[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState<boolean>(() => !ctxTrainees || ctxTrainees.length === 0);
   const [searchQuery, setSearchQuery] = useState('');
   
   // Filters for leaderboard per group, timeframe (daily, weekly, monthly, all)
@@ -44,6 +60,7 @@ export const PointsView: React.FC = () => {
 
   const [isAdjustModalOpen, setIsAdjustModalOpen] = useState(false);
   const [isCeremonyOpen, setIsCeremonyOpen] = useState(false);
+  const [isSocialStudioOpen, setIsSocialStudioOpen] = useState(false);
   const [activeTrainee, setActiveTrainee] = useState<Trainee | null>(null);
 
   const [adjustAmount, setAdjustAmount] = useState<number>(10);
@@ -51,25 +68,29 @@ export const PointsView: React.FC = () => {
   const [adjustReason, setAdjustReason] = useState('مشاركة متميزة وتفاعل إيجابي في المحاضرة');
 
   useEffect(() => {
+    if (ctxTrainees && ctxTrainees.length > 0) {
+      const filtered = activeBranchId !== 'all' ? ctxTrainees.filter(t => t.branchId === activeBranchId) : ctxTrainees;
+      setTrainees(filtered.slice().sort((a, b) => (b.points || 0) - (a.points || 0)));
+      setIsLoading(false);
+    }
+  }, [ctxTrainees, activeBranchId]);
+
+  useEffect(() => {
+    if (ctxGroups && ctxGroups.length > 0) {
+      setGroups(activeBranchId !== 'all' ? ctxGroups.filter(g => g.branchId === activeBranchId) : ctxGroups);
+    }
+  }, [ctxGroups, activeBranchId]);
+
+  useEffect(() => {
     loadData();
   }, [activeBranchId, refreshKey]);
 
   const loadData = async () => {
-    setIsLoading(true);
     try {
-      const [tRes, gRes, txRes] = await Promise.all([
-        api.getTrainees(),
-        api.getGroups(),
-        api.getPointTransactions()
-      ]);
-      const filteredBranches = activeBranchId !== 'all' ? tRes.filter(t => t.branchId === activeBranchId) : tRes;
-      setTrainees(filteredBranches.sort((a, b) => (b.points || 0) - (a.points || 0)));
-      setGroups(activeBranchId !== 'all' ? gRes.filter(g => g.branchId === activeBranchId) : gRes);
+      const txRes = await api.getPointTransactions().catch(() => []);
       setTransactions(txRes || []);
     } catch (err: any) {
-      showToast(err.message || 'فشل تحميل بيانات النقاط', 'error');
-    } finally {
-      setIsLoading(false);
+      // soft
     }
   };
 
@@ -293,37 +314,85 @@ export const PointsView: React.FC = () => {
         </div>
       </div>
 
-      {/* 3D Glowing Champion Ceremony Callout Banner */}
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-amber-50 via-yellow-50 to-orange-50 dark:from-amber-950/90 dark:via-slate-900/95 dark:to-indigo-950/90 border-2 border-amber-300 dark:border-amber-400/80 p-5 md:p-6 shadow-sm dark:shadow-[0_15px_40px_rgba(245,158,11,0.25)] backdrop-blur-xl group transition-all">
-        <div className="absolute top-0 right-0 w-full h-full bg-[radial-gradient(circle_at_top_right,rgba(251,191,36,0.15),transparent_60%)] pointer-events-none" />
+      {/* Pro Centers: Dual Social Studio & Live Ceremony Command Hub */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         
-        <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-5">
-          <div className="flex items-center gap-4 text-right">
-            <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-amber-500 via-yellow-400 to-amber-300 border-2 border-white flex items-center justify-center text-slate-950 shadow-md shadow-amber-500/30 shrink-0 transform group-hover:scale-110 group-hover:rotate-3 transition-all">
-              <PartyPopper className="w-9 h-9 text-slate-950" />
+        {/* Hub 1: Social Media & Facebook Publishing Studio */}
+        <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-blue-900/90 via-indigo-950/95 to-slate-900 border-2 border-blue-400/80 p-5 md:p-6 shadow-md dark:shadow-[0_15px_40px_rgba(59,130,246,0.25)] backdrop-blur-xl group transition-all flex flex-col justify-between">
+          <div className="absolute top-0 right-0 w-full h-full bg-[radial-gradient(circle_at_top_right,rgba(59,130,246,0.2),transparent_60%)] pointer-events-none" />
+          
+          <div className="relative z-10 flex items-start gap-4">
+            <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-blue-500 via-indigo-500 to-amber-400 border-2 border-white/40 flex items-center justify-center text-white shadow-lg shadow-blue-500/30 shrink-0 transform group-hover:scale-105 group-hover:rotate-3 transition-all">
+              <Share2 className="w-7 h-7 text-white" />
             </div>
-            <div>
-              <div className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full text-[11px] font-black bg-amber-400 text-slate-950 mb-1 shadow font-mono">
-                <span>🌟 حفل التتويج التفاعلي المباشر</span>
+            <div className="space-y-1">
+              <div className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full text-[10px] font-black bg-blue-500 text-white shadow font-mono">
+                <span>📢 Social Studio Pro</span>
               </div>
-              <h3 className="font-black text-lg text-amber-900 dark:text-amber-100 leading-tight">
-                منصة تكريم الأبطال وحفل نجوم الجلسة الحماسي 🏆
+              <h3 className="font-black text-base md:text-lg text-white leading-tight">
+                استوديو النشر على فيسبوك وسوشيال ميديا 🚀
               </h3>
-              <p className="text-xs text-slate-600 dark:text-slate-300 mt-1 max-w-2xl leading-relaxed">
-                اضغط لبدء شاشة التتويج التفاعلية مع تصفيق الأبطال، إعلان المراتب من الثالث للأول مع المؤثرات الصوتية والمنصة الذهبية الثلاثية الأبعاد!
+              <p className="text-xs text-blue-200/90 leading-relaxed">
+                توليد ونشر بوستات وبطاقات تكريم الأبطال على فيسبوك وواتساب بدقة 4K مع نصوص تسويقية ذكية ومخصصة بضغطة زر واحدة!
               </p>
             </div>
           </div>
 
-          {/* 3D Radiant Tactile Button */}
-          <button
-            onClick={() => setIsCeremonyOpen(true)}
-            className="w-full md:w-auto px-7 py-3.5 rounded-2xl bg-gradient-to-r from-amber-400 via-yellow-400 to-amber-500 hover:from-yellow-300 hover:to-amber-400 text-slate-950 font-black text-xs shadow-[0_4px_0_#b45309] hover:shadow-[0_2px_0_#b45309] hover:translate-y-[2px] active:shadow-none active:translate-y-[4px] transition-all flex items-center justify-center gap-2.5 shrink-0 border border-yellow-300 cursor-pointer"
-          >
-            <Crown className="w-5 h-5 text-slate-950 animate-bounce" />
-            <span className="text-sm">🏆 بدء حفل إظهار نجوم الجلسة الان</span>
-          </button>
+          <div className="mt-5 pt-4 border-t border-white/10 flex items-center justify-between gap-3 relative z-10">
+            <span className="text-[11px] font-bold text-amber-300 font-mono flex items-center gap-1">
+              <Sparkles className="w-3.5 h-3.5" />
+              جاهز للنشر الفوري
+            </span>
+
+            <button
+              type="button"
+              onClick={() => setIsSocialStudioOpen(true)}
+              className="px-6 py-3 rounded-2xl bg-gradient-to-r from-blue-500 via-indigo-600 to-blue-600 hover:from-blue-600 hover:to-indigo-700 text-white font-black text-xs shadow-lg shadow-blue-500/30 active:scale-95 transition-all flex items-center gap-2 cursor-pointer border border-blue-300/40"
+            >
+              <Share2 className="w-4 h-4" />
+              <span>فتح استوديو النشر على فيسبوك 📢</span>
+            </button>
+          </div>
         </div>
+
+        {/* Hub 2: Live Podium Ceremony */}
+        <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-amber-50 via-yellow-50 to-orange-50 dark:from-amber-950/90 dark:via-slate-900/95 dark:to-indigo-950/90 border-2 border-amber-300 dark:border-amber-400/80 p-5 md:p-6 shadow-md dark:shadow-[0_15px_40px_rgba(245,158,11,0.25)] backdrop-blur-xl group transition-all flex flex-col justify-between">
+          <div className="absolute top-0 right-0 w-full h-full bg-[radial-gradient(circle_at_top_right,rgba(251,191,36,0.15),transparent_60%)] pointer-events-none" />
+          
+          <div className="relative z-10 flex items-start gap-4">
+            <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-amber-500 via-yellow-400 to-amber-300 border-2 border-white flex items-center justify-center text-slate-950 shadow-lg shadow-amber-500/30 shrink-0 transform group-hover:scale-105 group-hover:rotate-3 transition-all">
+              <PartyPopper className="w-7 h-7 text-slate-950" />
+            </div>
+            <div className="space-y-1">
+              <div className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full text-[10px] font-black bg-amber-400 text-slate-950 shadow font-mono">
+                <span>🌟 حفل التتويج التفاعلي المباشر</span>
+              </div>
+              <h3 className="font-black text-base md:text-lg text-amber-900 dark:text-amber-100 leading-tight">
+                منصة تكريم الأبطال ونجوم الجلسة 🏆
+              </h3>
+              <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+                شاشة التتويج التفاعلية مع تصفيق الجماهير، إعلان المراكز الثلاثة، ألعاب نارية والمؤثرات الصوتية الاحتفالية!
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-5 pt-4 border-t border-amber-200 dark:border-slate-800 flex items-center justify-between gap-3 relative z-10">
+            <span className="text-[11px] font-bold text-amber-700 dark:text-amber-400 font-mono flex items-center gap-1">
+              <Crown className="w-3.5 h-3.5" />
+              عرض شاشة كاملة بالقاعة
+            </span>
+
+            <button
+              type="button"
+              onClick={() => setIsCeremonyOpen(true)}
+              className="px-6 py-3 rounded-2xl bg-gradient-to-r from-amber-400 via-yellow-400 to-amber-500 hover:from-yellow-300 hover:to-amber-400 text-slate-950 font-black text-xs shadow-[0_4px_0_#b45309] hover:shadow-[0_2px_0_#b45309] hover:translate-y-[2px] active:shadow-none active:translate-y-[4px] transition-all flex items-center gap-2 cursor-pointer border border-yellow-300"
+            >
+              <Crown className="w-4 h-4 animate-bounce" />
+              <span>بدء حفل نجوم الجلسة الآن 🏆</span>
+            </button>
+          </div>
+        </div>
+
       </div>
 
       {/* 3D Interactive Badge Categories Showcase */}
@@ -531,6 +600,14 @@ export const PointsView: React.FC = () => {
 
                   <div className="flex items-center gap-1.5">
                     <button
+                      type="button"
+                      onClick={() => setIsSocialStudioOpen(true)}
+                      className="p-2 rounded-xl bg-blue-50 hover:bg-blue-100 dark:bg-blue-500/20 dark:hover:bg-blue-500/30 text-blue-700 dark:text-blue-300 border border-blue-300 dark:border-blue-500/40 text-xs font-bold transition-all active:scale-95 shadow-xs cursor-pointer"
+                      title="نشر بطاقة هذا البطل على فيسبوك وسوشيال ميديا"
+                    >
+                      <Share2 className="w-3.5 h-3.5" />
+                    </button>
+                    <button
                       onClick={() => handleQuickAdd(t, 10, 'مشاركة ممتازة في المعمل')}
                       className="px-3 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-500/20 dark:hover:bg-emerald-500/30 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-500/40 text-xs font-bold transition-all active:scale-95 shadow-xs cursor-pointer"
                       title="إضافة 10 نقاط سريعة"
@@ -682,7 +759,15 @@ export const PointsView: React.FC = () => {
                       </td>
 
                       <td className="p-4 text-center">
-                        <div className="flex items-center justify-center gap-2">
+                        <div className="flex items-center justify-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => setIsSocialStudioOpen(true)}
+                            className="p-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 dark:bg-blue-500/20 dark:hover:bg-blue-500/30 text-blue-700 dark:text-blue-300 border border-blue-300 dark:border-blue-500/40 text-[11px] font-bold transition-all active:scale-95 cursor-pointer shadow-xs"
+                            title="نشر بطاقة الطالب على فيسبوك"
+                          >
+                            <Share2 className="w-3.5 h-3.5" />
+                          </button>
                           <button
                             onClick={() => handleQuickAdd(t, 10, 'مشاركة ممتازة بالجلسة')}
                             className="px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-500/20 dark:hover:bg-emerald-500/30 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-500/40 text-[11px] font-bold transition-all active:scale-95 cursor-pointer shadow-xs"
@@ -694,7 +779,7 @@ export const PointsView: React.FC = () => {
                             onClick={() => handleOpenAdjust(t)}
                             className="px-3 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 dark:bg-amber-500/20 dark:hover:bg-amber-500/30 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-500/40 text-[11px] font-bold transition-all active:scale-95 cursor-pointer shadow-xs"
                           >
-                            تعديل النقاط
+                            تعديل
                           </button>
                         </div>
                       </td>
@@ -831,6 +916,17 @@ export const PointsView: React.FC = () => {
           onAwardBonus={(traineeId, points, reason) => {
             handleAddPoints(traineeId, points, reason);
           }}
+        />
+      )}
+
+      {/* Social Media & Facebook Publishing Studio Modal */}
+      {isSocialStudioOpen && (
+        <SocialPublishingStudioModal
+          trainees={trainees}
+          groups={groups}
+          initialGroupId={selectedGroupFilter !== 'all' ? selectedGroupFilter : undefined}
+          onClose={() => setIsSocialStudioOpen(false)}
+          onShowToast={showToast}
         />
       )}
     </div>

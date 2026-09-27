@@ -1,6 +1,6 @@
 import React, { useRef } from 'react';
 import { X, Printer, Download, Share2, ShieldCheck, Award, Calendar, Clock, Building2, User } from 'lucide-react';
-import html2canvas from 'html2canvas';
+import { captureElementToCanvas } from '../utils/captureUtils';
 import { TrainerAttestation } from '../types';
 
 interface TrainerAttestationModalProps {
@@ -31,11 +31,11 @@ export const TrainerAttestationModal: React.FC<TrainerAttestationModalProps> = (
   const handleDownloadImage = async () => {
     if (!certificateRef.current) return;
     try {
-      const canvas = await html2canvas(certificateRef.current, {
+      const canvas = await captureElementToCanvas(certificateRef.current, {
         scale: 2,
-        useCORS: true,
         backgroundColor: '#020617'
       });
+      if (!canvas) return;
       const image = canvas.toDataURL('image/png');
       const link = document.createElement('a');
       link.href = image;

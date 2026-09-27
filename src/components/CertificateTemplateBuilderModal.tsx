@@ -13,7 +13,7 @@ interface CertificateTemplateBuilderModalProps {
 const PRESET_BACKGROUNDS = [
   {
     id: 'royal_gold',
-    name: 'الذهبي الملكي الملكي (Royal Gold)',
+    name: 'النمط الملكي الذهبي',
     theme: 'classic_gold',
     primaryColor: '#b45309', // gold amber
     accentColor: '#d97706',

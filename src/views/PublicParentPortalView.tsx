@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import html2canvas from 'html2canvas';
+import { captureElementToCanvas } from '../utils/captureUtils';
 import { resilientOfflineService } from '../services/resilientOfflineService';
 import { cloudDb } from '../services/cloudDatabase';
 import { ThemeQuickSwitcher } from '../components/ThemeQuickSwitcher';
@@ -756,7 +756,8 @@ export const PublicParentPortalView: React.FC<PublicParentPortalViewProps> = ({ 
       return;
     }
     try {
-      const canvas = await html2canvas(el, { scale: 2, useCORS: true, backgroundColor: '#ffffff' });
+      const canvas = await captureElementToCanvas(el, { scale: 2, backgroundColor: '#ffffff' });
+      if (!canvas) throw new Error('Capture failed');
       const imgData = canvas.toDataURL('image/png');
       const link = document.createElement('a');
       link.href = imgData;

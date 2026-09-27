@@ -35,14 +35,14 @@ import {
 import { Program, Course, Group, Trainee } from '../types';
 
 export const PROGRAM_CATEGORIES = [
-  { id: 'برمجة وتطوير', label: 'برمجة وتطوير البرمجيات', icon: Code, color: 'text-blue-400 bg-blue-500/10 border-blue-500/30' },
-  { id: 'لغات وترجمة', label: 'اللغات والترجمة', icon: Globe, color: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30' },
-  { id: 'حاسب وتقنية', label: 'الحاسب الآلي والتقنية', icon: Laptop, color: 'text-cyan-400 bg-cyan-500/10 border-cyan-500/30' },
-  { id: 'تنمية بشرية', label: 'التنمية البشرية والقيادة', icon: Brain, color: 'text-amber-400 bg-amber-500/10 border-amber-500/30' },
-  { id: 'قدرات ومواهب', label: 'القدرات والمواهب', icon: Sparkles, color: 'text-purple-400 bg-purple-500/10 border-purple-500/30' },
-  { id: 'مناهج دراسية', label: 'المناهج والصفوف الدراسية', icon: GraduationCap, color: 'text-indigo-400 bg-indigo-500/10 border-indigo-500/30' },
-  { id: 'إداري ومالي', label: 'الإدارة والأعمال', icon: Briefcase, color: 'text-teal-400 bg-teal-500/10 border-teal-500/30' },
-  { id: 'عام', label: 'عام وتخصصات أخرى', icon: Layers, color: 'text-slate-300 bg-slate-500/10 border-slate-500/30' },
+  { id: 'برمجة وتطوير', label: 'برمجة وتطوير البرمجيات', icon: Code, color: 'text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-500/10 border-blue-200 dark:border-blue-500/30' },
+  { id: 'لغات وترجمة', label: 'اللغات والترجمة', icon: Globe, color: 'text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/10 border-emerald-200 dark:border-emerald-500/30' },
+  { id: 'حاسب وتقنية', label: 'الحاسب الآلي والتقنية', icon: Laptop, color: 'text-cyan-600 dark:text-cyan-400 bg-cyan-50 dark:bg-cyan-500/10 border-cyan-200 dark:border-cyan-500/30' },
+  { id: 'تنمية بشرية', label: 'التنمية البشرية والقيادة', icon: Brain, color: 'text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10 border-amber-200 dark:border-amber-500/30' },
+  { id: 'قدرات ومواهب', label: 'القدرات والمواهب', icon: Sparkles, color: 'text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-500/10 border-purple-200 dark:border-purple-500/30' },
+  { id: 'مناهج دراسية', label: 'المناهج والصفوف الدراسية', icon: GraduationCap, color: 'text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-500/10 border-indigo-200 dark:border-indigo-500/30' },
+  { id: 'إداري ومالي', label: 'الإدارة والأعمال', icon: Briefcase, color: 'text-teal-600 dark:text-teal-400 bg-teal-50 dark:bg-teal-500/10 border-teal-200 dark:border-teal-500/30' },
+  { id: 'عام', label: 'عام وتخصصات أخرى', icon: Layers, color: 'text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-500/10 border-slate-200 dark:border-slate-500/30' },
 ];
 
 export const TARGET_AUDIENCES = [
@@ -404,19 +404,19 @@ export const ProgramsView: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Page Header */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 bg-slate-800/80 border border-slate-700/80 p-5 rounded-2xl backdrop-blur-md shadow-xl">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 bg-white dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 p-5 rounded-2xl backdrop-blur-md shadow-sm dark:shadow-xl">
         <div className="flex items-center gap-3.5">
-          <div className="p-3 bg-gradient-to-br from-indigo-500/20 to-purple-500/20 border border-indigo-500/30 rounded-2xl text-indigo-400 shadow-inner">
+          <div className="p-3 bg-gradient-to-br from-indigo-500/10 to-purple-500/10 border border-indigo-500/20 dark:border-indigo-500/30 rounded-2xl text-indigo-600 dark:text-indigo-400 shadow-inner">
             <Layers className="w-7 h-7" />
           </div>
           <div>
-            <h2 className="text-xl font-black text-slate-100 flex items-center gap-2">
+            <h2 className="text-xl font-black text-slate-900 dark:text-slate-100 flex items-center gap-2">
               البرامج التدريبية الشاملة
-              <span className="text-xs bg-indigo-500/20 text-indigo-300 px-2.5 py-1 rounded-full font-mono font-bold border border-indigo-500/30">
+              <span className="text-xs bg-indigo-50 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300 px-2.5 py-1 rounded-full font-mono font-bold border border-indigo-200 dark:border-indigo-500/30">
                 {totalProgramsCount} برنامج
               </span>
             </h2>
-            <p className="text-xs text-slate-400 mt-1">
+            <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">
               إدارة وهيكلة المسارات والأقسام الرئيسية (البرمجة، اللغات، التنمية البشرية، الحاسب، المناهج التعليمية)
             </p>
           </div>
@@ -425,7 +425,7 @@ export const ProgramsView: React.FC = () => {
         <div className="flex items-center gap-2">
           <button
             onClick={handleOpenAdd}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs shadow-lg shadow-amber-500/20 transition-all transform hover:-translate-y-0.5 active:translate-y-0"
+            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 hover:to-yellow-400 text-slate-950 font-black text-xs shadow-lg shadow-amber-500/20 transition-all border border-amber-300 transform hover:-translate-y-0.5 active:translate-y-0"
           >
             <Plus className="w-4 h-4" />
             <span>إنشاء برنامج جديد</span>
@@ -435,49 +435,49 @@ export const ProgramsView: React.FC = () => {
 
       {/* Top Stats Overview Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="bg-slate-800/60 border border-slate-700/70 p-4 rounded-2xl flex items-center gap-3.5 backdrop-blur-md">
-          <div className="p-3 bg-indigo-500/10 border border-indigo-500/20 rounded-xl text-indigo-400">
+        <div className="bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/70 p-4 rounded-2xl flex items-center gap-3.5 shadow-sm backdrop-blur-md">
+          <div className="p-3 bg-indigo-50 dark:bg-indigo-500/10 border border-indigo-100 dark:border-indigo-500/20 rounded-xl text-indigo-600 dark:text-indigo-400">
             <Layers className="w-5 h-5" />
           </div>
           <div>
-            <span className="text-[11px] font-bold text-slate-400 block">إجمالي البرامج</span>
-            <span className="text-lg font-black text-slate-100 font-mono">{totalProgramsCount}</span>
+            <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 block">إجمالي البرامج</span>
+            <span className="text-lg font-black text-slate-900 dark:text-slate-100 font-mono">{totalProgramsCount}</span>
           </div>
         </div>
 
-        <div className="bg-slate-800/60 border border-slate-700/70 p-4 rounded-2xl flex items-center gap-3.5 backdrop-blur-md">
-          <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-emerald-400">
+        <div className="bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/70 p-4 rounded-2xl flex items-center gap-3.5 shadow-sm backdrop-blur-md">
+          <div className="p-3 bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-100 dark:border-emerald-500/20 rounded-xl text-emerald-600 dark:text-emerald-400">
             <CheckCircle2 className="w-5 h-5" />
           </div>
           <div>
-            <span className="text-[11px] font-bold text-slate-400 block">البرامج النشطة</span>
-            <span className="text-lg font-black text-emerald-400 font-mono">{activeProgramsCount}</span>
+            <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 block">البرامج النشطة</span>
+            <span className="text-lg font-black text-emerald-600 dark:text-emerald-400 font-mono">{activeProgramsCount}</span>
           </div>
         </div>
 
-        <div className="bg-slate-800/60 border border-slate-700/70 p-4 rounded-2xl flex items-center gap-3.5 backdrop-blur-md">
-          <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-xl text-blue-400">
+        <div className="bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/70 p-4 rounded-2xl flex items-center gap-3.5 shadow-sm backdrop-blur-md">
+          <div className="p-3 bg-blue-50 dark:bg-blue-500/10 border border-blue-100 dark:border-blue-500/20 rounded-xl text-blue-600 dark:text-blue-400">
             <BookOpen className="w-5 h-5" />
           </div>
           <div>
-            <span className="text-[11px] font-bold text-slate-400 block">الدورات المندمجة</span>
-            <span className="text-lg font-black text-blue-400 font-mono">{totalBundledCourses}</span>
+            <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 block">الدورات المندمجة</span>
+            <span className="text-lg font-black text-blue-600 dark:text-blue-400 font-mono">{totalBundledCourses}</span>
           </div>
         </div>
 
-        <div className="bg-slate-800/60 border border-slate-700/70 p-4 rounded-2xl flex items-center gap-3.5 backdrop-blur-md">
-          <div className="p-3 bg-purple-500/10 border border-purple-500/20 rounded-xl text-purple-400">
+        <div className="bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/70 p-4 rounded-2xl flex items-center gap-3.5 shadow-sm backdrop-blur-md">
+          <div className="p-3 bg-purple-50 dark:bg-purple-500/10 border border-purple-100 dark:border-purple-500/20 rounded-xl text-purple-600 dark:text-purple-400">
             <Sparkles className="w-5 h-5" />
           </div>
           <div>
-            <span className="text-[11px] font-bold text-slate-400 block">التخصصات والمجالات</span>
-            <span className="text-lg font-black text-purple-400 font-mono">{categoriesCount}</span>
+            <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 block">التخصصات والمجالات</span>
+            <span className="text-lg font-black text-purple-600 dark:text-purple-400 font-mono">{categoriesCount}</span>
           </div>
         </div>
       </div>
 
       {/* Toolbar: Search, Category Filter, Status Filter & Sorting */}
-      <div className="bg-slate-800/60 border border-slate-700/70 p-3.5 rounded-2xl backdrop-blur-md flex flex-wrap items-center justify-between gap-3">
+      <div className="bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/70 p-3.5 rounded-2xl shadow-sm backdrop-blur-md flex flex-wrap items-center justify-between gap-3">
         {/* Search */}
         <div className="relative flex-1 min-w-[220px]">
           <Search className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2" />
@@ -486,7 +486,7 @@ export const ProgramsView: React.FC = () => {
             placeholder="ابحث باسم البرنامج، الكود، أو الوصف..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-slate-900/80 border border-slate-700 rounded-xl pr-9 pl-3 py-2 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+            className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl pr-9 pl-3 py-2 text-xs text-slate-900 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-indigo-500"
           />
         </div>
 
@@ -496,7 +496,7 @@ export const ProgramsView: React.FC = () => {
           <select
             value={selectedCategory}
             onChange={(e) => setSelectedCategory(e.target.value)}
-            className="bg-slate-900/80 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-300 focus:outline-none focus:border-indigo-500"
+            className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-800 dark:text-slate-300 font-bold focus:outline-none focus:border-indigo-500"
           >
             <option value="all">كل المجال والتخصصات</option>
             {PROGRAM_CATEGORIES.map(cat => (
@@ -510,7 +510,7 @@ export const ProgramsView: React.FC = () => {
           <select
             value={selectedStatus}
             onChange={(e) => setSelectedStatus(e.target.value)}
-            className="bg-slate-900/80 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-300 focus:outline-none focus:border-indigo-500"
+            className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-800 dark:text-slate-300 font-bold focus:outline-none focus:border-indigo-500"
           >
             <option value="all">كل الحالات</option>
             <option value="active">نشط فقط</option>
@@ -525,7 +525,7 @@ export const ProgramsView: React.FC = () => {
           <select
             value={sortBy}
             onChange={(e: any) => setSortBy(e.target.value)}
-            className="bg-slate-900/80 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-300 focus:outline-none focus:border-indigo-500"
+            className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-800 dark:text-slate-300 font-bold focus:outline-none focus:border-indigo-500"
           >
             <option value="createdAt">الأحدث إنشاءً</option>
             <option value="name">أبجدياً بالاسم</option>
@@ -537,18 +537,18 @@ export const ProgramsView: React.FC = () => {
       {/* Program Cards Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
         {isLoading ? (
-          <div className="col-span-full py-16 text-center text-slate-400 flex flex-col items-center gap-2">
+          <div className="col-span-full py-16 text-center text-slate-500 dark:text-slate-400 flex flex-col items-center gap-2">
             <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
             <span>جاري تحميل البرامج التدريبية...</span>
           </div>
         ) : filteredPrograms.length === 0 ? (
-          <div className="col-span-full py-16 bg-slate-800/40 border border-slate-700/50 rounded-2xl text-center text-slate-400 space-y-3">
-            <Layers className="w-12 h-12 text-slate-600 mx-auto opacity-50" />
-            <p className="font-bold text-sm text-slate-300">لا توجد برامج تدريبية مطابقة للبحث</p>
+          <div className="col-span-full py-16 bg-white dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700/50 rounded-2xl text-center text-slate-500 dark:text-slate-400 space-y-3 shadow-sm">
+            <Layers className="w-12 h-12 text-slate-400 dark:text-slate-600 mx-auto opacity-50" />
+            <p className="font-bold text-sm text-slate-800 dark:text-slate-300">لا توجد برامج تدريبية مطابقة للبحث</p>
             <p className="text-xs text-slate-500">يمكنك إضافة برنامج جديد أو تعديل خيارات التصفية والبحث.</p>
             <button
               onClick={handleOpenAdd}
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-amber-500 text-slate-950 font-bold text-xs"
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs shadow-md shadow-amber-500/20"
             >
               <Plus className="w-4 h-4" />
               <span>إنشاء برنامج جديد</span>
@@ -564,7 +564,7 @@ export const ProgramsView: React.FC = () => {
             return (
               <div
                 key={p.id}
-                className="bg-slate-800/80 border border-slate-700/80 rounded-2xl p-5 shadow-xl backdrop-blur-md flex flex-col justify-between hover:border-indigo-500/50 transition-all duration-200 group"
+                className="bg-white dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 rounded-2xl p-5 shadow-sm hover:shadow-md dark:shadow-xl backdrop-blur-md flex flex-col justify-between hover:border-indigo-400 dark:hover:border-indigo-500/50 transition-all duration-200 group"
               >
                 <div>
                   {/* Top Header Row */}
@@ -574,11 +574,11 @@ export const ProgramsView: React.FC = () => {
                         <CatIcon className="w-5 h-5" />
                       </div>
                       <div>
-                        <h3 className="font-bold text-base text-slate-100 group-hover:text-indigo-300 transition-colors">
+                        <h3 className="font-black text-base text-slate-900 dark:text-slate-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-300 transition-colors">
                           {p.name}
                         </h3>
                         <div className="flex items-center gap-2 mt-0.5">
-                          <span className="font-mono text-[10px] text-slate-400 bg-slate-900/80 px-2 py-0.5 rounded border border-slate-700/60 font-bold">
+                          <span className="font-mono text-[10px] text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-900/80 px-2 py-0.5 rounded border border-slate-200 dark:border-slate-700/60 font-bold">
                             كود: {p.code}
                           </span>
                           <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${catMeta.color}`}>
@@ -591,10 +591,10 @@ export const ProgramsView: React.FC = () => {
                     {/* Status Badge */}
                     <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full border shrink-0 ${
                       p.status === 'inactive'
-                        ? 'bg-rose-500/10 text-rose-400 border-rose-500/30'
+                        ? 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-500/10 dark:text-rose-400 dark:border-rose-500/30'
                         : p.status === 'upcoming'
-                        ? 'bg-amber-500/10 text-amber-400 border-amber-500/30'
-                        : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                        ? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/30'
+                        : 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/30'
                     }`}>
                       {p.status === 'inactive' ? 'غير نشط' : p.status === 'upcoming' ? 'قريباً' : 'نشط'}
                     </span>
@@ -603,33 +603,33 @@ export const ProgramsView: React.FC = () => {
                   {/* Target Audience Badge & Description */}
                   {p.targetAudience && (
                     <div className="mb-2">
-                      <span className="text-[10px] font-bold text-indigo-300 bg-indigo-950/60 border border-indigo-800/50 px-2 py-0.5 rounded-md inline-block">
+                      <span className="text-[10px] font-bold text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800/50 px-2 py-0.5 rounded-md inline-block">
                         🎯 {p.targetAudience}
                       </span>
                     </div>
                   )}
 
-                  <p className="text-xs text-slate-400 line-clamp-2 mb-4 leading-relaxed">
+                  <p className="text-xs text-slate-600 dark:text-slate-400 line-clamp-2 mb-4 leading-relaxed">
                     {p.description || 'برنامج تدريبي متكامل يشمل مسارات تعليمية وتدريبية متدرجة.'}
                   </p>
 
                   {/* Program Key Metrics Grid */}
-                  <div className="grid grid-cols-4 gap-1.5 p-2.5 bg-slate-900/70 border border-slate-700/60 rounded-xl mb-4 text-center">
+                  <div className="grid grid-cols-4 gap-1.5 p-2.5 bg-slate-50 dark:bg-slate-900/70 border border-slate-200 dark:border-slate-700/60 rounded-xl mb-4 text-center">
                     <div>
-                      <span className="text-[10px] text-slate-400 block font-bold">الدورات</span>
-                      <span className="text-xs font-black text-indigo-400 font-mono">{stats.coursesCount}</span>
+                      <span className="text-[10px] text-slate-500 dark:text-slate-400 block font-bold">الدورات</span>
+                      <span className="text-xs font-black text-indigo-600 dark:text-indigo-400 font-mono">{stats.coursesCount}</span>
                     </div>
                     <div>
-                      <span className="text-[10px] text-slate-400 block font-bold">المجموعات</span>
-                      <span className="text-xs font-black text-cyan-400 font-mono">{stats.groupsCount}</span>
+                      <span className="text-[10px] text-slate-500 dark:text-slate-400 block font-bold">المجموعات</span>
+                      <span className="text-xs font-black text-cyan-600 dark:text-cyan-400 font-mono">{stats.groupsCount}</span>
                     </div>
                     <div>
-                      <span className="text-[10px] text-slate-400 block font-bold">الطلاب</span>
-                      <span className="text-xs font-black text-emerald-400 font-mono">{stats.traineesCount}</span>
+                      <span className="text-[10px] text-slate-500 dark:text-slate-400 block font-bold">الطلاب</span>
+                      <span className="text-xs font-black text-emerald-600 dark:text-emerald-400 font-mono">{stats.traineesCount}</span>
                     </div>
                     <div>
-                      <span className="text-[10px] text-slate-400 block font-bold">سعر الباقة</span>
-                      <span className="text-xs font-black text-amber-400 font-mono">
+                      <span className="text-[10px] text-slate-500 dark:text-slate-400 block font-bold">سعر الباقة</span>
+                      <span className="text-xs font-black text-amber-600 dark:text-amber-400 font-mono">
                         {p.bundlePrice ? `${p.bundlePrice} ج.م` : 'حسب الكورس'}
                       </span>
                     </div>
@@ -638,14 +638,14 @@ export const ProgramsView: React.FC = () => {
                   {/* Included Courses Section */}
                   <div className="space-y-1.5 mb-4">
                     <div className="flex items-center justify-between">
-                      <span className="text-[11px] font-bold text-slate-300 flex items-center gap-1">
-                        <BookOpen className="w-3.5 h-3.5 text-indigo-400" />
+                      <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1">
+                        <BookOpen className="w-3.5 h-3.5 text-indigo-500 dark:text-indigo-400" />
                         الدورات التابعة للبرنامج ({stats.coursesCount}):
                       </span>
                       {stats.coursesCount > 3 && (
                         <button
                           onClick={() => setExpandedProgramId(isExpanded ? null : p.id)}
-                          className="text-[10px] font-bold text-indigo-400 hover:text-indigo-300 flex items-center gap-0.5"
+                          className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 flex items-center gap-0.5"
                         >
                           <span>{isExpanded ? 'طي القائمة' : `عرض الكل (${stats.coursesCount})`}</span>
                           {isExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
@@ -654,7 +654,7 @@ export const ProgramsView: React.FC = () => {
                     </div>
 
                     {stats.coursesCount === 0 ? (
-                      <div className="p-2.5 rounded-xl bg-slate-900/40 border border-dashed border-slate-700 text-center text-[11px] text-slate-500">
+                      <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-900/40 border border-dashed border-slate-200 dark:border-slate-700 text-center text-[11px] text-slate-500">
                         لا توجد دورات مدمجة بهذا البرنامج بعد.
                       </div>
                     ) : (
@@ -662,18 +662,18 @@ export const ProgramsView: React.FC = () => {
                         {(isExpanded ? stats.includedCourses : stats.includedCourses.slice(0, 3)).map((c) => (
                           <div
                             key={c.id}
-                            className="flex items-center justify-between p-2 rounded-lg bg-slate-900/80 text-xs text-slate-200 border border-slate-700/50 hover:border-slate-600 transition-colors"
+                            className="flex items-center justify-between p-2 rounded-lg bg-slate-50 dark:bg-slate-900/80 text-xs text-slate-700 dark:text-slate-200 border border-slate-200/80 dark:border-slate-700/50 hover:border-slate-300 dark:hover:border-slate-600 transition-colors"
                           >
                             <div className="flex items-center gap-2 min-w-0">
-                              <BookOpen className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
-                              <span className="truncate font-bold text-slate-200">{c.name}</span>
+                              <BookOpen className="w-3.5 h-3.5 text-indigo-500 dark:text-indigo-400 shrink-0" />
+                              <span className="truncate font-bold text-slate-800 dark:text-slate-200">{c.name}</span>
                               {c.code && (
-                                <span className="font-mono text-[9px] text-slate-400 bg-slate-800 px-1.5 py-0.5 rounded">
+                                <span className="font-mono text-[9px] text-slate-600 dark:text-slate-400 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-1.5 py-0.5 rounded">
                                   {c.code}
                                 </span>
                               )}
                             </div>
-                            <span className="font-mono text-[10px] font-bold text-amber-400 shrink-0 mr-2">
+                            <span className="font-mono text-[10px] font-black text-amber-600 dark:text-amber-400 shrink-0 mr-2">
                               {c.feeAmount} ج.م
                             </span>
                           </div>
@@ -684,13 +684,13 @@ export const ProgramsView: React.FC = () => {
                 </div>
 
                 {/* Card Action Tools Bar */}
-                <div className="pt-3 border-t border-slate-700/60 flex items-center justify-between gap-1">
+                <div className="pt-3 border-t border-slate-100 dark:border-slate-700/60 flex items-center justify-between gap-1">
                   <div className="flex items-center gap-1">
                     {/* Details Button */}
                     <button
                       onClick={() => handleOpenDetails(p)}
                       title="عرض التفاصيل الكاملة والهيكل"
-                      className="p-1.5 rounded-lg bg-slate-900/80 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700/80 transition-colors"
+                      className="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-900/80 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 hover:text-slate-950 dark:hover:text-white border border-slate-200 dark:border-slate-700/80 transition-colors"
                     >
                       <Eye className="w-3.5 h-3.5" />
                     </button>
@@ -699,7 +699,7 @@ export const ProgramsView: React.FC = () => {
                     <button
                       onClick={() => handleOpenAddCourses(p)}
                       title="توليد وإضافة دورات إضافية لهذا البرنامج"
-                      className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 text-[11px] font-bold transition-colors"
+                      className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-50 dark:bg-indigo-500/10 hover:bg-indigo-100 dark:hover:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-500/30 text-[11px] font-bold transition-colors"
                     >
                       <FolderPlus className="w-3.5 h-3.5" />
                       <span>إضافة دورات</span>
@@ -711,7 +711,7 @@ export const ProgramsView: React.FC = () => {
                     <button
                       onClick={() => handleOpenEdit(p)}
                       title="تعديل بيانات البرنامج"
-                      className="p-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 transition-colors"
+                      className="p-1.5 rounded-lg bg-amber-50 dark:bg-amber-500/10 hover:bg-amber-100 dark:hover:bg-amber-500/20 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-500/30 transition-colors"
                     >
                       <Edit className="w-3.5 h-3.5" />
                     </button>
@@ -720,7 +720,7 @@ export const ProgramsView: React.FC = () => {
                     <button
                       onClick={() => handleOpenDelete(p)}
                       title="حذف البرنامج"
-                      className="p-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 transition-colors"
+                      className="p-1.5 rounded-lg bg-rose-50 dark:bg-rose-500/10 hover:bg-rose-100 dark:hover:bg-rose-500/20 text-rose-700 dark:text-rose-400 border border-rose-200 dark:border-rose-500/30 transition-colors"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
@@ -734,19 +734,19 @@ export const ProgramsView: React.FC = () => {
 
       {/* CREATE PROGRAM MODAL */}
       {isAddModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/80 backdrop-blur-md overflow-hidden">
-          <div className="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl max-w-xl w-full max-h-[90vh] flex flex-col overflow-hidden text-slate-100">
-            <div className="shrink-0 p-4 border-b border-slate-800 flex items-center justify-between bg-slate-900/90">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-900/60 dark:bg-slate-950/80 backdrop-blur-md overflow-hidden">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-2xl max-w-xl w-full max-h-[90vh] flex flex-col overflow-hidden text-slate-900 dark:text-slate-100">
+            <div className="shrink-0 p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-900/90">
               <div className="flex items-center gap-2">
-                <div className="p-2 bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-400">
+                <div className="p-2 bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-600 dark:text-amber-400">
                   <Plus className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-sm text-slate-100">إنشاء برنامج تدريبي جديد</h3>
-                  <p className="text-[11px] text-slate-400">إضافة قسم تدريبي رئيسي وتوليد دوراته تلقائياً</p>
+                  <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100">إنشاء برنامج تدريبي جديد</h3>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400">إضافة قسم تدريبي رئيسي وتوليد دوراته تلقائياً</p>
                 </div>
               </div>
-              <button onClick={() => setIsAddModalOpen(false)} className="text-slate-400 hover:text-white cursor-pointer">
+              <button onClick={() => setIsAddModalOpen(false)} className="text-slate-400 hover:text-slate-700 dark:hover:text-white cursor-pointer">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -754,36 +754,36 @@ export const ProgramsView: React.FC = () => {
             <form onSubmit={handleSaveProgram} className="flex-1 overflow-y-auto custom-scrollbar p-4 sm:p-6 space-y-4 text-xs">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-slate-300 font-bold mb-1">اسم البرنامج *</label>
+                  <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">اسم البرنامج *</label>
                   <input
                     type="text"
                     required
                     placeholder="مثال: مادة الكمبيوتر والتكنولوجيا"
                     value={addFormData.name}
                     onChange={(e) => setAddFormData({ ...addFormData, name: e.target.value })}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 focus:border-indigo-500"
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 focus:border-indigo-500"
                   />
                 </div>
                 <div>
-                  <label className="block text-slate-300 font-bold mb-1">كود البرنامج الموحد *</label>
+                  <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">كود البرنامج الموحد *</label>
                   <input
                     type="text"
                     required
                     placeholder="مثال: ICT أو DEV أو ENG"
                     value={addFormData.code}
                     onChange={(e) => setAddFormData({ ...addFormData, code: e.target.value })}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 font-mono focus:border-indigo-500 uppercase"
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 font-mono focus:border-indigo-500 uppercase"
                   />
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-slate-300 font-bold mb-1">التخصص / المجال الرئيسي *</label>
+                  <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">التخصص / المجال الرئيسي *</label>
                   <select
                     value={addFormData.category}
                     onChange={(e) => setAddFormData({ ...addFormData, category: e.target.value })}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 focus:border-indigo-500"
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 focus:border-indigo-500"
                   >
                     {PROGRAM_CATEGORIES.map(cat => (
                       <option key={cat.id} value={cat.id}>{cat.label}</option>
@@ -792,11 +792,11 @@ export const ProgramsView: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-slate-300 font-bold mb-1">الفئة المستهدفة</label>
+                  <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">الفئة المستهدفة</label>
                   <select
                     value={addFormData.targetAudience}
                     onChange={(e) => setAddFormData({ ...addFormData, targetAudience: e.target.value })}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 focus:border-indigo-500"
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 focus:border-indigo-500"
                   >
                     {TARGET_AUDIENCES.map(aud => (
                       <option key={aud} value={aud}>{aud}</option>
@@ -806,33 +806,33 @@ export const ProgramsView: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-slate-300 font-bold mb-1">وصف شمولية البرنامج</label>
+                <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">وصف شمولية البرنامج</label>
                 <textarea
                   rows={2}
                   placeholder="اكتب نبذة عن أهداف هذا البرنامج المدمج والدورات التابعة له..."
                   value={addFormData.description}
                   onChange={(e) => setAddFormData({ ...addFormData, description: e.target.value })}
-                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 focus:border-indigo-500"
+                  className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 focus:border-indigo-500"
                 ></textarea>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-slate-300 font-bold mb-1">سعر الباقة الكلي (اختياري)</label>
+                  <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">سعر الباقة الكلي (اختياري)</label>
                   <input
                     type="number"
                     placeholder="خصم الباقة المدمجة ج.م"
                     value={addFormData.bundlePrice || ''}
                     onChange={(e) => setAddFormData({ ...addFormData, bundlePrice: Number(e.target.value) })}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 font-mono focus:border-indigo-500"
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 font-mono focus:border-indigo-500"
                   />
                 </div>
                 <div>
-                  <label className="block text-slate-300 font-bold mb-1">حالة البرنامج</label>
+                  <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">حالة البرنامج</label>
                   <select
                     value={addFormData.status}
                     onChange={(e: any) => setAddFormData({ ...addFormData, status: e.target.value })}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 focus:border-indigo-500"
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 focus:border-indigo-500"
                   >
                     <option value="active">نشط ومتاح للحجز</option>
                     <option value="upcoming">قريباً / قادم</option>
@@ -842,10 +842,10 @@ export const ProgramsView: React.FC = () => {
               </div>
 
               {/* Generation Options */}
-              <div className="space-y-2 pt-2 border-t border-slate-800">
-                <label className="block text-slate-300 font-bold">طريقة توليد وإدراج الدورات التابعة</label>
-                <div className="flex items-center justify-between gap-2 bg-slate-800/60 p-2 rounded-xl border border-slate-700/60">
-                  <label className="flex items-center gap-1.5 cursor-pointer text-[11px] font-bold">
+              <div className="space-y-2 pt-2 border-t border-slate-200 dark:border-slate-800">
+                <label className="block text-slate-700 dark:text-slate-300 font-bold">طريقة توليد وإدراج الدورات التابعة</label>
+                <div className="flex items-center justify-between gap-2 bg-slate-50 dark:bg-slate-800/60 p-2 rounded-xl border border-slate-200 dark:border-slate-700/60">
+                  <label className="flex items-center gap-1.5 cursor-pointer text-[11px] font-bold text-slate-700 dark:text-slate-200">
                     <input
                       type="radio"
                       name="genType"
@@ -854,7 +854,7 @@ export const ProgramsView: React.FC = () => {
                     />
                     تسلسل صفوف دراسية
                   </label>
-                  <label className="flex items-center gap-1.5 cursor-pointer text-[11px] font-bold">
+                  <label className="flex items-center gap-1.5 cursor-pointer text-[11px] font-bold text-slate-700 dark:text-slate-200">
                     <input
                       type="radio"
                       name="genType"
@@ -863,7 +863,7 @@ export const ProgramsView: React.FC = () => {
                     />
                     تسلسل مستويات
                   </label>
-                  <label className="flex items-center gap-1.5 cursor-pointer text-[11px] font-bold">
+                  <label className="flex items-center gap-1.5 cursor-pointer text-[11px] font-bold text-slate-700 dark:text-slate-200">
                     <input
                       type="radio"
                       name="genType"
@@ -874,25 +874,25 @@ export const ProgramsView: React.FC = () => {
                   </label>
                 </div>
 
-                <div className="bg-slate-900/90 p-3 rounded-xl border border-slate-700/80">
+                <div className="bg-slate-50 dark:bg-slate-900/90 p-3 rounded-xl border border-slate-200 dark:border-slate-700/80">
                   {addFormData.generationType === 'grades' && (
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <label className="block text-slate-400 mb-1">من الصف</label>
+                        <label className="block text-slate-600 dark:text-slate-400 mb-1 font-bold">من الصف</label>
                         <select
                           value={addFormData.startGradeIdx}
                           onChange={(e) => setAddFormData({ ...addFormData, startGradeIdx: Number(e.target.value) })}
-                          className="w-full bg-slate-800 border border-slate-700 rounded-lg px-2.5 py-1.5 text-slate-200"
+                          className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-slate-800 dark:text-slate-200"
                         >
                           {STANDARD_GRADES.map((g, i) => <option key={i} value={i}>{g}</option>)}
                         </select>
                       </div>
                       <div>
-                        <label className="block text-slate-400 mb-1">إلى الصف</label>
+                        <label className="block text-slate-600 dark:text-slate-400 mb-1 font-bold">إلى الصف</label>
                         <select
                           value={addFormData.endGradeIdx}
                           onChange={(e) => setAddFormData({ ...addFormData, endGradeIdx: Number(e.target.value) })}
-                          className="w-full bg-slate-800 border border-slate-700 rounded-lg px-2.5 py-1.5 text-slate-200"
+                          className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-slate-800 dark:text-slate-200"
                         >
                           {STANDARD_GRADES.map((g, i) => <option key={i} value={i}>{g}</option>)}
                         </select>
@@ -902,14 +902,14 @@ export const ProgramsView: React.FC = () => {
 
                   {addFormData.generationType === 'levels' && (
                     <div>
-                      <label className="block text-slate-400 mb-1">عدد المستويات المطلوبة لتوليدها</label>
+                      <label className="block text-slate-600 dark:text-slate-400 mb-1 font-bold">عدد المستويات المطلوبة لتوليدها</label>
                       <input
                         type="number"
                         min="1"
                         max="12"
                         value={addFormData.levelCount}
                         onChange={(e) => setAddFormData({ ...addFormData, levelCount: Number(e.target.value) })}
-                        className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-slate-200 font-mono"
+                        className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 text-slate-800 dark:text-slate-200 font-mono"
                       />
                     </div>
                   )}
@@ -931,16 +931,16 @@ export const ProgramsView: React.FC = () => {
                                 setAddFormData({ ...addFormData, courseIds: next });
                               }}
                               className={`p-2 rounded-lg cursor-pointer flex items-center justify-between transition-colors ${
-                                isChecked ? 'bg-indigo-900/60 border border-indigo-700/60 text-indigo-200' : 'bg-slate-800/80 border border-slate-700/50'
+                                isChecked ? 'bg-indigo-50 dark:bg-indigo-900/60 border border-indigo-200 dark:border-indigo-700/60 text-indigo-900 dark:text-indigo-200' : 'bg-white dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/50 text-slate-800 dark:text-slate-200'
                               }`}
                             >
                               <div className="flex items-center gap-2">
-                                <div className={`w-4 h-4 rounded flex items-center justify-center border ${isChecked ? 'bg-indigo-600 border-indigo-500 text-white' : 'border-slate-600'}`}>
+                                <div className={`w-4 h-4 rounded flex items-center justify-center border ${isChecked ? 'bg-indigo-600 border-indigo-500 text-white' : 'border-slate-300 dark:border-slate-600'}`}>
                                   {isChecked && <Check className="w-3 h-3" />}
                                 </div>
                                 <span className="font-bold">{c.name}</span>
                               </div>
-                              <span className="font-mono text-[10px] text-slate-400">{c.feeAmount} ج.م</span>
+                              <span className="font-mono text-[10px] text-slate-500 dark:text-slate-400">{c.feeAmount} ج.م</span>
                             </div>
                           );
                         })
@@ -949,31 +949,31 @@ export const ProgramsView: React.FC = () => {
                   )}
 
                   {addFormData.generationType !== 'manual' && (
-                    <div className="mt-3 pt-2 border-t border-slate-800 flex items-center justify-between">
-                      <span className="text-slate-400 text-[11px]">رسوم كل دورة تولد تلقائياً:</span>
+                    <div className="mt-3 pt-2 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between">
+                      <span className="text-slate-600 dark:text-slate-400 text-[11px] font-bold">رسوم كل دورة تولد تلقائياً:</span>
                       <input
                         type="number"
                         value={addFormData.courseFee}
                         onChange={(e) => setAddFormData({ ...addFormData, courseFee: Number(e.target.value) })}
-                        className="w-28 bg-slate-800 border border-slate-700 rounded-lg px-2.5 py-1 text-slate-200 font-mono text-center"
+                        className="w-28 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1 text-slate-800 dark:text-slate-200 font-mono text-center"
                       />
                     </div>
                   )}
                 </div>
               </div>
 
-              <div className="pt-3 border-t border-slate-800 flex justify-end gap-2">
+              <div className="pt-3 border-t border-slate-200 dark:border-slate-800 flex justify-end gap-2">
                 <button
                   type="button"
                   onClick={() => setIsAddModalOpen(false)}
-                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl"
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl"
                 >
                   إلغاء
                 </button>
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="px-5 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-xl shadow-lg flex items-center gap-1.5"
+                  className="px-5 py-2 bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 hover:to-yellow-400 text-slate-950 font-black rounded-xl shadow-lg border border-amber-300 flex items-center gap-1.5"
                 >
                   {isSubmitting ? 'جاري الحفظ...' : 'حفظ وإنشاء البرنامج'}
                 </button>
@@ -985,19 +985,19 @@ export const ProgramsView: React.FC = () => {
 
       {/* EDIT PROGRAM MODAL */}
       {isEditModalOpen && activeProgram && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/80 backdrop-blur-md overflow-hidden">
-          <div className="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl max-w-xl w-full max-h-[90vh] flex flex-col overflow-hidden text-slate-100">
-            <div className="shrink-0 p-4 border-b border-slate-800 flex items-center justify-between bg-slate-900/90">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-900/60 dark:bg-slate-950/80 backdrop-blur-md overflow-hidden">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-2xl max-w-xl w-full max-h-[90vh] flex flex-col overflow-hidden text-slate-900 dark:text-slate-100">
+            <div className="shrink-0 p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-900/90">
               <div className="flex items-center gap-2">
-                <div className="p-2 bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-400">
+                <div className="p-2 bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-600 dark:text-amber-400">
                   <Edit className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-sm text-slate-100">تعديل بيانات البرنامج التدريبي</h3>
-                  <p className="text-[11px] text-slate-400">تحديث الكود، الاسم، المجال والدورات المدمجة</p>
+                  <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100">تعديل بيانات البرنامج التدريبي</h3>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400">تحديث الكود، الاسم، المجال والدورات المدمجة</p>
                 </div>
               </div>
-              <button onClick={() => setIsEditModalOpen(false)} className="text-slate-400 hover:text-white cursor-pointer">
+              <button onClick={() => setIsEditModalOpen(false)} className="text-slate-400 hover:text-slate-700 dark:hover:text-white cursor-pointer">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -1005,34 +1005,34 @@ export const ProgramsView: React.FC = () => {
             <form onSubmit={handleUpdateProgram} className="flex-1 overflow-y-auto custom-scrollbar p-4 sm:p-6 space-y-4 text-xs">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-slate-300 font-bold mb-1">اسم البرنامج *</label>
+                  <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">اسم البرنامج *</label>
                   <input
                     type="text"
                     required
                     value={editFormData.name}
                     onChange={(e) => setEditFormData({ ...editFormData, name: e.target.value })}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 focus:border-indigo-500"
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 focus:border-indigo-500"
                   />
                 </div>
                 <div>
-                  <label className="block text-slate-300 font-bold mb-1">الكود الموحد *</label>
+                  <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">الكود الموحد *</label>
                   <input
                     type="text"
                     required
                     value={editFormData.code}
                     onChange={(e) => setEditFormData({ ...editFormData, code: e.target.value })}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 font-mono uppercase focus:border-indigo-500"
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 font-mono uppercase focus:border-indigo-500"
                   />
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-slate-300 font-bold mb-1">التخصص / المجال الرئيسي</label>
+                  <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">التخصص / المجال الرئيسي</label>
                   <select
                     value={editFormData.category}
                     onChange={(e) => setEditFormData({ ...editFormData, category: e.target.value })}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 focus:border-indigo-500"
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 focus:border-indigo-500"
                   >
                     {PROGRAM_CATEGORIES.map(cat => (
                       <option key={cat.id} value={cat.id}>{cat.label}</option>
@@ -1041,11 +1041,11 @@ export const ProgramsView: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-slate-300 font-bold mb-1">الفئة المستهدفة</label>
+                  <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">الفئة المستهدفة</label>
                   <select
                     value={editFormData.targetAudience}
                     onChange={(e) => setEditFormData({ ...editFormData, targetAudience: e.target.value })}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 focus:border-indigo-500"
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 focus:border-indigo-500"
                   >
                     {TARGET_AUDIENCES.map(aud => (
                       <option key={aud} value={aud}>{aud}</option>
@@ -1055,31 +1055,31 @@ export const ProgramsView: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-slate-300 font-bold mb-1">الوصف الشامل</label>
+                <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">الوصف الشامل</label>
                 <textarea
                   rows={2}
                   value={editFormData.description}
                   onChange={(e) => setEditFormData({ ...editFormData, description: e.target.value })}
-                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 focus:border-indigo-500"
+                  className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 focus:border-indigo-500"
                 ></textarea>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-slate-300 font-bold mb-1">سعر الباقة المدمجة (ج.م)</label>
+                  <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">سعر الباقة المدمجة (ج.م)</label>
                   <input
                     type="number"
                     value={editFormData.bundlePrice || ''}
                     onChange={(e) => setEditFormData({ ...editFormData, bundlePrice: Number(e.target.value) })}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 font-mono focus:border-indigo-500"
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 font-mono focus:border-indigo-500"
                   />
                 </div>
                 <div>
-                  <label className="block text-slate-300 font-bold mb-1">حالة البرنامج</label>
+                  <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">حالة البرنامج</label>
                   <select
                     value={editFormData.status}
                     onChange={(e: any) => setEditFormData({ ...editFormData, status: e.target.value })}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 focus:border-indigo-500"
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 focus:border-indigo-500"
                   >
                     <option value="active">نشط ومتاح</option>
                     <option value="upcoming">قريباً / قادم</option>
@@ -1091,8 +1091,8 @@ export const ProgramsView: React.FC = () => {
 
               {/* Course Selection list */}
               <div>
-                <label className="block text-slate-300 font-bold mb-1">إدارة الدورات المندمجة بهذا البرنامج</label>
-                <div className="max-h-48 overflow-y-auto space-y-1 bg-slate-950 p-2.5 rounded-xl border border-slate-700">
+                <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">إدارة الدورات المندمجة بهذا البرنامج</label>
+                <div className="max-h-48 overflow-y-auto space-y-1 bg-slate-50 dark:bg-slate-950 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700">
                   {courses.map((c) => {
                     const isChecked = editFormData.courseIds.includes(c.id);
                     return (
@@ -1105,34 +1105,34 @@ export const ProgramsView: React.FC = () => {
                           setEditFormData({ ...editFormData, courseIds: next });
                         }}
                         className={`p-2 rounded-lg cursor-pointer flex items-center justify-between transition-colors ${
-                          isChecked ? 'bg-indigo-900/60 border border-indigo-700/60 text-indigo-200' : 'bg-slate-900 border border-slate-800 text-slate-400'
+                          isChecked ? 'bg-indigo-50 dark:bg-indigo-900/60 border border-indigo-200 dark:border-indigo-700/60 text-indigo-900 dark:text-indigo-200' : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-400'
                         }`}
                       >
                         <div className="flex items-center gap-2">
-                          <div className={`w-4 h-4 rounded flex items-center justify-center border ${isChecked ? 'bg-indigo-600 border-indigo-500 text-white' : 'border-slate-600'}`}>
+                          <div className={`w-4 h-4 rounded flex items-center justify-center border ${isChecked ? 'bg-indigo-600 border-indigo-500 text-white' : 'border-slate-300 dark:border-slate-600'}`}>
                             {isChecked && <Check className="w-3 h-3" />}
                           </div>
                           <span className="font-bold">{c.name}</span>
                         </div>
-                        <span className="font-mono text-[10px]">{c.feeAmount} ج.م</span>
+                        <span className="font-mono text-[10px] text-slate-500 dark:text-slate-400">{c.feeAmount} ج.م</span>
                       </div>
                     );
                   })}
                 </div>
               </div>
 
-              <div className="pt-3 border-t border-slate-800 flex justify-end gap-2">
+              <div className="pt-3 border-t border-slate-200 dark:border-slate-800 flex justify-end gap-2">
                 <button
                   type="button"
                   onClick={() => setIsEditModalOpen(false)}
-                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl"
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl"
                 >
                   إلغاء
                 </button>
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="px-5 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-xl shadow-lg flex items-center gap-1.5"
+                  className="px-5 py-2 bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 hover:to-yellow-400 text-slate-950 font-black rounded-xl shadow-lg border border-amber-300 flex items-center gap-1.5"
                 >
                   {isSubmitting ? 'جاري الحفظ...' : 'تحديث البيانات'}
                 </button>
@@ -1144,26 +1144,26 @@ export const ProgramsView: React.FC = () => {
 
       {/* ADD COURSES TO PROGRAM MODAL */}
       {isAddCoursesModalOpen && activeProgram && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/80 backdrop-blur-md overflow-hidden">
-          <div className="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl max-w-lg w-full max-h-[90vh] flex flex-col overflow-hidden text-slate-100">
-            <div className="shrink-0 p-4 border-b border-slate-800 flex items-center justify-between bg-slate-900/90">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-900/60 dark:bg-slate-950/80 backdrop-blur-md overflow-hidden">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-2xl max-w-lg w-full max-h-[90vh] flex flex-col overflow-hidden text-slate-900 dark:text-slate-100">
+            <div className="shrink-0 p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-900/90">
               <div className="flex items-center gap-2">
-                <div className="p-2 bg-indigo-500/10 border border-indigo-500/20 rounded-xl text-indigo-400">
+                <div className="p-2 bg-indigo-500/10 border border-indigo-500/20 rounded-xl text-indigo-600 dark:text-indigo-400">
                   <FolderPlus className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-sm text-slate-100">إضافة دورات إضافية لبرنامج: {activeProgram.name}</h3>
-                  <p className="text-[11px] text-slate-400">توليد مستويات أو صفوف إضافية ودمجها تلقائياً</p>
+                  <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100">إضافة دورات إضافية لبرنامج: {activeProgram.name}</h3>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400">توليد مستويات أو صفوف إضافية ودمجها تلقائياً</p>
                 </div>
               </div>
-              <button onClick={() => setIsAddCoursesModalOpen(false)} className="text-slate-400 hover:text-white cursor-pointer">
+              <button onClick={() => setIsAddCoursesModalOpen(false)} className="text-slate-400 hover:text-slate-700 dark:hover:text-white cursor-pointer">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             <form onSubmit={handleAppendCourses} className="flex-1 overflow-y-auto custom-scrollbar p-4 sm:p-6 space-y-4 text-xs">
-              <div className="flex items-center justify-between gap-2 bg-slate-800/60 p-2 rounded-xl border border-slate-700/60">
-                <label className="flex items-center gap-1.5 cursor-pointer text-[11px] font-bold">
+              <div className="flex items-center justify-between gap-2 bg-slate-50 dark:bg-slate-800/60 p-2 rounded-xl border border-slate-200 dark:border-slate-700/60">
+                <label className="flex items-center gap-1.5 cursor-pointer text-[11px] font-bold text-slate-700 dark:text-slate-200">
                   <input
                     type="radio"
                     name="appendGenType"
@@ -1172,7 +1172,7 @@ export const ProgramsView: React.FC = () => {
                   />
                   إضافة مستويات تالية
                 </label>
-                <label className="flex items-center gap-1.5 cursor-pointer text-[11px] font-bold">
+                <label className="flex items-center gap-1.5 cursor-pointer text-[11px] font-bold text-slate-700 dark:text-slate-200">
                   <input
                     type="radio"
                     name="appendGenType"
@@ -1183,17 +1183,17 @@ export const ProgramsView: React.FC = () => {
                 </label>
               </div>
 
-              <div className="bg-slate-900 p-3 rounded-xl border border-slate-700">
+              <div className="bg-slate-50 dark:bg-slate-900 p-3 rounded-xl border border-slate-200 dark:border-slate-700">
                 {appendCoursesData.generationType === 'levels' && (
                   <div>
-                    <label className="block text-slate-400 mb-1">عدد المستويات الإضافية المطلوب إنشاؤها</label>
+                    <label className="block text-slate-600 dark:text-slate-400 mb-1 font-bold">عدد المستويات الإضافية المطلوب إنشاؤها</label>
                     <input
                       type="number"
                       min="1"
                       max="10"
                       value={appendCoursesData.levelCount}
                       onChange={(e) => setAppendCoursesData({ ...appendCoursesData, levelCount: Number(e.target.value) })}
-                      className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-slate-200 font-mono"
+                      className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 text-slate-800 dark:text-slate-200 font-mono"
                     />
                   </div>
                 )}
@@ -1201,21 +1201,21 @@ export const ProgramsView: React.FC = () => {
                 {appendCoursesData.generationType === 'grades' && (
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-slate-400 mb-1">من الصف</label>
+                      <label className="block text-slate-600 dark:text-slate-400 mb-1 font-bold">من الصف</label>
                       <select
                         value={appendCoursesData.startGradeIdx}
                         onChange={(e) => setAppendCoursesData({ ...appendCoursesData, startGradeIdx: Number(e.target.value) })}
-                        className="w-full bg-slate-800 border border-slate-700 rounded-lg px-2.5 py-1.5 text-slate-200"
+                        className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-slate-800 dark:text-slate-200"
                       >
                         {STANDARD_GRADES.map((g, i) => <option key={i} value={i}>{g}</option>)}
                       </select>
                     </div>
                     <div>
-                      <label className="block text-slate-400 mb-1">إلى الصف</label>
+                      <label className="block text-slate-600 dark:text-slate-400 mb-1 font-bold">إلى الصف</label>
                       <select
                         value={appendCoursesData.endGradeIdx}
                         onChange={(e) => setAppendCoursesData({ ...appendCoursesData, endGradeIdx: Number(e.target.value) })}
-                        className="w-full bg-slate-800 border border-slate-700 rounded-lg px-2.5 py-1.5 text-slate-200"
+                        className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-slate-800 dark:text-slate-200"
                       >
                         {STANDARD_GRADES.map((g, i) => <option key={i} value={i}>{g}</option>)}
                       </select>
@@ -1223,22 +1223,22 @@ export const ProgramsView: React.FC = () => {
                   </div>
                 )}
 
-                <div className="mt-3 pt-2 border-t border-slate-800 flex items-center justify-between">
-                  <span className="text-slate-400 text-[11px]">رسوم الدورة الافتراضية:</span>
+                <div className="mt-3 pt-2 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between">
+                  <span className="text-slate-600 dark:text-slate-400 text-[11px] font-bold">رسوم الدورة الافتراضية:</span>
                   <input
                     type="number"
                     value={appendCoursesData.courseFee}
                     onChange={(e) => setAppendCoursesData({ ...appendCoursesData, courseFee: Number(e.target.value) })}
-                    className="w-28 bg-slate-800 border border-slate-700 rounded-lg px-2.5 py-1 text-slate-200 font-mono text-center"
+                    className="w-28 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1 text-slate-800 dark:text-slate-200 font-mono text-center"
                   />
                 </div>
               </div>
 
-              <div className="pt-3 border-t border-slate-800 flex justify-end gap-2">
+              <div className="pt-3 border-t border-slate-200 dark:border-slate-800 flex justify-end gap-2">
                 <button
                   type="button"
                   onClick={() => setIsAddCoursesModalOpen(false)}
-                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl"
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl"
                 >
                   إلغاء
                 </button>
@@ -1262,17 +1262,17 @@ export const ProgramsView: React.FC = () => {
         const stats = getProgramStats(activeProgram);
 
         return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/80 backdrop-blur-md overflow-hidden">
-            <div className="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] flex flex-col overflow-hidden text-slate-100">
-              <div className="shrink-0 p-4 flex items-center justify-between border-b border-slate-800 bg-slate-900/90">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-900/60 dark:bg-slate-950/80 backdrop-blur-md overflow-hidden">
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] flex flex-col overflow-hidden text-slate-900 dark:text-slate-100">
+              <div className="shrink-0 p-4 flex items-center justify-between border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/90">
                 <div className="flex items-center gap-3">
                   <div className={`p-3 rounded-xl border ${catMeta.color}`}>
                     <CatIcon className="w-6 h-6" />
                   </div>
                   <div>
-                    <h3 className="font-bold text-base text-slate-100">{activeProgram.name}</h3>
+                    <h3 className="font-bold text-base text-slate-900 dark:text-slate-100">{activeProgram.name}</h3>
                     <div className="flex items-center gap-2 mt-0.5">
-                      <span className="font-mono text-xs text-indigo-300 bg-indigo-950/80 px-2 py-0.5 rounded border border-indigo-700/60 font-bold">
+                      <span className="font-mono text-xs text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/80 px-2 py-0.5 rounded border border-indigo-200 dark:border-indigo-700/60 font-bold">
                         كود: {activeProgram.code}
                       </span>
                       <span className={`text-xs font-bold px-2 py-0.5 rounded-full border ${catMeta.color}`}>
@@ -1281,50 +1281,50 @@ export const ProgramsView: React.FC = () => {
                     </div>
                   </div>
                 </div>
-                <button onClick={() => setIsDetailsModalOpen(false)} className="text-slate-400 hover:text-white">
+                <button onClick={() => setIsDetailsModalOpen(false)} className="text-slate-400 hover:text-slate-700 dark:hover:text-white">
                   <X className="w-5 h-5" />
                 </button>
               </div>
 
-              <div className="space-y-4 text-xs">
+              <div className="space-y-4 text-xs p-4 sm:p-6 overflow-y-auto">
                 {/* Stats Summary Grid */}
-                <div className="grid grid-cols-4 gap-2 p-3 bg-slate-800/80 border border-slate-700/80 rounded-xl text-center">
+                <div className="grid grid-cols-4 gap-2 p-3 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 rounded-xl text-center">
                   <div>
-                    <span className="text-[10px] text-slate-400 block font-bold">إجمالي الدورات</span>
-                    <span className="text-base font-black text-indigo-400 font-mono">{stats.coursesCount}</span>
+                    <span className="text-[10px] text-slate-500 dark:text-slate-400 block font-bold">إجمالي الدورات</span>
+                    <span className="text-base font-black text-indigo-600 dark:text-indigo-400 font-mono">{stats.coursesCount}</span>
                   </div>
                   <div>
-                    <span className="text-[10px] text-slate-400 block font-bold">المجموعات النشطة</span>
-                    <span className="text-base font-black text-cyan-400 font-mono">{stats.groupsCount}</span>
+                    <span className="text-[10px] text-slate-500 dark:text-slate-400 block font-bold">المجموعات النشطة</span>
+                    <span className="text-base font-black text-cyan-600 dark:text-cyan-400 font-mono">{stats.groupsCount}</span>
                   </div>
                   <div>
-                    <span className="text-[10px] text-slate-400 block font-bold">الطلاب المسجلين</span>
-                    <span className="text-base font-black text-emerald-400 font-mono">{stats.traineesCount}</span>
+                    <span className="text-[10px] text-slate-500 dark:text-slate-400 block font-bold">الطلاب المسجلين</span>
+                    <span className="text-base font-black text-emerald-600 dark:text-emerald-400 font-mono">{stats.traineesCount}</span>
                   </div>
                   <div>
-                    <span className="text-[10px] text-slate-400 block font-bold">سعر الباقة الكلي</span>
-                    <span className="text-base font-black text-amber-400 font-mono">
+                    <span className="text-[10px] text-slate-500 dark:text-slate-400 block font-bold">سعر الباقة الكلي</span>
+                    <span className="text-base font-black text-amber-600 dark:text-amber-400 font-mono">
                       {activeProgram.bundlePrice ? `${activeProgram.bundlePrice} ج.م` : `${stats.totalFeesSum} ج.م`}
                     </span>
                   </div>
                 </div>
 
                 <div>
-                  <h4 className="font-bold text-slate-300 mb-1">وصف البرنامج:</h4>
-                  <p className="p-3 bg-slate-950 rounded-xl text-slate-300 leading-relaxed border border-slate-800">
+                  <h4 className="font-bold text-slate-700 dark:text-slate-300 mb-1">وصف البرنامج:</h4>
+                  <p className="p-3 bg-slate-50 dark:bg-slate-950 rounded-xl text-slate-700 dark:text-slate-300 leading-relaxed border border-slate-200 dark:border-slate-800">
                     {activeProgram.description || 'لا يوجد وصف مضاف لهذا البرنامج التدريبي.'}
                   </p>
                 </div>
 
                 {/* Courses breakdown list */}
                 <div>
-                  <h4 className="font-bold text-slate-300 mb-2 flex items-center gap-1.5">
-                    <BookOpen className="w-4 h-4 text-indigo-400" />
+                  <h4 className="font-bold text-slate-700 dark:text-slate-300 mb-2 flex items-center gap-1.5">
+                    <BookOpen className="w-4 h-4 text-indigo-500 dark:text-indigo-400" />
                     الدورات المندرجة تحت هذا البرنامج ({stats.coursesCount}):
                   </h4>
                   <div className="max-h-60 overflow-y-auto space-y-2 pr-1">
                     {stats.includedCourses.length === 0 ? (
-                      <p className="text-slate-500 text-center py-4 bg-slate-950 rounded-xl border border-slate-800">
+                      <p className="text-slate-500 text-center py-4 bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-200 dark:border-slate-800">
                         لا توجد دورات مضافة.
                       </p>
                     ) : (
@@ -1333,24 +1333,24 @@ export const ProgramsView: React.FC = () => {
                         return (
                           <div
                             key={c.id}
-                            className="p-3 bg-slate-950 rounded-xl border border-slate-800 flex items-center justify-between"
+                            className="p-3 bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-200 dark:border-slate-800 flex items-center justify-between"
                           >
                             <div>
                               <div className="flex items-center gap-2">
-                                <span className="font-bold text-slate-200 text-sm">{c.name}</span>
+                                <span className="font-bold text-slate-800 dark:text-slate-200 text-sm">{c.name}</span>
                                 {c.code && (
-                                  <span className="font-mono text-[10px] bg-slate-800 px-2 py-0.5 rounded text-indigo-300">
+                                  <span className="font-mono text-[10px] bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-2 py-0.5 rounded text-indigo-600 dark:text-indigo-300 font-bold">
                                     {c.code}
                                   </span>
                                 )}
                               </div>
-                              <div className="flex items-center gap-3 mt-1 text-[11px] text-slate-400">
+                              <div className="flex items-center gap-3 mt-1 text-[11px] text-slate-500 dark:text-slate-400">
                                 <span>عدد المجموعات: {courseGroups.length}</span>
                                 {c.grade && <span>الصف: {c.grade}</span>}
                                 {c.level && <span>المستوى: {c.level}</span>}
                               </div>
                             </div>
-                            <span className="font-mono font-black text-amber-400 text-sm">
+                            <span className="font-mono font-black text-amber-600 dark:text-amber-400 text-sm">
                               {c.feeAmount} ج.م
                             </span>
                           </div>
@@ -1360,10 +1360,10 @@ export const ProgramsView: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="pt-3 border-t border-slate-800 flex justify-end">
+                <div className="pt-3 border-t border-slate-200 dark:border-slate-800 flex justify-end">
                   <button
                     onClick={() => setIsDetailsModalOpen(false)}
-                    className="px-5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold rounded-xl"
+                    className="px-5 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold rounded-xl"
                   >
                     إغلاق
                   </button>
@@ -1376,27 +1376,27 @@ export const ProgramsView: React.FC = () => {
 
       {/* DELETE PROGRAM MODAL */}
       {isDeleteModalOpen && activeProgram && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
-          <div className="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl max-w-md w-full p-6 text-slate-100">
-            <div className="flex items-center gap-3 text-rose-400 mb-4">
-              <div className="p-3 bg-rose-500/10 border border-rose-500/20 rounded-xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 dark:bg-slate-950/80 backdrop-blur-md">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-2xl max-w-md w-full p-6 text-slate-900 dark:text-slate-100">
+            <div className="flex items-center gap-3 text-rose-600 dark:text-rose-400 mb-4">
+              <div className="p-3 bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 rounded-xl">
                 <AlertCircle className="w-6 h-6" />
               </div>
               <div>
-                <h3 className="font-bold text-base">تأكيد حذف البرنامج التدريبي</h3>
-                <p className="text-xs text-slate-400">هل أنت متأكد من حذف هذا البرنامج؟</p>
+                <h3 className="font-bold text-base text-slate-900 dark:text-slate-100">تأكيد حذف البرنامج التدريبي</h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400">هل أنت متأكد من حذف هذا البرنامج؟</p>
               </div>
             </div>
 
-            <p className="text-xs text-slate-300 bg-slate-950 p-3 rounded-xl border border-slate-800 mb-5">
-              أنت على وشك حذف البرنامج التدريبي <strong className="text-rose-300">{activeProgram.name}</strong>.
+            <p className="text-xs text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-950 p-3 rounded-xl border border-slate-200 dark:border-slate-800 mb-5">
+              أنت على وشك حذف البرنامج التدريبي <strong className="text-rose-600 dark:text-rose-300">{activeProgram.name}</strong>.
               علماً أن الدورات المنشأة سابقاً ستظل قائمة ولن تمحى من النظام.
             </p>
 
             <div className="flex justify-end gap-2">
               <button
                 onClick={() => setIsDeleteModalOpen(false)}
-                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs rounded-xl"
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs rounded-xl font-bold"
               >
                 إلغاء
               </button>

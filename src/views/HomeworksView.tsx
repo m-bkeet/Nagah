@@ -15,16 +15,34 @@ import { PrintAssignmentModal } from '../components/homeworks/PrintAssignmentMod
 import { KahootStudio } from '../components/kahoot/KahootStudio';
 
 export const HomeworksView: React.FC = () => {
-  const { showToast, activeBranchId } = useCenter();
+  const { 
+    showToast, 
+    activeBranchId,
+    courses: ctxCourses,
+    groups: ctxGroups,
+    trainees: ctxTrainees
+  } = useCenter();
   const [activeTab, setActiveTab] = useState<'submissions' | 'create_task' | 'tasks_list' | 'analytics'>('tasks_list');
 
-  // Primary Data
+  // Primary Data - Initialized from unified context for 0ms instant display
   const [homeworks, setHomeworks] = useState<HomeworkSubmission[]>([]);
   const [assignments, setAssignments] = useState<AssignmentTask[]>([]);
-  const [courses, setCourses] = useState<Course[]>([]);
-  const [groups, setGroups] = useState<Group[]>([]);
-  const [trainees, setTrainees] = useState<Trainee[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [courses, setCourses] = useState<Course[]>(() => ctxCourses || []);
+  const [groups, setGroups] = useState<Group[]>(() => ctxGroups || []);
+  const [trainees, setTrainees] = useState<Trainee[]>(() => ctxTrainees || []);
+  const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    if (ctxCourses && ctxCourses.length > 0) setCourses(ctxCourses);
+  }, [ctxCourses]);
+
+  useEffect(() => {
+    if (ctxGroups && ctxGroups.length > 0) setGroups(ctxGroups);
+  }, [ctxGroups]);
+
+  useEffect(() => {
+    if (ctxTrainees && ctxTrainees.length > 0) setTrainees(ctxTrainees);
+  }, [ctxTrainees]);
 
   // Filters & Search
   const [searchQuery, setSearchQuery] = useState('');
@@ -114,21 +132,14 @@ export const HomeworksView: React.FC = () => {
   }, [activeBranchId]);
 
   const loadData = async () => {
-    setIsLoading(true);
     try {
-      const [hwRes, assignRes, courseRes, grpRes, trRes] = await Promise.all([
-        fetch('/api/homeworks').then(r => r.json()),
-        api.getAssignments(activeBranchId !== 'all' ? { branchId: activeBranchId } : undefined),
-        api.getCourses(),
-        api.getGroups(),
-        api.getTrainees()
+      const [hwRes, assignRes] = await Promise.all([
+        fetch('/api/homeworks').then(r => r.json()).catch(() => []),
+        api.getAssignments(activeBranchId !== 'all' ? { branchId: activeBranchId } : undefined).catch(() => [])
       ]);
 
       setHomeworks(Array.isArray(hwRes) ? hwRes : []);
       setAssignments(Array.isArray(assignRes) ? assignRes : []);
-      setCourses(Array.isArray(courseRes) ? courseRes : []);
-      setGroups(Array.isArray(grpRes) ? grpRes : []);
-      setTrainees(Array.isArray(trRes) ? trRes : []);
     } catch (err) {
       console.error(err);
       showToast('فشل تحميل بيانات الواجبات والتكاليف', 'error');
