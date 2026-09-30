@@ -10,6 +10,7 @@ import { SessionCelebrationOverlay } from './SessionCelebrationOverlay';
 import { audioService } from '../services/audioService';
 import confetti from 'canvas-confetti';
 import { getEffectiveCenterLogo, handleLogoError } from '../utils/centerLogo';
+import { getPublicBaseUrl } from '../utils/urlHelper';
 
 const QRCodeImage: React.FC<{ value: string; size?: number; className?: string }> = ({ value, size = 64, className = '' }) => {
   const [dataUrl, setDataUrl] = useState<string>('');
@@ -162,7 +163,7 @@ export const PrintModal: React.FC = () => {
       case 'trainee_badge': {
         const { trainee, branchName, courseName } = printData.data;
         const managerName = settings?.managerName || 'د. محمد رمضان بخيت';
-        const scanUrl = `${window.location.origin}/?view=student_portal&code=${trainee.code || ''}&action=checkin&source=badge_print`;
+        const scanUrl = `${getPublicBaseUrl()}/?view=student_portal&code=${trainee.code || ''}&action=checkin&source=badge_print`;
 
         return (
           <div className="w-[360px] mx-auto bg-white text-slate-900 border-2 border-amber-500 rounded-3xl shadow-xl font-sans print:shadow-none print:border-amber-500 relative overflow-hidden flex flex-col justify-between" dir="rtl">

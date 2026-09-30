@@ -17,6 +17,7 @@ import {
   RefreshCw
 } from 'lucide-react';
 import { Trainer, Group, Course } from '../../types';
+import { getPublicBaseUrl } from '../../utils/urlHelper';
 
 interface AdvancedExamMakerProps {
   trainer: Trainer;
@@ -167,7 +168,7 @@ export const AdvancedExamMaker: React.FC<AdvancedExamMakerProps> = ({
       const data = await res.json();
       if (data.id || data.success) {
         const examId = data.id || data.exam?.id || `exam-${Date.now()}`;
-        const onlineLink = `${window.location.origin}/?view=public_student_portal&tab=exams&examId=${examId}`;
+        const onlineLink = `${getPublicBaseUrl()}/?view=student_portal&tab=exams&examId=${examId}`;
         setSavedExamLink(onlineLink);
         onShowToast('تم اعتماد وحفظ الاختبار في قاعدة بيانات النظام بنجاح! 🎉', 'success');
       } else {

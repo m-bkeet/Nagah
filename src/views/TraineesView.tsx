@@ -99,7 +99,13 @@ import { GoogleFormsImportModal } from '../components/GoogleFormsImportModal';
 
 const getTraineePhoto = (t: any): string => {
   if (!t) return '';
-  return t.photoUrl || t.photo || (t.id ? localStorage.getItem('student_session_photo_' + t.id) : null) || (t.code ? localStorage.getItem('student_session_photo_' + t.code) : null) || '';
+  const cached = (t.id ? localStorage.getItem('student_session_photo_' + t.id) : null) || 
+                 (t.code ? localStorage.getItem('student_session_photo_' + t.code) : null) || 
+                 (t.nationalId ? localStorage.getItem('student_session_photo_' + t.nationalId) : null);
+  if (cached && cached.trim().length > 0) return cached.trim();
+  if (t.photoUrl && typeof t.photoUrl === 'string' && t.photoUrl.trim().length > 0) return t.photoUrl.trim();
+  if (t.photo && typeof t.photo === 'string' && t.photo.trim().length > 0) return t.photo.trim();
+  return '';
 };
 
 export const TraineesView: React.FC = () => {
@@ -167,6 +173,26 @@ export const TraineesView: React.FC = () => {
     return () => window.removeEventListener('nagah_attendance_updated', handleAttSync);
   }, [activeTrainee?.id]);
 
+  // Listen to nagah_photo_updated and fetch fresh trainees on mount
+  useEffect(() => {
+    const handlePhotoSync = (e: any) => {
+      const { traineeId, code, photoUrl } = e.detail || {};
+      if (!photoUrl) return;
+      setTrainees(prev => prev.map(t => {
+        if (t.id === traineeId || (code && t.code === code) || (traineeId && t.code === traineeId)) {
+          return { ...t, photoUrl, photo: photoUrl };
+        }
+        return t;
+      }));
+    };
+
+    window.addEventListener('nagah_photo_updated', handlePhotoSync);
+
+    return () => {
+      window.removeEventListener('nagah_photo_updated', handlePhotoSync);
+    };
+  }, []);
+
   // Filters & Search
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedBranch, setSelectedBranch] = useState<string>('all');
@@ -176,6 +202,33 @@ export const TraineesView: React.FC = () => {
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
   const [selectedPaymentStatus, setSelectedPaymentStatus] = useState<string>('all');
   const [sortBy, setSortBy] = useState<string>('created_desc');
+
+  // Smart Cascading Options (الترابط الشلالي الذكي: الفرع -> الدورة -> المجموعة)
+  const availableFilterCourses = React.useMemo(() => {
+    if (!selectedBranch || selectedBranch === 'all') return courses;
+    return courses.filter(c => !c.branchId || c.branchId === selectedBranch || (c as any).branch_id === selectedBranch);
+  }, [courses, selectedBranch]);
+
+  const availableFilterGroups = React.useMemo(() => {
+    return groups.filter(g => {
+      const matchB = !selectedBranch || selectedBranch === 'all' || !g.branchId || g.branchId === selectedBranch;
+      const matchC = !selectedCourse || selectedCourse === 'all' || g.courseId === selectedCourse;
+      return matchB && matchC;
+    });
+  }, [groups, selectedBranch, selectedCourse]);
+
+  // Reset dependent filters when parent filter changes
+  useEffect(() => {
+    if (selectedCourse !== 'all' && !availableFilterCourses.some(c => c.id === selectedCourse)) {
+      setSelectedCourse('all');
+    }
+  }, [selectedBranch, availableFilterCourses, selectedCourse]);
+
+  useEffect(() => {
+    if (selectedGroup !== 'all' && !availableFilterGroups.some(g => g.id === selectedGroup)) {
+      setSelectedGroup('all');
+    }
+  }, [selectedBranch, selectedCourse, availableFilterGroups, selectedGroup]);
 
   const matchBranch = (traineeBranchId: string | undefined | null, targetBranchId: string, allBranches: Branch[]) => {
     if (!targetBranchId || targetBranchId === 'all') return true;
@@ -1860,8 +1913,8 @@ export const TraineesView: React.FC = () => {
               onChange={(e) => setSelectedCourse(e.target.value)}
               className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-800 dark:text-slate-200 focus:outline-none focus:border-amber-500 shadow-xs"
             >
-              <option value="all">جميع الدورات</option>
-              {courses.map((c) => (
+              <option value="all">جميع الدورات ({availableFilterCourses.length})</option>
+              {availableFilterCourses.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.name}
                 </option>
@@ -1876,8 +1929,8 @@ export const TraineesView: React.FC = () => {
               onChange={(e) => setSelectedGroup(e.target.value)}
               className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-800 dark:text-slate-200 focus:outline-none focus:border-amber-500 shadow-xs"
             >
-              <option value="all">جميع المجموعات</option>
-              {groups.map((g) => (
+              <option value="all">جميع المجموعات ({availableFilterGroups.length})</option>
+              {availableFilterGroups.map((g) => (
                 <option key={g.id} value={g.id}>
                   {g.name}
                 </option>

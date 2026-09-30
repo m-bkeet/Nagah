@@ -1,8 +1,9 @@
 import React, { useRef } from 'react';
-import { X, Printer, Download, Share2, CheckCircle2, ShieldCheck, Building2, Calendar, CreditCard, User, Receipt, FileText, Phone, Clock, HardDrive, Check } from 'lucide-react';
+import { X, Printer, Download, Share2, CheckCircle2, ShieldCheck, Building2, Calendar, CreditCard, User, Receipt, FileText, Phone, Clock, HardDrive, Check, Copy } from 'lucide-react';
 import { captureElementToCanvas } from '../utils/captureUtils';
 import { Payment } from '../types';
 import { numberToArabicWords } from '../utils/numberToArabicWords';
+import { getPublicBaseUrl } from '../utils/urlHelper';
 
 interface OfficialReceiptModalProps {
   isOpen: boolean;
@@ -118,7 +119,7 @@ export const OfficialReceiptModal: React.FC<OfficialReceiptModalProps> = ({
     try {
       const canvas = await captureElementToCanvas(receiptRef.current, {
         scale: 2,
-        backgroundColor: '#0f172a'
+        backgroundColor: '#ffffff'
       });
       if (!canvas) return;
       const image = canvas.toDataURL('image/png');
@@ -131,8 +132,61 @@ export const OfficialReceiptModal: React.FC<OfficialReceiptModalProps> = ({
     }
   };
 
+  const handleCopyReceiptImageAndText = async () => {
+    if (!receiptRef.current) return;
+    try {
+      const publicBase = getPublicBaseUrl();
+      const verifyUrl = `${publicBase}/?verifyReceipt=${payment.receiptNumber || payment.id}&code=${displayCode}`;
+      const text = `🏛️ *مركز النجاح للتدريب والتكنولوجيا*\n` +
+        `🧾 *سند قبض وإيصال سداد رسمي معتمد*\n` +
+        `━━━━━━━━━━━━━━━━━━━━\n` +
+        `📌 *رقم السند:* ${payment.receiptNumber || payment.id}\n` +
+        `👤 *الطالب:* ${displayName} (${displayCode})\n` +
+        (displayGroupName ? `👥 *المجموعة:* ${displayGroupName}\n` : '') +
+        `📚 *الدورة:* ${displayCourse}\n` +
+        `💰 *المبلغ المقبوض:* ${payment.amount} ج.م (${amountWords})\n` +
+        `📅 *عن فترة/شهر:* ${targetMonthStr}\n` +
+        (displayDiscount && displayDiscount > 0 ? `🏷️ *الخصم المطبق:* ${displayDiscount} ج.م\n` : '') +
+        (displayNextDueDate ? `🟢 *مسدد حتى تاريخ:* ${displayNextDueDate}\n` : '') +
+        (displayPreviousDebt && displayPreviousDebt > 0 ? `⚠️ *المديونية المتبقية:* ${displayPreviousDebt} ج.م\n` : `✅ *حالة المديونية:* لا توجد مديونية سابقة\n`) +
+        `💳 *طريقة السداد:* ${getMethodLabel(payment.paymentMethod)}\n` +
+        `📆 *تاريخ ووقت التحصيل:* ${payment.date} - ${displayTime}\n` +
+        `🛡️ *حالة السند:* معتمد وموثق بالسحابة والخزينة المركزية\n` +
+        `━━━━━━━━━━━━━━━━━━━━\n` +
+        `🔍 *رابط التحقق الإلكتروني المباشر:*\n${verifyUrl}\n\n` +
+        `📁 *ملاحظة:* تم حفظ السند وأرشفته إلكترونياً على سحابة المركز.\n` +
+        `شكراً لثقتكم بنا! 🌟`;
+
+      await navigator.clipboard.writeText(text);
+
+      const canvas = await captureElementToCanvas(receiptRef.current, {
+        scale: 2,
+        backgroundColor: '#ffffff'
+      });
+      if (canvas && navigator.clipboard && window.ClipboardItem) {
+        canvas.toBlob(async (blob) => {
+          if (blob) {
+            try {
+              await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+              alert('✅ تم نسخ نص الإيصال وصورة الإيصال معاً للحافظة بنجاح! يمكنك لصقهما مباشرة في واتساب (Ctrl+V).');
+            } catch {
+              alert('✅ تم نسخ نص الإيصال للحافظة بنجاح! (جاري تنزيل صورة الإيصال).');
+              handleDownloadImage();
+            }
+          }
+        }, 'image/png');
+      } else {
+        alert('✅ تم نسخ نص الإيصال للحافظة بنجاح!');
+        handleDownloadImage();
+      }
+    } catch (err) {
+      console.error('Failed to copy receipt:', err);
+    }
+  };
+
   const handleWhatsAppShare = () => {
-    const verifyUrl = `${window.location.origin}/?verifyReceipt=${payment.receiptNumber || payment.id}&code=${displayCode}`;
+    const publicBase = getPublicBaseUrl();
+    const verifyUrl = `${publicBase}/?verifyReceipt=${payment.receiptNumber || payment.id}&code=${displayCode}`;
     const text = `🏛️ *مركز النجاح للتدريب والتكنولوجيا*\n` +
       `🧾 *سند قبض وإيصال سداد رسمي معتمد*\n` +
       `━━━━━━━━━━━━━━━━━━━━\n` +
@@ -161,7 +215,8 @@ export const OfficialReceiptModal: React.FC<OfficialReceiptModalProps> = ({
   };
 
   const handleCopyVerifyLink = () => {
-    const verifyUrl = `${window.location.origin}/?verifyReceipt=${payment.receiptNumber || payment.id}&code=${displayCode}`;
+    const publicBase = getPublicBaseUrl();
+    const verifyUrl = `${publicBase}/?verifyReceipt=${payment.receiptNumber || payment.id}&code=${displayCode}`;
     navigator.clipboard.writeText(verifyUrl);
     setCopiedLink(true);
     setTimeout(() => setCopiedLink(false), 2500);
@@ -208,6 +263,14 @@ export const OfficialReceiptModal: React.FC<OfficialReceiptModalProps> = ({
               <span>حفظ صورة</span>
             </button>
             <button
+              onClick={handleCopyReceiptImageAndText}
+              className="py-1.5 px-2.5 sm:px-3 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold flex items-center gap-1 transition-all cursor-pointer shadow"
+              title="نسخ النص والصورة معاً للحافظة"
+            >
+              <Copy className="w-3.5 h-3.5" />
+              <span>نسخ النص والصورة 📋</span>
+            </button>
+            <button
               onClick={handleWhatsAppShare}
               className="py-1.5 px-2.5 sm:px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black flex items-center gap-1.5 shadow-lg shadow-emerald-600/30 transition-all active:scale-95 cursor-pointer"
               title={formattedWhatsAppPhone ? `إرسال واتساب للرقم ${formattedWhatsAppPhone}` : 'مشاركة عبر واتساب'}
@@ -241,8 +304,10 @@ export const OfficialReceiptModal: React.FC<OfficialReceiptModalProps> = ({
           </div>
         )}
 
-        {/* PRINTABLE RECEIPT CARD BODY */}
-        <div ref={receiptRef} className={`flex-1 overflow-y-auto custom-scrollbar p-6 md:p-8 space-y-5 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 print:bg-white print:text-slate-900 ${isThermalMode ? 'max-w-[320px] mx-auto text-xs space-y-3 font-mono print:w-[80mm]' : ''}`}>
+        {/* SCROLLABLE OUTER CONTAINER */}
+        <div className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-6 bg-slate-50 dark:bg-slate-950">
+          {/* PRINTABLE RECEIPT CARD BODY (WITHOUT SCROLLBARS FOR CLEAN CAPTURE) */}
+          <div ref={receiptRef} className={`bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 p-6 md:p-8 rounded-3xl shadow-sm space-y-5 print:bg-white print:text-slate-900 print:p-0 ${isThermalMode ? 'max-w-[320px] mx-auto text-xs space-y-3 font-mono print:w-[80mm]' : ''}`}>
           {isThermalMode ? (
             /* POS 80mm Thermal Receipt Layout */
             <div className="text-center space-y-2 border-b border-dashed border-slate-300 dark:border-slate-700 pb-3 print:border-black">
@@ -297,7 +362,7 @@ export const OfficialReceiptModal: React.FC<OfficialReceiptModalProps> = ({
                 <p className="font-bold text-emerald-700 dark:text-emerald-400 print:text-black mt-1">حالة الإيصال: معتمد ومسدد بالكامل ✅</p>
                 <div className="mt-2 flex justify-center">
                   <img
-                    src={`https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${encodeURIComponent(`${window.location.origin}/?verifyReceipt=${payment.receiptNumber || payment.id}&code=${displayCode}`)}`}
+                    src={`https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${encodeURIComponent(`${getPublicBaseUrl()}/?verifyReceipt=${payment.receiptNumber || payment.id}&code=${displayCode}`)}`}
                     alt="QR Verification"
                     className="w-16 h-16 bg-white p-1 rounded shadow"
                   />
@@ -426,7 +491,7 @@ export const OfficialReceiptModal: React.FC<OfficialReceiptModalProps> = ({
               <div className="pt-3 border-t border-slate-200 dark:border-slate-800 print:border-slate-300 flex items-center justify-between gap-4 text-xs">
                 <div className="flex items-center gap-3">
                   <img
-                    src={`https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(`${window.location.origin}/?verifyReceipt=${payment.receiptNumber || payment.id}&code=${displayCode}`)}`}
+                    src={`https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(`${getPublicBaseUrl()}/?verifyReceipt=${payment.receiptNumber || payment.id}&code=${displayCode}`)}`}
                     alt="QR Verification"
                     className="w-14 h-14 bg-white p-1 rounded-xl shadow border border-slate-300 dark:border-slate-700 print:border-black shrink-0"
                   />
@@ -457,6 +522,7 @@ export const OfficialReceiptModal: React.FC<OfficialReceiptModalProps> = ({
             </>
           )}
 
+          </div>
         </div>
       </div>
     </div>

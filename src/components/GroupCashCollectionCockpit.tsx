@@ -306,6 +306,12 @@ export const GroupCashCollectionCockpit: React.FC = () => {
       });
 
       if (res?.payment) {
+        // Cross-window and desktop shortcut instant synchronization
+        try {
+          new BroadcastChannel('nagah_finance_channel').postMessage({ type: 'FINANCE_MUTATED' });
+          localStorage.setItem('nagah_last_financial_mutation', Date.now().toString());
+        } catch {}
+
         // Refresh local data
         await loadAllPayments();
         await refreshCoreData(true);

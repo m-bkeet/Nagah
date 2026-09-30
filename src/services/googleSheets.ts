@@ -1,6 +1,7 @@
 // Google Sheets Integration Service for Nagah M-S Training & Consulting
 import { GoogleDriveService } from './googleDrive';
 import { Trainee, Course, Group, Trainer, AttendanceRecord, Payment, Expense, Certificate } from '../types';
+import { getPublicBaseUrl } from '../utils/urlHelper';
 
 declare global {
   interface Window {
@@ -340,7 +341,7 @@ export class GoogleSheetsService {
     const rows = certificates.map(cert => {
       const trainee = trainees.find(t => t.id === cert.traineeId);
       const course = courses.find(c => c.id === cert.courseId);
-      const verifyUrl = `${window.location.origin}/verify?id=${cert.serialNumber || cert.id}`;
+      const verifyUrl = `${getPublicBaseUrl()}/?verify=${cert.serialNumber || cert.id}&code=${trainee?.code || ''}`;
       return [
         cert.serialNumber || cert.id || '',
         trainee?.fullName || cert.traineeName || '',

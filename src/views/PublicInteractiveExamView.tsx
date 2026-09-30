@@ -92,6 +92,16 @@ export const PublicInteractiveExamView: React.FC<PublicInteractiveExamViewProps>
   // Result state
   const [submissionResult, setSubmissionResult] = useState<any>(null);
 
+  // Local Toasts
+  const [examToasts, setExamToasts] = useState<Array<{ id: string; text: string; type: 'success' | 'error' | 'info' | 'warning' }>>([]);
+  const showExamToast = (text: string, type: 'success' | 'error' | 'info' | 'warning' = 'info') => {
+    const id = 'toast-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4);
+    setExamToasts(prev => [...prev, { id, text, type }]);
+    setTimeout(() => {
+      setExamToasts(prev => prev.filter(t => t.id !== id));
+    }, 4500);
+  };
+
   // Default rich public exams curriculum
   const availablePublicExams = [
     {
@@ -303,7 +313,7 @@ export const PublicInteractiveExamView: React.FC<PublicInteractiveExamViewProps>
     const name = (matchedStudent?.fullName || studentNameInput).trim();
 
     if (!code && !name && !isPreviewMode) {
-      alert('يرجى إدخال كود الطالب أو اسمك للبدء في الاختبار.');
+      showExamToast('يرجى إدخال كود الطالب أو اسمك للبدء في الاختبار.', 'warning');
       return;
     }
 
@@ -401,12 +411,12 @@ export const PublicInteractiveExamView: React.FC<PublicInteractiveExamViewProps>
           } catch (e) {}
         }
       } else {
-        alert('حدث خطأ أثناء إرسال الإجابات، يرجى المحاولة مرة أخرى.');
+        showExamToast('حدث خطأ أثناء إرسال الإجابات، يرجى المحاولة مرة أخرى.', 'error');
         setPhase('testing');
       }
     } catch (err: any) {
       console.error('Error submitting exam:', err);
-      alert(err.message || 'فشل إرسال إجابات الاختبار');
+      showExamToast(err.message || 'فشل إرسال إجابات الاختبار', 'error');
       setPhase('testing');
     }
   };
@@ -457,18 +467,38 @@ export const PublicInteractiveExamView: React.FC<PublicInteractiveExamViewProps>
     : 'bg-slate-50 border-slate-300 text-slate-900 placeholder:text-slate-400 focus:bg-white';
 
   // ----------------------------------------------------
-  // UNIVERSAL TOP CLOSE BUTTON (Always visible on all screens!)
+  // UNIVERSAL TOP CLOSE BUTTON & TOAST OVERLAY (Always visible on all screens!)
   // ----------------------------------------------------
   const renderTopCloseButton = () => (
-    <button
-      type="button"
-      onClick={handleClose}
-      className="fixed top-3 left-3 sm:top-4 sm:left-4 z-[100] w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-slate-800/90 hover:bg-slate-900 text-white flex items-center justify-center shadow-2xl border border-white/20 transition-transform active:scale-90 cursor-pointer"
-      title="إغلاق والعودة (X)"
-      aria-label="إغلاق"
-    >
-      <X className="w-5 h-5 sm:w-6 sm:h-6 stroke-[2.5]" />
-    </button>
+    <>
+      <button
+        type="button"
+        onClick={handleClose}
+        className="fixed top-3 left-3 sm:top-4 sm:left-4 z-[100] w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-slate-800/90 hover:bg-slate-900 text-white flex items-center justify-center shadow-2xl border border-white/20 transition-transform active:scale-90 cursor-pointer"
+        title="إغلاق والعودة (X)"
+        aria-label="إغلاق"
+      >
+        <X className="w-5 h-5 sm:w-6 sm:h-6 stroke-[2.5]" />
+      </button>
+
+      {examToasts.length > 0 && (
+        <div className="fixed bottom-6 right-4 z-50 flex flex-col gap-2 max-w-sm w-full pointer-events-none">
+          {examToasts.map(t => (
+            <div
+              key={t.id}
+              className={`p-3 rounded-2xl shadow-xl border text-xs font-bold pointer-events-auto transition-all animate-in slide-in-from-bottom-2 flex items-center justify-between gap-2 backdrop-blur-md ${
+                t.type === 'success' ? 'bg-emerald-900/90 text-white border-emerald-500/40' :
+                t.type === 'error' ? 'bg-rose-900/90 text-white border-rose-500/40' :
+                t.type === 'warning' ? 'bg-amber-900/90 text-white border-amber-500/40' :
+                'bg-slate-900/90 text-white border-slate-700'
+              }`}
+            >
+              <span>{t.text}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </>
   );
 
   // ----------------------------------------------------

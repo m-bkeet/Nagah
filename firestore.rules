@@ -1,7 +1,117 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128;
+    }
+
+    // Default catch-all rule
     match /{document=**} {
+      allow read, write: if true;
+    }
+
+    // Core Domain Matches
+    match /branches/{branchId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    match /users/{userId} {
+      allow read, write: if true;
+    }
+
+    match /trainers/{trainerId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    match /courses/{courseId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    match /programs/{programId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    match /groups/{groupId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    match /trainees/{traineeId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    match /attendance/{attendanceId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    match /payments/{paymentId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    match /expenses/{expenseId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    match /trainerSettlements/{settlementId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    match /pointTransactions/{transactionId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    match /exams/{examId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    match /questions/{questionId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    match /examResults/{resultId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    match /interactiveSessions/{sessionId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    match /certificates/{certificateId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    match /assignments/{assignmentId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    match /settings/{settingsId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    match /nagah_store/{collectionName} {
       allow read, write: if true;
     }
   }

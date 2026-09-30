@@ -346,6 +346,7 @@ export const MessagesView: React.FC = () => {
     const groupsMap: { [key: string]: any } = {};
 
     portalMessages.forEach(msg => {
+      if (!msg) return;
       const targetT = trainees.find(t => t.id === msg.traineeId || (t.code && t.code === msg.traineeCode));
       const keyId = targetT?.id || msg.traineeId || msg.traineeCode || 'general-' + (msg.traineeName || 'student');
 
@@ -369,13 +370,15 @@ export const MessagesView: React.FC = () => {
 
       groupsMap[keyId].messages.push(msg);
 
-      // Increment unread count if message is not from admin and not read yet
-      if (msg.senderRole !== 'admin' && !msg.read) {
+      // Increment unread count if message is from student/parent and not read yet
+      const isFromUser = msg.senderRole === 'student' || msg.senderRole === 'parent' || msg.portalSource === 'student' || msg.portalSource === 'parent';
+      if (isFromUser && !msg.read && msg.isRead !== true) {
         groupsMap[keyId].unreadCount += 1;
       }
 
-      if (msg.createdAt) {
-        const msgTime = new Date(msg.createdAt);
+      const rawDate = msg.createdAt || msg.date;
+      if (rawDate) {
+        const msgTime = new Date(rawDate);
         if (!isNaN(msgTime.getTime()) && msgTime > groupsMap[keyId].lastMessageTime) {
           groupsMap[keyId].lastMessageTime = msgTime;
         }
@@ -386,8 +389,8 @@ export const MessagesView: React.FC = () => {
     return Object.values(groupsMap)
       .map((g: any) => {
         g.messages.sort((a: any, b: any) => {
-          const tA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-          const tB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+          const tA = (a.createdAt || a.date) ? new Date(a.createdAt || a.date).getTime() : 0;
+          const tB = (b.createdAt || b.date) ? new Date(b.createdAt || b.date).getTime() : 0;
           return (isNaN(tA) ? 0 : tA) - (isNaN(tB) ? 0 : tB);
         });
         return g;
@@ -395,10 +398,10 @@ export const MessagesView: React.FC = () => {
       .filter((g: any) => {
         // Inbox Filter
         if (inboxFilter === 'parent') {
-          const hasParent = g.messages.some((m: any) => m.portalSource === 'parent' || m.recipientType === 'parent');
+          const hasParent = g.messages.some((m: any) => m.portalSource === 'parent' || m.recipientType === 'parent' || m.senderRole === 'parent');
           if (!hasParent) return false;
         } else if (inboxFilter === 'student') {
-          const hasStudent = g.messages.some((m: any) => m.portalSource === 'student' || m.recipientType === 'student');
+          const hasStudent = g.messages.some((m: any) => m.portalSource === 'student' || m.recipientType === 'student' || m.senderRole === 'student');
           if (!hasStudent) return false;
         } else if (inboxFilter === 'unread') {
           if (g.unreadCount === 0) return false;
@@ -410,7 +413,7 @@ export const MessagesView: React.FC = () => {
           const tName = (g.traineeName || '').toLowerCase();
           const pName = (g.parentName || '').toLowerCase();
           const tCode = (g.traineeCode || '').toLowerCase();
-          const matchesMsg = g.messages.some((m: any) => (m.message || '').toLowerCase().includes(q));
+          const matchesMsg = g.messages.some((m: any) => (m.message || m.content || m.text || m.title || '').toLowerCase().includes(q));
 
           if (!tName.includes(q) && !pName.includes(q) && !tCode.includes(q) && !matchesMsg) {
             return false;
@@ -491,13 +494,24 @@ export const MessagesView: React.FC = () => {
             <div className="p-3 border-b border-slate-200 dark:border-slate-800 space-y-2.5 bg-slate-50/90 dark:bg-slate-900/50">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-black text-slate-900 dark:text-slate-100">محادثات الطلاب وأولياء الأمور</span>
-                <button
-                  onClick={loadInboxMessages}
-                  className="p-1.5 rounded-lg bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 shadow-xs transition-all active:scale-95"
-                  title="تحديث الرسائل"
-                >
-                  <RefreshCw className={`w-3.5 h-3.5 ${isLoadingInbox ? 'animate-spin text-amber-500' : ''}`} />
-                </button>
+                <div className="flex items-center gap-1">
+                  {portalMessages.length > 0 && (
+                    <button
+                      onClick={handleClearAllMessages}
+                      className="px-2 py-1 rounded-lg bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-100 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-900/40 text-[10px] font-bold transition-all"
+                      title="مسح وتصفير كافة الرسائل"
+                    >
+                      تصفير الرسائل
+                    </button>
+                  )}
+                  <button
+                    onClick={loadInboxMessages}
+                    className="p-1.5 rounded-lg bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 shadow-xs transition-all active:scale-95"
+                    title="تحديث الرسائل"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${isLoadingInbox ? 'animate-spin text-amber-500' : ''}`} />
+                  </button>
+                </div>
               </div>
 
               {/* Search Box */}
@@ -604,7 +618,7 @@ export const MessagesView: React.FC = () => {
                           ) : isLastMsgGreeting ? (
                             <span className="text-pink-600 dark:text-pink-400 shrink-0 font-bold">🌹 تحية شكر:</span>
                           ) : null}
-                          <span className="truncate">{lastMsg?.message || 'لا توجد رسائل'}</span>
+                          <span className="truncate">{lastMsg?.message || lastMsg?.content || lastMsg?.text || lastMsg?.title || 'رسالة جديدة'}</span>
                         </p>
                       </div>
                     </button>
@@ -662,6 +676,13 @@ export const MessagesView: React.FC = () => {
                         <span>محادثة الهاتف</span>
                       </button>
                     )}
+                    <button
+                      onClick={() => handleDeleteThread(activeChat.traineeId)}
+                      className="px-2 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-600 dark:bg-rose-950/40 text-rose-600 hover:text-white dark:text-rose-400 text-[10px] font-bold border border-rose-200 dark:border-rose-900/40 transition-all"
+                      title="حذف هذه المحادثة"
+                    >
+                      حذف المحادثة
+                    </button>
                   </div>
                 </div>
 
@@ -696,13 +717,13 @@ export const MessagesView: React.FC = () => {
                                 : `وارد البوابة: ${msg.portalSource === 'parent' ? 'ولي الأمر' : 'الطالب'}`}
                             </span>
                             <span className="font-mono">
-                              {formatSafeDateTime(msg.createdAt)}
+                              {formatSafeDateTime(msg.createdAt || msg.date)}
                             </span>
                           </div>
 
                           {/* Message Text */}
                           <p className="text-xs leading-relaxed whitespace-pre-wrap font-sans text-slate-800 dark:text-slate-200">
-                            {msg.message}
+                            {msg.message || msg.content || msg.text || msg.title || ''}
                           </p>
 
                           {/* Double Checks status indicator */}

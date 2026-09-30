@@ -813,21 +813,6 @@ app.post("/api/rtc/session/end", (req, res) => {
   }
 });
 
-// GET /api/rtc/resolve-path - Media Path Resolver (Local P2P vs Local Lab Relay vs Fallback)
-app.get("/api/rtc/resolve-path", (req, res) => {
-  try {
-    const { sessionId, branchId, labId } = req.query;
-    const resolution = labRelayService.resolvePath({
-      sessionId: (sessionId as string) || 'RTC-DEFAULT',
-      branchId: (branchId as string) || 'BRANCH-RIYADH-01',
-      labId: (labId as string) || 'LAB-101',
-    });
-    sendResponse(res, true, { resolution });
-  } catch (err: any) {
-    sendResponse(res, false, null, "Failed resolving media path: " + err.message, 500);
-  }
-});
-
 // =========================================================================
 // Classroom Session Engine & Event Bus APIs (PROMPT #12)
 // =========================================================================

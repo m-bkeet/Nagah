@@ -4574,8 +4574,9 @@ const handleGetPayments = async (req: Request, res: Response) => {
     const startDate = req.query.startDate as string;
     const endDate = req.query.endDate as string;
     const status = req.query.status as string;
+    const isFresh = req.query.fresh === 'true';
 
-    let list = await PaymentRepo.getAll();
+    let list = await PaymentRepo.getAll(isFresh);
 
     if (branchId && branchId !== 'all') list = list.filter(p => p.branchId === branchId);
     if (traineeId) list = list.filter(p => p.traineeId === traineeId);
@@ -5256,15 +5257,48 @@ apiRouter.post(['/public/register-trainer', '/public/register-trainer/'], handle
 
 apiRouter.get('/finance/summary', async (req: Request, res: Response) => {
   try {
-    const { branchId, startDate, endDate } = req.query;
+    const { branchId, startDate, endDate, fresh } = req.query;
+    const isFresh = fresh === 'true';
 
-    let [payments, expenses, trainees] = await Promise.all([
-      PaymentRepo.getAll(),
-      ExpenseRepo.getAll(),
-      TraineeRepo.getAll()
+    const [allPaymentsRaw, allExpensesRaw, allTraineesRaw] = await Promise.all([
+      PaymentRepo.getAll(isFresh),
+      ExpenseRepo.getAll(isFresh),
+      TraineeRepo.getAll(isFresh)
     ]);
 
-    let settlements = db.getData().trainerSettlements || [];
+    const allSettlementsRaw = db.getData().trainerSettlements || [];
+    const allBranchesRaw = (await BranchRepo.getAll().catch(() => [])) || db.getData().branches || [];
+
+    // Filter valid approved payments across entire system
+    const validAllPayments = (allPaymentsRaw || []).filter(p => p.status === 'approved' || (!p.status && !(p as any).proofImageUrl && !(p as any).proofUrl));
+    const allBranchesTotalRevenue = validAllPayments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+    const allBranchesTotalRemaining = (allTraineesRaw || []).reduce((sum, t) => sum + (Number(t.remainingAmount) || 0), 0);
+
+    const todayDateStr = new Date().toISOString().split('T')[0];
+    const todayAllPayments = validAllPayments.filter(p => p.date === todayDateStr);
+    const todayAllTotal = todayAllPayments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+
+    // Compute authoritative branch breakdown for all branches
+    const branchBreakdowns = (allBranchesRaw || []).map((b: any) => {
+      const bPayments = validAllPayments.filter(p => p.branchId === b.id);
+      const bTodayPayments = bPayments.filter(p => p.date === todayDateStr);
+      const bTrainees = (allTraineesRaw || []).filter(t => t.branchId === b.id);
+      return {
+        branchId: b.id,
+        branchName: b.name || (b.id === 'branch-1' ? 'فرع النجاح' : 'فرع بدر'),
+        totalRevenue: bPayments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0),
+        todayRevenue: bTodayPayments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0),
+        totalPaymentsCount: bPayments.length,
+        todayPaymentsCount: bTodayPayments.length,
+        totalRemaining: bTrainees.reduce((sum, t) => sum + (Number(t.remainingAmount) || 0), 0),
+        traineesCount: bTrainees.length
+      };
+    });
+
+    let payments = [...validAllPayments];
+    let expenses = [...(allExpensesRaw || [])];
+    let settlements = [...(allSettlementsRaw || [])];
+    let trainees = [...(allTraineesRaw || [])];
 
     if (branchId && branchId !== 'all') {
       payments = payments.filter(p => p.branchId === branchId);
@@ -5283,9 +5317,6 @@ apiRouter.get('/finance/summary', async (req: Request, res: Response) => {
       settlements = settlements.filter(s => s.date <= String(endDate));
     }
 
-    // Exclude unverified pending proofs and rejected submissions from Treasury summary
-    payments = (payments || []).filter(p => p.status === 'approved' || (!p.status && !(p as any).proofImageUrl && !(p as any).proofUrl));
-
     const totalRevenue = payments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
     const totalExpenses = expenses.reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
     const totalTrainerPayouts = settlements.reduce((sum, s) => sum + (Number(s.amount) || 0), 0);
@@ -5293,6 +5324,9 @@ apiRouter.get('/finance/summary', async (req: Request, res: Response) => {
 
     const totalTraineeRemaining = trainees.reduce((sum, t) => sum + (Number(t.remainingAmount) || 0), 0);
     const totalExpectedRevenue = trainees.reduce((sum, t) => sum + (Number(t.netAmount) || 0), 0);
+
+    const todaySelectedPayments = payments.filter(p => p.date === todayDateStr);
+    const todaySelectedTotal = todaySelectedPayments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
 
     // Trainer dues calculation
     let trainers = await TrainerRepo.getAll();
@@ -5314,6 +5348,13 @@ apiRouter.get('/finance/summary', async (req: Request, res: Response) => {
       totalExpectedRevenue,
       totalTrainerDues,
       totalCenterShare,
+      todayTotal: todaySelectedTotal,
+      todayPaymentsCount: todaySelectedPayments.length,
+      allBranchesTotalRevenue,
+      allBranchesTotalRemaining,
+      todayAllTotal,
+      todayAllPaymentsCount: todayAllPayments.length,
+      branchBreakdowns,
       paymentsCount: payments.length,
       expensesCount: expenses.length
     });
@@ -8935,6 +8976,29 @@ apiRouter.post('/lab/evaluate-lecture-attendance', async (req: Request, res: Res
   res.json(result);
 });
 
+// Student Profile & Points Real-time Refresh Endpoint
+apiRouter.get('/agent/student-refresh', async (req: Request, res: Response) => {
+  const code = String(req.query.code || '').trim();
+  if (!code) {
+    return res.status(400).json({ error: 'كود الطالب مطلوب' });
+  }
+  const trainees = await TraineeRepo.getAll();
+  const trainee = findTraineeMatch(trainees, code);
+  if (!trainee) {
+    return res.status(404).json({ error: 'لم يتم العثور على الطالب' });
+  }
+  const stats = getTraineeRankAndStats(trainee.id);
+  res.json({
+    success: true,
+    trainee: {
+      ...trainee,
+      points: trainee.totalPoints || trainee.points || 0,
+      totalPoints: trainee.totalPoints || trainee.points || 0,
+      stats
+    }
+  });
+});
+
 // Student Code Login & Automatic Attendance Logging
 // ----------------------------------------------------
 apiRouter.post('/agent/student-login', async (req: Request, res: Response) => {
@@ -8950,152 +9014,91 @@ apiRouter.post('/agent/student-login', async (req: Request, res: Response) => {
     return res.status(404).json({ error: 'لم يتم العثور على متدرب مسجل بهذا الكود أو الهاتف' });
   }
 
-  // Update or register Device in memory
-  const devId = (deviceId && String(deviceId).trim()) ? String(deviceId).trim() : `PC-${Math.floor(100 + Math.random() * 900)}`;
-  let device = db.getData().devices.find(d => d.deviceId === devId || d.id === devId);
-  if (!device) {
-    device = {
-      id: 'dev-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6),
-      deviceId: devId,
-      name: deviceName || `جهاز ${devId}`,
-      assignedUser: trainee.fullName,
-      userType: 'trainee',
-      branchId: trainee.branchId,
-      ipAddress: ipAddress || req.ip || '127.0.0.1',
-      lastHeartbeat: new Date().toISOString(),
-      isOnline: true,
-      currentTraineeName: trainee.fullName,
-      status: 'active'
-    };
-    (device as any).currentTraineeId = trainee.id;
-    (device as any).currentTraineeCode = trainee.code;
-    db.getData().devices.push(device);
-  } else {
-    device.assignedUser = trainee.fullName;
-    device.currentTraineeName = trainee.fullName;
-    (device as any).currentTraineeId = trainee.id;
-    (device as any).currentTraineeCode = trainee.code;
-    device.isOnline = true;
-    device.status = 'active';
-    device.lastHeartbeat = new Date().toISOString();
-  }
-
   // Evaluate Group Lecture Schedule & Timing
-  const group = db.getData().groups.find(g => g.id === trainee.groupId);
-  const course = db.getData().courses.find(c => c.id === trainee.courseId);
+  const group = (db.getData().groups || []).find(g => g.id === trainee.groupId);
+  const course = (db.getData().courses || []).find(c => c.id === trainee.courseId);
   const lectureWindow = group ? evaluateGroupLectureWindow(group) : null;
 
   const today = new Date().toISOString().split('T')[0];
   const currentTime = new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
 
+  if (!Array.isArray(db.getData().attendance)) {
+    db.getData().attendance = [];
+  }
+
   const existingAtt = (await AttendanceRepo.getByTraineeId(trainee.id)) || [];
-  let attRecord = existingAtt.find(
-    a => a.date === today && (a.groupId === trainee.groupId || !trainee.groupId)
+  const localAtt = db.getData().attendance || [];
+  let attRecord = [...existingAtt, ...localAtt].find(
+    a => a && a.date === today && (a.traineeId === trainee.id || (a as any).studentId === trainee.id || (a as any).traineeCode === trainee.code)
   );
 
-  let attendanceResultStatus: 'present' | 'absent' | 'not_scheduled' = 'not_scheduled';
+  let attendanceResultStatus: 'present' | 'absent' | 'not_scheduled' = 'present';
   let pointsAwarded = 0;
   let alreadyRecorded = false;
   let attendanceMessage = '';
 
-  if (lectureWindow && lectureWindow.isTodayLecture) {
-    if (lectureWindow.isWithinWindow) {
-      // Current time is within the lecture window
-      if (attRecord && attRecord.status === 'present') {
-        // Already recorded present for this lecture!
-        alreadyRecorded = true;
-        attendanceResultStatus = 'present';
-        attendanceMessage = `مرحباً بك مجدداً يا ${trainee.fullName}! تم تسجيل حضورك لمحاضرة اليوم (${group?.name}) مسبقاً في تمام الساعة ${attRecord.time || ''} 🌟`;
-      } else {
-        // First login during this lecture -> Record attendance and award points
-        const pointRule = (db.getData().pointRules || []).find(r => r.ruleType === 'attendance' && r.isActive);
-        const pts = pointRule ? pointRule.pointValue : 5;
-        pointsAwarded = pts;
+  // Always record attendance and award points when student logs in from Lab Kiosk / Studio link
+  const pointRule = (db.getData().pointRules || []).find(r => r.ruleType === 'attendance' && r.isActive);
+  const pts = pointRule ? pointRule.pointValue : 5;
 
-        if (attRecord) {
-          attRecord.status = 'present';
-          attRecord.time = currentTime;
-          attRecord.notes = `تسجيل حضور تلقائي ذكي من جهاز المعمل (${device.name})`;
-          await AttendanceRepo.update(attRecord.id, {
-            status: 'present',
-            time: currentTime,
-            notes: attRecord.notes
-          });
-        } else {
-          attRecord = {
-            id: 'att-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
-            date: today,
-            time: currentTime,
-            branchId: trainee.branchId,
-            groupId: trainee.groupId || 'grp-1',
-            courseId: trainee.courseId,
-            traineeId: trainee.id,
-            status: 'present',
-            notes: `تسجيل حضور تلقائي ذكي من جهاز المعمل (${device.name})`
-          };
-          await AttendanceRepo.create(attRecord.id, attRecord);
-        }
-
-        const newTotal = (trainee.totalPoints || trainee.points || 0) + pts;
-        await TraineeRepo.update(trainee.id, { totalPoints: newTotal, points: newTotal });
-        trainee.totalPoints = newTotal;
-        trainee.points = newTotal;
-
-        db.getData().pointTransactions.unshift({
-          id: 'pt-' + Date.now(),
-          traineeId: trainee.id,
-          groupId: trainee.groupId,
-          branchId: trainee.branchId,
-          points: pts,
-          reason: `حضور محاضرة ${group?.name || ''} تلقائياً عبر المعمل`,
-          ruleId: pointRule?.id,
-          addedByUserId: 'system',
-          addedByUserName: 'نظام رصد المعمل الآلي',
-          createdAt: new Date().toISOString()
-        });
-
-        attendanceResultStatus = 'present';
-        attendanceMessage = `تم تسجيل حضورك تلقائياً لمحاضرة اليوم (${group?.name || ''}) ومنحك +${pts} نقاط تميز! 🌟`;
-
-        // Send instant parent notification/report to Parent Portal
-        if (!db.getData().portalMessages) {
-          db.getData().portalMessages = [];
-        }
-        db.getData().portalMessages.unshift({
-          id: 'msg-att-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
-          traineeId: trainee.id,
-          traineeCode: trainee.code,
-          recipientId: trainee.id,
-          recipientType: 'parent',
-          sender: 'نظام إدارة الحصص والمعامل',
-          senderRole: 'system',
-          title: '✅ تقرير حضور الطالب للمحاضرة',
-          content: `تحية طيبة، نفيدكم علماً بتسجيل حضور الطالب (${trainee.fullName}) في قاعة المعمل لمجموعته (${group?.name || 'التدريبية'}) بنجاح في تمام الساعة ${currentTime}، وتم منحه +${pts} نجوم تميز وحضور 🌟`,
-          date: today,
-          time: currentTime,
-          type: 'attendance',
-          category: 'attendance_report',
-          isRead: false
-        });
-
-        db.save();
-      }
-    } else if (lectureWindow.hasEndedToday) {
-      // Student arrived after the lecture concluded
-      attendanceResultStatus = attRecord?.status === 'present' ? 'present' : 'absent';
-      attendanceMessage = attRecord?.status === 'present'
-        ? `أهلاً بك يا ${trainee.fullName}! تم توثيق حضورك للمحاضرة مسبقاً.`
-        : `مرحباً يا ${trainee.fullName}! لقد انتهى موعد محاضرة اليوم (${lectureWindow.startTime} - ${lectureWindow.endTime}). تم توثيق حالتك كغائب لعدم الدخول أثناء موعد المحاضرة.`;
-    } else {
-      // Upcoming today (before arrival window)
-      attendanceResultStatus = 'not_scheduled';
-      attendanceMessage = `أهلاً بك يا ${trainee.fullName}! موعد محاضرتك اليوم يبدأ في تمام الساعة ${lectureWindow.startTime}. سيتم تسجيل الحضور تلقائياً فور بدء موعد المحاضرة.`;
-    }
+  if (attRecord && attRecord.status === 'present') {
+    alreadyRecorded = true;
+    attendanceResultStatus = 'present';
+    pointsAwarded = 0;
+    attendanceMessage = `مرحباً بك مجدداً يا ${trainee.fullName}! تم تسجيل حضورك ومنح النقاط مسبقاً اليوم في تمام الساعة ${attRecord.time || ''} 🌟`;
   } else {
-    // Today is not a scheduled lecture day for this group
-    attendanceResultStatus = 'not_scheduled';
-    const scheduledDaysText = (lectureWindow?.scheduledDays || []).join(' - ') || 'لم تحدد بعد';
-    attendanceMessage = `أهلاً بك يا ${trainee.fullName}! مجموعتك (${group?.name || 'التدريبية'}) ليس لها محاضرة مجدولة اليوم (${lectureWindow?.dayName || 'اليوم'}). جدولك: ${scheduledDaysText}. يمكنك استعراض نجومك وأنشطة المعمل.`;
+    pointsAwarded = pts;
+    if (attRecord) {
+      attRecord.status = 'present';
+      attRecord.time = currentTime;
+      attRecord.notes = 'تسجيل حضور تفاعلي من رابط الاستوديو والمعمل';
+      await AttendanceRepo.update(attRecord.id, {
+        status: 'present',
+        time: currentTime,
+        notes: attRecord.notes
+      }).catch(() => {});
+    } else {
+      attRecord = {
+        id: 'att-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
+        date: today,
+        time: currentTime,
+        branchId: trainee.branchId || 'branch-1',
+        groupId: trainee.groupId || 'grp-1',
+        courseId: trainee.courseId || '',
+        traineeId: trainee.id,
+        status: 'present',
+        notes: 'تسجيل حضور تفاعلي من رابط الاستوديو والمعمل'
+      };
+      db.getData().attendance.push(attRecord);
+      await AttendanceRepo.create(attRecord.id, attRecord).catch(() => {});
+    }
+
+    const newTotal = (trainee.totalPoints || trainee.points || 0) + pts;
+    await TraineeRepo.update(trainee.id, { totalPoints: newTotal, points: newTotal }).catch(() => {});
+    trainee.totalPoints = newTotal;
+    trainee.points = newTotal;
+
+    if (!Array.isArray(db.getData().pointTransactions)) {
+      db.getData().pointTransactions = [];
+    }
+
+    db.getData().pointTransactions.unshift({
+      id: 'pt-' + Date.now(),
+      traineeId: trainee.id,
+      groupId: trainee.groupId,
+      branchId: trainee.branchId,
+      points: pts,
+      reason: `حضور المعمل وجلسة الاستوديو ${group?.name || ''}`,
+      ruleId: pointRule?.id,
+      addedByUserId: 'system',
+      addedByUserName: 'نظام رصد المعمل الآلي',
+      createdAt: new Date().toISOString()
+    });
+
+    attendanceResultStatus = 'present';
+    attendanceMessage = `أهلاً بك يا ${trainee.fullName}! تم تسجيل حضورك بنجاح ومنحك +${pts} نقاط تميز وحضور من المعمل والاستوديو! 🌟`;
+
+    db.saveImmediate();
   }
 
   const stats = getTraineeRankAndStats(trainee.id);
@@ -10090,6 +10093,39 @@ apiRouter.post(['/messages/mark-as-read', '/messages/mark-as-read/'], async (req
   }
 });
 
+apiRouter.post(['/messages/clear-all', '/messages/clear-all/'], async (req: Request, res: Response) => {
+  try {
+    const data = db.getData();
+    data.portalMessages = [];
+    db.saveImmediate();
+    try {
+      await saveCollectionToFirestore('portalMessages', []);
+    } catch (e) {}
+    res.json({ success: true, message: 'تم مسح وتصفير كافة الرسائل بنجاح' });
+  } catch (err: any) {
+    res.status(500).json({ error: 'فشل مسح الرسائل: ' + err.message });
+  }
+});
+
+apiRouter.delete('/messages/thread/:traineeId', async (req: Request, res: Response) => {
+  try {
+    const { traineeId } = req.params;
+    const data = db.getData();
+    if (Array.isArray(data.portalMessages)) {
+      data.portalMessages = data.portalMessages.filter(
+        (m: any) => m && m.traineeId !== traineeId && m.recipientId !== traineeId
+      );
+      db.saveImmediate();
+      try {
+        await saveCollectionToFirestore('portalMessages', data.portalMessages);
+      } catch (e) {}
+    }
+    res.json({ success: true, message: 'تم حذف المحادثة بنجاح' });
+  } catch (err: any) {
+    res.status(500).json({ error: 'فشل حذف المحادثة: ' + err.message });
+  }
+});
+
 // ===================================================
 // Student Portal Instant AI Homework Auto-Grading & Notification
 // ===================================================
@@ -10919,25 +10955,6 @@ apiRouter.post(['/student/send-message', '/student/send-message/'], async (req: 
 
     data.portalMessages.push(userMsg);
 
-    // Automatic Smart AI Reply
-    const aiReplyMsg = {
-      id: 'msg-ai-' + Date.now() + '-' + Math.random().toString(36).substring(2, 7),
-      traineeId: traineeId || trainee?.id || '',
-      traineeName: trainee?.fullName || senderName || 'طالب',
-      traineeCode: trainee?.code || '',
-      parentName: 'المساعد الذكي',
-      portalSource: 'system',
-      senderRole: 'admin',
-      senderName: 'المساعد الذكي لمركز النجاح 🤖',
-      recipientType: 'student',
-      message: `أهلاً بك يا بطل! 🌟 تم استلام رسالتك واستفسارك بخصوص: "${message.trim().substring(0, 60)}". تم تسليمها للمعلم والمركز للمتابعة، وأنا متواجد هنا لمساعدتك في أي سؤال!`,
-      messageType: 'reply',
-      read: true,
-      createdAt: new Date().toISOString()
-    };
-
-    data.portalMessages.push(aiReplyMsg);
-
     if (!Array.isArray(data.notifications)) data.notifications = [];
     data.notifications.unshift({
       id: 'notif-msg-' + Date.now(),
@@ -10950,19 +10967,8 @@ apiRouter.post(['/student/send-message', '/student/send-message/'], async (req: 
       metadata: { traineeId: traineeId || trainee?.id, traineeCode: trainee?.code }
     });
 
-    data.notifications.unshift({
-      id: 'notif-reply-' + Date.now(),
-      type: 'message',
-      title: `🤖 تأكيد تسليم استفسارك وتفاعل المساعد الذكي`,
-      message: `تم تسليم رسالتك بنجاح للمعلم وتوثيقها في سجلك الأكاديمي!`,
-      linkView: 'messages',
-      createdAt: new Date().toISOString(),
-      read: false,
-      metadata: { traineeId: traineeId || trainee?.id, traineeCode: trainee?.code }
-    });
-
     db.saveImmediate();
-    res.json({ success: true, message: userMsg, aiReply: aiReplyMsg });
+    res.json({ success: true, message: userMsg });
   } catch (err: any) {
     res.status(500).json({ error: 'فشل إرسال رسالة الطالب: ' + err.message });
   }

@@ -77,16 +77,75 @@ export const StudentKioskView: React.FC = () => {
     };
     window.addEventListener('nagah_lab_session_changed', handleLabEvent);
     window.addEventListener('storage', () => setIsLabLocked(!isTrainerSessionActive()));
-    const interval = setInterval(fetchStatus, 4000);
 
     return () => {
       isMounted = false;
       window.removeEventListener('nagah_lab_session_changed', handleLabEvent);
-      clearInterval(interval);
     };
   }, []);
 
-  // Poll for trainer's quick question
+  const handleRefreshStats = async () => {
+    if (!currentTrainee) return;
+    const code = currentTrainee.studentCode || currentTrainee.code || currentTrainee.id;
+    if (!code) return;
+    try {
+      const refRes = await fetch(`/api/agent/student-refresh?code=${encodeURIComponent(code)}`);
+      const refJson = await refRes.json();
+      if (refJson.success && refJson.trainee) {
+        setCurrentTrainee(refJson.trainee);
+      }
+      const res = await fetch('/api/lab/quick-question');
+      const json = await res.json();
+      if (json && json.data) {
+        setActiveQuestion(json.data);
+        if (json.data.answers && json.data.answers[code]) {
+          setSubmittedAnswer(json.data.answers[code].answer);
+        }
+      } else {
+        setActiveQuestion(null);
+      }
+    } catch {}
+  };
+
+  // Real-time Instant Points & Stars Synchronization
+  useEffect(() => {
+    if (!currentTrainee) return;
+    const syncPoints = () => {
+      try {
+        const stored = localStorage.getItem('nagah_trainees');
+        if (stored) {
+          const list = JSON.parse(stored);
+          const myCode = (currentTrainee.studentCode || currentTrainee.code || currentTrainee.id || '').trim().toUpperCase();
+          const found = list.find((t: any) =>
+            (t.id && t.id === currentTrainee.id) ||
+            (t.code && String(t.code).trim().toUpperCase() === myCode)
+          );
+          if (found) {
+            setCurrentTrainee(prev => prev ? { ...prev, ...found, points: found.totalPoints ?? found.points, totalPoints: found.totalPoints ?? found.points } : null);
+          }
+        }
+      } catch {}
+    };
+
+    const handlePointEvent = (e: any) => {
+      syncPoints();
+      handleRefreshStats();
+    };
+
+    window.addEventListener('storage', syncPoints);
+    window.addEventListener('focus', syncPoints);
+    window.addEventListener('nagah_points_mutated', handlePointEvent);
+    window.addEventListener('nagah_trainee_mutated', handlePointEvent);
+
+    return () => {
+      window.removeEventListener('storage', syncPoints);
+      window.removeEventListener('focus', syncPoints);
+      window.removeEventListener('nagah_points_mutated', handlePointEvent);
+      window.removeEventListener('nagah_trainee_mutated', handlePointEvent);
+    };
+  }, [currentTrainee?.id, currentTrainee?.code]);
+
+  // Check on mount or focus
   useEffect(() => {
     let isMounted = true;
     const checkQuickQuestion = async () => {
@@ -97,7 +156,6 @@ export const StudentKioskView: React.FC = () => {
         if (isMounted) {
           if (json && json.data) {
             setActiveQuestion(json.data);
-            // Check if current student already answered this specific question
             if (currentTrainee && json.data.answers && json.data.answers[currentTrainee.studentCode || currentTrainee.code]) {
               setSubmittedAnswer(json.data.answers[currentTrainee.studentCode || currentTrainee.code].answer);
             }
@@ -115,15 +173,11 @@ export const StudentKioskView: React.FC = () => {
             setActiveExternalActivity(null);
           }
         }
-      } catch (err) {
-        // silent fail
-      }
+      } catch (err) {}
     };
 
-    // Check immediately on mount or trainee login
     checkQuickQuestion();
 
-    // Check on window focus (instant event-driven trigger when student clicks or returns to tab)
     const handleWindowFocus = () => {
       checkQuickQuestion();
     };
@@ -395,6 +449,15 @@ export const StudentKioskView: React.FC = () => {
                 <div className="text-[10px] text-slate-500 dark:text-slate-400 font-bold">نجمة تميز ⭐</div>
               </div>
             </div>
+
+            {/* Refresh Stats Button */}
+            <button
+              onClick={handleRefreshStats}
+              className="p-3 rounded-2xl bg-amber-50 hover:bg-amber-100 dark:bg-amber-500/10 dark:hover:bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-500/30 transition-all cursor-pointer shadow-xs flex items-center justify-center"
+              title="تحديث الرصيد والنقاط"
+            >
+              <RefreshCw className="w-4 h-4" />
+            </button>
 
             {/* Logout button */}
             <button

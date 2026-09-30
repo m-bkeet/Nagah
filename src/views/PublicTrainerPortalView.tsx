@@ -51,7 +51,6 @@ import { AIPresentationGenerator } from '../components/trainer/AIPresentationGen
 import { LiveLectureStudio } from '../components/trainer/LiveLectureStudio';
 import { ThemeQuickSwitcher } from '../components/ThemeQuickSwitcher';
 import { AdvancedExamMaker } from '../components/trainer/AdvancedExamMaker';
-import { TrainerLanguageLabView } from '../components/languageLab/TrainerLanguageLabView';
 import { TrainerGroupsManager } from '../components/trainer/TrainerGroupsManager';
 import { TrainerContentPlanner } from '../components/trainer/TrainerContentPlanner';
 import { LectureRecapManager } from '../components/homeworks/LectureRecapManager';
@@ -1188,10 +1187,6 @@ export const PublicTrainerPortalView: React.FC<PublicTrainerPortalViewProps> = (
                 onShowToast={showToast}
                 onRefreshCourses={() => loadTrainerData(trainer.id)}
               />
-            )}
-
-            {activeTab === 'language_lab' && (
-              <TrainerLanguageLabView trainer={trainer} groups={groups} trainees={trainees} />
             )}
 
             {/* TAB 1: ATTENDANCE RECORDING */}

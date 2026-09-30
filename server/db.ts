@@ -21,16 +21,12 @@ import {
   ExamQuestion,
   ExamResult,
   InteractiveSession,
-  Device,
-  DeviceCommand,
   Certificate,
   TrainerAttestation,
   CertificateTemplate,
   AuditLog,
   CenterSettings,
   SystemNotification,
-  TraineeScreenshot,
-  ComputerLab,
   AssignmentTask
 } from '../src/types.ts';
 
@@ -53,20 +49,14 @@ export interface DatabaseSchema {
   questions: ExamQuestion[];
   examResults: ExamResult[];
   interactiveSessions: InteractiveSession[];
-  devices?: Device[];
-  deviceCommands?: DeviceCommand[];
   certificates: Certificate[];
   certificateTemplates?: CertificateTemplate[];
   trainerAttestations?: TrainerAttestation[];
   auditLogs: AuditLog[];
   settings: CenterSettings;
   notifications: SystemNotification[];
-  traineeScreenshots?: TraineeScreenshot[];
   secretFinancialArchives?: any[];
-  deletedDeviceIds?: string[];
-  labSchedules?: any[];
   traineeBadges?: any[];
-  traineeEvaluations?: any[];
   homeworkSubmissions?: any[];
   freedTraineeCodes?: Array<{
     code: string;
@@ -78,7 +68,6 @@ export interface DatabaseSchema {
     freedAt: string;
     traineeName?: string;
   }>;
-  computerLabs?: ComputerLab[];
   googleDriveSync?: any;
   studentPosts?: any[];
   socialComments?: any[];
@@ -113,9 +102,6 @@ const defaultPointRules: PointRule[] = [
 
 const initialData: DatabaseSchema = {
   freedTraineeCodes: [],
-  devices: [],
-  traineeScreenshots: [],
-  computerLabs: [],
   branches: [
     {
       id: 'branch-1',
@@ -3879,7 +3865,7 @@ class DatabaseManager {
 
   public async ensureHydrated(force = false): Promise<void> {
     const now = Date.now();
-    const CACHE_TTL_MS = 15000;
+    const CACHE_TTL_MS = 2000; // 2 seconds heartbeat to ensure fast multi-window / desktop shortcut sync without burning quota
     if (!force && this.isFirestoreHydrated && (now - this.lastHydrationTime < CACHE_TTL_MS)) {
       return;
     }
@@ -3899,18 +3885,30 @@ class DatabaseManager {
           return;
         }
 
-        // Fast collection sync: if only trainees were touched remotely, sync just trainees
-        if (this.isFirestoreHydrated && meta?.lastCollection === 'trainees' && remoteTime > this.lastRemoteSyncMetaTime) {
-          const remoteTrainees = await loadCollectionFromFirestore('trainees');
-          if (Array.isArray(remoteTrainees) && remoteTrainees.length > 0) {
-            console.log('[DB] Fast-hydrated trainees from Firestore! Count:', remoteTrainees.length);
+        // Fast collection sync: if a specific collection was touched remotely, sync just that collection
+        if (this.isFirestoreHydrated && meta?.lastCollection && remoteTime > this.lastRemoteSyncMetaTime) {
+          const colName = meta.lastCollection;
+          const remoteItems = await loadCollectionFromFirestore(colName);
+          if (Array.isArray(remoteItems) && remoteItems.length > 0) {
+            console.log(`[DB] Fast-hydrated ${colName} from Firestore! Count:`, remoteItems.length);
             const current = this.data || {} as any;
-            const coursesList = Array.isArray(current.courses) ? current.courses : [];
-            const deduplicated = this.deduplicateTrainees(remoteTrainees);
-            current.trainees = deduplicated.map((t: any) => ({
-              ...t,
-              ...calculateTraineeFeeAndFinancials(t, coursesList)
-            }));
+            if (colName === 'trainees') {
+              const coursesList = Array.isArray(current.courses) ? current.courses : [];
+              const deduplicated = this.deduplicateTrainees(remoteItems);
+              current.trainees = deduplicated.map((t: any) => ({
+                ...t,
+                ...calculateTraineeFeeAndFinancials(t, coursesList)
+              }));
+            } else {
+              const remoteMap = new Map((remoteItems as any[]).map(item => [item.id, item]));
+              const localList = Array.isArray(current[colName]) ? current[colName] : [];
+              for (const loc of localList) {
+                if (loc && loc.id && !remoteMap.has(loc.id)) {
+                  remoteMap.set(loc.id, loc);
+                }
+              }
+              current[colName] = Array.from(remoteMap.values());
+            }
             this.lastRemoteSyncMetaTime = remoteTime;
             return;
           }
@@ -4106,10 +4104,6 @@ class DatabaseManager {
           badges: Array.isArray(parsed.badges) ? parsed.badges : [],
           schedules: Array.isArray(parsed.schedules) ? parsed.schedules : [],
           session_attendance_records: Array.isArray(parsed.session_attendance_records) ? parsed.session_attendance_records : [],
-          devices: [],
-          deviceCommands: [],
-          traineeScreenshots: [],
-          computerLabs: [],
           users: existingUsers,
           settings: {
             ...initialData.settings,
@@ -4571,9 +4565,6 @@ class DatabaseManager {
       }
       if (options.auditLogs) {
         this.data.auditLogs = [];
-      }
-      if (options.screenshotsArchive) {
-        this.data.traineeScreenshots = [];
       }
     }
     // Synchronously write directly to disk to ensure immediate reset persistence

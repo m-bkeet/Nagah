@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { LectureRecap } from '../../types';
 import { detectCurriculum } from '../../domain/curriculumRegistry';
+import { getPublicBaseUrl } from '../../utils/urlHelper';
 
 export const GRADE_OPTIONS = [
   'الصف السادس الابتدائي (Grade 6 Languages) - دورة ICT 6',
@@ -860,7 +861,7 @@ ${prepText}
 ${recap.closingMessage || 'بالتوفيق يا أبطال النجاح! 🌟'}
 
 🌐 رابط تسليم الواجب متعدد الصفحات من البوابة:
-${window.location.origin}/student
+${getPublicBaseUrl()}/?view=student_portal
     `.trim();
 
     navigator.clipboard.writeText(text);

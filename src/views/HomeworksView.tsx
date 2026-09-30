@@ -13,6 +13,7 @@ import confetti from 'canvas-confetti';
 import { KahootGameModal } from '../components/homeworks/KahootGameModal';
 import { PrintAssignmentModal } from '../components/homeworks/PrintAssignmentModal';
 import { KahootStudio } from '../components/kahoot/KahootStudio';
+import { getPublicBaseUrl } from '../utils/urlHelper';
 
 export const HomeworksView: React.FC = () => {
   const { 
@@ -478,7 +479,7 @@ export const HomeworksView: React.FC = () => {
   // Instant WhatsApp Sharing Generator
   const handleShareAssignmentOnWhatsApp = (assignment: AssignmentTask) => {
     const qCount = assignment.quizGame?.questions?.length || 0;
-    const origin = window.location.origin;
+    const origin = getPublicBaseUrl();
     const directLink = `${origin}/#student-portal?task=${assignment.id}`;
 
     const text = `🌟 *واجب وتحدي تفاعلي جديد - مركز النجاح* 🌟\n\n` +
@@ -497,7 +498,7 @@ export const HomeworksView: React.FC = () => {
 
   // Copy Direct Link to Clipboard
   const handleCopyAssignmentLink = (assignment: AssignmentTask) => {
-    const origin = window.location.origin;
+    const origin = getPublicBaseUrl();
     const directLink = `${origin}/#student-portal?task=${assignment.id}`;
     navigator.clipboard.writeText(directLink);
     showToast('تم نسخ رابط التكليف للحافظة بنجاح 📋', 'success');

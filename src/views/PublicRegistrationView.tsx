@@ -6,7 +6,6 @@ import { captureElementToCanvas } from '../utils/captureUtils';
 import { uploadFile } from '../lib/storage';
 import { cloudDb } from '../services/cloudDatabase';
 import { ThemeQuickSwitcher } from '../components/ThemeQuickSwitcher';
-import { FloatingChatButton } from '../components/FloatingChatButton';
 
 const API_URL = `${window.location.origin}/api/public/register`;
 const BRANCHES_API = `${window.location.origin}/api/branches`;
@@ -747,7 +746,6 @@ export const PublicRegistrationView: React.FC<PublicRegistrationViewProps> = ({ 
         </div>
         )}
       </div>
-      <FloatingChatButton />
     </div>
   );
 };

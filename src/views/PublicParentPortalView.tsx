@@ -13,7 +13,6 @@ import {
 import { NextLectureWidget } from '../components/NextLectureWidget';
 import { ElectronicPaymentWidget } from '../components/ElectronicPaymentWidget';
 import { OfficialReceiptModal } from '../components/OfficialReceiptModal';
-import { ParentLanguageInsights } from '../components/language/ParentLanguageInsights';
 import { api } from '../services/api';
 import { Trainee, TraineeBadge, TraineeEvaluation, AttendanceRecord, LabScheduleSlot, Payment } from '../types';
 import { sessionEventsService, SessionEvent } from '../services/sessionEventsService';
@@ -137,11 +136,21 @@ export const PublicParentPortalView: React.FC<PublicParentPortalViewProps> = ({ 
   const [isSubmittingProof, setIsSubmittingProof] = useState<boolean>(false);
   const [proofNoticeMsg, setProofNoticeMsg] = useState<string>('');
 
+  const [parentToasts, setParentToasts] = useState<Array<{ id: string; text: string; type: 'success' | 'error' | 'info' | 'warning' }>>([]);
+
+  const showParentToast = (text: string, type: 'success' | 'error' | 'info' | 'warning' = 'info') => {
+    const id = 'toast-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4);
+    setParentToasts(prev => [...prev, { id, text, type }]);
+    setTimeout(() => {
+      setParentToasts(prev => prev.filter(t => t.id !== id));
+    }, 4500);
+  };
+
   const handleFileChangeForProof = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     if (file.size > 5 * 1024 * 1024) {
-      alert('حجم الصورة كبير جداً. يرجى اختيار صورة أقل من 5 ميجابايت.');
+      showParentToast('حجم الصورة كبير جداً. يرجى اختيار صورة أقل من 5 ميجابايت.', 'warning');
       return;
     }
     const reader = new FileReader();
@@ -155,11 +164,11 @@ export const PublicParentPortalView: React.FC<PublicParentPortalViewProps> = ({ 
     e.preventDefault();
     if (!selectedChild) return;
     if (!proofAmount || proofAmount <= 0) {
-      alert('يرجى كتابة مبلغ السداد الصحيح');
+      showParentToast('يرجى كتابة مبلغ السداد الصحيح', 'warning');
       return;
     }
     if (!proofImageBase64) {
-      alert('يرجى إرفاق صورة إيصال الدفع أو لقطة الشاشة');
+      showParentToast('يرجى إرفاق صورة إيصال الدفع أو لقطة الشاشة', 'warning');
       return;
     }
 
@@ -178,6 +187,7 @@ export const PublicParentPortalView: React.FC<PublicParentPortalViewProps> = ({ 
 
       if (res.success) {
         setProofNoticeMsg('تم رفع إيصال السداد بنجاح! الإيصال الآن قيد التحقق ومراجعة الإدارة ⏳');
+        showParentToast('تم رفع إيصال السداد بنجاح وجارٍ التحقق منه! ⏳', 'success');
         setTimeout(() => {
           setIsUploadProofModalOpen(false);
           setProofImageBase64('');
@@ -187,7 +197,7 @@ export const PublicParentPortalView: React.FC<PublicParentPortalViewProps> = ({ 
         }, 1800);
       }
     } catch (err: any) {
-      alert(err.message || 'حدث خطأ أثناء رفع إيصال السداد');
+      showParentToast(err.message || 'حدث خطأ أثناء رفع إيصال السداد', 'error');
     } finally {
       setIsSubmittingProof(false);
     }
@@ -320,7 +330,7 @@ export const PublicParentPortalView: React.FC<PublicParentPortalViewProps> = ({ 
       const choice = await deferredPrompt.userChoice;
       if (choice.outcome === 'accepted') setDeferredPrompt(null);
     } else {
-      alert('لتثبيت التطبيق على هاتفك:\n\n- في الآيفون (Safari): اضغط زر المشاركة ثم "إضافة للشاشة الرئيسية" (Add to Home Screen).\n\n- في الأندرويد (Chrome): افتح قائمة المتصفح ثم اختر "تثبيت التطبيق" (Install App).');
+      showParentToast('لتثبيت التطبيق على هاتفك: في الآيفون اضغط زر المشاركة ثم "إضافة للشاشة الرئيسية"، وفي الأندرويد اضغط قائمة المتصفح ثم "تثبيت التطبيق".', 'info');
     }
   };
 
@@ -654,10 +664,10 @@ export const PublicParentPortalView: React.FC<PublicParentPortalViewProps> = ({ 
           refreshParentData();
         }, 1200);
       } else {
-        alert(data.error || 'حدث خطأ أثناء حفظ البيانات');
+        showParentToast(data.error || 'حدث خطأ أثناء حفظ البيانات', 'error');
       }
     } catch (err) {
-      alert('حدث خطأ بالاتصال بالخادم');
+      showParentToast('حدث خطأ بالاتصال بالخادم', 'error');
     } finally {
       setIsSavingParentProfile(false);
     }
@@ -692,15 +702,16 @@ export const PublicParentPortalView: React.FC<PublicParentPortalViewProps> = ({ 
       const data = await res.json();
       if (res.ok && data.success) {
         setStudentUpdateMsg('تم تحديث بيانات وصورة الطالب بنجاح! ✓');
+        showParentToast('تم تحديث بيانات وصورة الطالب بنجاح! ✓', 'success');
         setTimeout(() => {
           setIsEditStudentModalOpen(false);
           refreshParentData();
         }, 1200);
       } else {
-        alert(data.error || 'حدث خطأ أثناء التحديث');
+        showParentToast(data.error || 'حدث خطأ أثناء التحديث', 'error');
       }
     } catch (err) {
-      alert('حدث خطأ بالاتصال بالخادم');
+      showParentToast('حدث خطأ بالاتصال بالخادم', 'error');
     } finally {
       setIsUpdatingStudent(false);
     }
@@ -730,6 +741,7 @@ export const PublicParentPortalView: React.FC<PublicParentPortalViewProps> = ({ 
       if (res.ok && data.success) {
         setChatInputText('');
         setChatSuccessNotice('تم إرسال رسالتك بنجاح وسيتواصل معك الفريق قريباً! 💬');
+        showParentToast('تم إرسال رسالتك بنجاح وسيتواصل معك الفريق قريباً! 💬', 'success');
         if (selectedChild.messages) {
           selectedChild.messages.unshift(data.message);
           if (data.aiReply) {
@@ -739,10 +751,10 @@ export const PublicParentPortalView: React.FC<PublicParentPortalViewProps> = ({ 
         refreshParentData();
         setTimeout(() => setChatSuccessNotice(''), 4000);
       } else {
-        alert(data.error || 'حدث خطأ أثناء إرسال الرسالة');
+        showParentToast(data.error || 'حدث خطأ أثناء إرسال الرسالة', 'error');
       }
     } catch (err) {
-      alert('حدث خطأ في الاتصال بالشبكة');
+      showParentToast('حدث خطأ في الاتصال بالشبكة', 'error');
     } finally {
       setIsSendingChatMessage(false);
     }
@@ -752,7 +764,7 @@ export const PublicParentPortalView: React.FC<PublicParentPortalViewProps> = ({ 
   const handleDownloadCertImage = async (certId: string, certName: string) => {
     const el = document.getElementById(`parent-cert-card-${certId}`);
     if (!el) {
-      alert('تعذر الوصول لبطاقة الشهادة');
+      showParentToast('تعذر الوصول لبطاقة الشهادة', 'warning');
       return;
     }
     try {
@@ -765,8 +777,9 @@ export const PublicParentPortalView: React.FC<PublicParentPortalViewProps> = ({ 
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+      showParentToast('تم تنزيل الشهادة بنجاح! 🎉', 'success');
     } catch (err) {
-      alert('حدث خطأ أثناء تنزيل الشهادة كصورة');
+      showParentToast('حدث خطأ أثناء تنزيل الشهادة كصورة', 'error');
     }
   };
 
@@ -789,11 +802,11 @@ export const PublicParentPortalView: React.FC<PublicParentPortalViewProps> = ({ 
         url: window.location.origin
       }).catch(() => {
         navigator.clipboard.writeText(shareText);
-        alert('📋 تم نسخ رابط ونص تحميل التطبيق بنجاح! يمكنك مشاركته مع العائلة والطلاب على واتساب وفيسبوك.');
+        showParentToast('📋 تم نسخ رابط ونص تحميل التطبيق بنجاح! يمكنك مشاركته مع العائلة والطلاب على واتساب وفيسبوك.', 'success');
       });
     } else {
       navigator.clipboard.writeText(shareText);
-      alert('📋 تم نسخ رابط ونص تحميل التطبيق بنجاح! يمكنك مشاركته مع العائلة والطلاب على واتساب وفيسبوك.');
+      showParentToast('📋 تم نسخ رابط ونص تحميل التطبيق بنجاح! يمكنك مشاركته مع العائلة والطلاب على واتساب وفيسبوك.', 'success');
     }
   };
 
@@ -2111,6 +2124,25 @@ export const PublicParentPortalView: React.FC<PublicParentPortalViewProps> = ({ 
         starWinnerName={celebrationData.winnerName}
         starWinnerPoints={celebrationData.winnerPoints}
       />
+
+      {/* Toast Notification Container for Parent Portal */}
+      {parentToasts.length > 0 && (
+        <div className="fixed bottom-20 sm:bottom-6 right-4 z-50 flex flex-col gap-2 max-w-sm w-full pointer-events-none">
+          {parentToasts.map(t => (
+            <div
+              key={t.id}
+              className={`p-3 rounded-2xl shadow-xl border text-xs font-bold pointer-events-auto transition-all animate-in slide-in-from-bottom-2 flex items-center justify-between gap-2 backdrop-blur-md ${
+                t.type === 'success' ? 'bg-emerald-900/90 text-white border-emerald-500/40' :
+                t.type === 'error' ? 'bg-rose-900/90 text-white border-rose-500/40' :
+                t.type === 'warning' ? 'bg-amber-900/90 text-white border-amber-500/40' :
+                'bg-slate-900/90 text-white border-slate-700'
+              }`}
+            >
+              <span>{t.text}</span>
+            </div>
+          ))}
+        </div>
+      )}
 
     </div>
   );

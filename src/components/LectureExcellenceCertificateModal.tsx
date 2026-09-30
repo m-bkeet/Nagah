@@ -15,6 +15,7 @@ import { audioService } from '../services/audioService';
 import { Trainee, Course, Group } from '../types';
 import { api } from '../services/api';
 import { getEffectiveCenterLogo, handleLogoError } from '../utils/centerLogo';
+import { getPublicBaseUrl } from '../utils/urlHelper';
 
 export interface LectureCertificateInitialData {
   traineeId?: string;
@@ -612,7 +613,7 @@ export const LectureExcellenceCertificateModal: React.FC<LectureExcellenceCertif
     }
   };
 
-  // Direct Print handler using hidden iframe for 100% popup-free printing
+  // Direct Clean Safe Print handler
   const handlePrint = () => {
     if (!isSaved) {
       handleSaveToCertificates();
@@ -624,77 +625,7 @@ export const LectureExcellenceCertificateModal: React.FC<LectureExcellenceCertif
       confetti({ particleCount: 70, spread: 60, origin: { y: 0.7 } });
     } catch {}
 
-    const printFrame = document.createElement('iframe');
-    printFrame.style.position = 'fixed';
-    printFrame.style.top = '-9999px';
-    printFrame.style.left = '-9999px';
-    printFrame.style.width = '1200px';
-    printFrame.style.height = '850px';
-    document.body.appendChild(printFrame);
-
-    const frameDoc = printFrame.contentWindow?.document;
-    if (!frameDoc || !certRef.current) {
-      window.print();
-      return;
-    }
-
-    const certificateHtml = certRef.current.outerHTML;
-
-    frameDoc.open();
-    frameDoc.write(`
-      <!DOCTYPE html>
-      <html dir="rtl" lang="ar">
-        <head>
-          <meta charset="utf-8">
-          <title>شهادة شكر وتقدير - ${currentTrainee?.fullName || 'متدرب'}</title>
-          <link rel="preconnect" href="https://fonts.googleapis.com">
-          <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-          <link href="https://fonts.googleapis.com/css2?family=Amiri:ital,wght@0,400;0,700;1,400&family=Cairo:wght@400;600;700;800;900&family=Tajawal:wght@400;700;900&display=swap" rel="stylesheet">
-          <style>
-            @page {
-              size: A4 landscape;
-              margin: 3mm;
-            }
-            body {
-              margin: 0;
-              padding: 0;
-              background: #fff;
-              font-family: 'Cairo', system-ui, sans-serif;
-              -webkit-print-color-adjust: exact !important;
-              print-color-adjust: exact !important;
-              color-adjust: exact !important;
-            }
-            * {
-              box-sizing: border-box;
-            }
-            .certificate-print-sheet {
-              width: 100% !important;
-              max-width: 1060px !important;
-              margin: 0 auto !important;
-              box-shadow: none !important;
-            }
-          </style>
-          <link rel="stylesheet" href="${window.location.origin}/src/index.css" />
-        </head>
-        <body>
-          <div style="width: 100%; max-width: 1060px; margin: 0 auto; padding: 2mm;">
-            ${certificateHtml}
-          </div>
-          <script>
-            window.onload = function() {
-              setTimeout(function() {
-                window.focus();
-                window.print();
-                setTimeout(function() {
-                  window.parent.document.body.removeChild(window.frameElement);
-                }, 1000);
-              }, 400);
-            };
-          </script>
-        </body>
-      </html>
-    `);
-    frameDoc.close();
+    window.print();
   };
 
   // Download High-Res Image
@@ -720,8 +651,21 @@ export const LectureExcellenceCertificateModal: React.FC<LectureExcellenceCertif
 
   // Build rich congratulatory text
   const buildShareMessage = () => {
-    const publicUrl = window.location.origin ? `${window.location.origin}/#public` : 'https://nagah-center.com';
-    return `🌟🏆 تهانينا الحارة من مركز النجاح للتدريب والاستشارات! 🏆🌟\n\nنهنئ المتدرب المتميز البطل: *${currentTrainee?.fullName || 'المتدرب'}* 🎓\nبمناسبة تفوقه وحصوله على استحقاق:\n✨ *${awardTitle}* ✨\n\n📌 المادة / الدورة: ${currentCourse?.name || 'الدورة التدريبية'}\n${targetGroup?.name ? `👥 المجموعة: ${targetGroup.name}\n` : ''}📌 تفاصيل التكريم: ${lectureTitle}\n⭐ التقييم: ${starsCount} نجوم (+${pointsEarned} نقطة تميز إضافية ⚡)\n🔒 الرقم المرجعي المعتمد: ${serialNumber}\n🌐 البوابة الإلكترونية: ${publicUrl}\n\nنتمنى لك دوام التألق والريادة دائماً! 🚀👏\n${settings?.centerName || 'مركز النجاح للتدريب والاستشارات'}`;
+    const publicBase = getPublicBaseUrl();
+    const verifyUrl = `${publicBase}/?verify=${serialNumber}&code=${currentTrainee?.code || ''}`;
+    const studentPortalUrl = `${publicBase}/?view=student_portal&code=${currentTrainee?.code || ''}`;
+    return `🌟🏆 تهانينا الحارة من مركز النجاح للتدريب والاستشارات! 🏆🌟\n\n` +
+      `نهنئ المتدرب المتميز البطل: *${currentTrainee?.fullName || 'المتدرب'}* 🎓\n` +
+      `بمناسبة تفوقه وحصوله على استحقاق:\n✨ *${awardTitle}* ✨\n\n` +
+      `📌 المادة / الدورة: ${currentCourse?.name || 'الدورة التدريبية'}\n` +
+      (targetGroup?.name ? `👥 المجموعة: ${targetGroup.name}\n` : '') +
+      `📌 تفاصيل التكريم: ${lectureTitle}\n` +
+      `⭐ التقييم: ${starsCount} نجوم (+${pointsEarned} نقطة تميز إضافية ⚡)\n` +
+      `🔒 الرقم المرجعي المعتمد: ${serialNumber}\n\n` +
+      `🔍 رابط فحص واعتماد الشهادة رسمياً:\n${verifyUrl}\n\n` +
+      `🎓 بوابة المتدرب الشخصية لمتابعة الإنجازات:\n${studentPortalUrl}\n\n` +
+      `نتمنى لك دوام التألق والريادة دائماً! 🚀👏\n` +
+      `${settings?.centerName || 'مركز النجاح للتدريب والاستشارات'}`;
   };
 
   // 1. Share Certificate Image to WhatsApp Group
@@ -841,11 +785,11 @@ export const LectureExcellenceCertificateModal: React.FC<LectureExcellenceCertif
   };
 
   return (
-    <div className="fixed inset-0 z-[99999] flex items-center justify-center p-2 sm:p-4 bg-slate-950/85 backdrop-blur-md overflow-y-auto">
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl max-w-[1400px] w-full my-auto max-h-[96vh] flex flex-col overflow-hidden text-slate-900 dark:text-slate-100 animate-in fade-in zoom-in-95">
+    <div className="fixed inset-0 z-[99999] flex items-center justify-center p-2 sm:p-4 bg-slate-950/85 backdrop-blur-md overflow-y-auto print-modal-overlay">
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl max-w-[1400px] w-full my-auto max-h-[96vh] flex flex-col overflow-hidden text-slate-900 dark:text-slate-100 animate-in fade-in zoom-in-95 print-modal-box">
         
         {/* Top Header Bar */}
-        <div className="px-5 py-3 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-900/90 shrink-0">
+        <div className="px-5 py-3 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-900/90 shrink-0 print:hidden">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-2xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-600 dark:text-amber-400 shadow-xs">
               <Award className="w-5 h-5" />
@@ -875,10 +819,10 @@ export const LectureExcellenceCertificateModal: React.FC<LectureExcellenceCertif
         </div>
 
         {/* Modal Body: Controls Column (Left) + Interactive Live Canvas Column (Right) */}
-        <div className="flex-1 overflow-y-auto grid grid-cols-1 lg:grid-cols-12 gap-5 p-4 sm:p-5 bg-slate-100/70 dark:bg-slate-950/50">
+        <div className="flex-1 overflow-y-auto grid grid-cols-1 lg:grid-cols-12 gap-5 p-4 sm:p-5 bg-slate-100/70 dark:bg-slate-950/50 print:p-0 print:bg-white print:block">
           
           {/* Controls Column (4 cols on large screens) */}
-          <div className="lg:col-span-4 space-y-3.5 overflow-y-auto pr-0.5 custom-scrollbar">
+          <div className="lg:col-span-4 space-y-3.5 overflow-y-auto pr-0.5 custom-scrollbar print:hidden">
             
             {/* Trainee & Course Selection Card */}
             <div className="bg-white dark:bg-slate-900 p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs space-y-2.5">
@@ -1398,10 +1342,10 @@ export const LectureExcellenceCertificateModal: React.FC<LectureExcellenceCertif
           </div>
 
           {/* Live High-Fidelity Preview Column (8 cols on large screens) */}
-          <div className="lg:col-span-8 flex flex-col items-center justify-start overflow-y-auto pb-4">
+          <div className="lg:col-span-8 flex flex-col items-center justify-start overflow-y-auto pb-4 print:w-full print:block print:p-0 print:overflow-visible">
             
             {/* Preview Toolbar with Zoom Controls & Fit Notice */}
-            <div className="w-full flex items-center justify-between mb-2 px-2 text-xs text-slate-600 dark:text-slate-400">
+            <div className="w-full flex items-center justify-between mb-2 px-2 text-xs text-slate-600 dark:text-slate-400 print:hidden">
               <span className="font-bold flex items-center gap-1.5 text-slate-800 dark:text-slate-200">
                 <Eye className="w-4 h-4 text-amber-500" />
                 معاينة الشهادة المعتمدة (كاملة المحتويات والأختام دون أي اقتطاع)

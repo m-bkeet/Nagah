@@ -54,7 +54,6 @@ import { SmartWhiteboardModal } from '../components/SmartWhiteboardModal';
 import { CelebrationBalloonsOverlay } from '../components/CelebrationBalloonsOverlay';
 import { AllInOneLessonPlanModal } from '../components/trainer/AllInOneLessonPlanModal';
 import { LectureRecapManager } from '../components/homeworks/LectureRecapManager';
-import { ProjectorAudioControlBar } from '../components/trainer/ProjectorAudioControlBar';
 import { SessionCeremonyModal } from '../components/SessionCeremonyModal';
 import { audioService } from '../services/audioService';
 
@@ -909,16 +908,6 @@ export const InteractiveSessionsView: React.FC<InteractiveSessionsViewProps> = (
             <span className="text-white font-black">السبورة الذكية 🎨</span>
           </button>
 
-          {/* AI All-In-One Lesson Pack Button */}
-          <button
-            onClick={() => setIsAllInOneModalOpen(true)}
-            className="px-4 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-700 hover:from-purple-700 hover:to-indigo-800 text-white font-black text-xs sm:text-sm rounded-2xl flex items-center gap-2 shadow-lg shadow-purple-600/25 transition-all active:scale-95 cursor-pointer border border-purple-400/50"
-            title="توليد خطة الدرس ومسابقة الكاهوت بنقرة واحدة بالذكاء الاصطناعي"
-          >
-            <Sparkles className="w-4 h-4 text-purple-200" />
-            <span className="text-white font-black">حزمة الدرس (AI) 🪄</span>
-          </button>
-
           {/* Hall Clapping Sound */}
           <button
             onClick={() => {
@@ -966,10 +955,7 @@ export const InteractiveSessionsView: React.FC<InteractiveSessionsViewProps> = (
         </div>
       </div>
 
-      {/* 2. AUDIO ROUTING & PROJECTOR SOUND ENGINE (توجيه صوت المايك للشاشة والبروجيكتور) */}
-      <ProjectorAudioControlBar />
-
-      {/* 3. GROUP SELECTOR & MAIN TABS BAR */}
+      {/* 2. GROUP SELECTOR & MAIN TABS BAR */}
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3.5 sm:p-4 rounded-2xl shadow-sm flex flex-col xl:flex-row items-center justify-between gap-4">
         
         {/* Main Tabs Navigation */}

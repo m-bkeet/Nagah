@@ -81,11 +81,9 @@ function sanitizeForFirestore(collectionName: string, items: any): any {
   if (collectionName === 'trainees') {
     return items.map((t: any) => {
       const sanitized = { ...t };
-      delete sanitized.photo; // Remove redundant duplicate field
-      // If photoUrl is an embedded base64 string, keep it compact for Firestore
-      if (sanitized.photoUrl && sanitized.photoUrl.startsWith('data:image') && sanitized.photoUrl.length > 5000) {
-        delete sanitized.photoUrl;
-      }
+      const resolvedPhoto = sanitized.photoUrl || sanitized.photo || '';
+      sanitized.photoUrl = resolvedPhoto;
+      sanitized.photo = resolvedPhoto;
       return sanitized;
     });
   }
@@ -434,9 +432,8 @@ export async function loadFullDbFromFirestore(): Promise<any> {
     'attendance', 'payments', 'expenses', 'trainerSettlements', 'pointRules',
     'pointTransactions', 'exams', 'questions', 'examResults', 'interactiveSessions',
     'certificates', 'certificateTemplates',
-    'trainerAttestations', 'auditLogs', 'settings', 'notifications',
-    'assignments', 'homeworkSubmissions', 'badges', 'traineeBadges', 'portalMessages',
-    'devices', 'deviceCommands'
+    'trainerAttestations', 'settings',
+    'assignments', 'homeworkSubmissions', 'badges', 'traineeBadges', 'portalMessages'
   ];
 
   const result: any = {};

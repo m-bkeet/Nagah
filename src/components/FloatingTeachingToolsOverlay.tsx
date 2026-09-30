@@ -42,7 +42,6 @@ import { audioService } from '../services/audioService';
 import { SmartWhiteboardModal } from './SmartWhiteboardModal';
 import { SmartSpeakerModal } from './SmartSpeakerModal';
 import { FloatingPointsModal } from './FloatingPointsModal';
-import { FloatingCopilotModal } from './FloatingCopilotModal';
 import { PopoutPortal } from './PopoutPortal';
 import { CelebrationBalloonsOverlay } from './CelebrationBalloonsOverlay';
 import { ExternalLink } from 'lucide-react';
@@ -87,7 +86,6 @@ export const FloatingTeachingToolsOverlay: React.FC<FloatingTeachingToolsOverlay
   // Smart Speaker Modal State
   const [isSmartSpeakerOpen, setIsSmartSpeakerOpen] = useState(false);
   const [isFloatingPointsOpen, setIsFloatingPointsOpen] = useState(false);
-  const [isFloatingCopilotOpen, setIsFloatingCopilotOpen] = useState(false);
 
   // Floating Bar Expansion & Position
   const [isPoppedOut, setIsPoppedOut] = useState(false);
@@ -316,26 +314,17 @@ export const FloatingTeachingToolsOverlay: React.FC<FloatingTeachingToolsOverlay
         setSelectedTraineeForPoints(formattedList[0]);
       }
 
-      if (!silent) {
-        audioService.playChime([523, 659, 783]);
-        showToast(`تمت مزامنة طلاب المجموعة (${activeDetectedGroupName || 'المعمل'}) بنجاح! 🟢 الحاضرون: ${presentTraineesList.length} من ${enrichedTrainees.length}`, 'success');
-      }
+      // Silent sync by default - no annoying toast popups on tab switch
     } catch (err) {
-      if (!silent) {
-        showToast('تعذر مزامنة قائمة الطلاب حالياً', 'error');
-      }
+      // Quiet background error handling
     } finally {
       setIsSyncingStudents(false);
     }
   }, [activeBranchId, selectedGroupId, showToast]);
 
-  // Initial Sync and Branch Switching Listener & Auto-Sync Interval every 3 seconds
+  // Initial Sync and Branch Switching Listener (event-driven, completely silent)
   useEffect(() => {
-    syncBranchStudents(activeBranchId, true, true);
-    const interval = setInterval(() => {
-      syncBranchStudents(activeBranchId, true, true);
-    }, 3000);
-    return () => clearInterval(interval);
+    syncBranchStudents(activeBranchId, false, true);
   }, [activeBranchId, refreshKey, syncBranchStudents]);
 
   // Initialize Canvas for Drawing Overlay
@@ -914,7 +903,6 @@ export const FloatingTeachingToolsOverlay: React.FC<FloatingTeachingToolsOverlay
   };
 
   const TOOLS_REGISTRY = [
-    { id: 'copilot', label: 'مساعد 🤖', category: 'ذكاء اصطناعي', shortcut: 'Alt+C', icon: Bot, textColor: 'text-fuchsia-400 group-hover:text-fuchsia-300' },
     { id: 'points', label: 'نقاط ⭐️', category: 'تفاعل', shortcut: 'Alt+A', icon: Star, textColor: 'text-amber-400 group-hover:text-amber-300' },
     { id: 'smart_speaker', label: 'صوت 📢', category: 'أدوات', shortcut: 'Alt+S', icon: Volume2, textColor: 'text-emerald-400 group-hover:text-emerald-300' },
     { id: 'pen', label: 'قلم 🖊️', category: 'رسم', shortcut: 'Alt+P', icon: PenTool, textColor: 'text-red-400 group-hover:text-red-300' },
@@ -1825,46 +1813,7 @@ export const FloatingTeachingToolsOverlay: React.FC<FloatingTeachingToolsOverlay
         </div>
       )}
 
-      {/* ---------------------------------------------------- */}
-      {/* POPUP MODAL: SESSION COPILOT AI */}
-      {/* ---------------------------------------------------- */}
-      {activeTool === 'copilot' && (
-        <div className="fixed bottom-20 sm:bottom-6 inset-x-4 sm:inset-x-auto sm:right-6 z-[9996] bg-white dark:bg-slate-900 border border-purple-300 dark:border-purple-500/40 p-5 rounded-3xl shadow-2xl text-slate-900 dark:text-white w-full max-w-sm mx-auto sm:mx-0 dir-rtl">
-          <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
-            <div className="flex items-center gap-2">
-              <Bot className="w-5 h-5 text-purple-600 dark:text-purple-400" />
-              <h3 className="text-sm font-bold text-purple-700 dark:text-purple-300">مساعد الحصة الذكي (Session Copilot)</h3>
-            </div>
-            <button onClick={() => setActiveTool('none')} className="text-slate-400 hover:text-slate-700 dark:hover:text-white">
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-
-          <div className="mt-3 space-y-2">
-            {copilotAlerts.map(alert => (
-              <div
-                key={alert.id}
-                className="p-3 bg-slate-50 dark:bg-slate-800/90 rounded-2xl border border-slate-200 dark:border-slate-700/80 text-xs space-y-2"
-              >
-                <p className="text-slate-800 dark:text-slate-200 font-medium">{alert.text}</p>
-                {alert.actionText && (
-                  <button
-                    onClick={() => {
-                      showToast(`تم تنفيذ الإجراء المقترح: ${alert.actionText}`, 'success');
-                    }}
-                    className="px-3 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-bold text-[10px] transition-colors"
-                  >
-                    {alert.actionText} ⚡
-                  </button>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
       <FloatingPointsModal isOpen={isFloatingPointsOpen} onClose={() => setIsFloatingPointsOpen(false)} />
-      <FloatingCopilotModal isOpen={isFloatingCopilotOpen} onClose={() => setIsFloatingCopilotOpen(false)} />
       <SmartSpeakerModal
         isOpen={isSmartSpeakerOpen}
         onClose={() => setIsSmartSpeakerOpen(false)}

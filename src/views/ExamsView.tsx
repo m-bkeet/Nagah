@@ -66,6 +66,7 @@ import {
   ExamPolicyConfig,
   Group
 } from '../types';
+import { getPublicBaseUrl } from '../utils/urlHelper';
 import { AIHomeworkScannerModal } from '../components/AIHomeworkScannerModal';
 import { AIExamUploadModal } from '../components/AIExamUploadModal';
 import { GroupManualGradeModal } from '../components/GroupManualGradeModal';
@@ -2401,12 +2402,12 @@ export const ExamsView: React.FC = () => {
                   <input
                     type="text"
                     readOnly
-                    value={`${window.location.origin}/?view=interactive-exam&examId=${shareModalExam.id}`}
+                    value={`${getPublicBaseUrl()}/?view=interactive-exam&examId=${shareModalExam.id}`}
                     className="flex-1 p-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-mono text-slate-700 dark:text-slate-300 select-all"
                   />
                   <button
                     onClick={() => {
-                      const link = `${window.location.origin}/?view=interactive-exam&examId=${shareModalExam.id}`;
+                      const link = `${getPublicBaseUrl()}/?view=interactive-exam&examId=${shareModalExam.id}`;
                       navigator.clipboard.writeText(link);
                       setShareModalCopied(true);
                       showToast('تم نسخ رابط الاختبار إلى الحافظة بنجاح 📋', 'success');
@@ -2437,7 +2438,7 @@ export const ExamsView: React.FC = () => {
             <div className="flex flex-col sm:flex-row items-center gap-2.5 pt-2">
               <a
                 href={`https://api.whatsapp.com/send?text=${encodeURIComponent(
-                  `السلام عليكم، إليكم رابط الاختبار التفاعلي: "${shareModalExam.title}"\nيمكنكم الدخول عبر الرابط وكتابة كود الطالب والبدء فوراً:\n${window.location.origin}/?view=interactive-exam&examId=${shareModalExam.id}\nبالتوفيق للجميع! 🌟`
+                  `السلام عليكم، إليكم رابط الاختبار التفاعلي: "${shareModalExam.title}"\nيمكنكم الدخول عبر الرابط وكتابة كود الطالب والبدء فوراً:\n${getPublicBaseUrl()}/?view=interactive-exam&examId=${shareModalExam.id}\nبالتوفيق للجميع! 🌟`
                 )}`}
                 target="_blank"
                 rel="noreferrer"

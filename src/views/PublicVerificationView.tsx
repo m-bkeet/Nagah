@@ -82,6 +82,7 @@ export const PublicVerificationView: React.FC<PublicVerificationViewProps> = ({ 
           const foundCert = (certs || []).find((c: any) => 
             String(c.id) === String(verifyId) || 
             String(c.serialNumber) === String(verifyId) ||
+            String(c.certificateNumber) === String(verifyId) ||
             String(c.code) === String(verifyId)
           );
 
@@ -89,8 +90,32 @@ export const PublicVerificationView: React.FC<PublicVerificationViewProps> = ({ 
             setRecordType('certificate');
             setRecordData(foundCert);
           } else {
-            setErrorMsg('عذراً، لم يتم العثور على الشهادة أو المستند برقم التحقق المطلوب.');
-            setRecordType('not_found');
+            // Also check localStorage cache fallback
+            try {
+              const cached = localStorage.getItem('nagah_certificates') || localStorage.getItem('certificates');
+              if (cached) {
+                const parsed = JSON.parse(cached);
+                const match = parsed.find((c: any) => 
+                  String(c.id) === String(verifyId) || 
+                  String(c.serialNumber) === String(verifyId) || 
+                  String(c.certificateNumber) === String(verifyId) || 
+                  String(c.code) === String(verifyId)
+                );
+                if (match) {
+                  setRecordType('certificate');
+                  setRecordData(match);
+                } else {
+                  setErrorMsg('عذراً، لم يتم العثور على الشهادة أو المستند برقم التحقق المطلوب.');
+                  setRecordType('not_found');
+                }
+              } else {
+                setErrorMsg('عذراً، لم يتم العثور على الشهادة أو المستند برقم التحقق المطلوب.');
+                setRecordType('not_found');
+              }
+            } catch {
+              setErrorMsg('عذراً، لم يتم العثور على الشهادة أو المستند برقم التحقق المطلوب.');
+              setRecordType('not_found');
+            }
           }
         } else if (verifyAttestation) {
           setRecordType('attestation');
@@ -157,9 +182,9 @@ export const PublicVerificationView: React.FC<PublicVerificationViewProps> = ({ 
   const verifyUrl = window.location.href;
 
   return (
-    <div className="min-h-screen bg-slate-100 text-slate-900 flex flex-col justify-between print:bg-white print:text-black" dir="rtl">
+    <div className="min-h-screen bg-slate-100 text-slate-900 flex flex-col justify-between print:bg-white print:text-black overflow-y-auto" dir="rtl">
       {/* Top Bar (Hidden on Print) */}
-      <header className="bg-white border-b border-slate-200 p-3 sm:p-4 flex items-center justify-between px-4 sm:px-6 shadow-sm print:hidden shrink-0">
+      <header className="bg-white border-b border-slate-200 p-3 sm:p-4 flex items-center justify-between px-4 sm:px-6 shadow-sm print:hidden shrink-0 sticky top-0 z-20">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-600 font-black">
             🏛️
@@ -201,18 +226,18 @@ export const PublicVerificationView: React.FC<PublicVerificationViewProps> = ({ 
         </div>
       </header>
 
-      {/* Main Content Area with Full Vertical Scroll */}
-      <main className="flex-1 p-3 sm:p-6 flex items-center justify-center overflow-y-auto">
-        <div className="w-full max-w-lg bg-white border border-slate-300 rounded-3xl p-5 sm:p-8 shadow-2xl relative print:shadow-none print:border-none my-auto space-y-5">
+      {/* Main Content Area with Natural Scroll */}
+      <main className="flex-1 p-4 sm:p-8 flex flex-col items-center justify-start overflow-y-auto">
+        <div className="w-full max-w-lg bg-white border border-slate-300 rounded-3xl p-5 sm:p-8 shadow-2xl relative print:shadow-none print:border-none my-6 space-y-5">
           
           {/* Authenticity Verified Banner (Hidden on print) */}
-          <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-3 flex items-center gap-3 print:hidden">
-            <div className="w-8 h-8 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-xs">
-              <ShieldCheck className="w-4 h-4" />
+          <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-3.5 flex items-center gap-3 print:hidden">
+            <div className="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+              <ShieldCheck className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="text-emerald-800 font-black text-xs">سند رسمي معتمد وموثق إلكترونياً</h3>
-              <p className="text-[10px] text-emerald-700">تم التحقق من صحة هذا السند في السحابة المركزية لمركز النجاح.</p>
+              <h3 className="text-emerald-800 font-black text-xs sm:text-sm">سند رسمي معتمد وموثق إلكترونياً</h3>
+              <p className="text-[10px] sm:text-[11px] text-emerald-700">تم التحقق من صحة هذا السند في السحابة المركزية لمركز النجاح.</p>
             </div>
           </div>
 

@@ -419,6 +419,7 @@ export const CenterProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         return t;
       });
       try { localStorage.setItem('nagah_trainees', JSON.stringify(updatedList)); } catch {}
+      window.dispatchEvent(new CustomEvent('nagah_points_mutated', { detail: { traineeIds, points: pVal, reason } }));
       return updatedList;
     });
 
@@ -789,81 +790,17 @@ export const CenterProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     };
   }, [refreshCoreData]);
 
-  // Direct Cloud Firestore Real-time Listener (Syncs AI Studio <-> Vercel instantaneously)
+  // Real-time Firestore listeners disabled to preserve Firebase quota and ensure instant zero-quota background usage.
   useEffect(() => {
-    if (!db) return;
-    let unsubMeta: (() => void) | null = null;
-    let unsubTrainees: (() => void) | null = null;
-
-    try {
-      // 1. Listen for global metadata changes across any environment (Vercel <-> AI Studio)
-      let metaDebounceTimer: any = null;
-      unsubMeta = onSnapshot(doc(db, 'nagah_store', 'sync_meta'), (snap) => {
-        if (snap.exists()) {
-          const meta = snap.data();
-          if (typeof document !== 'undefined' && document.hidden) return;
-          // Ignore transient high-frequency events to preserve quota and avoid UI jumping
-          if (!meta?.lastCollection || meta.lastCollection === 'pointTransactions' || meta.lastCollection === 'devices') {
-            return;
-          }
-          console.log('[Firestore Realtime] Cloud sync_meta update detected:', meta?.lastCollection);
-          clearTimeout(metaDebounceTimer);
-          metaDebounceTimer = setTimeout(() => {
-            // Targeted fetch: only fetch the changed collection instead of re-fetching the entire platform
-            if (meta.lastCollection === 'trainees') {
-              api.getTrainees().then(remoteTrainees => {
-                if (Array.isArray(remoteTrainees) && remoteTrainees.length > 0) {
-                  setTrainees(prev => deduplicateTraineeList(remoteTrainees));
-                }
-              }).catch(() => {});
-            } else if (meta.lastCollection === 'groups') {
-              api.getGroups().then(remoteGroups => {
-                if (Array.isArray(remoteGroups)) setGroups(remoteGroups);
-              }).catch(() => {});
-            } else if (meta.lastCollection === 'courses') {
-              api.getCourses().then(remoteCourses => {
-                if (Array.isArray(remoteCourses)) setCourses(remoteCourses);
-              }).catch(() => {});
-            }
-          }, 6000);
-        }
-      }, (err) => {
-        console.warn('[Firestore Realtime] sync_meta listener note:', err);
-      });
-
-      // 2. Direct listener on trainees document with local deduplication
-      unsubTrainees = onSnapshot(doc(db, 'nagah_store', 'trainees'), (snap) => {
-        if (snap.exists()) {
-          const data = snap.data();
-          if (data && !data.isSplit && data.payload) {
-            try {
-              const remoteTrainees = JSON.parse(data.payload);
-              if (Array.isArray(remoteTrainees) && remoteTrainees.length > 0) {
-                setTrainees(prev => {
-                  const deduped = deduplicateTraineeList(remoteTrainees);
-                  try { localStorage.setItem('nagah_trainees', JSON.stringify(deduped)); } catch {}
-                  return deduped;
-                });
-              }
-            } catch {}
-          }
-        }
-      }, (err) => {
-        console.warn('[Firestore Realtime] Trainees listener note:', err);
-      });
-    } catch (e) {
-      console.warn('[Firestore Realtime] Setup notice:', e);
-    }
-
-    return () => {
-      if (unsubMeta) unsubMeta();
-      if (unsubTrainees) unsubTrainees();
-    };
-  }, [refreshCoreData]);
+    // No-op to preserve quota
+    return () => {};
+  }, []);
 
   useEffect(() => {
-    refreshAll();
-    refreshCoreData(true);
+    const timer = setTimeout(() => {
+      refreshAll();
+    }, 600);
+    return () => clearTimeout(timer);
   }, []);
 
   // Keyboard shortcut Ctrl+K for search

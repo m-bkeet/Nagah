@@ -1,64 +1,431 @@
 {
   "entities": {
-    "Post": {
-      "title": "Post",
-      "description": "A social post",
+    "Branch": {
+      "title": "Branch",
+      "description": "Educational center branch",
       "type": "object",
       "properties": {
         "id": { "type": "string" },
-        "authorId": { "type": "string" },
-        "authorName": { "type": "string" },
-        "authorAvatar": { "type": "string" },
-        "authorRole": { "type": "string" },
-        "content": { "type": "string" },
-        "mediaUrl": { "type": "string" },
-        "mediaType": { "type": "string" },
-        "createdAt": { "type": "string", "format": "date-time" },
-        "likes": { "type": "array" },
-        "commentsCount": { "type": "number" }
-      },
-      "required": ["id", "authorId", "authorName", "content", "createdAt"]
-    },
-    "Comment": {
-      "title": "Comment",
-      "description": "A comment on a post",
-      "type": "object",
-      "properties": {
-        "id": { "type": "string" },
-        "postId": { "type": "string" },
-        "authorId": { "type": "string" },
-        "authorName": { "type": "string" },
-        "content": { "type": "string" },
+        "name": { "type": "string" },
+        "code": { "type": "string" },
+        "address": { "type": "string" },
+        "phone": { "type": "string" },
+        "managerName": { "type": "string" },
+        "status": { "type": "string", "enum": ["active", "inactive"] },
         "createdAt": { "type": "string", "format": "date-time" }
       },
-      "required": ["id", "postId", "authorId", "authorName", "content", "createdAt"]
+      "required": ["id", "name", "code"]
     },
-    "UserProfile": {
-      "title": "UserProfile",
-      "description": "User profile data",
+    "User": {
+      "title": "User",
+      "description": "Center staff, admins, and accountants",
       "type": "object",
       "properties": {
         "id": { "type": "string" },
+        "username": { "type": "string" },
         "fullName": { "type": "string" },
-        "avatarUrl": { "type": "string" },
-        "coverUrl": { "type": "string" },
-        "bio": { "type": "string" }
+        "role": { "type": "string", "enum": ["super_admin", "admin", "trainer", "receptionist", "accountant", "student", "parent"] },
+        "phone": { "type": "string" },
+        "email": { "type": "string" },
+        "status": { "type": "string" },
+        "branchId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
       },
-      "required": ["id", "fullName"]
+      "required": ["id", "username", "role"]
+    },
+    "Trainer": {
+      "title": "Trainer",
+      "description": "Instructor / Teacher profile",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "specialization": { "type": "string" },
+        "phone": { "type": "string" },
+        "email": { "type": "string" },
+        "nationalId": { "type": "string" },
+        "paymentModel": { "type": "string" },
+        "hourlyRate": { "type": "number" },
+        "percentageRate": { "type": "number" },
+        "branchId": { "type": "string" },
+        "status": { "type": "string" },
+        "photoUrl": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "name", "phone"]
+    },
+    "Course": {
+      "title": "Course",
+      "description": "Educational course or subject module",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "code": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "category": { "type": "string" },
+        "defaultPrice": { "type": "number" },
+        "sessionsCount": { "type": "number" },
+        "grade": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "title"]
+    },
+    "Program": {
+      "title": "Program",
+      "description": "Educational academic track or multi-course program",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "code": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "courses": { "type": "array" },
+        "grade": { "type": "string" },
+        "branchId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "title"]
+    },
+    "Group": {
+      "title": "Group",
+      "description": "Student class / study group batch",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "courseId": { "type": "string" },
+        "programId": { "type": "string" },
+        "trainerId": { "type": "string" },
+        "branchId": { "type": "string" },
+        "schedule": { "type": "array" },
+        "maxStudents": { "type": "number" },
+        "currentStudents": { "type": "number" },
+        "status": { "type": "string" },
+        "startDate": { "type": "string" },
+        "endDate": { "type": "string" },
+        "roomNumber": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "name", "courseId", "trainerId"]
+    },
+    "Trainee": {
+      "title": "Trainee",
+      "description": "Student / Trainee profile",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "code": { "type": "string" },
+        "fullName": { "type": "string" },
+        "phone": { "type": "string" },
+        "parentPhone": { "type": "string" },
+        "email": { "type": "string" },
+        "nationalId": { "type": "string" },
+        "branchId": { "type": "string" },
+        "courseId": { "type": "string" },
+        "groupId": { "type": "string" },
+        "grade": { "type": "string" },
+        "enrollmentDate": { "type": "string" },
+        "status": { "type": "string" },
+        "photoUrl": { "type": "string" },
+        "balance": { "type": "number" },
+        "totalPoints": { "type": "number" },
+        "badges": { "type": "array" },
+        "address": { "type": "string" },
+        "notes": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "code", "fullName"]
+    },
+    "AttendanceRecord": {
+      "title": "AttendanceRecord",
+      "description": "Student lecture attendance log",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "traineeId": { "type": "string" },
+        "groupId": { "type": "string" },
+        "trainerId": { "type": "string" },
+        "date": { "type": "string" },
+        "status": { "type": "string", "enum": ["present", "absent", "late", "excused"] },
+        "notes": { "type": "string" },
+        "sessionNumber": { "type": "number" },
+        "branchId": { "type": "string" },
+        "recordedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "traineeId", "groupId", "date", "status"]
+    },
+    "Payment": {
+      "title": "Payment",
+      "description": "Tuition fees and official payment receipts",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "receiptNumber": { "type": "string" },
+        "traineeId": { "type": "string" },
+        "amount": { "type": "number" },
+        "paymentMethod": { "type": "string" },
+        "paymentType": { "type": "string" },
+        "courseId": { "type": "string" },
+        "groupId": { "type": "string" },
+        "notes": { "type": "string" },
+        "paidAt": { "type": "string", "format": "date-time" },
+        "recordedBy": { "type": "string" },
+        "branchId": { "type": "string" }
+      },
+      "required": ["id", "receiptNumber", "traineeId", "amount", "paidAt"]
+    },
+    "Expense": {
+      "title": "Expense",
+      "description": "Center operational expenses and bills",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "amount": { "type": "number" },
+        "category": { "type": "string" },
+        "date": { "type": "string" },
+        "notes": { "type": "string" },
+        "branchId": { "type": "string" },
+        "recordedBy": { "type": "string" },
+        "receiptUrl": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "title", "amount", "date"]
+    },
+    "TrainerSettlement": {
+      "title": "TrainerSettlement",
+      "description": "Instructor earnings payout and financial settlement",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "trainerId": { "type": "string" },
+        "amount": { "type": "number" },
+        "periodStart": { "type": "string" },
+        "periodEnd": { "type": "string" },
+        "status": { "type": "string" },
+        "paidAt": { "type": "string", "format": "date-time" },
+        "notes": { "type": "string" },
+        "branchId": { "type": "string" }
+      },
+      "required": ["id", "trainerId", "amount", "paidAt"]
+    },
+    "PointTransaction": {
+      "title": "PointTransaction",
+      "description": "Student gamification reward and point transaction",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "traineeId": { "type": "string" },
+        "points": { "type": "number" },
+        "reason": { "type": "string" },
+        "source": { "type": "string" },
+        "createdBy": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "traineeId", "points", "reason", "createdAt"]
+    },
+    "Exam": {
+      "title": "Exam",
+      "description": "Periodic and interactive quiz/exam definition",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "courseId": { "type": "string" },
+        "groupId": { "type": "string" },
+        "totalScore": { "type": "number" },
+        "passingScore": { "type": "number" },
+        "durationMinutes": { "type": "number" },
+        "isLive": { "type": "boolean" },
+        "questionsCount": { "type": "number" },
+        "branchId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "title", "courseId", "totalScore"]
+    },
+    "ExamQuestion": {
+      "title": "ExamQuestion",
+      "description": "Single exam question",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "examId": { "type": "string" },
+        "questionText": { "type": "string" },
+        "questionType": { "type": "string" },
+        "options": { "type": "array" },
+        "correctAnswer": { "type": "string" },
+        "points": { "type": "number" },
+        "explanation": { "type": "string" }
+      },
+      "required": ["id", "examId", "questionText", "correctAnswer", "points"]
+    },
+    "ExamResult": {
+      "title": "ExamResult",
+      "description": "Student exam score attempt",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "examId": { "type": "string" },
+        "traineeId": { "type": "string" },
+        "score": { "type": "number" },
+        "totalScore": { "type": "number" },
+        "passed": { "type": "boolean" },
+        "answers": { "type": "array" },
+        "submittedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "examId", "traineeId", "score", "submittedAt"]
+    },
+    "InteractiveSession": {
+      "title": "InteractiveSession",
+      "description": "Live lecture session with smart screen or Kahoot integration",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "courseId": { "type": "string" },
+        "groupId": { "type": "string" },
+        "trainerId": { "type": "string" },
+        "status": { "type": "string" },
+        "kahootPin": { "type": "string" },
+        "classPointCode": { "type": "string" },
+        "startedAt": { "type": "string", "format": "date-time" },
+        "endedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "title", "courseId", "trainerId"]
+    },
+    "Certificate": {
+      "title": "Certificate",
+      "description": "Accredited training completion certificate",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "certificateNumber": { "type": "string" },
+        "traineeId": { "type": "string" },
+        "courseId": { "type": "string" },
+        "issueDate": { "type": "string" },
+        "grade": { "type": "string" },
+        "qrCodeUrl": { "type": "string" },
+        "templateId": { "type": "string" },
+        "issuedBy": { "type": "string" },
+        "branchId": { "type": "string" }
+      },
+      "required": ["id", "certificateNumber", "traineeId", "courseId", "issueDate"]
+    },
+    "AssignmentTask": {
+      "title": "AssignmentTask",
+      "description": "Weekly homework / assignment task",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "courseId": { "type": "string" },
+        "groupId": { "type": "string" },
+        "dueDate": { "type": "string" },
+        "totalPoints": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "title", "courseId", "groupId"]
+    },
+    "CenterSettings": {
+      "title": "CenterSettings",
+      "description": "Center global settings and profile",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "centerName": { "type": "string" },
+        "phone": { "type": "string" },
+        "email": { "type": "string" },
+        "address": { "type": "string" },
+        "logoUrl": { "type": "string" },
+        "primaryColor": { "type": "string" },
+        "currency": { "type": "string" },
+        "examPassPercentage": { "type": "number" }
+      },
+      "required": ["id", "centerName"]
     }
   },
   "firestore": {
-    "/posts/{postId}": {
-      "schema": { "$ref": "Post" },
-      "description": "Collection of posts"
+    "/branches/{branchId}": {
+      "schema": { "$ref": "Branch" },
+      "description": "Branches of the academy"
     },
-    "/posts/{postId}/comments/{commentId}": {
-      "schema": { "$ref": "Comment" },
-      "description": "Comments for each post"
+    "/users/{userId}": {
+      "schema": { "$ref": "User" },
+      "description": "Administrative users and system staff"
     },
-    "/profiles/{userId}": {
-      "schema": { "$ref": "UserProfile" },
-      "description": "User profiles"
+    "/trainers/{trainerId}": {
+      "schema": { "$ref": "Trainer" },
+      "description": "Certified trainers and teachers"
+    },
+    "/courses/{courseId}": {
+      "schema": { "$ref": "Course" },
+      "description": "Courses and training modules"
+    },
+    "/programs/{programId}": {
+      "schema": { "$ref": "Program" },
+      "description": "Multi-course academic programs"
+    },
+    "/groups/{groupId}": {
+      "schema": { "$ref": "Group" },
+      "description": "Active training groups and study batches"
+    },
+    "/trainees/{traineeId}": {
+      "schema": { "$ref": "Trainee" },
+      "description": "Enrolled students and trainees"
+    },
+    "/attendance/{attendanceId}": {
+      "schema": { "$ref": "AttendanceRecord" },
+      "description": "Lecture attendance records"
+    },
+    "/payments/{paymentId}": {
+      "schema": { "$ref": "Payment" },
+      "description": "Tuition receipts and payments"
+    },
+    "/expenses/{expenseId}": {
+      "schema": { "$ref": "Expense" },
+      "description": "Operational expenses and disbursements"
+    },
+    "/trainerSettlements/{settlementId}": {
+      "schema": { "$ref": "TrainerSettlement" },
+      "description": "Trainer financial settlement records"
+    },
+    "/pointTransactions/{transactionId}": {
+      "schema": { "$ref": "PointTransaction" },
+      "description": "Gamification points ledger"
+    },
+    "/exams/{examId}": {
+      "schema": { "$ref": "Exam" },
+      "description": "Exam definitions and tests"
+    },
+    "/questions/{questionId}": {
+      "schema": { "$ref": "ExamQuestion" },
+      "description": "Exam questions bank"
+    },
+    "/examResults/{resultId}": {
+      "schema": { "$ref": "ExamResult" },
+      "description": "Student exam attempts and results"
+    },
+    "/interactiveSessions/{sessionId}": {
+      "schema": { "$ref": "InteractiveSession" },
+      "description": "Live interactive whiteboard/game sessions"
+    },
+    "/certificates/{certificateId}": {
+      "schema": { "$ref": "Certificate" },
+      "description": "Issued digital certificates"
+    },
+    "/assignments/{assignmentId}": {
+      "schema": { "$ref": "AssignmentTask" },
+      "description": "Class assignments and homework"
+    },
+    "/settings/{settingsId}": {
+      "schema": { "$ref": "CenterSettings" },
+      "description": "Center global settings"
+    },
+    "/nagah_store/{collectionName}": {
+      "schema": { "$ref": "CenterSettings" },
+      "description": "Aggregated optimized data store partitions"
     }
   }
 }

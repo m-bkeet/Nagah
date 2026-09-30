@@ -42,13 +42,11 @@ export const MobileAppNavigation: React.FC<MobileAppNavigationProps> = ({
     { id: 'courses', label: 'الدورات التدريبية', cat: 'أكاديمي', icon: BookOpen, color: 'bg-amber-500/20 text-amber-400 border-amber-500/30' },
     { id: 'groups', label: 'المجموعات التدريبية', cat: 'أكاديمي', icon: Users, color: 'bg-teal-500/20 text-teal-400 border-teal-500/30' },
     { id: 'interactive', label: 'الجلسات التفاعلية', cat: 'تفاعل', icon: Sparkles, color: 'bg-amber-500/20 text-amber-400 border-amber-500/30' },
-    { id: 'homeworks', label: 'الواجبات والتكاليف', cat: 'أكاديمي', icon: CheckSquare, color: 'bg-rose-500/20 text-rose-400 border-rose-500/30' },
-    { id: 'exams', label: 'الاختبارات والدرجات', cat: 'أكاديمي', icon: Award, color: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30' },
+    { id: 'exams', label: 'الاختبارات والواجبات', cat: 'أكاديمي', icon: Award, color: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30' },
     { id: 'student_portal', label: 'بوابة الطالب', cat: 'بوابات', icon: GraduationCap, color: 'bg-indigo-500/20 text-indigo-400 border-indigo-500/30' },
     { id: 'parent_portal', label: 'بوابة ولي الأمر', cat: 'بوابات', icon: UserCheck, color: 'bg-lime-500/20 text-lime-400 border-lime-500/30' },
     { id: 'messages', label: 'الرسائل والتواصل', cat: 'تواصل', icon: MessageSquare, color: 'bg-sky-500/20 text-sky-400 border-sky-500/30' },
     { id: 'finance', label: 'الخزنة والحسابات', cat: 'إدارة', icon: Wallet, color: 'bg-green-500/20 text-green-400 border-green-500/30' },
-    { id: 'reports', label: 'مركز التقارير', cat: 'إدارة', icon: FileText, color: 'bg-violet-500/20 text-violet-400 border-violet-500/30' },
     { id: 'settings', label: 'إعدادات النظام', cat: 'نظام', icon: Settings, color: 'bg-slate-500/20 text-slate-300 border-slate-500/30' }
   ];
 

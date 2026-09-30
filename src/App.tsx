@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense, lazy } from 'react';
 import { ThemeProvider, useTheme } from './context/ThemeContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { CenterProvider, useCenter } from './context/CenterContext';
@@ -13,48 +13,57 @@ import { ToastContainer } from './components/ToastContainer';
 import { PrintModal } from './components/PrintModal';
 import { GlobalSearchModal } from './components/GlobalSearchModal';
 import { AiAssistantsModal } from './components/AiAssistantsModal';
-import { FloatingChatButton } from './components/FloatingChatButton';
 import { FloatingTeachingToolsOverlay } from './components/FloatingTeachingToolsOverlay';
 import { AudioAutoplayUnlockBanner } from './components/AudioAutoplayUnlockBanner';
 import { PwaUpdateToast } from './components/PwaUpdateToast';
 import { ErrorBoundary } from './components/ErrorBoundary';
 
-// Core Views
+// Immediate Loading Critical Views
 import { LoginView } from './views/LoginView';
 import { DashboardView } from './views/DashboardView';
-import { TrainersView } from './views/TrainersView';
-import { TraineesView } from './views/TraineesView';
-import { ProgramsView } from './views/ProgramsView';
-import { CoursesView } from './views/CoursesView';
-import { GroupsView } from './views/GroupsView';
-import { LabScheduleView } from './views/LabScheduleView';
-import { FinanceView } from './views/FinanceView';
-import { ExpensesView } from './views/ExpensesView';
-import { PointsView } from './views/PointsView';
-import { ExamsView } from './views/ExamsView';
-import { HomeworksView } from './views/HomeworksView';
-import { InteractiveSessionsView } from './views/InteractiveSessionsView';
-import { MessagesView } from './views/MessagesView';
-import { ReportsView } from './views/ReportsView';
-import { CertificatesView } from './views/CertificatesView';
-import { BranchesView } from './views/BranchesView';
-import { NagahAiDeveloperView } from './views/NagahAiDeveloperView';
-import { AuditLogsView } from './views/AuditLogsView';
-import { SettingsView } from './views/SettingsView';
 
-// Public Views & Portals
-import { StudentKioskView } from './views/StudentKioskView';
-import { PublicHomeView } from './views/PublicHomeView';
-import { PublicRegistrationView } from './views/PublicRegistrationView';
-import { PublicTrainerRegistrationView } from './views/PublicTrainerRegistrationView';
-import { PublicStudentPortalView } from './views/PublicStudentPortalView';
-import { PublicParentPortalView } from './views/PublicParentPortalView';
-import { PublicTrainerPortalView } from './views/PublicTrainerPortalView';
-import { PublicInteractiveExamView } from './views/PublicInteractiveExamView';
-import { PublicVerificationView } from './views/PublicVerificationView';
+// Code-Split Dynamic Views (Lazy Loaded on demand to make initial bundle feather-light)
+const TrainersView = lazy(() => import('./views/TrainersView').then(m => ({ default: m.TrainersView })));
+const TraineesView = lazy(() => import('./views/TraineesView').then(m => ({ default: m.TraineesView })));
+const ProgramsView = lazy(() => import('./views/ProgramsView').then(m => ({ default: m.ProgramsView })));
+const CoursesView = lazy(() => import('./views/CoursesView').then(m => ({ default: m.CoursesView })));
+const GroupsView = lazy(() => import('./views/GroupsView').then(m => ({ default: m.GroupsView })));
+const LabScheduleView = lazy(() => import('./views/LabScheduleView').then(m => ({ default: m.LabScheduleView })));
+const FinanceView = lazy(() => import('./views/FinanceView').then(m => ({ default: m.FinanceView })));
+const ExpensesView = lazy(() => import('./views/ExpensesView').then(m => ({ default: m.ExpensesView })));
+const PointsView = lazy(() => import('./views/PointsView').then(m => ({ default: m.PointsView })));
+const ExamsView = lazy(() => import('./views/ExamsView').then(m => ({ default: m.ExamsView })));
+const HomeworksView = lazy(() => import('./views/HomeworksView').then(m => ({ default: m.HomeworksView })));
+const InteractiveSessionsView = lazy(() => import('./views/InteractiveSessionsView').then(m => ({ default: m.InteractiveSessionsView })));
+const MessagesView = lazy(() => import('./views/MessagesView').then(m => ({ default: m.MessagesView })));
+const ReportsView = lazy(() => import('./views/ReportsView').then(m => ({ default: m.ReportsView })));
+const CertificatesView = lazy(() => import('./views/CertificatesView').then(m => ({ default: m.CertificatesView })));
+const BranchesView = lazy(() => import('./views/BranchesView').then(m => ({ default: m.BranchesView })));
+const NagahAiDeveloperView = lazy(() => import('./views/NagahAiDeveloperView').then(m => ({ default: m.NagahAiDeveloperView })));
+const AuditLogsView = lazy(() => import('./views/AuditLogsView').then(m => ({ default: m.AuditLogsView })));
+const SettingsView = lazy(() => import('./views/SettingsView').then(m => ({ default: m.SettingsView })));
+
+// Lazy Loaded Standalone Public Views & Portals
+const StudentKioskView = lazy(() => import('./views/StudentKioskView').then(m => ({ default: m.StudentKioskView })));
+const PublicHomeView = lazy(() => import('./views/PublicHomeView').then(m => ({ default: m.PublicHomeView })));
+const PublicRegistrationView = lazy(() => import('./views/PublicRegistrationView').then(m => ({ default: m.PublicRegistrationView })));
+const PublicTrainerRegistrationView = lazy(() => import('./views/PublicTrainerRegistrationView').then(m => ({ default: m.PublicTrainerRegistrationView })));
+const PublicStudentPortalView = lazy(() => import('./views/PublicStudentPortalView').then(m => ({ default: m.PublicStudentPortalView })));
+const PublicParentPortalView = lazy(() => import('./views/PublicParentPortalView').then(m => ({ default: m.PublicParentPortalView })));
+const PublicTrainerPortalView = lazy(() => import('./views/PublicTrainerPortalView').then(m => ({ default: m.PublicTrainerPortalView })));
+const PublicInteractiveExamView = lazy(() => import('./views/PublicInteractiveExamView').then(m => ({ default: m.PublicInteractiveExamView })));
+const PublicVerificationView = lazy(() => import('./views/PublicVerificationView').then(m => ({ default: m.PublicVerificationView })));
+
 import { IdleSleepWatcher } from './components/IdleSleepWatcher';
 import { hasPermission } from './utils/permissions';
-import { ShieldAlert, LayoutDashboard } from 'lucide-react';
+import { ShieldAlert, LayoutDashboard, Loader2 } from 'lucide-react';
+
+const ViewLoadingFallback = () => (
+  <div className="flex flex-col items-center justify-center min-h-[50vh] p-6 text-slate-500 animate-fadeIn">
+    <Loader2 className="w-8 h-8 text-amber-500 animate-spin mb-3" />
+    <span className="text-xs font-bold text-slate-600 dark:text-slate-300">جارٍ تجهيز الشاشة والبيانات...</span>
+  </div>
+);
 
 const AccessDeniedView: React.FC<{ tabId: string; onGoHome: () => void }> = ({ tabId, onGoHome }) => {
   return (
@@ -243,12 +252,11 @@ const AppContent: React.FC = () => {
   const standaloneView = renderPublicView();
   if (standaloneView) {
     return (
-      <>
+      <Suspense fallback={<ViewLoadingFallback />}>
         {standaloneView}
-        {activeTab === 'trainer_portal' && <FloatingTeachingToolsOverlay />}
         <ToastContainer />
         <PwaUpdateToast />
-      </>
+      </Suspense>
     );
   }
 
@@ -368,7 +376,9 @@ const AppContent: React.FC = () => {
           }`}
         >
           <ErrorBoundary key={activeTab} fallbackTitle={`حدث خطأ في تحميل هذا التبويب (${activeTab})`}>
-            {renderActiveView()}
+            <Suspense fallback={<ViewLoadingFallback />}>
+              {renderActiveView()}
+            </Suspense>
           </ErrorBoundary>
         </main>
       </div>
@@ -388,12 +398,9 @@ const AppContent: React.FC = () => {
         onClose={() => setIsAiModalOpen(false)} 
         initialTab={aiModalTab} 
       />
-      {/* Conditional Floating Chat & Tools (Only on Main Dashboard and Trainer Portal) */}
+      {/* Conditional Floating Tools (Only on Main Dashboard and Trainer Portal) */}
       {(activeTab === 'dashboard' || activeTab === 'trainer_portal') && (
-        <>
-          <FloatingChatButton />
-          <FloatingTeachingToolsOverlay />
-        </>
+        <FloatingTeachingToolsOverlay />
       )}
       <AudioAutoplayUnlockBanner />
       <PwaUpdateToast />

@@ -1,7 +1,5 @@
 import { api } from '../services/api';
 import { NextLectureWidget } from "../components/NextLectureWidget";
-import { AITutor } from "../components/AITutor";
-import { StudentLanguageLabView } from "../components/languageLab/StudentLanguageLabView";
 import { resilientOfflineService } from '../services/resilientOfflineService';
 import { cloudDb } from '../services/cloudDatabase';
 import { compressImage } from '../utils/imageCompressor';
@@ -13,7 +11,6 @@ import { isTrainerSessionActive } from '../utils/labSecurity';
 
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { detectCurriculum, getGradeLessonsList } from '../domain/curriculumRegistry';
-import { AIExplainModal } from '../components/AIExplainModal';
 import { KahootGameModal } from '../components/homeworks/KahootGameModal';
 import { VoiceSummaryRecorderModal } from '../components/homeworks/VoiceSummaryRecorderModal';
 import { LectureRecapManager } from '../components/homeworks/LectureRecapManager';
@@ -207,9 +204,18 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
   const [portalMessages, setPortalMessages] = useState<any[]>(() => initialSession?.portalMessages || []);
   const [activeMessageModal, setActiveMessageModal] = useState<any | null>(null);
   const [isPhotoStudioOpen, setIsPhotoStudioOpen] = useState(false);
-  const [isAiExplainOpen, setIsAiExplainOpen] = useState(false);
   const [isVoiceSummaryModalOpen, setIsVoiceSummaryModalOpen] = useState(false);
   const [activeKahootGameTask, setActiveKahootGameTask] = useState<any | null>(null);
+
+  const [portalToasts, setPortalToasts] = useState<Array<{ id: string; text: string; type: 'success' | 'error' | 'info' | 'warning' }>>([]);
+
+  const showPortalToast = (text: string, type: 'success' | 'error' | 'info' | 'warning' = 'info') => {
+    const id = 'toast-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4);
+    setPortalToasts(prev => [...prev, { id, text, type }]);
+    setTimeout(() => {
+      setPortalToasts(prev => prev.filter(t => t.id !== id));
+    }, 4500);
+  };
 
   // Session Celebration & Real-Time Event State
   const [showCelebrationOverlay, setShowCelebrationOverlay] = useState(false);
@@ -461,7 +467,7 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
         setDeferredPrompt(null);
       }
     } else {
-      alert('لتثبيت التطبيق على هاتفك:\n\n- في الآيفون (Safari): اضغط على زر المشاركة ثم "إضافة للشاشة الرئيسية" (Add to Home Screen).\n\n- في الأندرويد (Chrome): افتح قائمة المتصفح واشتر "تثبيت التطبيق" (Install App).');
+      showPortalToast('لتثبيت التطبيق على هاتفك: في الآيفون اضغط مشاركة ثم "إضافة للشاشة الرئيسية"، وفي الأندرويد اضغط قائمة المتصفح ثم "تثبيت التطبيق".', 'info');
     }
   };
 
@@ -484,11 +490,11 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
         url: window.location.origin
       }).catch(() => {
         navigator.clipboard.writeText(shareText);
-        alert('📋 تم نسخ رابط ونص تحميل التطبيق بنجاح! يمكنك الآن مشاركته مع زملائك على واتساب وفيسبوك.');
+        showPortalToast('📋 تم نسخ رابط ونص تحميل التطبيق بنجاح! يمكنك الآن مشاركته مع زملائك على واتساب وفيسبوك.', 'success');
       });
     } else {
       navigator.clipboard.writeText(shareText);
-      alert('📋 تم نسخ رابط ونص تحميل التطبيق بنجاح! يمكنك الآن مشاركته مع زملائك على واتساب وفيسبوك.');
+      showPortalToast('📋 تم نسخ رابط ونص تحميل التطبيق بنجاح! يمكنك الآن مشاركته مع زملائك على واتساب وفيسبوك.', 'success');
     }
   };
 
@@ -496,7 +502,7 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
   const handleDownloadCertImage = async (certId: string, certName: string) => {
     const el = document.getElementById(`cert-card-${certId}`);
     if (!el) {
-      alert('تعذر الوصول لعنصر الشهادة');
+      showPortalToast('تعذر الوصول لعنصر الشهادة', 'warning');
       return;
     }
     try {
@@ -509,8 +515,9 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+      showPortalToast('تم تنزيل الشهادة بنجاح! 🎉', 'success');
     } catch (err) {
-      alert('حدث خطأ أثناء حفظ الشهادة كصورة');
+      showPortalToast('حدث خطأ أثناء حفظ الشهادة كصورة', 'error');
     }
   };
 
@@ -612,7 +619,7 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   // Tabs inside Student Portal
-  const [activeTab, setActiveTab] = useState<'submit' | 'history' | 'badges' | 'schedule' | 'certificates' | 'profile' | 'language_lab' | 'finance' | 'recap_tasks'>('submit');
+  const [activeTab, setActiveTab] = useState<'submit' | 'history' | 'badges' | 'schedule' | 'certificates' | 'profile' | 'finance' | 'recap_tasks'>('submit');
   const [isTrainerLabSessionActive, setIsTrainerLabSessionActive] = useState<boolean>(() => isTrainerSessionActive(student?.branchId));
 
   useEffect(() => {
@@ -1065,11 +1072,11 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
       if (data.success) {
         setStudent(data.student);
         setIsProfileSettingsOpen(false);
-        alert('🎉 تم تحديث بيانات الحساب الشخصي وتأمين البوابة بنجاح!');
+        showPortalToast('🎉 تم تحديث بيانات الحساب الشخصي وتأمين البوابة بنجاح!', 'success');
       }
     } catch (err) {
       console.error("Error updating profile:", err);
-      alert('حدث خطأ أثناء حفظ الملف الشخصي');
+      showPortalToast('حدث خطأ أثناء حفظ الملف الشخصي', 'error');
     } finally {
       setSaveProfileLoading(false);
     }
@@ -1147,7 +1154,7 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
         videoRef.current.srcObject = stream;
       }
     } catch (err) {
-      alert('تعذر فتح الكاميرا: يرجى السماح بالوصول للكاميرا أو اختيار صورة من المعرض.');
+      showPortalToast('تعذر فتح الكاميرا: يرجى السماح بالوصول للكاميرا أو اختيار صورة من المعرض.', 'warning');
       setIsCameraActive(false);
     }
   };
@@ -1205,7 +1212,7 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
       : (selectedImageBase64 ? [selectedImageBase64] : []);
 
     if (pagesList.length === 0 && !studentNotes.trim()) {
-      alert('يرجى رفع أو تصوير ورقة أو أكثر للواجب أو كتابة نص الإجابة ليقوم الذكاء الاصطناعي بتصحيحها.');
+      showPortalToast('يرجى رفع أو تصوير ورقة أو أكثر للواجب أو كتابة نص الإجابة ليقوم الذكاء الاصطناعي بتصحيحها.', 'warning');
       return;
     }
 
@@ -1427,17 +1434,6 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
                   <span className="hidden sm:inline">ملخص فويس 🎙️</span>
                 </button>
 
-                {/* Highlighted "Explain to Me" AI Feature Button */}
-                <button
-                  type="button"
-                  onClick={() => setIsAiExplainOpen(true)}
-                  className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs shadow-md shadow-amber-500/20 active:scale-95 transition-all flex items-center gap-1.5"
-                  title="ميزة فهمني واشرحلي بالذكاء الاصطناعي"
-                >
-                  <span className="text-sm animate-bounce">💡</span>
-                  <span className="hidden sm:inline">فهمني واشرحلي</span>
-                </button>
-
                 {/* Notifications Bell */}
                 <button
                   type="button"
@@ -1612,7 +1608,7 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
                     <button
                       type="button"
                       onClick={async () => {
-                        if (!studentCodeInput) return alert('الرجاء كتابة كود الطالب أو رقم الهاتف أولاً.');
+                        if (!studentCodeInput) return showPortalToast('الرجاء كتابة كود الطالب أو رقم الهاتف أولاً.', 'warning');
                         try {
                           const res = await fetch('/api/student/forgot-password', {
                             method: 'POST',
@@ -1620,9 +1616,9 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
                             body: JSON.stringify({ codeOrPhone: studentCodeInput })
                           });
                           const data = await res.json();
-                          alert(data.message || data.error);
+                          showPortalToast(data.message || data.error || 'تمت العملية', data.success ? 'success' : 'info');
                         } catch (err) {
-                          alert('تعذر طلب كلمة المرور');
+                          showPortalToast('تعذر طلب كلمة المرور', 'error');
                         }
                       }}
                       className="text-[10px] font-bold text-amber-600 hover:text-amber-700 dark:text-amber-500 dark:hover:text-amber-400"
@@ -2067,19 +2063,6 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
 
               <button
                 type="button"
-                onClick={() => setActiveTab('language_lab')}
-                className={`p-2.5 rounded-2xl font-bold text-xs flex flex-col items-center justify-center gap-1 transition-all duration-200 cursor-pointer ${
-                  activeTab === 'language_lab'
-                    ? 'bg-gradient-to-b from-teal-600 to-emerald-700 text-white shadow-lg shadow-teal-600/30 border border-teal-300/50 ring-2 ring-teal-400/30 font-black scale-[1.02] -translate-y-0.5'
-                    : 'bg-gradient-to-b from-white to-slate-50 dark:from-slate-900 dark:to-slate-950 text-teal-700 dark:text-teal-300 hover:from-white hover:to-teal-50 dark:hover:to-slate-800 hover:text-teal-900 dark:hover:text-white border border-teal-500/30 shadow-xs hover:shadow-md hover:-translate-y-0.5 active:translate-y-0'
-                }`}
-              >
-                <Sparkles className="w-4 h-4 text-teal-500 dark:text-teal-300" />
-                <span className="text-[10px] text-center font-bold">المعمل الصوتي</span>
-              </button>
-
-              <button
-                type="button"
                 onClick={() => setActiveTab('help' as any)}
                 className={`p-2.5 rounded-2xl font-bold text-xs flex flex-col items-center justify-center gap-1 transition-all duration-200 cursor-pointer ${
                   activeTab === ('help' as any)
@@ -2091,17 +2074,6 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
                 <span className="text-[10px] text-center font-bold">المساعدة</span>
               </button>
             </div>
-
-            {activeTab === 'language_lab' && (
-              <StudentLanguageLabView student={student} />
-            )}
-
-            {/* AI TUTOR & HOMEWORK SCANNER / GRADER TAB */}
-            {activeTab === ('ai-tutor' as any) && (
-              <div className="space-y-6">
-                <AITutor studentName={student?.fullName || 'الطالب'} studentLevel={student?.courseName} />
-              </div>
-            )}
 
             {/* HELP, INQUIRIES & MESSAGES TAB */}
             {activeTab === ('help' as any) && (
@@ -3449,28 +3421,6 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
             )}
 
             {/* TAB: AI LANGUAGE LAB (STUDENT EXPERIENCE) */}
-            {activeTab === 'language_lab' && student && (
-              <div className="animate-in fade-in duration-300">
-                {!isTrainerLabSessionActive ? (
-                  <div className="p-8 bg-slate-900 border-2 border-rose-500/50 rounded-3xl text-center space-y-4 my-6 shadow-2xl">
-                    <div className="w-16 h-16 bg-rose-500/20 text-rose-400 rounded-3xl border border-rose-500/40 flex items-center justify-center text-3xl mx-auto shadow-inner">
-                      🔒
-                    </div>
-                    <div className="space-y-1">
-                      <span className="px-3 py-1 bg-rose-500/20 text-rose-300 border border-rose-500/30 text-xs font-black rounded-full inline-block">
-                        المعمل مغلق حالياً
-                      </span>
-                      <h3 className="text-lg font-black text-white">المعمل مغلق بقرار المحاضر المشرف</h3>
-                    </div>
-                    <p className="text-xs text-rose-200 max-w-lg mx-auto leading-relaxed">
-                      وفقاً لمعايير الأمان وقواعد مركز النجاح، تم إغلاق المعمل وقفل التمارين. يمكنك استخدام المعمل فور قيام المحاضر بفتحه وتفعيل الجلسة بالقاعة.
-                    </p>
-                  </div>
-                ) : (
-                  <StudentLanguageLabView student={student as any} />
-                )}
-              </div>
-            )}
           </div>
         )}
       </main>
@@ -3649,148 +3599,6 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
         </div>
       )}
 
-      {/* Floating Chat Bubble Button (WhatsApp/Messenger style) */}
-      <button
-        onClick={() => setIsChatOpen(!isChatOpen)}
-        className="fixed bottom-6 left-6 z-40 w-14 h-14 rounded-full bg-gradient-to-tr from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white shadow-2xl flex items-center justify-center transition-all hover:scale-110 group"
-        title="المساعد الذكي والدعم الفوري"
-      >
-        <MessageSquare className="w-7 h-7" />
-        <span className="absolute -top-1 -right-1 w-4 h-4 bg-amber-500 rounded-full border-2 border-white dark:border-slate-950 flex items-center justify-center text-[9px] font-black text-slate-950 animate-pulse">1</span>
-        <span className="absolute right-16 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 text-xs px-3 py-1 rounded-xl shadow-lg whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none border border-slate-200 dark:border-slate-700">
-          المساعد الذكي والدعم الفوري 🤖
-        </span>
-      </button>
-
-      {/* WhatsApp-like Chat Widget */}
-      {isChatOpen && (
-        <div className="fixed bottom-4 left-4 z-50 w-80 sm:w-96 bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden flex flex-col h-[500px] max-h-[80vh]">
-          {/* Header */}
-          <div className="bg-gradient-to-r from-emerald-600 to-teal-600 p-3 flex flex-col gap-2 text-white shrink-0 shadow-md">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center overflow-hidden">
-                  <img src="/logo.svg" alt="Logo" className="w-6 h-6 object-contain" />
-                </div>
-                <div>
-                  <h3 className="font-bold text-sm">محادثة المركز والمساعد الذكي</h3>
-                  <p className="text-[10px] text-emerald-100">رد آلي ذكي + فريق الدعم متصل الآن</p>
-                </div>
-              </div>
-              <button onClick={() => setIsChatOpen(false)} className="text-emerald-100 hover:text-white p-1 bg-black/10 rounded-full">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            {/* Quick Contact Links */}
-            <div className="flex items-center justify-around mt-2 border-t border-emerald-500/50 pt-2">
-              <a 
-                href={trainer?.phone ? `https://wa.me/${trainer.phone}` : `https://wa.me/201000000000`} 
-                target="_blank" 
-                rel="noreferrer"
-                className="flex items-center gap-1.5 text-xs font-bold bg-white text-emerald-600 px-3 py-1.5 rounded-full hover:bg-emerald-50 transition-colors shadow-sm"
-              >
-                <MessageSquare className="w-4 h-4 text-emerald-600" />
-                واتساب المدرب
-              </a>
-              <a 
-                href={trainer?.phone ? `sms:${trainer.phone}` : `sms:201000000000`}
-                className="flex items-center gap-1.5 text-xs font-bold bg-emerald-700 text-white px-3 py-1.5 rounded-full hover:bg-emerald-800 transition-colors shadow-sm"
-              >
-                <Phone className="w-4 h-4" />
-                رسالة عادية SMS
-              </a>
-            </div>
-          </div>
-          
-          {/* Messages Area */}
-          <div className="flex-1 overflow-y-auto p-4 bg-[#efeae2] dark:bg-slate-950 space-y-3" style={{ backgroundImage: 'url("https://w0.peakpx.com/wallpaper/818/148/HD-wallpaper-whatsapp-background-solid-color-thumbnail.jpg")', backgroundBlendMode: 'soft-light' }}>
-            <div className="flex justify-center">
-              <span className="bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-200 text-[10px] px-2 py-1 rounded-lg shadow-sm border border-emerald-200 dark:border-emerald-800">اليوم - الدعم الفوري</span>
-            </div>
-            
-            {/* Welcome Bot Message */}
-            <div className="flex items-start gap-2 max-w-[85%]">
-              <div className="w-7 h-7 rounded-full bg-emerald-600 text-white flex items-center justify-center shrink-0 text-xs font-bold">🤖</div>
-              <div className="bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 p-2.5 rounded-2xl rounded-tr-none shadow-sm text-sm relative border border-slate-200/50 dark:border-slate-700">
-                مرحباً بك يا بطل! أنا المساعد الذكي لمركز النجاح للتدريب والاستشارات. اطرح أي استفسار بخصوص جدولك، واجباتك، أو دوراتك وسأقوم بمساعدتك فوراً أو تحويله للإدارة!
-                <div className="text-left text-[9px] text-slate-400 dark:text-slate-500 mt-1">الآن</div>
-              </div>
-            </div>
-
-            {/* Render dynamic portal messages in chronological order */}
-            {portalMessages.map((m, idx) => {
-              const isOutgoing = m.senderRole === 'student' || m.senderName === student?.fullName;
-              return (
-                <div key={m.id || idx} className={`flex items-start gap-2 max-w-[85%] ${isOutgoing ? 'self-end ms-auto flex-row-reverse' : 'self-start me-auto'}`}>
-                  {!isOutgoing && (
-                    <div className="w-7 h-7 rounded-full bg-amber-500 text-white flex items-center justify-center shrink-0 text-xs font-bold">🎯</div>
-                  )}
-                  <div className={`p-2.5 rounded-2xl shadow-sm text-sm relative ${isOutgoing ? 'bg-[#dcf8c6] dark:bg-emerald-950/80 text-slate-800 dark:text-emerald-100 rounded-tl-none border border-emerald-300 dark:border-emerald-800' : 'bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 rounded-tr-none border border-slate-200 dark:border-slate-700'}`}>
-                    <div className="font-bold text-[10px] text-amber-600 dark:text-amber-400 mb-0.5">{m.senderName || m.parentName}</div>
-                    {m.message}
-                    <div className={`text-left text-[9px] mt-1 flex items-center gap-1 ${isOutgoing ? 'text-emerald-600 dark:text-emerald-400 justify-end' : 'text-slate-400 dark:text-slate-500'}`}>
-                      {new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      {isOutgoing && <Check className="w-3 h-3 text-blue-500" />}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-            <div ref={chatBottomRef} />
-          </div>
-          
-          {/* Input Area */}
-          <div className="bg-slate-100 dark:bg-slate-900 p-3 shrink-0 flex items-end gap-2 border-t border-slate-200 dark:border-slate-800">
-            <textarea
-              rows={1}
-              placeholder="اكتب رسالتك هنا..."
-              className="chat-textarea flex-1 resize-none rounded-2xl border border-slate-200 dark:border-slate-700 focus:ring-1 focus:ring-emerald-500 py-2.5 px-4 text-sm shadow-sm text-slate-800 dark:text-slate-100 bg-white dark:bg-slate-800 placeholder-slate-400 dark:placeholder-slate-500"
-              style={{ maxHeight: '100px' }}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  const val = e.currentTarget.value;
-                  if (val.trim()) {
-                    handleSendPortalMessage(val);
-                    e.currentTarget.value = '';
-                  }
-                }
-              }}
-            />
-            <button 
-              disabled={isSendingMessage}
-              className="w-10 h-10 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white flex items-center justify-center shrink-0 shadow-sm transition-colors disabled:opacity-50"
-              onClick={() => {
-                const ta = document.querySelector('.chat-textarea') as HTMLTextAreaElement;
-                if (ta && ta.value) {
-                  handleSendPortalMessage(ta.value);
-                  ta.value = '';
-                }
-              }}
-            >
-              {isSendingMessage ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4 rtl:-scale-x-100" />}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* AI Explain Modal / Bottom Sheet */}
-      {isAiExplainOpen && (
-        <AIExplainModal
-          isOpen={isAiExplainOpen}
-          onClose={() => setIsAiExplainOpen(false)}
-          studentContext={{
-            studentName: student?.fullName || 'طالب مركز النجاح',
-            courseName: student?.courseName || 'مجموعة البرمجة والتكنولوجيا',
-            gradeLevel: student?.groupName || 'الصف التدريبي'
-          }}
-          showToast={(msg, type) => {
-            const emojis = { success: '✅', error: '❌', warning: '⚠️', info: 'ℹ️' };
-            alert(`${emojis[type] || '✨'} ${msg}`);
-          }}
-        />
-      )}
-
       {/* Interactive Kahoot Game Modal for Student Portal */}
       {activeKahootGameTask && (
         <KahootGameModal
@@ -3918,6 +3726,25 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
         starWinnerName={celebrationData.winnerName}
         starWinnerPoints={celebrationData.winnerPoints}
       />
+
+      {/* Toast Notification Container for Student Portal */}
+      {portalToasts.length > 0 && (
+        <div className="fixed bottom-20 sm:bottom-6 right-4 z-50 flex flex-col gap-2 max-w-sm w-full pointer-events-none">
+          {portalToasts.map(t => (
+            <div
+              key={t.id}
+              className={`p-3 rounded-2xl shadow-xl border text-xs font-bold pointer-events-auto transition-all animate-in slide-in-from-bottom-2 flex items-center justify-between gap-2 backdrop-blur-md ${
+                t.type === 'success' ? 'bg-emerald-900/90 text-white border-emerald-500/40' :
+                t.type === 'error' ? 'bg-rose-900/90 text-white border-rose-500/40' :
+                t.type === 'warning' ? 'bg-amber-900/90 text-white border-amber-500/40' :
+                'bg-slate-900/90 text-white border-slate-700'
+              }`}
+            >
+              <span>{t.text}</span>
+            </div>
+          ))}
+        </div>
+      )}
 
     </div>
   );

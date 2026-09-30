@@ -97,10 +97,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'interactive', label: 'الجلسات التفاعلية', icon: CalendarCheck2, roles: ['super_admin', 'branch_manager', 'admin_staff', 'trainer', 'general_manager'] },
     { id: 'finance', label: 'الخزنة والحسابات', icon: Wallet, roles: ['super_admin', 'branch_manager', 'admin_staff', 'accountant'] },
     { id: 'points', label: 'لوحة التميز', icon: Star, roles: ['super_admin', 'branch_manager', 'admin_staff', 'trainer'] },
-    { id: 'exams', label: 'الاختبارات والدرجات', icon: FileSpreadsheet, roles: ['super_admin', 'branch_manager', 'admin_staff', 'trainer'] },
-    { id: 'homeworks', label: 'الواجبات والتكاليف', icon: CheckSquare, roles: ['super_admin', 'branch_manager', 'admin_staff', 'trainer'] },
+    { id: 'exams', label: 'الاختبارات والواجبات', icon: FileSpreadsheet, roles: ['super_admin', 'branch_manager', 'admin_staff', 'trainer'] },
     { id: 'messages', label: 'الرسائل والتواصل', icon: MessageSquare, roles: ['super_admin', 'branch_manager', 'admin_staff', 'receptionist'] },
-    { id: 'reports', label: 'مركز التقارير', icon: BarChart3, roles: ['super_admin', 'branch_manager', 'admin_staff', 'accountant'] },
     { id: 'certificates', label: 'الشهادات', icon: Award, roles: ['super_admin', 'branch_manager', 'admin_staff', 'receptionist'] },
     { id: 'branches', label: 'الفروع', icon: Building, roles: ['super_admin'] },
     { id: 'settings', label: 'إعدادات النظام', icon: Settings, roles: ['super_admin'] }
