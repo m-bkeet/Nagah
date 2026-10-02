@@ -1,12 +1,18 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   Sparkles, Mic, BookOpen, CheckCircle2, Clock, Share2, Copy, Send, 
   Plus, Edit3, Trash2, Check, ChevronDown, ChevronUp, Layers, Award,
-  Cpu, HardDrive, Zap, Info, Play, MessageSquare, AlertCircle, RefreshCw, FileText,
-  Filter, Users, Calendar, MapPin, Tag, X, Save, ArrowRight
+  Cpu, HardDrive, Zap, Info, Play, Pause, Volume2, MessageSquare, AlertCircle, RefreshCw, FileText,
+  Filter, Users, Calendar, MapPin, Tag, X, Save, ArrowRight, Download, Radio, GraduationCap, School, CheckSquare, Square
 } from 'lucide-react';
 import { LectureRecap } from '../../types';
-import { detectCurriculum } from '../../domain/curriculumRegistry';
+import { 
+  detectCurriculum, 
+  getOfficialLessonsForGrade, 
+  synthesizeOfficialCurriculumRecap,
+  OfficialCurriculumLesson,
+  OfficialLessonConcept 
+} from '../../domain/curriculumRegistry';
 import { getPublicBaseUrl } from '../../utils/urlHelper';
 
 export const GRADE_OPTIONS = [
@@ -343,6 +349,22 @@ export const LectureRecapManager: React.FC<LectureRecapManagerProps> = ({
   const [voiceMemoText, setVoiceMemoText] = useState('');
   const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
   const [audioChunks, setAudioChunks] = useState<Blob[]>([]);
+  const [recordingSeconds, setRecordingSeconds] = useState(0);
+  const [liveSpeechTranscription, setLiveSpeechTranscription] = useState('');
+  const [speechRecognitionInstance, setSpeechRecognitionInstance] = useState<any>(null);
+  const [voiceAudioBlobUrl, setVoiceAudioBlobUrl] = useState<string | null>(null);
+  const [voiceAudioBase64, setVoiceAudioBase64] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem('nagah_last_teacher_voice_recording') || null;
+    } catch {
+      return null;
+    }
+  });
+
+  // Official 2026/2027 Curriculum Picker State
+  const [selectedTerm, setSelectedTerm] = useState<1 | 2>(1);
+  const [selectedCurriculumLessonId, setSelectedCurriculumLessonId] = useState<string>('');
+  const [selectedConceptIds, setSelectedConceptIds] = useState<string[]>([]);
 
   // Selected Group and Grade for new/edited recap
   const initialGrade = currentGradeLevel || GRADE_OPTIONS[0];
@@ -353,6 +375,38 @@ export const LectureRecapManager: React.FC<LectureRecapManagerProps> = ({
   const [selectedBranch, setSelectedBranch] = useState<string>(BRANCH_OPTIONS[0]);
   const [availableCourses, setAvailableCourses] = useState<any[]>([]);
   const [availableGroups, setAvailableGroups] = useState<any[]>([]);
+
+  // Available Official 2026/2027 Curriculum Lessons for selected grade and term
+  const availableCurriculumLessons = useMemo(() => {
+    return getOfficialLessonsForGrade(selectedGrade, selectedTerm);
+  }, [selectedGrade, selectedTerm]);
+
+  const activeCurriculumLesson = useMemo(() => {
+    return availableCurriculumLessons.find(l => l.id === selectedCurriculumLessonId) || availableCurriculumLessons[0] || null;
+  }, [availableCurriculumLessons, selectedCurriculumLessonId]);
+
+  // Sync selected concepts when lesson changes
+  useEffect(() => {
+    if (activeCurriculumLesson) {
+      setSelectedConceptIds(activeCurriculumLesson.concepts.map(c => c.id));
+      if (!selectedCurriculumLessonId) {
+        setSelectedCurriculumLessonId(activeCurriculumLesson.id);
+      }
+    }
+  }, [activeCurriculumLesson?.id]);
+
+  // Recording Timer effect
+  useEffect(() => {
+    let interval: any;
+    if (isRecording) {
+      interval = setInterval(() => {
+        setRecordingSeconds((prev) => prev + 1);
+      }, 1000);
+    } else {
+      setRecordingSeconds(0);
+    }
+    return () => clearInterval(interval);
+  }, [isRecording]);
 
   // Form Data State
   const [formData, setFormData] = useState<Partial<LectureRecap>>(() => 
@@ -657,7 +711,24 @@ export const LectureRecapManager: React.FC<LectureRecapManagerProps> = ({
   const visibleRecaps = recaps.filter(isMatchingTarget);
   const activeRecap = visibleRecaps.find(r => r.id === selectedRecapId) || visibleRecaps[0] || null;
 
-  // Start voice recording for teacher memo
+  // Toggle specific curriculum concept
+  const toggleConcept = (conceptId: string) => {
+    setSelectedConceptIds(prev => 
+      prev.includes(conceptId) ? prev.filter(id => id !== conceptId) : [...prev, conceptId]
+    );
+  };
+
+  const selectAllConcepts = () => {
+    if (activeCurriculumLesson) {
+      setSelectedConceptIds(activeCurriculumLesson.concepts.map(c => c.id));
+    }
+  };
+
+  const deselectAllConcepts = () => {
+    setSelectedConceptIds([]);
+  };
+
+  // Start voice recording for teacher memo with live speech recognition & audio preservation
   const startVoiceRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -670,83 +741,175 @@ export const LectureRecapManager: React.FC<LectureRecapManagerProps> = ({
 
       recorder.onstop = async () => {
         const audioBlob = new Blob(chunks, { type: 'audio/webm' });
+        const blobUrl = URL.createObjectURL(audioBlob);
+        setVoiceAudioBlobUrl(blobUrl);
+
         const reader = new FileReader();
         reader.readAsDataURL(audioBlob);
         reader.onloadend = () => {
           const base64Audio = reader.result as string;
-          handleAiStructureVoice(base64Audio);
+          setVoiceAudioBase64(base64Audio);
+          try {
+            localStorage.setItem('nagah_last_teacher_voice_recording', base64Audio);
+          } catch (e) {
+            console.warn('Storage save failed:', e);
+          }
+          setFormData(prev => ({
+            ...prev,
+            voiceAudioUrl: blobUrl,
+            voiceAudioBase64: base64Audio,
+            audioVoiceUrl: blobUrl
+          }));
         };
       };
 
-      recorder.start();
+      recorder.start(250);
       setMediaRecorder(recorder);
       setAudioChunks(chunks);
       setIsRecording(true);
+
+      // Start live speech-to-text recognition if available
+      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      if (SpeechRecognition) {
+        try {
+          const recognition = new SpeechRecognition();
+          recognition.continuous = true;
+          recognition.interimResults = true;
+          recognition.lang = 'ar-EG';
+
+          recognition.onresult = (event: any) => {
+            let current = '';
+            for (let i = 0; i < event.results.length; i++) {
+              current += event.results[i][0].transcript + ' ';
+            }
+            const clean = current.trim();
+            if (clean) {
+              setLiveSpeechTranscription(clean);
+              setVoiceMemoText(prev => {
+                if (!prev) return clean;
+                if (prev.includes(clean)) return prev;
+                return `${prev} ${clean}`;
+              });
+            }
+          };
+
+          recognition.start();
+          setSpeechRecognitionInstance(recognition);
+        } catch (recErr) {
+          console.log('Speech recognition not active:', recErr);
+        }
+      }
     } catch (err: any) {
       alert('تعذر الوصول إلى الميكروفون: ' + err.message);
     }
   };
 
-  // Stop voice recording
+  // Stop voice recording safely
   const stopVoiceRecording = () => {
     if (mediaRecorder && mediaRecorder.state !== 'inactive') {
       mediaRecorder.stop();
       mediaRecorder.stream.getTracks().forEach((track) => track.stop());
       setIsRecording(false);
     }
+    if (speechRecognitionInstance) {
+      try {
+        speechRecognitionInstance.stop();
+      } catch (e) {}
+    }
   };
 
   const finalGroupName = selectedGroup.includes('مخصص') ? (customGroupInput || 'مجموعة مخصصة') : selectedGroup;
 
-  const handleAiStructureVoice = async (audioBase64?: string) => {
-    if (!audioBase64 && !voiceMemoText.trim()) {
-      alert('يرجى تسجيل صوتك أو كتابة ملاحظات المحاضرة أولاً لتنظيمها بالذكاء الاصطناعي.');
+  // Synthesize official curriculum lesson concepts + teacher voice/notes into complete recap & homework
+  const handleSynthesizeFromLessonAndVoice = async () => {
+    if (!activeCurriculumLesson) {
+      alert('يرجى اختيار درس من منهج 2026/2027 أولاً.');
       return;
     }
 
     setIsAiStructuring(true);
     try {
-      const res = await fetch('/api/lecture-recaps/ai-structure-voice', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          audioBase64,
-          mimeType: 'audio/webm',
-          teacherNotes: voiceMemoText,
-          targetGrade: selectedGrade,
-          targetGroup: finalGroupName,
-          targetCourse: selectedSubject
-        })
+      // 1. Instant client-side synthesis (0ms delay)
+      const syn = synthesizeOfficialCurriculumRecap({
+        lesson: activeCurriculumLesson,
+        selectedConceptIds,
+        teacherNotes: voiceMemoText,
+        teacherVoiceText: liveSpeechTranscription,
+        groupName: finalGroupName,
+        trainerName: formData.trainerName || 'المهندس / المدرب المعتمد'
       });
 
-      const data = await res.json();
-      if (data.success && data.structured) {
-        const s = data.structured;
-        setFormData((prev) => ({
-          ...prev,
-          title: s.title || prev.title,
-          gradeLevel: selectedGrade,
-          groupName: finalGroupName,
-          subject: selectedSubject,
-          recapSummary: {
-            points: Array.isArray(s.recapSummary?.points) ? s.recapSummary.points : (prev.recapSummary?.points || []),
-            detailedNotes: s.recapSummary?.detailedNotes || prev.recapSummary?.detailedNotes || ''
-          },
-          homeworkTasks: {
-            tasks: Array.isArray(s.homeworkTasks?.tasks) ? s.homeworkTasks.tasks : (prev.homeworkTasks?.tasks || []),
-            bonusChallenge: s.homeworkTasks?.bonusChallenge || prev.homeworkTasks?.bonusChallenge || '',
-            allowMultiPageUpload: true
-          },
-          nextLecturePrep: {
-            prepPoints: Array.isArray(s.nextLecturePrep?.prepPoints) ? s.nextLecturePrep.prepPoints : (prev.nextLecturePrep?.prepPoints || []),
-            teaserNotes: s.nextLecturePrep?.teaserNotes || prev.nextLecturePrep?.teaserNotes || ''
-          },
-          closingMessage: s.closingMessage || prev.closingMessage
-        }));
-        alert(`✨ تم تنظيم وهيكلة ملخص وتاسكات المحاضرة بالذكاء الاصطناعي بنجاح لمرحلة: (${selectedGrade})!`);
+      const coveredNames = activeCurriculumLesson.concepts
+        .filter(c => selectedConceptIds.includes(c.id))
+        .map(c => c.nameAr);
+
+      setFormData(prev => ({
+        ...prev,
+        title: syn.title,
+        gradeLevel: selectedGrade,
+        groupName: finalGroupName,
+        subject: selectedSubject,
+        selectedLessonId: activeCurriculumLesson.id,
+        selectedLessonTitle: activeCurriculumLesson.titleAr,
+        coveredElements: coveredNames,
+        voiceAudioUrl: voiceAudioBlobUrl || voiceAudioBase64 || prev.voiceAudioUrl,
+        voiceAudioBase64: voiceAudioBase64 || prev.voiceAudioBase64,
+        audioVoiceUrl: voiceAudioBlobUrl || voiceAudioBase64 || prev.audioVoiceUrl,
+        voiceTranscription: liveSpeechTranscription || voiceMemoText || prev.voiceTranscription,
+        recapSummary: syn.recapSummary,
+        homeworkTasks: syn.homeworkTasks,
+        nextLecturePrep: syn.nextLecturePrep,
+        closingMessage: syn.closingMessage
+      }));
+
+      // 2. Optionally invoke AI API endpoint if text or audio is available for extra richness
+      if (voiceAudioBase64 || voiceMemoText.trim()) {
+        try {
+          const res = await fetch('/api/lecture-recaps/ai-structure-voice', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              audioBase64: voiceAudioBase64 || undefined,
+              mimeType: 'audio/webm',
+              transcribedText: liveSpeechTranscription || undefined,
+              teacherNotes: voiceMemoText,
+              targetGrade: selectedGrade,
+              targetGroup: finalGroupName,
+              targetCourse: selectedSubject,
+              selectedLessonTitle: activeCurriculumLesson.titleAr,
+              coveredElements: coveredNames
+            })
+          });
+          const data = await res.json();
+          if (data.success && data.structured) {
+            const s = data.structured;
+            setFormData(prev => ({
+              ...prev,
+              title: s.title || prev.title,
+              recapSummary: {
+                points: Array.isArray(s.recapSummary?.points) && s.recapSummary.points.length > 0 ? s.recapSummary.points : (prev.recapSummary?.points || []),
+                detailedNotes: s.recapSummary?.detailedNotes || prev.recapSummary?.detailedNotes || ''
+              },
+              homeworkTasks: {
+                tasks: Array.isArray(s.homeworkTasks?.tasks) && s.homeworkTasks.tasks.length > 0 ? s.homeworkTasks.tasks : (prev.homeworkTasks?.tasks || []),
+                bonusChallenge: s.homeworkTasks?.bonusChallenge || prev.homeworkTasks?.bonusChallenge || '',
+                allowMultiPageUpload: true
+              },
+              nextLecturePrep: {
+                prepPoints: Array.isArray(s.nextLecturePrep?.prepPoints) && s.nextLecturePrep.prepPoints.length > 0 ? s.nextLecturePrep.prepPoints : (prev.nextLecturePrep?.prepPoints || []),
+                teaserNotes: s.nextLecturePrep?.teaserNotes || prev.nextLecturePrep?.teaserNotes || ''
+              },
+              closingMessage: s.closingMessage || prev.closingMessage
+            }));
+          }
+        } catch (apiErr) {
+          console.warn('API structure error, client synthesis used:', apiErr);
+        }
       }
+
+      alert(`✨ تم بنجاح دمج عناصر درس (${activeCurriculumLesson.titleAr}) مع توجيهات المدرب وهيكلة التكليفات والواجب المنزلي!`);
     } catch (e: any) {
-      alert('تعذر تحويل التسجيل الصوتي بالذكاء الاصطناعي: ' + e.message);
+      alert('حدث خطأ أثناء دمج العناصر: ' + e.message);
     } finally {
       setIsAiStructuring(false);
     }
@@ -766,6 +929,15 @@ export const LectureRecapManager: React.FC<LectureRecapManagerProps> = ({
         groupName: finalGroupName,
         subject: selectedSubject,
         branchId: selectedBranch,
+        voiceAudioUrl: voiceAudioBlobUrl || voiceAudioBase64 || formData.voiceAudioUrl,
+        voiceAudioBase64: voiceAudioBase64 || formData.voiceAudioBase64,
+        audioVoiceUrl: voiceAudioBlobUrl || voiceAudioBase64 || formData.audioVoiceUrl,
+        voiceTranscription: liveSpeechTranscription || voiceMemoText || formData.voiceTranscription,
+        selectedLessonId: activeCurriculumLesson?.id || formData.selectedLessonId,
+        selectedLessonTitle: activeCurriculumLesson?.titleAr || formData.selectedLessonTitle,
+        coveredElements: activeCurriculumLesson 
+          ? activeCurriculumLesson.concepts.filter(c => selectedConceptIds.includes(c.id)).map(c => c.nameAr) 
+          : formData.coveredElements,
         recapSummary: {
           points: (formData.recapSummary?.points || []).filter(p => p.trim() !== ''),
           detailedNotes: formData.recapSummary?.detailedNotes || ''
@@ -884,8 +1056,97 @@ ${getPublicBaseUrl()}/?view=student_portal
     (activeRecap.recapSummary?.points?.some(p => p.includes('كيسة') || p.includes('Power Supply') || p.includes('عمو الكهربائي')) ?? true)
   );
 
+  const countG4 = useMemo(() => recaps.filter(r => {
+    const rg = (r.gradeLevel || '').toLowerCase();
+    const rc = (r.subject || '').toLowerCase();
+    return rg.includes('رابع') || rg.includes('grade 4') || rc.includes('ict 4') || rc.includes('ict4');
+  }).length, [recaps]);
+
+  const countG5 = useMemo(() => recaps.filter(r => {
+    const rg = (r.gradeLevel || '').toLowerCase();
+    const rc = (r.subject || '').toLowerCase();
+    return rg.includes('خامس') || rg.includes('grade 5') || rc.includes('ict 5') || rc.includes('ict5');
+  }).length, [recaps]);
+
+  const countG6 = useMemo(() => recaps.filter(r => {
+    const rg = (r.gradeLevel || '').toLowerCase();
+    const rc = (r.subject || '').toLowerCase();
+    return rg.includes('سادس') || rg.includes('grade 6') || rc.includes('ict 6') || rc.includes('ict6');
+  }).length, [recaps]);
+
+  const countPrep1 = useMemo(() => recaps.filter(r => {
+    const rg = (r.gradeLevel || '').toLowerCase();
+    const rc = (r.subject || '').toLowerCase();
+    return rg.includes('أول إعدادي') || rg.includes('اول اعدادي') || rg.includes('prep 1') || rc.includes('prep 1');
+  }).length, [recaps]);
+
+  const countPrep2 = useMemo(() => recaps.filter(r => {
+    const rg = (r.gradeLevel || '').toLowerCase();
+    return rg.includes('ثاني إعدادي') || rg.includes('ثاني اعدادي') || rg.includes('prep 2');
+  }).length, [recaps]);
+
+  const countCoding = useMemo(() => recaps.filter(r => {
+    const rg = (r.gradeLevel || '').toLowerCase();
+    return rg.includes('بايثون') || rg.includes('روبوت');
+  }).length, [recaps]);
+
   return (
     <div className="space-y-6 text-slate-800" dir="rtl">
+      {/* COMPREHENSIVE GRADE LEVEL CLASSIFICATION & NAVIGATION BAR (كل صف لوحده) */}
+      <div className="bg-white border border-slate-200 rounded-3xl p-4 shadow-sm space-y-3">
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <div className="flex items-center gap-2">
+            <div className="w-9 h-9 rounded-2xl bg-amber-500/10 text-amber-600 flex items-center justify-center">
+              <School className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-xs font-black text-slate-900">تصنيف ملخصات المحاضرات والتكليفات (كل صف دراسي لوحده)</h3>
+              <p className="text-[11px] text-slate-500 font-medium">منهج تكنولوجيا المعلومات والاتصالات ICT لغات المعتمد 2026-2027</p>
+            </div>
+          </div>
+          <span className="text-[11px] font-bold text-slate-600 bg-slate-100 px-3 py-1 rounded-full">
+            إجمالي المحاضرات: {recaps.length}
+          </span>
+        </div>
+
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-thin">
+          {[
+            { id: 'all', label: '🌟 عرض كل الصفوف', count: recaps.length },
+            { id: 'رابع', label: '📘 الصف الرابع (ICT 4)', count: countG4 },
+            { id: 'خامس', label: '📗 الصف الخامس (ICT 5)', count: countG5 },
+            { id: 'سادس', label: '📕 الصف السادس (ICT 6)', count: countG6 },
+            { id: 'أول إعدادي', label: '🎓 الأول الإعدادي (ICT & AI)', count: countPrep1 },
+            { id: 'ثاني إعدادي', label: '💻 الثاني الإعدادي (Prep 2)', count: countPrep2 },
+            { id: 'بايثون', label: '🚀 بايثون وروبوتكس', count: countCoding }
+          ].map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => {
+                setTrainerGradeFilter(tab.id);
+                const firstOfGrade = recaps.find(r => {
+                  if (tab.id === 'all') return true;
+                  const rg = (r.gradeLevel || '').toLowerCase();
+                  const rc = (r.subject || '').toLowerCase();
+                  return rg.includes(tab.id) || rc.includes(tab.id);
+                });
+                if (firstOfGrade) setSelectedRecapId(firstOfGrade.id);
+              }}
+              className={`px-3.5 py-2 rounded-2xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 cursor-pointer border ${
+                trainerGradeFilter === tab.id
+                  ? 'bg-amber-500 text-slate-950 border-amber-600 shadow-md font-black'
+                  : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'
+              }`}
+            >
+              <span>{tab.label}</span>
+              <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-black ${
+                trainerGradeFilter === tab.id ? 'bg-slate-950 text-amber-400' : 'bg-slate-200 text-slate-700'
+              }`}>
+                {tab.count}
+              </span>
+            </button>
+          ))}
+        </div>
+      </div>
       {/* Top Header & Targeting Banner - Crisp Light Daylight Luxury */}
       <div className="bg-gradient-to-r from-amber-50 via-white to-blue-50/80 border-2 border-amber-200/90 rounded-3xl p-5 md:p-6 text-slate-900 shadow-sm relative overflow-hidden">
         <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 relative z-10">
@@ -963,40 +1224,6 @@ ${getPublicBaseUrl()}/?view=student_portal
           </div>
         </div>
       </div>
-
-      {/* TRAINER QUICK FILTER TABS */}
-      {mode === 'trainer_admin' && (
-        <div className="bg-white border border-slate-200 rounded-2xl p-3 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-          <div className="flex items-center gap-1.5 text-xs font-bold text-slate-700">
-            <Filter className="w-4 h-4 text-amber-500" />
-            <span>تصفية المحاضرات حسب المرحلة:</span>
-          </div>
-
-          <div className="flex items-center gap-1.5 overflow-x-auto w-full sm:w-auto pb-1 sm:pb-0 scrollbar-thin">
-            {[
-              { id: 'all', label: 'عرض الكل' },
-              { id: 'سادس', label: 'الصف السادس (ICT 6)' },
-              { id: 'خامس', label: 'الصف الخامس (ICT 5)' },
-              { id: 'رابع', label: 'الصف الرابع (ICT 4)' },
-              { id: 'أول إعدادي', label: 'الأول الإعدادي (Prep 1)' },
-              { id: 'بايثون', label: 'بايثون & AI' },
-              { id: 'روبوت', label: 'روبوتكس' }
-            ].map(tab => (
-              <button
-                key={tab.id}
-                onClick={() => setTrainerGradeFilter(tab.id)}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer ${
-                  trainerGradeFilter === tab.id
-                    ? 'bg-amber-500 text-slate-950 shadow-sm font-black'
-                    : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
-                }`}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* MULTIPLE RECAPS SELECTOR TABS (If there are multiple lectures for this grade/group) */}
       {visibleRecaps.length > 1 && (
@@ -1198,63 +1425,195 @@ ${getPublicBaseUrl()}/?view=student_portal
             )}
           </div>
 
-          {/* STEP 2: AI VOICE MEMO & NOTES */}
+          {/* STEP 1.5: OFFICIAL 2026/2027 ICT CURRICULUM LESSON & CONCEPTS PICKER */}
+          <div className="p-4 rounded-2xl bg-indigo-50/70 border border-indigo-200 space-y-3">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <h4 className="text-xs font-black text-indigo-950 flex items-center gap-1.5">
+                <BookOpen className="w-4 h-4 text-indigo-600" />
+                <span>الخطوة 2: اختيار الدرس وعناصره من منهج ICT لغات المعتمد رسمياً (2026-2027):</span>
+              </h4>
+              <div className="flex items-center gap-1 bg-white p-1 rounded-xl border border-indigo-200">
+                <button
+                  type="button"
+                  onClick={() => setSelectedTerm(1)}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    selectedTerm === 1 ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'
+                  }`}
+                >
+                  الفصل الدراسي الأول (Term 1)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedTerm(2)}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    selectedTerm === 2 ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'
+                  }`}
+                >
+                  الفصل الدراسي الثاني (Term 2)
+                </button>
+              </div>
+            </div>
+
+            {/* Lesson Picker Dropdown */}
+            <div className="space-y-1.5">
+              <label className="block font-bold text-slate-800 text-xs">
+                اختر الدرس المقرر (يتم تحميل محاوره ومفاهيمه المعتمدة تلقائياً):
+              </label>
+              <select
+                value={selectedCurriculumLessonId || activeCurriculumLesson?.id || ''}
+                onChange={(e) => {
+                  setSelectedCurriculumLessonId(e.target.value);
+                  const found = availableCurriculumLessons.find(l => l.id === e.target.value);
+                  if (found) {
+                    setSelectedConceptIds(found.concepts.map(c => c.id));
+                  }
+                }}
+                className="w-full bg-white border border-indigo-300 rounded-xl p-2.5 font-bold text-xs text-indigo-950 focus:outline-none focus:border-indigo-500 shadow-sm"
+              >
+                {availableCurriculumLessons.map((les) => (
+                  <option key={les.id} value={les.id}>
+                    {les.unitTitleAr} | {les.titleAr} - {les.titleEn}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Interactive Concept Chips */}
+            {activeCurriculumLesson && (
+              <div className="bg-white p-3.5 rounded-xl border border-indigo-100 space-y-2.5">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <span className="text-xs font-black text-slate-800 flex items-center gap-1.5">
+                    <CheckSquare className="w-3.5 h-3.5 text-indigo-600" />
+                    <span>عناصر ومفاهيم الدرس (حدد ما قمت بشرحه في هذه الحصة):</span>
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={selectAllConcepts}
+                      className="text-[11px] font-bold text-indigo-600 hover:text-indigo-800 underline cursor-pointer"
+                    >
+                      تحديد جميع العناصر ({activeCurriculumLesson.concepts.length})
+                    </button>
+                    <span className="text-slate-300">|</span>
+                    <button
+                      type="button"
+                      onClick={deselectAllConcepts}
+                      className="text-[11px] font-bold text-slate-500 hover:text-slate-700 underline cursor-pointer"
+                    >
+                      إلغاء التحديد
+                    </button>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {activeCurriculumLesson.concepts.map((concept) => {
+                    const isChecked = selectedConceptIds.includes(concept.id);
+                    return (
+                      <button
+                        key={concept.id}
+                        type="button"
+                        onClick={() => toggleConcept(concept.id)}
+                        className={`p-2.5 rounded-xl border text-right transition-all flex items-start gap-2 cursor-pointer ${
+                          isChecked
+                            ? 'bg-indigo-50/80 border-indigo-400 text-indigo-950 font-bold shadow-2xs'
+                            : 'bg-slate-50/60 border-slate-200 text-slate-600 hover:border-slate-300'
+                        }`}
+                      >
+                        <span className={`w-4 h-4 rounded mt-0.5 flex items-center justify-center shrink-0 border ${
+                          isChecked ? 'bg-indigo-600 border-indigo-600 text-white' : 'border-slate-300 bg-white'
+                        }`}>
+                          {isChecked && <Check className="w-3 h-3 stroke-[3]" />}
+                        </span>
+                        <div className="text-[11px] leading-tight">
+                          <strong className="block text-slate-900">{concept.nameAr}</strong>
+                          <span className="text-[10px] text-slate-500">{concept.nameEn}</span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* STEP 2: TEACHER VOICE RECORDING & NOTES */}
           <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-3">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-indigo-950 flex items-center gap-1.5">
-                <Mic className="w-4 h-4 text-indigo-600" />
-                <span>تسجيل صوتي للمدرب أو كتابة ملاحظات المحاضرة ليقوم الذكاء الاصطناعي بهيكلتها للمجموعة المحددة ({selectedGrade}):</span>
+              <span className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                <Mic className="w-4 h-4 text-rose-600" />
+                <span>الخطوة 3: تسجيل صوت المدرب أو كتابة ملاحظات الشرح وما تم التركيز عليه بالمعمل:</span>
               </span>
               {isRecording && (
-                <span className="text-rose-600 font-bold text-xs animate-pulse flex items-center gap-1">
-                  ● جاري التسجيل...
+                <span className="text-rose-600 font-black text-xs animate-pulse flex items-center gap-1 bg-rose-50 px-2.5 py-1 rounded-full border border-rose-200">
+                  ● جاري التسجيل الصوتي ({Math.floor(recordingSeconds / 60)}:{(recordingSeconds % 60).toString().padStart(2, '0')})
                 </span>
               )}
             </div>
+
+            {/* Saved Voice Player in Modal */}
+            {(voiceAudioBlobUrl || voiceAudioBase64) && (
+              <div className="p-3 bg-emerald-50 border border-emerald-300 rounded-xl space-y-1.5 animate-fadeIn">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-emerald-950 flex items-center gap-1.5">
+                    <Volume2 className="w-4 h-4 text-emerald-600" />
+                    <span>التسجيل الصوتي للمعلم محفوظ ومتاح للاستماع والنشر مع المحاضرة 🎧</span>
+                  </span>
+                  <span className="text-[10px] bg-emerald-600 text-white px-2 py-0.5 rounded-full font-bold">
+                    جاهز للنشر ✓
+                  </span>
+                </div>
+                <audio 
+                  controls 
+                  src={voiceAudioBlobUrl || voiceAudioBase64 || undefined} 
+                  className="w-full h-9 rounded-lg"
+                />
+              </div>
+            )}
 
             <textarea
               rows={3}
               value={voiceMemoText}
               onChange={(e) => setVoiceMemoText(e.target.value)}
-              placeholder="مثال: راجعنا على أجهزة الشبكات وعملنا كاهوت، وشرحنا الفرق بين المودم والمحول وكتبنا كود HTML بسيط، والواجب المطلوب حل التكليفات في الكشكول وتصوير صفحات الإجابة..."
+              placeholder="مثال: ركزنا على فك الكيسة وشرح الفرق بين RAM و Hard Disk، وحلينا تدريبات كاهوت والواجب كتابة المكونات في الكشكول وتصوير أكثر من ورقة..."
               className="w-full bg-white border border-slate-300 rounded-xl p-3 text-xs text-slate-900 focus:outline-none focus:border-amber-500 shadow-inner"
             />
 
-            <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-2.5 flex-wrap pt-1">
               {!isRecording ? (
                 <button
                   type="button"
                   onClick={startVoiceRecording}
-                  className="px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs flex items-center gap-1 shadow-sm cursor-pointer"
+                  className="px-3.5 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm cursor-pointer transition-all"
                 >
-                  <Mic className="w-3.5 h-3.5" />
+                  <Mic className="w-4 h-4" />
                   <span>بدء تسجيل صوتي 🎙️</span>
                 </button>
               ) : (
                 <button
                   type="button"
                   onClick={stopVoiceRecording}
-                  className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs flex items-center gap-1 shadow-sm cursor-pointer"
+                  className="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-black text-xs flex items-center gap-1.5 shadow-md cursor-pointer animate-pulse"
                 >
-                  <span>إيقاف ومعالجة التسجيل ⏹</span>
+                  <span>⏹ إيقاف وحفظ التسجيل</span>
                 </button>
               )}
 
+              {/* ACTION SYNTHESIZER BUTTON */}
               <button
                 type="button"
-                disabled={isAiStructuring || (!voiceMemoText.trim() && audioChunks.length === 0)}
-                onClick={() => handleAiStructureVoice()}
-                className="px-4 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 text-slate-950 font-black text-xs flex items-center gap-1.5 shadow-sm transition-all cursor-pointer disabled:opacity-50"
+                disabled={isAiStructuring || !activeCurriculumLesson}
+                onClick={handleSynthesizeFromLessonAndVoice}
+                className="px-5 py-2 rounded-xl bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500 hover:from-amber-400 text-slate-950 font-black text-xs flex items-center gap-2 shadow-md transition-all cursor-pointer disabled:opacity-50"
               >
                 {isAiStructuring ? (
                   <>
-                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                    <span>جاري الهيكلة والتنسيق بـ AI لمرحلة ({selectedGrade})...</span>
+                    <RefreshCw className="w-4 h-4 animate-spin text-slate-950" />
+                    <span>جاري دمج وتركيب العناصر وتوليد التكليف الذكي...</span>
                   </>
                 ) : (
                   <>
-                    <Sparkles className="w-3.5 h-3.5" />
-                    <span>هيكلة الملخص بالأقسام الأربعة بـ AI للمجموعة المحددة 🪄</span>
+                    <Sparkles className="w-4 h-4 text-slate-950" />
+                    <span>🪄 تركيب ودمج العناصر المشروحة وتوليد التكليف الذكي</span>
                   </>
                 )}
               </button>
@@ -1536,6 +1895,53 @@ ${getPublicBaseUrl()}/?view=student_portal
                   </div>
                 </div>
               </div>
+
+              {/* Teacher Recorded Voice Memo Player */}
+              {(activeRecap.voiceAudioUrl || activeRecap.voiceAudioBase64 || activeRecap.audioVoiceUrl) && (
+                <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-50 to-indigo-50 border border-amber-300 space-y-2.5 shadow-xs">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-black text-slate-900 flex items-center gap-2">
+                      <Volume2 className="w-4 h-4 text-amber-600" />
+                      <span>تسجيل صوت المدرب المعتمد للحصة (شرح وتلخيص المحاضرة):</span>
+                    </span>
+                    <span className="text-[10px] font-bold bg-amber-500 text-slate-950 px-2.5 py-0.5 rounded-full shadow-xs">
+                      صوت محفوظ 🎙️
+                    </span>
+                  </div>
+                  <audio 
+                    controls 
+                    src={activeRecap.voiceAudioUrl || activeRecap.voiceAudioBase64 || activeRecap.audioVoiceUrl} 
+                    className="w-full h-10 rounded-xl"
+                  />
+                  {activeRecap.voiceTranscription && (
+                    <div className="p-2.5 bg-white/90 rounded-xl border border-slate-200 text-[11px] text-slate-700 leading-relaxed font-medium">
+                      <span className="font-bold text-slate-900 block mb-0.5">التفريغ النصي لتسجيل المعلم:</span>
+                      "{activeRecap.voiceTranscription}"
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Covered Official 2026/2027 Curriculum Concepts */}
+              {(activeRecap.selectedLessonTitle || (Array.isArray(activeRecap.coveredElements) && activeRecap.coveredElements.length > 0)) && (
+                <div className="p-3.5 bg-blue-50/70 border border-blue-200 rounded-2xl space-y-2">
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-blue-950">
+                    <BookOpen className="w-4 h-4 text-blue-600" />
+                    <span>محتوى الدرس المعتمد (منهج ICT لغات 2026/2027):</span>
+                    <span className="text-blue-900 font-black">{activeRecap.selectedLessonTitle || activeRecap.title}</span>
+                  </div>
+                  {Array.isArray(activeRecap.coveredElements) && activeRecap.coveredElements.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 pt-0.5">
+                      {activeRecap.coveredElements.map((el, i) => (
+                        <span key={i} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-white border border-blue-200 text-[11px] font-bold text-blue-900 shadow-2xs">
+                          <Check className="w-3 h-3 text-emerald-600 stroke-[3]" />
+                          <span>{el}</span>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
 
               <div className="space-y-2.5">
                 {activeRecap.recapSummary?.points?.map((pt, idx) => (

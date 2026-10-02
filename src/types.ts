@@ -393,7 +393,22 @@ export type ExpenseCategory =
   | 'transport'
   | 'hospitality'
   | 'trainers'
+  | 'owner_drawings'
   | 'other';
+
+export interface OwnerWithdrawal {
+  id: string;
+  receiptNumber: string;
+  date: string;
+  amount: number;
+  branchId: string;
+  withdrawnByUserId?: string;
+  withdrawnByUserName?: string;
+  paymentMethod?: string;
+  notes?: string;
+  remainingTreasuryAfter?: number;
+  createdAt: string;
+}
 
 export interface Expense {
   id: string;
@@ -1147,6 +1162,12 @@ export interface LectureRecap {
   // Section 4: Trainer Voice / Closing Message
   closingMessage?: string;
   audioVoiceUrl?: string;
+  voiceAudioUrl?: string;
+  voiceAudioBase64?: string;
+  voiceTranscription?: string;
+  selectedLessonId?: string;
+  selectedLessonTitle?: string;
+  coveredElements?: string[];
 
   isPublished: boolean;
   createdAt: string;

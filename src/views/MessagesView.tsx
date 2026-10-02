@@ -341,6 +341,41 @@ export const MessagesView: React.FC = () => {
     }
   };
 
+  const handleClearAllMessages = async () => {
+    if (!window.confirm('هل أنت متأكد من رغبتك في مسح وتصفير كافة الرسائل والمحادثات؟')) return;
+    try {
+      const res = await fetch('/api/messages/clear-all', { method: 'POST' });
+      if (res.ok) {
+        setPortalMessages([]);
+        setActiveChatId(null);
+        showToast('تم مسح وتصفير كافة الرسائل بنجاح 🧹', 'success');
+      } else {
+        showToast('فشل مسح الرسائل', 'error');
+      }
+    } catch (err) {
+      showToast('خطأ في الاتصال بالخادم', 'error');
+    }
+  };
+
+  const handleDeleteThread = async (traineeId: string) => {
+    if (!traineeId) return;
+    if (!window.confirm('هل أنت متأكد من حذف هذه المحادثة بالكامل؟')) return;
+    try {
+      const res = await fetch(`/api/messages/thread/${encodeURIComponent(traineeId)}`, { method: 'DELETE' });
+      if (res.ok) {
+        setPortalMessages(prev => prev.filter(m => m.traineeId !== traineeId && m.traineeCode !== traineeId));
+        if (activeChatId === traineeId) {
+          setActiveChatId(null);
+        }
+        showToast('تم حذف المحادثة بنجاح 🗑️', 'success');
+      } else {
+        showToast('فشل حذف المحادثة', 'error');
+      }
+    } catch (err) {
+      showToast('خطأ في الاتصال بالخادم', 'error');
+    }
+  };
+
   // Group messages WhatsApp-style by student/trainee
   const chatGroups = useMemo(() => {
     const groupsMap: { [key: string]: any } = {};

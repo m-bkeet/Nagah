@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useCenter } from '../context/CenterContext';
 import { hasPermission } from '../utils/permissions';
@@ -26,7 +26,10 @@ import {
   ChevronLeft,
   Menu,
   Calendar,
-  Brain
+  Brain,
+  Zap,
+  Activity,
+  Gauge
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -173,13 +176,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
           })}
         </nav>
       </div>
-
-      {!isCollapsed && (
-        <div className="p-2 m-2 mt-0 rounded-xl bg-gradient-to-r from-amber-500/10 via-amber-500/15 to-amber-600/10 dark:bg-slate-950/60 border border-amber-400/50 dark:border-slate-800 text-center shrink-0 shadow-sm">
-          <p className="text-[11px] font-black text-amber-950 dark:text-amber-300">النجاح للتدريب والاستشارات</p>
-          <p className="text-[9px] font-bold text-amber-800/80 dark:text-slate-400">Nagah M-S</p>
-        </div>
-      )}
     </aside>
     </>
   );

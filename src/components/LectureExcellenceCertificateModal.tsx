@@ -583,6 +583,17 @@ export const LectureExcellenceCertificateModal: React.FC<LectureExcellenceCertif
   const handleSaveToCertificates = async () => {
     try {
       const branch = branches.find(b => b.id === activeBranchId) || branches[0];
+      const certTitle = certificateType === 'excellence' 
+        ? 'وسام تميز' 
+        : certificateType === 'achievement' 
+          ? 'شهادة إتمام وتفوق' 
+          : 'شهادة شكر وتقدير';
+      const certTitleEn = certificateType === 'excellence' 
+        ? 'Medal of Excellence' 
+        : certificateType === 'achievement' 
+          ? 'Certificate of Completion' 
+          : 'Certificate of Appreciation';
+
       const newCertData = {
         certificateNumber: serialNumber,
         serialNumber: serialNumber,
@@ -590,19 +601,32 @@ export const LectureExcellenceCertificateModal: React.FC<LectureExcellenceCertif
         traineeName: currentTrainee?.fullName || 'متدرب متميز',
         courseId: currentCourse?.id || 'manual',
         courseName: currentCourse?.name || 'الدورة التدريبية',
-        branchId: branch?.id || 'b1',
+        branchId: currentTrainee?.branchId || (branch?.id !== 'all' ? branch?.id : 'branch-1') || 'branch-1',
         issueDate: lectureDate,
         grade: `${awardTitle} (${pointsEarned} نقطة)`,
         durationText: lectureTitle,
         trainerName,
         managerName,
+        certificateTitle: certTitle,
+        certificateTitleEn: certTitleEn,
+        type: certificateType,
         templateTheme: themeStyle,
         qrPayload: serialNumber
       };
 
       await api.createCertificate(newCertData);
       setIsSaved(true);
-      showToast('تم توثيق شهادة التقدير بنجاح في سجل الشهادات', 'success');
+      showToast(
+        certificateType === 'excellence'
+          ? `تم اعتماد وتوثيق وسام التميز بنجاح لـ (${currentTrainee?.fullName}) في ملف الطالب وسجل الشهادات 🏅`
+          : `تم توثيق شهادة التقدير بنجاح لـ (${currentTrainee?.fullName}) في ملف الطالب وسجل الشهادات 📜`,
+        'success'
+      );
+      audioService.playClapping(2);
+      try {
+        confetti({ particleCount: 80, spread: 70, origin: { y: 0.6 } });
+      } catch {}
+
       if (onCertificateIssued) {
         onCertificateIssued(newCertData);
       }
@@ -1288,6 +1312,16 @@ export const LectureExcellenceCertificateModal: React.FC<LectureExcellenceCertif
                   </p>
                 </div>
               )}
+
+              {/* Direct Save & Issue Certificate/Medal Button */}
+              <button
+                type="button"
+                onClick={handleSaveToCertificates}
+                className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500 hover:brightness-110 text-slate-950 font-black text-xs shadow-lg shadow-amber-500/30 transition-all active:scale-95 flex items-center justify-center gap-2 cursor-pointer ring-2 ring-amber-400/50"
+              >
+                <Award className="w-4 h-4 text-slate-950" />
+                <span>{isSaved ? '✅ تم التوثيق (إعادة حفظ وتحديث)' : '💾 اعتماد وتوثيق في ملف الطالب وسجل الشهادات'}</span>
+              </button>
 
               {/* 1. Share Image to WhatsApp Group */}
               <button

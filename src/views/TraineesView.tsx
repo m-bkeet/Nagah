@@ -2,6 +2,7 @@ import { WhatsAppShareModal } from "../components/WhatsAppShareModal";
 import { ElectronicPaymentWidget } from "../components/ElectronicPaymentWidget";
 import { DuplicatesAuditModal } from "../components/DuplicatesAuditModal";
 import { getVodafoneCashUssdCode, executeVodafoneCashPayment, executeInstaPayPayment } from "../utils/paymentUtils";
+import { LectureExcellenceCertificateModal } from "../components/LectureExcellenceCertificateModal";
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import * as XLSX from 'xlsx';
@@ -354,7 +355,8 @@ export const TraineesView: React.FC = () => {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
-  const [profileTab, setProfileTab] = useState<'finance' | 'attendance' | 'points' | 'guidance' | 'vault'>('finance');
+  const [profileTab, setProfileTab] = useState<'finance' | 'attendance' | 'points' | 'guidance' | 'vault' | 'certificates'>('finance');
+  const [isAwardModalOpenForTrainee, setIsAwardModalOpenForTrainee] = useState(false);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isFormsImportModalOpen, setIsFormsImportModalOpen] = useState(false);
@@ -527,56 +529,99 @@ export const TraineesView: React.FC = () => {
     });
   }, [formData.fullName, formData.parentName, formData.parentPhone, trainees, activeTrainee]);
 
-  const fetchCodeForCourse = async (courseId?: string, targetGrade?: string, targetGroupId?: string) => {
+  const findCourseForGrade = useCallback((coursesList: any[], gradeName?: string) => {
+    if (!gradeName || !Array.isArray(coursesList)) return undefined;
+    const clean = String(gradeName).trim();
+    const lower = clean.toLowerCase();
+
+    // 1. Exact grade attribute match
+    const exact = coursesList.find(c => c && c.grade && String(c.grade).trim() === clean);
+    if (exact) return exact;
+
+    // 2. Prep 1 / 2 / 3 (المرحلة الإعدادية)
+    if (clean.includes('إعدادي') || clean.includes('اعدادي') || lower.includes('prep') || lower.includes('p1') || lower.includes('p2') || lower.includes('p3')) {
+      if (clean.includes('أول') || clean.includes('اول') || clean.includes('1') || lower.includes('p1')) {
+        return coursesList.find(c => c && ((c.grade && (c.grade.includes('أول إعدادي') || c.grade.includes('الأول الإعدادي') || c.grade.includes('اول اعدادي'))) || (c.name && /ict-?p1|p1|prep1|أول إعدادي|الأول الإعدادي|اول اعدادي/i.test(c.name)) || (c.code && /p1/i.test(c.code))));
+      }
+      if (clean.includes('ثاني') || clean.includes('تاني') || clean.includes('2') || lower.includes('p2')) {
+        return coursesList.find(c => c && ((c.grade && (c.grade.includes('ثاني إعدادي') || c.grade.includes('الثاني الإعدادي') || c.grade.includes('تاني اعدادي'))) || (c.name && /ict-?p2|p2|prep2|ثاني إعدادي|الثاني الإعدادي|تاني اعدادي/i.test(c.name)) || (c.code && /p2/i.test(c.code))));
+      }
+      if (clean.includes('ثالث') || clean.includes('تالت') || clean.includes('3') || lower.includes('p3')) {
+        return coursesList.find(c => c && ((c.grade && (c.grade.includes('ثالث إعدادي') || c.grade.includes('الثالث الإعدادي') || c.grade.includes('تالت اعدادي'))) || (c.name && /ict-?p3|p3|prep3|ثالث إعدادي|الثالث الإعدادي|تالت اعدادي/i.test(c.name)) || (c.code && /p3/i.test(c.code))));
+      }
+    }
+
+    // 3. Secondary 1 / 2 / 3 (المرحلة الثانوية)
+    if (clean.includes('ثانوي') || lower.includes('sec') || lower.includes('s1') || lower.includes('s2') || lower.includes('s3')) {
+      if (clean.includes('أول') || clean.includes('اول') || clean.includes('1') || lower.includes('s1') || lower.includes('sec1')) {
+        return coursesList.find(c => c && ((c.grade && (c.grade.includes('أول ثانوي') || c.grade.includes('الأول الثانوي') || c.grade.includes('اول ثانوي'))) || (c.name && /ict-?s1|s1|sec1|أول ثانوي|الأول الثانوي/i.test(c.name)) || (c.code && /s1/i.test(c.code))));
+      }
+      if (clean.includes('ثاني') || clean.includes('تاني') || clean.includes('2') || lower.includes('s2') || lower.includes('sec2')) {
+        return coursesList.find(c => c && ((c.grade && (c.grade.includes('ثاني ثانوي') || c.grade.includes('الثاني الثانوي') || c.grade.includes('تاني ثانوي'))) || (c.name && /ict-?s2|s2|sec2|ثاني ثانوي|الثاني الثانوي/i.test(c.name)) || (c.code && /s2/i.test(c.code))));
+      }
+      if (clean.includes('ثالث') || clean.includes('تالت') || clean.includes('3') || lower.includes('s3') || lower.includes('sec3')) {
+        return coursesList.find(c => c && ((c.grade && (c.grade.includes('ثالث ثانوي') || c.grade.includes('الثالث الثانوي') || c.grade.includes('تالت ثانوي'))) || (c.name && /ict-?s3|s3|sec3|ثالث ثانوي|الثالث الثانوي/i.test(c.name)) || (c.code && /s3/i.test(c.code))));
+      }
+    }
+
+    // 4. Primary 4 / 5 / 6 (المرحلة الابتدائية)
+    if (clean.includes('رابع') || clean.includes('4') || lower.includes('ict4')) {
+      return coursesList.find(c => c && ((c.grade && c.grade.includes('رابع')) || (c.name && /ict-?4|رابع/i.test(c.name)) || (c.code && /ict4/i.test(c.code))));
+    }
+    if (clean.includes('خامس') || clean.includes('5') || lower.includes('ict5')) {
+      return coursesList.find(c => c && ((c.grade && c.grade.includes('خامس')) || (c.name && /ict-?5|خامس/i.test(c.name)) || (c.code && /ict5/i.test(c.code))));
+    }
+    if (clean.includes('سادس') || clean.includes('6') || lower.includes('ict6')) {
+      return coursesList.find(c => c && ((c.grade && c.grade.includes('سادس')) || (c.name && /ict-?6|سادس/i.test(c.name)) || (c.code && /ict6/i.test(c.code))));
+    }
+
+    return undefined;
+  }, []);
+
+  const fetchCodeForCourse = async (courseId?: string, targetGrade?: string, targetGroupId?: string, forceOverwrite = false) => {
     if (!courseId && !targetGrade && !targetGroupId) return;
     setIsGeneratingCode(true);
     try {
       const g = targetGrade || formData.grade;
       const cId = courseId || formData.courseId;
       const grpId = targetGroupId || formData.groupId;
-      let matchedCourse = (courses || []).find(c => c.id === cId);
-      if (g && !matchedCourse) {
-        matchedCourse = (courses || []).find(c => 
-          (c.name && g && (c.name.includes(g) || g.includes(c.name))) || 
-          c.grade === g
-        );
-      }
-      const res = await api.getNextTraineeCode({ courseId: matchedCourse?.id || cId, grade: g, groupId: grpId });
+      const matchedCourse = findCourseForGrade(courses, g) || (courses || []).find(c => c.id === cId);
+      
+      const res = await api.getNextTraineeCode({ 
+        courseId: matchedCourse?.id || cId, 
+        grade: g || matchedCourse?.grade, 
+        groupId: grpId,
+        excludeId: activeTrainee?.id 
+      });
+
       if (res && res.code) {
-        const resPrefix = res.prefix || '';
         setFormData((prev: any) => {
+          const isEditMode = Boolean(activeTrainee);
           const currentCode = prev.code || '';
-          const currentPrefix = currentCode.replace(/[0-9]/g, '').toUpperCase().trim();
           
-          if (res.isRecycled) {
-            setCodeRegenNotice(`🔄 تم تخصيص الكود الشاغر (${res.code}) من متدرب محذوف ليأخذ مكانه في الفصل ببيانات جديدة كلياً ونظيفة.`);
+          // In Edit mode, if not forced and not changing grade, preserve current code
+          if (isEditMode && !forceOverwrite && currentCode) {
             return {
               ...prev,
               grade: g || prev.grade,
-              code: res.code,
               courseId: matchedCourse ? matchedCourse.id : prev.courseId,
               feeAmount: matchedCourse ? matchedCourse.feeAmount : prev.feeAmount
             };
           }
 
-          if (resPrefix && currentPrefix === resPrefix && currentCode.length > resPrefix.length) {
-            setCodeRegenNotice(`بادئة الكود الحالية (${currentPrefix}) متوافقة بالفعل مع الصف.`);
-            return {
-              ...prev,
-              grade: g || prev.grade,
-              courseId: matchedCourse ? matchedCourse.id : prev.courseId,
-              feeAmount: matchedCourse ? matchedCourse.feeAmount : prev.feeAmount
-            };
+          if (res.isRecycled) {
+            setCodeRegenNotice(`🔄 تم تخصيص الكود الشاغر (${res.code}) بنجاح.`);
           } else {
-            if (g) setCodeRegenNotice(`تم تحديد كود المتدرب تلقائياً: (${res.code})`);
-            return {
-              ...prev,
-              grade: g || prev.grade,
-              code: res.code,
-              courseId: matchedCourse ? matchedCourse.id : prev.courseId,
-              feeAmount: matchedCourse ? matchedCourse.feeAmount : prev.feeAmount
-            };
+            setCodeRegenNotice(`تم تحديد كود المتدرب تلقائياً: (${res.code})`);
           }
+
+          return {
+            ...prev,
+            grade: g || prev.grade,
+            code: res.code,
+            courseId: matchedCourse ? matchedCourse.id : prev.courseId,
+            feeAmount: matchedCourse ? matchedCourse.feeAmount : prev.feeAmount
+          };
         });
       }
     } catch (err) {
@@ -586,18 +631,52 @@ export const TraineesView: React.FC = () => {
     }
   };
 
-  const handleGradeChangeInEdit = async (selGrade: string) => {
-    const matchedCourse = (courses || []).find(c => 
-      (c.name && selGrade && (c.name.includes(selGrade) || selGrade.includes(c.name))) || 
-      c.grade === selGrade
+  const handleGradeChangeInAdd = async (selGrade: string) => {
+    const matchedCourse = findCourseForGrade(courses, selGrade);
+    const matchingGroups = (groups || []).filter(g => 
+      g && 
+      (!matchedCourse || g.courseId === matchedCourse.id) && 
+      (!formData.branchId || g.branchId === formData.branchId) && 
+      (!selGrade || !g.grade || g.grade === selGrade)
     );
+    const defaultGroup = matchingGroups.length > 0 ? matchingGroups[0].id : '';
+
+    setFormData((prev: any) => ({
+      ...prev,
+      grade: selGrade,
+      courseId: matchedCourse ? matchedCourse.id : '',
+      groupId: defaultGroup,
+      feeAmount: matchedCourse ? matchedCourse.feeAmount : prev.feeAmount
+    }));
+
+    if (selGrade || matchedCourse) {
+      await fetchCodeForCourse(matchedCourse?.id, selGrade, defaultGroup, true);
+    }
+  };
+
+  const handleGradeChangeInEdit = async (selGrade: string) => {
+    const matchedCourse = findCourseForGrade(courses, selGrade);
+    const matchingGroups = (groups || []).filter(g => 
+      g && 
+      (!matchedCourse || g.courseId === matchedCourse.id) && 
+      (!formData.branchId || g.branchId === formData.branchId) && 
+      (!selGrade || !g.grade || g.grade === selGrade)
+    );
+    const defaultGroup = matchingGroups.some(g => g.id === formData.groupId) ? formData.groupId : (matchingGroups.length > 0 ? matchingGroups[0].id : '');
+
+    const isGradeReallyChanged = activeTrainee && activeTrainee.grade !== selGrade;
+
     setFormData((prev: any) => ({
       ...prev,
       grade: selGrade,
       courseId: matchedCourse ? matchedCourse.id : prev.courseId,
+      groupId: defaultGroup,
       feeAmount: matchedCourse ? matchedCourse.feeAmount : prev.feeAmount
     }));
-    await fetchCodeForCourse(matchedCourse?.id || formData.courseId, selGrade);
+
+    if (isGradeReallyChanged) {
+      await fetchCodeForCourse(matchedCourse?.id, selGrade, defaultGroup, true);
+    }
   };
 
   const handlePhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -3154,24 +3233,11 @@ export const TraineesView: React.FC = () => {
               {/* Row 4: Grade + Branch + Course + Group + Trainer */}
               <div className="grid grid-cols-1 md:grid-cols-5 gap-3 bg-slate-50 dark:bg-slate-950/40 p-3 rounded-xl border border-slate-200 dark:border-slate-800">
                 <div>
-                  <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">الصف الدراسي</label>
+                  <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">الصف الدراسي *</label>
                   <select
                     value={formData.grade ?? ''}
-                    onChange={(e) => {
-                      const selGrade = e.target.value;
-                      let matchedCourse = (courses || []).find(c => (c.name && selGrade && (c.name.includes(selGrade) || selGrade.includes(c.name))) || c.grade === selGrade);
-                      if (selGrade.includes('رابع')) matchedCourse = (courses || []).find(c => (c.name && c.name.includes('ICT4')) || c.code?.includes('ICT4') || c.grade === selGrade);
-                      if (selGrade.includes('خامس')) matchedCourse = (courses || []).find(c => (c.name && c.name.includes('ICT5')) || c.code?.includes('ICT5') || c.grade === selGrade);
-                      if (selGrade.includes('سادس')) matchedCourse = (courses || []).find(c => (c.name && c.name.includes('ICT6')) || c.code?.includes('ICT6') || c.grade === selGrade);
-
-                      setFormData({
-                        ...formData,
-                        grade: selGrade,
-                        courseId: matchedCourse ? matchedCourse.id : formData.courseId,
-                        feeAmount: matchedCourse ? matchedCourse.feeAmount : formData.feeAmount
-                      });
-                    }}
-                    className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 text-xs focus:outline-none focus:border-amber-500 shadow-xs"
+                    onChange={(e) => handleGradeChangeInAdd(e.target.value)}
+                    className="w-full bg-white dark:bg-slate-800 border border-amber-300 dark:border-amber-500/50 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 text-xs font-bold focus:outline-none focus:border-amber-500 shadow-xs"
                   >
                     <option value="">-- اختر الصف --</option>
                     {GRADE_OPTIONS.map(g => (
@@ -3201,15 +3267,24 @@ export const TraineesView: React.FC = () => {
                     onChange={(e) => {
                       const cid = e.target.value;
                       const selCourse = courses.find((c) => c.id === cid);
+                      const derivedGrade = selCourse?.grade || formData.grade;
+                      const matchingGroups = (groups || []).filter(g => 
+                        g && 
+                        (!cid || g.courseId === cid) && 
+                        (!formData.branchId || g.branchId === formData.branchId) && 
+                        (!derivedGrade || !g.grade || g.grade === derivedGrade)
+                      );
+                      const defaultGroup = matchingGroups.length > 0 ? matchingGroups[0].id : '';
+
                       setFormData({
                         ...formData,
                         courseId: cid,
-                        groupId: '',
+                        groupId: defaultGroup,
                         feeAmount: selCourse ? selCourse.feeAmount : formData.feeAmount,
-                        grade: selCourse?.grade || formData.grade
+                        grade: derivedGrade
                       });
-                      if (cid) {
-                        fetchCodeForCourse(cid);
+                      if (cid || derivedGrade) {
+                        fetchCodeForCourse(cid, derivedGrade, defaultGroup, true);
                       }
                     }}
                     className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-amber-500 font-bold text-xs shadow-xs"
@@ -3222,11 +3297,17 @@ export const TraineesView: React.FC = () => {
                           {c.name} ({c.feeAmount} ج.م)
                         </option>
                       ))}
-                    {(courses || []).filter(c => c && (!formData.grade || c.grade === formData.grade || (c.name && formData.grade && (c.name.includes(formData.grade) || formData.grade.includes(c.name))))).length === 0 && (courses || []).map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.name} ({c.feeAmount} ج.م)
-                        </option>
-                      ))}
+                    {(courses || []).filter(c => c && !(!formData.grade || c.grade === formData.grade || (c.name && formData.grade && (c.name.includes(formData.grade) || formData.grade.includes(c.name))))).length > 0 && (
+                      <optgroup label="دورات أخرى">
+                        {(courses || [])
+                          .filter(c => c && !(!formData.grade || c.grade === formData.grade || (c.name && formData.grade && (c.name.includes(formData.grade) || formData.grade.includes(c.name)))))
+                          .map((c) => (
+                            <option key={c.id} value={c.id}>
+                              {c.name} ({c.feeAmount} ج.م)
+                            </option>
+                          ))}
+                      </optgroup>
+                    )}
                   </select>
                 </div>
                 <div>
@@ -3238,37 +3319,35 @@ export const TraineesView: React.FC = () => {
                       const selGroup = (groups || []).find(g => g?.id === gid);
                       if (selGroup) {
                         const selCourse = (courses || []).find(c => c?.id === selGroup.courseId);
+                        const grpGrade = selGroup.grade || selCourse?.grade || formData.grade;
                         setFormData({
                           ...formData,
                           groupId: gid,
                           courseId: selGroup.courseId || formData.courseId,
                           branchId: selGroup.branchId || formData.branchId,
-                          grade: selGroup.grade || selCourse?.grade || formData.grade,
+                          grade: grpGrade,
                           trainerId: selGroup.trainerId || formData.trainerId,
                           feeAmount: selGroup.feeAmount !== undefined && selGroup.feeAmount !== null ? selGroup.feeAmount : (selCourse ? selCourse.feeAmount : formData.feeAmount)
                         });
-                        fetchCodeForCourse(selGroup.courseId || formData.courseId, selGroup.grade || formData.grade, gid);
+                        fetchCodeForCourse(selGroup.courseId || formData.courseId, grpGrade, gid, true);
                       } else {
                         setFormData({ ...formData, groupId: gid });
-                        if (gid) {
-                          fetchCodeForCourse(formData.courseId, formData.grade, gid);
-                        }
                       }
                     }}
                     className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-amber-500 text-xs shadow-xs"
                   >
                     <option value="">-- اختر مجموعة --</option>
                     {(groups || [])
-                      .filter((g) => g && (!formData.courseId || g.courseId === formData.courseId) && (!formData.branchId || g.branchId === formData.branchId) && (!formData.grade || g.grade === formData.grade))
+                      .filter((g) => g && (!formData.courseId || g.courseId === formData.courseId) && (!formData.branchId || g.branchId === formData.branchId) && (!formData.grade || !g.grade || g.grade === formData.grade))
                       .map((g) => (
                         <option key={g.id} value={g.id}>
                           {g.name}
                         </option>
                       ))}
-                    {(groups || []).filter((g) => g && !((!formData.courseId || g.courseId === formData.courseId) && (!formData.branchId || g.branchId === formData.branchId) && (!formData.grade || g.grade === formData.grade))).length > 0 && (
+                    {(groups || []).filter((g) => g && !((!formData.courseId || g.courseId === formData.courseId) && (!formData.branchId || g.branchId === formData.branchId) && (!formData.grade || !g.grade || g.grade === formData.grade))).length > 0 && (
                       <optgroup label="مجموعات أخرى">
                         {(groups || [])
-                          .filter((g) => g && !((!formData.courseId || g.courseId === formData.courseId) && (!formData.branchId || g.branchId === formData.branchId) && (!formData.grade || g.grade === formData.grade)))
+                          .filter((g) => g && !((!formData.courseId || g.courseId === formData.courseId) && (!formData.branchId || g.branchId === formData.branchId) && (!formData.grade || !g.grade || g.grade === formData.grade)))
                           .map((g) => (
                             <option key={g.id} value={g.id}>
                               {g.name}
@@ -3731,20 +3810,35 @@ export const TraineesView: React.FC = () => {
                     onChange={(e) => {
                       const cid = e.target.value;
                       const selCourse = courses.find(c => c.id === cid);
+                      const derivedGrade = selCourse?.grade || formData.grade;
                       setFormData({
                         ...formData,
                         courseId: cid,
+                        grade: derivedGrade,
                         feeAmount: selCourse ? selCourse.feeAmount : formData.feeAmount
                       });
                     }}
                     className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 text-xs focus:outline-none"
                   >
                     <option value="">-- اختر دورة --</option>
-                    {courses.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name}
-                      </option>
-                    ))}
+                    {(courses || [])
+                      .filter(c => c && (!formData.grade || c.grade === formData.grade || (c.name && formData.grade && (c.name.includes(formData.grade) || formData.grade.includes(c.name)))))
+                      .map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name} ({c.feeAmount} ج.م)
+                        </option>
+                      ))}
+                    {(courses || []).filter(c => c && !(!formData.grade || c.grade === formData.grade || (c.name && formData.grade && (c.name.includes(formData.grade) || formData.grade.includes(c.name))))).length > 0 && (
+                      <optgroup label="دورات أخرى">
+                        {(courses || [])
+                          .filter(c => c && !(!formData.grade || c.grade === formData.grade || (c.name && formData.grade && (c.name.includes(formData.grade) || formData.grade.includes(c.name)))))
+                          .map((c) => (
+                            <option key={c.id} value={c.id}>
+                              {c.name} ({c.feeAmount} ج.م)
+                            </option>
+                          ))}
+                      </optgroup>
+                    )}
                   </select>
                 </div>
                 <div>
@@ -3767,16 +3861,16 @@ export const TraineesView: React.FC = () => {
                   >
                     <option value="">-- اختر مجموعة --</option>
                     {groups
-                      .filter((g) => (!formData.courseId || g.courseId === formData.courseId) && (!formData.branchId || g.branchId === formData.branchId))
+                      .filter((g) => (!formData.courseId || g.courseId === formData.courseId) && (!formData.branchId || g.branchId === formData.branchId) && (!formData.grade || !g.grade || g.grade === formData.grade))
                       .map((g) => (
                         <option key={g.id} value={g.id}>
                           {g.name}
                         </option>
                       ))}
-                    {groups.filter((g) => !((!formData.courseId || g.courseId === formData.courseId) && (!formData.branchId || g.branchId === formData.branchId))).length > 0 && (
+                    {groups.filter((g) => !((!formData.courseId || g.courseId === formData.courseId) && (!formData.branchId || g.branchId === formData.branchId) && (!formData.grade || !g.grade || g.grade === formData.grade))).length > 0 && (
                       <optgroup label="مجموعات أخرى">
                         {groups
-                          .filter((g) => !((!formData.courseId || g.courseId === formData.courseId) && (!formData.branchId || g.branchId === formData.branchId)))
+                          .filter((g) => !((!formData.courseId || g.courseId === formData.courseId) && (!formData.branchId || g.branchId === formData.branchId) && (!formData.grade || !g.grade || g.grade === formData.grade)))
                           .map((g) => (
                             <option key={g.id} value={g.id}>
                               {g.name}
@@ -4315,6 +4409,19 @@ export const TraineesView: React.FC = () => {
 
                 <button
                   type="button"
+                  onClick={() => setProfileTab('certificates')}
+                  className={`px-3.5 py-2 font-bold text-xs rounded-t-xl transition-all flex items-center gap-1.5 shrink-0 border-b-2 cursor-pointer ${
+                    profileTab === 'certificates'
+                      ? 'border-amber-500 text-amber-700 dark:text-amber-400 bg-amber-500/10'
+                      : 'border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'
+                  }`}
+                >
+                  <Award className="w-3.5 h-3.5" />
+                  <span>الشهادات والأوسمة ({(traineeProfileData?.certificates?.length || 0) + (traineeProfileData?.badges?.length || 0)})</span>
+                </button>
+
+                <button
+                  type="button"
                   onClick={() => setProfileTab('vault')}
                   className={`px-3.5 py-2 font-bold text-xs rounded-t-xl transition-all flex items-center gap-1.5 shrink-0 border-b-2 cursor-pointer ${
                     profileTab === 'vault'
@@ -4788,10 +4895,151 @@ export const TraineesView: React.FC = () => {
                   )}
                 </div>
               )}
+              {/* Tab 6: Certificates & Honors (الشهادات والأوسمة التكريمية) */}
+              {profileTab === 'certificates' && (
+                <div className="bg-white dark:bg-slate-850/60 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 space-y-4 shadow-2xs">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-3">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-10 h-10 rounded-2xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-500 text-lg">
+                        🎖️
+                      </div>
+                      <div>
+                        <h4 className="font-black text-sm text-slate-900 dark:text-white flex items-center gap-2">
+                          <span>سجل الشهادات المعتمدة وأوسمة التكريم الملكية</span>
+                        </h4>
+                        <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                          توثيق الإنجازات والأوسمة الممنوحة للمتدرب مع إمكانية المعاينة والطباعة الفورية
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setIsAwardModalOpenForTrainee(true)}
+                      className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500 hover:brightness-110 text-slate-950 font-black text-xs shadow-md transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                    >
+                      <Award className="w-4 h-4 text-slate-950" />
+                      <span>+ إصدار وسام تميز / شهادة تقدير 🎖️</span>
+                    </button>
+                  </div>
+
+                  {/* Issued Certificates Section */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h5 className="font-bold text-xs text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                        <span>📜 الشهادات المعتمدة الصادرة ({traineeProfileData?.certificates?.length || 0})</span>
+                      </h5>
+                    </div>
+
+                    {(!traineeProfileData?.certificates || traineeProfileData.certificates.length === 0) ? (
+                      <div className="text-center py-6 bg-slate-50 dark:bg-slate-900/50 rounded-xl border border-dashed border-slate-200 dark:border-slate-800 text-xs text-slate-500">
+                        لا توجد شهادات رسمية صادرة لهذا المتدرب بعد. اضغط على الزر أعلاه لمنح وسام تميز أو شهادة تفوق فوراً.
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {traineeProfileData.certificates.map((cert: any) => {
+                          const isMedal = cert.type === 'excellence' || cert.certificateTitle?.includes('وسام') || cert.grade?.includes('وسام');
+                          return (
+                            <div key={cert.id} className="p-3.5 bg-slate-50 dark:bg-slate-900/70 border border-slate-200 dark:border-slate-800 rounded-2xl space-y-2 hover:border-amber-400 transition-all">
+                              <div className="flex items-start justify-between gap-2">
+                                <span className={`text-[10px] font-black px-2 py-0.5 rounded-lg border ${
+                                  isMedal
+                                    ? 'bg-amber-400 text-slate-950 border-amber-500'
+                                    : 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700/60'
+                                }`}>
+                                  {isMedal ? '🏅 وسام تميز واستحقاق' : '📜 شهادة تقدير معتمدة'}
+                                </span>
+                                <span className="text-[10px] font-mono text-slate-500">{cert.serialNumber || cert.certificateNumber}</span>
+                              </div>
+                              <h5 className="font-black text-xs text-slate-900 dark:text-slate-100">{cert.certificateTitle || cert.grade}</h5>
+                              <p className="text-[11px] text-amber-700 dark:text-amber-400 font-bold">{cert.courseName}</p>
+                              <div className="flex items-center justify-between text-[10px] text-slate-500 pt-1 border-t border-slate-200 dark:border-slate-800">
+                                <span>تاريخ: {cert.issueDate}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setPrintData({
+                                      title: `${cert.certificateTitle || 'شهادة'} - ${activeTrainee.fullName}`,
+                                      type: 'certificate',
+                                      data: {
+                                        certificate: cert,
+                                        cert,
+                                        trainee: activeTrainee,
+                                        traineeName: activeTrainee.fullName,
+                                        courseName: cert.courseName,
+                                        grade: cert.grade,
+                                        serialNumber: cert.serialNumber || cert.certificateNumber,
+                                        issueDate: cert.issueDate,
+                                        branchName: branches.find(b => b.id === cert.branchId)?.name || 'مركز النجاح للتدريب والاستشارات'
+                                      }
+                                    });
+                                  }}
+                                  className="px-2.5 py-1 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-[10px] flex items-center gap-1 cursor-pointer"
+                                >
+                                  <Printer className="w-3 h-3" />
+                                  <span>معاينة وطباعة</span>
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Badges and Honors Section */}
+                  <div className="space-y-3 pt-3 border-t border-slate-100 dark:border-slate-800">
+                    <h5 className="font-bold text-xs text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                      <span>🏅 الأوسمة والشارات المكتسبة ({traineeProfileData?.badges?.length || 0})</span>
+                    </h5>
+                    {(!traineeProfileData?.badges || traineeProfileData.badges.length === 0) ? (
+                      <div className="text-center py-4 bg-slate-50 dark:bg-slate-900/50 rounded-xl text-xs text-slate-400">
+                        لا توجد شارات أو أوسمة مكتسبة بعد.
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                        {traineeProfileData.badges.map((b: any) => (
+                          <div key={b.id} className="p-3 bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 rounded-xl flex items-center gap-3">
+                            <span className="text-2xl shrink-0">{b.icon || '🏅'}</span>
+                            <div className="min-w-0">
+                              <h6 className="font-black text-xs text-slate-900 dark:text-slate-100 truncate">{b.badgeTitle || b.title}</h6>
+                              <p className="text-[10px] text-slate-500 truncate">{b.description}</p>
+                              <div className="flex items-center gap-2 text-[9px] text-slate-400 pt-0.5">
+                                {b.points && <span className="text-amber-600 dark:text-amber-400 font-bold font-mono">+{b.points} نقطة</span>}
+                                {b.date && <span>{b.date}</span>}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>,
         document.body
+      )}
+
+      {/* Trainee Lecture Excellence Certificate Modal */}
+      {isAwardModalOpenForTrainee && activeTrainee && (
+        <LectureExcellenceCertificateModal
+          isOpen={isAwardModalOpenForTrainee}
+          onClose={() => setIsAwardModalOpenForTrainee(false)}
+          initialData={{
+            traineeId: activeTrainee.id,
+            courseId: activeTrainee.courseId,
+            lectureTitle: 'المحاضرة التفاعلية والتطبيق العملي',
+            awardTitle: 'وسام تميز وتفوق واستحقاق عالي',
+            pointsEarned: 30
+          }}
+          onCertificateIssued={async () => {
+            if (activeTrainee) {
+              const updatedDetails = await api.getTraineeDetails(activeTrainee.id).catch(() => null);
+              if (updatedDetails) setTraineeProfileData(updatedDetails);
+            }
+          }}
+        />
       )}
 
       {/* ----------------- MODAL: Star & Reward Award Dialog ----------------- */}

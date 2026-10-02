@@ -48,6 +48,37 @@ let isQuotaExceeded = false;
 let quotaExceededNoticeTime = 0;
 const QUOTA_BACKOFF_MS = 30 * 1000; // Fast retry backoff (30s) if Google Cloud quota is hit
 
+// In-memory Firestore Quota Tracking metrics
+let readsCountToday = 0;
+let writesCountToday = 0;
+let deletesCountToday = 0;
+let currentTrackingDate = new Date().toISOString().split('T')[0];
+
+function checkDateRollover() {
+  const today = new Date().toISOString().split('T')[0];
+  if (today !== currentTrackingDate) {
+    currentTrackingDate = today;
+    readsCountToday = 0;
+    writesCountToday = 0;
+    deletesCountToday = 0;
+  }
+}
+
+export function recordFirestoreRead(count = 1) {
+  checkDateRollover();
+  readsCountToday += count;
+}
+
+export function recordFirestoreWrite(count = 1) {
+  checkDateRollover();
+  writesCountToday += count;
+}
+
+export function recordFirestoreDelete(count = 1) {
+  checkDateRollover();
+  deletesCountToday += count;
+}
+
 // High-frequency transient collections that should NEVER be pushed to remote Firestore
 const TRANSIENT_COLLECTIONS = new Set([
   'devices',
@@ -464,5 +495,42 @@ export async function loadFullDbFromFirestore(): Promise<any> {
   }
 
   return loadedCount > 0 ? result : null;
+}
+
+export function getFirestoreQuotaMetrics() {
+  checkDateRollover();
+  const DAILY_FREE_READS = 50000;
+  const DAILY_FREE_WRITES = 20000;
+  const DAILY_FREE_DELETES = 20000;
+
+  const now = Date.now();
+  const isBackoff = isQuotaExceeded && (now - quotaExceededNoticeTime < QUOTA_BACKOFF_MS);
+  const backoffRemaining = isBackoff ? Math.ceil((QUOTA_BACKOFF_MS - (now - quotaExceededNoticeTime)) / 1000) : 0;
+
+  return {
+    date: currentTrackingDate,
+    readsToday: readsCountToday,
+    writesToday: writesCountToday,
+    deletesToday: deletesCountToday,
+    limits: {
+      dailyReads: DAILY_FREE_READS,
+      dailyWrites: DAILY_FREE_WRITES,
+      dailyDeletes: DAILY_FREE_DELETES
+    },
+    remaining: {
+      reads: Math.max(0, DAILY_FREE_READS - readsCountToday),
+      writes: Math.max(0, DAILY_FREE_WRITES - writesCountToday)
+    },
+    percentageUsed: {
+      reads: Number(((readsCountToday / DAILY_FREE_READS) * 100).toFixed(2)),
+      writes: Number(((writesCountToday / DAILY_FREE_WRITES) * 100).toFixed(2))
+    },
+    circuitBreaker: {
+      active: isBackoff,
+      remainingSeconds: backoffRemaining,
+      lastNotice: quotaExceededNoticeTime ? new Date(quotaExceededNoticeTime).toISOString() : null
+    },
+    health: isBackoff ? 'quota_exhausted_backoff' : (readsCountToday > 45000 ? 'warning_near_limit' : 'optimal')
+  };
 }
 

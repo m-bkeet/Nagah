@@ -1,4 +1,4 @@
-import { api } from '../services/api';
+import { api, request } from '../services/api';
 import { NextLectureWidget } from "../components/NextLectureWidget";
 import { resilientOfflineService } from '../services/resilientOfflineService';
 import { cloudDb } from '../services/cloudDatabase';
@@ -70,7 +70,9 @@ import {
   Github,
   Youtube,
   ShieldAlert,
-  Layers
+  Layers,
+  Copy,
+  Gamepad2
 } from 'lucide-react';
 import { HomeworkSubmission, TraineeBadge } from '../types';
 import { StudentPhotoCropperModal } from '../components/StudentPhotoCropperModal';
@@ -222,6 +224,40 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
   const [celebrationData, setCelebrationData] = useState<{ title?: string; winnerName?: string; winnerPoints?: number }>({});
   const [sessionNotifs, setSessionNotifs] = useState<Array<{ id: string; title: string; message: string; time: string; type: string }>>([]);
 
+  // Active External Live Broadcast (Kahoot / ClassPoint / Quizizz PIN Broadcast)
+  const [activeExternalBroadcast, setActiveExternalBroadcast] = useState<{
+    title: string;
+    platform: string;
+    url: string;
+    gamePin?: string;
+    updatedAt: number;
+  } | null>(null);
+  const [isEmbeddedExternalModalOpen, setIsEmbeddedExternalModalOpen] = useState(false);
+  const [copiedBroadcastPin, setCopiedBroadcastPin] = useState(false);
+
+  // Fetch Active External Live Challenge (On Mount only - Zero background polling)
+  useEffect(() => {
+    let isMounted = true;
+    const fetchBroadcast = async () => {
+      try {
+        const res = await fetch('/api/lab/quick-question');
+        const json = await res.json();
+        if (isMounted) {
+          if (json && json.externalActivity && json.externalActivity.gamePin) {
+            setActiveExternalBroadcast(json.externalActivity);
+          } else {
+            setActiveExternalBroadcast(null);
+          }
+        }
+      } catch (err) {}
+    };
+
+    fetchBroadcast();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   useEffect(() => {
     const groupId = student?.groupDetails?.id || (student as any)?.groupId;
     if (!isLoggedIn || !groupId) return;
@@ -314,16 +350,14 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
       const savedPassword = localStorage.getItem('student_session_password') || '';
       if (savedCode && typeof navigator !== 'undefined' && navigator.onLine) {
         try {
-          const res = await fetch('/api/student/login', {
+          const data = await request<any>('/student/login', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ 
               codeOrPhone: savedCode,
               password: savedPassword
             })
           });
-          const data = await res.json();
-          if (res.ok && data.success) {
+          if (data && data.success) {
             const s = data.student;
             const cachedPhoto = localStorage.getItem('student_session_photo_' + s.id) || localStorage.getItem('student_session_photo_' + s.code);
             const studentObj = { ...s, photoUrl: s.photoUrl || cachedPhoto || '' };
@@ -669,16 +703,14 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
     const syncOnce = async () => {
       try {
         const savedPassword = localStorage.getItem('student_session_password') || '';
-        const res = await fetch('/api/student/login', {
+        const data = await request<any>('/student/login', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             codeOrPhone: student.code,
             password: savedPassword
           })
-        });
-        if (!res.ok) return;
-        const data = await res.json();
+        }).catch(() => null);
+        if (!data || !data.success) return;
         if (data.success && data.student) {
           setStudent(prev => {
             if (!prev) return data.student;
@@ -742,56 +774,47 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 4000);
 
-      const res = await fetch('/api/student/login', {
+      const data = await request<any>('/student/login', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           codeOrPhone: rawInput,
           password: studentPasswordInput.trim()
-        }),
-        signal: controller.signal
+        })
       });
-      clearTimeout(timeoutId);
 
-      if (res.ok) {
-        const data = await res.json();
-        if (data.success) {
-          apiAttemptSuccessful = true;
-          const s = data.student;
-          const cachedPhoto = localStorage.getItem('student_session_photo_' + s.id) || localStorage.getItem('student_session_photo_' + s.code);
-          const studentObj = { ...s, photoUrl: s.photoUrl || cachedPhoto || '' };
-          data.student = studentObj;
+      if (data && data.success) {
+        apiAttemptSuccessful = true;
+        const s = data.student;
+        const cachedPhoto = localStorage.getItem('student_session_photo_' + s.id) || localStorage.getItem('student_session_photo_' + s.code);
+        const studentObj = { ...s, photoUrl: s.photoUrl || cachedPhoto || '' };
+        data.student = studentObj;
 
-          setStudent(studentObj);
-          setTrainer(data.trainer);
-          setBadges(data.badges || []);
-          setHomeworks(data.homeworks || []);
-          setLabSchedules(data.labSchedules || []);
-          setGroupTasks(data.groupTasks || []);
-          setCertificates(data.certificates || []);
-          setPortalMessages(data.portalMessages || []);
-          
-          resilientOfflineService.saveToCache('student', data);
-          localStorage.setItem('nagah_student_active_session', JSON.stringify(data));
-          setIsOfflineFallbackData(false);
+        setStudent(studentObj);
+        setTrainer(data.trainer);
+        setBadges(data.badges || []);
+        setHomeworks(data.homeworks || []);
+        setLabSchedules(data.labSchedules || []);
+        setGroupTasks(data.groupTasks || []);
+        setCertificates(data.certificates || []);
+        setPortalMessages(data.portalMessages || []);
+        
+        resilientOfflineService.saveToCache('student', data);
+        localStorage.setItem('nagah_student_active_session', JSON.stringify(data));
+        setIsOfflineFallbackData(false);
 
-          localStorage.setItem('student_session_code', rawInput);
-          localStorage.setItem('student_session_password', studentPasswordInput.trim());
+        localStorage.setItem('student_session_code', rawInput);
+        localStorage.setItem('student_session_password', studentPasswordInput.trim());
 
-          if (data.portalMessages && data.portalMessages.length > 0) {
-            setActiveMessageModal(data.portalMessages[0]);
-          }
-
-          setIsLoggedIn(true);
-          return;
+        if (data.portalMessages && data.portalMessages.length > 0) {
+          setActiveMessageModal(data.portalMessages[0]);
         }
-      } else {
-        const data = await res.json().catch(() => null);
-        if (data?.requiresPassword) {
-          setRequiresPassword(true);
-          setLoginError(data.error || 'هذا الحساب محمي بكلمة مرور. يرجى إدخال كلمة المرور.');
-          return;
-        }
+
+        setIsLoggedIn(true);
+        return;
+      } else if (data?.requiresPassword) {
+        setRequiresPassword(true);
+        setLoginError(data.error || 'هذا الحساب محمي بكلمة مرور. يرجى إدخال كلمة المرور.');
+        return;
       }
     } catch (apiErr) {
       console.warn('[Student Portal] API route unreachable, attempting Cloud Firestore & local resilience...', apiErr);
@@ -1559,9 +1582,25 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
             </div>
 
             {loginError && (
-              <div className="p-3 rounded-2xl bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/30 text-rose-700 dark:text-rose-300 text-xs flex items-center gap-2">
-                <AlertTriangle className="w-4 h-4 text-rose-500 shrink-0" />
-                <span>{loginError}</span>
+              <div className="space-y-2">
+                <div className="p-3 rounded-2xl bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/30 text-rose-700 dark:text-rose-300 text-xs flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 text-rose-500 shrink-0" />
+                  <span>{loginError}</span>
+                </div>
+                {typeof window !== 'undefined' && window.location.hostname.includes('vercel.app') && (
+                  <a
+                    href="https://ais-pre-7wkppak7c63am6ebvulppu-481160813332.europe-west2.run.app"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="p-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-700 text-emerald-900 dark:text-emerald-200 text-xs flex items-center justify-between font-bold hover:bg-emerald-100 transition-all shadow-xs"
+                  >
+                    <span className="flex items-center gap-1.5">
+                      <Zap className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>هل تواجه بطء في فيرسيال؟ اضغط لفتح السيرفر المباشر 24/7 🚀</span>
+                    </span>
+                    <ExternalLink className="w-3.5 h-3.5 text-emerald-600" />
+                  </a>
+                )}
               </div>
             )}
 
@@ -1967,6 +2006,95 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
                 </div>
               </div>
             </div>
+
+            {/* ACTIVE LIVE EXTERNAL CHALLENGE BANNER (Kahoot / ClassPoint / Quizizz) */}
+            {activeExternalBroadcast && (
+              <div className="bg-gradient-to-r from-purple-950 via-indigo-900 to-purple-900 border-2 border-purple-400 rounded-3xl p-5 sm:p-6 shadow-2xl relative overflow-hidden animate-fadeIn text-white space-y-3">
+                <div className="flex items-center justify-between flex-wrap gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-2xl bg-purple-600/80 border border-purple-400 flex items-center justify-center text-2xl shadow-lg animate-pulse shrink-0">
+                      🎮
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="px-2.5 py-0.5 rounded-full bg-emerald-500 text-slate-950 font-black text-[10px] uppercase flex items-center gap-1 shadow-sm">
+                          <span className="w-2 h-2 rounded-full bg-white animate-ping" />
+                          بث مباشر نشط الآن
+                        </span>
+                        <span className="text-xs bg-purple-500/40 text-purple-200 px-2 py-0.5 rounded-md font-bold">
+                          {activeExternalBroadcast.platform || 'Kahoot'}
+                        </span>
+                      </div>
+                      <h3 className="text-base sm:text-lg font-black text-white mt-1">
+                        {activeExternalBroadcast.title || 'مسابقة كاهوت تفاعلية أطلقها المعلم الآن!'}
+                      </h3>
+                    </div>
+                  </div>
+
+                  {activeExternalBroadcast.gamePin && (
+                    <div className="flex items-center gap-2 bg-purple-950/90 border border-purple-400/50 px-4 py-2 rounded-2xl">
+                      <span className="text-xs text-purple-300 font-bold">كود اللعبة (PIN):</span>
+                      <span className="font-mono text-xl sm:text-2xl font-black text-amber-300 tracking-widest">
+                        {activeExternalBroadcast.gamePin}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText(activeExternalBroadcast.gamePin || '');
+                          setCopiedBroadcastPin(true);
+                          setTimeout(() => setCopiedBroadcastPin(false), 2000);
+                        }}
+                        className="px-2.5 py-1 bg-purple-800 hover:bg-purple-700 rounded-xl text-xs font-bold transition-all text-purple-200 cursor-pointer flex items-center gap-1"
+                        title="نسخ الكود"
+                      >
+                        <Copy className="w-3.5 h-3.5" />
+                        <span>{copiedBroadcastPin ? 'تم النسخ ✓' : 'نسخ'}</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-purple-800/60">
+                  <div className="text-xs text-purple-200 flex items-center gap-1.5">
+                    <span>اسمك المسجل:</span>
+                    <strong className="text-amber-300 bg-purple-950/90 px-2.5 py-1 rounded-lg border border-purple-700/60 font-black">
+                      {student?.fullName || 'الطالب'}
+                    </strong>
+                  </div>
+
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={() => setIsEmbeddedExternalModalOpen(true)}
+                      className="px-4 py-2 bg-purple-800/90 hover:bg-purple-700 text-white font-bold text-xs rounded-xl transition-all border border-purple-400/40 flex items-center gap-1.5 cursor-pointer shadow-md"
+                    >
+                      <span>📱 تشغيل داخل الصفحة</span>
+                    </button>
+
+                    <a
+                      href={
+                        (activeExternalBroadcast.platform || '').toLowerCase().includes('kahoot')
+                          ? (activeExternalBroadcast.gamePin ? `https://kahoot.it/?pin=${activeExternalBroadcast.gamePin}` : 'https://kahoot.it')
+                          : (activeExternalBroadcast.platform || '').toLowerCase().includes('quizizz')
+                          ? (activeExternalBroadcast.gamePin ? `https://quizizz.com/join?gc=${activeExternalBroadcast.gamePin}` : 'https://quizizz.com/join')
+                          : activeExternalBroadcast.url || 'https://www.classpoint.app'
+                      }
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={() => {
+                        try {
+                          navigator.clipboard.writeText(student?.fullName || '');
+                        } catch {}
+                      }}
+                      className="px-5 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs rounded-xl shadow-lg shadow-amber-500/30 hover:scale-105 active:scale-95 transition-all flex items-center gap-2 cursor-pointer"
+                    >
+                      <span>🚀 الدخول المباشر للمسابقة الآن</span>
+                      <ExternalLink className="w-4 h-4" />
+                    </a>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Navigation Bar */}
             <div className="bg-white/90 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-2 rounded-3xl shadow-xl shadow-indigo-950/5 backdrop-blur-2xl grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-9 gap-2">
@@ -3028,12 +3156,12 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
                           </div>
 
                           <div className="space-y-1">
-                            <h4 className="text-xs font-bold text-slate-900 dark:text-slate-100">{b.badgeTitle}</h4>
+                            <h4 className="text-xs font-bold text-slate-900 dark:text-slate-100">{b.badgeTitle || (b as any).title}</h4>
                             <p className="text-[10px] text-slate-500 dark:text-slate-400">
-                              النقاط المستحقة: <strong className="text-amber-600 dark:text-amber-400 font-mono">+{b.points} نقطة</strong>
+                              {(b as any).description || (b as any).category || 'تكريم وتميز'} • <strong className="text-amber-600 dark:text-amber-400 font-mono">+{b.points || 30} نقطة</strong>
                             </p>
                             <span className="text-[9px] text-slate-500 block">
-                              تاريخ الممنح: {new Date(b.awardedAt).toLocaleDateString('ar-EG')}
+                              تاريخ المنح: {(b as any).date || (b.awardedAt ? new Date(b.awardedAt).toLocaleDateString('ar-EG') : 'اليوم')}
                             </span>
                           </div>
                         </div>
@@ -3712,6 +3840,52 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
               alt="تكبير صفحة الواجب"
               className="max-h-[80vh] w-auto object-contain rounded-xl"
             />
+          </div>
+        </div>
+      )}
+
+      {/* Embedded Live External Game Modal (Kahoot / ClassPoint) */}
+      {isEmbeddedExternalModalOpen && activeExternalBroadcast && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 animate-fadeIn">
+          <div className="bg-slate-900 border-2 border-purple-500/60 rounded-3xl w-full max-w-4xl h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+            <div className="p-4 bg-purple-950/90 border-b border-purple-800 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <span className="text-2xl">🎮</span>
+                <div>
+                  <h3 className="text-white font-black text-sm sm:text-base">
+                    {activeExternalBroadcast.title || 'مسابقة كاهوت التفاعلية'}
+                  </h3>
+                  <p className="text-xs text-purple-300">
+                    كود اللعبة (PIN): <strong className="text-amber-300 font-mono font-black">{activeExternalBroadcast.gamePin}</strong> | اسمك: <strong className="text-emerald-300">{student?.fullName}</strong>
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <a
+                  href={activeExternalBroadcast.gamePin ? `https://kahoot.it/?pin=${activeExternalBroadcast.gamePin}` : (activeExternalBroadcast.url || 'https://kahoot.it')}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-3 py-1.5 bg-purple-700 hover:bg-purple-600 text-white rounded-xl text-xs font-bold flex items-center gap-1"
+                >
+                  <span>فتح بنافذة كاملة</span>
+                  <ExternalLink className="w-3.5 h-3.5" />
+                </a>
+                <button
+                  onClick={() => setIsEmbeddedExternalModalOpen(false)}
+                  className="p-2 text-slate-400 hover:text-white rounded-xl hover:bg-white/10"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+            <div className="flex-1 bg-slate-950 relative">
+              <iframe
+                src={activeExternalBroadcast.gamePin ? `https://kahoot.it/?pin=${activeExternalBroadcast.gamePin}` : (activeExternalBroadcast.url || 'https://kahoot.it')}
+                className="w-full h-full border-0"
+                title="Live Kahoot Game"
+                allow="fullscreen; clipboard-read; clipboard-write"
+              />
+            </div>
           </div>
         </div>
       )}

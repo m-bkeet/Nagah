@@ -8,12 +8,14 @@ import { InstallPwaButton } from './InstallPwaButton';
 import { AiAssistantsModal } from './AiAssistantsModal';
 import { PortalsQuickMenu } from './PortalsQuickMenu';
 import { ThemeQuickSwitcher } from './ThemeQuickSwitcher';
+import { CloudQuotaMonitorModal } from './CloudQuotaMonitorModal';
 import { getEffectiveCenterLogo, handleLogoError } from '../utils/centerLogo';
 import {
   Search,
   Bell,
   Building2,
   Wifi,
+  Cloud,
   Globe,
   LogOut,
   UserCheck,
@@ -50,6 +52,7 @@ export const Header: React.FC<HeaderProps> = ({ toggleSidebar, onNavigate }) => 
   const [isUserMenuPinned, setIsUserMenuPinned] = useState(false);
   const [isNotifMenuPinned, setIsNotifMenuPinned] = useState(false);
   const [showPortalsMenu, setShowPortalsMenu] = useState(false);
+  const [isQuotaModalOpen, setIsQuotaModalOpen] = useState(false);
 
   const userMenuRef = React.useRef<HTMLDivElement>(null);
   const notifMenuRef = React.useRef<HTMLDivElement>(null);
@@ -409,6 +412,17 @@ export const Header: React.FC<HeaderProps> = ({ toggleSidebar, onNavigate }) => 
         {/* Global Themes & Color Switcher */}
         <ThemeQuickSwitcher />
 
+        {/* Cloud & Quota Monitor Button */}
+        <button
+          type="button"
+          onClick={() => setIsQuotaModalOpen(true)}
+          className="p-1.5 rounded-xl border border-amber-300/80 dark:border-amber-700/80 bg-amber-50 hover:bg-amber-100/90 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300 flex items-center gap-1.5 transition-all cursor-pointer shadow-xs active:scale-95 shrink-0"
+          title="مراقبة كوتا Vercel و Firestore وروابط الطوارئ المباشرة"
+        >
+          <Cloud className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+          <span className="hidden xl:inline font-bold text-xs">الكوتا السحابية</span>
+        </button>
+
         {/* Notifications Popover */}
         <div
           className="relative"
@@ -578,6 +592,13 @@ export const Header: React.FC<HeaderProps> = ({ toggleSidebar, onNavigate }) => 
         isOpen={isAiModalOpen}
         onClose={() => setIsAiModalOpen(false)}
         initialTab={aiModalTab}
+      />
+
+      {/* Cloud & Quota Monitor Modal */}
+      <CloudQuotaMonitorModal
+        isOpen={isQuotaModalOpen}
+        onClose={() => setIsQuotaModalOpen(false)}
+        showToast={showToast}
       />
     </header>
   );

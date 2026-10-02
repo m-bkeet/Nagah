@@ -44,7 +44,15 @@ import {
   HomeworkSubmission
 } from '../src/types';
 
+import { getSystemQuotaStatus, recordSystemInvocation } from './systemQuotaService';
+
 export const apiRouter = express.Router();
+
+// Track every API invocation for Vercel/Cloud quota telemetry
+apiRouter.use((req, res, next) => {
+  recordSystemInvocation();
+  next();
+});
 
 // Mount AI Language Lab sub-router
 apiRouter.use('/language-lab', languageLabRouter);
@@ -77,6 +85,51 @@ apiRouter.get('/health', (req: Request, res: Response) => {
       environment: process.env.NODE_ENV || "development",
     }
   });
+});
+
+// System Quota & Cloud Telemetry API (Vercel & Firestore Usage Health)
+apiRouter.get('/system/quota-status', async (req: Request, res: Response) => {
+  try {
+    const forceRefresh = req.query.forceRefresh === 'true' || req.query.fresh === 'true';
+    const status = await getSystemQuotaStatus(forceRefresh);
+    res.json(status);
+  } catch (err: any) {
+    res.status(500).json({ error: 'Failed to retrieve quota status: ' + err.message });
+  }
+});
+
+apiRouter.post('/system/quota-refresh', async (req: Request, res: Response) => {
+  try {
+    const status = await getSystemQuotaStatus(true);
+    res.json({ success: true, status });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+apiRouter.post('/system/quota-config', async (req: Request, res: Response) => {
+  try {
+    const { token, projectId, teamId } = req.body || {};
+    const curDb = db.getData();
+    if (!curDb.settings) curDb.settings = {} as any;
+    
+    curDb.settings.vercelApiToken = (token || '').trim();
+    if (projectId) curDb.settings.vercelProjectId = (projectId || '').trim();
+    if (teamId !== undefined) curDb.settings.vercelTeamId = (teamId || '').trim();
+    
+    // Test the token immediately
+    const updatedStatus = await getSystemQuotaStatus(true);
+    res.json({
+      success: true,
+      message: updatedStatus.vercel.connected 
+        ? 'تم ربط حساب Vercel بنجاح وقراءة الاستهلاك اللحظي!' 
+        : 'تم حفظ الإعدادات بنجاح.',
+      vercel: updatedStatus.vercel,
+      status: updatedStatus
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: 'تعذر حفظ إعدادات Vercel: ' + err.message });
+  }
 });
 
 // Center Settings API Endpoints
@@ -1025,23 +1078,12 @@ apiRouter.get('/trainees/next-code', async (req: Request, res: Response) => {
     let targetPrefix = typeof prefix === 'string' ? prefix : '';
     let targetGroupId = typeof groupId === 'string' && groupId ? groupId : undefined;
 
-    // Resolve course/grade from group if not explicitly provided
-    if (targetGroupId && !targetPrefix && !courseId && !grade) {
-      const groups = await GroupRepo.getAll();
-      const grp = groups.find(g => g.id === targetGroupId);
-      if (grp) {
-        if (grp.courseId) {
-          const courses = await CourseRepo.getAll();
-          const course = courses.find(c => c.id === grp.courseId);
-          if (course) {
-            targetPrefix = db.getPrefixForGradeOrCourse(course.name || course.grade || '');
-          }
-        } else if (grp.grade) {
-          targetPrefix = db.getPrefixForGradeOrCourse(grp.grade);
-        }
-      }
+    // Priority 1: Grade provided explicitly
+    if (!targetPrefix && typeof grade === 'string' && grade) {
+      targetPrefix = db.getPrefixForGradeOrCourse(grade);
     }
 
+    // Priority 2: Course provided explicitly
     if (!targetPrefix && typeof courseId === 'string' && courseId) {
       const courses = await CourseRepo.getAll();
       const course = courses.find(c => c.id === courseId);
@@ -1049,8 +1091,22 @@ apiRouter.get('/trainees/next-code', async (req: Request, res: Response) => {
         targetPrefix = db.getPrefixForGradeOrCourse(course.name || course.grade || '');
       }
     }
-    if (!targetPrefix && typeof grade === 'string' && grade) {
-      targetPrefix = db.getPrefixForGradeOrCourse(grade);
+
+    // Priority 3: Resolve course/grade from group if not explicitly provided
+    if (targetGroupId && !targetPrefix && !courseId && !grade) {
+      const groups = await GroupRepo.getAll();
+      const grp = groups.find(g => g.id === targetGroupId);
+      if (grp) {
+        if (grp.grade) {
+          targetPrefix = db.getPrefixForGradeOrCourse(grp.grade);
+        } else if (grp.courseId) {
+          const courses = await CourseRepo.getAll();
+          const course = courses.find(c => c.id === grp.courseId);
+          if (course) {
+            targetPrefix = db.getPrefixForGradeOrCourse(course.name || course.grade || '');
+          }
+        }
+      }
     }
     const resolvedPrefix = targetPrefix
       ? (targetPrefix.length === 1 ? targetPrefix.toUpperCase() : db.getPrefixForGradeOrCourse(targetPrefix))
@@ -1255,7 +1311,15 @@ apiRouter.get('/trainees/:id', async (req: Request, res: Response) => {
     const points = Array.from(ptMap.values()).sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
     const exams = (db.getData().examResults || []).filter(er => traineeKeys.has(String(er.traineeId).trim().toLowerCase()));
 
-    res.json({ trainee, payments, attendance, points, exams });
+    // Combine Certificates and Badges for this trainee
+    const certificates = (db.getData().certificates || []).filter((c: any) => {
+      return [c.traineeId, c.studentId, c.traineeCode, c.studentCode, c.traineeName, c.studentName].some(cand => cand && traineeKeys.has(String(cand).trim().toLowerCase()));
+    });
+    const badges = (db.getData().badges || []).filter((b: any) => {
+      return [b.traineeId, b.studentId, b.traineeCode, b.studentCode].some(cand => cand && traineeKeys.has(String(cand).trim().toLowerCase()));
+    });
+
+    res.json({ trainee, payments, attendance, points, exams, certificates, badges });
   } catch(e: any) { res.status(500).json({ success: false, error: e.message }); }
 });
 
@@ -1395,17 +1459,17 @@ apiRouter.put('/trainees/:id', async (req: Request, res: Response) => {
 
       let oldCourseId = currentTrainee.courseId;
       let oldGrade = currentTrainee.grade;
-      let newCourseId = updates.courseId !== undefined ? updates.courseId : oldCourseId;
       let newGrade = updates.grade !== undefined ? updates.grade : oldGrade;
+      let newCourseId = updates.courseId !== undefined ? updates.courseId : oldCourseId;
       
       let targetPrefix = '';
-      if (newCourseId) {
+      if (newGrade) {
+        targetPrefix = db.getPrefixForGradeOrCourse(newGrade);
+      }
+      if (!targetPrefix && newCourseId) {
         const courses = await CourseRepo.getAll();
         const course = courses.find(c => c.id === newCourseId);
-        if (course) targetPrefix = db.getPrefixForGradeOrCourse(course.name);
-      }
-      if (!targetPrefix && newGrade) {
-        targetPrefix = db.getPrefixForGradeOrCourse(newGrade);
+        if (course) targetPrefix = db.getPrefixForGradeOrCourse(course.grade || course.name);
       }
       targetPrefix = (targetPrefix || 'A').toUpperCase();
 
@@ -1414,12 +1478,12 @@ apiRouter.put('/trainees/:id', async (req: Request, res: Response) => {
       const m = currentCode.match(/^([a-zA-Z]+)/);
       if (m) currentPrefix = m[1].toUpperCase();
 
-      const gradeOrCourseChanged = (newCourseId && newCourseId !== oldCourseId) || (newGrade && newGrade !== oldGrade);
-      const isCodeMismatched = currentPrefix && targetPrefix && currentPrefix !== targetPrefix;
+      const gradeChanged = Boolean(newGrade && oldGrade && newGrade !== oldGrade);
       const isForceRegen = updates.forceRegenerateCode === true;
-      const userProvidedValidNewCode = updates.code && updates.code !== currentTrainee.code && updates.code.toUpperCase().startsWith(targetPrefix);
+      const userProvidedValidNewCode = updates.code && updates.code !== currentTrainee.code;
 
-      if ((gradeOrCourseChanged || isCodeMismatched || isForceRegen || !currentCode) && !userProvidedValidNewCode) {
+      // STRICT PRESERVATION: Do not re-scramble existing code on normal edits unless explicitly requested or grade genuinely changed
+      if (!currentCode || isForceRegen || (gradeChanged && currentPrefix !== targetPrefix && !userProvidedValidNewCode)) {
         const regex = new RegExp(`^${targetPrefix}-?(\\d+)$`, 'i');
         let maxNum = 0;
         allTrainees.forEach(t => {
@@ -1441,6 +1505,9 @@ apiRouter.put('/trainees/:id', async (req: Request, res: Response) => {
         updates.code = autoNewCode;
         updates.prefix = targetPrefix;
         console.log(`[TRAINEE_UPDATE] Auto-assigned unique code for trainee ${id}: ${currentTrainee.code} -> ${updates.code}`);
+      } else if (!updates.code && currentCode) {
+        updates.code = currentCode;
+        updates.prefix = currentPrefix || targetPrefix;
       }
     }
     
@@ -4896,20 +4963,26 @@ apiRouter.get('/finance/expenses', async (req: Request, res: Response) => {
 
 apiRouter.post('/finance/expenses', async (req: Request, res: Response) => {
   try {
-    const { category, amount, beneficiary, description, branchId, notes, documentNumber } = req.body;
+    const { category, amount, beneficiary, description, branchId, notes, documentNumber, date, title, paymentMethod, paidByUserId, paidByUserName } = req.body;
     if (!category || !amount || Number(amount) <= 0 || !branchId) {
       return res.status(400).json({ error: 'التصنيف والمبلغ والفرع حقول إجبارية' });
     }
 
+    const expenseDate = date ? String(date).trim() : new Date().toISOString().split('T')[0];
+
     const newExpense: Expense = {
       id: 'exp-' + Date.now(),
       documentNumber: documentNumber || `EXP-${Date.now().toString().slice(-6)}`,
-      date: new Date().toISOString().split('T')[0],
+      date: expenseDate,
+      title: title?.trim() || description?.trim() || category,
       category,
       branchId,
       beneficiary: beneficiary?.trim() || 'عام',
       amount: Number(amount),
-      description: description?.trim() || '',
+      description: description?.trim() || title?.trim() || '',
+      paymentMethod: paymentMethod || 'cash',
+      paidByUserId: paidByUserId || 'admin',
+      paidByUserName: paidByUserName || 'مسؤول الحسابات',
       notes: notes || '',
       createdAt: new Date().toISOString()
     };
@@ -4917,16 +4990,74 @@ apiRouter.post('/finance/expenses', async (req: Request, res: Response) => {
     const createdExpense = await ExpenseRepo.create(newExpense.id, newExpense);
 
     db.logAudit({
-      userId: 'admin',
-      userName: 'مسؤول الحسابات',
+      userId: paidByUserId || 'admin',
+      userName: paidByUserName || 'مسؤول الحسابات',
       action: 'تسجيل مصروف',
       entity: 'المصروفات',
       entityId: createdExpense.id,
       branchId: createdExpense.branchId,
-      details: `صرف مبلغ ${createdExpense.amount} ج.م تصنيف (${createdExpense.category}) - المستفيد: ${createdExpense.beneficiary}`
+      details: `صرف مبلغ ${createdExpense.amount} ج.م تصنيف (${createdExpense.category}) - المستفيد: ${createdExpense.beneficiary} - الفرع: ${createdExpense.branchId} - التاريخ: ${createdExpense.date}`
     });
 
     res.json({ success: true, expense: createdExpense });
+  } catch(e: any) { res.status(500).json({ error: e.message }); }
+});
+
+apiRouter.put('/finance/expenses/:id', async (req: Request, res: Response) => {
+  try {
+    const id = req.params.id;
+    const existing = await ExpenseRepo.getById(id);
+    if (!existing) return res.status(404).json({ error: 'سند الصرف غير موجود' });
+
+    const { category, amount, beneficiary, description, branchId, notes, documentNumber, date, title, paymentMethod, paidByUserId, paidByUserName } = req.body;
+
+    const updated = await ExpenseRepo.update(id, {
+      ...(category ? { category } : {}),
+      ...(amount !== undefined ? { amount: Number(amount) } : {}),
+      ...(branchId ? { branchId } : {}),
+      ...(beneficiary !== undefined ? { beneficiary: beneficiary.trim() } : {}),
+      ...(date ? { date: String(date).trim() } : {}),
+      ...(title !== undefined ? { title: title.trim() } : {}),
+      ...(description !== undefined ? { description: description.trim() } : {}),
+      ...(paymentMethod ? { paymentMethod } : {}),
+      ...(documentNumber ? { documentNumber } : {}),
+      ...(notes !== undefined ? { notes } : {}),
+      ...(paidByUserName ? { paidByUserName } : {})
+    });
+
+    db.logAudit({
+      userId: paidByUserId || 'admin',
+      userName: paidByUserName || 'مسؤول الحسابات',
+      action: 'تعديل مصروف',
+      entity: 'المصروفات',
+      entityId: id,
+      branchId: updated?.branchId || existing.branchId,
+      details: `تعديل سند الصرف ${updated?.documentNumber || existing.documentNumber} بمبلغ ${updated?.amount || existing.amount} ج.م`
+    });
+
+    res.json({ success: true, expense: updated });
+  } catch(e: any) { res.status(500).json({ error: e.message }); }
+});
+
+apiRouter.delete('/finance/expenses/:id', async (req: Request, res: Response) => {
+  try {
+    const id = req.params.id;
+    const existing = await ExpenseRepo.getById(id);
+    if (!existing) return res.status(404).json({ error: 'سند الصرف غير موجود' });
+
+    await ExpenseRepo.delete(id);
+
+    db.logAudit({
+      userId: 'admin',
+      userName: 'مسؤول الحسابات',
+      action: 'حذف مصروف',
+      entity: 'المصروفات',
+      entityId: id,
+      branchId: existing.branchId,
+      details: `حذف سند الصرف ${existing.documentNumber} بمبلغ ${existing.amount} ج.م`
+    });
+
+    res.json({ success: true, message: 'تم حذف سند الصرف بنجاح' });
   } catch(e: any) { res.status(500).json({ error: e.message }); }
 });
 
@@ -4994,6 +5125,36 @@ apiRouter.post('/finance/trainer-settlements', (req: Request, res: Response) => 
   });
 
   res.json({ success: true, settlement, trainer });
+});
+
+apiRouter.delete('/finance/trainer-settlements/:id', async (req: Request, res: Response) => {
+  try {
+    const id = req.params.id;
+    const settlements = db.getData().trainerSettlements || [];
+    const idx = settlements.findIndex(s => s.id === id);
+    if (idx === -1) {
+      return res.status(404).json({ error: 'التسوية غير موجودة' });
+    }
+    const settlement = settlements[idx];
+    settlements.splice(idx, 1);
+
+    // Also remove any corresponding expense in expenses ledger
+    const expenses = db.getData().expenses || [];
+    const expIdx = expenses.findIndex(e => 
+      e.id === `exp-tr-${settlement.id.replace('ts-', '')}` || 
+      (e.notes && e.notes.includes(settlement.receiptNumber))
+    );
+    if (expIdx >= 0) {
+      expenses.splice(expIdx, 1);
+    }
+
+    db.recalculateTrainerFinances(settlement.trainerId);
+    db.save();
+
+    res.json({ success: true, message: 'تم حذف وإلغاء سند التسوية بنجاح' });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 apiRouter.get('/reports/financial_summary', async (req: Request, res: Response) => {
@@ -5268,6 +5429,7 @@ apiRouter.get('/finance/summary', async (req: Request, res: Response) => {
 
     const allSettlementsRaw = db.getData().trainerSettlements || [];
     const allBranchesRaw = (await BranchRepo.getAll().catch(() => [])) || db.getData().branches || [];
+    const allOwnerWithdrawalsRaw = db.getData().ownerWithdrawals || [];
 
     // Filter valid approved payments across entire system
     const validAllPayments = (allPaymentsRaw || []).filter(p => p.status === 'approved' || (!p.status && !(p as any).proofImageUrl && !(p as any).proofUrl));
@@ -5282,11 +5444,23 @@ apiRouter.get('/finance/summary', async (req: Request, res: Response) => {
     const branchBreakdowns = (allBranchesRaw || []).map((b: any) => {
       const bPayments = validAllPayments.filter(p => p.branchId === b.id);
       const bTodayPayments = bPayments.filter(p => p.date === todayDateStr);
+      const bExpenses = (allExpensesRaw || []).filter(e => e.branchId === b.id);
+      const bSettlements = (allSettlementsRaw || []).filter(s => s.branchId === b.id);
+      const bWithdrawals = (allOwnerWithdrawalsRaw || []).filter(w => w.branchId === b.id);
       const bTrainees = (allTraineesRaw || []).filter(t => t.branchId === b.id);
+      const bTotalRevenue = bPayments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+      const bGeneralExpenses = bExpenses.filter(e => e.category !== 'trainers' && !e.id?.startsWith('exp-tr-') && !bSettlements.some(s => s.receiptNumber && e.notes?.includes(s.receiptNumber)));
+      const bTotalExpenses = bGeneralExpenses.reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
+      const bTotalPayouts = bSettlements.reduce((sum, s) => sum + (Number(s.amount) || 0), 0);
+      const bTotalWithdrawals = bWithdrawals.reduce((sum, w) => sum + (Number(w.amount) || 0), 0);
       return {
         branchId: b.id,
         branchName: b.name || (b.id === 'branch-1' ? 'فرع النجاح' : 'فرع بدر'),
-        totalRevenue: bPayments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0),
+        totalRevenue: bTotalRevenue,
+        totalExpenses: bTotalExpenses,
+        totalPayouts: bTotalPayouts,
+        totalWithdrawals: bTotalWithdrawals,
+        netTreasury: Math.max(0, bTotalRevenue - bTotalExpenses - bTotalPayouts - bTotalWithdrawals),
         todayRevenue: bTodayPayments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0),
         totalPaymentsCount: bPayments.length,
         todayPaymentsCount: bTodayPayments.length,
@@ -5298,29 +5472,35 @@ apiRouter.get('/finance/summary', async (req: Request, res: Response) => {
     let payments = [...validAllPayments];
     let expenses = [...(allExpensesRaw || [])];
     let settlements = [...(allSettlementsRaw || [])];
+    let withdrawals = [...(allOwnerWithdrawalsRaw || [])];
     let trainees = [...(allTraineesRaw || [])];
 
-    if (branchId && branchId !== 'all') {
+    if (branchId && branchId !== 'all' && branchId !== 'undefined' && branchId !== 'null' && branchId !== '') {
       payments = payments.filter(p => p.branchId === branchId);
       expenses = expenses.filter(e => e.branchId === branchId);
       settlements = settlements.filter(s => s.branchId === branchId);
+      withdrawals = withdrawals.filter(w => w.branchId === branchId);
       trainees = trainees.filter(t => t.branchId === branchId);
     }
     if (startDate) {
       payments = payments.filter(p => p.date >= String(startDate));
       expenses = expenses.filter(e => e.date >= String(startDate));
       settlements = settlements.filter(s => s.date >= String(startDate));
+      withdrawals = withdrawals.filter(w => w.date >= String(startDate));
     }
     if (endDate) {
       payments = payments.filter(p => p.date <= String(endDate));
       expenses = expenses.filter(e => e.date <= String(endDate));
       settlements = settlements.filter(s => s.date <= String(endDate));
+      withdrawals = withdrawals.filter(w => w.date <= String(endDate));
     }
 
+    const generalExpenses = expenses.filter(e => e.category !== 'trainers' && !e.id?.startsWith('exp-tr-') && !settlements.some(s => s.receiptNumber && e.notes?.includes(s.receiptNumber)));
     const totalRevenue = payments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
-    const totalExpenses = expenses.reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
+    const totalExpenses = generalExpenses.reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
     const totalTrainerPayouts = settlements.reduce((sum, s) => sum + (Number(s.amount) || 0), 0);
-    const netTreasury = totalRevenue - totalExpenses - totalTrainerPayouts;
+    const totalOwnerWithdrawals = withdrawals.reduce((sum, w) => sum + (Number(w.amount) || 0), 0);
+    const netTreasury = Math.max(0, totalRevenue - totalExpenses - totalTrainerPayouts - totalOwnerWithdrawals);
 
     const totalTraineeRemaining = trainees.reduce((sum, t) => sum + (Number(t.remainingAmount) || 0), 0);
     const totalExpectedRevenue = trainees.reduce((sum, t) => sum + (Number(t.netAmount) || 0), 0);
@@ -5337,12 +5517,13 @@ apiRouter.get('/finance/summary', async (req: Request, res: Response) => {
       .filter(t => branchId && branchId !== 'all' ? t.branchId === branchId : true)
       .reduce((sum, t) => sum + (Number(t.balanceDue) || 0), 0);
 
-    const totalCenterShare = Math.max(0, totalRevenue - totalTrainerPayouts);
+    const totalCenterShare = Math.max(0, totalRevenue - totalTrainerPayouts - totalExpenses);
 
     res.json({
       totalRevenue,
       totalExpenses,
       totalTrainerPayouts,
+      totalOwnerWithdrawals,
       netTreasury,
       totalTraineeRemaining,
       totalExpectedRevenue,
@@ -5356,10 +5537,110 @@ apiRouter.get('/finance/summary', async (req: Request, res: Response) => {
       todayAllPaymentsCount: todayAllPayments.length,
       branchBreakdowns,
       paymentsCount: payments.length,
-      expensesCount: expenses.length
+      expensesCount: expenses.length,
+      ownerWithdrawalsCount: withdrawals.length
     });
   } catch (err: any) {
     res.status(500).json({ error: 'تعذر جلب الخلاصة المالية: ' + err.message });
+  }
+});
+
+// Owner Withdrawals Endpoints (صرف حصة ومسحوبات صاحب المركز)
+apiRouter.get('/finance/owner-withdrawals', async (req: Request, res: Response) => {
+  try {
+    const { branchId } = req.query;
+    let list = db.getData().ownerWithdrawals || [];
+    if (branchId && branchId !== 'all' && branchId !== 'undefined' && branchId !== 'null' && branchId !== '') {
+      list = list.filter((w: any) => w.branchId === branchId);
+    }
+    res.json(list.sort((a: any, b: any) => new Date(b.createdAt || b.date).getTime() - new Date(a.createdAt || a.date).getTime()));
+  } catch (err: any) {
+    res.status(500).json({ error: 'فشل جلب مسحوبات المالك: ' + err.message });
+  }
+});
+
+apiRouter.post('/finance/owner-withdrawal', async (req: Request, res: Response) => {
+  try {
+    const { amount, date, notes, paymentMethod, branchId, withdrawnByUserId, withdrawnByUserName } = req.body;
+    const withdrawAmount = Number(amount);
+    if (!withdrawAmount || isNaN(withdrawAmount) || withdrawAmount <= 0) {
+      return res.status(400).json({ error: 'يرجى إدخال مبلغ صحيح للصرف' });
+    }
+
+    if (!db.getData().ownerWithdrawals) {
+      db.getData().ownerWithdrawals = [];
+    }
+
+    // Calculate current treasury balance before withdrawal
+    const payments = (db.getData().payments || []).filter((p: any) => p.status === 'approved' || (!p.status && !p.proofImageUrl));
+    const expenses = db.getData().expenses || [];
+    const settlements = db.getData().trainerSettlements || [];
+    const priorWithdrawals = db.getData().ownerWithdrawals || [];
+
+    const totalRev = payments.reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0);
+    const totalExp = expenses.reduce((sum: number, e: any) => sum + (Number(e.amount) || 0), 0);
+    const totalSet = settlements.reduce((sum: number, s: any) => sum + (Number(s.amount) || 0), 0);
+    const totalPriorWith = priorWithdrawals.reduce((sum: number, w: any) => sum + (Number(w.amount) || 0), 0);
+    const treasuryBefore = Math.max(0, totalRev - totalExp - totalSet - totalPriorWith);
+
+    if (withdrawAmount > treasuryBefore) {
+      return res.status(400).json({ 
+        error: `المبلغ المطلوب (${withdrawAmount.toLocaleString()} ج.م) أكبر من الرصيد المتوفر حالياً بالخزنة (${treasuryBefore.toLocaleString()} ج.م)` 
+      });
+    }
+
+    const receiptNumber = `OWNER-WITH-${Date.now().toString().slice(-6)}`;
+    const newWithdrawal = {
+      id: `ow-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      receiptNumber,
+      date: date || new Date().toISOString().split('T')[0],
+      amount: withdrawAmount,
+      branchId: branchId || 'branch-1',
+      withdrawnByUserId: withdrawnByUserId || 'owner',
+      withdrawnByUserName: withdrawnByUserName || 'صاحب المركز (المدير العام)',
+      paymentMethod: paymentMethod || 'cash',
+      notes: notes || 'صرف دفعة من حصة وأرباح صاحب المركز من الخزينة',
+      remainingTreasuryAfter: Math.max(0, treasuryBefore - withdrawAmount),
+      createdAt: new Date().toISOString()
+    };
+
+    db.getData().ownerWithdrawals.push(newWithdrawal);
+    db.saveImmediate();
+
+    // Log in audit log
+    db.logAudit({
+      userId: withdrawnByUserId || 'owner',
+      userName: withdrawnByUserName || 'صاحب المركز',
+      action: 'صرف حصة صاحب المركز',
+      entity: 'الخزينة العامة',
+      entityId: newWithdrawal.id,
+      branchId: newWithdrawal.branchId,
+      details: `تم صرف مبلغ ${withdrawAmount.toLocaleString()} ج.م كحصة صاحب المركز. الرصيد المتبقي في الخزنة: ${newWithdrawal.remainingTreasuryAfter.toLocaleString()} ج.م`
+    });
+
+    res.json({
+      success: true,
+      withdrawal: newWithdrawal,
+      message: 'تم تسجيل صرف حصة صاحب المركز بنجاح وتحديث رصيد الخزينة المتبقي'
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: 'تعذر تنفيذ صرف حصة المركز: ' + err.message });
+  }
+});
+
+apiRouter.delete('/finance/owner-withdrawal/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    if (!db.getData().ownerWithdrawals) return res.status(404).json({ error: 'السند غير موجود' });
+    const initialLen = db.getData().ownerWithdrawals.length;
+    db.getData().ownerWithdrawals = db.getData().ownerWithdrawals.filter((w: any) => w.id !== id);
+    if (db.getData().ownerWithdrawals.length === initialLen) {
+      return res.status(404).json({ error: 'السند غير موجود' });
+    }
+    db.saveImmediate();
+    res.json({ success: true, message: 'تم إلغاء سند صرف حصة المركز بنجاح' });
+  } catch (err: any) {
+    res.status(500).json({ error: 'فشل إلغاء السند: ' + err.message });
   }
 });
 
@@ -7527,24 +7808,32 @@ apiRouter.post('/certificates', async (req: Request, res: Response) => {
     const certData = req.body;
     if (!certData) return res.status(400).json({ error: 'بيانات الشهادة مطلوبة' });
 
+    const trainees = await TraineeRepo.getAll();
+    const matchedTr = trainees.find(t => t.id === (certData.traineeId || certData.studentId));
+    const effectiveBranchId = certData.branchId || matchedTr?.branchId || 'branch-1';
+    const isMedal = (certData.grade && certData.grade.includes('وسام')) || 
+                    certData.type === 'excellence' || 
+                    (certData.certificateTitle && certData.certificateTitle.includes('وسام'));
+
     const newCert: any = {
       id: certData.id || 'cert-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
       traineeId: certData.traineeId || certData.studentId,
-      traineeName: certData.traineeName || certData.studentName || 'المتدرب',
-      courseId: certData.courseId || '',
+      traineeName: certData.traineeName || certData.studentName || matchedTr?.fullName || 'المتدرب',
+      courseId: certData.courseId || matchedTr?.courseId || '',
       courseName: certData.courseName || '',
+      branchId: effectiveBranchId,
       issueDate: certData.issueDate || new Date().toISOString().split('T')[0],
-      grade: certData.grade || 'امتياز',
+      grade: certData.grade || (isMedal ? 'وسام تميز وتفوق' : 'امتياز'),
       certificateNumber: certData.certificateNumber || 'CERT-' + Math.floor(100000 + Math.random() * 900000),
       serialNumber: certData.serialNumber || certData.certificateNumber || '',
       durationText: certData.durationText || '',
       trainerName: certData.trainerName || '',
-      managerName: certData.managerName || '',
-      certificateTitle: certData.certificateTitle || '',
-      certificateTitleEn: certData.certificateTitleEn || '',
+      managerName: certData.managerName || 'د. محمد رمضان بخيت',
+      certificateTitle: certData.certificateTitle || (isMedal ? 'وسام تميز' : 'شهادة تقدير'),
+      certificateTitleEn: certData.certificateTitleEn || (isMedal ? 'Medal of Excellence' : 'Certificate of Appreciation'),
       status: certData.status || 'issued',
       qrCode: certData.qrCode || '',
-      type: certData.type || 'appreciation',
+      type: certData.type || (isMedal ? 'excellence' : 'appreciation'),
       templateId: certData.templateId || 'default',
       notes: certData.notes || '',
       score: certData.score !== undefined ? Number(certData.score) : undefined,
@@ -7560,32 +7849,40 @@ apiRouter.post('/certificates', async (req: Request, res: Response) => {
     }
     db.getData().certificates.push(newCert);
 
-    // Award bonus points and excellence badge to the trainee for receiving a certificate
+    // Award bonus points and excellence badge to the trainee for receiving a certificate or medal
     if (newCert.traineeId) {
-      const trainees = await TraineeRepo.getAll();
-      const tr = trainees.find(t => t.id === newCert.traineeId);
+      const tr = matchedTr || trainees.find(t => t.id === newCert.traineeId);
       if (tr) {
-        tr.points = (Number(tr.points) || 0) + 50;
-        tr.totalPoints = (Number(tr.totalPoints) || 0) + 50;
+        const bonusPts = isMedal ? 30 : 50;
+        tr.points = (Number(tr.points) || 0) + bonusPts;
+        tr.totalPoints = (Number(tr.totalPoints) || 0) + bonusPts;
         await TraineeRepo.update(tr.id, { points: tr.points, totalPoints: tr.totalPoints });
+
+        const badgeTitle = isMedal 
+          ? (newCert.certificateTitle || 'وسام تميز وتفوق 🏅') 
+          : (newCert.certificateTitle || 'شهادة تقدير وتفوق 📜⭐');
+        const badgeIcon = isMedal ? '🏅' : '🏆';
 
         if (!db.getData().badges) db.getData().badges = [];
         db.getData().badges.push({
           id: 'badge-' + Date.now(),
           traineeId: tr.id,
           studentId: tr.id,
-          title: 'شهادة تقدير وتفوق 📜⭐',
-          description: `منحت عن ${newCert.courseName || 'الأداء المتميز'}`,
-          icon: '🏆',
-          date: new Date().toISOString().split('T')[0]
+          title: badgeTitle,
+          badgeTitle: badgeTitle,
+          description: `منحت عن ${newCert.courseName || 'الأداء المتميز'} - ${newCert.grade || ''}`,
+          icon: badgeIcon,
+          category: isMedal ? 'أوسمة التميز' : 'الشهادات والتقدير',
+          points: bonusPts,
+          date: newCert.issueDate || new Date().toISOString().split('T')[0]
         });
 
         if (!db.getData().pointTransactions) db.getData().pointTransactions = [];
         db.getData().pointTransactions.push({
           id: 'pt-' + Date.now(),
           traineeId: tr.id,
-          points: 50,
-          reason: `مكافأة الحصول على شهادة تقدير (${newCert.courseName || 'تفوق'})`,
+          points: bonusPts,
+          reason: `مكافأة الحصول على ${badgeTitle} (${newCert.courseName || 'تفوق'})`,
           date: new Date().toISOString()
         } as any);
       }
@@ -9127,9 +9424,9 @@ apiRouter.post('/agent/student-login', async (req: Request, res: Response) => {
       stats
     },
     device: {
-      id: device.id,
-      deviceId: device.deviceId,
-      name: device.name
+      id: 'dev-' + (trainee.code || '1'),
+      deviceId: 'PC-' + (trainee.code || '1'),
+      name: `جهاز الطالب (${trainee.fullName})`
     },
     attendance: attRecord,
     lectureWindow
@@ -9516,18 +9813,33 @@ apiRouter.post('/lab/quick-question/answer', (req: Request, res: Response) => {
 
 // Get / Broadcast active external lab session (Kahoot PIN, ClassPoint, etc.)
 apiRouter.get('/lab/active-activity', (req: Request, res: Response) => {
-  res.json({ success: true, activity: activeLabExternalActivity });
+  const external = activeLabExternalActivity || masterBroadcast.activeExternalSession;
+  res.json({ success: true, activity: external });
 });
 
 apiRouter.post('/lab/active-activity/broadcast', (req: Request, res: Response) => {
-  const { title, platform, url, gamePin } = req.body;
-  activeLabExternalActivity = {
+  const { title, platform, url, gamePin, clear } = req.body;
+  
+  if (clear || (!url && !gamePin)) {
+    activeLabExternalActivity = null;
+    masterBroadcast.activeExternalSession = null;
+    console.log('[LIVE_BROADCAST] Cleared active external session.');
+    return res.json({ success: true, activity: null });
+  }
+
+  const sessionObj = {
     title: title || 'مسابقة المعمل الحية',
     platform: platform || 'Kahoot',
-    url: url || 'https://kahoot.it',
+    url: url || (platform === 'Kahoot' ? 'https://kahoot.it' : 'https://www.classpoint.app'),
     gamePin: gamePin ? String(gamePin).trim() : '',
     updatedAt: Date.now()
   };
+
+  activeLabExternalActivity = sessionObj;
+  masterBroadcast.activeExternalSession = sessionObj;
+  masterBroadcast.updatedAt = new Date().toISOString();
+
+  console.log(`[LIVE_BROADCAST] Active external broadcast launched: ${sessionObj.platform} PIN: ${sessionObj.gamePin}`);
   res.json({ success: true, activity: activeLabExternalActivity });
 });
 
@@ -10736,7 +11048,13 @@ apiRouter.post(['/lecture-recaps', '/lecture-recaps/'], async (req: Request, res
       homeworkTasks: homeworkTasks || { tasks: [], bonusChallenge: '' },
       nextLecturePrep: nextLecturePrep || { prepPoints: [], teaserNotes: '' },
       closingMessage: closingMessage || 'بالتوفيق يا أبطال النجاح! 🌟',
-      audioVoiceUrl: audioVoiceUrl || undefined,
+      audioVoiceUrl: audioVoiceUrl || req.body.voiceAudioUrl || req.body.voiceAudioBase64 || undefined,
+      voiceAudioUrl: req.body.voiceAudioUrl || audioVoiceUrl || req.body.voiceAudioBase64 || undefined,
+      voiceAudioBase64: req.body.voiceAudioBase64 || undefined,
+      voiceTranscription: req.body.voiceTranscription || undefined,
+      selectedLessonId: req.body.selectedLessonId || undefined,
+      selectedLessonTitle: req.body.selectedLessonTitle || undefined,
+      coveredElements: Array.isArray(req.body.coveredElements) ? req.body.coveredElements : undefined,
       isPublished: isPublished !== false,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
@@ -10849,7 +11167,9 @@ apiRouter.post(['/lecture-recaps/ai-structure-voice', '/lecture-recaps/ai-struct
       transcribedText,
       teacherNotes,
       targetGrade,
-      targetCourse
+      targetCourse,
+      selectedLessonTitle,
+      coveredElements
     } = req.body;
 
     const structured = await structurePostLectureVoiceMemo({
@@ -10858,7 +11178,9 @@ apiRouter.post(['/lecture-recaps/ai-structure-voice', '/lecture-recaps/ai-struct
       transcribedText,
       teacherNotes,
       targetGrade,
-      targetCourse
+      targetCourse,
+      selectedLessonTitle,
+      coveredElements
     });
 
     res.json({
@@ -11223,7 +11545,16 @@ apiRouter.post('/parent/login', async (req: Request, res: Response) => {
 
       // Badges
       const childBadges = (data.badges || []).filter((b: any) =>
-        b.traineeId === t.id || b.studentId === t.id
+        b.traineeId === t.id || b.studentId === t.id ||
+        (b.traineeCode && t.code && String(b.traineeCode).trim().toLowerCase() === String(t.code).trim().toLowerCase())
+      );
+
+      // Certificates & Medals
+      const childCerts = (data.certificates || []).filter((c: any) =>
+        c.traineeId === t.id || c.studentId === t.id ||
+        (c.traineeCode && t.code && String(c.traineeCode).trim().toLowerCase() === String(t.code).trim().toLowerCase()) ||
+        (c.studentCode && t.code && String(c.studentCode).trim().toLowerCase() === String(t.code).trim().toLowerCase()) ||
+        (c.traineeName && t.fullName && String(c.traineeName).trim().toLowerCase() === String(t.fullName).trim().toLowerCase())
       );
 
       // Evaluations
@@ -11283,8 +11614,9 @@ apiRouter.post('/parent/login', async (req: Request, res: Response) => {
         courseName: course?.name || 'البرنامج التدريبي العام',
         groupName: group?.name || 'المجموعة المعتمدة',
         badges: childBadges.length > 0 ? childBadges : [
-          { id: 'b-1', title: 'مبرمج المستقبل', description: 'التفوق والتطوير المستمر', icon: '🏆', date: new Date().toISOString() }
+          { id: 'b-1', title: 'مبرمج المستقبل', badgeTitle: 'مبرمج المستقبل', description: 'التفوق والتطوير المستمر', icon: '🏆', date: new Date().toISOString() }
         ],
+        certificates: childCerts,
         evaluations: childEvals,
         attendance: childAtt,
         attendanceCount: childAtt.filter((a: any) => a.status === 'present' || a.status === 'حاضر').length,

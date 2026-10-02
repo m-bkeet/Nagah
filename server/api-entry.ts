@@ -77,6 +77,54 @@ app.get(['/health', '/api/health'], async (req, res) => {
   });
 });
 
+// Dedicated Quota & Cloud Health Endpoints for Vercel
+app.get(['/system/quota-status', '/api/system/quota-status'], async (req, res) => {
+  try {
+    const { getSystemQuotaStatus } = await import('./systemQuotaService.js');
+    const forceRefresh = req.query.forceRefresh === 'true' || req.query.fresh === 'true';
+    const status = await getSystemQuotaStatus(forceRefresh);
+    res.json(status);
+  } catch (err: any) {
+    res.status(500).json({ error: 'Failed to retrieve quota status: ' + err.message });
+  }
+});
+
+app.post(['/system/quota-refresh', '/api/system/quota-refresh'], async (req, res) => {
+  try {
+    const { getSystemQuotaStatus } = await import('./systemQuotaService.js');
+    const status = await getSystemQuotaStatus(true);
+    res.json({ success: true, status });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.post(['/system/quota-config', '/api/system/quota-config'], async (req, res) => {
+  try {
+    const { getSystemQuotaStatus } = await import('./systemQuotaService.js');
+    const { db } = await import('./db.js');
+    const { token, projectId, teamId } = req.body || {};
+    const curDb = db.getData();
+    if (!curDb.settings) curDb.settings = {} as any;
+    
+    curDb.settings.vercelApiToken = (token || '').trim();
+    if (projectId) curDb.settings.vercelProjectId = (projectId || '').trim();
+    if (teamId !== undefined) curDb.settings.vercelTeamId = (teamId || '').trim();
+    
+    const updatedStatus = await getSystemQuotaStatus(true);
+    res.json({
+      success: true,
+      message: updatedStatus.vercel.connected 
+        ? 'تم ربط حساب Vercel بنجاح وقراءة الاستهلاك اللحظي!' 
+        : 'تم حفظ الإعدادات بنجاح.',
+      vercel: updatedStatus.vercel,
+      status: updatedStatus
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: 'تعذر حفظ إعدادات Vercel: ' + err.message });
+  }
+});
+
 // Add CORS to allow external forms/apps to hit the public APIs
 app.use(cors({
   origin: true,

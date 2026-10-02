@@ -1239,11 +1239,56 @@ export const PublicParentPortalView: React.FC<PublicParentPortalViewProps> = ({ 
                         <div key={b.id} className="p-3 rounded-xl bg-slate-950 border border-slate-800 flex items-center gap-2.5">
                           <span className="text-2xl">{b.icon || '🏅'}</span>
                           <div>
-                            <p className="text-xs font-bold text-white">{b.badgeTitle}</p>
-                            <p className="text-[10px] text-slate-400">{b.category}</p>
+                            <p className="text-xs font-bold text-white">{b.badgeTitle || (b as any).title}</p>
+                            <p className="text-[10px] text-slate-400">{(b as any).description || b.category || 'تكريم وتميز'}</p>
                           </div>
                         </div>
                       ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Certificates Display */}
+                {((selectedChild as any).certificates && (selectedChild as any).certificates.length > 0) && (
+                  <div className="p-5 rounded-2xl bg-slate-900 border border-amber-500/30 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-xs font-black text-white flex items-center gap-2">
+                        <Award className="w-4 h-4 text-amber-400" />
+                        <span>الشهادات المعتمدة وأوسمة التكريم الملكية ({((selectedChild as any).certificates || []).length})</span>
+                      </h3>
+                      <span className="text-[10px] bg-amber-500/20 text-amber-300 font-bold px-2 py-0.5 rounded-full border border-amber-500/40">
+                        معتمدة رسمياً 📜
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {((selectedChild as any).certificates || []).map((cert: any) => {
+                        const isMedal = cert.type === 'excellence' || cert.certificateTitle?.includes('وسام') || cert.grade?.includes('وسام');
+                        return (
+                          <div 
+                            key={cert.id} 
+                            id={`parent-cert-card-${cert.id}`}
+                            className="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-2 relative overflow-hidden"
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <span className={`text-[10px] font-black px-2 py-0.5 rounded-lg border ${
+                                isMedal 
+                                  ? 'bg-amber-400 text-slate-950 border-amber-500 font-bold' 
+                                  : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                              }`}>
+                                {isMedal ? '🏅 وسام تميز ملكي' : '📜 شهادة تقدير معتمدة'}
+                              </span>
+                              <span className="text-[9px] font-mono text-slate-400">{cert.serialNumber || cert.certificateNumber}</span>
+                            </div>
+                            <h4 className="text-xs font-bold text-white">{cert.certificateTitle || cert.grade}</h4>
+                            <p className="text-[11px] text-amber-400 font-semibold">{cert.courseName}</p>
+                            <div className="flex items-center justify-between text-[10px] text-slate-400 pt-2 border-t border-slate-800/80">
+                              <span>التاريخ: {cert.issueDate}</span>
+                              <span className="text-emerald-400 font-bold">موثقة بالباركود والـ QR ✅</span>
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 )}

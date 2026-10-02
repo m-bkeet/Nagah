@@ -4,7 +4,9 @@
   "outputDirectory": "dist",
   "functions": {
     "api/index.js": {
-      "includeFiles": "{data/database.json,firebase-applet-config.json}"
+      "includeFiles": "{data/database.json,firebase-applet-config.json}",
+      "maxDuration": 30,
+      "memory": 1024
     }
   },
   "headers": [
@@ -18,6 +20,18 @@
       "source": "/(.*)\\.(js|css|png|jpg|jpeg|gif|svg|ico|woff|woff2)",
       "headers": [
         { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
+      ]
+    },
+    {
+      "source": "/api/system/quota-status",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-store, no-cache, must-revalidate" }
+      ]
+    },
+    {
+      "source": "/api/health",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-store, no-cache, must-revalidate" }
       ]
     }
   ],

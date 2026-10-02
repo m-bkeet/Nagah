@@ -4241,28 +4241,34 @@ class DatabaseManager {
       .replace(/ى/g, 'ي')
       .replace(/[\s_\-]/g, '');
 
-    // Check if grade matches keys in settings
+    // 1. Preparatory Grades (المرحلة الإعدادية) - STRICT PRIORITY
+    if (norm.includes('اعدادي') || norm.includes('prep') || norm.includes('ictp') || norm.includes('ict-p') || norm.includes('p1') || norm.includes('p2') || norm.includes('p3')) {
+      if (norm.includes('اول') || norm.includes('1') || norm.includes('p1')) return 'D';
+      if (norm.includes('ثاني') || norm.includes('تاني') || norm.includes('2') || norm.includes('p2')) return 'E';
+      if (norm.includes('ثالث') || norm.includes('تالت') || norm.includes('3') || norm.includes('p3')) return 'F';
+      return 'D';
+    }
+
+    // 2. Secondary Grades (المرحلة الثانوية) - STRICT PRIORITY
+    if (norm.includes('ثانوي') || norm.includes('sec') || norm.includes('icts') || norm.includes('ict-s') || norm.includes('s1') || norm.includes('s2') || norm.includes('s3')) {
+      if (norm.includes('اول') || norm.includes('1') || norm.includes('s1') || norm.includes('sec1')) return 'G';
+      if (norm.includes('ثاني') || norm.includes('تاني') || norm.includes('2') || norm.includes('s2') || norm.includes('sec2')) return 'H';
+      if (norm.includes('ثالث') || norm.includes('تالت') || norm.includes('3') || norm.includes('s3') || norm.includes('sec3')) return 'I';
+      return 'G';
+    }
+
+    // 3. Primary Grades (المرحلة الابتدائية) - STRICT PRIORITY
+    if (norm.includes('رابع') || norm.includes('رابعه') || norm.includes('4ابتدائي') || norm.includes('ابتدائي4') || norm.includes('ict4') || norm.includes('grade4') || norm.includes('primary4') || norm === '4' || norm === 'صف4' || norm.includes('الرابع')) return 'A';
+    if (norm.includes('خامس') || norm.includes('خامسه') || norm.includes('5ابتدائي') || norm.includes('ابتدائي5') || norm.includes('ict5') || norm.includes('grade5') || norm.includes('primary5') || norm === '5' || norm === 'صف5' || norm.includes('الخامس')) return 'B';
+    if (norm.includes('سادس') || norm.includes('سادسه') || norm.includes('ساته') || norm.includes('6ابتدائي') || norm.includes('ابتدائي6') || norm.includes('ict6') || norm.includes('grade6') || norm.includes('primary6') || norm === '6' || norm === 'صف6' || norm.includes('السادس')) return 'C';
+
+    // Check if exact normalized match in settings prefixes keys
     for (const [k, v] of Object.entries(prefixes)) {
       const kNorm = k.toLowerCase().replace(/[أإآ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي').replace(/[\s_\-]/g, '');
-      if (kNorm === norm || (kNorm.length > 2 && norm.includes(kNorm)) || (norm.length > 2 && kNorm.includes(norm))) {
+      if (kNorm === norm) {
         return v;
       }
     }
-
-    // 1. Secondary Grades (المرحلة الثانوية)
-    if (norm.includes('اولثانوي') || norm.includes('1ثانوي') || norm.includes('ثانوي1') || norm.includes('sec1') || norm.includes('s1') || norm.includes('ictsec1')) return 'G';
-    if (norm.includes('ثانيثانوي') || norm.includes('تانيثانوي') || norm.includes('2ثانوي') || norm.includes('ثانوي2') || norm.includes('sec2') || norm.includes('s2') || norm.includes('ictsec2')) return 'H';
-    if (norm.includes('ثالثثانوي') || norm.includes('تالتثانوي') || norm.includes('3ثانوي') || norm.includes('ثانوي3') || norm.includes('sec3') || norm.includes('s3') || norm.includes('ictsec3')) return 'I';
-
-    // 2. Preparatory Grades (المرحلة الإعدادية)
-    if (norm.includes('اولاعدادي') || norm.includes('1اعدادي') || norm.includes('اعدادي1') || norm.includes('ictp1') || norm.includes('p1') || norm.includes('prep1') || norm.includes('ict-p1')) return 'D';
-    if (norm.includes('ثانياعدادي') || norm.includes('تانياعدادي') || norm.includes('2اعدادي') || norm.includes('اعدادي2') || norm.includes('ictp2') || norm.includes('p2') || norm.includes('prep2') || norm.includes('ict-p2')) return 'E';
-    if (norm.includes('ثالثاعدادي') || norm.includes('تالتاعدادي') || norm.includes('3اعدادي') || norm.includes('اعدادي3') || norm.includes('ictp3') || norm.includes('p3') || norm.includes('prep3') || norm.includes('ict-p3')) return 'F';
-
-    // 3. Primary Grades (المرحلة الابتدائية)
-    if (norm.includes('رابع') || norm.includes('رابعه') || norm.includes('4ابتدائي') || norm.includes('ابتدائي4') || norm.includes('ict4') || norm.includes('grade4') || norm.includes('primary4') || norm === '4' || norm === 'صف4') return 'A';
-    if (norm.includes('خامس') || norm.includes('خامسه') || norm.includes('5ابتدائي') || norm.includes('ابتدائي5') || norm.includes('ict5') || norm.includes('grade5') || norm.includes('primary5') || norm === '5' || norm === 'صف5') return 'B';
-    if (norm.includes('سادس') || norm.includes('سادسه') || norm.includes('ساته') || norm.includes('6ابتدائي') || norm.includes('ابتدائي6') || norm.includes('ict6') || norm.includes('grade6') || norm.includes('primary6') || norm === '6' || norm === 'صف6') return 'C';
 
     return this.data.settings.traineeCodePrefix || 'A';
   }

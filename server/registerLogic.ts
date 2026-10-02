@@ -9,32 +9,26 @@ export function resolveGradePrefix(gradeOrCourse?: string): string {
   const clean = String(gradeOrCourse).trim();
   const lower = clean.toLowerCase();
 
-  // 1. Primary 4 (الصف الرابع الابتدائي) -> A
+  // 1. Preparatory Grades (المرحلة الإعدادية) -> D, E, F
+  if (clean.includes('إعدادي') || clean.includes('اعدادي') || lower.includes('prep') || lower.includes('ict-p') || lower.includes('ictp') || lower.includes('p1') || lower.includes('p2') || lower.includes('p3')) {
+    if (clean.includes('أول') || clean.includes('اول') || clean.includes('1') || lower.includes('p1')) return 'D';
+    if (clean.includes('ثاني') || clean.includes('تاني') || clean.includes('2') || lower.includes('p2')) return 'E';
+    if (clean.includes('ثالث') || clean.includes('تالت') || clean.includes('3') || lower.includes('p3')) return 'F';
+    return 'D';
+  }
+
+  // 2. Secondary Grades (المرحلة الثانوية) -> G, H, I
+  if (clean.includes('ثانوي') || lower.includes('sec') || lower.includes('ict-s') || lower.includes('icts') || lower.includes('s1') || lower.includes('s2') || lower.includes('s3')) {
+    if (clean.includes('أول') || clean.includes('اول') || clean.includes('1') || lower.includes('s1') || lower.includes('sec1')) return 'G';
+    if (clean.includes('ثاني') || clean.includes('تاني') || clean.includes('2') || lower.includes('s2') || lower.includes('sec2')) return 'H';
+    if (clean.includes('ثالث') || clean.includes('تالت') || clean.includes('3') || lower.includes('s3') || lower.includes('sec3')) return 'I';
+    return 'G';
+  }
+
+  // 3. Primary Grades (المرحلة الابتدائية) -> A, B, C
   if (clean.includes('رابع') || lower.includes('ict4') || clean === '4' || clean.includes('الرابع')) return 'A';
-  
-  // 2. Primary 5 (الصف الخامس الابتدائي) -> B
   if (clean.includes('خامس') || lower.includes('ict5') || clean === '5' || clean.includes('الخامس')) return 'B';
-  
-  // 3. Primary 6 (الصف السادس الابتدائي) -> C
   if (clean.includes('سادس') || lower.includes('ict6') || clean === '6' || clean.includes('السادس')) return 'C';
-  
-  // 4. Prep 1 (الصف الأول الإعدادي) -> D
-  if (clean.includes('أول إعدادي') || clean.includes('اول اعدادي') || clean.includes('1 إعدادي') || clean.includes('الأول الإعدادي') || lower.includes('ict-p1') || lower.includes('p1')) return 'D';
-  
-  // 5. Prep 2 (الصف الثاني الإعدادي) -> E
-  if (clean.includes('ثاني إعدادي') || clean.includes('تاني اعدادي') || clean.includes('2 إعدادي') || clean.includes('الثاني الإعدادي') || lower.includes('ict-p2') || lower.includes('p2')) return 'E';
-  
-  // 6. Prep 3 (الصف الثالث الإعدادي) -> F
-  if (clean.includes('ثالث إعدادي') || clean.includes('تالت اعدادي') || clean.includes('3 إعدادي') || clean.includes('الثالث الإعدادي') || lower.includes('ict-p3') || lower.includes('p3')) return 'F';
-  
-  // 7. Sec 1 (الصف الأول الثانوي) -> G
-  if (clean.includes('أول ثانوي') || clean.includes('اول ثانوي') || clean.includes('1 ثانوي') || clean.includes('الأول الثانوي') || lower.includes('sec-1') || lower.includes('ict-s1') || lower.includes('s1')) return 'G';
-  
-  // 8. Sec 2 (الصف الثاني الثانوي) -> H
-  if (clean.includes('ثاني ثانوي') || clean.includes('تاني ثانوي') || clean.includes('2 ثانوي') || clean.includes('الثاني الثانوي') || lower.includes('sec-2') || lower.includes('ict-s2') || lower.includes('s2')) return 'H';
-  
-  // 9. Sec 3 (الصف الثالث الثانوي) -> I
-  if (clean.includes('ثالث ثانوي') || clean.includes('تالت ثانوي') || clean.includes('3 ثانوي') || clean.includes('الثالث الثانوي') || lower.includes('sec-3') || lower.includes('ict-s3') || lower.includes('s3')) return 'I';
 
   return 'A';
 }

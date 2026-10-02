@@ -1004,10 +1004,14 @@ export async function structurePostLectureVoiceMemo(params: {
   teacherNotes?: string;
   targetGrade?: string;
   targetCourse?: string;
+  selectedLessonTitle?: string;
+  coveredElements?: string[];
 }): Promise<StructuredPostLectureRecap> {
   const parts: any[] = [];
   const gradeLevel = params.targetGrade || 'الصف الرابع الابتدائي (Grade 4 Languages)';
   const courseName = params.targetCourse || 'تكنولوجيا المعلومات والاتصالات ICT & Computer';
+  const lessonTitle = params.selectedLessonTitle || 'محاضرة تكنولوجيا المعلومات والاتصالات المعتمدة';
+  const elements = Array.isArray(params.coveredElements) ? params.coveredElements : [];
 
   if (params.audioBase64 && String(params.audioBase64).length > 20) {
     const cleanAudio = params.audioBase64.replace(/^data:[^;]+;base64,/, '').trim();
@@ -1026,23 +1030,27 @@ export async function structurePostLectureVoiceMemo(params: {
 
   const prompt = `أنت المساعد الأكاديمي والتربوي الذكي في "مركز النجاح للتدريب والاستشارات".
 المعلم أو المدرب قام بتسجيل فويس ختامي بعد انتهاء الحصة/المحاضرة، أو كتب ملحوظات سريعة.
-مهمتك هي الاستماع للصوت أو قراءة النص، وإعادة صياغة وتنظيم المحتوى في نموذج احترافي منمق ومبهر لأولياء الأمور والطلاب، مقسم بدقة إلى 4 أقسام رئيسية:
+المرحلة المستهدفة: ${gradeLevel} | المادة: ${courseName}
+الدرس المعتمد المختار: ${lessonTitle}
+العناصر والمفاهيم الأساسية المقررة رسمياً التي تم تحديدها وشرحها:
+${elements.length > 0 ? elements.map((el) => ` - ${el}`).join('\n') : ' - مفاهيم الدرس المقررة'}
+
+${params.transcribedText ? `التفريغ الأولي لتسجيل صوت المعلم: ${params.transcribedText}` : ''}
+${params.teacherNotes ? `ملاحظات المعلم المكتوبة: ${params.teacherNotes}` : ''}
+
+مهمتك هي الاستماع للصوت أو قراءة تفريغ الصوت والملاحظات المكتوبة، ودمجها بذكاء مع عناصر الدرس المعتمد (${lessonTitle})، وإخراج نموذج احترافي منمق ومبهر لأولياء الأمور والطلاب، مقسم بدقة إلى 4 أقسام رئيسية:
 
 1. **ما تم شرحه بالمحاضرة السابقة (recapSummary)**:
-   - مصفوفة نقاط رقمية مرتبة (points) توضح كل ما تم إنجازه (المراجعة، التمارين، كاهوت، فتح وفك الكيسة ومكوناتها، دورة البيانات Data vs Information، إلخ).
+   - مصفوفة نقاط رقمية مرتبة (points) توضح كل ما تم إنجازه (المراجعة، شرح العناصر المحددة، التطبيق العملي، وملاحظات المعلم الصوتية).
    - ملخص شامل منسق (detailedNotes).
 2. **المطلوب والتاسكات قبل المحاضرة القادمة (homeworkTasks)**:
-   - مصفوفة مهام واضحة ومحددة (tasks) مثل كتابة المكونات، تلخيص الدروس في صفحة، أسئلة مهمة، وإمكانية رفع عدة صفحات في الواجب.
+   - مصفوفة مهام واضحة ومحددة (tasks) تلائم تماماً الدرس المشروح (${lessonTitle}) ومفاهيمه، مع التوجيه بحلها في كشكول التدريب وتصوير أكثر من صفحة.
    - تحدي بونص تحفيزي (bonusChallenge) لمن يقوم بتطبيق عملي أو تصوير فيديو.
 3. **الاستعداد والتحضير للمحاضرة القادمة (nextLecturePrep)**:
-   - نقاط التحضير (prepPoints) مثل ربط المفاهيم، إحضار الأدوات، وما سيتم دراسته.
+   - نقاط التحضير (prepPoints) للموضوع التالي في المنهج المعتمد.
    - تشويقة المحاضرة (teaserNotes).
 4. **الرسالة والتشجيع الختامي (closingMessage)**:
    - كلمات فخر وتشجيع تربوية ملهمة للأبطال وأولياء الأمور.
-
-${params.transcribedText ? `التفريغ الأولي لصوت المعلم: ${params.transcribedText}` : ''}
-${params.teacherNotes ? `ملاحظات المعلم المكتوبة: ${params.teacherNotes}` : ''}
-المرحلة المستهدفة: ${gradeLevel} | المادة: ${courseName}
 
 أخرج النتيجة بصيغة JSON مطابقة للمخطط:`;
 
@@ -1097,46 +1105,56 @@ ${params.teacherNotes ? `ملاحظات المعلم المكتوبة: ${params.
         return JSON.parse(cleanJson) as StructuredPostLectureRecap;
       }
     } catch (err: any) {
-      console.warn('Gemini structurePostLectureVoiceMemo error, using standard template:', err?.message);
+      console.warn('Gemini structurePostLectureVoiceMemo error, using dynamic synthesized template:', err?.message);
     }
   }
 
-  // Default standard template matching Grade 4 prompt
+  // Dynamic resilient synthesis (NEVER overwrites with inappropriate default!)
+  const points: string[] = [
+    '1. مراجعة شاملة وأسئلة تفاعلية استهلالية على المفاهيم السابقة ومسابقة كاهوت لتثبيت المعلومات.'
+  ];
+
+  if (elements.length > 0) {
+    elements.forEach((el) => {
+      points.push(`${points.length + 1}. شرح وتطبيق عملي على: ${el}.`);
+    });
+  } else {
+    points.push(`2. استعراض وشرح المحاور والمفاهيم الرئيسية لـ (${lessonTitle}).`);
+  }
+
+  const voiceOrNotes = params.transcribedText || params.teacherNotes;
+  if (voiceOrNotes && voiceOrNotes.trim()) {
+    points.push(`${points.length + 1}. توجيهات وشروحات المدرب الصوتية بالحصة: "${voiceOrNotes.trim()}"`);
+  }
+  points.push(`${points.length + 1}. تطبيق المعمل العملي وحل التدريبات النموذجية والتأكد من إتقان كل بطل للدرس.`);
+
+  const dynamicTasks: string[] = [
+    `1. تلخيص وكتابة المفاهيم الأساسية لـ (${lessonTitle}) في كشكول التدريب والمتابعة.`,
+    '2. حل تدريبات وأسئلة الحصة المحددة بالكشكول بدقة وخط واضح.',
+    '3. تصوير صفحات الواجب بالكشكول (إمكانية رفع أكثر من صفحة) عبر بوابة المتدرب للتقييم الذكي.'
+  ];
+
   return {
-    title: 'أبطال الصف الرابع لغات - فرع مركز بدر والنجاح 💻🌟',
+    title: `${lessonTitle} - ${gradeLevel} 🌐💻`,
     gradeLevel: gradeLevel,
     subject: courseName,
     recapSummary: {
-      points: [
-        '1. مراجعة شاملة Revision على ما تم دراسته سابقاً.',
-        '2. أسئلة تفاعلية وتطبيقية على Lesson 1 & Lesson 2.',
-        '3. حل وتصحيح الواجبات والتأكد من إتقان كل طالب للأسئلة.',
-        '4. مسابقة كاهوت Kahoot حماسية لتثبيت المعلومات والتنافس الشريف.',
-        '5. فتح Lesson 3 مع عرض فيديو تمهيدي شيق وممتع.',
-        '6. فتح وفك الـ Case عملياً والتعرف على الأجزاء الداخلية للأجهزة.',
-        '7. مكونات الكيسة الخمسة (عمو الكهربائي = Power Supply ⚡️، ماما نوسة = Motherboard 👩🍳، المخيخ = CPU 🧠، السمكة = RAM 🐟، الخزنة = Hard Disk 🔒).',
-        '8. دورة البيانات Data Cycle (دخول Data -> تحويل ومعالجة بالمخيخ CPU -> خروج Information مفيدة).'
-      ],
-      detailedNotes: 'تمت المحاضرة وسط تفاعل منقطع النظير واستيعاب عملي مباشر لكل طالب وفك الكيسة ورؤية القطع بالعين المجردة.'
+      points,
+      detailedNotes: `تمت المحاضرة بنجاح مع تغطية شاملة للمفاهيم المعتمدة رسمياً لمنهج 2026/2027 وسط تفاعل ممتاز من الطلاب وتطبيق عملي بالمعمل.`
     },
     homeworkTasks: {
-      tasks: [
-        '1. كتابة وتوثيق أسماء مكونات الكيسة الخمسة بالعربي والإنجليزي في الكشكول.',
-        '2. تلخيص Lesson 1 & Lesson 2 في نصف صفحة + حل الأسئلة المهمة في النصف الثاني.',
-        '3. تلخيص تحضيري لـ Lesson 3 في صفحة كاملة.',
-        '4. إمكانية تصوير ورفع أكثر من ورقة/صفحة في الواجب عبر بوابة المتدرب.'
-      ],
-      bonusChallenge: '🌟 بونص إضافي خاص: تسجيل فيديو أو فويس وأنت تشاور على مكونات الكيسة وتشرحها بصوتك!',
+      tasks: dynamicTasks,
+      bonusChallenge: '🌟 بونص تفوق خاص: تسجيل فويس قصير أو فيديو مدته دقيقة عبر البوابة تشرح فيه أهم مفهوم تعلمته اليوم!',
       dueDateTime: new Date(Date.now() + 6 * 86400000).toISOString()
     },
     nextLecturePrep: {
       prepPoints: [
-        'ربط المسميات الأساسية (عمو الكهربائي = Power Supply, ماما نوسة = Motherboard, المخيخ = CPU, السمكة = RAM, الخزنة = Hard Disk).',
-        'إحضار كشكول التدريب وأدوات المعمل والاستعداد لمسابقة كاهوت وتطبيق عملي جديد.'
+        'قراءة الدرس التالي في المنهج المعتمد والاستعداد لمسابقة كاهوت الحماسية القادمة.',
+        'إحضار كشكول التدريب وأدوات المعمل في الموعد المحدد.'
       ],
-      teaserNotes: 'المحاضرة القادمة ستشهد تحديات برمجية وعملية تفاعلية مشوقة جداً داخل المعمل!'
+      teaserNotes: 'المحاضرة القادمة ستشهد تحديات تطبيقية جديدة ومفاجآت وتكريم للأبطال الملتزمين!'
     },
-    closingMessage: 'أبطال المستقبل، فخور جداً بتركيزكم وفهمكم العملي لمكونات الحاسوب، أنتم لستم مستخدمين عاديين بل مهندسون ومبتكرون! ننتظر إبداعاتكم في تلخيص الدروس والتطبيق العملي. 🚀🌟'
+    closingMessage: `أبطال ومبدعو ${gradeLevel}، فخور جداً باستيعابكم وتفاعلكم الرائع اليوم! أنتم مستقبل التكنولوجيا المشرق، استمروا في هذا التألق. 🌟🚀💻`
   };
 }
 

@@ -2206,7 +2206,7 @@ export const InteractiveSessionsView: React.FC<InteractiveSessionsViewProps> = (
         <div className="animate-fadeIn">
           <LectureRecapManager
             mode="trainer_admin"
-            currentGradeLevel={branchGroups.find(g => g.id === selectedGroupId)?.name || 'الصف الرابع الابتدائي (Grade 4 Languages)'}
+            currentGradeLevel={selectedGroupId !== 'auto' ? branchGroups.find(g => g.id === selectedGroupId)?.name : undefined}
           />
         </div>
       )}

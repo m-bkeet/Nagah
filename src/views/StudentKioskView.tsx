@@ -43,6 +43,8 @@ export const StudentKioskView: React.FC = () => {
   const [submittedAnswer, setSubmittedAnswer] = useState<string | null>(null);
   const [isSubmittingAnswer, setIsSubmittingAnswer] = useState(false);
   const [showCelebration, setShowCelebration] = useState(false);
+  const [isEmbeddedGameOpen, setIsEmbeddedGameOpen] = useState(false);
+  const [copiedPin, setCopiedPin] = useState(false);
 
   // Kahoot PIN input
   const [kahootPin, setKahootPin] = useState('');
@@ -53,19 +55,19 @@ export const StudentKioskView: React.FC = () => {
     gamePin?: string;
   } | null>(null);
 
-  // Master Lab Lock & Access Control State
-  const [isLabLocked, setIsLabLocked] = useState<boolean>(() => !isTrainerSessionActive());
+  // Master Lab Lock & Access Control State (Defaults to open and available)
+  const [isLabLocked, setIsLabLocked] = useState<boolean>(false);
 
   useEffect(() => {
     let isMounted = true;
     const fetchStatus = async () => {
       try {
         const res = await api.getLabStatus();
-        if (isMounted && res) {
+        if (isMounted && res && typeof res.isOpen === 'boolean') {
           setIsLabLocked(!res.isOpen);
         }
       } catch {
-        if (isMounted) setIsLabLocked(!isTrainerSessionActive());
+        if (isMounted) setIsLabLocked(false);
       }
     };
     fetchStatus();
@@ -76,7 +78,6 @@ export const StudentKioskView: React.FC = () => {
       }
     };
     window.addEventListener('nagah_lab_session_changed', handleLabEvent);
-    window.addEventListener('storage', () => setIsLabLocked(!isTrainerSessionActive()));
 
     return () => {
       isMounted = false;
@@ -145,11 +146,10 @@ export const StudentKioskView: React.FC = () => {
     };
   }, [currentTrainee?.id, currentTrainee?.code]);
 
-  // Check on mount or focus
+  // Check on mount (Zero background polling)
   useEffect(() => {
     let isMounted = true;
     const checkQuickQuestion = async () => {
-      if (typeof document !== 'undefined' && document.hidden) return;
       try {
         const res = await fetch('/api/lab/quick-question');
         const json = await res.json();
@@ -164,11 +164,9 @@ export const StudentKioskView: React.FC = () => {
             setSubmittedAnswer(null);
           }
 
-          if (json && json.externalActivity) {
+          if (json && json.externalActivity && json.externalActivity.gamePin) {
             setActiveExternalActivity(json.externalActivity);
-            if (json.externalActivity.gamePin) {
-              setKahootPin(json.externalActivity.gamePin);
-            }
+            setKahootPin(json.externalActivity.gamePin);
           } else {
             setActiveExternalActivity(null);
           }
@@ -178,14 +176,8 @@ export const StudentKioskView: React.FC = () => {
 
     checkQuickQuestion();
 
-    const handleWindowFocus = () => {
-      checkQuickQuestion();
-    };
-    window.addEventListener('focus', handleWindowFocus);
-
     return () => {
       isMounted = false;
-      window.removeEventListener('focus', handleWindowFocus);
     };
   }, [currentTrainee]);
 
@@ -491,58 +483,122 @@ export const StudentKioskView: React.FC = () => {
 
         {/* ACTIVE LIVE EXTERNAL CHALLENGE (كلاس بوينت / كاهوت / كويزيز) */}
         {activeExternalActivity && (
-          <div className="bg-gradient-to-r from-purple-900/50 via-indigo-900/40 to-blue-900/50 border-2 border-purple-400/60 rounded-3xl p-6 shadow-2xl relative overflow-hidden animate-fadeIn space-y-4">
-            <div className="flex items-center justify-between flex-wrap gap-3">
+          <div className="bg-gradient-to-r from-purple-950 via-indigo-900 to-purple-900 border-2 border-purple-400 rounded-3xl p-6 shadow-2xl relative overflow-hidden animate-fadeIn space-y-4 text-white">
+            <div className="flex items-center justify-between flex-wrap gap-4">
               <div className="flex items-center gap-3">
-                <span className="w-3.5 h-3.5 rounded-full bg-emerald-400 animate-ping"></span>
+                <span className="w-4 h-4 rounded-full bg-emerald-400 animate-ping shrink-0" />
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className="text-xs bg-purple-500 text-white font-black px-2.5 py-0.5 rounded-full uppercase">
-                      {activeExternalActivity.platform || 'ClassPoint'}
+                    <span className="text-xs bg-purple-500 text-white font-black px-2.5 py-0.5 rounded-full uppercase shadow-sm">
+                      {activeExternalActivity.platform || 'Kahoot'} 🎮
                     </span>
                     <h3 className="text-lg sm:text-xl font-black text-white">
                       {activeExternalActivity.title || 'مسابقة تفاعلية أطلقها المعلم الآن!'}
                     </h3>
                   </div>
                   {activeExternalActivity.gamePin && (
-                    <div className="flex items-center gap-3 flex-wrap mt-1">
-                      <p className="text-xs text-purple-200">
-                        كود الانضمام (PIN / Code): <span className="font-mono text-base font-black text-amber-300 tracking-wider mr-1">{activeExternalActivity.gamePin}</span>
-                      </p>
-                      <p className="text-xs text-emerald-300 bg-emerald-500/20 px-2 py-0.5 rounded-lg border border-emerald-500/30">
-                        اسمك المسجل: <strong className="text-white">{studentName}</strong> (جاهز للنسخ والدخول)
+                    <div className="flex items-center gap-3 flex-wrap mt-2">
+                      <div className="flex items-center gap-1.5 bg-purple-900/80 border border-purple-400/50 px-3 py-1 rounded-xl">
+                        <span className="text-xs text-purple-200">كود الانضمام (PIN):</span>
+                        <span className="font-mono text-xl font-black text-amber-300 tracking-wider">
+                          {activeExternalActivity.gamePin}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            navigator.clipboard.writeText(activeExternalActivity.gamePin || '');
+                            setCopiedPin(true);
+                            setTimeout(() => setCopiedPin(false), 2000);
+                          }}
+                          className="px-2 py-0.5 bg-purple-700 hover:bg-purple-600 rounded-lg text-xs font-bold transition-all text-purple-200 cursor-pointer"
+                        >
+                          {copiedPin ? 'تم النسخ ✓' : 'نسخ الكود'}
+                        </button>
+                      </div>
+                      <p className="text-xs text-emerald-300 bg-emerald-500/20 px-3 py-1 rounded-xl border border-emerald-500/30">
+                        اسمك المسجل: <strong className="text-white">{studentName}</strong>
                       </p>
                     </div>
                   )}
                 </div>
               </div>
 
-              <button
-                onClick={() => {
-                  try {
-                    navigator.clipboard.writeText(studentName);
-                  } catch {}
-                  const plat = (activeExternalActivity.platform || '').toLowerCase();
-                  const pin = activeExternalActivity.gamePin || '';
-                  let targetUrl = activeExternalActivity.url || '';
+              <div className="flex items-center gap-2 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => setIsEmbeddedGameOpen(true)}
+                  className="px-4 py-2.5 bg-purple-700 hover:bg-purple-600 text-white font-bold text-xs rounded-xl transition-all border border-purple-400/40 flex items-center gap-1.5 cursor-pointer shadow-md"
+                >
+                  <span>📱 فتح داخل المنصة</span>
+                </button>
 
-                  if (plat.includes('classpoint')) {
-                    targetUrl = 'https://www.classpoint.app';
-                  } else if (plat.includes('kahoot')) {
-                    targetUrl = pin ? `https://kahoot.it/?pin=${pin}` : 'https://kahoot.it';
-                  } else if (plat.includes('quizizz')) {
-                    targetUrl = pin ? `https://quizizz.com/join?gc=${pin}` : 'https://quizizz.com/join';
-                  } else if (!targetUrl) {
-                    targetUrl = 'https://www.classpoint.app';
+                <a
+                  href={
+                    (activeExternalActivity.platform || '').toLowerCase().includes('kahoot')
+                      ? (activeExternalActivity.gamePin ? `https://kahoot.it/?pin=${activeExternalActivity.gamePin}` : 'https://kahoot.it')
+                      : (activeExternalActivity.platform || '').toLowerCase().includes('quizizz')
+                      ? (activeExternalActivity.gamePin ? `https://quizizz.com/join?gc=${activeExternalActivity.gamePin}` : 'https://quizizz.com/join')
+                      : activeExternalActivity.url || 'https://www.classpoint.app'
                   }
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={() => {
+                    try {
+                      navigator.clipboard.writeText(studentName);
+                    } catch {}
+                  }}
+                  className="px-6 py-3 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-sm rounded-2xl flex items-center gap-2 shadow-xl shadow-amber-500/30 hover:scale-105 active:scale-95 transition-all cursor-pointer"
+                >
+                  <span>الانضمام للمسابقة فوراً 🚀</span>
+                  <ExternalLink className="w-4 h-4" />
+                </a>
+              </div>
+            </div>
+          </div>
+        )}
 
-                  window.open(targetUrl, '_blank', 'noopener,noreferrer');
-                }}
-                className="px-6 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-black text-sm rounded-2xl flex items-center gap-2 shadow-xl shadow-purple-600/40 hover:scale-105 active:scale-95 transition-all cursor-pointer"
-              >
-                <span>الانضمام للمسابقة بالاسم والكود فوراً 🚀</span>
-                <ExternalLink className="w-4 h-4" />
-              </button>
+        {/* Embedded Game Modal for Kiosk */}
+        {isEmbeddedGameOpen && activeExternalActivity && (
+          <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 animate-fadeIn">
+            <div className="bg-slate-900 border-2 border-purple-500/60 rounded-3xl w-full max-w-4xl h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+              <div className="p-4 bg-purple-950/90 border-b border-purple-800 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <span className="text-2xl">🎮</span>
+                  <div>
+                    <h3 className="text-white font-black text-sm sm:text-base">
+                      {activeExternalActivity.title || 'مسابقة كاهوت التفاعلية'}
+                    </h3>
+                    <p className="text-xs text-purple-300">
+                      كود اللعبة (PIN): <strong className="text-amber-300 font-mono font-black">{activeExternalActivity.gamePin}</strong> | اسمك: <strong className="text-emerald-300">{studentName}</strong>
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <a
+                    href={activeExternalActivity.gamePin ? `https://kahoot.it/?pin=${activeExternalActivity.gamePin}` : 'https://kahoot.it'}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-3 py-1.5 bg-purple-700 hover:bg-purple-600 text-white rounded-xl text-xs font-bold flex items-center gap-1"
+                  >
+                    <span>فتح بنافذة كاملة</span>
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </a>
+                  <button
+                    onClick={() => setIsEmbeddedGameOpen(false)}
+                    className="p-2 text-slate-400 hover:text-white rounded-xl hover:bg-white/10"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+              </div>
+              <div className="flex-1 bg-slate-950 relative">
+                <iframe
+                  src={activeExternalActivity.gamePin ? `https://kahoot.it/?pin=${activeExternalActivity.gamePin}` : 'https://kahoot.it'}
+                  className="w-full h-full border-0"
+                  title="Live Kahoot Game"
+                  allow="fullscreen; clipboard-read; clipboard-write"
+                />
+              </div>
             </div>
           </div>
         )}

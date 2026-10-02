@@ -816,3 +816,674 @@ export function getVoiceSummaryTopicsForGrade(curriculum: GradeCurriculum): Arra
 
   return list;
 }
+
+// =========================================================================
+// OFFICIAL 2026/2027 MOE ICT CURRICULUM FOR LANGUAGES (Primary 4, 5, 6 & Prep 1, 2)
+// With Interactive Key Elements (العناصر والمفاهيم الأساسية المعتمدة)
+// =========================================================================
+
+export interface OfficialLessonConcept {
+  id: string;
+  nameAr: string;
+  nameEn: string;
+  category?: 'core' | 'hardware' | 'software' | 'safety' | 'practical';
+}
+
+export interface OfficialCurriculumLesson {
+  id: string;
+  gradeKey: 'grade4' | 'grade5' | 'grade6' | 'prep1' | 'prep2';
+  gradeNameAr: string;
+  gradeNameEn: string;
+  term: 1 | 2;
+  unitNumber: number;
+  unitTitleAr: string;
+  unitTitleEn: string;
+  lessonNumber: number;
+  titleAr: string;
+  titleEn: string;
+  concepts: OfficialLessonConcept[];
+  defaultHomework: string[];
+  bonusChallenge: string;
+  nextPrep: string[];
+}
+
+export const OFFICIAL_ICT_CURRICULUM_2026_2027: Record<string, OfficialCurriculumLesson[]> = {
+  // -----------------------------------------------------------------------
+  // GRADE 4 (Primary 4 Languages) - ICT 4 (2026/2027)
+  // -----------------------------------------------------------------------
+  grade4: [
+    {
+      id: 'g4_t1_l1',
+      gradeKey: 'grade4',
+      gradeNameAr: 'الصف الرابع الابتدائي',
+      gradeNameEn: 'Grade 4 (Primary 4 Languages)',
+      term: 1,
+      unitNumber: 1,
+      unitTitleAr: 'المحور الأول: دور تكنولوجيا المعلومات في حياتنا',
+      unitTitleEn: 'Theme 1: The Role of ICT in Our Lives',
+      lessonNumber: 1,
+      titleAr: 'الدرس 1: المستكشف النشط (عالم الآثار ألبرت لين)',
+      titleEn: 'Lesson 1: Explorer in Action (Archaeologist Albert Lin)',
+      concepts: [
+        { id: 'g4_l1_c1', nameAr: 'الرادار المخترق للأرض (GPR - Ground Penetrating Radar)', nameEn: 'Ground Penetrating Radar (GPR)', category: 'hardware' },
+        { id: 'g4_l1_c2', nameAr: 'مقياس المغناطيسية (Magnetometer) للكشف عن المعادن', nameEn: 'Magnetometer (Detecting Metals)', category: 'hardware' },
+        { id: 'g4_l1_c3', nameAr: 'نظام تحديد المواقع العالمي (GPS) واستخدام الأقمار الصناعية', nameEn: 'Global Positioning System (GPS)', category: 'hardware' },
+        { id: 'g4_l1_c4', nameAr: 'أدوات الاستكشاف فوق الأرض وتحت الأرض بدون حفر', nameEn: 'Non-invasive Archaeological Surveying', category: 'core' }
+      ],
+      defaultHomework: [
+        'كتابة جدول في الكشكول يوضح وظيفة كل من: (GPS, Magnetometer, GPR) مع رسم توضيحي بسيط.',
+        'حل أسئلة كتاب الوزارة المعتمد على الدرس الأول في كشكول الحصة.',
+        'تصوير ورقة الإجابة بالكشكول ورفعها عبر بوابة المتدرب للتقييم والتصحيح الذكي.'
+      ],
+      bonusChallenge: '🌟 بونص تفوق: تخيل أنك مستكشف يبحث عن آثار تحت الأرض، اكتب خطة من 3 أسطر تحدد فيها أي الأدوات ستستخدم أولاً ولماذا!',
+      nextPrep: ['التحضير للدرس الثاني: التكنولوجيا وتطورها التاريخي والعصور الأربعة من عصر ما قبل الميكانيكا حتى عصر الإلكترونيات.']
+    },
+    {
+      id: 'g4_t1_l2',
+      gradeKey: 'grade4',
+      gradeNameAr: 'الصف الرابع الابتدائي',
+      gradeNameEn: 'Grade 4 (Primary 4 Languages)',
+      term: 1,
+      unitNumber: 1,
+      unitTitleAr: 'المحور الأول: دور تكنولوجيا المعلومات في حياتنا',
+      unitTitleEn: 'Theme 1: The Role of ICT in Our Lives',
+      lessonNumber: 2,
+      titleAr: 'الدرس 2: التكنولوجيا وتطورها التاريخي عبر العصور',
+      titleEn: 'Lesson 2: Technology and Its Historical Evolution',
+      concepts: [
+        { id: 'g4_l2_c1', nameAr: 'عصر ما قبل الثورة الميكانيكية (Pre-mechanical Age) - الكتابة والصور والرموز الهيروغليفية', nameEn: 'Pre-mechanical Age (3000 BC - 1450 AD)', category: 'core' },
+        { id: 'g4_l2_c2', nameAr: 'عصر الثورة الميكانيكية (Mechanical Age) - الطباعة والآلة الكاتبة وآلة باسكالين', nameEn: 'Mechanical Age (Printing Press, Pascaline)', category: 'core' },
+        { id: 'g4_l2_c3', nameAr: 'عصر الثورة الكهروميكانيكية (Electro-mechanical Age) - التلغراف وخطوط الهاتف وبدايات الكمبيوتر', nameEn: 'Electro-mechanical Age (Telegraph, Telephone)', category: 'core' },
+        { id: 'g4_l2_c4', nameAr: 'عصر الثورة الإلكترونية والمعلوماتية (Electronic Age) - الحواسيب الشخصية والأقمار الصناعية والإنترنت', nameEn: 'Electronic Age (Personal Computers, Satellites)', category: 'core' }
+      ],
+      defaultHomework: [
+        'رسم خط زمني (Timeline) في الكشكول يضم العصور الأربعة للتكنولوجيا مع ذكر اختراع واحد لكل عصر.',
+        'حل أسئلة مراجعة التطور التكنولوجي وتصوير الكشكول ورفعه على البوابة.'
+      ],
+      bonusChallenge: '🌟 بونص متميز: ابحث عن مخترع آلة "باسكالين Pascaline" واكتب في سطرين كيف ساعدت في علم الحساب.',
+      nextPrep: ['التحضير للدرس الثالث: مكونات جهاز الكمبيوتر (وحدات الإدخال والإخراج).']
+    },
+    {
+      id: 'g4_t1_l3',
+      gradeKey: 'grade4',
+      gradeNameAr: 'الصف الرابع الابتدائي',
+      gradeNameEn: 'Grade 4 (Primary 4 Languages)',
+      term: 1,
+      unitNumber: 1,
+      unitTitleAr: 'المحور الأول: دور تكنولوجيا المعلومات في حياتنا',
+      unitTitleEn: 'Theme 1: The Role of ICT in Our Lives',
+      lessonNumber: 3,
+      titleAr: 'الدرس 3: مكونات جهاز الكمبيوتر (العتاد ووحدات الإدخال والإخراج)',
+      titleEn: 'Lesson 3: Components of Computer Systems (Hardware, Input & Output)',
+      concepts: [
+        { id: 'g4_l3_c1', nameAr: 'وحدات الإدخال (Input Devices): لوحة المفاتيح، الفأرة، الميكروفون، الكاميرا، الماسح الضوئي Scanner', nameEn: 'Input Devices (Keyboard, Mouse, Mic, Camera, Scanner)', category: 'hardware' },
+        { id: 'g4_l3_c2', nameAr: 'وحدات الإخراج (Output Devices): الشاشة، مكبرات الصوت Speakers، مركب الكلام Speech Synthesizer، شاشة برايل الطرفية', nameEn: 'Output Devices (Screen, Speakers, Speech Synthesizer, Braille)', category: 'hardware' },
+        { id: 'g4_l3_c3', nameAr: 'مكونات الكيسة (Hardware Parts): اللوحة الأم Motherboard، المعالج CPU، مزود الطاقة Power Supply، الذاكرة RAM، القرص الصلب Hard Disk', nameEn: 'Case Hardware (Motherboard, CPU, Power Supply, RAM, HDD)', category: 'hardware' },
+        { id: 'g4_l3_c4', nameAr: 'دورة معالجة البيانات: إدخال البيانات Data -> معالجة بالمخيخ CPU -> إخراج المعلومات Information', nameEn: 'Data Processing Cycle (Input Data -> CPU -> Output Information)', category: 'core' }
+      ],
+      defaultHomework: [
+        'كتابة جدول في الكشكول للمقارنة بين وحدات الإدخال (Input) ووحدات الإخراج (Output).',
+        'رسم وتوثيق أسماء مكونات الكيسة الخمسة (Power Supply, Motherboard, CPU, RAM, Hard Disk) بالإنجليزي والعربي.',
+        'تصوير صفحات الكشكول ورفعها عبر بوابة المتدرب الذكية.'
+      ],
+      bonusChallenge: '🌟 بونص عملي: تسجيل فويس قصير أو فيديو تشرح فيه بصوتك الفرق بين Data و Information وتسمي 3 وحدات إدخال.',
+      nextPrep: ['التحضير للدرس الرابع: البرمجيات وأنظمة التشغيل (Software & Operating Systems).']
+    },
+    {
+      id: 'g4_t1_l4',
+      gradeKey: 'grade4',
+      gradeNameAr: 'الصف الرابع الابتدائي',
+      gradeNameEn: 'Grade 4 (Primary 4 Languages)',
+      term: 1,
+      unitNumber: 1,
+      unitTitleAr: 'المحور الأول: دور تكنولوجيا المعلومات في حياتنا',
+      unitTitleEn: 'Theme 1: The Role of ICT in Our Lives',
+      lessonNumber: 4,
+      titleAr: 'الدرس 4: البرمجيات وأنظمة التشغيل (Software & Operating Systems)',
+      titleEn: 'Lesson 4: Software and Operating Systems',
+      concepts: [
+        { id: 'g4_l4_c1', nameAr: 'نظام التشغيل (Operating System - Windows) ودوره كوسيط بين المستخدم والعتاد', nameEn: 'Operating System (OS Role & Windows)', category: 'software' },
+        { id: 'g4_l4_c2', nameAr: 'وحدة المعالجة المركزية (CPU) عقل الكمبيوتر ومسؤولية معالجة الأوامر', nameEn: 'CPU (Brain of Computer & Command Processing)', category: 'hardware' },
+        { id: 'g4_l4_c3', nameAr: 'البرمجيات التطبيقية (Application Software) مثل Word, PowerPoint, المتصفحات والألعاب', nameEn: 'Applications Software (MS Word, PowerPoint, Browsers)', category: 'software' },
+        { id: 'g4_l4_c4', nameAr: 'مخطط تدفق الأوامر: المستخدم -> التطبيق -> نظام التشغيل OS -> المعالج CPU -> الشاشة', nameEn: 'Software Execution Flow to CPU', category: 'core' }
+      ],
+      defaultHomework: [
+        'كتابة خطوات ما يحدث عند كتابة حرف في برنامج Word حتى يظهر على الشاشة في الكشكول.',
+        'حل تدريبات الدرس الرابع بالكشكول وتصويرها لرفعها على البوابة.'
+      ],
+      bonusChallenge: '🌟 بونص ذكاء: اذكر اسم نظامي تشغيل غير الويندوز يُستخدمان في الهواتف الذكية.',
+      nextPrep: ['التحضير للدرس الخامس: التكنولوجيا المساعدة ودعم ذوي الهمم (Assistive Technology).']
+    },
+    {
+      id: 'g4_t1_l5',
+      gradeKey: 'grade4',
+      gradeNameAr: 'الصف الرابع الابتدائي',
+      gradeNameEn: 'Grade 4 (Primary 4 Languages)',
+      term: 1,
+      unitNumber: 1,
+      unitTitleAr: 'المحور الأول: دور تكنولوجيا المعلومات في حياتنا',
+      unitTitleEn: 'Theme 1: The Role of ICT in Our Lives',
+      lessonNumber: 5,
+      titleAr: 'الدرس 5: التكنولوجيا المساعدة ودعم أصحاب الهمم (Assistive Technology)',
+      titleEn: 'Lesson 5: Supporting People of Determination with Assistive Technology',
+      concepts: [
+        { id: 'g4_l5_c1', nameAr: 'برمجيات تكبير الشاشة (Screen Magnification Software) لضعاف البصر', nameEn: 'Screen Magnification Software', category: 'software' },
+        { id: 'g4_l5_c2', nameAr: 'برمجيات التواصل البديل (Alternative Communication Software) لفاقدي النطق', nameEn: 'Alternative Communication Software', category: 'software' },
+        { id: 'g4_l5_c3', nameAr: 'سماعات الأذن الرقمية وبرامج معالجة السمع الذكية', nameEn: 'Digital Hearing Aids', category: 'hardware' },
+        { id: 'g4_l5_c4', nameAr: 'الأطراف الاصطناعية الذكية والكراسي المتحركة الكهربائية والمستكشف ألبرت لين', nameEn: 'Smart Prosthetics & Wheelchairs (Albert Lin)', category: 'hardware' }
+      ],
+      defaultHomework: [
+        'كتابة 3 أمثلة للتكنولوجيا المساعدة وكيف تفيد الطلاب في حياتهم اليومية بالكشكول.',
+        'تصوير واجب الكشكول ورفعه على بوابة المتدرب.'
+      ],
+      bonusChallenge: '🌟 بونص ابتكار: اقترح فكرة جهاز ذكي جديد يساعد زميلك الكفيف في المدرسة.',
+      nextPrep: ['التحضير للدرس السادس: مشكلات شائعة لتكنولوجيا المعلومات وحلولها الخطوة بخطوة.']
+    },
+    {
+      id: 'g4_t1_l6',
+      gradeKey: 'grade4',
+      gradeNameAr: 'الصف الرابع الابتدائي',
+      gradeNameEn: 'Grade 4 (Primary 4 Languages)',
+      term: 1,
+      unitNumber: 1,
+      unitTitleAr: 'المحور الأول: دور تكنولوجيا المعلومات في حياتنا',
+      unitTitleEn: 'Theme 1: The Role of ICT in Our Lives',
+      lessonNumber: 6,
+      titleAr: 'الدرس 6: مشكلات شائعة لتكنولوجيا المعلومات وطرق حلها (Troubleshooting)',
+      titleEn: 'Lesson 6: Common ICT Problems and Troubleshooting Solutions',
+      concepts: [
+        { id: 'g4_l6_c1', nameAr: 'مشكلة عدم فتح أحد التطبيقات (إغلاقه عبر إدارة المهام، تحديث البرنامج، إعادة تشغيل الجهاز)', nameEn: 'App Not Opening Troubleshooting', category: 'practical' },
+        { id: 'g4_l6_c2', nameAr: 'مشكلة توقف مؤشر الفأرة أو لوحة المفاتيح (فحص كابل USB، إعادة التشغيل، التأكد من البطارية)', nameEn: 'Mouse / Keyboard Not Responding', category: 'practical' },
+        { id: 'g4_l6_c3', nameAr: 'مشكلة تجمد الشاشة (Screen Freeze) والضغط على Ctrl + Alt + Delete', nameEn: 'Screen Freeze & Force Quit', category: 'practical' },
+        { id: 'g4_l6_c4', nameAr: 'مشكلة انقطاع الإنترنت (فحص اتصال Wi-Fi، كابل الراوتر، إعادة تشغيل جهاز الراوتر)', nameEn: 'No Internet Connection Solutions', category: 'practical' }
+      ],
+      defaultHomework: [
+        'كتابة جدول في الكشكول يضم 3 مشكلات للكمبيوتر والحل المقترح لكل مشكلة خطوة بخطوة.',
+        'حل تدريبات كتاب المدرسة وتصوير صفحات الإجابة.'
+      ],
+      bonusChallenge: '🌟 بونص عملي: طبق خطوة إعادة تشغيل الراوتر في المنزل واكتب ماذا لاحظت في الأضواء.',
+      nextPrep: ['التحضير للدرس السابع: جمع البيانات وتحليلها ورسم المخططات البيانية ببرنامج Excel.']
+    },
+    {
+      id: 'g4_t1_l7',
+      gradeKey: 'grade4',
+      gradeNameAr: 'الصف الرابع الابتدائي',
+      gradeNameEn: 'Grade 4 (Primary 4 Languages)',
+      term: 1,
+      unitNumber: 1,
+      unitTitleAr: 'المحور الأول: دور تكنولوجيا المعلومات في حياتنا',
+      unitTitleEn: 'Theme 1: The Role of ICT in Our Lives',
+      lessonNumber: 7,
+      titleAr: 'الدرس 7: جمع البيانات وتحليلها والتعبير عنها برسم بياني (Data & Graphs)',
+      titleEn: 'Lesson 7: Collecting, Analyzing Data and Graphing with Excel',
+      concepts: [
+        { id: 'g4_l7_c1', nameAr: 'مصادر جمع البيانات (الاستطلاعات Surveys، التجارب، المقابلات الشخصية، الكتب الموثوقة)', nameEn: 'Data Collection Sources (Surveys, Experiments)', category: 'core' },
+        { id: 'g4_l7_c2', nameAr: 'تحليل البيانات ومراجعتها واستبعاد المعلومات غير الدقيقة', nameEn: 'Data Analysis & Verification', category: 'core' },
+        { id: 'g4_l7_c3', nameAr: 'الرسم البياني العمودي (Bar Chart) للتعبير عن النتائج بوضوح', nameEn: 'Bar Charts Presentation', category: 'software' },
+        { id: 'g4_l7_c4', nameAr: 'تطبيق عملي باستخدام برنامج Microsoft Excel لإنشاء جدول ورسم بياني', nameEn: 'Excel Hands-on Chart Creation', category: 'practical' }
+      ],
+      defaultHomework: [
+        'جمع بيانات سريعة عن الأجهزة المفضلة لأفراد أسرتك (موبايل، لابتوب، تابلت) ورسم عمود بياني في الكشكول.',
+        'تصوير الرسم البياني بالكشكول ورفعه على البوابة.'
+      ],
+      bonusChallenge: '🌟 بونص متميز: فتح ملف Excel على الكمبيوتر وتجربة إدراج رسم بياني وتصوير الشاشة.',
+      nextPrep: ['التحضير للدرس الثامن: إعداد التقارير لنتائج الأبحاث وعروض PowerPoint.']
+    },
+    {
+      id: 'g4_t1_l8',
+      gradeKey: 'grade4',
+      gradeNameAr: 'الصف الرابع الابتدائي',
+      gradeNameEn: 'Grade 4 (Primary 4 Languages)',
+      term: 1,
+      unitNumber: 1,
+      unitTitleAr: 'المحور الأول: دور تكنولوجيا المعلومات في حياتنا',
+      unitTitleEn: 'Theme 1: The Role of ICT in Our Lives',
+      lessonNumber: 8,
+      titleAr: 'الدرس 8: إعداد ومشاركة التقارير لنتائج الأبحاث (Reporting Findings)',
+      titleEn: 'Lesson 8: Preparing and Reporting Research Findings',
+      concepts: [
+        { id: 'g4_l8_c1', nameAr: 'العروض التقديمية (PowerPoint Presentations) وتنظيم الشرائح والألوان والخطوط', nameEn: 'PowerPoint Slide Presentations', category: 'software' },
+        { id: 'g4_l8_c2', nameAr: 'مقاطع الفيديو التعليمية والتسجيلات الصوتية لشرح النتائج', nameEn: 'Educational Video & Voice Clips', category: 'core' },
+        { id: 'g4_l8_c3', nameAr: 'الملصقات الإعلانية الرقمية والورقية (Posters) لجذب الانتباه', nameEn: 'Digital Posters & Visual Aids', category: 'practical' },
+        { id: 'g4_l8_c4', nameAr: 'المقالات الرقمية والمدونات (Blogs) ومواقع التواصل لنشر المعرفة باحترافية', nameEn: 'Digital Blogs & Safe Publishing', category: 'core' }
+      ],
+      defaultHomework: [
+        'تصميم ملصق ورقي أو شريحة باوربوينت في الكشكول تعرض فكرة مشروع رقمي صغير.',
+        'حل تدريبات مراجعة المحور الأول كاملاً في الكشكول ورفع الصور.'
+      ],
+      bonusChallenge: '🌟 بونص إبداعي: فتح PowerPoint وعمل شريحة واحدة بها عنوانك وصورة وتنسيق جميل.',
+      nextPrep: ['التحضير للمحور الثاني: احتياطات السلامة والأمان الرقمي على شبكة الإنترنت.']
+    }
+  ],
+
+  // -----------------------------------------------------------------------
+  // GRADE 5 (Primary 5 Languages) - ICT 5 (2026/2027)
+  // -----------------------------------------------------------------------
+  grade5: [
+    {
+      id: 'g5_t1_l1',
+      gradeKey: 'grade5',
+      gradeNameAr: 'الصف الخامس الابتدائي',
+      gradeNameEn: 'Grade 5 (Primary 5 Languages)',
+      term: 1,
+      unitNumber: 1,
+      unitTitleAr: 'المحور الأول: دور تكنولوجيا المعلومات في حياتنا اليومية',
+      unitTitleEn: 'Theme 1: ICT in Daily Life',
+      lessonNumber: 1,
+      titleAr: 'الدرس 1: المستكشف النشط (عالم الآثار فريد هيبرت)',
+      titleEn: 'Lesson 1: Explorer in Action (Archaeologist Fred Hiebert)',
+      concepts: [
+        { id: 'g5_l1_c1', nameAr: 'استخدام برامج Microsoft Word و Excel و PowerPoint في توثيق الأبحاث والبعثات', nameEn: 'Office Suite in Archaeological Research', category: 'software' },
+        { id: 'g5_l1_c2', nameAr: 'أدوات التواصل الرقمي: البريد الإلكتروني، تطبيق WhatsApp، مكالمات Zoom الافتراضية', nameEn: 'Digital Communication (Zoom, WhatsApp, Email)', category: 'core' },
+        { id: 'g5_l1_c3', nameAr: 'الجولات الافتراضية (Virtual Tours) واستكشاف المتاحف عن بُعد', nameEn: 'Virtual Museum Tours', category: 'core' },
+        { id: 'g5_l1_c4', nameAr: 'الاستفادة من بنك المعرفة المصري (EKB) في التعليم والتدريب للطلاب', nameEn: 'Egyptian Knowledge Bank (EKB) in Learning', category: 'core' }
+      ],
+      defaultHomework: [
+        'كتابة 3 أدوات رقمية استخدمها فريد هيبرت في التواصل مع زملائه وتوثيق اكتشافاته بالكشكول.',
+        'تصوير صفحات الكشكول ورفعها عبر البوابة الذكية.'
+      ],
+      bonusChallenge: '🌟 بونص متميز: زيارة موقع بنك المعرفة المصري وكتابة اسم كتاب أو درس تصفحته هناك.',
+      nextPrep: ['التحضير للدرس الثاني: الأدوات والملحقات الرقمية (Accessories) ووحدات قياس البيانات.']
+    },
+    {
+      id: 'g5_t1_l2',
+      gradeKey: 'grade5',
+      gradeNameAr: 'الصف الخامس الابتدائي',
+      gradeNameEn: 'Grade 5 (Primary 5 Languages)',
+      term: 1,
+      unitNumber: 1,
+      unitTitleAr: 'المحور الأول: دور تكنولوجيا المعلومات في حياتنا اليومية',
+      unitTitleEn: 'Theme 1: ICT in Daily Life',
+      lessonNumber: 2,
+      titleAr: 'الدرس 2: ملحقات الكمبيوتر وأدوات الشبكات ووحدات القياس (Accessories & Units)',
+      titleEn: 'Lesson 2: Computer Network Accessories & Storage Units',
+      concepts: [
+        { id: 'g5_l2_c1', nameAr: 'الراوتر (Router) وكابل الإيثرنت (Ethernet Cable) ومنفذ الإيثرنت (Ethernet Port)', nameEn: 'Router, Ethernet Cable & Port', category: 'hardware' },
+        { id: 'g5_l2_c2', nameAr: 'القرص الصلب الخارجي (External Hard Drive) وذاكرة الفلاشة (Flash Memory)', nameEn: 'External HDD & USB Flash Memory', category: 'hardware' },
+        { id: 'g5_l2_c3', nameAr: 'وحدات قياس البيانات: Bit, Byte (8 Bits), KB, MB, GB, TB بالترتيب التصاعدي', nameEn: 'Data Units (Bit, Byte, KB, MB, GB, TB)', category: 'core' },
+        { id: 'g5_l2_c4', nameAr: 'وحدة قياس سرعة الإنترنت: ميجابت في الثانية (Mbps - Megabits per second)', nameEn: 'Network Speed Units (Mbps)', category: 'core' }
+      ],
+      defaultHomework: [
+        'كتابة سلم وحدات القياس التصاعدي من Bit إلى TB في الكشكول وتوضيح كم بت في البايت الواحد.',
+        'المقارنة بين كابل الإيثرنت وشبكة Wi-Fi اللاسلكية من حيث السرعة والاستقرار.',
+        'تصوير الكشكول ورفعه على البوابة.'
+      ],
+      bonusChallenge: '🌟 بونص حسابي: إذا كانت لديك فلاشة مساحتها 16 جيجابايت، احسب كم ميجابايت تقريبًا بداخلها!',
+      nextPrep: ['التحضير للدرس الثالث: الشبكات ومفاهيم الإنترنت والإنترانت (LAN, WAN, Internet vs Intranet).']
+    },
+    {
+      id: 'g5_t1_l3',
+      gradeKey: 'grade5',
+      gradeNameAr: 'الصف الخامس الابتدائي',
+      gradeNameEn: 'Grade 5 (Primary 5 Languages)',
+      term: 1,
+      unitNumber: 1,
+      unitTitleAr: 'المحور الأول: دور تكنولوجيا المعلومات في حياتنا اليومية',
+      unitTitleEn: 'Theme 1: ICT in Daily Life',
+      lessonNumber: 3,
+      titleAr: 'الدرس 3: شبكات الحاسوب والإنترنت والإنترانت (Networks, Internet & Intranet)',
+      titleEn: 'Lesson 3: Computer Networks, Internet, Intranet & IoT',
+      concepts: [
+        { id: 'g5_l3_c1', nameAr: 'الشبكة المحلية (LAN - Local Area Network) في معمل المدرسة أو المنزل', nameEn: 'Local Area Network (LAN)', category: 'core' },
+        { id: 'g5_l3_c2', nameAr: 'شبكة الإنترنت المفتوحة (Internet) مقابل شبكة الإنترانت المغلقة (Intranet)', nameEn: 'Internet vs Intranet Differences', category: 'core' },
+        { id: 'g5_l3_c3', nameAr: 'شبكة الويب العالمية (World Wide Web - WWW) ودورها في تصفح المواقع', nameEn: 'World Wide Web (WWW)', category: 'software' },
+        { id: 'g5_l3_c4', nameAr: 'إنترنت الأشياء (IoT - Internet of Things) والبلوتوث (Bluetooth) والأجهزة المنزلية الذكية', nameEn: 'Internet of Things (IoT) & Bluetooth', category: 'hardware' }
+      ],
+      defaultHomework: [
+        'كتابة جدول مقارنة دقيق بين Internet و Intranet في الكشكول.',
+        'كتابة مثالين على أجهزة تدعم تقنية إنترنت الأشياء (IoT) في المنزل الذكي.',
+        'تصوير الكشكول ورفعه على بوابة المتدرب.'
+      ],
+      bonusChallenge: '🌟 بونص تكنولوجي: كيف تساعد تقنية إنترنت الأشياء الأشخاص ضعاف البصر داخل منازلهم؟',
+      nextPrep: ['التحضير للدرس الرابع: أدوات التواصل والعمل الجماعي الرقمي.']
+    }
+  ],
+
+  // -----------------------------------------------------------------------
+  // GRADE 6 (Primary 6 Languages) - ICT 6 (2026/2027)
+  // -----------------------------------------------------------------------
+  grade6: [
+    {
+      id: 'g6_t1_l1',
+      gradeKey: 'grade6',
+      gradeNameAr: 'الصف السادس الابتدائي',
+      gradeNameEn: 'Grade 6 (Primary 6 Languages)',
+      term: 1,
+      unitNumber: 1,
+      unitTitleAr: 'الوحدة الأولى: شبكات الحاسوب وأدوات الذكاء الاصطناعي',
+      unitTitleEn: 'Unit 1: Computer Networks & AI Tools',
+      lessonNumber: 1,
+      titleAr: 'الدرس 1: المستكشف النشط (المطور كارتيك ساوهني)',
+      titleEn: 'Lesson 1: Explorer in Action (Developer Kartik Sawhney)',
+      concepts: [
+        { id: 'g6_l1_c1', nameAr: 'التكنولوجيا المساعدة المتقدمة وتطوير منصات رقمية تدعم فاقدي البصر', nameEn: 'Advanced Assistive Platforms for Visually Impaired', category: 'software' },
+        { id: 'g6_l1_c2', nameAr: 'تحويل الرسوم البيانية والمعادلات الرياضية المعقدة إلى رموز صوتية وبرايل', nameEn: 'STEM to Audio & Braille Conversion', category: 'core' },
+        { id: 'g6_l1_c3', nameAr: 'استخدام تطبيقات الذكاء الاصطناعي في قراءة النصوص والتعرف على العناصر بالصور', nameEn: 'AI Computer Vision & Screen Readers', category: 'software' },
+        { id: 'g6_l1_c4', nameAr: 'ريادة الأعمال التكنولوجية وحلول الدمج الشامل في التعليم والعمل', nameEn: 'Inclusive EdTech & Social Impact', category: 'core' }
+      ],
+      defaultHomework: [
+        'كتابة ملخص في الكشكول يوضح إنجازات كارتيك ساوهني وكيف طوّر أدوات قراءة الرسوم الرياضية للمكفوفين.',
+        'تصوير الكشكول ورفعه عبر البوابة للتصحيح الذكي.'
+      ],
+      bonusChallenge: '🌟 بونص متميز: ابحث عن اسم منصة I-Stem التي شارك كارتيك في تأسيسها واكتب هدفها في سطرين.',
+      nextPrep: ['التحضير للدرس الثاني: أجهزة شبكات الكمبيوتر (المودم، المحول، الراوتر، الشبكات السلكية واللاسلكية).']
+    },
+    {
+      id: 'g6_t1_l2',
+      gradeKey: 'grade6',
+      gradeNameAr: 'الصف السادس الابتدائي',
+      gradeNameEn: 'Grade 6 (Primary 6 Languages)',
+      term: 1,
+      unitNumber: 1,
+      unitTitleAr: 'الوحدة الأولى: شبكات الحاسوب وأدوات الذكاء الاصطناعي',
+      unitTitleEn: 'Unit 1: Computer Networks & AI Tools',
+      lessonNumber: 2,
+      titleAr: 'الدرس 2: أجهزة شبكات الكمبيوتر والتكنولوجيا المتقدمة (Network Hardware & Smart Tech)',
+      titleEn: 'Lesson 2: Computer Network Devices (Modem, Switch, Router & Smart Tech)',
+      concepts: [
+        { id: 'g6_l2_c1', nameAr: 'الشبكات السلكية (Wired Networks - كابلات Ethernet) مقابل اللاسلكية (Wireless Networks - Wi-Fi)', nameEn: 'Wired vs Wireless Networks', category: 'hardware' },
+        { id: 'g6_l2_c2', nameAr: 'المودم (Modem) ودوره في تحويل إشارات مزود الخدمة ISP إلى إشارات رقمية', nameEn: 'Modem (ISP Signal Conversion)', category: 'hardware' },
+        { id: 'g6_l2_c3', nameAr: 'المحول الذكي (Switch) لإرسال البيانات إلى الجهاز المقصود تحديداً عبر عنوان MAC', nameEn: 'Switch (Intelligent Data Routing via MAC)', category: 'hardware' },
+        { id: 'g6_l2_c4', nameAr: 'الراوتر (Router) وتوصيل الأجهزة بشبكة الإنترنت وتوزيع عناوين IP', nameEn: 'Router (IP Distribution & Internet Access)', category: 'hardware' },
+        { id: 'g6_l2_c5', nameAr: 'مقدمة في الذكاء الاصطناعي (AI)، الواقع الافتراضي (VR)، والواقع المعزز (AR)', nameEn: 'Emerging Tech: AI, VR & AR Integration', category: 'core' }
+      ],
+      defaultHomework: [
+        'كتابة الفروق الجوهرية بين المودم (Modem) والمحول (Switch) والراوتر (Router) في الكشكول مع رسم توضيحي.',
+        'توضيح الفرق بين الشبكة السلكية والشبكة اللاسلكية في جدول.',
+        'تصوير صفحات الكشكول ورفعها عبر البوابة للتقييم الفوري.'
+      ],
+      bonusChallenge: '🌟 بونص تطبيقي: افحص الراوتر والمودم في منزلك واكتب نوع التوصيل (سلكي أم لاسلكي) وعدد المنافذ فيه.',
+      nextPrep: ['التحضير للدرس الثالث: التكنولوجيا المتقدمة وتطبيقات الذكاء الاصطناعي والواقع المعزز في حياتنا اليومية.']
+    },
+    {
+      id: 'g6_t1_l7',
+      gradeKey: 'grade6',
+      gradeNameAr: 'الصف السادس الابتدائي',
+      gradeNameEn: 'Grade 6 (Primary 6 Languages)',
+      term: 1,
+      unitNumber: 1,
+      unitTitleAr: 'الوحدة الأولى: شبكات الحاسوب وأدوات الذكاء الاصطناعي',
+      unitTitleEn: 'Unit 1: Computer Networks & AI Tools',
+      lessonNumber: 7,
+      titleAr: 'الدرس 7: أنظمة تشغيل الحواسيب والهواتف (Operating Systems)',
+      titleEn: 'Lesson 7: Desktop & Mobile Operating Systems',
+      concepts: [
+        { id: 'g6_l7_c1', nameAr: 'أنظمة تشغيل الحواسيب: Windows, macOS, Linux (مفتوح المصدر)', nameEn: 'Desktop OS (Windows, macOS, Open-Source Linux)', category: 'software' },
+        { id: 'g6_l7_c2', nameAr: 'أنظمة تشغيل الهواتف الذكية: Android, iOS وإدارة التطبيقات والأذونات', nameEn: 'Mobile OS (Android & Apple iOS)', category: 'software' },
+        { id: 'g6_l7_c3', nameAr: 'أنظمة تشغيل أجهزة الروبوت (ROS - Robot Operating System)', nameEn: 'Robot Operating Systems (ROS)', category: 'software' },
+        { id: 'g6_l7_c4', nameAr: 'الفرق بين البرمجيات مغلقة المصدر ومفتوحة المصدر (Closed vs Open Source)', nameEn: 'Open Source vs Closed Source Software', category: 'core' }
+      ],
+      defaultHomework: [
+        'كتابة مقارنة بين نظام Windows ونظام Linux من حيث المصدر والترخيص في الكشكول.',
+        'تصوير الكشكول ورفعه على البوابة.'
+      ],
+      bonusChallenge: '🌟 بونص متميز: اذكر 3 مميزات لنظام التشغيل مفتوح المصدر (Open-Source) ولماذا يفضله المبرمجون.',
+      nextPrep: ['التحضير للدرس الثامن: تصميم صفحات الويب التفاعلية بلغة ترميز النصوص التشعبية HTML.']
+    },
+    {
+      id: 'g6_t1_l8',
+      gradeKey: 'grade6',
+      gradeNameAr: 'الصف السادس الابتدائي',
+      gradeNameEn: 'Grade 6 (Primary 6 Languages)',
+      term: 1,
+      unitNumber: 1,
+      unitTitleAr: 'الوحدة الأولى: شبكات الحاسوب وأدوات الذكاء الاصطناعي',
+      unitTitleEn: 'Unit 1: Computer Networks & AI Tools',
+      lessonNumber: 8,
+      titleAr: 'الدرس 8: تصميم وبرمجة صفحات الويب بلغة HTML',
+      titleEn: 'Lesson 8: Designing Webpages with HTML',
+      concepts: [
+        { id: 'g6_l8_c1', nameAr: 'مفهوم لغة HTML (HyperText Markup Language) لهيكلة صفحات الإنترنت', nameEn: 'HTML (HyperText Markup Language) Fundamentals', category: 'software' },
+        { id: 'g6_l8_c2', nameAr: 'هيكل الصفحة الأساسي: الوسوم <html> و <head> و <title> و <body>', nameEn: 'Basic Document Structure (html, head, title, body)', category: 'software' },
+        { id: 'g6_l8_c3', nameAr: 'وسوم العناوين الرئيسية والفرعية: من <h1> الأكبر حتى <h6> الأصغر', nameEn: 'Heading Tags (h1 through h6)', category: 'software' },
+        { id: 'g6_l8_c4', nameAr: 'وسم الفقرة <p> ووسوم التنسيق: <strong> للخط العريض و <em> للخط المائل', nameEn: 'Paragraph <p> & Text Styling (strong, em)', category: 'software' },
+        { id: 'g6_l8_c5', nameAr: 'القوائم النقطية <ul> والمرقمة <ol> وعناصر القائمة <li>', nameEn: 'Lists (ul, ol, li elements)', category: 'software' }
+      ],
+      defaultHomework: [
+        'كتابة كود صفحة HTML بسيطة في الكشكول تحتوي على: عنوان h1 باسمك، فقرة p، وقائمة بـ 3 هوايات.',
+        'تصوير الكود المكتوب في الكشكول ورفعه عبر بوابة المتدرب للتصحيح والحصول على النجوم.'
+      ],
+      bonusChallenge: '🌟 بونص برمجي عملي: إنشاء ملف بامتداد .html على جهاز الكمبيوتر وفتحه بمتصفح Chrome وتصوير الشاشة!',
+      nextPrep: ['التحضير للوحدة الثانية: الأمن السيبراني وطرق الحماية والمصادقة متعددة العوامل 2FA.']
+    }
+  ],
+
+  // -----------------------------------------------------------------------
+  // PREP 1 (Grade 7 Languages) - ICT & AI (المنهج المعتمد رسمياً 2024-2027)
+  // -----------------------------------------------------------------------
+  prep1: [
+    {
+      id: 'p1_t1_l1',
+      gradeKey: 'prep1',
+      gradeNameAr: 'الصف الأول الإعدادي',
+      gradeNameEn: 'Prep 1 (ICT & AI Languages)',
+      term: 1,
+      unitNumber: 1,
+      unitTitleAr: 'المحور الأول: التكنولوجيا الخضراء والتحول الرقمي وأنظمة التشغيل',
+      unitTitleEn: 'Unit 1: Green Tech, Digital Transformation & OS',
+      lessonNumber: 1,
+      titleAr: 'الدرس 1: التكنولوجيا الخضراء (Green Technology) والاستدامة البيئية',
+      titleEn: 'Lesson 1: Green Technology & Environmental Sustainability',
+      concepts: [
+        { id: 'p1_l1_c1', nameAr: 'مفهوم التكنولوجيا الخضراء (Green Tech) واستخدام التقنيات الصديقة للبيئة', nameEn: 'Green Technology Core Concepts & Sustainability', category: 'core' },
+        { id: 'p1_l1_c2', nameAr: 'الحد من النفايات الإلكترونية (E-Waste Management) وإعادة تدوير الأجهزة القديمة', nameEn: 'Electronic Waste (E-Waste) Reduction & Recycling', category: 'safety' },
+        { id: 'p1_l1_c3', nameAr: 'ترشيد استهلاك الطاقة في مراكز البيانات والحواسيب الخضراء (Green Computing)', nameEn: 'Energy Efficiency in Data Centers & Green Computing', category: 'hardware' },
+        { id: 'p1_l1_c4', nameAr: 'دور الذكاء الاصطناعي وإنترنت الأشياء في مراقبة المناخ وحماية الموارد الطبيعية', nameEn: 'AI & IoT in Climate Monitoring & Resource Optimization', category: 'core' }
+      ],
+      defaultHomework: [
+        'كتابة تقرير قصير في الكشكول يوضح 3 ممارسات يومية لتطبيق التكنولوجيا الخضراء في استخدام الأجهزة الذكية.',
+        'تعريف النفايات الإلكترونية (E-Waste) وكيف يمكن التخلص منها بأمان.',
+        'تصوير صفحات الكشكول ورفعها عبر البوابة الذكية.'
+      ],
+      bonusChallenge: '🌟 بونص متميز: ابحث عن مشروع محطة طاقة شمسية ذكية في مصر تعمل بالذكاء الاصطناعي واكتب اسمها في سطرين.',
+      nextPrep: ['التحضير للدرس الثاني: التحول الرقمي (Digital Transformation) وتطبيقاته الحكومية والتعليمية.']
+    },
+    {
+      id: 'p1_t1_l2',
+      gradeKey: 'prep1',
+      gradeNameAr: 'الصف الأول الإعدادي',
+      gradeNameEn: 'Prep 1 (ICT & AI Languages)',
+      term: 1,
+      unitNumber: 1,
+      unitTitleAr: 'المحور الأول: التكنولوجيا الخضراء والتحول الرقمي وأنظمة التشغيل',
+      unitTitleEn: 'Unit 1: Green Tech, Digital Transformation & OS',
+      lessonNumber: 2,
+      titleAr: 'الدرس 2: التحول الرقمي (Digital Transformation) وتطبيقاته في المجتمع',
+      titleEn: 'Lesson 2: Digital Transformation & Smart Societal Applications',
+      concepts: [
+        { id: 'p1_l2_c1', nameAr: 'مفهوم التحول الرقمي والانتقال من الإجراءات الورقية إلى المنصات الرقمية السحابية', nameEn: 'Digital Transformation & Paperless Smart Workflows', category: 'core' },
+        { id: 'p1_l2_c2', nameAr: 'منصة مصر الرقمية (Digital Egypt) والخدمات الحكومية الإلكترونية المتكاملة', nameEn: 'Digital Egypt Platform & E-Government Services', category: 'software' },
+        { id: 'p1_l2_c3', nameAr: 'منظومة الدفع والتحصيل الإلكتروني (E-Payment, فوري، كروت ميزة، محافظ الهاتف)', nameEn: 'Digital Payments & Fintech (Meeza, E-Wallets, POS)', category: 'core' },
+        { id: 'p1_l2_c4', nameAr: 'الأمن الرقمي والشمول المالي وحماية الخصوصية للمواطنين', nameEn: 'Financial Inclusion & Digital Citizen Privacy', category: 'safety' }
+      ],
+      defaultHomework: [
+        'كتابة 3 خدمات حكومية يمكن إنجازها عبر بوابة مصر الرقمية في كشكول التدريب.',
+        'مقارنة بين الدفع النقدي التقليدي والدفع الإلكتروني عبر المحافظ الذكية من حيث الأمان والسرعة.',
+        'تصوير الكشكول ورفعه على البوابة.'
+      ],
+      bonusChallenge: '🌟 بونص تقني: اكتب اسم الهيئة الرسمية المسؤولة عن حماية المستهلك والمعاملات المالية الرقمية في مصر.',
+      nextPrep: ['التحضير للدرس الثالث: أنظمة التشغيل الحديثة (Windows, Linux, Android, iOS) وإدارتها.']
+    },
+    {
+      id: 'p1_t1_l3',
+      gradeKey: 'prep1',
+      gradeNameAr: 'الصف الأول الإعدادي',
+      gradeNameEn: 'Prep 1 (ICT & AI Languages)',
+      term: 1,
+      unitNumber: 1,
+      unitTitleAr: 'المحور الأول: التكنولوجيا الخضراء والتحول الرقمي وأنظمة التشغيل',
+      unitTitleEn: 'Unit 1: Green Tech, Digital Transformation & OS',
+      lessonNumber: 3,
+      titleAr: 'الدرس 3: أنظمة التشغيل الحديثة وإدارة موارد الحاسوب (Operating Systems)',
+      titleEn: 'Lesson 3: Operating Systems Architecture & Resource Management',
+      concepts: [
+        { id: 'p1_l3_c1', nameAr: 'وظائف نظام التشغيل الأساسية: إدارة المعالج، الذاكرة، وحدات التخزين، الملحقات، وأمان النظام', nameEn: 'Core OS Functions: CPU, Memory, Storage & Security', category: 'software' },
+        { id: 'p1_l3_c2', nameAr: 'مقارنة بين أنظمة تشغيل الحواسيب (Windows, Linux) وأنظمة تشغيل الهواتف (Android, iOS)', nameEn: 'Desktop OS (Windows/Linux) vs Mobile OS (Android/iOS)', category: 'software' },
+        { id: 'p1_l3_c3', nameAr: 'واجهة المستخدم الرسومية (GUI) مقابل سطر الأوامر (Command Line Interface - CLI)', nameEn: 'GUI vs Command Line Interface (CLI)', category: 'software' },
+        { id: 'p1_l3_c4', nameAr: 'هيكلة نظام الملفات (File Systems) وتنظيم الدلائل والأقراص الصلبة', nameEn: 'File System Hierarchy & Storage Management', category: 'software' }
+      ],
+      defaultHomework: [
+        'عمل جدول مقارنة شامل بين Windows و Android في كشكول الحصة.',
+        'كتابة الفرق بين واجهة GUI وسطر الأوامر CLI.',
+        'تصوير الكشكول ورفعه عبر البوابة.'
+      ],
+      bonusChallenge: '🌟 بونص متقدم: افتح موجه الأوامر (CMD أو Terminal) في حاسوبك، اكتب الأمر dir أو ls وشاهد النتيجة!',
+      nextPrep: ['التحضير للدرس الرابع: تثبيت وإلغاء البرامج وإدارة التعريفات ومنافذ التوصيل.']
+    },
+    {
+      id: 'p1_t1_l5',
+      gradeKey: 'prep1',
+      gradeNameAr: 'الصف الأول الإعدادي',
+      gradeNameEn: 'Prep 1 (ICT & AI Languages)',
+      term: 1,
+      unitNumber: 1,
+      unitTitleAr: 'المحور الأول: التكنولوجيا الخضراء والتحول الرقمي وأنظمة التشغيل',
+      unitTitleEn: 'Unit 1: Green Tech, Digital Transformation & OS',
+      lessonNumber: 5,
+      titleAr: 'الدرس 5: البريد الإلكتروني والحساب المدرسي الموحد (Unified School Account & Email)',
+      titleEn: 'Lesson 5: Professional Email & MOE Unified School Account',
+      concepts: [
+        { id: 'p1_l5_c1', nameAr: 'تفعيل واستخدام الحساب المدرسي الموحد (@moe.edu.eg) عبر منصة أوفيس 365', nameEn: 'Activating Unified School Account (@moe.edu.eg)', category: 'software' },
+        { id: 'p1_l5_c2', nameAr: 'هيكلة رسالة البريد الإلكتروني الاحترافية: To, Cc, Bcc, Subject, Body, Attachments', nameEn: 'Professional Email Components (To, Cc, Bcc, Subject)', category: 'core' },
+        { id: 'p1_l5_c3', nameAr: 'قواعد الإتيكيت واللباقة في المراسلات التعليمية والأكاديمية الرسمية', nameEn: 'Digital Etiquette & Formal Communication', category: 'core' },
+        { id: 'p1_l5_c4', nameAr: 'تجنب رسائل التصيد الاحتيالي (Phishing Emails) والملفات المرفقة الخبيثة', nameEn: 'Phishing Detection & Attachment Safety', category: 'safety' }
+      ],
+      defaultHomework: [
+        'تسجيل الدخول بالحساب المدرسي الموحد وتصوير شاشة صفحة الحساب وإرفاقها.',
+        'كتابة نموذج لرسالة بريد إلكتروني رسمية إلى معلم المادة في الكشكول موضحة الحقول الأساسية.',
+        'تصوير الكشكول ورفعه على البوابة.'
+      ],
+      bonusChallenge: '🌟 بونص متميز: ما هو الفرق الجوهري بين حقل النسخة الكربونية Cc وحقل النسخة المخفية Bcc؟',
+      nextPrep: ['التحضير للمحور الثاني: الحوسبة السحابية (Cloud Computing) و Google Drive وتصميم قواعد البيانات.']
+    },
+    {
+      id: 'p1_t1_l6',
+      gradeKey: 'prep1',
+      gradeNameAr: 'الصف الأول الإعدادي',
+      gradeNameEn: 'Prep 1 (ICT & AI Languages)',
+      term: 1,
+      unitNumber: 2,
+      unitTitleAr: 'المحور الثاني: الحوسبة السحابية وقواعد البيانات والمشروعات الرقمية',
+      unitTitleEn: 'Unit 2: Cloud Computing, Databases & Digital Projects',
+      lessonNumber: 6,
+      titleAr: 'الدرس 6: الحوسبة السحابية وخدمات التخزين السحابي (Cloud Computing & Storage)',
+      titleEn: 'Lesson 6: Cloud Computing, Storage Services (Google Drive, OneDrive)',
+      concepts: [
+        { id: 'p1_l6_c1', nameAr: 'مفهوم الحوسبة السحابية (Cloud Computing) ومميزات حفظ الملفات عبر السحابة', nameEn: 'Cloud Computing Architecture & Advantages', category: 'core' },
+        { id: 'p1_l6_c2', nameAr: 'خدمات التخزين السحابي: Google Drive و Microsoft OneDrive والمزامنة التلقائية', nameEn: 'Cloud Storage (Google Drive, OneDrive & Sync)', category: 'software' },
+        { id: 'p1_l6_c3', nameAr: 'العمل الجماعي التعاوني والمشاركة التزامنية للمستندات (Real-Time Document Collaboration)', nameEn: 'Real-Time Document Collaboration & Permissions', category: 'software' },
+        { id: 'p1_l6_c4', nameAr: 'إدارة أذونات الملفات السحابية: عارض (Viewer)، معلق (Commenter)، محرر (Editor)', nameEn: 'File Sharing Permissions (Viewer, Commenter, Editor)', category: 'safety' }
+      ],
+      defaultHomework: [
+        'كتابة 4 فوائد للحوسبة السحابية مقارنة بحفظ الملفات على الفلاشة أو القرص المحلي في الكشكول.',
+        'شرح الفرق بين صلاحية Viewer وصلاحية Editor عند مشاركة ملف سحابي.',
+        'تصوير الكشكول ورفعه على البوابة.'
+      ],
+      bonusChallenge: '🌟 بونص عملي: إنشاء مجلد سحابي على Google Drive أو OneDrive ورفع ملف عليه ومشاركته برابط خاص.',
+      nextPrep: ['التحضير للدرس السابع: الاجتماعات الافتراضية بـ Google Meet وإدارة المشروعات الرقمية.']
+    }
+  ]
+};
+
+/**
+ * Returns all official lessons matching a grade query and term
+ */
+export function getOfficialLessonsForGrade(
+  gradeQuery: string,
+  term?: 1 | 2 | 'all'
+): OfficialCurriculumLesson[] {
+  const q = (gradeQuery || '').toLowerCase();
+  let key: 'grade4' | 'grade5' | 'grade6' | 'prep1' | 'prep2' = 'grade4';
+
+  if (q.includes('سادس') || q.includes('grade 6') || q.includes('ict 6') || q.includes('ict6')) {
+    key = 'grade6';
+  } else if (q.includes('خامس') || q.includes('grade 5') || q.includes('ict 5') || q.includes('ict5')) {
+    key = 'grade5';
+  } else if (q.includes('رابع') || q.includes('grade 4') || q.includes('ict 4') || q.includes('ict4')) {
+    key = 'grade4';
+  } else if (q.includes('أول إعدادي') || q.includes('اول اعدادي') || q.includes('prep 1') || q.includes('prep1')) {
+    key = 'prep1';
+  } else if (q.includes('ثاني إعدادي') || q.includes('prep 2')) {
+    key = 'prep2';
+  }
+
+  const list = OFFICIAL_ICT_CURRICULUM_2026_2027[key] || OFFICIAL_ICT_CURRICULUM_2026_2027.grade4;
+  if (!term || term === 'all') return list;
+  return list.filter(l => l.term === term);
+}
+
+/**
+ * Intelligent Synthesis of Official Lesson Concepts + Teacher Spoken/Written Notes
+ * Generates instant professional lecture recap & homework assignment tailored to the official curriculum
+ */
+export function synthesizeOfficialCurriculumRecap(params: {
+  lesson: OfficialCurriculumLesson;
+  selectedConceptIds: string[];
+  teacherNotes?: string;
+  teacherVoiceText?: string;
+  groupName?: string;
+  trainerName?: string;
+}): {
+  title: string;
+  recapSummary: { points: string[]; detailedNotes: string };
+  homeworkTasks: { tasks: string[]; bonusChallenge: string; allowMultiPageUpload: boolean };
+  nextLecturePrep: { prepPoints: string[]; teaserNotes: string };
+  closingMessage: string;
+} {
+  const { lesson, selectedConceptIds, teacherNotes, teacherVoiceText, groupName, trainerName } = params;
+
+  // Selected concepts
+  const chosenConcepts = lesson.concepts.filter(c => selectedConceptIds.includes(c.id));
+  const activeConcepts = chosenConcepts.length > 0 ? chosenConcepts : lesson.concepts;
+
+  // Build Recap Points from official concepts + teacher notes
+  const points: string[] = [
+    `1. مراجعة شاملة وأسئلة تفاعلية استهلالية وتكريم الأبطال المتفوقين في الحصة السابقة.`
+  ];
+
+  activeConcepts.forEach((c, idx) => {
+    points.push(`${idx + 2}. شرح وتطبيق عملي على مفهوم (${c.nameAr}) - [${c.nameEn}].`);
+  });
+
+  if (teacherVoiceText && teacherVoiceText.trim().length > 10) {
+    points.push(`${points.length + 1}. ملحوظات وشروحات المدرب الصوتية بالحصة: "${teacherVoiceText.trim()}"`);
+  }
+
+  if (teacherNotes && teacherNotes.trim().length > 5 && teacherNotes !== teacherVoiceText) {
+    points.push(`${points.length + 1}. تطبيق المعمل والملاحظات الإضافية: ${teacherNotes.trim()}`);
+  }
+
+  points.push(`${points.length + 1}. حل تدريبات وتطبيقات عملية بالمعمل والتأكد من إتقان كل بطل لجميع المفاهيم المقررة.`);
+
+  // Build Homework Tasks aligned with curriculum lesson
+  const tasks: string[] = [...lesson.defaultHomework];
+  if (chosenConcepts.length > 0) {
+    tasks.unshift(`كتابة وتلخيص المفاهيم المشروحة في الحصة (${chosenConcepts.map(c => c.nameAr.split('(')[0].trim()).join('، ')}) في كشكول التدريب.`);
+  }
+
+  const bonusChallenge = lesson.bonusChallenge || '🌟 بونص متميز: تسجيل فويس قصير بصوتك تلخص فيه أهم فكرة تعلمتها في درس اليوم!';
+  const nextPrepPoints = lesson.nextPrep.length > 0 ? lesson.nextPrep : ['إحضار كشكول التدريب والمتابعة والمحافظة على المذاكرة المنتظمة.'];
+
+  const stageName = lesson.gradeNameAr;
+  const closingMessage = `أبطال ومبدعو ${stageName} (${groupName || 'مجموعة اللغات المعتمدة'})، تفاعل وفهم راقٍ وتطبيق متميز في درس اليوم! فخور جداً باجتهادكم ومستواكم المتقدم. استمروا في التألق! 🚀⭐💻`;
+
+  const detailedNotes = `تمت تغطية عناصر (${lesson.titleAr}) بنجاح وتطبيق المفاهيم المقررة رسمياً لمنهج 2026/2027 مع تفاعل تطبيقي ملموس ومتابعة كراسات التدريب.`;
+
+  return {
+    title: `${lesson.titleAr} - ${lesson.titleEn} 🌐💻`,
+    recapSummary: {
+      points,
+      detailedNotes
+    },
+    homeworkTasks: {
+      tasks,
+      bonusChallenge,
+      allowMultiPageUpload: true
+    },
+    nextLecturePrep: {
+      prepPoints: nextPrepPoints,
+      teaserNotes: `المحاضرة القادمة سننتقل للخطوة التالية في المنهج المعتمد بتطبيقات ومسابقات كاهوت جديدة!`
+    },
+    closingMessage
+  };
+}
