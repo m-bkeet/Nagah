@@ -1,5 +1,5 @@
-import { getFirestoreQuotaMetrics } from './firestoreStorage';
-import { db } from './db';
+import { getFirestoreQuotaMetrics } from './firestoreStorage.ts';
+import { db } from './db.ts';
 
 let totalInvocations = 0;
 let lastResetDate = new Date().toISOString().split('T')[0];

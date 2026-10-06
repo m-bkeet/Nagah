@@ -22,7 +22,12 @@ export function isPaymentReminderWindow(date = new Date()): boolean {
 }
 
 export function getEffectiveFee(trainee: any, courses: any[] = [], groups: any[] = []): number {
-  if (!trainee) return 500;
+  if (!trainee) return 0;
+  const isSuspendedOrDropped = trainee.status === 'suspended' || trainee.status === 'dropped';
+  const isUnassigned = !trainee.groupId || trainee.groupId.trim() === '' || trainee.groupId === 'unassigned';
+  if (isSuspendedOrDropped || isUnassigned) {
+    return 0;
+  }
   if (trainee.feeAmount && Number(trainee.feeAmount) > 0) {
     return Number(trainee.feeAmount);
   }
@@ -38,11 +43,19 @@ export function getEffectiveFee(trainee: any, courses: any[] = [], groups: any[]
       return Number(crs.feeAmount || crs.price);
     }
   }
-  return Number(trainee.feeAmount) || 500;
+  return Number(trainee.feeAmount) || 0;
 }
 
 export function getEffectiveNetAmount(trainee: any, courses: any[] = [], groups: any[] = []): number {
   if (!trainee) return 0;
+  
+  // Rule: Suspended, dropped, or unassigned students have 0 dues/expected revenue
+  const isSuspendedOrDropped = trainee.status === 'suspended' || trainee.status === 'dropped';
+  const isUnassigned = !trainee.groupId || trainee.groupId.trim() === '' || trainee.groupId === 'unassigned';
+  if (isSuspendedOrDropped || isUnassigned) {
+    return 0;
+  }
+
   const isExempt = Boolean(
     trainee.isExempt === true || 
     String(trainee.isExempt) === 'true' || 
@@ -57,6 +70,14 @@ export function getEffectiveNetAmount(trainee: any, courses: any[] = [], groups:
 
 export function getEffectiveRemaining(trainee: any, courses: any[] = [], groups: any[] = []): number {
   if (!trainee) return 0;
+
+  // Rule: Suspended, dropped, or unassigned students have 0 remaining debt
+  const isSuspendedOrDropped = trainee.status === 'suspended' || trainee.status === 'dropped';
+  const isUnassigned = !trainee.groupId || trainee.groupId.trim() === '' || trainee.groupId === 'unassigned';
+  if (isSuspendedOrDropped || isUnassigned) {
+    return 0;
+  }
+
   const isExempt = Boolean(
     trainee.isExempt === true || 
     String(trainee.isExempt) === 'true' || 
@@ -74,6 +95,14 @@ export function getEffectiveRemaining(trainee: any, courses: any[] = [], groups:
  */
 export function isTraineeUnpaid(trainee: any, courses: any[] = [], groups: any[] = []): boolean {
   if (!trainee) return false;
+
+  // Suspended, dropped, or unassigned trainees are not billed for dues
+  const isSuspendedOrDropped = trainee.status === 'suspended' || trainee.status === 'dropped';
+  const isUnassigned = !trainee.groupId || trainee.groupId.trim() === '' || trainee.groupId === 'unassigned';
+  if (isSuspendedOrDropped || isUnassigned) {
+    return false;
+  }
+
   const isExempt = Boolean(
     trainee.isExempt === true || 
     String(trainee.isExempt) === 'true' || 
@@ -81,9 +110,7 @@ export function isTraineeUnpaid(trainee: any, courses: any[] = [], groups: any[]
     /إعفاء|معفى|معفي|أبناء|منحة|مالك|إداري|مجاني/i.test(trainee.notes || '')
   );
   if (isExempt) return false;
-  const remaining = trainee.remainingAmount !== undefined && trainee.remainingAmount !== null
-    ? Number(trainee.remainingAmount)
-    : getEffectiveRemaining(trainee, courses, groups);
+  const remaining = getEffectiveRemaining(trainee, courses, groups);
   return remaining > 0;
 }
 
@@ -102,6 +129,45 @@ export function getTraineePaymentStatusInfo(trainee: any, isStudentView = false,
       statusLabel: 'غير محدد',
       shortLabel: 'غير محدد',
       statusBadgeClass: 'bg-slate-100 text-slate-800 border-slate-300 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700'
+    };
+  }
+
+  // 1. Suspended Trainee (متوقف)
+  if (trainee.status === 'suspended') {
+    return {
+      isUnpaid: false,
+      isExempt: false,
+      remainingAmount: 0,
+      isReminderWindow: false,
+      statusLabel: 'متوقف (بدون مستحقات مالية) ⏸️',
+      shortLabel: 'متوقف ⏸️',
+      statusBadgeClass: 'bg-slate-100 text-slate-800 border-slate-300 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700 font-bold shadow-xs'
+    };
+  }
+
+  // 2. Dropped Trainee (منسحب)
+  if (trainee.status === 'dropped') {
+    return {
+      isUnpaid: false,
+      isExempt: false,
+      remainingAmount: 0,
+      isReminderWindow: false,
+      statusLabel: 'منسحب (بدون مستحقات) 🚫',
+      shortLabel: 'منسحب 🚫',
+      statusBadgeClass: 'bg-stone-100 text-stone-800 border-stone-300 dark:bg-stone-800 dark:text-stone-300 dark:border-stone-700 font-bold shadow-xs'
+    };
+  }
+
+  // 3. Unassigned to Group (غير مسكن بمجموعة)
+  if (!trainee.groupId || trainee.groupId.trim() === '' || trainee.groupId === 'unassigned') {
+    return {
+      isUnpaid: false,
+      isExempt: false,
+      remainingAmount: 0,
+      isReminderWindow: false,
+      statusLabel: 'غير مسكن بمجموعة (بدون مستحقات) ⏳',
+      shortLabel: 'غير مسكن ⏳',
+      statusBadgeClass: 'bg-amber-50 text-amber-900 border-amber-300 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-700 font-bold shadow-xs'
     };
   }
 
@@ -125,11 +191,9 @@ export function getTraineePaymentStatusInfo(trainee: any, isStudentView = false,
   }
 
   const unpaid = isTraineeUnpaid(trainee);
-  const remaining =
-    trainee.remainingAmount ??
-    Math.max(0, (trainee.feeAmount || 0) - (trainee.discountAmount || 0) - (trainee.paidAmount || 0));
+  const remaining = getEffectiveRemaining(trainee);
 
-  if (unpaid) {
+  if (unpaid && remaining > 0) {
     const isBeforeFirstCycle = date.getFullYear() === 2026 && (date.getMonth() < 8 || (date.getMonth() === 8 && date.getDate() < 28));
 
     // Hide arrears if not in window for EVERYONE or before the first cycle
@@ -152,7 +216,7 @@ export function getTraineePaymentStatusInfo(trainee: any, isStudentView = false,
         remainingAmount: remaining,
         isReminderWindow: true,
         statusLabel: `غير مسدد الاشتراك 🔴 (تنبيه متبقي ${remaining} ج.م)`,
-        shortLabel: 'غير مسدد الاشتراك 🚨',
+        shortLabel: 'غير مسدد 🚨',
         statusBadgeClass: 'bg-rose-100 text-rose-900 border-rose-300 dark:bg-rose-950/60 dark:text-rose-300 dark:border-rose-500/60 animate-pulse font-bold shadow-md shadow-rose-950/10'
       };
     }
@@ -163,7 +227,7 @@ export function getTraineePaymentStatusInfo(trainee: any, isStudentView = false,
       remainingAmount: remaining,
       isReminderWindow: false,
       statusLabel: `غير مسدد الاشتراك ⚠️ (متبقي ${remaining} ج.م)`,
-      shortLabel: 'غير مسدد الاشتراك ⚠️',
+      shortLabel: 'غير مسدد ⚠️',
       statusBadgeClass: 'bg-amber-100 text-amber-900 border-amber-300 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-500/40 font-bold shadow-xs'
     };
   }

@@ -766,7 +766,7 @@ export const PublicInteractiveExamView: React.FC<PublicInteractiveExamViewProps>
                 <div className="relative">
                   <input
                     type="text"
-                    placeholder="مثال: A001 أو رقم الهاتف"
+                    placeholder="أدخل كود الطالب أو رقم الهاتف..."
                     value={studentCodeInput}
                     onChange={e => setStudentCodeInput(e.target.value)}
                     className={`w-full p-3.5 ${inputClasses} border rounded-2xl text-sm font-bold focus:outline-none focus:ring-2 focus:ring-blue-500`}

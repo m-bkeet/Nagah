@@ -546,7 +546,8 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ initialTab }) => {
     });
   };
 
-  const filteredPayments = payments.filter(
+  const sourcePayments = searchQuery.trim() ? allPayments : payments;
+  const filteredPayments = sourcePayments.filter(
     (p) =>
       p.receiptNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (p.traineeName && p.traineeName.toLowerCase().includes(searchQuery.toLowerCase())) ||
@@ -733,9 +734,10 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ initialTab }) => {
     }>();
 
     const traineesList = ctxTrainees || trainees || [];
-    const filteredT = selectedFinanceBranchId === 'all' 
+    const filteredT = (selectedFinanceBranchId === 'all' 
       ? traineesList 
-      : traineesList.filter(t => t.branchId === selectedFinanceBranchId);
+      : traineesList.filter(t => t.branchId === selectedFinanceBranchId)
+    ).filter(t => t.status === 'active' && Boolean(t.groupId) && t.groupId.trim() !== '' && t.groupId !== 'unassigned');
 
     filteredT.forEach(t => {
       const gName = normalizeGradeName(t);
@@ -804,10 +806,17 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ initialTab }) => {
   const courseGradeBreakdown = useMemo(() => {
     return courses.map(course => {
       const courseTrainees = trainees.filter(t => t.courseId === course.id || (t.courseIds && t.courseIds.includes(course.id)));
+      const activeCourseTrainees = courseTrainees.filter(t => 
+        t.status === 'active' && 
+        Boolean(t.groupId) && 
+        t.groupId.trim() !== '' && 
+        t.groupId !== 'unassigned' && 
+        !t.isExempt
+      );
       const coursePayments = payments.filter(p => p.courseId === course.id);
       const totalCollected = coursePayments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
-      const expectedRevenue = courseTrainees.reduce((sum, t) => sum + (t.isExempt ? 0 : (Number(t.netAmount) || Number(t.feeAmount) || 0)), 0);
-      const remainingDebt = courseTrainees.reduce((sum, t) => sum + (t.isExempt ? 0 : (Number(t.remainingAmount) || 0)), 0);
+      const expectedRevenue = activeCourseTrainees.reduce((sum, t) => sum + (Number(t.netAmount) || Number(t.feeAmount) || 0), 0);
+      const remainingDebt = activeCourseTrainees.reduce((sum, t) => sum + (Number(t.remainingAmount) || 0), 0);
       const collectionRate = expectedRevenue > 0 ? Math.round((totalCollected / expectedRevenue) * 100) : 0;
       
       const trainerPct = course.trainerPercentage || course.trainerSharePercentage || 50;
@@ -816,7 +825,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ initialTab }) => {
 
       return {
         course,
-        traineesCount: courseTrainees.length,
+        traineesCount: activeCourseTrainees.length,
         paymentsCount: coursePayments.length,
         expectedRevenue,
         totalCollected,
@@ -875,14 +884,18 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ initialTab }) => {
       .reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
   }, [branchFilteredPayments, currentMonthStr]);
 
-  // 3. المستحق هذا الشهر (Due Expected Fees this month)
+  // 3. المستحق هذا الشهر (Due Expected Fees this month - only active & group-assigned trainees)
   const dueThisMonth = useMemo(() => {
-    return branchFilteredTrainees.reduce((sum, t) => sum + (t.isExempt ? 0 : (Number(t.netAmount) || Number(t.feeAmount) || 0)), 0);
+    return branchFilteredTrainees
+      .filter(t => t.status === 'active' && Boolean(t.groupId) && t.groupId.trim() !== '' && t.groupId !== 'unassigned' && !t.isExempt)
+      .reduce((sum, t) => sum + (Number(t.netAmount) || Number(t.feeAmount) || 0), 0);
   }, [branchFilteredTrainees]);
 
-  // 4. مديونية ومتأخرات هذا الشهر (Debt / Unpaid This Month)
+  // 4. مديونية ومتأخرات هذا الشهر (Debt / Unpaid This Month - only active & group-assigned trainees)
   const debtThisMonth = useMemo(() => {
-    return branchFilteredTrainees.reduce((sum, t) => sum + (t.isExempt ? 0 : (Number(t.remainingAmount) || 0)), 0);
+    return branchFilteredTrainees
+      .filter(t => t.status === 'active' && Boolean(t.groupId) && t.groupId.trim() !== '' && t.groupId !== 'unassigned' && !t.isExempt)
+      .reduce((sum, t) => sum + (Number(t.remainingAmount) || 0), 0);
   }, [branchFilteredTrainees]);
 
   // 5. المديونية السابقة والمتراكمة (Previous Debts)
@@ -1312,7 +1325,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ initialTab }) => {
             <div className="mt-2 pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-[10px] text-slate-500 dark:text-slate-400">
               <span>المتبقي</span>
               <span className="font-mono font-bold text-amber-600 dark:text-amber-400">
-                {branchFilteredTrainees.filter(t => !t.isExempt && (t.remainingAmount || 0) > 0).length} طالب
+                {branchFilteredTrainees.filter(t => t.status === 'active' && Boolean(t.groupId) && t.groupId.trim() !== '' && t.groupId !== 'unassigned' && !t.isExempt && (t.remainingAmount || 0) > 0).length} طالب
               </span>
             </div>
           </div>

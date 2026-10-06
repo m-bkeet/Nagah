@@ -22,37 +22,58 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { LoginView } from './views/LoginView';
 import { DashboardView } from './views/DashboardView';
 
+// Resilient Lazy Import Helper with Auto-Retry and Failover for Dynamic Chunk Hash Changes
+const lazyWithRetry = <T extends React.ComponentType<any>>(
+  importFn: () => Promise<{ default: T }>
+) =>
+  lazy(async () => {
+    const pageHasBeenRefreshed = sessionStorage.getItem('retry_lazy_refresh');
+    try {
+      const component = await importFn();
+      sessionStorage.removeItem('retry_lazy_refresh');
+      return component;
+    } catch (error) {
+      console.warn('[LazyRetry] Dynamic module fetch failed. Retrying with fresh reload...', error);
+      if (!pageHasBeenRefreshed) {
+        sessionStorage.setItem('retry_lazy_refresh', 'true');
+        window.location.reload();
+      }
+      throw error;
+    }
+  });
+
 // Code-Split Dynamic Views (Lazy Loaded on demand to make initial bundle feather-light)
-const TrainersView = lazy(() => import('./views/TrainersView').then(m => ({ default: m.TrainersView })));
-const TraineesView = lazy(() => import('./views/TraineesView').then(m => ({ default: m.TraineesView })));
-const ProgramsView = lazy(() => import('./views/ProgramsView').then(m => ({ default: m.ProgramsView })));
-const CoursesView = lazy(() => import('./views/CoursesView').then(m => ({ default: m.CoursesView })));
-const GroupsView = lazy(() => import('./views/GroupsView').then(m => ({ default: m.GroupsView })));
-const LabScheduleView = lazy(() => import('./views/LabScheduleView').then(m => ({ default: m.LabScheduleView })));
-const FinanceView = lazy(() => import('./views/FinanceView').then(m => ({ default: m.FinanceView })));
-const ExpensesView = lazy(() => import('./views/ExpensesView').then(m => ({ default: m.ExpensesView })));
-const PointsView = lazy(() => import('./views/PointsView').then(m => ({ default: m.PointsView })));
-const ExamsView = lazy(() => import('./views/ExamsView').then(m => ({ default: m.ExamsView })));
-const HomeworksView = lazy(() => import('./views/HomeworksView').then(m => ({ default: m.HomeworksView })));
-const InteractiveSessionsView = lazy(() => import('./views/InteractiveSessionsView').then(m => ({ default: m.InteractiveSessionsView })));
-const MessagesView = lazy(() => import('./views/MessagesView').then(m => ({ default: m.MessagesView })));
-const ReportsView = lazy(() => import('./views/ReportsView').then(m => ({ default: m.ReportsView })));
-const CertificatesView = lazy(() => import('./views/CertificatesView').then(m => ({ default: m.CertificatesView })));
-const BranchesView = lazy(() => import('./views/BranchesView').then(m => ({ default: m.BranchesView })));
-const NagahAiDeveloperView = lazy(() => import('./views/NagahAiDeveloperView').then(m => ({ default: m.NagahAiDeveloperView })));
-const AuditLogsView = lazy(() => import('./views/AuditLogsView').then(m => ({ default: m.AuditLogsView })));
-const SettingsView = lazy(() => import('./views/SettingsView').then(m => ({ default: m.SettingsView })));
+const TrainersView = lazyWithRetry(() => import('./views/TrainersView').then(m => ({ default: m.TrainersView })));
+const TraineesView = lazyWithRetry(() => import('./views/TraineesView').then(m => ({ default: m.TraineesView })));
+const ProgramsView = lazyWithRetry(() => import('./views/ProgramsView').then(m => ({ default: m.ProgramsView })));
+const CoursesView = lazyWithRetry(() => import('./views/CoursesView').then(m => ({ default: m.CoursesView })));
+const GroupsView = lazyWithRetry(() => import('./views/GroupsView').then(m => ({ default: m.GroupsView })));
+const LabScheduleView = lazyWithRetry(() => import('./views/LabScheduleView').then(m => ({ default: m.LabScheduleView })));
+const FinanceView = lazyWithRetry(() => import('./views/FinanceView').then(m => ({ default: m.FinanceView })));
+const ExpensesView = lazyWithRetry(() => import('./views/ExpensesView').then(m => ({ default: m.ExpensesView })));
+const PointsView = lazyWithRetry(() => import('./views/PointsView').then(m => ({ default: m.PointsView })));
+const ExamsView = lazyWithRetry(() => import('./views/ExamsView').then(m => ({ default: m.ExamsView })));
+const HomeworksView = lazyWithRetry(() => import('./views/HomeworksView').then(m => ({ default: m.HomeworksView })));
+const InteractiveSessionsView = lazyWithRetry(() => import('./views/InteractiveSessionsView').then(m => ({ default: m.InteractiveSessionsView })));
+const MessagesView = lazyWithRetry(() => import('./views/MessagesView').then(m => ({ default: m.MessagesView })));
+const ReportsView = lazyWithRetry(() => import('./views/ReportsView').then(m => ({ default: m.ReportsView })));
+const CertificatesView = lazyWithRetry(() => import('./views/CertificatesView').then(m => ({ default: m.CertificatesView })));
+const BranchesView = lazyWithRetry(() => import('./views/BranchesView').then(m => ({ default: m.BranchesView })));
+const NagahAiDeveloperView = lazyWithRetry(() => import('./views/NagahAiDeveloperView').then(m => ({ default: m.NagahAiDeveloperView })));
+const AuditLogsView = lazyWithRetry(() => import('./views/AuditLogsView').then(m => ({ default: m.AuditLogsView })));
+const SettingsView = lazyWithRetry(() => import('./views/SettingsView').then(m => ({ default: m.SettingsView })));
 
 // Lazy Loaded Standalone Public Views & Portals
-const StudentKioskView = lazy(() => import('./views/StudentKioskView').then(m => ({ default: m.StudentKioskView })));
-const PublicHomeView = lazy(() => import('./views/PublicHomeView').then(m => ({ default: m.PublicHomeView })));
-const PublicRegistrationView = lazy(() => import('./views/PublicRegistrationView').then(m => ({ default: m.PublicRegistrationView })));
-const PublicTrainerRegistrationView = lazy(() => import('./views/PublicTrainerRegistrationView').then(m => ({ default: m.PublicTrainerRegistrationView })));
-const PublicStudentPortalView = lazy(() => import('./views/PublicStudentPortalView').then(m => ({ default: m.PublicStudentPortalView })));
-const PublicParentPortalView = lazy(() => import('./views/PublicParentPortalView').then(m => ({ default: m.PublicParentPortalView })));
-const PublicTrainerPortalView = lazy(() => import('./views/PublicTrainerPortalView').then(m => ({ default: m.PublicTrainerPortalView })));
-const PublicInteractiveExamView = lazy(() => import('./views/PublicInteractiveExamView').then(m => ({ default: m.PublicInteractiveExamView })));
-const PublicVerificationView = lazy(() => import('./views/PublicVerificationView').then(m => ({ default: m.PublicVerificationView })));
+const StudentKioskView = lazyWithRetry(() => import('./views/StudentKioskView').then(m => ({ default: m.StudentKioskView })));
+const PublicHomeView = lazyWithRetry(() => import('./views/PublicHomeView').then(m => ({ default: m.PublicHomeView })));
+const PublicRegistrationView = lazyWithRetry(() => import('./views/PublicRegistrationView').then(m => ({ default: m.PublicRegistrationView })));
+const PublicTrainerRegistrationView = lazyWithRetry(() => import('./views/PublicTrainerRegistrationView').then(m => ({ default: m.PublicTrainerRegistrationView })));
+const PublicStudentPortalView = lazyWithRetry(() => import('./views/PublicStudentPortalView').then(m => ({ default: m.PublicStudentPortalView })));
+const PublicParentPortalView = lazyWithRetry(() => import('./views/PublicParentPortalView').then(m => ({ default: m.PublicParentPortalView })));
+const UnifiedStudentParentPortalView = lazyWithRetry(() => import('./views/UnifiedStudentParentPortalView').then(m => ({ default: m.UnifiedStudentParentPortalView })));
+const PublicTrainerPortalView = lazyWithRetry(() => import('./views/PublicTrainerPortalView').then(m => ({ default: m.PublicTrainerPortalView })));
+const PublicInteractiveExamView = lazyWithRetry(() => import('./views/PublicInteractiveExamView').then(m => ({ default: m.PublicInteractiveExamView })));
+const PublicVerificationView = lazyWithRetry(() => import('./views/PublicVerificationView').then(m => ({ default: m.PublicVerificationView })));
 
 import { IdleSleepWatcher } from './components/IdleSleepWatcher';
 import { hasPermission } from './utils/permissions';
@@ -116,6 +137,17 @@ const AppContent: React.FC = () => {
 
     let view = searchParams.get('view');
     let taskId = searchParams.get('task');
+
+    // Parse direct pathname (e.g. /student, /parent, /trainer, /student-portal, /parent-portal, /trainer-portal)
+    const pathname = window.location.pathname.replace(/^\/+|\/+$/g, '').toLowerCase();
+    if (pathname && !view) {
+      if (['student', 'student-portal', 'student_portal', 'students'].includes(pathname)) view = 'student-portal';
+      else if (['parent', 'parent-portal', 'parent_portal', 'parents'].includes(pathname)) view = 'parent-portal';
+      else if (['trainer', 'trainer-portal', 'trainer_portal', 'trainers'].includes(pathname)) view = 'trainer-portal';
+      else if (['kiosk', 'lab', 'student-kiosk', 'student_kiosk'].includes(pathname)) view = 'kiosk';
+      else if (['exam', 'interactive-exam', 'exams'].includes(pathname)) view = 'interactive-exam';
+      else if (['login', 'signin', 'auth', 'admin'].includes(pathname)) view = 'login';
+    }
 
     // Parse location.hash (e.g. #student-portal?task=assign-123 or #quiz-challenge?task=assign-123)
     const hash = window.location.hash || '';
@@ -225,19 +257,15 @@ const AppContent: React.FC = () => {
       case 'student':
       case 'student-portal':
       case 'student_portal':
-      case 'quiz-challenge':
-      case 'challenge':
-      case 'portal':
-        return <PublicStudentPortalView directTaskId={directTaskId} onBack={() => setActiveTab('public_home')} />;
-      case 'interactive-exam':
-      case 'interactive_exam':
-      case 'exam':
-      case 'take-exam':
-        return <PublicInteractiveExamView onBack={() => setActiveTab('public_home')} />;
       case 'parent':
       case 'parent-portal':
       case 'parent_portal':
-        return <PublicParentPortalView onBack={() => setActiveTab('public_home')} />;
+      case 'portal':
+      case 'family':
+        return <UnifiedStudentParentPortalView directTaskId={directTaskId} onBack={() => setActiveTab('public_home')} />;
+      case 'quiz-challenge':
+      case 'challenge':
+        return <PublicStudentPortalView directTaskId={directTaskId} onBack={() => setActiveTab('public_home')} />;
       case 'trainer':
       case 'trainer-portal':
       case 'trainer_portal':

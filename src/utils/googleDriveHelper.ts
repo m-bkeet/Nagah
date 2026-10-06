@@ -40,6 +40,34 @@ export function getGoogleDriveViewUrl(driveFileId: string): string {
   return `https://drive.google.com/file/d/${driveFileId}/view?usp=sharing`;
 }
 
-export function getGoogleDriveDownloadUrl(driveFileId: string): string {
-  return `https://drive.google.com/uc?export=download&id=${driveFileId}`;
+export function getGoogleDriveThumbnailUrl(driveFileId: string, size = 400): string {
+  if (!driveFileId) return '';
+  const cleanId = extractGoogleDriveId(driveFileId) || driveFileId.trim();
+  return `https://lh3.googleusercontent.com/d/${cleanId}=w${size}`;
+}
+
+export function getGoogleDriveMediaProxyUrl(driveFileId: string): string {
+  if (!driveFileId) return '';
+  const cleanId = extractGoogleDriveId(driveFileId) || driveFileId.trim();
+  return `/api/drive/media/${cleanId}`;
+}
+
+export function resolveTraineePhotoUrl(photoUrl?: string, photoDriveFileId?: string): string {
+  if (photoDriveFileId && photoDriveFileId.trim().length > 0) {
+    return getGoogleDriveThumbnailUrl(photoDriveFileId);
+  }
+  if (!photoUrl) return '';
+  const trimmed = photoUrl.trim();
+  if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+    const driveId = extractGoogleDriveId(trimmed);
+    if (driveId) {
+      return getGoogleDriveThumbnailUrl(driveId);
+    }
+    return trimmed;
+  }
+  const extracted = extractGoogleDriveId(trimmed);
+  if (extracted) {
+    return getGoogleDriveThumbnailUrl(extracted);
+  }
+  return trimmed;
 }

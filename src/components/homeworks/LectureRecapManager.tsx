@@ -66,7 +66,8 @@ export const BRANCH_OPTIONS = [
 
 // Helper to provide realistic, grade-accurate curriculum template when switching grades
 export const getGradeCurriculumTemplate = (grade: string, groupName?: string): Partial<LectureRecap> => {
-  const g = grade.toLowerCase();
+  const rawG = `${grade} ${groupName || ''}`.toLowerCase();
+  const g = rawG.replace(/[أإآ]/g, 'ا').replace(/ى/g, 'ي').replace(/ة/g, 'ه');
   
   // Grade 6 / ICT 6 Template
   if (g.includes('سادس') || g.includes('grade 6') || g.includes('ict6') || g.includes('ict 6')) {
@@ -147,7 +148,16 @@ export const getGradeCurriculumTemplate = (grade: string, groupName?: string): P
   }
 
   // Prep 1 Template (Official 2024-2026 MOE Curriculum)
-  if (g.includes('أول إعدادي') || g.includes('اول اعدادي') || g.includes('prep 1') || g.includes('prep1')) {
+  if (
+    g.includes('اول اعدادي') ||
+    g.includes('اولي اعدادي') ||
+    g.includes('الاول الاعدادي') ||
+    g.includes('1 اعدادي') ||
+    g.includes('prep 1') ||
+    g.includes('prep1') ||
+    g.includes('ict-p1') ||
+    g.includes('p1')
+  ) {
     return {
       title: 'المحاضرة 1: التكنولوجيا الخضراء والتحول الرقمي وأنظمة التشغيل الحديثة 🌿💻',
       gradeLevel: grade,
@@ -384,6 +394,61 @@ export const LectureRecapManager: React.FC<LectureRecapManagerProps> = ({
   const activeCurriculumLesson = useMemo(() => {
     return availableCurriculumLessons.find(l => l.id === selectedCurriculumLessonId) || availableCurriculumLessons[0] || null;
   }, [availableCurriculumLessons, selectedCurriculumLessonId]);
+
+  // Unconditional Grade Level Counts (Must remain at top to avoid React Hook Error #310)
+  const countG4 = useMemo(() => recaps.filter(r => {
+    const rg = (r.gradeLevel || '').toLowerCase();
+    const rc = (r.subject || '').toLowerCase();
+    return rg.includes('رابع') || rg.includes('grade 4') || rc.includes('ict 4') || rc.includes('ict4');
+  }).length, [recaps]);
+
+  const countG5 = useMemo(() => recaps.filter(r => {
+    const rg = (r.gradeLevel || '').toLowerCase();
+    const rc = (r.subject || '').toLowerCase();
+    return rg.includes('خامس') || rg.includes('grade 5') || rc.includes('ict 5') || rc.includes('ict5');
+  }).length, [recaps]);
+
+  const countG6 = useMemo(() => recaps.filter(r => {
+    const rg = (r.gradeLevel || '').toLowerCase();
+    const rc = (r.subject || '').toLowerCase();
+    return rg.includes('سادس') || rg.includes('grade 6') || rc.includes('ict 6') || rc.includes('ict6');
+  }).length, [recaps]);
+
+  const countPrep1 = useMemo(() => recaps.filter(r => {
+    const rawRg = `${r.gradeLevel || ''} ${r.groupName || ''} ${r.subject || ''}`.toLowerCase();
+    const rg = rawRg.replace(/[أإآ]/g, 'ا').replace(/ى/g, 'ي').replace(/ة/g, 'ه');
+    return (
+      rg.includes('اول اعدادي') ||
+      rg.includes('اولي اعدادي') ||
+      rg.includes('الاول الاعدادي') ||
+      rg.includes('prep 1') ||
+      rg.includes('prep1') ||
+      rg.includes('ict-p1') ||
+      rg.includes('p1')
+    );
+  }).length, [recaps]);
+
+  const countPrep2 = useMemo(() => recaps.filter(r => {
+    const rg = (r.gradeLevel || '').toLowerCase();
+    return rg.includes('ثاني إعدادي') || rg.includes('ثاني اعدادي') || rg.includes('prep 2');
+  }).length, [recaps]);
+
+  const countCoding = useMemo(() => recaps.filter(r => {
+    const rg = (r.gradeLevel || '').toLowerCase();
+    return rg.includes('بايثون') || rg.includes('روبوت');
+  }).length, [recaps]);
+
+  // Determine effective student grade level and curriculum
+  const detectedCurriculum = useMemo(() => {
+    return detectCurriculum({
+      code: studentCode,
+      fullName: studentName,
+      grade: studentGradeLevel || currentGradeLevel,
+      courseName: ''
+    });
+  }, [studentCode, studentName, studentGradeLevel, currentGradeLevel]);
+
+  const effectiveGrade = (studentGradeLevel || currentGradeLevel || detectedCurriculum?.gradeNameAr || '').trim();
 
   // Sync selected concepts when lesson changes
   useEffect(() => {
@@ -627,18 +692,6 @@ export const LectureRecapManager: React.FC<LectureRecapManagerProps> = ({
     });
   };
 
-  // Determine effective student grade level and curriculum
-  const detectedCurriculum = useMemo(() => {
-    return detectCurriculum({
-      code: studentCode,
-      fullName: studentName,
-      grade: studentGradeLevel || currentGradeLevel,
-      courseName: ''
-    });
-  }, [studentCode, studentName, studentGradeLevel, currentGradeLevel]);
-
-  const effectiveGrade = (studentGradeLevel || currentGradeLevel || detectedCurriculum.gradeNameAr || '').trim();
-
   // Smart Matching Logic for Student / Parent / Trainer
   const isMatchingTarget = (recap: LectureRecap) => {
     if (mode === 'trainer_admin') {
@@ -662,28 +715,31 @@ export const LectureRecapManager: React.FC<LectureRecapManagerProps> = ({
       return true;
     }
 
+    // Grade key derived from student code & profile is absolute authority
+    const currKey = detectedCurriculum.gradeKey;
+
     // STRICT Grade 6 Check:
-    const isTargetG6 = target.includes('سادس') || target.includes('grade 6') || target.includes('سادسة') || target.includes('primary 6') || target.includes('ict6') || target.includes('ict 6');
+    const isTargetG6 = currKey === 'grade6' || target.includes('سادس') || target.includes('grade 6') || target.includes('سادسة') || target.includes('primary 6') || target.includes('ict6') || target.includes('ict 6');
     const isRecapG6 = recapGrade.includes('سادس') || recapGrade.includes('grade 6') || recapGrade.includes('سادسة') || recapGroup.includes('سادس') || recapGroup.includes('ict6') || recapGroup.includes('ict 6') || recapCourse.includes('ict6') || recapCourse.includes('ict 6');
 
     // STRICT Grade 5 Check:
-    const isTargetG5 = target.includes('خامس') || target.includes('grade 5') || target.includes('خامسة') || target.includes('primary 5') || target.includes('ict5') || target.includes('ict 5');
+    const isTargetG5 = currKey === 'grade5' || target.includes('خامس') || target.includes('grade 5') || target.includes('خامسة') || target.includes('primary 5') || target.includes('ict5') || target.includes('ict 5');
     const isRecapG5 = recapGrade.includes('خامس') || recapGrade.includes('grade 5') || recapGrade.includes('خامسة') || recapGroup.includes('خامس') || recapGroup.includes('ict5') || recapGroup.includes('ict 5') || recapCourse.includes('ict5') || recapCourse.includes('ict 5');
 
     // STRICT Grade 4 Check:
-    const isTargetG4 = target.includes('رابع') || target.includes('grade 4') || target.includes('رابعة') || target.includes('primary 4') || target.includes('ict4') || target.includes('ict 4');
+    const isTargetG4 = currKey === 'grade4' || target.includes('رابع') || target.includes('grade 4') || target.includes('رابعة') || target.includes('primary 4') || target.includes('ict4') || target.includes('ict 4');
     const isRecapG4 = recapGrade.includes('رابع') || recapGrade.includes('grade 4') || recapGrade.includes('رابعة') || recapGroup.includes('رابع') || recapGroup.includes('ict4') || recapGroup.includes('ict 4') || recapCourse.includes('ict4') || recapCourse.includes('ict 4');
 
     // STRICT Prep 1 Check:
-    const isTargetPrep1 = target.includes('أول إعدادي') || target.includes('اول اعدادي') || target.includes('prep 1') || target.includes('prep1');
-    const isRecapPrep1 = recapGrade.includes('أول إعدادي') || recapGrade.includes('اول اعدادي') || recapGrade.includes('prep 1') || recapGroup.includes('إعدادي') || recapGroup.includes('prep 1');
+    const isTargetPrep1 = currKey === 'prep1' || target.includes('أول إعدادي') || target.includes('أولى إعدادي') || target.includes('اولي اعدادي') || target.includes('اول اعدادي') || target.includes('الأول الإعدادي') || target.includes('prep 1') || target.includes('prep1') || target.includes('ict-p1');
+    const isRecapPrep1 = recapGrade.includes('أول إعدادي') || recapGrade.includes('أولى إعدادي') || recapGrade.includes('اولي اعدادي') || recapGrade.includes('اول اعدادي') || recapGrade.includes('الأول الإعدادي') || recapGrade.includes('prep 1') || recapGroup.includes('إعدادي') || recapGroup.includes('prep 1') || recapCourse.includes('prep 1') || recapCourse.includes('ict-p1');
 
     // STRICT Prep 2 Check:
-    const isTargetPrep2 = target.includes('ثاني إعدادي') || target.includes('ثاني اعدادي') || target.includes('prep 2');
+    const isTargetPrep2 = currKey === 'prep2' || target.includes('ثاني إعدادي') || target.includes('ثاني اعدادي') || target.includes('prep 2');
     const isRecapPrep2 = recapGrade.includes('ثاني إعدادي') || recapGrade.includes('prep 2');
 
     // STRICT Prep 3 Check:
-    const isTargetPrep3 = target.includes('ثالث إعدادي') || target.includes('ثالث اعدادي') || target.includes('prep 3');
+    const isTargetPrep3 = currKey === 'prep3' || target.includes('ثالث إعدادي') || target.includes('ثالث اعدادي') || target.includes('prep 3');
     const isRecapPrep3 = recapGrade.includes('ثالث إعدادي') || recapGrade.includes('prep 3');
 
     // Python & AI Check:
@@ -695,12 +751,12 @@ export const LectureRecapManager: React.FC<LectureRecapManagerProps> = ({
     const isRecapRobotics = recapGrade.includes('روبوت') || recapGrade.includes('robot');
 
     // If target belongs to any specific grade/program, strictly prevent cross-grade leakage:
-    if (isTargetG6) return isRecapG6;
-    if (isTargetG5) return isRecapG5;
-    if (isTargetG4) return isRecapG4;
-    if (isTargetPrep1) return isRecapPrep1;
-    if (isTargetPrep2) return isRecapPrep2;
-    if (isTargetPrep3) return isRecapPrep3;
+    if (currKey === 'prep1' || isTargetPrep1) return isRecapPrep1;
+    if (currKey === 'prep2' || isTargetPrep2) return isRecapPrep2;
+    if (currKey === 'prep3' || isTargetPrep3) return isRecapPrep3;
+    if (currKey === 'grade6' || isTargetG6) return isRecapG6;
+    if (currKey === 'grade5' || isTargetG5) return isRecapG5;
+    if (currKey === 'grade4' || isTargetG4) return isRecapG4;
     if (isTargetPython) return isRecapPython;
     if (isTargetRobotics) return isRecapRobotics;
 
@@ -1055,40 +1111,6 @@ ${getPublicBaseUrl()}/?view=student_portal
     (activeRecap.gradeLevel?.includes('رابع') || activeRecap.title?.includes('كيسة') || activeRecap.title?.includes('عمو الكهربائي')) &&
     (activeRecap.recapSummary?.points?.some(p => p.includes('كيسة') || p.includes('Power Supply') || p.includes('عمو الكهربائي')) ?? true)
   );
-
-  const countG4 = useMemo(() => recaps.filter(r => {
-    const rg = (r.gradeLevel || '').toLowerCase();
-    const rc = (r.subject || '').toLowerCase();
-    return rg.includes('رابع') || rg.includes('grade 4') || rc.includes('ict 4') || rc.includes('ict4');
-  }).length, [recaps]);
-
-  const countG5 = useMemo(() => recaps.filter(r => {
-    const rg = (r.gradeLevel || '').toLowerCase();
-    const rc = (r.subject || '').toLowerCase();
-    return rg.includes('خامس') || rg.includes('grade 5') || rc.includes('ict 5') || rc.includes('ict5');
-  }).length, [recaps]);
-
-  const countG6 = useMemo(() => recaps.filter(r => {
-    const rg = (r.gradeLevel || '').toLowerCase();
-    const rc = (r.subject || '').toLowerCase();
-    return rg.includes('سادس') || rg.includes('grade 6') || rc.includes('ict 6') || rc.includes('ict6');
-  }).length, [recaps]);
-
-  const countPrep1 = useMemo(() => recaps.filter(r => {
-    const rg = (r.gradeLevel || '').toLowerCase();
-    const rc = (r.subject || '').toLowerCase();
-    return rg.includes('أول إعدادي') || rg.includes('اول اعدادي') || rg.includes('prep 1') || rc.includes('prep 1');
-  }).length, [recaps]);
-
-  const countPrep2 = useMemo(() => recaps.filter(r => {
-    const rg = (r.gradeLevel || '').toLowerCase();
-    return rg.includes('ثاني إعدادي') || rg.includes('ثاني اعدادي') || rg.includes('prep 2');
-  }).length, [recaps]);
-
-  const countCoding = useMemo(() => recaps.filter(r => {
-    const rg = (r.gradeLevel || '').toLowerCase();
-    return rg.includes('بايثون') || rg.includes('روبوت');
-  }).length, [recaps]);
 
   return (
     <div className="space-y-6 text-slate-800" dir="rtl">

@@ -190,11 +190,11 @@ export async function handlePublicRegister(req: Request, res: Response) {
     const allGroups = await GroupRepo.getAll();
     const allBranches = await BranchRepo.getAll();
 
-    // Sibling-safe duplicate check:
+    // Sibling-safe and distinct student duplicate check:
     // SIBLINGS share the same parent phone number! They must NOT be blocked!
     // A duplicate ONLY exists if:
-    // 1) Same student name (normalized) AND (same phone OR same parent phone OR same course/grade)
-    // OR 2) Exact National ID match (if provided and valid)
+    // 1) Exact National ID match (if provided and valid >= 10 digits)
+    // OR 2) Exact matching full name (at least 3 words) AND matching student/parent phone number
     const cleanNationalId = String(data.nationalId || '').trim();
     const existingTrainee = allTrainees.find(t => {
       const tPhoneDigits = String(t.phone || '').replace(/\D/g, '').slice(-10);
@@ -211,9 +211,9 @@ export async function handlePublicRegister(req: Request, res: Response) {
 
       const samePhone = (phoneDigits && phoneDigits.length >= 8 && (phoneDigits === tPhoneDigits || phoneDigits === tParentPhoneDigits)) ||
                         (parentPhoneDigits && parentPhoneDigits.length >= 8 && (parentPhoneDigits === tPhoneDigits || parentPhoneDigits === tParentPhoneDigits));
-      const sameGrade = grade && t.grade && String(t.grade).trim().toLowerCase() === grade.toLowerCase();
 
-      return samePhone || sameGrade;
+      // Must match BOTH full name AND phone number to be considered the same registered student
+      return Boolean(sameName && samePhone);
     });
 
     if (existingTrainee) {

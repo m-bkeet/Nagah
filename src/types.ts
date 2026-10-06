@@ -114,6 +114,8 @@ export interface Trainee {
   points?: number; // Alias for totalPoints
   ranking?: number; // الترتيب
   photoUrl?: string;
+  photoDriveFileId?: string;
+  parentPhotoDriveFileId?: string;
   themeColor?: string;
   isExempt?: boolean;
   exemptReason?: 'management_children' | 'friend_children' | 'scholarship' | 'other';
@@ -1096,6 +1098,22 @@ export interface HomeworkSubmission {
   rating: string;
   strengths: string[];
   corrections: string[];
+  mistakes?: Array<{
+    questionNumber: string;
+    questionSummary: string;
+    studentAnswer: string;
+    correctAnswer: string;
+    isCorrect: boolean;
+    scoreAwarded?: number;
+    maxScore?: number;
+    explanation: string;
+  }>;
+  lessonSummaryEvaluation?: {
+    completeness?: string;
+    coveredCoreConcepts?: string[];
+    missingConcepts?: string[];
+    overallVerdict?: string;
+  };
   generalFeedback: string;
   trainerNotes?: string;
   audioFeedbackUrl?: string; // Teacher voice recording/note

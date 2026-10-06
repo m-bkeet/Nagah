@@ -627,7 +627,12 @@ export function detectCurriculum(student?: {
   }
 
   const code = (student.code || '').trim().toUpperCase();
-  const gradeText = `${student.grade || ''} ${student.stage || ''} ${student.courseName || ''} ${student.groupName || ''}`.toLowerCase();
+  const rawGradeText = `${student.grade || ''} ${student.stage || ''} ${student.courseName || ''} ${student.groupName || ''} ${student.academicYear || ''}`.toLowerCase();
+  // Robust Arabic normalization for flexible grade detection
+  const gradeText = rawGradeText
+    .replace(/[أإآ]/g, 'ا')
+    .replace(/ى/g, 'ي')
+    .replace(/ة/g, 'ه');
 
   // 1. Direct Student Code Prefix Matching (Highest Authority in NAGAH MS)
   if (code.startsWith('D')) {
@@ -652,47 +657,60 @@ export function detectCurriculum(student?: {
     return MOE_CURRICULA.grade6; // Grade 6 (الصف السادس الابتدائي)
   }
 
-  // 2. Text-Based Fallback Matching
+  // 2. Text-Based Fallback Matching (Normalized)
   if (
-    gradeText.includes('أول إعدادي') ||
-    gradeText.includes('الأول الإعدادي') ||
     gradeText.includes('اول اعدادي') ||
+    gradeText.includes('اولي اعدادي') ||
+    gradeText.includes('الاول الاعدادي') ||
+    gradeText.includes('1 اعدادي') ||
     gradeText.includes('prep 1') ||
     gradeText.includes('prep1') ||
+    gradeText.includes('ict-p1') ||
+    gradeText.includes('ict p1') ||
     gradeText.includes('grade 7') ||
-    gradeText.includes('g7')
+    gradeText.includes('g7') ||
+    gradeText.includes('1st prep')
   ) {
     return MOE_CURRICULA.prep1;
   }
 
   if (
-    gradeText.includes('ثاني إعدادي') ||
-    gradeText.includes('الثاني الإعدادي') ||
+    gradeText.includes('ثاني اعدادي') ||
+    gradeText.includes('تانيه اعدادي') ||
     gradeText.includes('تاني اعدادي') ||
+    gradeText.includes('الثاني الاعدادي') ||
+    gradeText.includes('2 اعدادي') ||
     gradeText.includes('prep 2') ||
     gradeText.includes('prep2') ||
+    gradeText.includes('ict-p2') ||
     gradeText.includes('grade 8') ||
-    gradeText.includes('g8')
+    gradeText.includes('g8') ||
+    gradeText.includes('2nd prep')
   ) {
     return MOE_CURRICULA.prep2;
   }
 
   if (
-    gradeText.includes('ثالث إعدادي') ||
-    gradeText.includes('الثالث الإعدادي') ||
+    gradeText.includes('ثالث اعدادي') ||
+    gradeText.includes('تالته اعدادي') ||
     gradeText.includes('تالت اعدادي') ||
+    gradeText.includes('الثالث الاعدادي') ||
+    gradeText.includes('3 اعدادي') ||
     gradeText.includes('prep 3') ||
     gradeText.includes('prep3') ||
+    gradeText.includes('ict-p3') ||
     gradeText.includes('grade 9') ||
-    gradeText.includes('g9')
+    gradeText.includes('g9') ||
+    gradeText.includes('3rd prep')
   ) {
     return MOE_CURRICULA.prep3;
   }
 
   if (
-    gradeText.includes('أول ثانوي') ||
-    gradeText.includes('الأول الثانوي') ||
     gradeText.includes('اول ثانوي') ||
+    gradeText.includes('اولي ثانوي') ||
+    gradeText.includes('الاول الثانوي') ||
+    gradeText.includes('1 ثانوي') ||
     gradeText.includes('sec 1') ||
     gradeText.includes('sec1') ||
     gradeText.includes('grade 10') ||
@@ -1392,7 +1410,8 @@ export function getOfficialLessonsForGrade(
   gradeQuery: string,
   term?: 1 | 2 | 'all'
 ): OfficialCurriculumLesson[] {
-  const q = (gradeQuery || '').toLowerCase();
+  const rawQ = (gradeQuery || '').toLowerCase();
+  const q = rawQ.replace(/[أإآ]/g, 'ا').replace(/ى/g, 'ي').replace(/ة/g, 'ه');
   let key: 'grade4' | 'grade5' | 'grade6' | 'prep1' | 'prep2' = 'grade4';
 
   if (q.includes('سادس') || q.includes('grade 6') || q.includes('ict 6') || q.includes('ict6')) {
@@ -1401,9 +1420,27 @@ export function getOfficialLessonsForGrade(
     key = 'grade5';
   } else if (q.includes('رابع') || q.includes('grade 4') || q.includes('ict 4') || q.includes('ict4')) {
     key = 'grade4';
-  } else if (q.includes('أول إعدادي') || q.includes('اول اعدادي') || q.includes('prep 1') || q.includes('prep1')) {
+  } else if (
+    q.includes('اول اعدادي') ||
+    q.includes('اولي اعدادي') ||
+    q.includes('الاول الاعدادي') ||
+    q.includes('1 اعدادي') ||
+    q.includes('prep 1') ||
+    q.includes('prep1') ||
+    q.includes('ict-p1') ||
+    q.includes('p1')
+  ) {
     key = 'prep1';
-  } else if (q.includes('ثاني إعدادي') || q.includes('prep 2')) {
+  } else if (
+    q.includes('ثاني اعدادي') ||
+    q.includes('تانيه اعدادي') ||
+    q.includes('تاني اعدادي') ||
+    q.includes('الثاني الاعدادي') ||
+    q.includes('2 اعدادي') ||
+    q.includes('prep 2') ||
+    q.includes('prep2') ||
+    q.includes('ict-p2')
+  ) {
     key = 'prep2';
   }
 

@@ -97,15 +97,20 @@ import { StudentCardsBroadcastModal } from '../components/StudentCardsBroadcastM
 import { GoogleSheetsHubModal } from '../components/GoogleSheetsHubModal';
 import { GoogleSheetsService } from '../services/googleSheets';
 import { GoogleFormsImportModal } from '../components/GoogleFormsImportModal';
+import { GoogleDriveService } from '../services/googleDrive';
+import { resolveTraineePhotoUrl } from '../utils/googleDriveHelper';
 
 const getTraineePhoto = (t: any): string => {
   if (!t) return '';
+  if (t.photoDriveFileId && typeof t.photoDriveFileId === 'string' && t.photoDriveFileId.trim().length > 0) {
+    return resolveTraineePhotoUrl(t.photoUrl, t.photoDriveFileId);
+  }
   const cached = (t.id ? localStorage.getItem('student_session_photo_' + t.id) : null) || 
                  (t.code ? localStorage.getItem('student_session_photo_' + t.code) : null) || 
                  (t.nationalId ? localStorage.getItem('student_session_photo_' + t.nationalId) : null);
   if (cached && cached.trim().length > 0) return cached.trim();
-  if (t.photoUrl && typeof t.photoUrl === 'string' && t.photoUrl.trim().length > 0) return t.photoUrl.trim();
-  if (t.photo && typeof t.photo === 'string' && t.photo.trim().length > 0) return t.photo.trim();
+  if (t.photoUrl && typeof t.photoUrl === 'string' && t.photoUrl.trim().length > 0) return resolveTraineePhotoUrl(t.photoUrl.trim());
+  if (t.photo && typeof t.photo === 'string' && t.photo.trim().length > 0) return resolveTraineePhotoUrl(t.photo.trim());
   return '';
 };
 
@@ -679,12 +684,31 @@ export const TraineesView: React.FC = () => {
     }
   };
 
-  const handlePhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePhotoSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (file.size > 5 * 1024 * 1024) {
-        showToast('حجم الصورة كبير جداً، يرجى اختيار صورة أقل من 5 ميجابايت', 'warning');
+      if (file.size > 10 * 1024 * 1024) {
+        showToast('حجم الصورة كبير جداً، يرجى اختيار صورة أقل من 10 ميجابايت', 'warning');
         return;
+      }
+      showToast('جاري رفع صورة المتدرب إلى Google Drive... ☁️', 'info');
+      try {
+        const uploadRes = await GoogleDriveService.uploadStudentPhoto(
+          file,
+          formData.fullName || 'متدرب',
+          formData.code || 'م'
+        );
+        if (uploadRes.success && uploadRes.fileId) {
+          setFormData((prev: any) => ({
+            ...prev,
+            photoUrl: uploadRes.photoUrl,
+            photoDriveFileId: uploadRes.fileId
+          }));
+          showToast('تم رفع الصورة بنجاح إلى Google Drive! ✨', 'success');
+          return;
+        }
+      } catch (err: any) {
+        console.warn('Google Drive direct upload notice:', err);
       }
       const reader = new FileReader();
       reader.onload = () => {
@@ -774,9 +798,16 @@ export const TraineesView: React.FC = () => {
 
     setIsAddingTrainee(true);
     try {
-      const netAmt = (Number(formData.feeAmount) || 0) - (Number(formData.discountAmount) || 0);
+      const isSuspendedOrDropped = formData.status === 'suspended' || formData.status === 'dropped';
+      const isUnassigned = !formData.groupId || formData.groupId.trim() === '' || formData.groupId === 'unassigned';
+      const isExempt = Boolean(formData.isExempt);
+
+      const feeAmt = Number(formData.feeAmount) || 0;
+      const discountAmt = isExempt ? feeAmt : (Number(formData.discountAmount) || 0);
       const paidAmt = Number(formData.initialPayment) || 0;
-      const remainingAmt = netAmt - paidAmt;
+
+      const netAmt = (isSuspendedOrDropped || isUnassigned || isExempt) ? 0 : Math.max(0, feeAmt - discountAmt);
+      const remainingAmt = (isSuspendedOrDropped || isUnassigned || isExempt) ? 0 : Math.max(0, netAmt - paidAmt);
 
       const payload = {
         ...formData,
@@ -798,9 +829,21 @@ export const TraineesView: React.FC = () => {
             try { localStorage.setItem('nagah_trainees', JSON.stringify(newList)); } catch {}
             return newList;
           });
-          // Ensure branch filter doesn't hide the new student
+          // Ensure filters don't hide the new student from the user's view
           if (selectedBranch !== 'all' && selectedBranch !== newTrainee.branchId) {
             setSelectedBranch('all');
+          }
+          if (selectedCourse !== 'all' && selectedCourse !== newTrainee.courseId) {
+            setSelectedCourse('all');
+          }
+          if (selectedGroup !== 'all' && selectedGroup !== newTrainee.groupId) {
+            setSelectedGroup('all');
+          }
+          if (selectedStatus !== 'all' && selectedStatus !== newTrainee.status) {
+            setSelectedStatus('all');
+          }
+          if (searchQuery.trim()) {
+            setSearchQuery('');
           }
         }
         const traineeName = newTrainee?.fullName || formData.fullName || 'المتدرب';
@@ -867,12 +910,16 @@ export const TraineesView: React.FC = () => {
 
     setIsEditingTrainee(true);
     try {
+      const isSuspendedOrDropped = formData.status === 'suspended' || formData.status === 'dropped';
+      const isUnassigned = !formData.groupId || formData.groupId.trim() === '' || formData.groupId === 'unassigned';
       const isExempt = Boolean(formData.isExempt);
+
       const feeAmt = Number(formData.feeAmount) || 0;
       const discountAmt = isExempt ? feeAmt : (Number(formData.discountAmount) || 0);
       const currentPaid = activeTrainee.paidAmount || 0;
-      const netAmt = isExempt ? 0 : Math.max(0, feeAmt - discountAmt);
-      const remainingAmt = isExempt ? 0 : Math.max(0, netAmt - currentPaid);
+
+      const netAmt = (isSuspendedOrDropped || isUnassigned || isExempt) ? 0 : Math.max(0, feeAmt - discountAmt);
+      const remainingAmt = (isSuspendedOrDropped || isUnassigned || isExempt) ? 0 : Math.max(0, netAmt - currentPaid);
 
       const res = await api.updateTrainee(activeTrainee.id, {
         ...formData,
@@ -967,6 +1014,10 @@ export const TraineesView: React.FC = () => {
   const executeDeleteSingle = async () => {
     if (!deleteConfirm?.trainee) return;
     const targetId = deleteConfirm.trainee.id;
+    const driveFileId = deleteConfirm.trainee.photoDriveFileId;
+    if (driveFileId) {
+      GoogleDriveService.deleteDriveFile(driveFileId).catch(() => {});
+    }
     try {
       const res = await api.deleteTrainee(targetId);
       setTrainees(prev => {
@@ -2331,9 +2382,9 @@ export const TraineesView: React.FC = () => {
                   <div className="p-4 space-y-3.5 text-right">
                     {/* Student Info */}
                     <div className="flex items-center gap-3">
-                      {t.photoUrl ? (
+                      {getTraineePhoto(t) ? (
                         <img
-                          src={t.photoUrl}
+                          src={getTraineePhoto(t)}
                           alt={t.fullName}
                           className="w-12 h-12 rounded-xl object-cover border border-amber-500/50 shadow-md shrink-0 cursor-pointer"
                           onClick={() => handleOpenProfile(t)}
@@ -2418,7 +2469,13 @@ export const TraineesView: React.FC = () => {
                         <div className="font-mono font-bold">
                           <span className="text-sky-700 dark:text-emerald-400">{t.paidAmount}</span>
                           <span className="text-slate-400 dark:text-slate-600 mx-1">/</span>
-                          {t.remainingAmount > 0 ? (
+                          {t.status === 'suspended' ? (
+                            <span className="text-slate-500 dark:text-slate-400 text-[10px]">متوقف (0 ج.م)</span>
+                          ) : t.status === 'dropped' ? (
+                            <span className="text-stone-500 dark:text-stone-400 text-[10px]">منسحب (0 ج.م)</span>
+                          ) : !t.groupId || t.groupId === 'unassigned' ? (
+                            <span className="text-amber-600 dark:text-amber-400 text-[10px]">غير مسكن (0 ج.م)</span>
+                          ) : t.remainingAmount > 0 ? (
                             <span className="text-rose-700 dark:text-rose-400">{t.remainingAmount} ج.م</span>
                           ) : (
                             <span className="text-emerald-700 dark:text-emerald-400 text-[10px]">خالص ✓</span>
@@ -2695,7 +2752,19 @@ export const TraineesView: React.FC = () => {
                         {/* Remaining & Subscription Status */}
                         <td className="p-3.5 font-mono font-bold">
                           <div className="flex flex-col gap-1 items-start">
-                            {t.remainingAmount > 0 ? (
+                            {t.status === 'suspended' ? (
+                              <span className="text-slate-600 bg-slate-100 dark:bg-slate-800 dark:text-slate-300 px-2 py-0.5 rounded border border-slate-200 dark:border-slate-700 text-xs">
+                                0 ج.م (متوقف)
+                              </span>
+                            ) : t.status === 'dropped' ? (
+                              <span className="text-stone-600 bg-stone-100 dark:bg-stone-800 dark:text-stone-300 px-2 py-0.5 rounded border border-stone-200 dark:border-stone-700 text-xs">
+                                0 ج.م (منسحب)
+                              </span>
+                            ) : !t.groupId || t.groupId === 'unassigned' ? (
+                              <span className="text-amber-700 bg-amber-50 dark:bg-amber-950/40 dark:text-amber-300 px-2 py-0.5 rounded border border-amber-200 dark:border-amber-700 text-xs">
+                                0 ج.م (غير مسكن)
+                              </span>
+                            ) : t.remainingAmount > 0 ? (
                               <span className="text-rose-700 bg-rose-50 dark:bg-rose-950/40 dark:text-rose-400 px-2 py-0.5 rounded border border-rose-200 dark:border-rose-800/50">
                                 {t.remainingAmount} ج.م
                               </span>
@@ -4307,47 +4376,75 @@ export const TraineesView: React.FC = () => {
 
               {/* Financial Balance Summary (4 Balanced Stat Cards) */}
               {(() => {
-                const feeAmount = activeTrainee.feeAmount && activeTrainee.feeAmount > 0 
+                const isSuspendedOrDropped = activeTrainee.status === 'suspended' || activeTrainee.status === 'dropped';
+                const isUnassigned = !activeTrainee.groupId || activeTrainee.groupId.trim() === '' || activeTrainee.groupId === 'unassigned';
+                const isExempt = Boolean(activeTrainee.isExempt || activeTrainee.exemptReason);
+
+                const baseFee = activeTrainee.feeAmount && activeTrainee.feeAmount > 0 
                   ? activeTrainee.feeAmount 
                   : (courses.find(c => c.id === activeTrainee.courseId)?.feeAmount || 2500);
-                const discountAmount = activeTrainee.discountAmount || 0;
+
+                const feeAmount = (isSuspendedOrDropped || isUnassigned) ? 0 : baseFee;
+                const discountAmount = (isSuspendedOrDropped || isUnassigned) ? 0 : (activeTrainee.discountAmount || (isExempt ? baseFee : 0));
                 const paidAmount = activeTrainee.paidAmount || 0;
-                const remainingDebt = Math.max(0, feeAmount - discountAmount - paidAmount);
+                const remainingDebt = (isSuspendedOrDropped || isUnassigned || isExempt) ? 0 : Math.max(0, feeAmount - discountAmount - paidAmount);
 
                 return (
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                    <div className="p-3.5 rounded-2xl bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-800 shadow-2xs">
-                      <span className="text-slate-500 dark:text-slate-400 text-xs font-medium block mb-1">رسوم الدورة المقررة</span>
-                      <span className="text-base sm:text-lg font-black font-mono text-slate-900 dark:text-white">
-                        {feeAmount} <span className="text-xs font-bold text-slate-500 dark:text-slate-400">ج.م</span>
-                      </span>
-                    </div>
+                  <div className="space-y-3">
+                    {/* Informative Status Banner if Suspended / Dropped / Unassigned */}
+                    {activeTrainee.status === 'suspended' && (
+                      <div className="p-3 bg-slate-100 dark:bg-slate-800/80 border border-slate-300 dark:border-slate-700 rounded-2xl flex items-center gap-2.5 text-slate-800 dark:text-slate-200 text-xs font-bold shadow-xs">
+                        <span className="text-base">⏸️</span>
+                        <span>حساب المتدرب: <strong>متوقف مؤقتاً</strong> — تم استبعاد الطالب من الحسابات والمطالبات المالية والمستحقات، ولا يوجد عليه أي مديونية لحين إعادة تنشيطه يدوياً.</span>
+                      </div>
+                    )}
+                    {activeTrainee.status === 'dropped' && (
+                      <div className="p-3 bg-stone-100 dark:bg-stone-800/80 border border-stone-300 dark:border-stone-700 rounded-2xl flex items-center gap-2.5 text-stone-800 dark:text-stone-200 text-xs font-bold shadow-xs">
+                        <span className="text-base">🚫</span>
+                        <span>حساب المتدرب: <strong>منسحب</strong> — الطالب مستبعد من كافة الحسابات والرسوم المستحقة.</span>
+                      </div>
+                    )}
+                    {activeTrainee.status === 'active' && isUnassigned && (
+                      <div className="p-3 bg-amber-50 dark:bg-amber-950/50 border border-amber-300 dark:border-amber-700/60 rounded-2xl flex items-center gap-2.5 text-amber-900 dark:text-amber-300 text-xs font-bold shadow-xs">
+                        <span className="text-base">⏳</span>
+                        <span>حساب المتدرب: <strong>غير مسكن على مجموعة</strong> — الطالب مستبعد من المطالبات المالية لحين تسكينه في مجموعة دراسية وتنشيطه.</span>
+                      </div>
+                    )}
 
-                    <div className="p-3.5 rounded-2xl bg-amber-50/50 dark:bg-amber-950/20 border border-amber-200/70 dark:border-amber-800/40 shadow-2xs">
-                      <span className="text-amber-800 dark:text-amber-400 text-xs font-medium block mb-1">الخصم الممنوح</span>
-                      <span className="text-base sm:text-lg font-black font-mono text-amber-700 dark:text-amber-300">
-                        {discountAmount} <span className="text-xs font-bold text-amber-700/70 dark:text-amber-400/70">ج.م</span>
-                      </span>
-                    </div>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                      <div className="p-3.5 rounded-2xl bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-800 shadow-2xs">
+                        <span className="text-slate-500 dark:text-slate-400 text-xs font-medium block mb-1">رسوم الدورة المقررة</span>
+                        <span className="text-base sm:text-lg font-black font-mono text-slate-900 dark:text-white">
+                          {feeAmount} <span className="text-xs font-bold text-slate-500 dark:text-slate-400">ج.م</span>
+                        </span>
+                      </div>
 
-                    <div className="p-3.5 rounded-2xl bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-200/70 dark:border-emerald-800/40 shadow-2xs">
-                      <span className="text-emerald-800 dark:text-emerald-400 text-xs font-medium block mb-1">إجمالي المدفوع</span>
-                      <span className="text-base sm:text-lg font-black font-mono text-emerald-700 dark:text-emerald-300">
-                        {paidAmount} <span className="text-xs font-bold text-emerald-700/70 dark:text-emerald-400/70">ج.م</span>
-                      </span>
-                    </div>
+                      <div className="p-3.5 rounded-2xl bg-amber-50/50 dark:bg-amber-950/20 border border-amber-200/70 dark:border-amber-800/40 shadow-2xs">
+                        <span className="text-amber-800 dark:text-amber-400 text-xs font-medium block mb-1">الخصم الممنوح</span>
+                        <span className="text-base sm:text-lg font-black font-mono text-amber-700 dark:text-amber-300">
+                          {discountAmount} <span className="text-xs font-bold text-amber-700/70 dark:text-amber-400/70">ج.م</span>
+                        </span>
+                      </div>
 
-                    <div className={`p-3.5 rounded-2xl border shadow-2xs ${
-                      remainingDebt > 0
-                        ? 'bg-rose-50/60 dark:bg-rose-950/20 border-rose-200/70 dark:border-rose-800/40'
-                        : 'bg-white dark:bg-slate-850 border-slate-200 dark:border-slate-800'
-                    }`}>
-                      <span className={`text-xs font-medium block mb-1 ${remainingDebt > 0 ? 'text-rose-800 dark:text-rose-400' : 'text-slate-500 dark:text-slate-400'}`}>
-                        المتبقي المطلوب
-                      </span>
-                      <span className={`text-base sm:text-lg font-black font-mono ${remainingDebt > 0 ? 'text-rose-700 dark:text-rose-300' : 'text-emerald-600 dark:text-emerald-400'}`}>
-                        {remainingDebt} <span className="text-xs font-bold opacity-75">ج.م</span>
-                      </span>
+                      <div className="p-3.5 rounded-2xl bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-200/70 dark:border-emerald-800/40 shadow-2xs">
+                        <span className="text-emerald-800 dark:text-emerald-400 text-xs font-medium block mb-1">إجمالي المدفوع</span>
+                        <span className="text-base sm:text-lg font-black font-mono text-emerald-700 dark:text-emerald-300">
+                          {paidAmount} <span className="text-xs font-bold text-emerald-700/70 dark:text-emerald-400/70">ج.م</span>
+                        </span>
+                      </div>
+
+                      <div className={`p-3.5 rounded-2xl border shadow-2xs ${
+                        remainingDebt > 0
+                          ? 'bg-rose-50/60 dark:bg-rose-950/20 border-rose-200/70 dark:border-rose-800/40'
+                          : 'bg-white dark:bg-slate-850 border-slate-200 dark:border-slate-800'
+                      }`}>
+                        <span className={`text-xs font-medium block mb-1 ${remainingDebt > 0 ? 'text-rose-800 dark:text-rose-400' : 'text-slate-500 dark:text-slate-400'}`}>
+                          المتبقي المطلوب
+                        </span>
+                        <span className={`text-base sm:text-lg font-black font-mono ${remainingDebt > 0 ? 'text-rose-700 dark:text-rose-300' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                          {remainingDebt} <span className="text-xs font-bold opacity-75">ج.م</span>
+                        </span>
+                      </div>
                     </div>
                   </div>
                 );
@@ -5784,21 +5881,26 @@ export const TraineesView: React.FC = () => {
           initialImage={formData.photoUrl}
           studentName={formData.fullName || 'المتدرب'}
           onSavePhoto={async (finalPhoto) => {
+            showToast('جاري معالجة ورفع الصورة إلى Google Drive... ☁️', 'info');
             try {
-              const res = await fetch('/api/upload', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ fileData: finalPhoto, fileName: 'cropped-photo.jpg' })
-              });
-              const data = await res.json();
-              if (res.ok && data.success) {
-                setFormData((prev: any) => ({ ...prev, photoUrl: data.url }));
-              } else {
-                setFormData((prev: any) => ({ ...prev, photoUrl: finalPhoto }));
+              const uploadRes = await GoogleDriveService.uploadStudentPhoto(
+                finalPhoto,
+                formData.fullName || 'المتدرب',
+                formData.code || 'م'
+              );
+              if (uploadRes.success && uploadRes.fileId) {
+                setFormData((prev: any) => ({
+                  ...prev,
+                  photoUrl: uploadRes.photoUrl,
+                  photoDriveFileId: uploadRes.fileId
+                }));
+                showToast('تمت معالجة ورفع الصورة بنجاح إلى Google Drive ✨', 'success');
+                return;
               }
-            } catch(e) {
-              setFormData((prev: any) => ({ ...prev, photoUrl: finalPhoto }));
+            } catch (err: any) {
+              console.warn('Google Drive photo upload notice:', err);
             }
+            setFormData((prev: any) => ({ ...prev, photoUrl: finalPhoto }));
             showToast('تمت معالجة وحفظ صورة المتدرب بنجاح ✨', 'success');
           }}
         />

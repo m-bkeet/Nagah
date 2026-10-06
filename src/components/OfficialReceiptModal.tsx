@@ -73,6 +73,20 @@ export const OfficialReceiptModal: React.FC<OfficialReceiptModalProps> = ({
   if (!isOpen || !payment) return null;
 
   const displayName = payment.traineeName || studentName || traineeName || 'اسم الطالب غير محدد';
+
+  const formatNextDueString = (dateStr?: string) => {
+    if (!dateStr) return 'مسدد حتى 25/10';
+    if (dateStr.startsWith('مسدد حتى')) return dateStr;
+    try {
+      const parts = dateStr.split('-');
+      if (parts.length === 3) {
+        const m = parseInt(parts[1], 10);
+        const d = parseInt(parts[2], 10);
+        return `مسدد حتى ${d}/${m}`;
+      }
+    } catch {}
+    return `مسدد حتى ${dateStr}`;
+  };
   const displayCode = payment.traineeCode || studentCode || traineeCode || '—';
   const displayTrainerCode = payment.trainerCode || trainerCode || '—';
   const displayTrainerName = payment.trainerName || trainerName || '';
@@ -80,7 +94,7 @@ export const OfficialReceiptModal: React.FC<OfficialReceiptModalProps> = ({
   const displayBranch = branchName || 'الفرع الرئيسي';
   const displayGroupName = payment.groupName || groupName || '';
   const amountWords = numberToArabicWords(payment.amount);
-  const targetMonthStr = payment.targetMonth || 'الشهر الحالي';
+  const targetMonthStr = payment.targetMonth || 'سبتمبر 2026';
   const displayNextDueDate = payment.nextDueDate || nextDueDate;
   const displayPreviousDebt = payment.previousDebt !== undefined ? payment.previousDebt : previousDebt;
   const displayDiscount = payment.discountAmount !== undefined ? payment.discountAmount : discountAmount;
@@ -376,15 +390,19 @@ export const OfficialReceiptModal: React.FC<OfficialReceiptModalProps> = ({
               {/* Header */}
               <div className="flex items-start justify-between border-b border-slate-200 dark:border-slate-800 print:border-slate-300 pb-4">
                 <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-500 to-amber-600 flex items-center justify-center font-black text-slate-950 text-xl shadow-lg print:border print:border-amber-600">
-                    🏛️
+                  <div className="w-12 h-12 rounded-full border-2 border-amber-400 p-0.5 bg-white shadow-md flex items-center justify-center shrink-0">
+                    <img 
+                      src={centerSettings?.logoUrl || "/icon-512.png"} 
+                      alt="اللوجو الرسمي للمركز" 
+                      className="w-full h-full object-contain rounded-full" 
+                    />
                   </div>
                   <div>
                     <h2 className="text-base font-black text-slate-900 dark:text-white print:text-black">
                       {centerSettings?.name || 'مركز النجاح للتدريب والتكنولوجيا'}
                     </h2>
                     <p className="text-[11px] text-slate-500 dark:text-slate-400 print:text-slate-600">
-                      إدارة الشؤون المالية والخزينة العامة • فرع {displayBranch}
+                      إدارة الشؤون المالية والخزينة العامة • فرع {displayBranch} • هاتف: {centerSettings?.phone || '01001500686'}
                     </p>
                   </div>
                 </div>
@@ -458,9 +476,9 @@ export const OfficialReceiptModal: React.FC<OfficialReceiptModalProps> = ({
                 </div>
 
                 <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950/40 border border-slate-200 dark:border-slate-800 print:border-slate-300">
-                  <span className="text-[10px] text-slate-500 dark:text-slate-400 print:text-slate-500 block mb-0.5">تاريخ الاستحقاق القادم:</span>
+                  <span className="text-[10px] text-slate-500 dark:text-slate-400 print:text-slate-500 block mb-0.5">تاريخ الاستحقاق (مسدد حتى):</span>
                   <span className="font-bold text-emerald-700 dark:text-emerald-400 print:text-emerald-800 dir-ltr">
-                    {displayNextDueDate || 'تلقائي شهرياً'}
+                    {formatNextDueString(displayNextDueDate)}
                   </span>
                 </div>
 

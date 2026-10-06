@@ -122,6 +122,31 @@ export const GroupCashCollectionCockpit: React.FC = () => {
 
   // Helpers to calculate financial status for a student
   const getTraineeFinancialInfo = (t: Trainee) => {
+    // Check suspended / dropped / unassigned FIRST
+    const isSuspendedOrDropped = t.status === 'suspended' || t.status === 'dropped';
+    const isUnassigned = !t.groupId || t.groupId.trim() === '' || t.groupId === 'unassigned';
+    
+    // Latest payment record
+    const traineePayments = (paymentsList || []).filter(p => p.traineeId === t.id && p.status !== 'rejected');
+    const latestPayment = traineePayments.length > 0 ? traineePayments[traineePayments.length - 1] : null;
+
+    if (isSuspendedOrDropped || isUnassigned) {
+      return {
+        baseFee: 0,
+        discount: 0,
+        net: 0,
+        paid: t.paidAmount || 0,
+        remaining: 0,
+        isExempt: false,
+        reasonLabel: isSuspendedOrDropped 
+          ? (t.status === 'suspended' ? '⏸️ متوقف (مستبعد من الحسابات)' : '🚫 منسحب (مستبعد من الحسابات)')
+          : '⏳ غير مسكن بمجموعة (مستبعد)',
+        isPaidUntilNextMonth: true,
+        latestPayment,
+        nextPaymentDueDate: undefined
+      };
+    }
+
     // Check exemption flags FIRST
     const note = t.notes || '';
     const isExemptNote = /إعفاء|معفى|معفي|أبناء|منحة|مالك|إداري|استثنائي|مجاني/i.test(note);
@@ -162,10 +187,6 @@ export const GroupCashCollectionCockpit: React.FC = () => {
     } else if (paid > 0 && remaining === 0) {
       isPaidUntilNextMonth = true;
     }
-
-    // Latest payment record
-    const traineePayments = (paymentsList || []).filter(p => p.traineeId === t.id && p.status !== 'rejected');
-    const latestPayment = traineePayments.length > 0 ? traineePayments[traineePayments.length - 1] : null;
 
     return {
       baseFee,
@@ -259,15 +280,15 @@ export const GroupCashCollectionCockpit: React.FC = () => {
     }
     setPaymentMethod('cash');
 
-    // Default target month (current month in Arabic)
+    // Default target month = Month 9 (سبتمبر 2026)
     const now = new Date();
-    const currentMonthName = now.toLocaleDateString('ar-EG', { month: 'long', year: 'numeric' });
-    setPaymentTargetMonth(currentMonthName);
+    setPaymentTargetMonth('سبتمبر 2026');
 
-    // Default next due date = exactly 1 month from now
-    const nextMonth = new Date(now);
-    nextMonth.setMonth(nextMonth.getMonth() + 1);
-    setNextDueDateInput(nextMonth.toISOString().split('T')[0]);
+    // Default next due date = Day 25 of next cycle (e.g. 25/10/2026)
+    const dueYear = now.getFullYear();
+    const dueMonth = now.getMonth(); // Current month index (e.g. 9 for October)
+    const calcNextDueDate = new Date(dueYear, dueMonth, 25);
+    setNextDueDateInput(calcNextDueDate.toISOString().split('T')[0]);
 
     setIsCollectionModalOpen(true);
   };
@@ -887,6 +908,39 @@ export const GroupCashCollectionCockpit: React.FC = () => {
                     placeholder="مثال: سبتمبر 2026"
                     className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:ring-2 focus:ring-amber-500 focus:outline-none"
                   />
+                  <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPaymentTargetMonth('سبتمبر 2026 (شهر 9)');
+                        setNextDueDateInput('2026-10-25');
+                      }}
+                      className="px-2 py-0.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-amber-300 text-[10px] font-bold border border-slate-700 cursor-pointer"
+                    >
+                      شهر 9 (سبتمبر)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPaymentTargetMonth('أكتوبر 2026 (شهر 10)');
+                        setNextDueDateInput('2026-11-25');
+                      }}
+                      className="px-2 py-0.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-amber-300 text-[10px] font-bold border border-slate-700 cursor-pointer"
+                    >
+                      شهر 10 (أكتوبر)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPaymentTargetMonth('سبتمبر + أكتوبر 2026 (شهرين)');
+                        setPaymentAmount(400);
+                        setNextDueDateInput('2026-11-25');
+                      }}
+                      className="px-2 py-0.5 rounded-lg bg-emerald-900/60 hover:bg-emerald-800/80 text-emerald-300 text-[10px] font-bold border border-emerald-700/60 cursor-pointer"
+                    >
+                      شهرين 9 + 10 (400 ج.م)
+                    </button>
+                  </div>
                 </div>
 
                 <div>

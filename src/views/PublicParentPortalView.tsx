@@ -227,13 +227,25 @@ export const PublicParentPortalView: React.FC<PublicParentPortalViewProps> = ({ 
 
   const autoLoginParent = async (phoneOrCode: string) => {
     if (!phoneOrCode) return;
-    setIsLoading(true);
     setError('');
 
     const isActuallyOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
     const savedPassword = localStorage.getItem('parent_session_password') || '';
 
-    // 1. If online, fetch fresh server data
+    // 1. INSTANT 0MS LOAD: Render cached parent data from local memory immediately
+    try {
+      const cached = resilientOfflineService.getFromCache('parent');
+      if (cached && Array.isArray(cached.children) && cached.children.length > 0) {
+        populateParentData(cached);
+        setIsLoading(false);
+      } else {
+        setIsLoading(true);
+      }
+    } catch (e) {
+      setIsLoading(true);
+    }
+
+    // 2. SILENT BACKGROUND REVALIDATION: Re-check server without showing blocking loading spinner
     if (isActuallyOnline) {
       try {
         const res = await fetch('/api/parent/login', {
@@ -246,10 +258,7 @@ export const PublicParentPortalView: React.FC<PublicParentPortalViewProps> = ({ 
           populateParentData(data);
           resilientOfflineService.saveToCache('parent', data);
           setIsOfflineFallback(false);
-          setIsLoading(false);
-          return;
         } else {
-          // If the account was not found on the server, clear invalid session
           if (res.status === 404 || (data.error && data.error.includes('لم يتم العثور'))) {
             localStorage.removeItem('parent_session_code');
             localStorage.removeItem('parent_session_password');
@@ -257,34 +266,13 @@ export const PublicParentPortalView: React.FC<PublicParentPortalViewProps> = ({ 
           }
         }
       } catch (err) {
-        console.warn('[Parent Auto-Login] Server request failed, falling back to local cache if matching:', err);
+        console.warn('[Parent Auto-Login] Background revalidation failed:', err);
+      } finally {
+        setIsLoading(false);
       }
+    } else {
+      setIsLoading(false);
     }
-
-    // 2. Only if offline or network unreachable, load matching cached data
-    try {
-      const cached = resilientOfflineService.getFromCache('parent');
-      if (cached && Array.isArray(cached.children) && cached.children.length > 0) {
-        const norm = normalizeDigits(phoneOrCode).trim().toLowerCase();
-        const digits = cleanPhoneDigits(phoneOrCode);
-        const matches = cached.children.some((c: any) => {
-          const cCode = normalizeDigits(c.code || '').trim().toLowerCase();
-          const cPhone = cleanPhoneDigits(c.phone || '');
-          const pPhone = cleanPhoneDigits(c.parentPhone || '');
-          return cCode === norm || (digits.length >= 8 && (cPhone === digits || pPhone === digits));
-        });
-        if (matches) {
-          populateParentData(cached);
-          setIsOfflineFallback(!isActuallyOnline);
-          setIsLoading(false);
-          return;
-        }
-      }
-    } catch (e) {
-      console.warn('[Parent Auto-Login] No matching parent cache:', e);
-    }
-
-    setIsLoading(false);
   };
 
   const populateParentData = (data: any) => {
@@ -926,7 +914,7 @@ export const PublicParentPortalView: React.FC<PublicParentPortalViewProps> = ({ 
                   required
                   value={codeOrPhone}
                   onChange={(e) => setCodeOrPhone(e.target.value)}
-                  placeholder="مثال: A001 أو 01001500686"
+                  placeholder="أدخل كود الطالب أو رقم الهاتف..."
                   className="w-full px-4 py-3 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-indigo-500 text-sm font-mono text-center shadow-xs"
                 />
               </div>
@@ -990,8 +978,8 @@ export const PublicParentPortalView: React.FC<PublicParentPortalViewProps> = ({ 
           /* LOGGED IN DASHBOARD */
           <div className="space-y-5">
 
-            {/* 3. PROMINENT ELEGANT CHILD SELECTOR BAR (Royal Vibrant Theme) */}
-            <div className="bg-gradient-to-r from-purple-900 via-indigo-900 to-purple-950 p-4 sm:p-5 rounded-3xl border border-purple-500/40 shadow-xl shadow-purple-950/20 flex flex-col sm:flex-row items-center justify-between gap-4 text-white">
+            {/* 3. PROMINENT ELEGANT CHILD SELECTOR BAR (Day & Royal Gold Theme) */}
+            <div className="bg-gradient-to-r from-amber-500 via-amber-600 to-amber-700 dark:from-purple-900 dark:via-indigo-900 dark:to-purple-950 p-4 sm:p-5 rounded-3xl border border-amber-300 dark:border-purple-500/40 shadow-xl flex flex-col sm:flex-row items-center justify-between gap-4 text-slate-950 dark:text-white">
               
               {/* Selected Child Info Badge */}
               <div className="flex items-center gap-3.5 w-full sm:w-auto">
@@ -1000,31 +988,36 @@ export const PublicParentPortalView: React.FC<PublicParentPortalViewProps> = ({ 
                     <img 
                       src={selectedChild?.photoUrl || (selectedChild as any)?.photo} 
                       alt={selectedChild?.fullName} 
-                      className="w-14 h-14 rounded-2xl object-cover border-2 border-amber-400 shadow-md bg-purple-950"
+                      className="w-14 h-14 rounded-2xl object-cover border-2 border-amber-200 dark:border-amber-400 shadow-md bg-white dark:bg-purple-950"
                     />
                   ) : (
-                    <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-amber-400 to-amber-600 text-slate-950 font-black text-xl flex items-center justify-center border-2 border-amber-300 shadow-md">
+                    <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-amber-200 to-amber-400 text-slate-950 font-black text-xl flex items-center justify-center border-2 border-amber-100 shadow-md">
                       {selectedChild?.fullName?.charAt(0) || 'ط'}
                     </div>
                   )}
                   <button
                     onClick={handleOpenStudentEdit}
                     title="تعديل صورة وبيانات الطالب"
-                    className="absolute -bottom-1 -left-1 p-1 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-lg border border-purple-900 shadow transition-transform hover:scale-110"
+                    className="absolute -bottom-1 -left-1 p-1 bg-slate-950 text-amber-400 hover:bg-slate-900 font-bold rounded-lg border border-amber-400 shadow transition-transform hover:scale-110"
                   >
                     <Camera className="w-3 h-3" />
                   </button>
                 </div>
 
                 <div>
-                  <div className="flex items-center gap-2">
-                    <h2 className="text-base font-black text-white">{selectedChild?.fullName}</h2>
-                    <span className="text-[10px] bg-amber-400/20 text-amber-300 border border-amber-400/40 px-2 py-0.5 rounded-full font-mono font-bold">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h2 className="text-base font-black text-slate-950 dark:text-white">{selectedChild?.fullName}</h2>
+                    <span className="text-[10px] bg-slate-950/20 dark:bg-amber-400/20 text-slate-950 dark:text-amber-300 border border-slate-950/30 dark:border-amber-400/40 px-2 py-0.5 rounded-full font-mono font-bold">
                       {selectedChild?.code}
                     </span>
+                    {(selectedChild?.status === 'suspended' || selectedChild?.status === 'stopped' || selectedChild?.status === 'withdrawn' || selectedChild?.status === 'inactive' || (selectedChild as any)?.isSuspended) && (
+                      <span className="bg-rose-600 text-white font-black text-[10px] px-2.5 py-0.5 rounded-full shadow-xs flex items-center gap-1 border border-rose-300">
+                        🛑 حساب متوقف / منسحب
+                      </span>
+                    )}
                   </div>
-                  <p className="text-xs text-purple-200 mt-0.5">
-                    البرنامج: <span className="text-amber-300 font-black">{selectedChild?.courseName || 'الدورة التدريبية'}</span> • المجموعة: <span className="text-purple-100 font-bold">{selectedChild?.groupName || 'المجموعة الأساسية'}</span>
+                  <p className="text-xs text-slate-900 dark:text-purple-200 mt-0.5 font-medium">
+                    البرنامج: <span className="text-slate-950 dark:text-amber-300 font-black">{selectedChild?.courseName || 'الدورة التدريبية'}</span> • المجموعة: <span className="text-slate-950 dark:text-purple-100 font-bold">{selectedChild?.groupName || 'المجموعة الأساسية'}</span>
                   </p>
                 </div>
               </div>
@@ -1107,99 +1100,118 @@ export const PublicParentPortalView: React.FC<PublicParentPortalViewProps> = ({ 
             </nav>
 
             {/* TAB 1: OVERVIEW & QUICK STATS */}
-            {activeTab === 'overview' && selectedChild && (
-              <div className="space-y-5">
-                
-                {/* Stats Grid */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                  <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-1">
-                    <div className="flex items-center justify-between text-indigo-600 dark:text-indigo-400">
-                      <Clock className="w-4 h-4" />
-                      <span className="text-[10px] font-black bg-indigo-100 dark:bg-indigo-500/20 text-indigo-800 dark:text-indigo-300 px-2 py-0.5 rounded-full">نسبة الحضور</span>
+            {activeTab === 'overview' && selectedChild && (() => {
+              const isSuspended = selectedChild.status === 'suspended' || selectedChild.status === 'stopped' || selectedChild.status === 'withdrawn' || selectedChild.status === 'inactive' || (selectedChild as any).isSuspended;
+
+              return (
+                <div className="space-y-5">
+                  
+                  {/* Stats Grid */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-1">
+                      <div className="flex items-center justify-between text-indigo-600 dark:text-indigo-400">
+                        <Clock className="w-4 h-4" />
+                        <span className="text-[10px] font-black bg-indigo-100 dark:bg-indigo-500/20 text-indigo-800 dark:text-indigo-300 px-2 py-0.5 rounded-full">نسبة الحضور</span>
+                      </div>
+                      <p className="text-2xl font-black text-slate-900 dark:text-white">
+                        {selectedChild.totalAttendance > 0 
+                          ? `${Math.round((selectedChild.attendanceCount / selectedChild.totalAttendance) * 100)}%` 
+                          : '100%'}
+                      </p>
+                      <p className="text-[11px] font-medium text-slate-600 dark:text-slate-400">حضر {selectedChild.attendanceCount} من أصل {selectedChild.totalAttendance || 1} محاضرة</p>
                     </div>
-                    <p className="text-2xl font-black text-slate-900 dark:text-white">
-                      {selectedChild.totalAttendance > 0 
-                        ? `${Math.round((selectedChild.attendanceCount / selectedChild.totalAttendance) * 100)}%` 
-                        : '100%'}
-                    </p>
-                    <p className="text-[11px] font-medium text-slate-600 dark:text-slate-400">حضر {selectedChild.attendanceCount} من أصل {selectedChild.totalAttendance || 1} محاضرة</p>
+
+                    <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-1">
+                      <div className="flex items-center justify-between text-amber-600 dark:text-amber-400">
+                        <Star className="w-4 h-4 fill-amber-500 text-amber-500" />
+                        <span className="text-[10px] font-black bg-amber-100 dark:bg-amber-500/20 text-amber-900 dark:text-amber-300 px-2 py-0.5 rounded-full">رصيد النقاط</span>
+                      </div>
+                      <p className="text-2xl font-black text-amber-600 dark:text-amber-400">{selectedChild.totalPoints || selectedChild.points || 0}</p>
+                      <p className="text-[11px] font-medium text-slate-600 dark:text-slate-400">نجمة مكافأة وتميز</p>
+                    </div>
+
+                    <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-1">
+                      <div className="flex items-center justify-between text-rose-600 dark:text-rose-400">
+                        <Award className="w-4 h-4 text-rose-500" />
+                        <span className="text-[10px] font-black bg-rose-100 dark:bg-rose-500/20 text-rose-800 dark:text-rose-300 px-2 py-0.5 rounded-full">الأوسمة والشارات</span>
+                      </div>
+                      <p className="text-2xl font-black text-rose-600 dark:text-rose-400">{selectedChild.badges?.length || 0}</p>
+                      <p className="text-[11px] font-medium text-slate-600 dark:text-slate-400">وسام تكريم مكتسب</p>
+                    </div>
+
+                    <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-1">
+                      <div className="flex items-center justify-between text-emerald-600 dark:text-emerald-400">
+                        <DollarSign className="w-4 h-4 text-emerald-500" />
+                        <span className="text-[10px] font-black bg-emerald-100 dark:bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 px-2 py-0.5 rounded-full">المتبقي</span>
+                      </div>
+                      <p className="text-2xl font-black text-emerald-600 dark:text-emerald-400">
+                        {isSuspended ? '0 ج.م' : `${selectedChild.remainingAmount || 0} ج.م`}
+                      </p>
+                      <p className="text-[11px] font-medium text-slate-600 dark:text-slate-400">
+                        {isSuspended ? 'حساب متوقف / معفي من السداد 🛑' : 'رسوم متبقية للدورة'}
+                      </p>
+                    </div>
                   </div>
 
-                  <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-1">
-                    <div className="flex items-center justify-between text-amber-600 dark:text-amber-400">
-                      <Star className="w-4 h-4 fill-amber-500 text-amber-500" />
-                      <span className="text-[10px] font-black bg-amber-100 dark:bg-amber-500/20 text-amber-900 dark:text-amber-300 px-2 py-0.5 rounded-full">رصيد النقاط</span>
+                  {/* Next Lecture Widget (Only for Active Enrolled Students) */}
+                  {!isSuspended && selectedChild.groupDetails && (
+                    <NextLectureWidget groupDetails={selectedChild.groupDetails} variant="parent" />
+                  )}
+
+                  {/* Direct Lecture Recap & Homework Alert for Parent */}
+                  {isSuspended ? (
+                    <div className="p-5 rounded-3xl bg-amber-50 dark:bg-amber-950/40 border-2 border-amber-400/60 shadow-md flex items-center gap-3.5">
+                      <Shield className="w-7 h-7 text-amber-600 shrink-0" />
+                      <div>
+                        <h3 className="font-black text-sm text-slate-900 dark:text-white">حساب الطالب متوقف / منسحب حالياً 🛑</h3>
+                        <p className="text-xs text-slate-600 dark:text-slate-300 font-medium mt-0.5">
+                          لا توجد مواعيد محاضرات قادمة أو تكليفات واجبات مطلوبة من الطالب خلال فترة التوقف.
+                        </p>
+                      </div>
                     </div>
-                    <p className="text-2xl font-black text-amber-600 dark:text-amber-400">{selectedChild.totalPoints || selectedChild.points || 0}</p>
-                    <p className="text-[11px] font-medium text-slate-600 dark:text-slate-400">نجمة مكافأة وتميز</p>
-                  </div>
-
-                  <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-1">
-                    <div className="flex items-center justify-between text-rose-600 dark:text-rose-400">
-                      <Award className="w-4 h-4 text-rose-500" />
-                      <span className="text-[10px] font-black bg-rose-100 dark:bg-rose-500/20 text-rose-800 dark:text-rose-300 px-2 py-0.5 rounded-full">الأوسمة والشارات</span>
-                    </div>
-                    <p className="text-2xl font-black text-rose-600 dark:text-rose-400">{selectedChild.badges?.length || 0}</p>
-                    <p className="text-[11px] font-medium text-slate-600 dark:text-slate-400">وسام تكريم مكتسب</p>
-                  </div>
-
-                  <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-1">
-                    <div className="flex items-center justify-between text-emerald-600 dark:text-emerald-400">
-                      <DollarSign className="w-4 h-4 text-emerald-500" />
-                      <span className="text-[10px] font-black bg-emerald-100 dark:bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 px-2 py-0.5 rounded-full">المتبقي</span>
-                    </div>
-                    <p className="text-2xl font-black text-emerald-600 dark:text-emerald-400">{selectedChild.remainingAmount || 0} ج.م</p>
-                    <p className="text-[11px] font-medium text-slate-600 dark:text-slate-400">رسوم متبقية للدورة</p>
-                  </div>
-                </div>
-
-                {/* Next Lecture Widget */}
-                {selectedChild.groupDetails && (
-                  <NextLectureWidget groupDetails={selectedChild.groupDetails} variant="parent" />
-                )}
-
-                {/* Direct Lecture Recap & Homework Alert for Parent */}
-                <div className="p-5 rounded-3xl bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-amber-500/10 border-2 border-amber-500/40 shadow-lg flex flex-col sm:flex-row items-center justify-between gap-4">
-                  <div className="space-y-1.5 text-center sm:text-right">
-                    <div className="flex items-center justify-center sm:justify-start gap-2">
-                      <span className="px-2.5 py-0.5 rounded-full bg-amber-500 text-slate-950 font-black text-[10px]">
-                        جديد اليوم 📢
-                      </span>
-                      <h3 className="font-black text-sm text-slate-900 dark:text-white flex items-center gap-1.5">
-                        <BookOpen className="w-4 h-4 text-amber-500" />
-                        <span>
+                  ) : (
+                    <div className="p-5 rounded-3xl bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-amber-500/10 border-2 border-amber-500/40 shadow-lg flex flex-col sm:flex-row items-center justify-between gap-4">
+                      <div className="space-y-1.5 text-center sm:text-right">
+                        <div className="flex items-center justify-center sm:justify-start gap-2">
+                          <span className="px-2.5 py-0.5 rounded-full bg-amber-500 text-slate-950 font-black text-[10px]">
+                            جديد اليوم 📢
+                          </span>
+                          <h3 className="font-black text-sm text-slate-900 dark:text-white flex items-center gap-1.5">
+                            <BookOpen className="w-4 h-4 text-amber-500" />
+                            <span>
+                              {selectedChild.assignments && selectedChild.assignments.length > 0
+                                ? `تكليف اليوم: ${selectedChild.assignments[0].title}`
+                                : selectedChild.recaps && selectedChild.recaps.length > 0
+                                ? `ملخص الحصة: ${selectedChild.recaps[0].title}`
+                                : 'ملخص الحصة وتكليفات الواجب المطلوب من الطالب'}
+                            </span>
+                          </h3>
+                        </div>
+                        <p className="text-xs text-slate-600 dark:text-slate-300 max-w-xl leading-relaxed">
                           {selectedChild.assignments && selectedChild.assignments.length > 0
-                            ? `تكليف اليوم: ${selectedChild.assignments[0].title}`
+                            ? `الواجب المعتمد للطالب: ${selectedChild.assignments[0].instructions || selectedChild.assignments[0].title} • يرجى متابعة الحل والتسليم قبل الموعد المحدد.`
                             : selectedChild.recaps && selectedChild.recaps.length > 0
-                            ? `ملخص الحصة: ${selectedChild.recaps[0].title}`
-                            : 'ملخص الحصة وتكليفات الواجب المطلوب من الطالب'}
-                        </span>
-                      </h3>
-                    </div>
-                    <p className="text-xs text-slate-600 dark:text-slate-300 max-w-xl leading-relaxed">
-                      {selectedChild.assignments && selectedChild.assignments.length > 0
-                        ? `الواجب المعتمد للطالب: ${selectedChild.assignments[0].instructions || selectedChild.assignments[0].title} • يرجى متابعة الحل والتسليم قبل الموعد المحدد.`
-                        : selectedChild.recaps && selectedChild.recaps.length > 0
-                        ? `تابع ما تعلمه ابنك اليوم في المحاضرة وتأكد من مراجعة النقاط التدريبية والتطبيق العملي في المعمل.`
-                        : 'تابع ما تعلمه ابنك اليوم في المحاضرة وتأكد من كتابة التلخيص وحل الواجب في الكشكول قبل المحاضرة القادمة.'}
-                    </p>
-                  </div>
+                            ? `تابع ما تعلمه ابنك اليوم في المحاضرة وتأكد من مراجعة النقاط التدريبية والتطبيق العملي في المعمل.`
+                            : 'تابع ما تعلمه ابنك اليوم في المحاضرة وتأكد من كتابة التلخيص وحل الواجب في الكشكول قبل المحاضرة القادمة.'}
+                        </p>
+                      </div>
 
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab('recap')}
-                    className="px-5 py-2.5 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-500 hover:brightness-110 text-slate-950 font-black text-xs shadow-md shadow-amber-500/20 active:scale-95 transition-all flex items-center gap-2 shrink-0 cursor-pointer"
-                  >
-                    <span>فتح ملخص وتكليفات الواجب 🚀</span>
-                    <ArrowRight className="w-4 h-4 rotate-180" />
-                  </button>
-                </div>
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab('recap')}
+                        className="px-5 py-2.5 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-500 hover:brightness-110 text-slate-950 font-black text-xs shadow-md shadow-amber-500/20 active:scale-95 transition-all flex items-center gap-2 shrink-0 cursor-pointer"
+                      >
+                        <span>فتح ملخص وتكليفات الواجب 🚀</span>
+                        <ArrowRight className="w-4 h-4 rotate-180" />
+                      </button>
+                    </div>
+                  )}
 
                 {/* Trainer Info Card */}
                 {selectedChild.trainer && (
-                  <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-between gap-4">
+                  <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex items-center justify-between gap-4 shadow-sm">
                     <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 rounded-2xl bg-indigo-950 border border-indigo-500/30 text-indigo-400 flex items-center justify-center font-bold">
+                      <div className="w-12 h-12 rounded-2xl bg-indigo-50 dark:bg-indigo-950 border border-indigo-200 dark:border-indigo-500/30 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-bold shrink-0">
                         {selectedChild.trainer.photoUrl ? (
                           <img src={selectedChild.trainer.photoUrl} alt={selectedChild.trainer.name} className="w-full h-full rounded-2xl object-cover" />
                         ) : (
@@ -1207,9 +1219,9 @@ export const PublicParentPortalView: React.FC<PublicParentPortalViewProps> = ({ 
                         )}
                       </div>
                       <div>
-                        <span className="text-[10px] text-indigo-400 font-bold">المُحاضر / المدرب المباشر</span>
-                        <h3 className="text-sm font-black text-white">{selectedChild.trainer.name}</h3>
-                        <p className="text-xs text-slate-400">{selectedChild.trainer.specialty || 'مدرب معتمد بالمركز'}</p>
+                        <span className="text-[10px] text-indigo-600 dark:text-indigo-400 font-bold">المُحاضر / المدرب المباشر</span>
+                        <h3 className="text-sm font-black text-slate-900 dark:text-white">{selectedChild.trainer.name}</h3>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">{selectedChild.trainer.specialty || 'مدرب معتمد بالمركز'}</p>
                       </div>
                     </div>
                     
@@ -1219,9 +1231,9 @@ export const PublicParentPortalView: React.FC<PublicParentPortalViewProps> = ({ 
                         setActiveTab('messages');
                         setChatRecipientType('trainer');
                       }}
-                      className="px-3 py-2 rounded-xl bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 text-xs font-bold flex items-center gap-1.5 transition-all"
+                      className="px-3 py-2 rounded-xl bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-600/20 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-500/30 text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer"
                     >
-                      <MessageSquare className="w-3.5 h-3.5" />
+                      <MessageSquare className="w-3.5 h-3.5 text-indigo-600" />
                       <span>مراسلة المدرب</span>
                     </button>
                   </div>
@@ -1229,18 +1241,18 @@ export const PublicParentPortalView: React.FC<PublicParentPortalViewProps> = ({ 
 
                 {/* Badges Display */}
                 {selectedChild.badges && selectedChild.badges.length > 0 && (
-                  <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800 space-y-3">
-                    <h3 className="text-xs font-black text-white flex items-center gap-2">
-                      <Award className="w-4 h-4 text-purple-400" />
+                  <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-3 shadow-sm">
+                    <h3 className="text-xs font-black text-slate-900 dark:text-white flex items-center gap-2">
+                      <Award className="w-4 h-4 text-purple-600 dark:text-purple-400" />
                       <span>الأوسمة والشارات التكريمية للمتدرب</span>
                     </h3>
                     <div className="flex flex-wrap gap-2">
                       {selectedChild.badges.map((b) => (
-                        <div key={b.id} className="p-3 rounded-xl bg-slate-950 border border-slate-800 flex items-center gap-2.5">
+                        <div key={b.id} className="p-3 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 flex items-center gap-2.5">
                           <span className="text-2xl">{b.icon || '🏅'}</span>
                           <div>
-                            <p className="text-xs font-bold text-white">{b.badgeTitle || (b as any).title}</p>
-                            <p className="text-[10px] text-slate-400">{(b as any).description || b.category || 'تكريم وتميز'}</p>
+                            <p className="text-xs font-bold text-slate-900 dark:text-white">{b.badgeTitle || (b as any).title}</p>
+                            <p className="text-[10px] text-slate-500 dark:text-slate-400">{(b as any).description || b.category || 'تكريم وتميز'}</p>
                           </div>
                         </div>
                       ))}
@@ -1250,13 +1262,13 @@ export const PublicParentPortalView: React.FC<PublicParentPortalViewProps> = ({ 
 
                 {/* Certificates Display */}
                 {((selectedChild as any).certificates && (selectedChild as any).certificates.length > 0) && (
-                  <div className="p-5 rounded-2xl bg-slate-900 border border-amber-500/30 space-y-3">
+                  <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-amber-300 dark:border-amber-500/30 space-y-3 shadow-sm">
                     <div className="flex items-center justify-between">
-                      <h3 className="text-xs font-black text-white flex items-center gap-2">
-                        <Award className="w-4 h-4 text-amber-400" />
+                      <h3 className="text-xs font-black text-slate-900 dark:text-white flex items-center gap-2">
+                        <Award className="w-4 h-4 text-amber-500" />
                         <span>الشهادات المعتمدة وأوسمة التكريم الملكية ({((selectedChild as any).certificates || []).length})</span>
                       </h3>
-                      <span className="text-[10px] bg-amber-500/20 text-amber-300 font-bold px-2 py-0.5 rounded-full border border-amber-500/40">
+                      <span className="text-[10px] bg-amber-100 dark:bg-amber-500/20 text-amber-900 dark:text-amber-300 font-bold px-2 py-0.5 rounded-full border border-amber-300 dark:border-amber-500/40">
                         معتمدة رسمياً 📜
                       </span>
                     </div>
@@ -1293,33 +1305,34 @@ export const PublicParentPortalView: React.FC<PublicParentPortalViewProps> = ({ 
                   </div>
                 )}
               </div>
-            )}
+              );
+            })()}
 
             {/* TAB: LECTURE RECAP & TODAY'S HOMEWORK ASSIGNMENTS FOR PARENTS */}
             {activeTab === 'recap' && selectedChild && (
               <div className="space-y-6">
-                {/* 1. Official Daily Assignments & Homework Tasks Card */}
-                <div className="p-5 md:p-6 rounded-3xl bg-slate-900 border border-slate-800 shadow-xl space-y-4">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-800">
+                {/* 1. Official Daily Assignments & Homework Tasks Card (Soft Green & White Light Theme) */}
+                <div className="p-5 md:p-6 rounded-3xl bg-white dark:bg-slate-900 border-2 border-emerald-300 dark:border-slate-800 shadow-xl space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-emerald-100 dark:border-slate-800">
                     <div className="flex items-center gap-2.5">
-                      <div className="w-9 h-9 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-400 flex items-center justify-center font-black">
+                      <div className="w-10 h-10 rounded-2xl bg-emerald-100 dark:bg-amber-500/20 border border-emerald-300 dark:border-amber-500/40 text-emerald-800 dark:text-amber-400 flex items-center justify-center font-black text-lg shrink-0">
                         📝
                       </div>
                       <div>
-                        <h3 className="font-black text-sm text-white flex items-center gap-2">
+                        <h3 className="font-black text-sm text-slate-900 dark:text-white flex items-center gap-2">
                           <span>التكليفات والواجبات المطلوبة من الطالب اليوم</span>
-                          <span className="text-[10px] bg-amber-500/20 text-amber-300 font-bold px-2 py-0.5 rounded-full border border-amber-500/40">
+                          <span className="text-[10px] bg-emerald-100 dark:bg-amber-500/20 text-emerald-800 dark:text-amber-300 font-bold px-2.5 py-0.5 rounded-full border border-emerald-300 dark:border-amber-500/40">
                             متابعة ولي الأمر 👨‍👦
                           </span>
                         </h3>
-                        <p className="text-[11px] text-slate-400">
+                        <p className="text-[11px] text-slate-600 dark:text-slate-400 font-medium">
                           قائمة المهام والواجبات المحددة من المدرب لـ ({selectedChild.fullName}) - الصف: {selectedChild.grade || selectedChild.courseName || selectedChild.groupName || 'المرحلة التدريبية'}
                         </p>
                       </div>
                     </div>
 
                     <div className="text-left sm:text-right">
-                      <span className="text-xs font-black text-slate-300">
+                      <span className="text-xs font-black text-emerald-800 dark:text-slate-300 bg-emerald-50 dark:bg-slate-800 px-3 py-1 rounded-full border border-emerald-200 dark:border-slate-700">
                         {selectedChild.assignments ? selectedChild.assignments.length : 0} تكليفات معتمدة
                       </span>
                     </div>
@@ -1334,20 +1347,20 @@ export const PublicParentPortalView: React.FC<PublicParentPortalViewProps> = ({ 
                             key={asg.id || idx}
                             className={`p-4 rounded-2xl border transition-all ${
                               isDone
-                                ? 'bg-emerald-950/20 border-emerald-500/40'
-                                : 'bg-slate-950 border-amber-500/30 shadow-md shadow-amber-500/5'
+                                ? 'bg-emerald-50 dark:bg-emerald-950/20 border-emerald-300 dark:border-emerald-500/40 shadow-xs'
+                                : 'bg-amber-50/60 dark:bg-slate-950 border-amber-300 dark:border-amber-500/30 shadow-md'
                             }`}
                           >
                             <div className="flex items-start justify-between gap-3 mb-2">
                               <div className="flex items-center gap-2">
                                 <span className="text-lg">{isDone ? '✅' : '📌'}</span>
-                                <h4 className="font-bold text-xs text-white line-clamp-1">{asg.title}</h4>
+                                <h4 className="font-black text-xs text-slate-900 dark:text-white line-clamp-1">{asg.title}</h4>
                               </div>
                               <span
                                 className={`text-[10px] font-black px-2.5 py-0.5 rounded-full shrink-0 ${
                                   isDone
-                                    ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
-                                    : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                                    ? 'bg-emerald-100 dark:bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-500/40'
+                                    : 'bg-amber-100 dark:bg-amber-500/20 text-amber-900 dark:text-amber-300 border border-amber-300 dark:border-amber-500/40'
                                 }`}
                               >
                                 {isDone ? 'تم التسليم بنجاح' : 'مطلوب إنجازه اليوم'}
@@ -1355,12 +1368,12 @@ export const PublicParentPortalView: React.FC<PublicParentPortalViewProps> = ({ 
                             </div>
 
                             {asg.instructions && (
-                              <p className="text-xs text-slate-300 mb-3 line-clamp-2 leading-relaxed bg-slate-900/60 p-2.5 rounded-xl border border-slate-800">
+                              <p className="text-xs text-slate-700 dark:text-slate-300 mb-3 line-clamp-2 leading-relaxed bg-white dark:bg-slate-900/60 p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 font-medium">
                                 {asg.instructions}
                               </p>
                             )}
 
-                            <div className="flex items-center justify-between text-[11px] text-slate-400 pt-2 border-t border-slate-800/80">
+                            <div className="flex items-center justify-between text-[11px] text-slate-600 dark:text-slate-400 pt-2 border-t border-slate-200 dark:border-slate-800/80 font-bold">
                               <span className="flex items-center gap-1">
                                 <Calendar className="w-3.5 h-3.5 text-slate-500" />
                                 <span>آخر موعد: {asg.dueDate ? asg.dueDate.split('T')[0] : 'قبل المحاضرة القادمة'}</span>
@@ -1372,10 +1385,20 @@ export const PublicParentPortalView: React.FC<PublicParentPortalViewProps> = ({ 
                               )}
                             </div>
 
-                            {isDone && asg.score !== null && asg.score !== undefined && (
-                              <div className="mt-2.5 p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-between text-xs">
-                                <span className="text-emerald-300 font-bold">تقييم المدرب:</span>
-                                <span className="font-black font-mono text-emerald-400">{asg.score} / {asg.points || 100}</span>
+                            {isDone && (asg.score !== null && asg.score !== undefined || asg.grade !== null && asg.grade !== undefined) && (
+                              <div className="mt-2.5 p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 space-y-1.5 text-xs">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-emerald-800 dark:text-emerald-300 font-bold">نتيجة وتصحيح الذكاء الاصطناعي:</span>
+                                  <span className="font-black font-mono text-emerald-700 dark:text-emerald-400">
+                                    {asg.grade ?? asg.score} / {asg.maxGrade || asg.points || asg.totalMarks || 100}
+                                    {asg.percentage ? ` (${asg.percentage}%)` : ''}
+                                  </span>
+                                </div>
+                                {(asg.generalFeedback || asg.feedback) && (
+                                  <p className="text-[11px] text-slate-700 dark:text-slate-300 bg-white/60 dark:bg-slate-900/60 p-1.5 rounded-lg border border-emerald-500/20 leading-relaxed">
+                                    💬 {asg.generalFeedback || asg.feedback}
+                                  </p>
+                                )}
                               </div>
                             )}
                           </div>
@@ -1410,38 +1433,38 @@ export const PublicParentPortalView: React.FC<PublicParentPortalViewProps> = ({ 
               <div className="space-y-5">
                 
                 {/* Schedules */}
-                <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800 space-y-3">
-                  <h3 className="text-xs font-black text-white flex items-center gap-2">
-                    <Calendar className="w-4 h-4 text-indigo-400" />
+                <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-3 shadow-sm">
+                  <h3 className="text-xs font-black text-slate-900 dark:text-white flex items-center gap-2">
+                    <Calendar className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
                     <span>جدول المحاضرات والأيام الأسبوعية</span>
                   </h3>
                   {selectedChild.schedules && selectedChild.schedules.length > 0 ? (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                       {selectedChild.schedules.map((s, idx) => (
-                        <div key={idx} className="p-3 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between">
-                          <span className="text-xs font-bold text-slate-200">{s.dayOfWeek}</span>
-                          <span className="text-xs font-mono text-indigo-300 font-bold">{s.startTime} - {s.endTime}</span>
+                        <div key={idx} className="p-3 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 flex items-center justify-between">
+                          <span className="text-xs font-bold text-slate-800 dark:text-slate-200">{s.dayOfWeek}</span>
+                          <span className="text-xs font-mono text-indigo-600 dark:text-indigo-300 font-bold">{s.startTime} - {s.endTime}</span>
                         </div>
                       ))}
                     </div>
                   ) : (
-                    <p className="text-xs text-slate-400">المحاضرات قائمة بحسب المواعيد الرسمية للمجموعة.</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">المحاضرات قائمة بحسب المواعيد الرسمية للمجموعة.</p>
                   )}
                 </div>
 
                 {/* Attendance History */}
-                <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800 space-y-3">
-                  <h3 className="text-xs font-black text-white flex items-center gap-2">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-3 shadow-sm">
+                  <h3 className="text-xs font-black text-slate-900 dark:text-white flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
                     <span>سجل الحضور والغياب التفصيلي</span>
                   </h3>
                   {selectedChild.attendance && selectedChild.attendance.length > 0 ? (
                     <div className="max-h-60 overflow-y-auto space-y-2 pr-1">
                       {selectedChild.attendance.map((att) => (
-                        <div key={att.id} className="p-2.5 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between text-xs">
-                          <span className="font-mono text-slate-300">{att.date}</span>
+                        <div key={att.id} className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 flex items-center justify-between text-xs">
+                          <span className="font-mono text-slate-800 dark:text-slate-300 font-bold">{att.date}</span>
                           <span className={`px-2.5 py-0.5 rounded-full font-bold text-[10px] ${
-                            att.status === 'present' ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
+                            att.status === 'present' ? 'bg-emerald-100 dark:bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-500/30' : 'bg-rose-100 dark:bg-rose-500/20 text-rose-800 dark:text-rose-300 border border-rose-300 dark:border-rose-500/30'
                           }`}>
                             {att.status === 'present' ? 'حاضر ✓' : 'غائب ✗'}
                           </span>
@@ -1449,65 +1472,86 @@ export const PublicParentPortalView: React.FC<PublicParentPortalViewProps> = ({ 
                       ))}
                     </div>
                   ) : (
-                    <p className="text-xs text-slate-400">لا توجد سجلات حضور مسجلة بعد.</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">لا توجد سجلات حضور مسجلة بعد.</p>
                   )}
                 </div>
               </div>
             )}
 
             {/* TAB 3: FINANCIALS & RECEIPTS */}
-            {activeTab === 'finance' && selectedChild && (
-              <div className="space-y-5">
-                
-                {/* Financial Summary */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800">
-                    <span className="text-[10px] font-bold text-slate-400">إجمالي رسوم الدورة</span>
-                    <p className="text-lg font-black text-white">{(selectedChild as any).coursePrice || (selectedChild as any).totalAmount || selectedChild.feeAmount || 0} ج.م</p>
-                  </div>
-                  <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800">
-                    <span className="text-[10px] font-bold text-emerald-400">المبلغ المدفوع</span>
-                    <p className="text-lg font-black text-emerald-400">{selectedChild.paidAmount || 0} ج.م</p>
-                  </div>
-                  <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800">
-                    <span className="text-[10px] font-bold text-rose-400">المبلغ المتبقي</span>
-                    <p className="text-lg font-black text-rose-400">{selectedChild.remainingAmount || 0} ج.م</p>
-                  </div>
-                </div>
-
-                {/* Action Card: Upload Receipt Proof */}
-                <div className="p-5 rounded-2xl bg-gradient-to-r from-emerald-950/80 via-slate-900 to-slate-900 border border-emerald-500/30 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-xl">
-                  <div className="space-y-1 text-center sm:text-right">
-                    <div className="flex items-center justify-center sm:justify-start gap-2 text-emerald-400 font-bold text-xs">
-                      <Camera className="w-4 h-4" />
-                      <span>إثبات السداد الإلكتروني 📸</span>
+            {activeTab === 'finance' && selectedChild && (() => {
+              const isSuspended = selectedChild.status === 'suspended' || selectedChild.status === 'stopped' || selectedChild.status === 'withdrawn' || selectedChild.status === 'inactive' || (selectedChild as any).isSuspended;
+              
+              return (
+                <div className="space-y-5">
+                  
+                  {/* Financial Summary Cards (Bright Light Theme) */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-1">
+                      <span className="text-[10px] font-bold text-slate-600 dark:text-slate-400">إجمالي رسوم الدورة</span>
+                      <p className="text-lg font-black text-slate-900 dark:text-white">
+                        {isSuspended ? '0 ج.م (حساب متوقف)' : `${(selectedChild as any).coursePrice || (selectedChild as any).totalAmount || selectedChild.feeAmount || 0} ج.م`}
+                      </p>
                     </div>
-                    <p className="text-xs font-bold text-white">قم برفع صورة إيصال الدفع أو لقطة الشاشة ليتم تحقق واعتماد الخزينة</p>
-                    <p className="text-[10px] text-slate-400">فودافون كاش • انستا باي • تحويل بنكي</p>
+                    <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-1">
+                      <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400">المبلغ المدفوع</span>
+                      <p className="text-lg font-black text-emerald-600 dark:text-emerald-400">{selectedChild.paidAmount || 0} ج.م</p>
+                    </div>
+                    <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-1">
+                      <span className="text-[10px] font-bold text-rose-600 dark:text-rose-400">المبلغ المتبقي</span>
+                      <p className="text-lg font-black text-rose-600 dark:text-rose-400">
+                        {isSuspended ? '0 ج.م (معفي من السداد 🛑)' : `${selectedChild.remainingAmount || 0} ج.م`}
+                      </p>
+                    </div>
                   </div>
-                  <button
-                    onClick={() => {
-                      setProofAmount(selectedChild.remainingAmount || 0);
-                      setIsUploadProofModalOpen(true);
-                    }}
-                    className="w-full sm:w-auto py-2.5 px-5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-lg transition-all flex items-center justify-center gap-2 whitespace-nowrap"
-                  >
-                    <Camera className="w-4 h-4" />
-                    <span>رفع صورة الإيصال الآن</span>
-                  </button>
-                </div>
 
-                {/* Receipts History */}
-                <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-xs font-black text-white flex items-center gap-2">
-                      <Receipt className="w-4 h-4 text-emerald-400" />
-                      <span>سجل سندات القبض والدفعات المرفوعة</span>
-                    </h3>
-                    <span className="text-[10px] text-slate-400 font-mono font-bold">
-                      {(selectedChild.payments || []).length} سند/طلب
-                    </span>
-                  </div>
+                  {/* Action Card: Upload Receipt Proof or Suspended Notice */}
+                  {isSuspended ? (
+                    <div className="p-5 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border-2 border-amber-400/60 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-md">
+                      <div className="space-y-1 text-center sm:text-right">
+                        <div className="flex items-center justify-center sm:justify-start gap-2 text-amber-900 dark:text-amber-300 font-black text-xs">
+                          <ShieldCheck className="w-5 h-5 text-amber-600 shrink-0" />
+                          <span>تنبيه: حساب الطالب متوقف / منسحب حالياً 🛑</span>
+                        </div>
+                        <p className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                          هذا الحساب متوقف أو منسحب بناءً على سجلات الإدارة، ولا تتطلب منه أية مصروفات أو استحقاقات مالية طوال فترة التوقف.
+                        </p>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="p-5 rounded-2xl bg-gradient-to-r from-emerald-500/10 via-teal-500/10 to-emerald-500/10 border-2 border-emerald-500/30 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-md">
+                      <div className="space-y-1 text-center sm:text-right">
+                        <div className="flex items-center justify-center sm:justify-start gap-2 text-emerald-700 dark:text-emerald-400 font-bold text-xs">
+                          <Camera className="w-4 h-4" />
+                          <span>إثبات السداد الإلكتروني 📸</span>
+                        </div>
+                        <p className="text-xs font-bold text-slate-900 dark:text-white">قم برفع صورة إيصال الدفع أو لقطة الشاشة ليتم تحقق واعتماد الخزينة</p>
+                        <p className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">فودافون كاش • انستا باي • تحويل بنكي</p>
+                      </div>
+                      <button
+                        onClick={() => {
+                          setProofAmount(selectedChild.remainingAmount || 0);
+                          setIsUploadProofModalOpen(true);
+                        }}
+                        className="w-full sm:w-auto py-2.5 px-5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-lg transition-all flex items-center justify-center gap-2 whitespace-nowrap cursor-pointer"
+                      >
+                        <Camera className="w-4 h-4" />
+                        <span>رفع صورة الإيصال الآن</span>
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Receipts History */}
+                  <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-3 shadow-sm">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-xs font-black text-slate-900 dark:text-white flex items-center gap-2">
+                        <Receipt className="w-4 h-4 text-emerald-500" />
+                        <span>سجل سندات القبض والدفعات المرفوعة</span>
+                      </h3>
+                      <span className="text-[10px] text-slate-500 font-mono font-bold">
+                        {(selectedChild.payments || []).length} سند/طلب
+                      </span>
+                    </div>
 
                   {selectedChild.payments && selectedChild.payments.length > 0 ? (
                     <div className="space-y-2.5">
@@ -1602,36 +1646,44 @@ export const PublicParentPortalView: React.FC<PublicParentPortalViewProps> = ({ 
                 </div>
 
                 {/* Electronic Payment Widget */}
-                <ElectronicPaymentWidget
-                  vodafoneCashNumber={paymentAccounts.vodafoneCash}
-                  instapayAddress={paymentAccounts.instapay}
-                  studentName={selectedChild.fullName}
-                  defaultAmount={selectedChild.remainingAmount || 0}
-                  adminPhone={paymentAccounts.vodafoneCash}
-                  showTitle={true}
-                />
+                {!isSuspended ? (
+                  <ElectronicPaymentWidget
+                    vodafoneCashNumber={paymentAccounts.vodafoneCash}
+                    instapayAddress={paymentAccounts.instapay}
+                    studentName={selectedChild.fullName}
+                    defaultAmount={selectedChild.remainingAmount || 0}
+                    adminPhone={paymentAccounts.vodafoneCash}
+                    showTitle={true}
+                  />
+                ) : (
+                  <div className="p-5 rounded-2xl bg-rose-50 dark:bg-rose-950/20 border border-rose-300 dark:border-rose-800 text-center space-y-1">
+                    <p className="font-black text-xs text-rose-800 dark:text-rose-300">🛑 حساب الطالب متوقف / منسحب حالياً</p>
+                    <p className="text-[11px] text-rose-700 dark:text-rose-400">هذا الحساب معفي تماماً من أية دفعات أو مستحقات مالية طوال فترة التوقف.</p>
+                  </div>
+                )}
               </div>
-            )}
+              );
+            })()}
 
             {/* TAB 4: DIRECT MESSAGING CHAT FEED */}
             {activeTab === 'messages' && selectedChild && (
               <div className="space-y-5">
                 
                 {/* Send Message Card */}
-                <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800 space-y-4">
-                  <h3 className="text-xs font-black text-white flex items-center gap-2">
-                    <MessageSquare className="w-4 h-4 text-emerald-400" />
+                <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-4 shadow-sm">
+                  <h3 className="text-xs font-black text-slate-900 dark:text-white flex items-center gap-2">
+                    <MessageSquare className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
                     <span>إرسال رسالة جديدة للإدارة أو المدرب</span>
                   </h3>
 
                   <form onSubmit={handleSendChatMessage} className="space-y-3">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                       <div>
-                        <label className="block text-[11px] font-bold text-slate-300 mb-1">الجهة الموجه إليها</label>
+                        <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">الجهة الموجه إليها</label>
                         <select
                           value={chatRecipientType}
                           onChange={(e: any) => setChatRecipientType(e.target.value)}
-                          className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-xs text-white"
+                          className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500"
                         >
                           <option value="admin">إدارة المركز العامة</option>
                           <option value="trainer">المدرب المباشر ({selectedChild.trainer?.name || 'المدرب'})</option>
@@ -1639,11 +1691,11 @@ export const PublicParentPortalView: React.FC<PublicParentPortalViewProps> = ({ 
                       </div>
 
                       <div>
-                        <label className="block text-[11px] font-bold text-slate-300 mb-1">نوع الرسالة</label>
+                        <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">نوع الرسالة</label>
                         <select
                           value={chatMessageType}
                           onChange={(e: any) => setChatMessageType(e.target.value)}
-                          className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-xs text-white"
+                          className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500"
                         >
                           <option value="message">💬 استفسار / ملاحظة عامة</option>
                           <option value="greeting">🌹 بطاقة شكر وتكريم</option>
@@ -1658,13 +1710,13 @@ export const PublicParentPortalView: React.FC<PublicParentPortalViewProps> = ({ 
                         value={chatInputText}
                         onChange={(e) => setChatInputText(e.target.value)}
                         placeholder="اكتب استفسارك أو ملاحظتك هنا ليصل مباشرة للإدارة والمدرب..."
-                        className="w-full p-3 rounded-xl bg-slate-950 border border-slate-700 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                        className="w-full p-3 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 text-xs text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-indigo-500"
                       />
                     </div>
 
                     {chatSuccessNotice && (
-                      <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs font-bold flex items-center gap-2">
-                        <Check className="w-4 h-4 text-emerald-400 shrink-0" />
+                      <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-300 dark:border-emerald-500/30 text-emerald-800 dark:text-emerald-300 text-xs font-bold flex items-center gap-2">
+                        <Check className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
                         <span>{chatSuccessNotice}</span>
                       </div>
                     )}
@@ -1672,7 +1724,7 @@ export const PublicParentPortalView: React.FC<PublicParentPortalViewProps> = ({ 
                     <button
                       type="submit"
                       disabled={isSendingChatMessage}
-                      className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-md transition-all"
+                      className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-md transition-all cursor-pointer"
                     >
                       <Send className="w-4 h-4" />
                       <span>{isSendingChatMessage ? 'جاري إرسال الرسالة...' : 'إرسال الرسالة الآن 🚀'}</span>
@@ -1681,10 +1733,10 @@ export const PublicParentPortalView: React.FC<PublicParentPortalViewProps> = ({ 
                 </div>
 
                 {/* Message History Thread */}
-                <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800 space-y-3">
-                  <h3 className="text-xs font-black text-white flex items-center gap-2">
-                    <Clock className="w-4 h-4 text-indigo-400" />
-                    <span>سجل الرسائل والردود الردود الفورية</span>
+                <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-3 shadow-sm">
+                  <h3 className="text-xs font-black text-slate-900 dark:text-white flex items-center gap-2">
+                    <Clock className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                    <span>سجل الرسائل والردود الفورية</span>
                   </h3>
 
                   {parentMessages && parentMessages.length > 0 ? (
@@ -1694,12 +1746,12 @@ export const PublicParentPortalView: React.FC<PublicParentPortalViewProps> = ({ 
                           key={m.id}
                           className={`p-3.5 rounded-2xl border ${
                             m.senderName?.includes('المساعد') || m.messageType === 'ai_reply'
-                              ? 'bg-indigo-950/40 border-indigo-500/30 text-indigo-200 mr-4'
-                              : 'bg-slate-950 border-slate-800 text-slate-200'
+                              ? 'bg-indigo-50 dark:bg-indigo-950/40 border-indigo-200 dark:border-indigo-500/30 text-indigo-900 dark:text-indigo-200 mr-4'
+                              : 'bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-200'
                           }`}
                         >
                           <div className="flex items-center justify-between gap-2 mb-1">
-                            <span className="text-[11px] font-bold text-indigo-400">{m.parentName || m.senderName || 'ولي الأمر'}</span>
+                            <span className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400">{m.parentName || m.senderName || 'ولي الأمر'}</span>
                             <span className="text-[9px] text-slate-500 font-mono">
                               {m.createdAt ? new Date(m.createdAt).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }) : ''}
                             </span>
@@ -1709,7 +1761,7 @@ export const PublicParentPortalView: React.FC<PublicParentPortalViewProps> = ({ 
                       ))}
                     </div>
                   ) : (
-                    <p className="text-xs text-slate-400">لا توجد رسائل سابقة. يمكنك إرسال استفسارك من النموذج أعلاه.</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">لا توجد رسائل سابقة. يمكنك إرسال استفسارك من النموذج أعلاه.</p>
                   )}
                 </div>
               </div>
@@ -2113,8 +2165,8 @@ export const PublicParentPortalView: React.FC<PublicParentPortalViewProps> = ({ 
       />
 
       {/* FOOTER */}
-      <footer className="mt-12 text-center text-[11px] text-slate-500 space-y-1">
-        <p>جميع الحقوق محفوظة © مركز النجاح للتدريب والاستشارات • بوابة ولي الأمر الذكية</p>
+      <footer className="mt-12 text-center text-xs text-slate-700 dark:text-slate-300 font-bold space-y-1 pb-6">
+        <p>جميع الحقوق محفوظة © مركز النجاح للتدريب والاستشارات • بوابة ولي الأمر والمتابعة الذكية</p>
       </footer>
       </div>
 

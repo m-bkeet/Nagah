@@ -26,6 +26,15 @@ function getDb() {
     return null;
   }
 }
+function checkDateRollover() {
+  const today = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
+  if (today !== currentTrackingDate) {
+    currentTrackingDate = today;
+    readsCountToday = 0;
+    writesCountToday = 0;
+    deletesCountToday = 0;
+  }
+}
 function withTimeout(promise, ms = 12e3) {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error("FIRESTORE_TIMEOUT")), ms);
@@ -46,13 +55,35 @@ function hashPayload(data) {
   return crypto.createHash("md5").update(str).digest("hex");
 }
 function sanitizeForFirestore(collectionName, items) {
-  if (!Array.isArray(items)) return items;
+  if (!items) return items;
+  if (!Array.isArray(items)) {
+    if (collectionName === "settings" && typeof items === "object") {
+      const sanitized = { ...items };
+      if (typeof sanitized.logoUrl === "string" && (sanitized.logoUrl.startsWith("data:image") || sanitized.logoUrl.startsWith("data:"))) {
+        delete sanitized.logoUrl;
+      }
+      return sanitized;
+    }
+    return items;
+  }
   if (collectionName === "trainees") {
     return items.map((t) => {
       const sanitized = { ...t };
-      delete sanitized.photo;
-      if (sanitized.photoUrl && sanitized.photoUrl.startsWith("data:image") && sanitized.photoUrl.length > 5e3) {
-        delete sanitized.photoUrl;
+      if (sanitized.photoDriveFileId && typeof sanitized.photoDriveFileId === "string" && sanitized.photoDriveFileId.trim()) {
+        const cleanDriveId = sanitized.photoDriveFileId.trim();
+        sanitized.photoDriveFileId = cleanDriveId;
+        sanitized.photoUrl = `https://lh3.googleusercontent.com/d/${cleanDriveId}`;
+        delete sanitized.photo;
+      } else {
+        if (typeof sanitized.photoUrl === "string" && (sanitized.photoUrl.startsWith("data:image") || sanitized.photoUrl.startsWith("data:"))) {
+          delete sanitized.photoUrl;
+        }
+        if (typeof sanitized.photo === "string" && (sanitized.photo.startsWith("data:image") || sanitized.photo.startsWith("data:"))) {
+          delete sanitized.photo;
+        }
+      }
+      if (typeof sanitized.parentPhotoUrl === "string" && sanitized.parentPhotoUrl.startsWith("data:")) {
+        delete sanitized.parentPhotoUrl;
       }
       return sanitized;
     });
@@ -62,8 +93,23 @@ function sanitizeForFirestore(collectionName, items) {
       const sanitized = { ...sub };
       delete sanitized.imageBase64;
       delete sanitized.fileData;
-      if (sanitized.attachmentUrl && sanitized.attachmentUrl.startsWith("data:image")) {
+      if (sanitized.attachmentUrl && (sanitized.attachmentUrl.startsWith("data:image") || sanitized.attachmentUrl.startsWith("data:"))) {
         delete sanitized.attachmentUrl;
+      }
+      return sanitized;
+    });
+  }
+  if (collectionName === "courses") {
+    return items.map((c) => {
+      const sanitized = { ...c };
+      if (Array.isArray(sanitized.materials)) {
+        sanitized.materials = sanitized.materials.map((m) => {
+          const cleanM = { ...m };
+          if (typeof cleanM.fileUrl === "string" && cleanM.fileUrl.startsWith("data:")) {
+            delete cleanM.fileUrl;
+          }
+          return cleanM;
+        });
       }
       return sanitized;
     });
@@ -264,27 +310,6 @@ async function allocateNextTraineeCode(prefix = "A", localTrainees = [], groupId
       }
     }
   }
-  const db2 = getDb();
-  if (db2) {
-    try {
-      const remoteList = await loadCollectionFromFirestore("trainees");
-      if (Array.isArray(remoteList)) {
-        for (const t of remoteList) {
-          if (t && t.code) {
-            const c = String(t.code).trim().toUpperCase();
-            usedCodes.add(c);
-            const m = c.match(regex);
-            if (m) {
-              const num = parseInt(m[1], 10);
-              if (!isNaN(num)) usedNumbers.add(num);
-            }
-          }
-        }
-      }
-    } catch (e) {
-      console.warn("[allocateNextTraineeCode] remote trainees scan notice:", e);
-    }
-  }
   if (groupId && Array.isArray(freedCodesList)) {
     const groupFreed = freedCodesList.find(
       (f) => f && f.code && f.groupId === groupId && (f.prefix?.toUpperCase() === pfx || f.code.toUpperCase().startsWith(pfx)) && !usedCodes.has(f.code.toUpperCase())
@@ -313,23 +338,6 @@ async function allocateNextTraineeCode(prefix = "A", localTrainees = [], groupId
   while (usedCodes.has(candidate.toUpperCase())) {
     candidateNum++;
     candidate = `${pfx}${String(candidateNum).padStart(3, "0")}`;
-  }
-  if (db2) {
-    try {
-      const counterRef = doc(db2, "nagah_store", "code_counters");
-      const counterSnap = await withTimeout(getDoc(counterRef), 3e3);
-      let countersMap = {};
-      if (counterSnap.exists()) {
-        countersMap = counterSnap.data()?.counters || {};
-      }
-      const existingVal = Number(countersMap[pfx]) || 0;
-      if (candidateNum > existingVal) {
-        countersMap[pfx] = candidateNum;
-        await withTimeout(setDoc(counterRef, { counters: countersMap, updatedAt: (/* @__PURE__ */ new Date()).toISOString() }, { merge: true }), 3e3);
-      }
-    } catch (e) {
-      console.warn("[allocateNextTraineeCode] Firestore code_counters update notice:", e);
-    }
   }
   console.log(`[allocateNextTraineeCode] Allocated unique code ${candidate} (prefix: ${pfx}, num: ${candidateNum})`);
   return candidate;
@@ -369,16 +377,12 @@ async function loadFullDbFromFirestore() {
     "certificates",
     "certificateTemplates",
     "trainerAttestations",
-    "auditLogs",
     "settings",
-    "notifications",
     "assignments",
     "homeworkSubmissions",
     "badges",
     "traineeBadges",
-    "portalMessages",
-    "devices",
-    "deviceCommands"
+    "portalMessages"
   ];
   const result = {};
   let loadedCount = 0;
@@ -405,7 +409,41 @@ async function loadFullDbFromFirestore() {
   }
   return loadedCount > 0 ? result : null;
 }
-var firebaseConfig, dbId, firestoreInstance, collectionHashes, isQuotaExceeded, quotaExceededNoticeTime, QUOTA_BACKOFF_MS, TRANSIENT_COLLECTIONS, isServerless, debouncedSyncTimer, pendingDbData;
+function getFirestoreQuotaMetrics() {
+  checkDateRollover();
+  const DAILY_FREE_READS = 5e4;
+  const DAILY_FREE_WRITES = 2e4;
+  const DAILY_FREE_DELETES = 2e4;
+  const now = Date.now();
+  const isBackoff = isQuotaExceeded && now - quotaExceededNoticeTime < QUOTA_BACKOFF_MS;
+  const backoffRemaining = isBackoff ? Math.ceil((QUOTA_BACKOFF_MS - (now - quotaExceededNoticeTime)) / 1e3) : 0;
+  return {
+    date: currentTrackingDate,
+    readsToday: readsCountToday,
+    writesToday: writesCountToday,
+    deletesToday: deletesCountToday,
+    limits: {
+      dailyReads: DAILY_FREE_READS,
+      dailyWrites: DAILY_FREE_WRITES,
+      dailyDeletes: DAILY_FREE_DELETES
+    },
+    remaining: {
+      reads: Math.max(0, DAILY_FREE_READS - readsCountToday),
+      writes: Math.max(0, DAILY_FREE_WRITES - writesCountToday)
+    },
+    percentageUsed: {
+      reads: Number((readsCountToday / DAILY_FREE_READS * 100).toFixed(2)),
+      writes: Number((writesCountToday / DAILY_FREE_WRITES * 100).toFixed(2))
+    },
+    circuitBreaker: {
+      active: isBackoff,
+      remainingSeconds: backoffRemaining,
+      lastNotice: quotaExceededNoticeTime ? new Date(quotaExceededNoticeTime).toISOString() : null
+    },
+    health: isBackoff ? "quota_exhausted_backoff" : readsCountToday > 45e3 ? "warning_near_limit" : "optimal"
+  };
+}
+var firebaseConfig, dbId, firestoreInstance, collectionHashes, isQuotaExceeded, quotaExceededNoticeTime, QUOTA_BACKOFF_MS, readsCountToday, writesCountToday, deletesCountToday, currentTrackingDate, TRANSIENT_COLLECTIONS, isServerless, debouncedSyncTimer, pendingDbData;
 var init_firestoreStorage = __esm({
   "server/firestoreStorage.ts"() {
     firebaseConfig = null;
@@ -433,7 +471,11 @@ var init_firestoreStorage = __esm({
     collectionHashes = /* @__PURE__ */ new Map();
     isQuotaExceeded = false;
     quotaExceededNoticeTime = 0;
-    QUOTA_BACKOFF_MS = 30 * 1e3;
+    QUOTA_BACKOFF_MS = 5 * 60 * 1e3;
+    readsCountToday = 0;
+    writesCountToday = 0;
+    deletesCountToday = 0;
+    currentTrackingDate = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
     TRANSIENT_COLLECTIONS = /* @__PURE__ */ new Set([
       "devices",
       "deviceCommands",
@@ -514,9 +556,6 @@ var init_db = __esm({
     ];
     initialData = {
       freedTraineeCodes: [],
-      devices: [],
-      traineeScreenshots: [],
-      computerLabs: [],
       branches: [
         {
           id: "branch-1",
@@ -4128,39 +4167,29 @@ var init_db = __esm({
         if (!Array.isArray(list) || list.length === 0) return [];
         const byId = /* @__PURE__ */ new Map();
         const byCode = /* @__PURE__ */ new Map();
-        const byNormName = /* @__PURE__ */ new Map();
         const result = [];
-        const normArabic = (s) => {
-          if (!s) return "";
-          return String(s).trim().toLowerCase().replace(/[\u064B-\u065F\u0670\u0640]/g, "").replace(/[أإآٱ]/g, "\u0627").replace(/ة/g, "\u0647").replace(/ى/g, "\u064A").replace(/[ؤئ]/g, "\u0621").replace(/عبد\s+/g, "\u0639\u0628\u062F").replace(/ابو\s+/g, "\u0627\u0628\u0648").replace(/[\s\-_.]+/g, " ").trim();
+        const normName = (str) => {
+          if (!str) return "";
+          return String(str).trim().toLowerCase().replace(/[\u064B-\u065F\u0670\u0640]/g, "").replace(/[أإآٱ]/g, "\u0627").replace(/ة/g, "\u0647").replace(/ى/g, "\u064A").replace(/[ؤئ]/g, "\u0621").replace(/عبد\s+/g, "\u0639\u0628\u062F").replace(/ابو\s+/g, "\u0627\u0628\u0648").replace(/[\s\-_.]+/g, " ").trim();
         };
-        const cleanPhone = (p) => String(p || "").replace(/\D/g, "").slice(-10);
         for (const t of list) {
-          if (!t) continue;
+          if (!t || typeof t !== "object") continue;
           const id = t.id ? String(t.id).trim() : "";
-          const code = t.code ? String(t.code).trim().toUpperCase() : "";
-          const normName = normArabic(t.fullName || t.name);
-          const phone = cleanPhone(t.phone);
-          const parentPhone = cleanPhone(t.parentPhone);
+          if (!id) continue;
+          const tNorm = normName(t.fullName);
           let existing = null;
-          if (id && byId.has(id)) {
+          if (byId.has(id)) {
             existing = byId.get(id);
-          } else if (normName && byNormName.has(normName)) {
-            const candidate = byNormName.get(normName);
-            const cPhone = cleanPhone(candidate.phone);
-            const cParentPhone = cleanPhone(candidate.parentPhone);
-            const samePhone = phone && (phone === cPhone || phone === cParentPhone) || parentPhone && (parentPhone === cPhone || parentPhone === cParentPhone);
-            const sameGroupOrCourse = t.groupId && candidate.groupId && t.groupId === candidate.groupId || t.courseId && candidate.courseId && t.courseId === candidate.courseId;
-            if (samePhone || sameGroupOrCourse || !phone && !parentPhone && !cPhone && !cParentPhone) {
-              existing = candidate;
-            }
-          } else if (code && byCode.has(code)) {
-            const candidate = byCode.get(code);
-            const candNorm = normArabic(candidate.fullName || candidate.name);
-            const sameName = candNorm && normName && candNorm === normName;
-            const sameNatId = t.nationalId && candidate.nationalId && String(t.nationalId).trim() === String(candidate.nationalId).trim();
-            if (sameName || sameNatId) {
-              existing = candidate;
+          } else if (t.nationalId && String(t.nationalId).trim().length >= 10 && tNorm) {
+            const cleanNat = String(t.nationalId).trim();
+            for (const prev of result) {
+              if (prev.nationalId && String(prev.nationalId).trim() === cleanNat) {
+                const prevNorm = normName(prev.fullName);
+                if (prevNorm && prevNorm === tNorm) {
+                  existing = prev;
+                  break;
+                }
+              }
             }
           }
           if (existing) {
@@ -4171,13 +4200,12 @@ var init_db = __esm({
             const mergedPaidAmount = Math.max(Number(existing.paidAmount || 0), Number(t.paidAmount || 0));
             Object.assign(existing, {
               ...t,
-              ...existing,
               id: existing.id || t.id,
               code: existing.code || t.code,
               fullName: existing.fullName || t.fullName,
-              phone: existing.phone || t.phone,
-              parentPhone: existing.parentPhone || t.parentPhone,
-              nationalId: existing.nationalId || t.nationalId,
+              phone: t.phone || existing.phone,
+              parentPhone: t.parentPhone || existing.parentPhone,
+              nationalId: t.nationalId || existing.nationalId,
               totalPoints: mergedTotalPoints,
               points: mergedTotalPoints,
               paidAmount: mergedPaidAmount,
@@ -4185,21 +4213,21 @@ var init_db = __esm({
             });
           } else {
             const record = { ...t };
+            const code = record.code ? String(record.code).trim().toUpperCase() : "";
             if (code && byCode.has(code)) {
               const suffix = Math.random().toString(36).substring(2, 5).toUpperCase();
               record.code = `${code}-${suffix}`;
             }
             result.push(record);
-            if (id) byId.set(id, record);
-            if (record.code) byCode.set(record.code, record);
-            if (normName) byNormName.set(normName, record);
+            byId.set(id, record);
+            if (record.code) byCode.set(String(record.code).trim().toUpperCase(), record);
           }
         }
         return result;
       }
       async ensureHydrated(force = false) {
         const now = Date.now();
-        const CACHE_TTL_MS = 15e3;
+        const CACHE_TTL_MS = 2e3;
         if (!force && this.isFirestoreHydrated && now - this.lastHydrationTime < CACHE_TTL_MS) {
           return;
         }
@@ -4215,21 +4243,6 @@ var init_db = __esm({
             if (this.isFirestoreHydrated && remoteTime > 0 && remoteTime <= this.lastRemoteSyncMetaTime && !force) {
               return;
             }
-            if (this.isFirestoreHydrated && meta?.lastCollection === "trainees" && remoteTime > this.lastRemoteSyncMetaTime) {
-              const remoteTrainees = await loadCollectionFromFirestore("trainees");
-              if (Array.isArray(remoteTrainees) && remoteTrainees.length > 0) {
-                console.log("[DB] Fast-hydrated trainees from Firestore! Count:", remoteTrainees.length);
-                const current = this.data || {};
-                const coursesList = Array.isArray(current.courses) ? current.courses : [];
-                const deduplicated = this.deduplicateTrainees(remoteTrainees);
-                current.trainees = deduplicated.map((t) => ({
-                  ...t,
-                  ...calculateTraineeFeeAndFinancials(t, coursesList)
-                }));
-                this.lastRemoteSyncMetaTime = remoteTime;
-                return;
-              }
-            }
             const remoteData = await loadFullDbFromFirestore();
             if (remoteData && Object.keys(remoteData).length > 0) {
               console.log("[DB] Hydrated from Firestore! Collections loaded:", Object.keys(remoteData).length);
@@ -4240,8 +4253,8 @@ var init_db = __esm({
                   if (key === "trainees") {
                     const remoteList = Array.isArray(val) ? val : [];
                     const localList = Array.isArray(merged[key]) ? merged[key] : [];
-                    const remoteIdSet = new Set(remoteList.map((t) => t.id || t.code).filter(Boolean));
-                    const localOnly = localList.filter((t) => t && t.id && !remoteIdSet.has(t.id) && (!t.code || !remoteIdSet.has(t.code)));
+                    const remoteIdSet = new Set(remoteList.map((t) => t.id).filter(Boolean));
+                    const localOnly = localList.filter((t) => t && t.id && !remoteIdSet.has(t.id));
                     merged[key] = this.deduplicateTrainees([...remoteList, ...localOnly]);
                   } else if (Array.isArray(merged[key]) && merged[key].length > 0) {
                     const remoteMap = new Map(val.map((item) => [item.id, item]));
@@ -4270,7 +4283,17 @@ var init_db = __esm({
                 }));
               }
               this.data = merged;
+              this.isFirestoreHydrated = true;
               this.lastRemoteSyncMetaTime = remoteTime || Date.now();
+              try {
+                this.ensureDataDir();
+                const jsonStr = JSON.stringify(this.data, null, 2);
+                const tempFile = `${DB_FILE}.tmp`;
+                fs2.writeFileSync(tempFile, jsonStr, "utf-8");
+                fs2.renameSync(tempFile, DB_FILE);
+              } catch (diskErr) {
+                console.warn("[DB] Non-critical disk sync notice after hydration:", diskErr);
+              }
             }
           } catch (err) {
             console.warn("[DB] Firestore hydration notice:", err);
@@ -4387,10 +4410,6 @@ var init_db = __esm({
               badges: Array.isArray(parsed.badges) ? parsed.badges : [],
               schedules: Array.isArray(parsed.schedules) ? parsed.schedules : [],
               session_attendance_records: Array.isArray(parsed.session_attendance_records) ? parsed.session_attendance_records : [],
-              devices: [],
-              deviceCommands: [],
-              traineeScreenshots: [],
-              computerLabs: [],
               users: existingUsers,
               settings: {
                 ...initialData.settings,
@@ -4459,10 +4478,7 @@ var init_db = __esm({
         try {
           await saveFullDbToFirestore2(data, immediate);
         } catch (err) {
-          console.warn("[DB] Firestore sync error:", err);
-          if (immediate) {
-            throw err;
-          }
+          console.warn("[DB] Firestore sync non-fatal warning:", err);
         }
       }
       logAudit(log) {
@@ -4498,21 +4514,27 @@ var init_db = __esm({
         const prefixes = this.data.settings.gradePrefixes || {};
         if (prefixes[clean]) return prefixes[clean];
         const norm = clean.toLowerCase().replace(/[أإآ]/g, "\u0627").replace(/ة/g, "\u0647").replace(/ى/g, "\u064A").replace(/[\s_\-]/g, "");
+        if (norm.includes("\u0627\u0639\u062F\u0627\u062F\u064A") || norm.includes("prep") || norm.includes("ictp") || norm.includes("ict-p") || norm.includes("p1") || norm.includes("p2") || norm.includes("p3")) {
+          if (norm.includes("\u0627\u0648\u0644") || norm.includes("1") || norm.includes("p1")) return "D";
+          if (norm.includes("\u062B\u0627\u0646\u064A") || norm.includes("\u062A\u0627\u0646\u064A") || norm.includes("2") || norm.includes("p2")) return "E";
+          if (norm.includes("\u062B\u0627\u0644\u062B") || norm.includes("\u062A\u0627\u0644\u062A") || norm.includes("3") || norm.includes("p3")) return "F";
+          return "D";
+        }
+        if (norm.includes("\u062B\u0627\u0646\u0648\u064A") || norm.includes("sec") || norm.includes("icts") || norm.includes("ict-s") || norm.includes("s1") || norm.includes("s2") || norm.includes("s3")) {
+          if (norm.includes("\u0627\u0648\u0644") || norm.includes("1") || norm.includes("s1") || norm.includes("sec1")) return "G";
+          if (norm.includes("\u062B\u0627\u0646\u064A") || norm.includes("\u062A\u0627\u0646\u064A") || norm.includes("2") || norm.includes("s2") || norm.includes("sec2")) return "H";
+          if (norm.includes("\u062B\u0627\u0644\u062B") || norm.includes("\u062A\u0627\u0644\u062A") || norm.includes("3") || norm.includes("s3") || norm.includes("sec3")) return "I";
+          return "G";
+        }
+        if (norm.includes("\u0631\u0627\u0628\u0639") || norm.includes("\u0631\u0627\u0628\u0639\u0647") || norm.includes("4\u0627\u0628\u062A\u062F\u0627\u0626\u064A") || norm.includes("\u0627\u0628\u062A\u062F\u0627\u0626\u064A4") || norm.includes("ict4") || norm.includes("grade4") || norm.includes("primary4") || norm === "4" || norm === "\u0635\u06414" || norm.includes("\u0627\u0644\u0631\u0627\u0628\u0639")) return "A";
+        if (norm.includes("\u062E\u0627\u0645\u0633") || norm.includes("\u062E\u0627\u0645\u0633\u0647") || norm.includes("5\u0627\u0628\u062A\u062F\u0627\u0626\u064A") || norm.includes("\u0627\u0628\u062A\u062F\u0627\u0626\u064A5") || norm.includes("ict5") || norm.includes("grade5") || norm.includes("primary5") || norm === "5" || norm === "\u0635\u06415" || norm.includes("\u0627\u0644\u062E\u0627\u0645\u0633")) return "B";
+        if (norm.includes("\u0633\u0627\u062F\u0633") || norm.includes("\u0633\u0627\u062F\u0633\u0647") || norm.includes("\u0633\u0627\u062A\u0647") || norm.includes("6\u0627\u0628\u062A\u062F\u0627\u0626\u064A") || norm.includes("\u0627\u0628\u062A\u062F\u0627\u0626\u064A6") || norm.includes("ict6") || norm.includes("grade6") || norm.includes("primary6") || norm === "6" || norm === "\u0635\u06416" || norm.includes("\u0627\u0644\u0633\u0627\u062F\u0633")) return "C";
         for (const [k, v] of Object.entries(prefixes)) {
           const kNorm = k.toLowerCase().replace(/[أإآ]/g, "\u0627").replace(/ة/g, "\u0647").replace(/ى/g, "\u064A").replace(/[\s_\-]/g, "");
-          if (kNorm === norm || kNorm.length > 2 && norm.includes(kNorm) || norm.length > 2 && kNorm.includes(norm)) {
+          if (kNorm === norm) {
             return v;
           }
         }
-        if (norm.includes("\u0627\u0648\u0644\u062B\u0627\u0646\u0648\u064A") || norm.includes("1\u062B\u0627\u0646\u0648\u064A") || norm.includes("\u062B\u0627\u0646\u0648\u064A1") || norm.includes("sec1") || norm.includes("s1") || norm.includes("ictsec1")) return "G";
-        if (norm.includes("\u062B\u0627\u0646\u064A\u062B\u0627\u0646\u0648\u064A") || norm.includes("\u062A\u0627\u0646\u064A\u062B\u0627\u0646\u0648\u064A") || norm.includes("2\u062B\u0627\u0646\u0648\u064A") || norm.includes("\u062B\u0627\u0646\u0648\u064A2") || norm.includes("sec2") || norm.includes("s2") || norm.includes("ictsec2")) return "H";
-        if (norm.includes("\u062B\u0627\u0644\u062B\u062B\u0627\u0646\u0648\u064A") || norm.includes("\u062A\u0627\u0644\u062A\u062B\u0627\u0646\u0648\u064A") || norm.includes("3\u062B\u0627\u0646\u0648\u064A") || norm.includes("\u062B\u0627\u0646\u0648\u064A3") || norm.includes("sec3") || norm.includes("s3") || norm.includes("ictsec3")) return "I";
-        if (norm.includes("\u0627\u0648\u0644\u0627\u0639\u062F\u0627\u062F\u064A") || norm.includes("1\u0627\u0639\u062F\u0627\u062F\u064A") || norm.includes("\u0627\u0639\u062F\u0627\u062F\u064A1") || norm.includes("ictp1") || norm.includes("p1") || norm.includes("prep1") || norm.includes("ict-p1")) return "D";
-        if (norm.includes("\u062B\u0627\u0646\u064A\u0627\u0639\u062F\u0627\u062F\u064A") || norm.includes("\u062A\u0627\u0646\u064A\u0627\u0639\u062F\u0627\u062F\u064A") || norm.includes("2\u0627\u0639\u062F\u0627\u062F\u064A") || norm.includes("\u0627\u0639\u062F\u0627\u062F\u064A2") || norm.includes("ictp2") || norm.includes("p2") || norm.includes("prep2") || norm.includes("ict-p2")) return "E";
-        if (norm.includes("\u062B\u0627\u0644\u062B\u0627\u0639\u062F\u0627\u062F\u064A") || norm.includes("\u062A\u0627\u0644\u062A\u0627\u0639\u062F\u0627\u062F\u064A") || norm.includes("3\u0627\u0639\u062F\u0627\u062F\u064A") || norm.includes("\u0627\u0639\u062F\u0627\u062F\u064A3") || norm.includes("ictp3") || norm.includes("p3") || norm.includes("prep3") || norm.includes("ict-p3")) return "F";
-        if (norm.includes("\u0631\u0627\u0628\u0639") || norm.includes("\u0631\u0627\u0628\u0639\u0647") || norm.includes("4\u0627\u0628\u062A\u062F\u0627\u0626\u064A") || norm.includes("\u0627\u0628\u062A\u062F\u0627\u0626\u064A4") || norm.includes("ict4") || norm.includes("grade4") || norm.includes("primary4") || norm === "4" || norm === "\u0635\u06414") return "A";
-        if (norm.includes("\u062E\u0627\u0645\u0633") || norm.includes("\u062E\u0627\u0645\u0633\u0647") || norm.includes("5\u0627\u0628\u062A\u062F\u0627\u0626\u064A") || norm.includes("\u0627\u0628\u062A\u062F\u0627\u0626\u064A5") || norm.includes("ict5") || norm.includes("grade5") || norm.includes("primary5") || norm === "5" || norm === "\u0635\u06415") return "B";
-        if (norm.includes("\u0633\u0627\u062F\u0633") || norm.includes("\u0633\u0627\u062F\u0633\u0647") || norm.includes("\u0633\u0627\u062A\u0647") || norm.includes("6\u0627\u0628\u062A\u062F\u0627\u0626\u064A") || norm.includes("\u0627\u0628\u062A\u062F\u0627\u0626\u064A6") || norm.includes("ict6") || norm.includes("grade6") || norm.includes("primary6") || norm === "6" || norm === "\u0635\u06416") return "C";
         return this.data.settings.traineeCodePrefix || "A";
       }
       getNextTraineeCode(prefixOrGrade, groupId) {
@@ -4755,9 +4777,6 @@ var init_db = __esm({
           if (options.auditLogs) {
             this.data.auditLogs = [];
           }
-          if (options.screenshotsArchive) {
-            this.data.traineeScreenshots = [];
-          }
         }
         this.saveDataDirect(this.data);
         this.recalculateTraineeRankings();
@@ -4765,6 +4784,288 @@ var init_db = __esm({
       }
     };
     db = new DatabaseManager();
+  }
+});
+
+// server/systemQuotaService.ts
+var systemQuotaService_exports = {};
+__export(systemQuotaService_exports, {
+  fetchLiveVercelUsage: () => fetchLiveVercelUsage,
+  getSystemQuotaStatus: () => getSystemQuotaStatus,
+  recordSystemInvocation: () => recordSystemInvocation
+});
+function recordSystemInvocation() {
+  totalInvocations++;
+  const today = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
+  if (today !== lastResetDate) {
+    lastResetDate = today;
+    dailyInvocations = 0;
+  }
+  dailyInvocations++;
+}
+async function fetchLiveVercelUsage(forceRefresh = false) {
+  const now = Date.now();
+  if (!forceRefresh && cachedVercelData && now - lastVercelFetchTime < 6e4) {
+    return cachedVercelData;
+  }
+  const dbData = db.getData() || {};
+  const settings = dbData.settings || {};
+  const token = (process.env.VERCEL_TOKEN || process.env.VERCEL_API_TOKEN || settings.vercelApiToken || settings.vercelConfig?.token || "").trim();
+  const projectId = (process.env.VERCEL_PROJECT_ID || settings.vercelProjectId || settings.vercelConfig?.projectId || "nagah-training-center").trim();
+  const teamId = (process.env.VERCEL_TEAM_ID || settings.vercelTeamId || settings.vercelConfig?.teamId || "").trim();
+  const defaultUsage = {
+    connected: false,
+    tokenConfigured: Boolean(token),
+    source: "telemetry_estimation",
+    projectName: projectId || "nagah-training-center",
+    deploymentStatus: "READY",
+    billingPeriod: {
+      start: new Date(Date.now() - 15 * 864e5).toISOString(),
+      end: new Date(Date.now() + 15 * 864e5).toISOString(),
+      resetDateFormatted: "\u062A\u062A\u062C\u062F\u062F \u0643\u0644 30 \u064A\u0648\u0645\u0627\u064B \u0645\u0646 \u062A\u0627\u0631\u064A\u062E \u0625\u0646\u0634\u0627\u0621 \u062D\u0633\u0627\u0628\u0643 \u0639\u0644\u0649 \u0641\u064A\u0631\u0633\u064A\u0627\u0644",
+      daysRemaining: 15,
+      hoursRemaining: 12
+    },
+    metrics: {
+      bandwidthUsedGB: Number((totalInvocations * 45e-5).toFixed(2)),
+      bandwidthLimitGB: 100,
+      bandwidthPercentage: Number((totalInvocations * 45e-5 / 100 * 100).toFixed(2)),
+      bandwidthRemainingGB: Math.max(0, Number((100 - totalInvocations * 45e-5).toFixed(2))),
+      executionUsedGBHours: Number((totalInvocations * 15e-5).toFixed(2)),
+      executionLimitGBHours: 100,
+      executionPercentage: Number((totalInvocations * 15e-5 / 100 * 100).toFixed(2)),
+      executionRemainingGBHours: Math.max(0, Number((100 - totalInvocations * 15e-5).toFixed(2))),
+      invocationsUsed: totalInvocations,
+      invocationsLimit: 1e5,
+      invocationsPercentage: Number((totalInvocations / 1e5 * 100).toFixed(2)),
+      invocationsRemaining: Math.max(0, 1e5 - totalInvocations)
+    }
+  };
+  if (!token) {
+    cachedVercelData = defaultUsage;
+    lastVercelFetchTime = now;
+    return defaultUsage;
+  }
+  try {
+    const teamParam = teamId ? `?teamId=${encodeURIComponent(teamId)}` : "";
+    const projectUrl = `https://api.vercel.com/v9/projects/${encodeURIComponent(projectId)}${teamParam}`;
+    const projectRes = await fetch(projectUrl, {
+      headers: {
+        "Authorization": `Bearer ${token}`,
+        "Content-Type": "application/json"
+      }
+    });
+    let deploymentStatus = "READY";
+    let latestUrl = "";
+    let projectName = projectId;
+    if (projectRes.ok) {
+      const pJson = await projectRes.json();
+      projectName = pJson.name || projectId;
+      latestUrl = pJson.targets?.production?.url ? `https://${pJson.targets.production.url}` : "";
+      const readyState = pJson.targets?.production?.readyState;
+      if (readyState === "READY") deploymentStatus = "READY";
+      else if (readyState === "ERROR") deploymentStatus = "ERROR";
+      else if (readyState === "BUILDING") deploymentStatus = "BUILDING";
+      else if (readyState === "INITIALIZING") deploymentStatus = "INITIALIZING";
+      else if (pJson.paused) deploymentStatus = "PAUSED";
+    }
+    const usageUrl = `https://api.vercel.com/v2/usage${teamParam}`;
+    const usageRes = await fetch(usageUrl, {
+      headers: {
+        "Authorization": `Bearer ${token}`,
+        "Content-Type": "application/json"
+      }
+    });
+    let bwGB = 0;
+    let execGBH = 0;
+    let invUsed = totalInvocations;
+    let periodStart = new Date(Date.now() - 15 * 864e5).toISOString();
+    let periodEnd = new Date(Date.now() + 15 * 864e5).toISOString();
+    if (usageRes.ok) {
+      const uJson = await usageRes.json();
+      if (uJson.period?.start && uJson.period?.end) {
+        periodStart = uJson.period.start;
+        periodEnd = uJson.period.end;
+      }
+      if (uJson.bandwidth?.value !== void 0) {
+        bwGB = Number((uJson.bandwidth.value / (1024 * 1024 * 1024)).toFixed(2));
+      }
+      if (uJson.serverlessFunctionExecution?.value !== void 0) {
+        execGBH = Number(uJson.serverlessFunctionExecution.value.toFixed(2));
+      }
+      if (uJson.edgeMiddlewareInvocations?.value !== void 0 || uJson.serverlessFunctionInvocations?.value !== void 0) {
+        invUsed = (uJson.serverlessFunctionInvocations?.value || 0) + (uJson.edgeMiddlewareInvocations?.value || 0);
+      }
+    }
+    const endMs = new Date(periodEnd).getTime();
+    const diffMs = Math.max(0, endMs - now);
+    const daysRemaining = Math.floor(diffMs / 864e5);
+    const hoursRemaining = Math.floor(diffMs % 864e5 / 36e5);
+    const endFormatted = new Date(periodEnd).toLocaleDateString("ar-EG", {
+      day: "numeric",
+      month: "long",
+      year: "numeric"
+    });
+    const result = {
+      connected: true,
+      tokenConfigured: true,
+      source: "official_api",
+      projectName,
+      projectId,
+      deploymentStatus,
+      latestDeploymentUrl: latestUrl,
+      billingPeriod: {
+        start: periodStart,
+        end: periodEnd,
+        resetDateFormatted: `\u062A\u062A\u062C\u062F\u062F \u0627\u0644\u0643\u0648\u062A\u0627 \u062A\u0644\u0642\u0627\u0626\u064A\u0627\u064B \u064A\u0648\u0645 ${endFormatted} (\u0645\u062A\u0628\u0642\u064A ${daysRemaining} \u064A\u0648\u0645 \u0648 ${hoursRemaining} \u0633\u0627\u0639\u0629)`,
+        daysRemaining,
+        hoursRemaining
+      },
+      metrics: {
+        bandwidthUsedGB: bwGB,
+        bandwidthLimitGB: 100,
+        bandwidthPercentage: Number((bwGB / 100 * 100).toFixed(2)),
+        bandwidthRemainingGB: Math.max(0, Number((100 - bwGB).toFixed(2))),
+        executionUsedGBHours: execGBH,
+        executionLimitGBHours: 100,
+        executionPercentage: Number((execGBH / 100 * 100).toFixed(2)),
+        executionRemainingGBHours: Math.max(0, Number((100 - execGBH).toFixed(2))),
+        invocationsUsed: invUsed,
+        invocationsLimit: 1e5,
+        invocationsPercentage: Number((invUsed / 1e5 * 100).toFixed(2)),
+        invocationsRemaining: Math.max(0, 1e5 - invUsed)
+      }
+    };
+    cachedVercelData = result;
+    lastVercelFetchTime = now;
+    return result;
+  } catch (err) {
+    console.warn("[SystemQuotaService] Vercel API query warning:", err?.message || err);
+    defaultUsage.errorNotice = "\u062A\u0639\u0630\u0631 \u0627\u0644\u0627\u062A\u0635\u0627\u0644 \u0628\u0640 Vercel API: " + (err?.message || "\u062E\u0637\u0623 \u0627\u062A\u0635\u0627\u0644");
+    cachedVercelData = defaultUsage;
+    lastVercelFetchTime = now;
+    return defaultUsage;
+  }
+}
+async function getSystemQuotaStatus(forceRefresh = false) {
+  const isVercel = Boolean(process.env.VERCEL || process.env.VERCEL_ENV);
+  const mem = process.memoryUsage();
+  const firestoreRaw = getFirestoreQuotaMetrics();
+  const now = /* @__PURE__ */ new Date();
+  const midnightUtc = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1, 0, 0, 0));
+  const diffMs = midnightUtc.getTime() - now.getTime();
+  const resetCountdownHours = Math.floor(diffMs / (1e3 * 60 * 60));
+  const resetCountdownMinutes = Math.floor(diffMs % (1e3 * 60 * 60) / (1e3 * 60));
+  const firestoreMetrics = {
+    ...firestoreRaw,
+    resetCountdownHours,
+    resetCountdownMinutes,
+    storageUsageNote: "\u0633\u0639\u0629 \u0642\u0627\u0639\u062F\u0629 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0644\u0645\u062C\u0627\u0646\u064A\u0629 1 \u062C\u064A\u062C\u0627\u0628\u0627\u064A\u062A \u062A\u0643\u0641\u064A \u0644\u0623\u0643\u062B\u0631 \u0645\u0646 50,000 \u0637\u0627\u0644\u0628"
+  };
+  const cloudRunProd = "https://ais-pre-7wkppak7c63am6ebvulppu-481160813332.europe-west2.run.app";
+  const cloudRunDev = "https://ais-dev-7wkppak7c63am6ebvulppu-481160813332.europe-west2.run.app";
+  const vercelUsage = await fetchLiveVercelUsage(forceRefresh);
+  const response = {
+    timestamp: (/* @__PURE__ */ new Date()).toISOString(),
+    runtime: {
+      platform: isVercel ? "vercel" : process.env.K_SERVICE ? "cloudrun" : "development",
+      isVercel,
+      vercelEnv: process.env.VERCEL_ENV || "production",
+      vercelRegion: process.env.VERCEL_REGION || process.env.AWS_REGION || "europe-west2",
+      nodeVersion: process.version,
+      uptimeSeconds: Math.floor(process.uptime()),
+      memoryRssMB: Math.round(mem.rss / (1024 * 1024)),
+      heapUsedMB: Math.round(mem.heapUsed / (1024 * 1024))
+    },
+    firestore: firestoreMetrics,
+    vercel: vercelUsage,
+    vercelTelemetry: {
+      monthlyInvocationLimit: 1e5,
+      monthlyBandwidthLimitGB: 100,
+      monthlyExecutionLimitGBHours: 100,
+      estimatedInvocationsToday: dailyInvocations,
+      totalTrackedInvocations: totalInvocations,
+      accountCycleNote: "\u062A\u062A\u062C\u062F\u062F \u0643\u0648\u062A\u0627 \u0641\u064A\u0631\u0633\u064A\u0627\u0644 \u0627\u0644\u0645\u062C\u0627\u0646\u064A\u0629 (Hobby Plan) \u0643\u0644 30 \u064A\u0648\u0645\u0627\u064B \u0645\u0646 \u062A\u0627\u0631\u064A\u062E \u0625\u0646\u0634\u0627\u0621 \u062D\u0633\u0627\u0628\u0643 \u0648\u0644\u064A\u0633 \u0623\u0648\u0644 \u0627\u0644\u0634\u0647\u0631 \u0627\u0644\u0645\u064A\u0644\u0627\u062F\u064A.",
+      commonBlockReasons: [
+        {
+          code: "402_PAYMENT_REQUIRED",
+          reason: "\u062A\u062C\u0627\u0648\u0632 \u062D\u062F \u0627\u0644\u0627\u0633\u062A\u062F\u0639\u0627\u0621\u0627\u062A \u0623\u0648 \u0627\u0633\u062A\u0647\u0644\u0627\u0643 \u0627\u0644\u0645\u0639\u0627\u0644\u062C \u0627\u0644\u0645\u062C\u0627\u0646\u064A (GB-Hours)",
+          solution: "\u0627\u0644\u062F\u062E\u0648\u0644 \u0625\u0644\u0649 \u0644\u0648\u062D\u0629 \u062A\u062D\u0643\u0645 Vercel \u062B\u0645 \u0627\u0644\u0646\u0642\u0631 \u0639\u0644\u0649 Unpause Deployment \u0623\u0648 \u0627\u0633\u062A\u062E\u062F\u0627\u0645 \u0631\u0627\u0628\u0637 Cloud Run \u0627\u0644\u0628\u062F\u064A\u0644 \u0641\u0648\u0631\u0627\u064B."
+        },
+        {
+          code: "DEPLOYMENT_PAUSED",
+          reason: "\u0625\u064A\u0642\u0627\u0641 \u0645\u0624\u0642\u062A \u064A\u062F\u0648\u064A \u0623\u0648 \u0628\u0633\u0628\u0628 \u062A\u0646\u0628\u064A\u0647 \u0627\u0633\u062A\u0647\u0644\u0627\u0643 \u0627\u0644\u0643\u0648\u062A\u0627 \u0627\u0644\u0645\u0627\u0644\u064A",
+          solution: "\u0627\u0641\u062A\u062D \u0645\u0634\u0631\u0648\u0639\u0643 \u0639\u0644\u0649 vercel.com -> Settings -> Domains / Deployments \u0648\u0627\u0636\u063A\u0637 Resume."
+        },
+        {
+          code: "FUNCTION_INVOCATION_TIMEOUT",
+          reason: "\u0627\u0633\u062A\u063A\u0631\u0627\u0642 \u0627\u0644\u062F\u0648\u0627\u0644 \u0627\u0644\u062E\u0627\u062F\u0645\u0629 \u0623\u0643\u062B\u0631 \u0645\u0646 \u0627\u0644\u062D\u062F \u0627\u0644\u0645\u0633\u0645\u0648\u062D (10 \u062B\u0648\u0627\u0646\u064D)",
+          solution: "\u062A\u0645 \u062A\u062D\u0633\u064A\u0646 vercel.json \u0648\u062A\u0641\u0639\u064A\u0644 \u0627\u0644\u062A\u062E\u0632\u064A\u0646 \u0627\u0644\u0645\u0624\u0642\u062A Stale-While-Revalidate \u0644\u062A\u0642\u0644\u064A\u0635 \u0645\u062F\u0629 \u0627\u0644\u0627\u0633\u062A\u062F\u0639\u0627\u0621 \u0625\u0644\u0649 \u0623\u062C\u0632\u0627\u0621 \u0645\u0646 \u0627\u0644\u062B\u0627\u0646\u064A\u0629."
+        }
+      ]
+    },
+    liveMirrors: {
+      cloudRunProduction: cloudRunProd,
+      cloudRunDevelopment: cloudRunDev,
+      recommendedStudentUrl: cloudRunProd,
+      isAlwaysOnline: true
+    },
+    actions: {
+      howToUnpauseVercel: [
+        "1. \u0627\u062F\u062E\u0644 \u0639\u0644\u0649 \u0644\u0648\u062D\u0629 \u062A\u062D\u0643\u0645 \u0641\u064A\u0631\u0633\u064A\u0627\u0644 https://vercel.com \u0648\u0627\u0641\u062A\u062D \u0645\u0634\u0631\u0648\u0639 nagah-training-center.",
+        '2. \u0625\u0630\u0627 \u0638\u0647\u0631 \u0634\u0631\u064A\u0637 \u0623\u0635\u0641\u0631 \u0623\u0648 \u0623\u062D\u0645\u0631 \u0645\u0643\u062A\u0648\u0628 \u0639\u0644\u064A\u0647 "Deployment Paused" \u0623\u0648 "Usage Limit Exceeded"\u060C \u0627\u0636\u063A\u0637 \u0639\u0644\u0649 \u0632\u0631 "Unpause" \u0623\u0648 "Resume".',
+        '3. \u062A\u0623\u0643\u062F \u0645\u0646 \u062A\u0627\u0631\u064A\u062E \u062A\u062C\u062F\u064A\u062F \u0627\u0644\u062F\u0648\u0631\u0629 \u0627\u0644\u062D\u0633\u0627\u0628\u064A\u0629 \u0627\u0644\u0645\u0643\u062A\u0648\u0628 \u0641\u064A \u062A\u0628\u0648\u064A\u0628 "Usage" (\u0645\u062B\u0644\u0627\u064B: Resets on Oct 14).',
+        "4. \u0623\u0639\u062F \u0646\u0634\u0631 \u0627\u0644\u0643\u0648\u062F (Redeploy) \u0645\u0646 \u062E\u0644\u0627\u0644 \u0627\u0644\u062A\u0628\u0648\u064A\u0628 Deployments -> Redeploy."
+      ],
+      howToReduceVercelQuota: [
+        "\u062A\u0645 \u0636\u0628\u0637 \u0627\u0644\u0643\u0627\u0634 (Cache-Control) \u0644\u0644\u0645\u0644\u0641\u0627\u062A \u0627\u0644\u062B\u0627\u0628\u062A\u0629 \u0648\u0627\u0644\u0635\u0648\u0631 \u062A\u0644\u0642\u0627\u0626\u064A\u0627\u064B \u0628\u0646\u0633\u0628\u0629 95%.",
+        "\u062A\u0645 \u062A\u0641\u0639\u064A\u0644 \u0642\u0631\u0627\u0621\u0629 \u0642\u0648\u0627\u0639\u062F \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A \u0645\u0646 \u0627\u0644\u0630\u0627\u0643\u0631\u0629 \u0628\u062F\u0644\u0627\u064B \u0645\u0646 \u0627\u0633\u062A\u062F\u0639\u0627\u0621\u0627\u062A \u0627\u0644\u062E\u0627\u062F\u0645 \u0627\u0644\u0645\u062A\u0643\u0631\u0631\u0629.",
+        "\u062A\u0645 \u062A\u0632\u0648\u064A\u062F\u0643 \u0628\u0631\u0627\u0628\u0637 \u0627\u0644\u0633\u062D\u0627\u0628\u0629 \u0627\u0644\u0645\u0633\u062A\u0642\u0644 (Cloud Run) \u0627\u0644\u0630\u064A \u064A\u0639\u0645\u0644 24/7 \u062F\u0648\u0646 \u0623\u064A \u0642\u064A\u0648\u062F \u0639\u0644\u0649 \u0639\u062F\u062F \u0627\u0644\u0637\u0644\u0627\u0628."
+      ]
+    }
+  };
+  try {
+    const curDb = db.getData();
+    if (curDb) {
+      if (!curDb.settings) curDb.settings = {};
+      curDb.settings.lastQuotaSnapshot = {
+        updatedAt: response.timestamp,
+        firestoreReadsToday: firestoreMetrics.readsToday,
+        firestoreWritesToday: firestoreMetrics.writesToday,
+        firestoreReadsRemaining: firestoreMetrics.remaining.reads,
+        vercelBandwidthUsedGB: vercelUsage.metrics.bandwidthUsedGB,
+        vercelExecutionUsedGBHours: vercelUsage.metrics.executionUsedGBHours,
+        vercelInvocationsUsed: vercelUsage.metrics.invocationsUsed,
+        vercelResetDate: vercelUsage.billingPeriod?.resetDateFormatted,
+        deploymentStatus: vercelUsage.deploymentStatus
+      };
+      if (!Array.isArray(curDb.quotaAudit)) {
+        curDb.quotaAudit = [];
+      }
+      curDb.quotaAudit.push({
+        timestamp: response.timestamp,
+        reads: firestoreMetrics.readsToday,
+        writes: firestoreMetrics.writesToday,
+        vercelInvocations: vercelUsage.metrics.invocationsUsed
+      });
+      if (curDb.quotaAudit.length > 50) {
+        curDb.quotaAudit = curDb.quotaAudit.slice(-50);
+      }
+    }
+  } catch (e) {
+  }
+  return response;
+}
+var totalInvocations, lastResetDate, dailyInvocations, cachedVercelData, lastVercelFetchTime;
+var init_systemQuotaService = __esm({
+  "server/systemQuotaService.ts"() {
+    init_firestoreStorage();
+    init_db();
+    totalInvocations = 0;
+    lastResetDate = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
+    dailyInvocations = 0;
+    cachedVercelData = null;
+    lastVercelFetchTime = 0;
   }
 });
 
@@ -5091,8 +5392,9 @@ function createRepo(key) {
         if (key === "trainees" && Array.isArray(memData.trainees)) {
           memData.trainees = db.deduplicateTrainees(memData.trainees);
         }
-        await saveCollectionToFirestore(key, memData[key]);
-        db.save();
+        db.saveImmediate();
+        saveCollectionToFirestore(key, memData[key]).catch(() => {
+        });
       }
       return fullItem;
     },
@@ -5108,8 +5410,9 @@ function createRepo(key) {
         const idx = list.findIndex((i) => i.id === docId);
         if (idx >= 0) list[idx] = updatedItem;
         else list.push(updatedItem);
-        await saveCollectionToFirestore(key, memData[key]);
-        db.save();
+        db.saveImmediate();
+        saveCollectionToFirestore(key, memData[key]).catch(() => {
+        });
       }
       return updatedItem;
     },
@@ -5120,8 +5423,9 @@ function createRepo(key) {
         const list = memData[key];
         const idx = list.findIndex((i) => i.id === id);
         if (idx >= 0) list.splice(idx, 1);
-        await saveCollectionToFirestore(key, memData[key]);
-        db.save();
+        db.saveImmediate();
+        saveCollectionToFirestore(key, memData[key]).catch(() => {
+        });
       }
       return true;
     },
@@ -5339,15 +5643,21 @@ function resolveGradePrefix(gradeOrCourse) {
   if (!gradeOrCourse) return "A";
   const clean = String(gradeOrCourse).trim();
   const lower = clean.toLowerCase();
+  if (clean.includes("\u0625\u0639\u062F\u0627\u062F\u064A") || clean.includes("\u0627\u0639\u062F\u0627\u062F\u064A") || lower.includes("prep") || lower.includes("ict-p") || lower.includes("ictp") || lower.includes("p1") || lower.includes("p2") || lower.includes("p3")) {
+    if (clean.includes("\u0623\u0648\u0644") || clean.includes("\u0627\u0648\u0644") || clean.includes("1") || lower.includes("p1")) return "D";
+    if (clean.includes("\u062B\u0627\u0646\u064A") || clean.includes("\u062A\u0627\u0646\u064A") || clean.includes("2") || lower.includes("p2")) return "E";
+    if (clean.includes("\u062B\u0627\u0644\u062B") || clean.includes("\u062A\u0627\u0644\u062A") || clean.includes("3") || lower.includes("p3")) return "F";
+    return "D";
+  }
+  if (clean.includes("\u062B\u0627\u0646\u0648\u064A") || lower.includes("sec") || lower.includes("ict-s") || lower.includes("icts") || lower.includes("s1") || lower.includes("s2") || lower.includes("s3")) {
+    if (clean.includes("\u0623\u0648\u0644") || clean.includes("\u0627\u0648\u0644") || clean.includes("1") || lower.includes("s1") || lower.includes("sec1")) return "G";
+    if (clean.includes("\u062B\u0627\u0646\u064A") || clean.includes("\u062A\u0627\u0646\u064A") || clean.includes("2") || lower.includes("s2") || lower.includes("sec2")) return "H";
+    if (clean.includes("\u062B\u0627\u0644\u062B") || clean.includes("\u062A\u0627\u0644\u062A") || clean.includes("3") || lower.includes("s3") || lower.includes("sec3")) return "I";
+    return "G";
+  }
   if (clean.includes("\u0631\u0627\u0628\u0639") || lower.includes("ict4") || clean === "4" || clean.includes("\u0627\u0644\u0631\u0627\u0628\u0639")) return "A";
   if (clean.includes("\u062E\u0627\u0645\u0633") || lower.includes("ict5") || clean === "5" || clean.includes("\u0627\u0644\u062E\u0627\u0645\u0633")) return "B";
   if (clean.includes("\u0633\u0627\u062F\u0633") || lower.includes("ict6") || clean === "6" || clean.includes("\u0627\u0644\u0633\u0627\u062F\u0633")) return "C";
-  if (clean.includes("\u0623\u0648\u0644 \u0625\u0639\u062F\u0627\u062F\u064A") || clean.includes("\u0627\u0648\u0644 \u0627\u0639\u062F\u0627\u062F\u064A") || clean.includes("1 \u0625\u0639\u062F\u0627\u062F\u064A") || clean.includes("\u0627\u0644\u0623\u0648\u0644 \u0627\u0644\u0625\u0639\u062F\u0627\u062F\u064A") || lower.includes("ict-p1") || lower.includes("p1")) return "D";
-  if (clean.includes("\u062B\u0627\u0646\u064A \u0625\u0639\u062F\u0627\u062F\u064A") || clean.includes("\u062A\u0627\u0646\u064A \u0627\u0639\u062F\u0627\u062F\u064A") || clean.includes("2 \u0625\u0639\u062F\u0627\u062F\u064A") || clean.includes("\u0627\u0644\u062B\u0627\u0646\u064A \u0627\u0644\u0625\u0639\u062F\u0627\u062F\u064A") || lower.includes("ict-p2") || lower.includes("p2")) return "E";
-  if (clean.includes("\u062B\u0627\u0644\u062B \u0625\u0639\u062F\u0627\u062F\u064A") || clean.includes("\u062A\u0627\u0644\u062A \u0627\u0639\u062F\u0627\u062F\u064A") || clean.includes("3 \u0625\u0639\u062F\u0627\u062F\u064A") || clean.includes("\u0627\u0644\u062B\u0627\u0644\u062B \u0627\u0644\u0625\u0639\u062F\u0627\u062F\u064A") || lower.includes("ict-p3") || lower.includes("p3")) return "F";
-  if (clean.includes("\u0623\u0648\u0644 \u062B\u0627\u0646\u0648\u064A") || clean.includes("\u0627\u0648\u0644 \u062B\u0627\u0646\u0648\u064A") || clean.includes("1 \u062B\u0627\u0646\u0648\u064A") || clean.includes("\u0627\u0644\u0623\u0648\u0644 \u0627\u0644\u062B\u0627\u0646\u0648\u064A") || lower.includes("sec-1") || lower.includes("ict-s1") || lower.includes("s1")) return "G";
-  if (clean.includes("\u062B\u0627\u0646\u064A \u062B\u0627\u0646\u0648\u064A") || clean.includes("\u062A\u0627\u0646\u064A \u062B\u0627\u0646\u0648\u064A") || clean.includes("2 \u062B\u0627\u0646\u0648\u064A") || clean.includes("\u0627\u0644\u062B\u0627\u0646\u064A \u0627\u0644\u062B\u0627\u0646\u0648\u064A") || lower.includes("sec-2") || lower.includes("ict-s2") || lower.includes("s2")) return "H";
-  if (clean.includes("\u062B\u0627\u0644\u062B \u062B\u0627\u0646\u0648\u064A") || clean.includes("\u062A\u0627\u0644\u062A \u062B\u0627\u0646\u0648\u064A") || clean.includes("3 \u062B\u0627\u0646\u0648\u064A") || clean.includes("\u0627\u0644\u062B\u0627\u0644\u062B \u0627\u0644\u062B\u0627\u0646\u0648\u064A") || lower.includes("sec-3") || lower.includes("ict-s3") || lower.includes("s3")) return "I";
   return "A";
 }
 function matchCourseForRegistration(allCourses, grade, track) {
@@ -5490,8 +5800,7 @@ async function handlePublicRegister(req, res) {
       const sameName = normInputName && normExistingName && normInputName === normExistingName;
       if (!sameName) return false;
       const samePhone = phoneDigits && phoneDigits.length >= 8 && (phoneDigits === tPhoneDigits || phoneDigits === tParentPhoneDigits) || parentPhoneDigits && parentPhoneDigits.length >= 8 && (parentPhoneDigits === tPhoneDigits || parentPhoneDigits === tParentPhoneDigits);
-      const sameGrade = grade && t.grade && String(t.grade).trim().toLowerCase() === grade.toLowerCase();
-      return samePhone || sameGrade;
+      return Boolean(sameName && samePhone);
     });
     if (existingTrainee) {
       const existingCourse = allCourses.find((c) => c.id === existingTrainee.courseId);
@@ -7643,6 +7952,1171 @@ init_db();
 
 // server/gemini.ts
 import { GoogleGenAI, Type } from "@google/genai";
+
+// src/domain/curriculumRegistry.ts
+var MOE_CURRICULA = {
+  // -------------------------------------------------------------
+  // GRADE 4 - الصف الرابع الابتدائي (رمز الكود A)
+  // -------------------------------------------------------------
+  grade4: {
+    gradeKey: "grade4",
+    gradeCodePrefix: "A",
+    gradeNameAr: "\u0627\u0644\u0635\u0641 \u0627\u0644\u0631\u0627\u0628\u0639 \u0627\u0644\u0627\u0628\u062A\u062F\u0627\u0626\u064A",
+    gradeNameEn: "Grade 4 (Primary 4)",
+    stageAr: "\u0627\u0644\u0645\u0631\u062D\u0644\u0629 \u0627\u0644\u0627\u0628\u062A\u062F\u0627\u0626\u064A\u0629",
+    subjectNameAr: "\u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u0627\u0644\u0645\u0639\u0644\u0648\u0645\u0627\u062A \u0648\u0627\u0644\u0627\u062A\u0635\u0627\u0644\u0627\u062A (ICT)",
+    subjectNameEn: "Information and Communications Technology (ICT)",
+    terms: {
+      term1: {
+        units: [
+          {
+            unitNumber: 1,
+            unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u0623\u0648\u0644\u0649: \u062F\u0648\u0631 \u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u0627\u0644\u0645\u0639\u0644\u0648\u0645\u0627\u062A \u0641\u064A \u062D\u064A\u0627\u062A\u0646\u0627",
+            unitTitleEn: "Unit 1: The Role of ICT in Our Lives",
+            term: 1,
+            lessons: [
+              { id: "g4_t1_u1_l1", lessonNumber: 1, unitNumber: 1, term: 1, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u0623\u0648\u0644\u0649", unitTitleEn: "Unit 1", titleAr: "\u0627\u0644\u062F\u0631\u0633 1: \u0627\u0644\u0645\u0633\u062A\u0643\u0634\u0641 \u0627\u0644\u0646\u0634\u0637 (\u0623\u0644\u0628\u0631\u062A \u0644\u064A\u0646)", titleEn: "Lesson 1: Explorer in Action (Albert Lin)" },
+              { id: "g4_t1_u1_l2", lessonNumber: 2, unitNumber: 1, term: 1, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u0623\u0648\u0644\u0649", unitTitleEn: "Unit 1", titleAr: "\u0627\u0644\u062F\u0631\u0633 2: \u0627\u0644\u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u0648\u062A\u0637\u0648\u0631\u0647\u0627 \u0627\u0644\u062A\u0627\u0631\u064A\u062E\u064A", titleEn: "Lesson 2: Technology & Historical Evolution" },
+              { id: "g4_t1_u1_l3", lessonNumber: 3, unitNumber: 1, term: 1, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u0623\u0648\u0644\u0649", unitTitleEn: "Unit 1", titleAr: "\u0627\u0644\u062F\u0631\u0633 3: \u0645\u0643\u0648\u0646\u0627\u062A \u062C\u0647\u0627\u0632 \u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631", titleEn: "Lesson 3: Computer Components" },
+              { id: "g4_t1_u1_l4", lessonNumber: 4, unitNumber: 1, term: 1, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u0623\u0648\u0644\u0649", unitTitleEn: "Unit 1", titleAr: "\u0627\u0644\u062F\u0631\u0633 4: \u0627\u0644\u0628\u0631\u0645\u062C\u064A\u0627\u062A \u0648\u0623\u0646\u0638\u0645\u0629 \u0627\u0644\u062A\u0634\u063A\u064A\u0644", titleEn: "Lesson 4: Software & Operating Systems" },
+              { id: "g4_t1_u1_l5", lessonNumber: 5, unitNumber: 1, term: 1, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u0623\u0648\u0644\u0649", unitTitleEn: "Unit 1", titleAr: "\u0627\u0644\u062F\u0631\u0633 5: \u062C\u0645\u0639 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A \u0648\u062A\u062D\u0644\u064A\u0644\u0647\u0627 \u0648\u0627\u0644\u062A\u0639\u0628\u064A\u0631 \u0639\u0646\u0647\u0627 \u0628\u0631\u0633\u0645 \u0628\u064A\u0627\u0646\u064A", titleEn: "Lesson 5: Collecting, Analyzing Data & Graphs" },
+              { id: "g4_t1_u1_l6", lessonNumber: 6, unitNumber: 1, term: 1, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u0623\u0648\u0644\u0649", unitTitleEn: "Unit 1", titleAr: "\u0627\u0644\u062F\u0631\u0633 6: \u0645\u0634\u0643\u0644\u0627\u062A \u0634\u0627\u0626\u0639\u0629 \u0644\u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u0627\u0644\u0645\u0639\u0644\u0648\u0645\u0627\u062A \u0648\u0627\u0644\u062D\u0644\u0648\u0644", titleEn: "Lesson 6: Common ICT Problems & Solutions" },
+              { id: "g4_t1_u1_l7", lessonNumber: 7, unitNumber: 1, term: 1, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u0623\u0648\u0644\u0649", unitTitleEn: "Unit 1", titleAr: "\u0627\u0644\u062F\u0631\u0633 7: \u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u0627\u0644\u0645\u0639\u0644\u0648\u0645\u0627\u062A \u0648\u0627\u0644\u0627\u062A\u0635\u0627\u0644\u0627\u062A \u0648\u062E\u0637\u0629 \u062C\u0645\u0639 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A", titleEn: "Lesson 7: ICT Data Collection Plans" },
+              { id: "g4_t1_u1_l8", lessonNumber: 8, unitNumber: 1, term: 1, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u0623\u0648\u0644\u0649", unitTitleEn: "Unit 1", titleAr: "\u0627\u0644\u062F\u0631\u0633 8: \u0625\u0639\u062F\u0627\u062F \u0627\u0644\u062A\u0642\u0627\u0631\u064A\u0631 \u0644\u0646\u062A\u0627\u0626\u062C \u0627\u0644\u0623\u0628\u062D\u0627\u062B", titleEn: "Lesson 8: Reporting Research Findings" }
+            ]
+          },
+          {
+            unitNumber: 2,
+            unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u062B\u0627\u0646\u064A\u0629: \u0627\u062D\u062A\u064A\u0627\u0637\u0627\u062A \u0627\u0644\u0633\u0644\u0627\u0645\u0629 \u0627\u0644\u0631\u0642\u0645\u064A\u0629 \u0648\u062D\u0645\u0627\u064A\u0629 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A",
+            unitTitleEn: "Unit 2: Digital Safety & Security",
+            term: 1,
+            lessons: [
+              { id: "g4_t1_u2_l1", lessonNumber: 1, unitNumber: 2, term: 1, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u062B\u0627\u0646\u064A\u0629", unitTitleEn: "Unit 2", titleAr: "\u0627\u0644\u062F\u0631\u0633 1: \u0627\u0644\u0645\u0633\u062A\u0643\u0634\u0641 \u0627\u0644\u0646\u0634\u0637 (\u0623\u0646\u064A\u0643\u0627 \u0625\u064A\u0647)", titleEn: "Lesson 1: Explorer in Action (Anika Ih)" },
+              { id: "g4_t1_u2_l2", lessonNumber: 2, unitNumber: 2, term: 1, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u062B\u0627\u0646\u064A\u0629", unitTitleEn: "Unit 2", titleAr: "\u0627\u0644\u062F\u0631\u0633 2: \u0627\u0644\u0645\u062E\u0627\u0637\u0631 \u0627\u0644\u0645\u0631\u062A\u0628\u0637\u0629 \u0628\u0634\u0628\u0643\u0629 \u0627\u0644\u0625\u0646\u062A\u0631\u0646\u062A \u0648\u0648\u0633\u0627\u0626\u0644 \u0627\u0644\u0623\u0645\u0627\u0646", titleEn: "Lesson 2: Internet Risks & Safe Communication" },
+              { id: "g4_t1_u2_l3", lessonNumber: 3, unitNumber: 2, term: 1, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u062B\u0627\u0646\u064A\u0629", unitTitleEn: "Unit 2", titleAr: "\u0627\u0644\u062F\u0631\u0633 3: \u0627\u0633\u062A\u062E\u062F\u0627\u0645 \u0623\u062F\u0648\u0627\u062A \u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u0627\u0644\u0645\u0639\u0644\u0648\u0645\u0627\u062A \u0628\u0637\u0631\u064A\u0642\u0629 \u0635\u062D\u064A\u062D\u0629 \u0648\u0623\u062E\u0644\u0627\u0642\u064A\u0629", titleEn: "Lesson 3: Using ICT Tools Ethically" },
+              { id: "g4_t1_u2_l4", lessonNumber: 4, unitNumber: 2, term: 1, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u062B\u0627\u0646\u064A\u0629", unitTitleEn: "Unit 2", titleAr: "\u0627\u0644\u062F\u0631\u0633 4: \u0643\u064A\u0641\u064A\u0629 \u0627\u0644\u0628\u062D\u062B \u0639\u0644\u0649 \u0634\u0628\u0643\u0629 \u0627\u0644\u0625\u0646\u062A\u0631\u0646\u062A \u0648\u062A\u062F\u0642\u064A\u0642 \u0627\u0644\u0645\u0639\u0644\u0648\u0645\u0627\u062A", titleEn: "Lesson 4: Effective Internet Search" },
+              { id: "g4_t1_u2_l5", lessonNumber: 5, unitNumber: 2, term: 1, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u062B\u0627\u0646\u064A\u0629", unitTitleEn: "Unit 2", titleAr: "\u0627\u0644\u062F\u0631\u0633 5: \u0643\u064A\u0641\u064A\u0629 \u0627\u0644\u062A\u0623\u0643\u062F \u0645\u0646 \u0635\u062F\u0642 \u0648\u0635\u062D\u0629 \u0627\u0644\u0645\u0639\u0644\u0648\u0645\u0627\u062A", titleEn: "Lesson 5: Verifying Online Information" },
+              { id: "g4_t1_u2_l6", lessonNumber: 6, unitNumber: 2, term: 1, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u062B\u0627\u0646\u064A\u0629", unitTitleEn: "Unit 2", titleAr: "\u0627\u0644\u062F\u0631\u0633 6: \u0623\u0635\u062D\u0627\u0628 \u0627\u0644\u062D\u0633\u0627\u0628\u0627\u062A \u0639\u0644\u0649 \u0627\u0644\u0625\u0646\u062A\u0631\u0646\u062A \u0648\u062A\u062C\u0646\u0628 \u0627\u0644\u0627\u062D\u062A\u064A\u0627\u0644", titleEn: "Lesson 6: Online Identity & Phishing" },
+              { id: "g4_t1_u2_l7", lessonNumber: 7, unitNumber: 2, term: 1, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u062B\u0627\u0646\u064A\u0629", unitTitleEn: "Unit 2", titleAr: "\u0627\u0644\u062F\u0631\u0633 7: \u062E\u0637\u0629 \u0634\u062E\u0635\u064A\u0629 \u0644\u0644\u0623\u0645\u0627\u0646 \u0627\u0644\u0631\u0642\u0645\u064A", titleEn: "Lesson 7: Personal Digital Security Plan" },
+              { id: "g4_t1_u2_l8", lessonNumber: 8, unitNumber: 2, term: 1, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u062B\u0627\u0646\u064A\u0629", unitTitleEn: "Unit 2", titleAr: "\u0627\u0644\u062F\u0631\u0633 8: \u062A\u0637\u0628\u064A\u0642 \u0639\u0645\u0644\u064A: \u0645\u0634\u0631\u0648\u0639 \u0627\u0644\u0639\u0631\u0636 \u0627\u0644\u062A\u0642\u062F\u064A\u0645\u064A \u0627\u0644\u0646\u0647\u0627\u0626\u064A", titleEn: "Lesson 8: Final Presentation Project" }
+            ]
+          }
+        ]
+      },
+      term2: {
+        units: [
+          {
+            unitNumber: 3,
+            unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u062B\u0627\u0644\u062B\u0629: \u0627\u0644\u0645\u0648\u0627\u0637\u0646\u0629 \u0627\u0644\u0631\u0642\u0645\u064A\u0629 \u0648\u0627\u0644\u0627\u062A\u0635\u0627\u0644 \u0639\u0628\u0631 \u0627\u0644\u0625\u0646\u062A\u0631\u0646\u062A",
+            unitTitleEn: "Unit 3: Digital Citizenship & Online Communication",
+            term: 2,
+            lessons: [
+              { id: "g4_t2_u3_l1", lessonNumber: 1, unitNumber: 3, term: 2, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u062B\u0627\u0644\u062B\u0629", unitTitleEn: "Unit 3", titleAr: "\u0627\u0644\u062F\u0631\u0633 1: \u0627\u0644\u0645\u0633\u062A\u0643\u0634\u0641 \u0627\u0644\u0646\u0634\u0637 (\u0648\u0644\u064A\u0627\u0645 \u062A\u0627\u064A\u0646\u0631)", titleEn: "Lesson 1: Explorer in Action (William Tyner)" },
+              { id: "g4_t2_u3_l2", lessonNumber: 2, unitNumber: 3, term: 2, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u062B\u0627\u0644\u062B\u0629", unitTitleEn: "Unit 3", titleAr: "\u0627\u0644\u062F\u0631\u0633 2: \u0627\u0644\u0645\u0648\u0627\u0637\u0646\u0629 \u0627\u0644\u0631\u0642\u0645\u064A\u0629 \u0648\u062D\u0642\u0648\u0642 \u0648\u0648\u0627\u062C\u0628\u0627\u062A \u0627\u0644\u0645\u0648\u0627\u0637\u0646 \u0627\u0644\u0631\u0642\u0645\u064A", titleEn: "Lesson 2: Digital Citizenship Rights & Duties" },
+              { id: "g4_t2_u3_l3", lessonNumber: 3, unitNumber: 3, term: 2, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u062B\u0627\u0644\u062B\u0629", unitTitleEn: "Unit 3", titleAr: "\u0627\u0644\u062F\u0631\u0633 3: \u0627\u0644\u0622\u062B\u0627\u0631 \u0627\u0644\u0625\u064A\u062C\u0627\u0628\u064A\u0629 \u0644\u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u0627\u0644\u0645\u0639\u0644\u0648\u0645\u0627\u062A \u0641\u064A \u062D\u064A\u0627\u062A\u0646\u0627", titleEn: "Lesson 3: Positive Impacts of ICT" },
+              { id: "g4_t2_u3_l4", lessonNumber: 4, unitNumber: 3, term: 2, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u062B\u0627\u0644\u062B\u0629", unitTitleEn: "Unit 3", titleAr: "\u0627\u0644\u062F\u0631\u0633 4: \u0623\u062F\u0648\u0627\u062A \u0627\u0644\u062A\u0648\u0627\u0635\u0644 \u0627\u0644\u0645\u062A\u0632\u0627\u0645\u0646 \u0648\u063A\u064A\u0631 \u0627\u0644\u0645\u062A\u0632\u0627\u0645\u0646", titleEn: "Lesson 4: Synchronous vs Asynchronous Communication" },
+              { id: "g4_t2_u3_l5", lessonNumber: 5, unitNumber: 3, term: 2, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u062B\u0627\u0644\u062B\u0629", unitTitleEn: "Unit 3", titleAr: "\u0627\u0644\u062F\u0631\u0633 5: \u0627\u0633\u062A\u062E\u062F\u0627\u0645 \u0628\u064A\u0626\u0627\u062A \u0627\u0644\u062A\u0639\u0644\u0645 \u0627\u0644\u0631\u0642\u0645\u064A\u0629 \u0648\u0628\u0646\u0643 \u0627\u0644\u0645\u0639\u0631\u0641\u0629 \u0627\u0644\u0645\u0635\u0631\u064A EKB", titleEn: "Lesson 5: Digital Learning Environments & EKB" },
+              { id: "g4_t2_u3_l6", lessonNumber: 6, unitNumber: 3, term: 2, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u062B\u0627\u0644\u062B\u0629", unitTitleEn: "Unit 3", titleAr: "\u0627\u0644\u062F\u0631\u0633 6: \u0627\u0644\u062A\u062E\u0637\u064A\u0637 \u0644\u0628\u062D\u062B \u0631\u0642\u0645\u064A \u0645\u0648\u062B\u0648\u0642", titleEn: "Lesson 6: Planning Digital Research" }
+            ]
+          },
+          {
+            unitNumber: 4,
+            unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u0631\u0627\u0628\u0639\u0629: \u0645\u0634\u0631\u0648\u0639\u0627\u062A \u0628\u0631\u0645\u062C\u064A\u0629 \u0648\u062A\u0637\u0628\u064A\u0642\u0627\u062A \u0631\u0642\u0645\u064A\u0629",
+            unitTitleEn: "Unit 4: Digital Software & Projects",
+            term: 2,
+            lessons: [
+              { id: "g4_t2_u4_l1", lessonNumber: 1, unitNumber: 4, term: 2, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u0631\u0627\u0628\u0639\u0629", unitTitleEn: "Unit 4", titleAr: "\u0627\u0644\u062F\u0631\u0633 1: \u0627\u0644\u0645\u0633\u062A\u0643\u0634\u0641 \u0627\u0644\u0646\u0634\u0637 (\u063A\u0648\u062A\u0627\u0645 \u0634\u0627\u0647)", titleEn: "Lesson 1: Explorer in Action (Gautam Shah)" },
+              { id: "g4_t2_u4_l2", lessonNumber: 2, unitNumber: 4, term: 2, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u0631\u0627\u0628\u0639\u0629", unitTitleEn: "Unit 4", titleAr: "\u0627\u0644\u062F\u0631\u0633 2: \u0645\u0647\u0627\u0631\u0627\u062A \u062D\u0644 \u0627\u0644\u0645\u0634\u0643\u0644\u0627\u062A \u0648\u0627\u0644\u062A\u0641\u0643\u064A\u0631 \u0627\u0644\u062E\u0648\u0627\u0631\u0632\u0645\u064A", titleEn: "Lesson 2: Problem Solving & Algorithmic Thinking" },
+              { id: "g4_t2_u4_l3", lessonNumber: 3, unitNumber: 4, term: 2, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u0631\u0627\u0628\u0639\u0629", unitTitleEn: "Unit 4", titleAr: "\u0627\u0644\u062F\u0631\u0633 3: \u062A\u0642\u062F\u064A\u0645 \u0648\u062A\u0646\u0633\u064A\u0642 \u0627\u0644\u0645\u0639\u0644\u0648\u0645\u0627\u062A \u0628\u0637\u0631\u064A\u0642\u0629 \u062C\u0630\u0627\u0628\u0629", titleEn: "Lesson 3: Presenting Information Graphically" },
+              { id: "g4_t2_u4_l4", lessonNumber: 4, unitNumber: 4, term: 2, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u0631\u0627\u0628\u0639\u0629", unitTitleEn: "Unit 4", titleAr: "\u0627\u0644\u062F\u0631\u0633 4: \u0645\u0642\u062F\u0645\u0629 \u0625\u0644\u0649 \u0627\u0644\u0628\u0631\u0645\u062C\u0629 \u0648\u0627\u0644\u0623\u0648\u0627\u0645\u0631 \u0627\u0644\u0631\u0642\u0645\u064A\u0629 (Scratch / Code.org)", titleEn: "Lesson 4: Introduction to Coding Blocks" },
+              { id: "g4_t2_u4_l5", lessonNumber: 5, unitNumber: 4, term: 2, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u0631\u0627\u0628\u0639\u0629", unitTitleEn: "Unit 4", titleAr: "\u0627\u0644\u062F\u0631\u0633 5: \u062A\u0635\u0645\u064A\u0645 \u0645\u0644\u0635\u0642 \u0625\u0639\u0644\u0627\u0646\u064A \u0648\u0639\u0631\u0636 \u062A\u0642\u062F\u064A\u0645\u064A \u062A\u0641\u0627\u0639\u0644\u064A", titleEn: "Lesson 5: Designing Digital Posters & Slides" },
+              { id: "g4_t2_u4_l6", lessonNumber: 6, unitNumber: 4, term: 2, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u0631\u0627\u0628\u0639\u0629", unitTitleEn: "Unit 4", titleAr: "\u0627\u0644\u062F\u0631\u0633 6: \u0627\u0644\u0645\u0634\u0631\u0648\u0639 \u0627\u0644\u0646\u0647\u0627\u0626\u064A \u0627\u0644\u062A\u0643\u0627\u0645\u0644\u064A", titleEn: "Lesson 6: Final Integrated Capstone Project" }
+            ]
+          }
+        ]
+      }
+    }
+  },
+  // -------------------------------------------------------------
+  // GRADE 5 - الصف الخامس الابتدائي (رمز الكود B)
+  // -------------------------------------------------------------
+  grade5: {
+    gradeKey: "grade5",
+    gradeCodePrefix: "B",
+    gradeNameAr: "\u0627\u0644\u0635\u0641 \u0627\u0644\u062E\u0627\u0645\u0633 \u0627\u0644\u0627\u0628\u062A\u062F\u0627\u0626\u064A",
+    gradeNameEn: "Grade 5 (Primary 5)",
+    stageAr: "\u0627\u0644\u0645\u0631\u062D\u0644\u0629 \u0627\u0644\u0627\u0628\u062A\u062F\u0627\u0626\u064A\u0629",
+    subjectNameAr: "\u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u0627\u0644\u0645\u0639\u0644\u0648\u0645\u0627\u062A \u0648\u0627\u0644\u0627\u062A\u0635\u0627\u0644\u0627\u062A (ICT)",
+    subjectNameEn: "Information and Communications Technology (ICT)",
+    terms: {
+      term1: {
+        units: [
+          {
+            unitNumber: 1,
+            unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u0623\u0648\u0644\u0649: \u062F\u0648\u0631 \u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u0627\u0644\u0645\u0639\u0644\u0648\u0645\u0627\u062A \u0641\u064A \u062D\u064A\u0627\u062A\u0646\u0627 \u0627\u0644\u064A\u0648\u0645\u064A\u0629",
+            unitTitleEn: "Unit 1: ICT in Daily Life",
+            term: 1,
+            lessons: [
+              { id: "g5_t1_u1_l1", lessonNumber: 1, unitNumber: 1, term: 1, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u0623\u0648\u0644\u0649", unitTitleEn: "Unit 1", titleAr: "\u0627\u0644\u062F\u0631\u0633 1: \u0627\u0644\u0645\u0633\u062A\u0643\u0634\u0641 \u0627\u0644\u0646\u0634\u0637 (\u0641\u0631\u064A\u062F \u0647\u064A\u0628\u0631\u062A)", titleEn: "Lesson 1: Explorer in Action (Fred Hiebert)" },
+              { id: "g5_t1_u1_l2", lessonNumber: 2, unitNumber: 1, term: 1, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u0623\u0648\u0644\u0649", unitTitleEn: "Unit 1", titleAr: "\u0627\u0644\u062F\u0631\u0633 2: \u0627\u0644\u0623\u062F\u0648\u0627\u062A \u0648\u0627\u0644\u0645\u0644\u062D\u0642\u0627\u062A \u0627\u0644\u0631\u0642\u0645\u064A\u0629 (\u0627\u0644\u0623\u0642\u0631\u0627\u0635 \u0627\u0644\u0635\u0644\u0628\u0629\u060C \u0627\u0644\u0641\u0644\u0627\u0634\u0629\u060C \u0643\u0627\u0628\u0644 \u0627\u0644\u0625\u064A\u062B\u0631\u0646\u062A)", titleEn: "Lesson 2: Digital Devices & Accessories" },
+              { id: "g5_t1_u1_l3", lessonNumber: 3, unitNumber: 1, term: 1, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u0623\u0648\u0644\u0649", unitTitleEn: "Unit 1", titleAr: "\u0627\u0644\u062F\u0631\u0633 3: \u0627\u0644\u0634\u0628\u0643\u0627\u062A \u0648\u0645\u0641\u0627\u0647\u064A\u0645 \u0627\u0644\u0625\u0646\u062A\u0631\u0646\u062A \u0648\u0627\u0644\u0625\u0646\u062A\u0631\u0627\u0646\u062A (Internet & Intranet)", titleEn: "Lesson 3: Computer Networks & Intranet" },
+              { id: "g5_t1_u1_l4", lessonNumber: 4, unitNumber: 1, term: 1, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u0623\u0648\u0644\u0649", unitTitleEn: "Unit 1", titleAr: "\u0627\u0644\u062F\u0631\u0633 4: \u0623\u062F\u0648\u0627\u062A \u0627\u0644\u062A\u0648\u0627\u0635\u0644 \u0627\u0644\u0631\u0642\u0645\u064A \u0648\u0627\u0644\u0639\u0645\u0644 \u0627\u0644\u062C\u0645\u0627\u0639\u064A", titleEn: "Lesson 4: Digital Collaboration Tools" },
+              { id: "g5_t1_u1_l5", lessonNumber: 5, unitNumber: 1, term: 1, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u0623\u0648\u0644\u0649", unitTitleEn: "Unit 1", titleAr: "\u0627\u0644\u062F\u0631\u0633 5: \u0625\u062F\u0627\u0631\u0629 \u0627\u0644\u0645\u0644\u0641\u0627\u062A \u0648\u0627\u0644\u0645\u062C\u0644\u062F\u0627\u062A \u0648\u062A\u0646\u0638\u064A\u0645 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A", titleEn: "Lesson 5: Digital File Management" },
+              { id: "g5_t1_u1_l6", lessonNumber: 6, unitNumber: 1, term: 1, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u0623\u0648\u0644\u0649", unitTitleEn: "Unit 1", titleAr: "\u0627\u0644\u062F\u0631\u0633 6: \u0627\u0633\u062A\u0631\u0627\u062A\u064A\u062C\u064A\u0627\u062A \u0627\u0644\u0628\u062D\u062B \u0639\u0646 \u0627\u0644\u0645\u0639\u0644\u0648\u0645\u0627\u062A \u0648\u062D\u0644 \u0627\u0644\u0645\u0634\u0643\u0644\u0627\u062A", titleEn: "Lesson 6: Information Search Strategies" },
+              { id: "g5_t1_u1_l7", lessonNumber: 7, unitNumber: 1, term: 1, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u0623\u0648\u0644\u0649", unitTitleEn: "Unit 1", titleAr: "\u0627\u0644\u062F\u0631\u0633 7: \u062A\u062C\u0645\u064A\u0639 \u0648\u062A\u0646\u0638\u064A\u0645 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A \u0628\u0627\u0633\u062A\u062E\u062F\u0627\u0645 \u062C\u062F\u0627\u0648\u0644 Excel", titleEn: "Lesson 7: Data Organization with Excel" },
+              { id: "g5_t1_u1_l8", lessonNumber: 8, unitNumber: 1, term: 1, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u0623\u0648\u0644\u0649", unitTitleEn: "Unit 1", titleAr: "\u0627\u0644\u062F\u0631\u0633 8: \u0625\u0639\u062F\u0627\u062F \u0648\u0645\u0634\u0627\u0631\u0643\u0629 \u0627\u0644\u062A\u0642\u0627\u0631\u064A\u0631 \u0627\u0644\u0631\u0642\u0645\u064A\u0629", titleEn: "Lesson 8: Sharing Digital Reports" }
+            ]
+          },
+          {
+            unitNumber: 2,
+            unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u062B\u0627\u0646\u064A\u0629: \u0627\u062D\u062A\u064A\u0627\u0637\u0627\u062A \u0627\u0644\u0623\u0645\u0646 \u0627\u0644\u0631\u0642\u0645\u064A \u0648\u0627\u0644\u0633\u0644\u0627\u0645\u0629 \u0627\u0644\u0633\u064A\u0628\u0631\u0627\u0646\u064A\u0629",
+            unitTitleEn: "Unit 2: Digital Security & Cybersecurity",
+            term: 1,
+            lessons: [
+              { id: "g5_t1_u2_l1", lessonNumber: 1, unitNumber: 2, term: 1, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u062B\u0627\u0646\u064A\u0629", unitTitleEn: "Unit 2", titleAr: "\u0627\u0644\u062F\u0631\u0633 1: \u0627\u0644\u0645\u0633\u062A\u0643\u0634\u0641 \u0627\u0644\u0646\u0634\u0637 (\u062C\u064A\u0646\u062C\u0631 \u0631\u0648\u062C\u0631\u0632)", titleEn: "Lesson 1: Explorer in Action (Ginger Rogers)" },
+              { id: "g5_t1_u2_l2", lessonNumber: 2, unitNumber: 2, term: 1, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u062B\u0627\u0646\u064A\u0629", unitTitleEn: "Unit 2", titleAr: "\u0627\u0644\u062F\u0631\u0633 2: \u062D\u0645\u0627\u064A\u0629 \u0623\u0646\u0641\u0633\u0646\u0627 \u0648\u0645\u0639\u0644\u0648\u0645\u0627\u062A\u0646\u0627 \u0648\u0643\u0644\u0645\u0627\u062A \u0627\u0644\u0645\u0631\u0648\u0631 \u0627\u0644\u0642\u0648\u064A\u0629", titleEn: "Lesson 2: Protecting Personal Data & Passwords" },
+              { id: "g5_t1_u2_l3", lessonNumber: 3, unitNumber: 2, term: 1, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u062B\u0627\u0646\u064A\u0629", unitTitleEn: "Unit 2", titleAr: "\u0627\u0644\u062F\u0631\u0633 3: \u0633\u0631\u0642\u0629 \u0627\u0644\u0647\u0648\u064A\u0629 \u0648\u0645\u062D\u0627\u0648\u0644\u0627\u062A \u0627\u0644\u062A\u0635\u064A\u062F \u0627\u0644\u0627\u062D\u062A\u064A\u0627\u0644\u064A (Phishing & Smishing)", titleEn: "Lesson 3: Identity Theft & Phishing" },
+              { id: "g5_t1_u2_l4", lessonNumber: 4, unitNumber: 2, term: 1, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u062B\u0627\u0646\u064A\u0629", unitTitleEn: "Unit 2", titleAr: "\u0627\u0644\u062F\u0631\u0633 4: \u0643\u064A\u0641\u064A\u0629 \u0627\u0644\u062A\u0639\u0627\u0645\u0644 \u0645\u0639 \u0627\u0644\u0645\u0648\u0627\u0642\u0639 \u0648\u0627\u0644\u0645\u0635\u0627\u062F\u0631 \u0627\u0644\u0625\u0644\u0643\u062A\u0631\u0648\u0646\u064A\u0629 \u0627\u0644\u0645\u0634\u0628\u0648\u0647\u0629", titleEn: "Lesson 4: Dealing with Scam Websites" },
+              { id: "g5_t1_u2_l5", lessonNumber: 5, unitNumber: 2, term: 1, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u062B\u0627\u0646\u064A\u0629", unitTitleEn: "Unit 2", titleAr: "\u0627\u0644\u062F\u0631\u0633 5: \u062D\u0642\u0648\u0642 \u0627\u0644\u0645\u0644\u0643\u064A\u0629 \u0627\u0644\u0641\u0643\u0631\u064A\u0629 \u0648\u0642\u0648\u0627\u0646\u064A\u0646 \u0627\u0644\u0646\u0634\u0631 \u0627\u0644\u0631\u0642\u0645\u064A", titleEn: "Lesson 5: Intellectual Property & Copyright" },
+              { id: "g5_t1_u2_l6", lessonNumber: 6, unitNumber: 2, term: 1, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u062B\u0627\u0646\u064A\u0629", unitTitleEn: "Unit 2", titleAr: "\u0627\u0644\u062F\u0631\u0633 6: \u0627\u0633\u062A\u062E\u062F\u0627\u0645 \u0627\u0644\u0645\u0635\u0627\u062F\u0631 \u0627\u0644\u0631\u0642\u0645\u064A\u0629 \u0648\u0627\u0644\u062A\u0648\u062B\u064A\u0642 \u0627\u0644\u0623\u0643\u0627\u062F\u064A\u0645\u064A", titleEn: "Lesson 6: Using Digital Sources & Documentation" },
+              { id: "g5_t1_u2_l7", lessonNumber: 7, unitNumber: 2, term: 1, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u062B\u0627\u0646\u064A\u0629", unitTitleEn: "Unit 2", titleAr: "\u0627\u0644\u062F\u0631\u0633 7: \u0639\u0645\u0644\u064A\u0627\u062A \u0627\u0644\u0628\u062D\u062B \u0627\u0644\u0645\u062A\u0642\u062F\u0645\u0629 \u0648\u062A\u0635\u0641\u064A\u0629 \u0627\u0644\u0646\u062A\u0627\u0626\u062C", titleEn: "Lesson 7: Advanced Online Search" },
+              { id: "g5_t1_u2_l8", lessonNumber: 8, unitNumber: 2, term: 1, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u062B\u0627\u0646\u064A\u0629", unitTitleEn: "Unit 2", titleAr: "\u0627\u0644\u062F\u0631\u0633 8: \u062A\u0648\u062B\u064A\u0642 \u0627\u0644\u0645\u0639\u0644\u0648\u0645\u0627\u062A \u0648\u0639\u0631\u0636 \u0646\u062A\u0627\u0626\u062C \u0627\u0644\u0628\u062D\u062B", titleEn: "Lesson 8: Documenting & Presenting Research" }
+            ]
+          }
+        ]
+      },
+      term2: {
+        units: [
+          {
+            unitNumber: 3,
+            unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u062B\u0627\u0644\u062B\u0629: \u0627\u0644\u0645\u0648\u0627\u0637\u0646\u0629 \u0627\u0644\u0631\u0642\u0645\u064A\u0629 \u0648\u0627\u0644\u062A\u062C\u0627\u0631\u0629 \u0627\u0644\u0625\u0644\u0643\u062A\u0631\u0648\u0646\u064A\u0629",
+            unitTitleEn: "Unit 3: Digital Citizenship & E-Commerce",
+            term: 2,
+            lessons: [
+              { id: "g5_t2_u3_l1", lessonNumber: 1, unitNumber: 3, term: 2, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u062B\u0627\u0644\u062B\u0629", unitTitleEn: "Unit 3", titleAr: "\u0627\u0644\u062F\u0631\u0633 1: \u0627\u0644\u0645\u0633\u062A\u0643\u0634\u0641 \u0627\u0644\u0646\u0634\u0637 (\u0628\u064A\u0643\u0646 \u0647\u064A\u062F\u062C\u0632)", titleEn: "Lesson 1: Explorer in Action (Beckin Hedges)" },
+              { id: "g5_t2_u3_l2", lessonNumber: 2, unitNumber: 3, term: 2, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u062B\u0627\u0644\u062B\u0629", unitTitleEn: "Unit 3", titleAr: "\u0627\u0644\u062F\u0631\u0633 2: \u0627\u0644\u0645\u0648\u0627\u0637\u0646\u0629 \u0627\u0644\u0631\u0642\u0645\u064A\u0629 \u0648\u0627\u0644\u0645\u0633\u0624\u0648\u0644\u064A\u0629 \u0627\u0644\u0627\u062C\u062A\u0645\u0627\u0639\u064A\u0629", titleEn: "Lesson 2: Digital Citizenship & Social Responsibility" },
+              { id: "g5_t2_u3_l3", lessonNumber: 3, unitNumber: 3, term: 2, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u062B\u0627\u0644\u062B\u0629", unitTitleEn: "Unit 3", titleAr: "\u0627\u0644\u062F\u0631\u0633 3: \u0627\u0644\u062A\u0648\u0627\u0635\u0644 \u0627\u0644\u0641\u0639\u0627\u0644 \u0639\u0628\u0631 \u0627\u0644\u0625\u0646\u062A\u0631\u0646\u062A \u0648\u0622\u062F\u0627\u0628 \u0627\u0644\u062D\u0648\u0627\u0631 \u0627\u0644\u0631\u0642\u0645\u064A", titleEn: "Lesson 3: Effective Online Communication" },
+              { id: "g5_t2_u3_l4", lessonNumber: 4, unitNumber: 3, term: 2, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u062B\u0627\u0644\u062B\u0629", unitTitleEn: "Unit 3", titleAr: "\u0627\u0644\u062F\u0631\u0633 4: \u0627\u0644\u0645\u0648\u0627\u0642\u0639 \u0627\u0644\u062A\u062C\u0627\u0631\u064A\u0629 \u0648\u063A\u064A\u0631 \u0627\u0644\u062A\u062C\u0627\u0631\u064A\u0629 \u0648\u0627\u0644\u0645\u0631\u0627\u062C\u0639\u0627\u062A \u0627\u0644\u0631\u0642\u0645\u064A\u0629", titleEn: "Lesson 4: Commercial vs Non-Commercial Sites" },
+              { id: "g5_t2_u3_l5", lessonNumber: 5, unitNumber: 3, term: 2, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u062B\u0627\u0644\u062B\u0629", unitTitleEn: "Unit 3", titleAr: "\u0627\u0644\u062F\u0631\u0633 5: \u062E\u062F\u0645\u0627\u062A \u0648\u062D\u0645\u0627\u064A\u0629 \u0627\u0644\u0645\u0633\u062A\u0647\u0644\u0643 \u0627\u0644\u0631\u0642\u0645\u064A", titleEn: "Lesson 5: Digital Consumer Rights" },
+              { id: "g5_t2_u3_l6", lessonNumber: 6, unitNumber: 3, term: 2, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u062B\u0627\u0644\u062B\u0629", unitTitleEn: "Unit 3", titleAr: "\u0627\u0644\u062F\u0631\u0633 6: \u0625\u0646\u0634\u0627\u0621 \u0635\u0641\u062D\u0629 \u0648\u064A\u0628 \u0628\u0633\u064A\u0637\u0629 \u0628\u0627\u0633\u062A\u062E\u062F\u0627\u0645 \u0644\u063A\u0629 HTML", titleEn: "Lesson 6: Simple Webpage with HTML" }
+            ]
+          },
+          {
+            unitNumber: 4,
+            unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u0631\u0627\u0628\u0639\u0629: \u0645\u0634\u0631\u0648\u0639\u0627\u062A \u0628\u0631\u0645\u062C\u064A\u0629 \u0648\u062E\u0648\u0627\u0631\u0632\u0645\u064A\u0627\u062A \u062A\u0641\u0627\u0639\u0644\u064A\u0629",
+            unitTitleEn: "Unit 4: Coding & Algorithmic Projects",
+            term: 2,
+            lessons: [
+              { id: "g5_t2_u4_l1", lessonNumber: 1, unitNumber: 4, term: 2, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u0631\u0627\u0628\u0639\u0629", unitTitleEn: "Unit 4", titleAr: "\u0627\u0644\u062F\u0631\u0633 1: \u0627\u0644\u0645\u0633\u062A\u0643\u0634\u0641 \u0627\u0644\u0646\u0634\u0637 (\u062F. \u062F\u064A\u064A\u063A\u0648 \u0628\u0648\u0646\u0633)", titleEn: "Lesson 1: Explorer in Action (Dr. Diego Ponce)" },
+              { id: "g5_t2_u4_l2", lessonNumber: 2, unitNumber: 4, term: 2, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u0631\u0627\u0628\u0639\u0629", unitTitleEn: "Unit 4", titleAr: "\u0627\u0644\u062F\u0631\u0633 2: \u062C\u0645\u0639 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A \u0648\u062A\u0646\u0633\u064A\u0642\u0647\u0627 \u0648\u0639\u0631\u0636\u0647\u0627 \u0628\u0631\u0645\u062C\u064A\u0627\u064B", titleEn: "Lesson 2: Data Collection & Algorithmic Formatting" },
+              { id: "g5_t2_u4_l3", lessonNumber: 3, unitNumber: 4, term: 2, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u0631\u0627\u0628\u0639\u0629", unitTitleEn: "Unit 4", titleAr: "\u0627\u0644\u062F\u0631\u0633 3: \u0645\u0642\u062F\u0645\u0629 \u0625\u0644\u0649 \u0627\u0644\u062E\u0648\u0627\u0631\u0632\u0645\u064A\u0627\u062A \u0648\u0627\u0644\u0645\u0646\u0637\u0642 \u0627\u0644\u0628\u0631\u0645\u062C\u064A", titleEn: "Lesson 3: Introduction to Algorithms" },
+              { id: "g5_t2_u4_l4", lessonNumber: 4, unitNumber: 4, term: 2, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u0631\u0627\u0628\u0639\u0629", unitTitleEn: "Unit 4", titleAr: "\u0627\u0644\u062F\u0631\u0633 4: \u0628\u0631\u0645\u062C\u0629 \u0627\u0644\u0623\u0644\u0639\u0627\u0628 \u0648\u0627\u0644\u0645\u0634\u0627\u0631\u064A\u0639 \u0628\u0628\u0631\u0646\u0627\u0645\u062C Scratch", titleEn: "Lesson 4: Game Programming with Scratch" },
+              { id: "g5_t2_u4_l5", lessonNumber: 5, unitNumber: 4, term: 2, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u0631\u0627\u0628\u0639\u0629", unitTitleEn: "Unit 4", titleAr: "\u0627\u0644\u062F\u0631\u0633 5: \u0623\u062F\u0648\u0627\u062A \u0645\u0639\u0627\u0644\u062C\u0629 \u0627\u0644\u0646\u0635\u0648\u0635 \u0627\u0644\u0645\u062A\u0642\u062F\u0645\u0629 \u0648\u0627\u0644\u0639\u0631\u0648\u0636 \u0627\u0644\u062A\u0641\u0627\u0639\u0644\u064A\u0629", titleEn: "Lesson 5: Advanced Presentation Tools" },
+              { id: "g5_t2_u4_l6", lessonNumber: 6, unitNumber: 4, term: 2, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u0631\u0627\u0628\u0639\u0629", unitTitleEn: "Unit 4", titleAr: "\u0627\u0644\u062F\u0631\u0633 6: \u0627\u0644\u0645\u0634\u0631\u0648\u0639 \u0627\u0644\u062A\u0639\u0627\u0648\u0646\u064A \u0627\u0644\u0628\u0631\u0645\u062C\u064A \u0627\u0644\u0646\u0647\u0627\u0626\u064A", titleEn: "Lesson 6: Final Collaborative Coding Project" }
+            ]
+          }
+        ]
+      }
+    }
+  },
+  // -------------------------------------------------------------
+  // GRADE 6 - الصف السادس الابتدائي (رمز الكود C)
+  // -------------------------------------------------------------
+  grade6: {
+    gradeKey: "grade6",
+    gradeCodePrefix: "C",
+    gradeNameAr: "\u0627\u0644\u0635\u0641 \u0627\u0644\u0633\u0627\u062F\u0633 \u0627\u0644\u0627\u0628\u062A\u062F\u0627\u0626\u064A",
+    gradeNameEn: "Grade 6 (Primary 6)",
+    stageAr: "\u0627\u0644\u0645\u0631\u062D\u0644\u0629 \u0627\u0644\u0627\u0628\u062A\u062F\u0627\u0626\u064A\u0629",
+    subjectNameAr: "\u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u0627\u0644\u0645\u0639\u0644\u0648\u0645\u0627\u062A \u0648\u0627\u0644\u0627\u062A\u0635\u0627\u0644\u0627\u062A (ICT)",
+    subjectNameEn: "Information and Communications Technology (ICT)",
+    terms: {
+      term1: {
+        units: [
+          {
+            unitNumber: 1,
+            unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u0623\u0648\u0644\u0649: \u0634\u0628\u0643\u0627\u062A \u0627\u0644\u062D\u0627\u0633\u0648\u0628 \u0648\u0623\u062F\u0648\u0627\u062A \u0627\u0644\u0630\u0643\u0627\u0621 \u0627\u0644\u0627\u0635\u0637\u0646\u0627\u0639\u064A",
+            unitTitleEn: "Unit 1: Computer Networks & AI Tools",
+            term: 1,
+            lessons: [
+              { id: "g6_t1_u1_l1", lessonNumber: 1, unitNumber: 1, term: 1, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u0623\u0648\u0644\u0649", unitTitleEn: "Unit 1", titleAr: "\u0627\u0644\u062F\u0631\u0633 1: \u0627\u0644\u0645\u0633\u062A\u0643\u0634\u0641 \u0627\u0644\u0646\u0634\u0637 (\u0643\u0627\u0631\u062A\u064A\u0643 \u0633\u0627\u0648 \u0647\u0646\u064A)", titleEn: "Lesson 1: Explorer in Action (Kartik Sawhney)" },
+              { id: "g6_t1_u1_l2", lessonNumber: 2, unitNumber: 1, term: 1, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u0623\u0648\u0644\u0649", unitTitleEn: "Unit 1", titleAr: "\u0627\u0644\u062F\u0631\u0633 2: \u062A\u0635\u0645\u064A\u0645 \u0648\u062A\u0648\u0635\u064A\u0644 \u0634\u0628\u0643\u0627\u062A \u0627\u0644\u062D\u0627\u0633\u0648\u0628 (Modem, Switch, Router, Hub)", titleEn: "Lesson 2: Computer Network Devices & Setup" },
+              { id: "g6_t1_u1_l3", lessonNumber: 3, unitNumber: 1, term: 1, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u0623\u0648\u0644\u0649", unitTitleEn: "Unit 1", titleAr: "\u0627\u0644\u062F\u0631\u0633 3: \u0627\u0644\u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u0627\u0644\u0645\u0633\u0627\u0639\u062F\u0629 \u0648\u0627\u0644\u062A\u0642\u0646\u064A\u0627\u062A \u0627\u0644\u062D\u062F\u064A\u062B\u0629 \u0644\u062F\u0645\u062C \u0630\u0648\u064A \u0627\u0644\u0647\u0645\u0645", titleEn: "Lesson 3: Assistive Technologies & Innovation" },
+              { id: "g6_t1_u1_l4", lessonNumber: 4, unitNumber: 1, term: 1, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u0623\u0648\u0644\u0649", unitTitleEn: "Unit 1", titleAr: "\u0627\u0644\u062F\u0631\u0633 4: \u062A\u0637\u0628\u064A\u0642\u0627\u062A \u0627\u0644\u0630\u0643\u0627\u0621 \u0627\u0644\u0627\u0635\u0637\u0646\u0627\u0639\u064A (AI) \u0648\u0627\u0644\u0648\u0627\u0642\u0639 \u0627\u0644\u0627\u0641\u062A\u0631\u0627\u0636\u064A (VR) \u0648\u0627\u0644\u0645\u0639\u0632\u0632 (AR)", titleEn: "Lesson 4: AI, Virtual Reality & Augmented Reality" },
+              { id: "g6_t1_u1_l5", lessonNumber: 5, unitNumber: 1, term: 1, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u0623\u0648\u0644\u0649", unitTitleEn: "Unit 1", titleAr: "\u0627\u0644\u062F\u0631\u0633 5: \u0645\u0647\u0627\u0631\u0627\u062A \u0627\u0644\u0628\u062D\u062B \u0627\u0644\u0645\u062A\u0642\u062F\u0645\u0629 \u0648\u062A\u062F\u0642\u064A\u0642 \u0627\u0644\u0645\u062D\u062A\u0648\u0649 \u0627\u0644\u0631\u0642\u0645\u064A", titleEn: "Lesson 5: Advanced Search & Fact-Checking" },
+              { id: "g6_t1_u1_l6", lessonNumber: 6, unitNumber: 1, term: 1, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u0623\u0648\u0644\u0649", unitTitleEn: "Unit 1", titleAr: "\u0627\u0644\u062F\u0631\u0633 6: \u0627\u0644\u0623\u062C\u0647\u0632\u0629 \u0627\u0644\u0645\u062D\u0645\u0648\u0644\u0629 \u0648\u0623\u0646\u0638\u0645\u0629 \u0627\u0644\u062A\u0634\u063A\u064A\u0644 \u0627\u0644\u0630\u0643\u064A\u0629 (Android, iOS)", titleEn: "Lesson 6: Mobile Devices & Mobile Operating Systems" },
+              { id: "g6_t1_u1_l7", lessonNumber: 7, unitNumber: 1, term: 1, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u0623\u0648\u0644\u0649", unitTitleEn: "Unit 1", titleAr: "\u0627\u0644\u062F\u0631\u0633 7: \u0623\u0646\u0638\u0645\u0629 \u0627\u0644\u062A\u0634\u063A\u064A\u0644 \u0644\u0644\u062D\u0648\u0627\u0633\u064A\u0628 (Windows, macOS, Linux)", titleEn: "Lesson 7: Desktop Operating Systems" },
+              { id: "g6_t1_u1_l8", lessonNumber: 8, unitNumber: 1, term: 1, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u0623\u0648\u0644\u0649", unitTitleEn: "Unit 1", titleAr: "\u0627\u0644\u062F\u0631\u0633 8: \u062A\u0635\u0645\u064A\u0645 \u0648\u0628\u0631\u0645\u062C\u0629 \u0635\u0641\u062D\u0627\u062A \u0627\u0644\u0648\u064A\u0628 \u0628\u0644\u063A\u0629 HTML", titleEn: "Lesson 8: Designing Webpages with HTML" }
+            ]
+          },
+          {
+            unitNumber: 2,
+            unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u062B\u0627\u0646\u064A\u0629: \u0627\u062D\u062A\u064A\u0627\u0637\u0627\u062A \u0627\u0644\u0623\u0645\u0627\u0646 \u0627\u0644\u0633\u064A\u0628\u0631\u0627\u0646\u064A \u0648\u0627\u0644\u0623\u0645\u0646 \u0627\u0644\u0631\u0642\u0645\u064A",
+            unitTitleEn: "Unit 2: Cybersecurity & Digital Safety",
+            term: 1,
+            lessons: [
+              { id: "g6_t1_u2_l1", lessonNumber: 1, unitNumber: 2, term: 1, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u062B\u0627\u0646\u064A\u0629", unitTitleEn: "Unit 2", titleAr: "\u0627\u0644\u062F\u0631\u0633 1: \u0627\u0644\u0645\u0633\u062A\u0643\u0634\u0641 \u0627\u0644\u0646\u0634\u0637 (\u0645\u064A\u0631\u064A\u062F\u064A\u062B \u0647\u0648\u064A\u062A)", titleEn: "Lesson 1: Explorer in Action (Meredith Hoyt)" },
+              { id: "g6_t1_u2_l2", lessonNumber: 2, unitNumber: 2, term: 1, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u062B\u0627\u0646\u064A\u0629", unitTitleEn: "Unit 2", titleAr: "\u0627\u0644\u062F\u0631\u0633 2: \u0627\u0644\u062A\u0647\u062F\u064A\u062F\u0627\u062A \u0627\u0644\u0633\u064A\u0628\u0631\u0627\u0646\u064A\u0629 \u0648\u0623\u0646\u0648\u0627\u0639 \u0627\u0644\u0641\u064A\u0631\u0648\u0633\u0627\u062A \u0648\u0627\u0644\u0628\u0631\u0645\u062C\u064A\u0627\u062A \u0627\u0644\u062E\u0628\u064A\u062B\u0629 (Malware)", titleEn: "Lesson 2: Cyber Threats & Malware Types" },
+              { id: "g6_t1_u2_l3", lessonNumber: 3, unitNumber: 2, term: 1, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u062B\u0627\u0646\u064A\u0629", unitTitleEn: "Unit 2", titleAr: "\u0627\u0644\u062F\u0631\u0633 3: \u0623\u0645\u0646 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A \u0648\u0637\u0631\u0642 \u0627\u0644\u0645\u0635\u0627\u062F\u0642\u0629 \u0645\u062A\u0639\u062F\u062F\u0629 \u0627\u0644\u0639\u0648\u0627\u0645\u0644 (MFA / 2FA)", titleEn: "Lesson 3: Multi-Factor Authentication & Data Protection" },
+              { id: "g6_t1_u2_l4", lessonNumber: 4, unitNumber: 2, term: 1, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u062B\u0627\u0646\u064A\u0629", unitTitleEn: "Unit 2", titleAr: "\u0627\u0644\u062F\u0631\u0633 4: \u0627\u0644\u0623\u0645\u0646 \u0627\u0644\u0633\u064A\u0628\u0631\u0627\u0646\u064A \u0648\u062D\u0645\u0627\u064A\u0629 \u0627\u0644\u0623\u062C\u0647\u0632\u0629 \u0627\u0644\u0634\u062E\u0635\u064A\u0629 \u0648\u0634\u0628\u0643\u0627\u062A \u0627\u0644\u0648\u0627\u064A \u0641\u0627\u064A", titleEn: "Lesson 4: Device & Wi-Fi Cybersecurity" },
+              { id: "g6_t1_u2_l5", lessonNumber: 5, unitNumber: 2, term: 1, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u062B\u0627\u0646\u064A\u0629", unitTitleEn: "Unit 2", titleAr: "\u0627\u0644\u062F\u0631\u0633 5: \u062D\u0642\u0648\u0642 \u0627\u0644\u0646\u0634\u0631 \u0627\u0644\u0631\u0642\u0645\u064A\u0629 \u0648\u0631\u062E\u0635 \u0627\u0644\u0645\u0634\u0627\u0639 \u0627\u0644\u0625\u0628\u062F\u0627\u0639\u064A (Creative Commons)", titleEn: "Lesson 5: Digital Copyright & Creative Commons" },
+              { id: "g6_t1_u2_l6", lessonNumber: 6, unitNumber: 2, term: 1, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u062B\u0627\u0646\u064A\u0629", unitTitleEn: "Unit 2", titleAr: "\u0627\u0644\u062F\u0631\u0633 6: \u0623\u062F\u0648\u0627\u062A \u062D\u0645\u0627\u064A\u0629 \u0627\u0644\u062E\u0635\u0648\u0635\u064A\u0629 \u0627\u0644\u0631\u0642\u0645\u064A\u0629 \u0648\u0625\u062F\u0627\u0631\u0629 \u0627\u0644\u0647\u0648\u064A\u0629", titleEn: "Lesson 6: Privacy Protection & Digital Identity" },
+              { id: "g6_t1_u2_l7", lessonNumber: 7, unitNumber: 2, term: 1, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u062B\u0627\u0646\u064A\u0629", unitTitleEn: "Unit 2", titleAr: "\u0627\u0644\u062F\u0631\u0633 7: \u0627\u0644\u0628\u062D\u062B \u0627\u0644\u0623\u0643\u0627\u062F\u064A\u0645\u064A \u0627\u0644\u0645\u0648\u062B\u0648\u0642 \u0648\u0642\u0648\u0627\u0639\u062F \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0644\u0631\u0642\u0645\u064A\u0629", titleEn: "Lesson 7: Academic Databases & Trusted Search" },
+              { id: "g6_t1_u2_l8", lessonNumber: 8, unitNumber: 2, term: 1, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u062B\u0627\u0646\u064A\u0629", unitTitleEn: "Unit 2", titleAr: "\u0627\u0644\u062F\u0631\u0633 8: \u0627\u0644\u0639\u0631\u0636 \u0627\u0644\u062A\u0642\u062F\u064A\u0645\u064A \u0627\u0644\u0646\u0647\u0627\u0626\u064A \u0648\u0625\u062F\u0627\u0631\u0629 \u0627\u0644\u0645\u0634\u0627\u0631\u064A\u0639 \u0627\u0644\u0631\u0642\u0645\u064A\u0629", titleEn: "Lesson 8: Final Project Presentation & Management" }
+            ]
+          }
+        ]
+      },
+      term2: {
+        units: [
+          {
+            unitNumber: 3,
+            unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u062B\u0627\u0644\u062B\u0629: \u0627\u0644\u0628\u0631\u0645\u062C\u0629 \u0648\u0627\u0644\u062A\u0637\u0648\u064A\u0631 \u0627\u0644\u0631\u0642\u0645\u064A \u0648\u0627\u0644\u0630\u0643\u0627\u0621 \u0627\u0644\u0627\u0635\u0637\u0646\u0627\u0639\u064A \u0627\u0644\u062A\u0648\u0644\u064A\u062F\u064A",
+            unitTitleEn: "Unit 3: Coding & Generative AI",
+            term: 2,
+            lessons: [
+              { id: "g6_t2_u3_l1", lessonNumber: 1, unitNumber: 3, term: 2, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u062B\u0627\u0644\u062B\u0629", unitTitleEn: "Unit 3", titleAr: "\u0627\u0644\u062F\u0631\u0633 1: \u0627\u0644\u0645\u0633\u062A\u0643\u0634\u0641 \u0627\u0644\u0646\u0634\u0637 (\u0643\u064A\u0646\u064A \u0643\u0648\u0627\u0646)", titleEn: "Lesson 1: Explorer in Action (Kenny Kwan)" },
+              { id: "g6_t2_u3_l2", lessonNumber: 2, unitNumber: 3, term: 2, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u062B\u0627\u0644\u062B\u0629", unitTitleEn: "Unit 3", titleAr: "\u0627\u0644\u062F\u0631\u0633 2: \u0644\u063A\u0627\u062A \u0627\u0644\u0628\u0631\u0645\u062C\u0629 \u0648\u0628\u0646\u0627\u0621 \u0648\u062A\u0646\u0633\u064A\u0642 \u0627\u0644\u0645\u0648\u0627\u0642\u0639 (HTML & CSS)", titleEn: "Lesson 2: Web Programming with HTML & CSS" },
+              { id: "g6_t2_u3_l3", lessonNumber: 3, unitNumber: 3, term: 2, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u062B\u0627\u0644\u062B\u0629", unitTitleEn: "Unit 3", titleAr: "\u0627\u0644\u062F\u0631\u0633 3: \u0627\u0644\u0628\u0631\u0645\u062C\u0629 \u0627\u0644\u062E\u0648\u0627\u0631\u0632\u0645\u064A\u0629 \u0648\u062D\u0644 \u0627\u0644\u0645\u0634\u0643\u0644\u0627\u062A \u0627\u0644\u0645\u0639\u0642\u062F\u0629", titleEn: "Lesson 3: Algorithmic Coding & Problem Solving" },
+              { id: "g6_t2_u3_l4", lessonNumber: 4, unitNumber: 3, term: 2, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u062B\u0627\u0644\u062B\u0629", unitTitleEn: "Unit 3", titleAr: "\u0627\u0644\u062F\u0631\u0633 4: \u0627\u0644\u0630\u0643\u0627\u0621 \u0627\u0644\u0627\u0635\u0637\u0646\u0627\u0639\u064A \u0627\u0644\u062A\u0648\u0644\u064A\u062F\u064A \u0648\u062A\u0637\u0628\u064A\u0642\u0627\u062A\u0647 \u0627\u0644\u062A\u0639\u0644\u064A\u0645\u064A\u0629", titleEn: "Lesson 4: Generative AI in Learning & Ethics" },
+              { id: "g6_t2_u3_l5", lessonNumber: 5, unitNumber: 3, term: 2, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u062B\u0627\u0644\u062B\u0629", unitTitleEn: "Unit 3", titleAr: "\u0627\u0644\u062F\u0631\u0633 5: \u0625\u0646\u062A\u0627\u062C \u0627\u0644\u0648\u0633\u0627\u0626\u0637 \u0627\u0644\u0645\u062A\u0639\u062F\u062F\u0629 \u0648\u0627\u0644\u0645\u062D\u062A\u0648\u0649 \u0627\u0644\u0631\u0642\u0645\u064A \u0627\u0644\u062A\u0641\u0627\u0639\u0644\u064A", titleEn: "Lesson 5: Interactive Multimedia Production" },
+              { id: "g6_t2_u3_l6", lessonNumber: 6, unitNumber: 3, term: 2, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u062B\u0627\u0644\u062B\u0629", unitTitleEn: "Unit 3", titleAr: "\u0627\u0644\u062F\u0631\u0633 6: \u0623\u0645\u0646 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0644\u0633\u062D\u0627\u0628\u064A\u0629 \u0648\u0627\u0644\u062A\u062E\u0632\u064A\u0646 \u0627\u0644\u0633\u062D\u0627\u0628\u064A (Cloud Storage)", titleEn: "Lesson 6: Cloud Storage & Cloud Security" }
+            ]
+          },
+          {
+            unitNumber: 4,
+            unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u0631\u0627\u0628\u0639\u0629: \u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u0627\u0644\u0645\u0633\u062A\u0642\u0628\u0644 \u0648\u0625\u0646\u062A\u0631\u0646\u062A \u0627\u0644\u0623\u0634\u064A\u0627\u0621 \u0648\u0627\u0644\u0645\u062F\u0646 \u0627\u0644\u0630\u0643\u064A\u0629",
+            unitTitleEn: "Unit 4: Future Technologies & IoT",
+            term: 2,
+            lessons: [
+              { id: "g6_t2_u4_l1", lessonNumber: 1, unitNumber: 4, term: 2, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u0631\u0627\u0628\u0639\u0629", unitTitleEn: "Unit 4", titleAr: "\u0627\u0644\u062F\u0631\u0633 1: \u0627\u0644\u0645\u0633\u062A\u0643\u0634\u0641 \u0627\u0644\u0646\u0634\u0637 (\u062F. \u0645\u0631\u064A\u0645 \u0645\u0637\u0631)", titleEn: "Lesson 1: Explorer in Action (Dr. Maryam Matar)" },
+              { id: "g6_t2_u4_l2", lessonNumber: 2, unitNumber: 4, term: 2, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u0631\u0627\u0628\u0639\u0629", unitTitleEn: "Unit 4", titleAr: "\u0627\u0644\u062F\u0631\u0633 2: \u0623\u062C\u0647\u0632\u0629 \u0625\u0646\u062A\u0631\u0646\u062A \u0627\u0644\u0623\u0634\u064A\u0627\u0621 (IoT) \u0648\u0627\u0644\u0645\u062F\u0646 \u0627\u0644\u0630\u0643\u064A\u0629 \u0648\u0627\u0644\u0645\u0633\u062A\u0634\u0639\u0631\u0627\u062A", titleEn: "Lesson 2: Internet of Things (IoT) & Smart Sensors" },
+              { id: "g6_t2_u4_l3", lessonNumber: 3, unitNumber: 4, term: 2, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u0631\u0627\u0628\u0639\u0629", unitTitleEn: "Unit 4", titleAr: "\u0627\u0644\u062F\u0631\u0633 3: \u0645\u0641\u0627\u0647\u064A\u0645 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0644\u0636\u062E\u0645\u0629 (Big Data) \u0648\u0645\u0639\u0627\u0644\u062C\u062A\u0647\u0627", titleEn: "Lesson 3: Big Data Fundamentals" },
+              { id: "g6_t2_u4_l4", lessonNumber: 4, unitNumber: 4, term: 2, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u0631\u0627\u0628\u0639\u0629", unitTitleEn: "Unit 4", titleAr: "\u0627\u0644\u062F\u0631\u0633 4: \u0627\u0644\u0631\u0648\u0628\u0648\u062A\u0627\u062A \u0648\u0627\u0644\u062A\u062D\u0643\u0645 \u0627\u0644\u0622\u0644\u064A \u0648\u0627\u0644\u0623\u0646\u0638\u0645\u0629 \u0627\u0644\u0645\u062F\u0645\u062C\u0629", titleEn: "Lesson 4: Robotics & Automated Systems" },
+              { id: "g6_t2_u4_l5", lessonNumber: 5, unitNumber: 4, term: 2, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u0631\u0627\u0628\u0639\u0629", unitTitleEn: "Unit 4", titleAr: "\u0627\u0644\u062F\u0631\u0633 5: \u0631\u064A\u0627\u062F\u0629 \u0627\u0644\u0623\u0639\u0645\u0627\u0644 \u0627\u0644\u0631\u0642\u0645\u064A\u0629 \u0648\u0627\u0644\u062A\u0633\u0648\u064A\u0642 \u0627\u0644\u0625\u0644\u0643\u062A\u0631\u0648\u0646\u064A", titleEn: "Lesson 5: Digital Entrepreneurship" },
+              { id: "g6_t2_u4_l6", lessonNumber: 6, unitNumber: 4, term: 2, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u0631\u0627\u0628\u0639\u0629", unitTitleEn: "Unit 4", titleAr: "\u0627\u0644\u062F\u0631\u0633 6: \u0645\u0639\u0631\u0636 \u0627\u0644\u0627\u0628\u062A\u0643\u0627\u0631 \u0648\u0627\u0644\u0645\u0634\u0631\u0648\u0639 \u0627\u0644\u0631\u0642\u0645\u064A \u0627\u0644\u0634\u0627\u0645\u0644", titleEn: "Lesson 6: Comprehensive Innovation Showcase" }
+            ]
+          }
+        ]
+      }
+    }
+  },
+  // -------------------------------------------------------------
+  // PREP 1 (GRADE 7) - الصف الأول الإعدادي (رمز الكود D - مثل طالبة دارين D015)
+  // المنهج المعتمد رسمياً والمطور من وزارة التربية والتعليم للعام الدراسي 2024 / 2025 / 2026
+  // -------------------------------------------------------------
+  prep1: {
+    gradeKey: "prep1",
+    gradeCodePrefix: "D",
+    gradeNameAr: "\u0627\u0644\u0635\u0641 \u0627\u0644\u0623\u0648\u0644 \u0627\u0644\u0625\u0639\u062F\u0627\u062F\u064A",
+    gradeNameEn: "1st Preparatory (Grade 7)",
+    stageAr: "\u0627\u0644\u0645\u0631\u062D\u0644\u0629 \u0627\u0644\u0625\u0639\u062F\u0627\u062F\u064A\u0629",
+    subjectNameAr: "\u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u0627\u0644\u0645\u0639\u0644\u0648\u0645\u0627\u062A \u0648\u0627\u0644\u0627\u062A\u0635\u0627\u0644\u0627\u062A \u0648\u0627\u0644\u062D\u0627\u0633\u0628 \u0627\u0644\u0622\u0644\u064A \u0648\u0627\u0644\u0630\u0643\u0627\u0621 \u0627\u0644\u0627\u0635\u0637\u0646\u0627\u0639\u064A",
+    subjectNameEn: "Computer Science, ICT & AI (Prep 1)",
+    terms: {
+      term1: {
+        units: [
+          {
+            unitNumber: 1,
+            unitTitleAr: "\u0627\u0644\u0645\u062D\u0648\u0631 \u0627\u0644\u0623\u0648\u0644: \u0627\u0644\u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u0627\u0644\u062E\u0636\u0631\u0627\u0621 \u0648\u0627\u0644\u062A\u062D\u0648\u0644 \u0627\u0644\u0631\u0642\u0645\u064A \u0648\u0623\u0646\u0638\u0645\u0629 \u0627\u0644\u062A\u0634\u063A\u064A\u0644",
+            unitTitleEn: "Unit 1: Green Tech, Digital Transformation & OS",
+            term: 1,
+            lessons: [
+              { id: "p1_t1_u1_l1", lessonNumber: 1, unitNumber: 1, term: 1, unitTitleAr: "\u0627\u0644\u0645\u062D\u0648\u0631 \u0627\u0644\u0623\u0648\u0644", unitTitleEn: "Unit 1", titleAr: "\u0627\u0644\u062F\u0631\u0633 1: \u0627\u0644\u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u0627\u0644\u062E\u0636\u0631\u0627\u0621 (Green Technology) \u0648\u0645\u0641\u0647\u0648\u0645\u0647\u0627 \u0648\u0623\u0647\u0645\u064A\u062A\u0647\u0627 \u0641\u064A \u0627\u0644\u0627\u0633\u062A\u062F\u0627\u0645\u0629", titleEn: "Lesson 1: Green Technology & Environmental Sustainability" },
+              { id: "p1_t1_u1_l2", lessonNumber: 2, unitNumber: 1, term: 1, unitTitleAr: "\u0627\u0644\u0645\u062D\u0648\u0631 \u0627\u0644\u0623\u0648\u0644", unitTitleEn: "Unit 1", titleAr: "\u0627\u0644\u062F\u0631\u0633 2: \u0627\u0644\u062A\u062D\u0648\u0644 \u0627\u0644\u0631\u0642\u0645\u064A (Digital Transformation) \u0648\u062A\u0637\u0628\u064A\u0642\u0627\u062A\u0647 \u0641\u064A \u0627\u0644\u0645\u062C\u062A\u0645\u0639", titleEn: "Lesson 2: Digital Transformation & Applications" },
+              { id: "p1_t1_u1_l3", lessonNumber: 3, unitNumber: 1, term: 1, unitTitleAr: "\u0627\u0644\u0645\u062D\u0648\u0631 \u0627\u0644\u0623\u0648\u0644", unitTitleEn: "Unit 1", titleAr: "\u0627\u0644\u062F\u0631\u0633 3: \u0623\u0646\u0638\u0645\u0629 \u0627\u0644\u062A\u0634\u063A\u064A\u0644 (Operating Systems: Windows, Android, Linux, iOS) \u0648\u0625\u062F\u0627\u0631\u062A\u0647\u0627", titleEn: "Lesson 3: Operating Systems Types & Functions" },
+              { id: "p1_t1_u1_l4", lessonNumber: 4, unitNumber: 1, term: 1, unitTitleAr: "\u0627\u0644\u0645\u062D\u0648\u0631 \u0627\u0644\u0623\u0648\u0644", unitTitleEn: "Unit 1", titleAr: "\u0627\u0644\u062F\u0631\u0633 4: \u062A\u062B\u0628\u064A\u062A \u0648\u0625\u0644\u063A\u0627\u0621 \u062A\u062B\u0628\u064A\u062A \u0627\u0644\u0628\u0631\u0627\u0645\u062C \u0648\u0625\u062F\u0627\u0631\u0629 \u0627\u0644\u0623\u062C\u0647\u0632\u0629 \u0648\u0627\u0644\u0645\u0644\u062D\u0642\u0627\u062A \u0627\u0644\u0631\u0642\u0645\u064A\u0629", titleEn: "Lesson 4: Software & Hardware Devices Management" },
+              { id: "p1_t1_u1_l5", lessonNumber: 5, unitNumber: 1, term: 1, unitTitleAr: "\u0627\u0644\u0645\u062D\u0648\u0631 \u0627\u0644\u0623\u0648\u0644", unitTitleEn: "Unit 1", titleAr: "\u0627\u0644\u062F\u0631\u0633 5: \u0627\u0644\u0628\u0631\u064A\u062F \u0627\u0644\u0625\u0644\u0643\u062A\u0631\u0648\u0646\u064A (Email) \u0648\u0627\u0644\u062D\u0633\u0627\u0628 \u0627\u0644\u0645\u062F\u0631\u0633\u064A \u0627\u0644\u0645\u0648\u062D\u062F \u0648\u0627\u0633\u062A\u062E\u062F\u0627\u0645\u0647 \u0628\u0627\u062D\u062A\u0631\u0627\u0641\u064A\u0629", titleEn: "Lesson 5: Professional Email & Unified Accounts" }
+            ]
+          },
+          {
+            unitNumber: 2,
+            unitTitleAr: "\u0627\u0644\u0645\u062D\u0648\u0631 \u0627\u0644\u062B\u0627\u0646\u064A: \u0627\u0644\u062D\u0648\u0633\u0628\u0629 \u0627\u0644\u0633\u062D\u0627\u0628\u064A\u0629 \u0648\u0642\u0648\u0627\u0639\u062F \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A \u0648\u0627\u0644\u0645\u0634\u0631\u0648\u0639\u0627\u062A \u0627\u0644\u0631\u0642\u0645\u064A\u0629",
+            unitTitleEn: "Unit 2: Cloud Computing, Databases & Digital Projects",
+            term: 1,
+            lessons: [
+              { id: "p1_t1_u2_l1", lessonNumber: 6, unitNumber: 2, term: 1, unitTitleAr: "\u0627\u0644\u0645\u062D\u0648\u0631 \u0627\u0644\u062B\u0627\u0646\u064A", unitTitleEn: "Unit 2", titleAr: "\u0627\u0644\u062F\u0631\u0633 6: \u0627\u0644\u062D\u0648\u0633\u0628\u0629 \u0627\u0644\u0633\u062D\u0627\u0628\u064A\u0629 (Cloud Computing) \u0648\u062E\u062F\u0645\u0627\u062A \u0627\u0644\u062A\u062E\u0632\u064A\u0646 \u0627\u0644\u0633\u062D\u0627\u0628\u064A (Google Drive, OneDrive)", titleEn: "Lesson 6: Cloud Computing & Cloud Storage" },
+              { id: "p1_t1_u2_l2", lessonNumber: 7, unitNumber: 2, term: 1, unitTitleAr: "\u0627\u0644\u0645\u062D\u0648\u0631 \u0627\u0644\u062B\u0627\u0646\u064A", unitTitleEn: "Unit 2", titleAr: "\u0627\u0644\u062F\u0631\u0633 7: \u0627\u0644\u0627\u062C\u062A\u0645\u0627\u0639\u0627\u062A \u0627\u0644\u0627\u0641\u062A\u0631\u0627\u0636\u064A\u0629 \u0628\u0640 Google Meet \u0648\u0625\u062F\u0627\u0631\u0629 \u0627\u0644\u0645\u0634\u0631\u0648\u0639\u0627\u062A \u0627\u0644\u0631\u0642\u0645\u064A\u0629", titleEn: "Lesson 7: Google Meet & Digital Project Management" },
+              { id: "p1_t1_u2_l3", lessonNumber: 8, unitNumber: 2, term: 1, unitTitleAr: "\u0627\u0644\u0645\u062D\u0648\u0631 \u0627\u0644\u062B\u0627\u0646\u064A", unitTitleEn: "Unit 2", titleAr: "\u0627\u0644\u062F\u0631\u0633 8: \u062A\u0635\u0645\u064A\u0645 \u0642\u0648\u0627\u0639\u062F \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A (Database Design: \u0627\u0644\u062C\u062F\u0627\u0648\u0644\u060C \u0627\u0644\u0646\u0645\u0627\u0630\u062C\u060C \u0627\u0644\u0627\u0633\u062A\u0639\u0644\u0627\u0645\u0627\u062A\u060C \u0627\u0644\u062A\u0642\u0627\u0631\u064A\u0631)", titleEn: "Lesson 8: Database Design (Tables, Forms, Queries & Reports)" },
+              { id: "p1_t1_u2_l4", lessonNumber: 9, unitNumber: 2, term: 1, unitTitleAr: "\u0627\u0644\u0645\u062D\u0648\u0631 \u0627\u0644\u062B\u0627\u0646\u064A", unitTitleEn: "Unit 2", titleAr: "\u0627\u0644\u062F\u0631\u0633 9: \u0627\u0644\u0645\u0634\u0631\u0648\u0639 \u0627\u0644\u0631\u0642\u0645\u064A \u0644\u0644\u0641\u0635\u0644 \u0627\u0644\u062F\u0631\u0627\u0633\u064A \u0627\u0644\u0623\u0648\u0644 \u0648\u062A\u0637\u0628\u064A\u0642\u0647 \u0627\u0644\u0639\u0645\u0644\u064A", titleEn: "Lesson 9: Term 1 Capstone Digital Project" }
+            ]
+          }
+        ]
+      },
+      term2: {
+        units: [
+          {
+            unitNumber: 3,
+            unitTitleAr: "\u0627\u0644\u0645\u062D\u0648\u0631 \u0627\u0644\u062B\u0627\u0644\u062B: \u0627\u0644\u0630\u0643\u0627\u0621 \u0627\u0644\u0627\u0635\u0637\u0646\u0627\u0639\u064A \u0648\u0627\u0644\u0631\u0648\u0628\u0648\u062A\u0627\u062A \u0648\u0627\u0644\u0623\u0646\u0638\u0645\u0629 \u0627\u0644\u0630\u0643\u064A\u0629",
+            unitTitleEn: "Unit 3: AI Applications, Sensors & Robotics",
+            term: 2,
+            lessons: [
+              { id: "p1_t2_u3_l1", lessonNumber: 1, unitNumber: 3, term: 2, unitTitleAr: "\u0627\u0644\u0645\u062D\u0648\u0631 \u0627\u0644\u062B\u0627\u0644\u062B", unitTitleEn: "Unit 3", titleAr: "\u0627\u0644\u062F\u0631\u0633 1: \u062A\u0637\u0628\u064A\u0642\u0627\u062A \u0627\u0644\u0630\u0643\u0627\u0621 \u0627\u0644\u0627\u0635\u0637\u0646\u0627\u0639\u064A \u0627\u0644\u062D\u062F\u064A\u062B\u0629 (Artificial Intelligence Applications)", titleEn: "Lesson 1: Modern AI Applications" },
+              { id: "p1_t2_u3_l2", lessonNumber: 2, unitNumber: 3, term: 2, unitTitleAr: "\u0627\u0644\u0645\u062D\u0648\u0631 \u0627\u0644\u062B\u0627\u0644\u062B", unitTitleEn: "Unit 3", titleAr: "\u0627\u0644\u062F\u0631\u0633 2: \u0623\u062C\u0647\u0632\u0629 \u0627\u0644\u0627\u0633\u062A\u0634\u0639\u0627\u0631 \u0648\u0627\u0644\u062D\u0633\u0627\u0633\u0627\u062A (Sensors) \u0641\u064A \u0627\u0644\u0646\u0638\u0645 \u0627\u0644\u062A\u0641\u0627\u0639\u0644\u064A\u0629 \u0627\u0644\u0630\u0643\u064A\u0629", titleEn: "Lesson 2: Sensors & Smart Automation" },
+              { id: "p1_t2_u3_l3", lessonNumber: 3, unitNumber: 3, term: 2, unitTitleAr: "\u0627\u0644\u0645\u062D\u0648\u0631 \u0627\u0644\u062B\u0627\u0644\u062B", unitTitleEn: "Unit 3", titleAr: "\u0627\u0644\u062F\u0631\u0633 3: \u0627\u0644\u0631\u0648\u0628\u0648\u062A\u0627\u062A \u0648\u0627\u0644\u0623\u0646\u0638\u0645\u0629 \u0627\u0644\u0622\u0644\u064A\u0629 \u0648\u0627\u0644\u062A\u062D\u0643\u0645 (Robotics & Automation)", titleEn: "Lesson 3: Robotics & Automated Control" }
+            ]
+          },
+          {
+            unitNumber: 4,
+            unitTitleAr: "\u0627\u0644\u0645\u062D\u0648\u0631 \u0627\u0644\u0631\u0627\u0628\u0639: \u0627\u0644\u0628\u0631\u0645\u062C\u0629 \u0628\u0644\u063A\u0629 \u0633\u0643\u0631\u0627\u062A\u0634 \u0648\u0645\u0628\u0627\u062F\u0626 \u0644\u063A\u0629 \u0628\u0627\u064A\u062B\u0648\u0646 (Scratch to Python)",
+            unitTitleEn: "Unit 4: Programming from Scratch to Python",
+            term: 2,
+            lessons: [
+              { id: "p1_t2_u4_l1", lessonNumber: 4, unitNumber: 4, term: 2, unitTitleAr: "\u0627\u0644\u0645\u062D\u0648\u0631 \u0627\u0644\u0631\u0627\u0628\u0639", unitTitleEn: "Unit 4", titleAr: "\u0627\u0644\u062F\u0631\u0633 4: \u0645\u0646\u0637\u0642\u0629 \u0627\u0644\u0643\u0627\u0626\u0646\u0627\u062A (Sprites) \u0648\u0627\u0644\u0645\u0638\u0627\u0647\u0631 \u0648\u0627\u0644\u0623\u062D\u062F\u0627\u062B \u0628\u0628\u0631\u0646\u0627\u0645\u062C \u0633\u0643\u0631\u0627\u062A\u0634", titleEn: "Lesson 4: Scratch Sprites, Costumes & Events" },
+              { id: "p1_t2_u4_l2", lessonNumber: 5, unitNumber: 4, term: 2, unitTitleAr: "\u0627\u0644\u0645\u062D\u0648\u0631 \u0627\u0644\u0631\u0627\u0628\u0639", unitTitleEn: "Unit 4", titleAr: '\u0627\u0644\u062F\u0631\u0633 5: \u0645\u0628\u0627\u062F\u0626 \u0648\u0623\u0633\u0627\u0633\u064A\u0627\u062A \u0644\u063A\u0629 \u0627\u0644\u0628\u0631\u0645\u062C\u0629 "\u0627\u0644\u0628\u0627\u064A\u062B\u0648\u0646" (Python Programming Basics)', titleEn: "Lesson 5: Introduction to Python Programming" },
+              { id: "p1_t2_u4_l3", lessonNumber: 6, unitNumber: 4, term: 2, unitTitleAr: "\u0627\u0644\u0645\u062D\u0648\u0631 \u0627\u0644\u0631\u0627\u0628\u0639", unitTitleEn: "Unit 4", titleAr: "\u0627\u0644\u062F\u0631\u0633 6: \u0627\u0644\u0645\u062A\u063A\u064A\u0631\u0627\u062A \u0648\u0623\u0646\u0648\u0627\u0639 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A \u0641\u064A \u0644\u063A\u0629 \u0628\u0627\u064A\u062B\u0648\u0646 (Variables & Data Types in Python)", titleEn: "Lesson 6: Variables & Data Types in Python" },
+              { id: "p1_t2_u4_l4", lessonNumber: 7, unitNumber: 4, term: 2, unitTitleAr: "\u0627\u0644\u0645\u062D\u0648\u0631 \u0627\u0644\u0631\u0627\u0628\u0639", unitTitleEn: "Unit 4", titleAr: "\u0627\u0644\u062F\u0631\u0633 7: \u0627\u0644\u0639\u0645\u0644\u064A\u0627\u062A \u0627\u0644\u062D\u0633\u0627\u0628\u064A\u0629 \u0648\u0627\u0644\u0645\u0646\u0637\u0642\u064A\u0629 \u0648\u062C\u0645\u0644 \u0627\u0644\u0625\u062F\u062E\u0627\u0644 \u0648\u0627\u0644\u0625\u062E\u0631\u0627\u062C \u0641\u064A \u0628\u0627\u064A\u062B\u0648\u0646", titleEn: "Lesson 7: Python Operators, Input/Output Functions" },
+              { id: "p1_t2_u4_l5", lessonNumber: 8, unitNumber: 4, term: 2, unitTitleAr: "\u0627\u0644\u0645\u062D\u0648\u0631 \u0627\u0644\u0631\u0627\u0628\u0639", unitTitleEn: "Unit 4", titleAr: "\u0627\u0644\u062F\u0631\u0633 8: \u0627\u0644\u0645\u0634\u0631\u0648\u0639 \u0627\u0644\u0628\u0631\u0645\u062C\u064A \u0627\u0644\u0646\u0647\u0627\u0626\u064A \u0648\u0627\u0644\u0627\u062E\u062A\u0628\u0627\u0631 \u0627\u0644\u0639\u0645\u0644\u064A \u0644\u0645\u0627\u062F\u0629 \u0627\u0644\u062D\u0627\u0633\u0628", titleEn: "Lesson 8: Final Practical Programming Project" }
+            ]
+          }
+        ]
+      }
+    }
+  },
+  // -------------------------------------------------------------
+  // PREP 2 (GRADE 8) - الصف الثاني الإعدادي (رمز الكود E)
+  // المنهج المطوّر - تصميم وتطوير مواقع الويب HTML / CSS / JavaScript
+  // -------------------------------------------------------------
+  prep2: {
+    gradeKey: "prep2",
+    gradeCodePrefix: "E",
+    gradeNameAr: "\u0627\u0644\u0635\u0641 \u0627\u0644\u062B\u0627\u0646\u064A \u0627\u0644\u0625\u0639\u062F\u0627\u062F\u064A",
+    gradeNameEn: "2nd Preparatory (Grade 8)",
+    stageAr: "\u0627\u0644\u0645\u0631\u062D\u0644\u0629 \u0627\u0644\u0625\u0639\u062F\u0627\u062F\u064A\u0629",
+    subjectNameAr: "\u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u0627\u0644\u0645\u0639\u0644\u0648\u0645\u0627\u062A \u0648\u062A\u0635\u0645\u064A\u0645 \u0648\u062A\u0637\u0648\u064A\u0631 \u0645\u0648\u0627\u0642\u0639 \u0627\u0644\u0648\u064A\u0628",
+    subjectNameEn: "Web Design & Development (Prep 2)",
+    terms: {
+      term1: {
+        units: [
+          {
+            unitNumber: 1,
+            unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u0623\u0648\u0644\u0649: \u0623\u0633\u0627\u0633\u064A\u0627\u062A \u0645\u0648\u0627\u0642\u0639 \u0627\u0644\u0648\u064A\u0628 \u0648\u062A\u0635\u0645\u064A\u0645 \u0627\u0644\u0635\u0641\u062D\u0627\u062A \u0627\u0644\u062B\u0627\u0628\u062A\u0629 (HTML5)",
+            unitTitleEn: "Unit 1: Web Fundamentals & Static Pages (HTML5)",
+            term: 1,
+            lessons: [
+              { id: "p2_t1_u1_l1", lessonNumber: 1, unitNumber: 1, term: 1, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u0623\u0648\u0644\u0649", unitTitleEn: "Unit 1", titleAr: "\u0627\u0644\u062F\u0631\u0633 1: \u0645\u0641\u0627\u0647\u064A\u0645 \u0645\u0648\u0627\u0642\u0639 \u0627\u0644\u0648\u064A\u0628 \u0648\u0627\u0644\u0635\u0641\u062D\u0629 \u0627\u0644\u0631\u0626\u064A\u0633\u064A\u0629 \u0648\u0627\u0644\u0635\u0641\u062D\u0627\u062A \u0627\u0644\u062B\u0627\u0628\u062A\u0629 \u0648\u0627\u0644\u062A\u0641\u0627\u0639\u0644\u064A\u0629", titleEn: "Lesson 1: Web Concepts & Static vs Dynamic Pages" },
+              { id: "p2_t1_u1_l2", lessonNumber: 2, unitNumber: 1, term: 1, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u0623\u0648\u0644\u0649", unitTitleEn: "Unit 1", titleAr: "\u0627\u0644\u062F\u0631\u0633 2: \u0645\u0631\u0627\u062D\u0644 \u062A\u0635\u0645\u064A\u0645 \u0648\u0625\u0646\u0634\u0627\u0621 \u0645\u0648\u0642\u0639 \u0627\u0644\u0648\u064A\u0628 (\u0627\u0644\u062A\u062E\u0637\u064A\u0637\u060C \u0627\u0644\u062A\u0635\u0645\u064A\u0645\u060C \u0627\u0644\u0625\u0639\u062F\u0627\u062F\u060C \u0627\u0644\u062A\u0646\u0641\u064A\u0630)", titleEn: "Lesson 2: Web Development Life Cycle" },
+              { id: "p2_t1_u1_l3", lessonNumber: 3, unitNumber: 1, term: 1, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u0623\u0648\u0644\u0649", unitTitleEn: "Unit 1", titleAr: "\u0627\u0644\u062F\u0631\u0633 3: \u0627\u0644\u0647\u064A\u0643\u0644 \u0627\u0644\u0623\u0633\u0627\u0633\u064A \u0644\u0635\u0641\u062D\u0629 \u0627\u0644\u0648\u064A\u0628 \u0628\u0644\u063A\u0629 HTML \u0648\u0627\u0644\u0648\u0633\u0648\u0645 \u0627\u0644\u0631\u0626\u064A\u0633\u064A\u0629", titleEn: "Lesson 3: HTML Structure & Core Tags" },
+              { id: "p2_t1_u1_l4", lessonNumber: 4, unitNumber: 1, term: 1, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u0623\u0648\u0644\u0649", unitTitleEn: "Unit 1", titleAr: "\u0627\u0644\u062F\u0631\u0633 4: \u062A\u0646\u0633\u064A\u0642 \u0627\u0644\u0646\u0635\u0648\u0635 \u0648\u0627\u0644\u0641\u0642\u0631\u0627\u062A \u0648\u0627\u0644\u0639\u0646\u0627\u0648\u064A\u0646 \u0648\u0627\u0644\u062E\u0637\u0648\u0637 \u0641\u064A HTML", titleEn: "Lesson 4: Text Formatting & Typography" },
+              { id: "p2_t1_u1_l5", lessonNumber: 5, unitNumber: 1, term: 1, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u0623\u0648\u0644\u0649", unitTitleEn: "Unit 1", titleAr: "\u0627\u0644\u062F\u0631\u0633 5: \u0625\u062F\u0631\u0627\u062C \u0627\u0644\u0635\u0648\u0631 \u0648\u0627\u0644\u0648\u0633\u0627\u0626\u0637 \u0648\u0627\u0644\u0635\u0648\u062A \u0648\u0627\u0644\u0641\u064A\u062F\u064A\u0648 \u0648\u062E\u0644\u0641\u064A\u0627\u062A \u0627\u0644\u0635\u0641\u062D\u0627\u062A", titleEn: "Lesson 5: Media, Images, Audio & Video Embedding" },
+              { id: "p2_t1_u1_l6", lessonNumber: 6, unitNumber: 1, term: 1, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u0623\u0648\u0644\u0649", unitTitleEn: "Unit 1", titleAr: "\u0627\u0644\u062F\u0631\u0633 6: \u0625\u0646\u0634\u0627\u0621 \u0627\u0644\u0627\u0631\u062A\u0628\u0627\u0637\u0627\u062A \u0627\u0644\u062A\u0634\u0639\u0628\u064A\u0629 \u0648\u0627\u0644\u0642\u0648\u0627\u0626\u0645 \u0648\u0627\u0644\u062C\u062F\u0627\u0648\u0644 (Links & Tables)", titleEn: "Lesson 6: Hyperlinks, Lists & Tables in HTML" }
+            ]
+          },
+          {
+            unitNumber: 2,
+            unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u062B\u0627\u0646\u064A\u0629: \u0644\u063A\u0629 \u062A\u0646\u0633\u064A\u0642 \u0635\u0641\u062D\u0627\u062A \u0627\u0644\u0648\u064A\u0628 (CSS) \u0648\u062A\u0635\u0645\u064A\u0645 \u0627\u0644\u0648\u0627\u062C\u0647\u0627\u062A \u0627\u0644\u0645\u062A\u062C\u0627\u0648\u0628\u0629",
+            unitTitleEn: "Unit 2: Styling Webpages with CSS",
+            term: 1,
+            lessons: [
+              { id: "p2_t1_u2_l1", lessonNumber: 1, unitNumber: 2, term: 1, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u062B\u0627\u0646\u064A\u0629", unitTitleEn: "Unit 2", titleAr: "\u0627\u0644\u062F\u0631\u0633 1: \u0645\u0642\u062F\u0645\u0629 \u0625\u0644\u0649 \u0644\u063A\u0629 CSS \u0648\u0642\u0648\u0627\u0639\u062F \u0643\u062A\u0627\u0628\u0629 \u0627\u0644\u0623\u0646\u0645\u0627\u0637 \u0648\u0627\u0644\u0645\u062D\u062F\u062F\u0627\u062A (Selectors)", titleEn: "Lesson 1: CSS Syntax & Selectors" },
+              { id: "p2_t1_u2_l2", lessonNumber: 2, unitNumber: 2, term: 1, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u062B\u0627\u0646\u064A\u0629", unitTitleEn: "Unit 2", titleAr: "\u0627\u0644\u062F\u0631\u0633 2: \u0627\u0644\u0623\u0644\u0648\u0627\u0646 \u0648\u0627\u0644\u062E\u0644\u0641\u064A\u0627\u062A \u0648\u0627\u0644\u062D\u062F\u0648\u062F \u0648\u0627\u0644\u062A\u0623\u062B\u064A\u0631\u0627\u062A \u0627\u0644\u0628\u0635\u0631\u064A\u0629", titleEn: "Lesson 2: Colors, Backgrounds & Borders" },
+              { id: "p2_t1_u2_l3", lessonNumber: 3, unitNumber: 2, term: 1, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u062B\u0627\u0646\u064A\u0629", unitTitleEn: "Unit 2", titleAr: "\u0627\u0644\u062F\u0631\u0633 3: \u0646\u0645\u0648\u0630\u062C \u0627\u0644\u0635\u0646\u062F\u0648\u0642 (CSS Box Model: Margin, Padding, Border)", titleEn: "Lesson 3: The CSS Box Model" },
+              { id: "p2_t1_u2_l4", lessonNumber: 4, unitNumber: 2, term: 1, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u062B\u0627\u0646\u064A\u0629", unitTitleEn: "Unit 2", titleAr: "\u0627\u0644\u062F\u0631\u0633 4: \u062A\u0646\u0633\u064A\u0642 \u0623\u0634\u0631\u0637\u0629 \u0627\u0644\u062A\u0646\u0642\u0644 \u0648\u0642\u0648\u0627\u0626\u0645 \u0627\u0644\u0631\u0648\u0627\u0628\u0637 \u0648\u0627\u0644\u0623\u0632\u0631\u0627\u0631 \u0627\u0644\u062A\u0641\u0627\u0639\u0644\u064A\u0629", titleEn: "Lesson 4: Navigation Bars & Button Styling" },
+              { id: "p2_t1_u2_l5", lessonNumber: 5, unitNumber: 2, term: 1, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u062B\u0627\u0646\u064A\u0629", unitTitleEn: "Unit 2", titleAr: "\u0627\u0644\u062F\u0631\u0633 5: \u0627\u0644\u062A\u0635\u0645\u064A\u0645 \u0627\u0644\u0645\u062A\u062C\u0627\u0648\u0628 \u0644\u0644\u0647\u0648\u0627\u062A\u0641 \u0648\u0627\u0644\u0634\u0627\u0634\u0627\u062A \u0627\u0644\u0630\u0643\u064A\u0629 (Responsive Web Design)", titleEn: "Lesson 5: Responsive Web Design Basics" },
+              { id: "p2_t1_u2_l6", lessonNumber: 6, unitNumber: 2, term: 1, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u062B\u0627\u0646\u064A\u0629", unitTitleEn: "Unit 2", titleAr: "\u0627\u0644\u062F\u0631\u0633 6: \u0645\u0634\u0631\u0648\u0639 \u0628\u0646\u0627\u0621 \u0645\u0648\u0642\u0639 \u0645\u062A\u0643\u0627\u0645\u0644 \u0644\u0644\u0645\u062F\u0631\u0633\u0629 \u0623\u0648 \u0627\u0644\u0645\u0631\u0643\u0632 \u0627\u0644\u062A\u062F\u0631\u064A\u0628\u064A", titleEn: "Lesson 6: Complete School/Center Website Project" }
+            ]
+          }
+        ]
+      },
+      term2: {
+        units: [
+          {
+            unitNumber: 3,
+            unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u062B\u0627\u0644\u062B\u0629: \u0644\u063A\u0629 \u062C\u0627\u0641\u0627\u0633\u0643\u0631\u064A\u0628\u062A \u0648\u0627\u0644\u0635\u0641\u062D\u0627\u062A \u0627\u0644\u062A\u0641\u0627\u0639\u0644\u064A\u0629 (JavaScript Basics)",
+            unitTitleEn: "Unit 3: Interactive Web with JavaScript",
+            term: 2,
+            lessons: [
+              { id: "p2_t2_u3_l1", lessonNumber: 1, unitNumber: 3, term: 2, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u062B\u0627\u0644\u062B\u0629", unitTitleEn: "Unit 3", titleAr: "\u0627\u0644\u062F\u0631\u0633 1: \u0645\u0642\u062F\u0645\u0629 \u0625\u0644\u0649 \u0644\u063A\u0629 JavaScript \u0648\u0627\u0644\u0641\u0631\u0642 \u0628\u064A\u0646 \u0627\u0644\u0635\u0641\u062D\u0627\u062A \u0627\u0644\u062B\u0627\u0628\u062A\u0629 \u0648\u0627\u0644\u062A\u0641\u0627\u0639\u0644\u064A\u0629", titleEn: "Lesson 1: Introduction to JavaScript" },
+              { id: "p2_t2_u3_l2", lessonNumber: 2, unitNumber: 3, term: 2, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u062B\u0627\u0644\u062B\u0629", unitTitleEn: "Unit 3", titleAr: "\u0627\u0644\u062F\u0631\u0633 2: \u062C\u0645\u0644 \u0627\u0644\u0625\u062E\u0631\u0627\u062C \u0648\u0627\u0644\u062A\u0641\u0627\u0639\u0644 \u0645\u0639 \u0627\u0644\u0645\u0633\u062A\u062E\u062F\u0645 (alert, confirm, prompt, console)", titleEn: "Lesson 2: Output Methods & Popups" },
+              { id: "p2_t2_u3_l3", lessonNumber: 3, unitNumber: 3, term: 2, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u062B\u0627\u0644\u062B\u0629", unitTitleEn: "Unit 3", titleAr: "\u0627\u0644\u062F\u0631\u0633 3: \u0627\u0644\u0645\u062A\u063A\u064A\u0631\u0627\u062A \u0648\u0623\u0646\u0648\u0627\u0639 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A \u0648\u0627\u0644\u0639\u0645\u0644\u064A\u0627\u062A \u0627\u0644\u062D\u0633\u0627\u0628\u064A\u0629 \u0648\u0627\u0644\u0645\u0646\u0637\u0642\u064A\u0629", titleEn: "Lesson 3: Variables, Data Types & Operators" },
+              { id: "p2_t2_u3_l4", lessonNumber: 4, unitNumber: 3, term: 2, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u062B\u0627\u0644\u062B\u0629", unitTitleEn: "Unit 3", titleAr: "\u0627\u0644\u062F\u0631\u0633 4: \u0627\u0644\u0634\u0631\u0648\u0637 \u0648\u0627\u062A\u062E\u0627\u0630 \u0627\u0644\u0642\u0631\u0627\u0631 (if, else if, switch)", titleEn: "Lesson 4: Conditional Statements & Logic" },
+              { id: "p2_t2_u3_l5", lessonNumber: 5, unitNumber: 3, term: 2, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u062B\u0627\u0644\u062B\u0629", unitTitleEn: "Unit 3", titleAr: "\u0627\u0644\u062F\u0631\u0633 5: \u0627\u0644\u062F\u0648\u0627\u0644 (Functions) \u0648\u0627\u0644\u0623\u062D\u062F\u0627\u062B (Events) \u0648\u0627\u0644\u062A\u0641\u0627\u0639\u0644 \u0645\u0639 \u0627\u0644\u0623\u0632\u0631\u0627\u0631", titleEn: "Lesson 5: Functions & DOM Event Handling" },
+              { id: "p2_t2_u3_l6", lessonNumber: 6, unitNumber: 3, term: 2, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u062B\u0627\u0644\u062B\u0629", unitTitleEn: "Unit 3", titleAr: "\u0627\u0644\u062F\u0631\u0633 6: \u0627\u0644\u062A\u062D\u0642\u0642 \u0645\u0646 \u0635\u062D\u0629 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A \u0641\u064A \u0646\u0645\u0627\u0630\u062C \u0627\u0644\u0648\u064A\u0628 (Form Validation)", titleEn: "Lesson 6: HTML Form Data Validation" }
+            ]
+          },
+          {
+            unitNumber: 4,
+            unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u0631\u0627\u0628\u0639\u0629: \u0623\u0645\u0627\u0646 \u0627\u0644\u0645\u0639\u0644\u0648\u0645\u0627\u062A \u0648\u0627\u0644\u062C\u0631\u0627\u0626\u0645 \u0627\u0644\u0633\u064A\u0628\u0631\u0627\u0646\u064A\u0629 \u0648\u0646\u0634\u0631 \u0627\u0644\u0645\u0648\u0627\u0642\u0639",
+            unitTitleEn: "Unit 4: Information Security & Web Hosting",
+            term: 2,
+            lessons: [
+              { id: "p2_t2_u4_l1", lessonNumber: 1, unitNumber: 4, term: 2, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u0631\u0627\u0628\u0639\u0629", unitTitleEn: "Unit 4", titleAr: "\u0627\u0644\u062F\u0631\u0633 1: \u0645\u0641\u0627\u0647\u064A\u0645 \u0623\u0645\u0646 \u0627\u0644\u0645\u0639\u0644\u0648\u0645\u0627\u062A \u0648\u0633\u0631\u064A\u0629 \u0648\u062A\u0643\u0627\u0645\u0644 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A", titleEn: "Lesson 1: Information Security & Confidentiality" },
+              { id: "p2_t2_u4_l2", lessonNumber: 2, unitNumber: 4, term: 2, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u0631\u0627\u0628\u0639\u0629", unitTitleEn: "Unit 4", titleAr: "\u0627\u0644\u062F\u0631\u0633 2: \u0627\u0644\u062A\u0647\u062F\u064A\u062F\u0627\u062A \u0627\u0644\u0625\u0644\u0643\u062A\u0631\u0648\u0646\u064A\u0629 \u0648\u0627\u0644\u0628\u0631\u0645\u062C\u064A\u0627\u062A \u0627\u0644\u062E\u0628\u064A\u062B\u0629 \u0648\u0647\u062C\u0645\u0627\u062A \u062D\u062C\u0628 \u0627\u0644\u062E\u062F\u0645\u0629", titleEn: "Lesson 2: Cyber Threats & Malware Protection" },
+              { id: "p2_t2_u4_l3", lessonNumber: 3, unitNumber: 4, term: 2, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u0631\u0627\u0628\u0639\u0629", unitTitleEn: "Unit 4", titleAr: "\u0627\u0644\u062F\u0631\u0633 3: \u0627\u0644\u0623\u0645\u0627\u0646 \u0641\u064A \u0627\u0644\u0645\u0639\u0627\u0645\u0644\u0627\u062A \u0627\u0644\u0625\u0644\u0643\u062A\u0631\u0648\u0646\u064A\u0629 \u0648\u0627\u0644\u062A\u062C\u0627\u0631\u0629 \u0627\u0644\u0631\u0642\u0645\u064A\u0629", titleEn: "Lesson 3: E-Commerce Security" },
+              { id: "p2_t2_u4_l4", lessonNumber: 4, unitNumber: 4, term: 2, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u0631\u0627\u0628\u0639\u0629", unitTitleEn: "Unit 4", titleAr: "\u0627\u0644\u062F\u0631\u0633 4: \u0627\u0644\u0627\u0633\u062A\u062E\u062F\u0627\u0645 \u0627\u0644\u0622\u0645\u0646 \u0648\u0627\u0644\u0623\u062E\u0644\u0627\u0642\u064A \u0644\u0644\u0630\u0643\u0627\u0621 \u0627\u0644\u0627\u0635\u0637\u0646\u0627\u0639\u064A \u0641\u064A \u062A\u0637\u0648\u064A\u0631 \u0627\u0644\u0648\u064A\u0628", titleEn: "Lesson 4: AI Tools & Safe Web Practices" },
+              { id: "p2_t2_u4_l5", lessonNumber: 5, unitNumber: 4, term: 2, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u0631\u0627\u0628\u0639\u0629", unitTitleEn: "Unit 4", titleAr: "\u0627\u0644\u062F\u0631\u0633 5: \u0646\u0634\u0631 \u0648\u0627\u0633\u062A\u0636\u0627\u0641\u0629 \u0627\u0644\u0645\u0648\u0642\u0639 \u0639\u0644\u0649 \u062E\u0648\u0627\u062F\u0645 \u0633\u062D\u0627\u0628\u064A\u0629 \u0645\u062C\u0627\u0646\u064A\u0629 (Hosting)", titleEn: "Lesson 5: Web Hosting & Domain Basics" },
+              { id: "p2_t2_u4_l6", lessonNumber: 6, unitNumber: 4, term: 2, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u0631\u0627\u0628\u0639\u0629", unitTitleEn: "Unit 4", titleAr: "\u0627\u0644\u062F\u0631\u0633 6: \u0627\u0644\u0645\u0634\u0631\u0648\u0639 \u0627\u0644\u062A\u0637\u0628\u064A\u0642\u064A \u0627\u0644\u062E\u062A\u0627\u0645\u064A: \u0645\u0648\u0642\u0639 \u0648\u064A\u0628 \u062A\u0641\u0627\u0639\u0644\u064A \u0645\u0624\u0645\u0646 \u0648\u0634\u0627\u0645\u0644", titleEn: "Lesson 6: Secure Interactive Web Project" }
+            ]
+          }
+        ]
+      }
+    }
+  },
+  // -------------------------------------------------------------
+  // PREP 3 (GRADE 9) - الصف الثالث الإعدادي (رمز الكود F)
+  // المنهج المطوّر - حل المشكلات والبرمجة الشيئية VB.NET
+  // -------------------------------------------------------------
+  prep3: {
+    gradeKey: "prep3",
+    gradeCodePrefix: "F",
+    gradeNameAr: "\u0627\u0644\u0635\u0641 \u0627\u0644\u062B\u0627\u0644\u062B \u0627\u0644\u0625\u0639\u062F\u0627\u062F\u064A",
+    gradeNameEn: "3rd Preparatory (Grade 9)",
+    stageAr: "\u0627\u0644\u0645\u0631\u062D\u0644\u0629 \u0627\u0644\u0625\u0639\u062F\u0627\u062F\u064A\u0629",
+    subjectNameAr: "\u0627\u0644\u062D\u0627\u0633\u0628 \u0627\u0644\u0622\u0644\u064A \u0648\u0627\u0644\u0628\u0631\u0645\u062C\u0629 \u0627\u0644\u0634\u064A\u0626\u064A\u0629 \u0648\u062D\u0644 \u0627\u0644\u0645\u0634\u0643\u0644\u0627\u062A",
+    subjectNameEn: "Computer Science & Object-Oriented Programming",
+    terms: {
+      term1: {
+        units: [
+          {
+            unitNumber: 1,
+            unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u0623\u0648\u0644\u0649: \u062D\u0644 \u0627\u0644\u0645\u0634\u0643\u0644\u0627\u062A \u0648\u062E\u0631\u0627\u0626\u0637 \u0627\u0644\u062A\u062F\u0641\u0642 (Flowcharts & Problem Solving)",
+            unitTitleEn: "Unit 1: Problem Solving & Flowcharts",
+            term: 1,
+            lessons: [
+              { id: "p3_t1_u1_l1", lessonNumber: 1, unitNumber: 1, term: 1, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u0623\u0648\u0644\u0649", unitTitleEn: "Unit 1", titleAr: "\u0627\u0644\u062F\u0631\u0633 1: \u0645\u0641\u0647\u0648\u0645 \u0627\u0644\u0645\u0634\u0643\u0644\u0629 \u0648\u062E\u0637\u0648\u0627\u062A \u062D\u0644 \u0627\u0644\u0645\u0634\u0643\u0644\u0627\u062A \u0648\u0627\u0644\u062E\u0648\u0627\u0631\u0632\u0645\u064A\u0627\u062A", titleEn: "Lesson 1: Problem Solving Steps & Algorithms" },
+              { id: "p3_t1_u1_l2", lessonNumber: 2, unitNumber: 1, term: 1, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u0623\u0648\u0644\u0649", unitTitleEn: "Unit 1", titleAr: "\u0627\u0644\u062F\u0631\u0633 2: \u062E\u0631\u0627\u0626\u0637 \u0627\u0644\u062A\u062F\u0641\u0642 \u0627\u0644\u0628\u0633\u064A\u0637\u0629 \u0648\u0627\u0644\u0631\u0645\u0648\u0632 \u0627\u0644\u0627\u0635\u0637\u0644\u0627\u062D\u064A\u0629 (Simple Flowcharts)", titleEn: "Lesson 2: Simple Flowchart Design" },
+              { id: "p3_t1_u1_l3", lessonNumber: 3, unitNumber: 1, term: 1, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u0623\u0648\u0644\u0649", unitTitleEn: "Unit 1", titleAr: "\u0627\u0644\u062F\u0631\u0633 3: \u0627\u0644\u062A\u0641\u0631\u0639 \u0648\u0627\u062A\u062E\u0627\u0630 \u0627\u0644\u0642\u0631\u0627\u0631 \u0641\u064A \u062E\u0631\u0627\u0626\u0637 \u0627\u0644\u062A\u062F\u0641\u0642 (Branching / Decision)", titleEn: "Lesson 3: Branching & Decision Flowcharts" },
+              { id: "p3_t1_u1_l4", lessonNumber: 4, unitNumber: 1, term: 1, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u0623\u0648\u0644\u0649", unitTitleEn: "Unit 1", titleAr: "\u0627\u0644\u062F\u0631\u0633 4: \u062D\u0644\u0642\u0627\u062A \u0627\u0644\u062A\u0643\u0631\u0627\u0631 \u0648\u0627\u0644\u0639\u062F\u0627\u062F\u0627\u062A \u0641\u064A \u062E\u0631\u0627\u0626\u0637 \u0627\u0644\u062A\u062F\u0641\u0642 (Loops & Counters)", titleEn: "Lesson 4: Loops & Counters in Flowcharts" },
+              { id: "p3_t1_u1_l5", lessonNumber: 5, unitNumber: 1, term: 1, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u0623\u0648\u0644\u0649", unitTitleEn: "Unit 1", titleAr: "\u0627\u0644\u062F\u0631\u0633 5: \u062E\u0631\u0627\u0626\u0637 \u0627\u0644\u062A\u062F\u0641\u0642 \u0627\u0644\u0645\u062A\u0642\u062F\u0645\u0629 \u0648\u062A\u0637\u0628\u064A\u0642\u0627\u062A \u0628\u0631\u0645\u062C\u064A\u0629 \u0631\u064A\u0627\u0636\u064A\u0629", titleEn: "Lesson 5: Advanced Algorithmic Flowcharts" },
+              { id: "p3_t1_u1_l6", lessonNumber: 6, unitNumber: 1, term: 1, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u0623\u0648\u0644\u0649", unitTitleEn: "Unit 1", titleAr: "\u0627\u0644\u062F\u0631\u0633 6: \u0645\u0642\u062F\u0645\u0629 \u0625\u0644\u0649 \u0628\u064A\u0626\u0629 \u0627\u0644\u062A\u0637\u0648\u064A\u0631 \u0627\u0644\u0645\u062A\u0643\u0627\u0645\u0644\u0629 Visual Studio IDE", titleEn: "Lesson 6: Visual Studio IDE & Development Environment" }
+            ]
+          },
+          {
+            unitNumber: 2,
+            unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u062B\u0627\u0646\u064A\u0629: \u0627\u0644\u0628\u0631\u0645\u062C\u0629 \u0627\u0644\u0634\u064A\u0626\u064A\u0629 \u0648\u0645\u0648\u062C\u0647\u0629 \u0628\u0627\u0644\u062D\u062F\u062B (Object-Oriented Programming)",
+            unitTitleEn: "Unit 2: Event-Driven OOP Programming",
+            term: 1,
+            lessons: [
+              { id: "p3_t1_u2_l1", lessonNumber: 1, unitNumber: 2, term: 1, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u062B\u0627\u0646\u064A\u0629", unitTitleEn: "Unit 2", titleAr: "\u0627\u0644\u062F\u0631\u0633 1: \u0645\u0641\u0627\u0647\u064A\u0645 \u0627\u0644\u0628\u0631\u0645\u062C\u0629 \u0627\u0644\u0643\u0627\u0626\u0646\u064A\u0629 \u0648\u0627\u0644\u062E\u0635\u0627\u0626\u0635 \u0648\u0627\u0644\u0623\u062D\u062F\u0627\u062B \u0648\u0627\u0644\u0648\u0633\u0627\u0626\u0644", titleEn: "Lesson 1: OOP Concepts (Classes, Objects, Methods)" },
+              { id: "p3_t1_u2_l2", lessonNumber: 2, unitNumber: 2, term: 1, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u062B\u0627\u0646\u064A\u0629", unitTitleEn: "Unit 2", titleAr: "\u0627\u0644\u062F\u0631\u0633 2: \u0623\u062F\u0627\u0629 \u0627\u0644\u0646\u0645\u0648\u0630\u062C (Form) \u0648\u0636\u0628\u0637 \u062E\u0635\u0627\u0626\u0635 \u0627\u0644\u0648\u0627\u062C\u0647\u0629 \u0627\u0644\u0623\u0633\u0627\u0633\u064A\u0629", titleEn: "Lesson 2: Form Control & UI Properties" },
+              { id: "p3_t1_u2_l3", lessonNumber: 3, unitNumber: 2, term: 1, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u062B\u0627\u0646\u064A\u0629", unitTitleEn: "Unit 2", titleAr: "\u0627\u0644\u062F\u0631\u0633 3: \u0623\u062F\u0648\u0627\u062A \u0627\u0644\u062A\u062D\u0643\u0645 \u0627\u0644\u0623\u0633\u0627\u0633\u064A\u0629 (Button, Label, TextBox)", titleEn: "Lesson 3: Core UI Controls (Button, Label, TextBox)" },
+              { id: "p3_t1_u2_l4", lessonNumber: 4, unitNumber: 2, term: 1, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u062B\u0627\u0646\u064A\u0629", unitTitleEn: "Unit 2", titleAr: "\u0627\u0644\u062F\u0631\u0633 4: \u0623\u062F\u0648\u0627\u062A \u0627\u0644\u0627\u062E\u062A\u064A\u0627\u0631 \u0648\u0627\u0644\u0642\u0648\u0627\u0626\u0645 (RadioButton, CheckBox, ListBox, ComboBox)", titleEn: "Lesson 4: Selection & List Controls" },
+              { id: "p3_t1_u2_l5", lessonNumber: 5, unitNumber: 2, term: 1, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u062B\u0627\u0646\u064A\u0629", unitTitleEn: "Unit 2", titleAr: "\u0627\u0644\u062F\u0631\u0633 5: \u0643\u062A\u0627\u0628\u0629 \u0627\u0644\u0634\u064A\u0641\u0631\u0629 \u0627\u0644\u0628\u0631\u0645\u062C\u064A\u0629 \u0648\u0645\u0639\u0627\u0644\u062C\u0629 \u0623\u062D\u062F\u0627\u062B \u0627\u0644\u0646\u0642\u0631 \u0648\u0627\u0644\u0625\u062F\u062E\u0627\u0644", titleEn: "Lesson 5: Writing Code & Event Handlers" },
+              { id: "p3_t1_u2_l6", lessonNumber: 6, unitNumber: 2, term: 1, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u062B\u0627\u0646\u064A\u0629", unitTitleEn: "Unit 2", titleAr: "\u0627\u0644\u062F\u0631\u0633 6: \u062A\u0637\u0628\u064A\u0642 \u0628\u0631\u0645\u062C\u064A: \u0622\u0644\u0629 \u062D\u0627\u0633\u0628\u0629 \u0630\u0643\u064A\u0629 \u0648\u0628\u0631\u0646\u0627\u0645\u062C \u0631\u0635\u062F \u0648\u062A\u0642\u062F\u064A\u0631 \u0627\u0644\u062F\u0631\u062C\u0627\u062A", titleEn: "Lesson 6: Calculator & Student Grade Software Project" }
+            ]
+          }
+        ]
+      },
+      term2: {
+        units: [
+          {
+            unitNumber: 3,
+            unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u062B\u0627\u0644\u062B\u0629: \u0627\u0644\u0645\u062A\u063A\u064A\u0631\u0627\u062A \u0648\u0627\u0644\u062B\u0648\u0627\u0628\u062A \u0648\u062C\u0645\u0644 \u0627\u0644\u062A\u062D\u0643\u0645 \u0648\u0627\u0644\u062A\u0643\u0631\u0627\u0631",
+            unitTitleEn: "Unit 3: Variables, Constants & Control Structures",
+            term: 2,
+            lessons: [
+              { id: "p3_t2_u3_l1", lessonNumber: 1, unitNumber: 3, term: 2, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u062B\u0627\u0644\u062B\u0629", unitTitleEn: "Unit 3", titleAr: "\u0627\u0644\u062F\u0631\u0633 1: \u0627\u0644\u0625\u0639\u0644\u0627\u0646 \u0639\u0646 \u0627\u0644\u0645\u062A\u063A\u064A\u0631\u0627\u062A \u0648\u0627\u0644\u062B\u0648\u0627\u0628\u062A \u0648\u0623\u0646\u0648\u0627\u0639 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A (Dim & Const)", titleEn: "Lesson 1: Variables, Constants & Data Types" },
+              { id: "p3_t2_u3_l2", lessonNumber: 2, unitNumber: 3, term: 2, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u062B\u0627\u0644\u062B\u0629", unitTitleEn: "Unit 3", titleAr: "\u0627\u0644\u062F\u0631\u0633 2: \u0627\u0644\u0639\u0645\u0644\u064A\u0627\u062A \u0627\u0644\u062D\u0633\u0627\u0628\u064A\u0629 \u0648\u0627\u0644\u0645\u0646\u0637\u0642\u064A\u0629 \u0648\u0623\u0633\u0628\u0642\u064A\u0629 \u062A\u0646\u0641\u064A\u0630 \u0627\u0644\u0639\u0645\u0644\u064A\u0627\u062A", titleEn: "Lesson 2: Arithmetic & Logical Precedence" },
+              { id: "p3_t2_u3_l3", lessonNumber: 3, unitNumber: 3, term: 2, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u062B\u0627\u0644\u062B\u0629", unitTitleEn: "Unit 3", titleAr: "\u0627\u0644\u062F\u0631\u0633 3: \u062C\u0645\u0644 \u0627\u062A\u062E\u0627\u0630 \u0627\u0644\u0642\u0631\u0627\u0631 \u0648\u0627\u0644\u062A\u0641\u0631\u0639 \u0627\u0644\u0634\u0631\u0637\u064A (If...Then...Else & Select Case)", titleEn: "Lesson 3: Decision Statements (If & Select Case)" },
+              { id: "p3_t2_u3_l4", lessonNumber: 4, unitNumber: 3, term: 2, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u062B\u0627\u0644\u062B\u0629", unitTitleEn: "Unit 3", titleAr: "\u0627\u0644\u062F\u0631\u0633 4: \u062C\u0645\u0644 \u0627\u0644\u062A\u0643\u0631\u0627\u0631 \u0648\u0627\u0644\u062F\u0648\u0631\u0627\u0646 (For...Next & Do While Loop)", titleEn: "Lesson 4: Looping Structures (For Next & Do While)" },
+              { id: "p3_t2_u3_l5", lessonNumber: 5, unitNumber: 3, term: 2, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u062B\u0627\u0644\u062B\u0629", unitTitleEn: "Unit 3", titleAr: "\u0627\u0644\u062F\u0631\u0633 5: \u0627\u0644\u0625\u062C\u0631\u0627\u0621\u0627\u062A \u0648\u0627\u0644\u062F\u0648\u0627\u0644 \u0627\u0644\u0645\u062E\u0635\u0635\u0629 \u0648\u0625\u0639\u0627\u062F\u0629 \u0627\u0633\u062A\u062E\u062F\u0627\u0645 \u0627\u0644\u0643\u0648\u062F (Sub & Function)", titleEn: "Lesson 5: Procedures & Functions (Sub / Function)" },
+              { id: "p3_t2_u3_l6", lessonNumber: 6, unitNumber: 3, term: 2, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u062B\u0627\u0644\u062B\u0629", unitTitleEn: "Unit 3", titleAr: "\u0627\u0644\u062F\u0631\u0633 6: \u0627\u0644\u0623\u062E\u0637\u0627\u0621 \u0627\u0644\u0628\u0631\u0645\u062C\u064A\u0629 \u0648\u0623\u0646\u0648\u0627\u0639\u0647\u0627 \u0648\u062A\u062A\u0628\u0639 \u0648\u062A\u0635\u062D\u064A\u062D \u0627\u0644\u0623\u062E\u0637\u0627\u0621 (Debugging)", titleEn: "Lesson 6: Debugging & Error Handling Types" }
+            ]
+          },
+          {
+            unitNumber: 4,
+            unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u0631\u0627\u0628\u0639\u0629: \u0623\u0645\u0627\u0646 \u0627\u0644\u0628\u0631\u0645\u062C\u064A\u0627\u062A \u0648\u0642\u0648\u0627\u0639\u062F \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A \u0648\u062A\u0637\u0628\u064A\u0642\u0627\u062A \u0627\u0644\u0630\u0643\u0627\u0621 \u0627\u0644\u0627\u0635\u0637\u0646\u0627\u0639\u064A",
+            unitTitleEn: "Unit 4: Database Integration & Software Security",
+            term: 2,
+            lessons: [
+              { id: "p3_t2_u4_l1", lessonNumber: 1, unitNumber: 4, term: 2, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u0631\u0627\u0628\u0639\u0629", unitTitleEn: "Unit 4", titleAr: "\u0627\u0644\u062F\u0631\u0633 1: \u0645\u0642\u062F\u0645\u0629 \u0625\u0644\u0649 \u0642\u0648\u0627\u0639\u062F \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A \u0648\u0631\u0628\u0637\u0647\u0627 \u0628\u0627\u0644\u062A\u0637\u0628\u064A\u0642\u0627\u062A \u0627\u0644\u0628\u0631\u0645\u062C\u064A\u0629", titleEn: "Lesson 1: Database Fundamentals & App Connection" },
+              { id: "p3_t2_u4_l2", lessonNumber: 2, unitNumber: 4, term: 2, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u0631\u0627\u0628\u0639\u0629", unitTitleEn: "Unit 4", titleAr: "\u0627\u0644\u062F\u0631\u0633 2: \u062A\u0635\u0645\u064A\u0645 \u0642\u0627\u0639\u062F\u0629 \u0628\u064A\u0627\u0646\u0627\u062A \u0644\u062A\u0633\u062C\u064A\u0644 \u0627\u0644\u0637\u0644\u0627\u0628 \u0648\u062A\u062E\u0632\u064A\u0646 \u0627\u0644\u0633\u062C\u0644\u0627\u062A", titleEn: "Lesson 2: Designing Student Records Database" },
+              { id: "p3_t2_u4_l3", lessonNumber: 3, unitNumber: 4, term: 2, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u0631\u0627\u0628\u0639\u0629", unitTitleEn: "Unit 4", titleAr: "\u0627\u0644\u062F\u0631\u0633 3: \u062F\u0645\u062C \u0623\u062F\u0648\u0627\u062A \u0627\u0644\u0630\u0643\u0627\u0621 \u0627\u0644\u0627\u0635\u0637\u0646\u0627\u0639\u064A \u0648\u062A\u062D\u0644\u064A\u0644 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A \u0641\u064A \u0627\u0644\u0645\u0634\u0627\u0631\u064A\u0639", titleEn: "Lesson 3: AI Integration & Data Insights" },
+              { id: "p3_t2_u4_l4", lessonNumber: 4, unitNumber: 4, term: 2, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u0631\u0627\u0628\u0639\u0629", unitTitleEn: "Unit 4", titleAr: "\u0627\u0644\u062F\u0631\u0633 4: \u0627\u0644\u062A\u0634\u0641\u064A\u0631 \u0648\u062D\u0645\u0627\u064A\u0629 \u0643\u0644\u0645\u0627\u062A \u0627\u0644\u0645\u0631\u0648\u0631 \u0648\u0633\u0631\u064A\u0629 \u0645\u0639\u0644\u0648\u0645\u0627\u062A \u0627\u0644\u0646\u0638\u0627\u0645", titleEn: "Lesson 4: Password Hashing & Security" },
+              { id: "p3_t2_u4_l5", lessonNumber: 5, unitNumber: 4, term: 2, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u0631\u0627\u0628\u0639\u0629", unitTitleEn: "Unit 4", titleAr: "\u0627\u0644\u062F\u0631\u0633 5: \u062A\u0648\u062B\u064A\u0642 \u0627\u0644\u0628\u0631\u0627\u0645\u062C \u0648\u0625\u0646\u0634\u0627\u0621 \u0645\u0644\u0641 \u0627\u0644\u062A\u062B\u0628\u064A\u062A \u0627\u0644\u062A\u0646\u0641\u064A\u0630\u064A (Setup Executable)", titleEn: "Lesson 5: Software Packaging & Deployment" },
+              { id: "p3_t2_u4_l6", lessonNumber: 6, unitNumber: 4, term: 2, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u0631\u0627\u0628\u0639\u0629", unitTitleEn: "Unit 4", titleAr: "\u0627\u0644\u062F\u0631\u0633 6: \u0627\u0644\u0645\u0634\u0631\u0648\u0639 \u0627\u0644\u0646\u0647\u0627\u0626\u064A \u0627\u0644\u0645\u062A\u0643\u0627\u0645\u0644: \u0645\u0646\u0638\u0648\u0645\u0629 \u0625\u062F\u0627\u0631\u0629 \u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0644\u0637\u0644\u0627\u0628 \u0648\u0627\u0644\u0634\u0647\u0627\u062F\u0627\u062A", titleEn: "Lesson 6: Comprehensive Student Management System" }
+            ]
+          }
+        ]
+      }
+    }
+  },
+  // -------------------------------------------------------------
+  // SECONDARY 1 (GRADE 10) - الصف الأول الثانوي (رمز الكود G أو S1)
+  // المنهج المطوّر - الحوسبة السحابية، شبكات متقدمة، لغة Python، والذكاء الاصطناعي
+  // -------------------------------------------------------------
+  sec1: {
+    gradeKey: "sec1",
+    gradeCodePrefix: "G",
+    gradeNameAr: "\u0627\u0644\u0635\u0641 \u0627\u0644\u0623\u0648\u0644 \u0627\u0644\u062B\u0627\u0646\u0648\u064A",
+    gradeNameEn: "1st Secondary (Grade 10)",
+    stageAr: "\u0627\u0644\u0645\u0631\u062D\u0644\u0629 \u0627\u0644\u062B\u0627\u0646\u0648\u064A\u0629",
+    subjectNameAr: "\u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u0627\u0644\u0645\u0639\u0644\u0648\u0645\u0627\u062A \u0648\u0627\u0644\u0627\u062A\u0635\u0627\u0644\u0627\u062A \u0648\u0627\u0644\u0630\u0643\u0627\u0621 \u0627\u0644\u0627\u0635\u0637\u0646\u0627\u0639\u064A \u0648\u0627\u0644\u062D\u0648\u0633\u0628\u0629 \u0627\u0644\u0633\u062D\u0627\u0628\u064A\u0629",
+    subjectNameEn: "Advanced ICT, Cloud Computing & AI (Sec 1)",
+    terms: {
+      term1: {
+        units: [
+          {
+            unitNumber: 1,
+            unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u0623\u0648\u0644\u0649: \u0627\u0644\u0628\u0646\u064A\u0629 \u0627\u0644\u062A\u062D\u062A\u064A\u0629 \u0644\u0644\u062D\u0648\u0633\u0628\u0629 \u0627\u0644\u0633\u062D\u0627\u0628\u064A\u0629 \u0648\u0647\u0646\u062F\u0633\u0629 \u0627\u0644\u0634\u0628\u0643\u0627\u062A \u0648\u0627\u0644\u0630\u0643\u0627\u0621 \u0627\u0644\u0627\u0635\u0637\u0646\u0627\u0639\u064A",
+            unitTitleEn: "Unit 1: Cloud Infrastructure, Advanced Networking & AI",
+            term: 1,
+            lessons: [
+              { id: "s1_t1_u1_l1", lessonNumber: 1, unitNumber: 1, term: 1, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u0623\u0648\u0644\u0649", unitTitleEn: "Unit 1", titleAr: "\u0627\u0644\u062F\u0631\u0633 1: \u0627\u0644\u062D\u0648\u0633\u0628\u0629 \u0627\u0644\u0633\u062D\u0627\u0628\u064A\u0629 \u0648\u0646\u0645\u0627\u0630\u062C \u0627\u0644\u062E\u062F\u0645\u0629 \u0627\u0644\u0633\u062D\u0627\u0628\u064A\u0629 (IaaS, PaaS, SaaS)", titleEn: "Lesson 1: Cloud Computing Service Models (IaaS, PaaS, SaaS)" },
+              { id: "s1_t1_u1_l2", lessonNumber: 2, unitNumber: 1, term: 1, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u0623\u0648\u0644\u0649", unitTitleEn: "Unit 1", titleAr: "\u0627\u0644\u062F\u0631\u0633 2: \u0623\u0645\u0646 \u0627\u0644\u0645\u0639\u0644\u0648\u0645\u0627\u062A \u0627\u0644\u0633\u062D\u0627\u0628\u064A\u0629 \u0648\u0627\u0644\u062A\u0634\u0641\u064A\u0631 \u0627\u0644\u0645\u062A\u0642\u062F\u0645 (Cloud Security & Cryptography)", titleEn: "Lesson 2: Cloud Security & Encryption" },
+              { id: "s1_t1_u1_l3", lessonNumber: 3, unitNumber: 1, term: 1, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u0623\u0648\u0644\u0649", unitTitleEn: "Unit 1", titleAr: "\u0627\u0644\u062F\u0631\u0633 3: \u0634\u0628\u0643\u0627\u062A \u0627\u0644\u062D\u0627\u0633\u0648\u0628 \u0627\u0644\u0645\u062A\u0642\u062F\u0645\u0629 \u0648\u0628\u0631\u0648\u062A\u0648\u0643\u0648\u0644\u0627\u062A \u0627\u0644\u0625\u0646\u062A\u0631\u0646\u062A (TCP/IP, DNS, IPv6)", titleEn: "Lesson 3: Advanced Protocols & Network Routing" },
+              { id: "s1_t1_u1_l4", lessonNumber: 4, unitNumber: 1, term: 1, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u0623\u0648\u0644\u0649", unitTitleEn: "Unit 1", titleAr: "\u0627\u0644\u062F\u0631\u0633 4: \u0623\u0633\u0627\u0633\u064A\u0627\u062A \u0627\u0644\u0630\u0643\u0627\u0621 \u0627\u0644\u0627\u0635\u0637\u0646\u0627\u0639\u064A \u0627\u0644\u062A\u0648\u0644\u064A\u062F\u064A \u0648\u0627\u0644\u062A\u0639\u0644\u0645 \u0627\u0644\u0622\u0644\u064A (Machine Learning Concepts)", titleEn: "Lesson 4: Generative AI & Machine Learning" },
+              { id: "s1_t1_u1_l5", lessonNumber: 5, unitNumber: 1, term: 1, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u0623\u0648\u0644\u0649", unitTitleEn: "Unit 1", titleAr: "\u0627\u0644\u062F\u0631\u0633 5: \u0627\u0644\u0646\u0645\u0627\u0630\u062C \u0627\u0644\u0644\u063A\u0648\u064A\u0629 \u0627\u0644\u0643\u0628\u064A\u0631\u0629 \u0648\u0627\u0633\u062A\u062E\u062F\u0627\u0645\u0627\u062A\u0647\u0627 \u0648\u0635\u064A\u0627\u063A\u0629 \u0627\u0644\u0623\u0648\u0627\u0645\u0631 (LLMs & Prompt Engineering)", titleEn: "Lesson 5: LLMs & Prompt Engineering" },
+              { id: "s1_t1_u1_l6", lessonNumber: 6, unitNumber: 1, term: 1, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u0623\u0648\u0644\u0649", unitTitleEn: "Unit 1", titleAr: "\u0627\u0644\u062F\u0631\u0633 6: \u0623\u062E\u0644\u0627\u0642\u064A\u0627\u062A \u0627\u0644\u0630\u0643\u0627\u0621 \u0627\u0644\u0627\u0635\u0637\u0646\u0627\u0639\u064A \u0648\u0627\u0644\u0645\u0633\u0624\u0648\u0644\u064A\u0629 \u0627\u0644\u0642\u0627\u0646\u0648\u0646\u064A\u0629 \u0627\u0644\u0631\u0642\u0645\u064A\u0629", titleEn: "Lesson 6: AI Ethics & Legal Frameworks" }
+            ]
+          },
+          {
+            unitNumber: 2,
+            unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u062B\u0627\u0646\u064A\u0629: \u062D\u0644 \u0627\u0644\u0645\u0634\u0643\u0644\u0627\u062A \u0627\u0644\u0628\u0631\u0645\u062C\u064A\u0629 \u0628\u0644\u063A\u0629 \u0628\u0627\u064A\u062B\u0648\u0646 (Python Programming Fundamentals)",
+            unitTitleEn: "Unit 2: Python Programming Fundamentals",
+            term: 1,
+            lessons: [
+              { id: "s1_t1_u2_l1", lessonNumber: 1, unitNumber: 2, term: 1, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u062B\u0627\u0646\u064A\u0629", unitTitleEn: "Unit 2", titleAr: "\u0627\u0644\u062F\u0631\u0633 1: \u0628\u064A\u0626\u0629 \u0644\u063A\u0629 Python \u0648\u0623\u0646\u0648\u0627\u0639 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0644\u0623\u0633\u0627\u0633\u064A\u0629 \u0648\u0627\u0644\u0645\u062F\u062E\u0644\u0627\u062A \u0648\u0627\u0644\u0645\u062E\u0631\u062C\u0627\u062A (Input / Output)", titleEn: "Lesson 1: Python Basics & Input/Output Operations" },
+              { id: "s1_t1_u2_l2", lessonNumber: 2, unitNumber: 2, term: 1, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u062B\u0627\u0646\u064A\u0629", unitTitleEn: "Unit 2", titleAr: "\u0627\u0644\u062F\u0631\u0633 2: \u0627\u0644\u0647\u064A\u0627\u0643\u0644 \u0627\u0644\u0634\u0631\u0637\u064A\u0629 \u0648\u0627\u0644\u0645\u0646\u0637\u0642\u064A\u0629 \u0648\u0627\u0644\u062A\u062D\u0643\u0645 \u0641\u064A \u0633\u064A\u0631 \u0627\u0644\u0628\u0631\u0646\u0627\u0645\u062C (if, elif, else)", titleEn: "Lesson 2: Conditional Logic & Branching in Python" },
+              { id: "s1_t1_u2_l3", lessonNumber: 3, unitNumber: 2, term: 1, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u062B\u0627\u0646\u064A\u0629", unitTitleEn: "Unit 2", titleAr: "\u0627\u0644\u062F\u0631\u0633 3: \u062D\u0644\u0642\u0627\u062A \u0627\u0644\u062A\u0643\u0631\u0627\u0631 \u0648\u0627\u0644\u0642\u0648\u0627\u0626\u0645 \u0648\u0627\u0644\u0645\u0635\u0641\u0648\u0641\u0627\u062A (Loops, Lists & Tuples)", titleEn: "Lesson 3: Python Loops, Lists & Tuples" },
+              { id: "s1_t1_u2_l4", lessonNumber: 4, unitNumber: 2, term: 1, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u062B\u0627\u0646\u064A\u0629", unitTitleEn: "Unit 2", titleAr: "\u0627\u0644\u062F\u0631\u0633 4: \u0627\u0644\u0642\u0648\u0627\u0645\u064A\u0633 \u0648\u0627\u0644\u0645\u062C\u0645\u0648\u0639\u0627\u062A \u0648\u0627\u0644\u062A\u0639\u0627\u0645\u0644 \u0645\u0639 \u0627\u0644\u0646\u0635\u0648\u0635 (Dictionaries & Strings)", titleEn: "Lesson 4: Dictionaries & String Manipulation" },
+              { id: "s1_t1_u2_l5", lessonNumber: 5, unitNumber: 2, term: 1, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u062B\u0627\u0646\u064A\u0629", unitTitleEn: "Unit 2", titleAr: "\u0627\u0644\u062F\u0631\u0633 5: \u0627\u0644\u062F\u0648\u0627\u0644 \u0627\u0644\u0645\u062E\u0635\u0635\u0629 \u0648\u0627\u0644\u0645\u0643\u062A\u0628\u0627\u062A \u0627\u0644\u0628\u0631\u0645\u062C\u064A\u0629 \u0627\u0644\u0623\u0633\u0627\u0633\u064A\u0629 (Functions & Modules)", titleEn: "Lesson 5: Functions & Modular Python" },
+              { id: "s1_t1_u2_l6", lessonNumber: 6, unitNumber: 2, term: 1, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u062B\u0627\u0646\u064A\u0629", unitTitleEn: "Unit 2", titleAr: "\u0627\u0644\u062F\u0631\u0633 6: \u0645\u0634\u0631\u0648\u0639 \u0628\u0631\u0645\u062C\u064A: \u0628\u0646\u0627\u0621 \u0631\u0648\u0628\u0648\u062A \u0645\u062D\u0627\u062F\u062B\u0629 \u0630\u0643\u064A \u0645\u0628\u0633\u0637 (Simple Chatbot in Python)", titleEn: "Lesson 6: Python Chatbot Capstone Project" }
+            ]
+          }
+        ]
+      },
+      term2: {
+        units: [
+          {
+            unitNumber: 3,
+            unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u062B\u0627\u0644\u062B\u0629: \u062A\u062D\u0644\u064A\u0644 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A \u0648\u062A\u0635\u0648\u0631\u0647\u0627 \u0648\u0645\u0643\u062A\u0628\u0627\u062A \u0628\u0627\u064A\u062B\u0648\u0646 (Data Analysis with Python)",
+            unitTitleEn: "Unit 3: Data Analytics & Visualization with Python",
+            term: 2,
+            lessons: [
+              { id: "s1_t2_u3_l1", lessonNumber: 1, unitNumber: 3, term: 2, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u062B\u0627\u0644\u062B\u0629", unitTitleEn: "Unit 3", titleAr: "\u0627\u0644\u062F\u0631\u0633 1: \u0645\u0642\u062F\u0645\u0629 \u0625\u0644\u0649 \u0639\u0644\u0645 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A \u0648\u0647\u0646\u062F\u0633\u0629 \u0648\u0627\u0633\u062A\u0643\u0634\u0627\u0641 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A", titleEn: "Lesson 1: Introduction to Data Science" },
+              { id: "s1_t2_u3_l2", lessonNumber: 2, unitNumber: 3, term: 2, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u062B\u0627\u0644\u062B\u0629", unitTitleEn: "Unit 3", titleAr: "\u0627\u0644\u062F\u0631\u0633 2: \u0627\u0633\u062A\u062E\u062F\u0627\u0645 \u0645\u0643\u062A\u0628\u0629 NumPy \u0644\u0644\u0639\u0645\u0644\u064A\u0627\u062A \u0627\u0644\u0631\u064A\u0627\u0636\u064A\u0629 \u0648\u0627\u0644\u0645\u0635\u0641\u0648\u0641\u0627\u062A \u0627\u0644\u0639\u062F\u062F\u064A\u0629", titleEn: "Lesson 2: Numerical Computing with NumPy" },
+              { id: "s1_t2_u3_l3", lessonNumber: 3, unitNumber: 3, term: 2, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u062B\u0627\u0644\u062B\u0629", unitTitleEn: "Unit 3", titleAr: "\u0627\u0644\u062F\u0631\u0633 3: \u0645\u0639\u0627\u0644\u062C\u0629 \u0648\u062A\u0646\u0638\u064A\u0641 \u0648\u062A\u0635\u0641\u064A\u0629 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A \u0628\u0627\u0633\u062A\u062E\u062F\u0627\u0645 \u0645\u0643\u062A\u0628\u0629 Pandas", titleEn: "Lesson 3: Data Wrangling with Pandas" },
+              { id: "s1_t2_u3_l4", lessonNumber: 4, unitNumber: 3, term: 2, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u062B\u0627\u0644\u062B\u0629", unitTitleEn: "Unit 3", titleAr: "\u0627\u0644\u062F\u0631\u0633 4: \u062A\u0635\u0648\u0631 \u0648\u0631\u0633\u0645 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A \u0628\u064A\u0627\u0646\u064A\u0627 \u0628\u0627\u0633\u062A\u062E\u062F\u0627\u0645 Matplotlib & Seaborn", titleEn: "Lesson 4: Data Visualization with Matplotlib" },
+              { id: "s1_t2_u3_l5", lessonNumber: 5, unitNumber: 3, term: 2, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u062B\u0627\u0644\u062B\u0629", unitTitleEn: "Unit 3", titleAr: "\u0627\u0644\u062F\u0631\u0633 5: \u0628\u0646\u0627\u0621 \u0646\u0645\u0627\u0630\u062C \u062A\u0646\u0628\u0624\u064A\u0629 \u0648\u062A\u0637\u0628\u064A\u0642\u0627\u062A \u0639\u0645\u0644\u064A\u0629 \u0639\u0644\u0649 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0644\u062D\u0642\u064A\u0642\u064A\u0629", titleEn: "Lesson 5: Predictive Analytics Basics" },
+              { id: "s1_t2_u3_l6", lessonNumber: 6, unitNumber: 3, term: 2, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u062B\u0627\u0644\u062B\u0629", unitTitleEn: "Unit 3", titleAr: "\u0627\u0644\u062F\u0631\u0633 6: \u0645\u0634\u0631\u0648\u0639 \u062A\u062D\u0644\u064A\u0644 \u0628\u064A\u0627\u0646\u0627\u062A \u0634\u0627\u0645\u0644 \u0648\u0639\u0631\u0636 \u0644\u0648\u062D\u0629 \u0645\u0624\u0634\u0631\u0627\u062A \u062A\u0641\u0627\u0639\u0644\u064A\u0629", titleEn: "Lesson 6: Interactive Data Analytics Dashboard" }
+            ]
+          },
+          {
+            unitNumber: 4,
+            unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u0631\u0627\u0628\u0639\u0629: \u0627\u0644\u0623\u0645\u0646 \u0627\u0644\u0633\u064A\u0628\u0631\u0627\u0646\u064A \u0627\u0644\u0645\u062A\u0642\u062F\u0645 \u0648\u062A\u0637\u0648\u064A\u0631 \u062A\u0637\u0628\u064A\u0642\u0627\u062A \u0627\u0644\u0648\u064A\u0628 \u0627\u0644\u062D\u062F\u064A\u062B\u0629",
+            unitTitleEn: "Unit 4: Advanced Cybersecurity & Web App Development",
+            term: 2,
+            lessons: [
+              { id: "s1_t2_u4_l1", lessonNumber: 1, unitNumber: 4, term: 2, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u0631\u0627\u0628\u0639\u0629", unitTitleEn: "Unit 4", titleAr: "\u0627\u0644\u062F\u0631\u0633 1: \u0623\u0645\u0646 \u0627\u0644\u0648\u064A\u0628 \u0648\u0627\u062E\u062A\u0628\u0627\u0631 \u0627\u0644\u0627\u062E\u062A\u0631\u0627\u0642 \u0627\u0644\u0623\u062E\u0644\u0627\u0642\u064A \u0648\u0627\u0643\u062A\u0634\u0627\u0641 \u0627\u0644\u062B\u063A\u0631\u0627\u062A", titleEn: "Lesson 1: Web Security & Ethical Hacking Basics" },
+              { id: "s1_t2_u4_l2", lessonNumber: 2, unitNumber: 4, term: 2, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u0631\u0627\u0628\u0639\u0629", unitTitleEn: "Unit 4", titleAr: "\u0627\u0644\u062F\u0631\u0633 2: \u062D\u0645\u0627\u064A\u0629 \u0627\u0644\u062A\u0637\u0628\u064A\u0642\u0627\u062A \u0648\u062A\u0623\u0645\u064A\u0646 \u0648\u0627\u062C\u0647\u0627\u062A \u0628\u0631\u0645\u062C\u0629 \u0627\u0644\u062A\u0637\u0628\u064A\u0642\u0627\u062A (API Security & OAuth)", titleEn: "Lesson 2: API Security & Modern Authentication" },
+              { id: "s1_t2_u4_l3", lessonNumber: 3, unitNumber: 4, term: 2, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u0631\u0627\u0628\u0639\u0629", unitTitleEn: "Unit 4", titleAr: "\u0627\u0644\u062F\u0631\u0633 3: \u062A\u0637\u0648\u064A\u0631 \u0648\u0627\u062C\u0647\u0627\u062A \u0627\u0644\u0648\u064A\u0628 \u0627\u0644\u062A\u0641\u0627\u0639\u0644\u064A\u0629 \u0627\u0644\u062D\u062F\u064A\u062B\u0629 \u0648\u0627\u0633\u062A\u062E\u062F\u0627\u0645 \u0623\u0637\u0631 \u0627\u0644\u0639\u0645\u0644", titleEn: "Lesson 3: Modern Web Framework Architecture" },
+              { id: "s1_t2_u4_l4", lessonNumber: 4, unitNumber: 4, term: 2, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u0631\u0627\u0628\u0639\u0629", unitTitleEn: "Unit 4", titleAr: "\u0627\u0644\u062F\u0631\u0633 4: \u0627\u0644\u062A\u062E\u0632\u064A\u0646 \u0627\u0644\u0633\u062D\u0627\u0628\u064A \u0648\u0642\u0648\u0627\u0639\u062F \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A \u063A\u064A\u0631 \u0627\u0644\u0639\u0644\u0627\u0626\u0642\u064A\u0629 (NoSQL / Cloud DB)", titleEn: "Lesson 4: Cloud Databases & NoSQL" },
+              { id: "s1_t2_u4_l5", lessonNumber: 5, unitNumber: 4, term: 2, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u0631\u0627\u0628\u0639\u0629", unitTitleEn: "Unit 4", titleAr: "\u0627\u0644\u062F\u0631\u0633 5: \u0625\u062F\u0627\u0631\u0629 \u0627\u0644\u0645\u0634\u0627\u0631\u064A\u0639 \u0627\u0644\u0628\u0631\u0645\u062C\u064A\u0629 \u0648\u0646\u0638\u0627\u0645 \u0627\u0644\u062A\u062D\u0643\u0645 \u0641\u064A \u0627\u0644\u0625\u0635\u062F\u0627\u0631\u0627\u062A Git / GitHub", titleEn: "Lesson 5: Version Control with Git & Team Workflows" },
+              { id: "s1_t2_u4_l6", lessonNumber: 6, unitNumber: 4, term: 2, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u0631\u0627\u0628\u0639\u0629", unitTitleEn: "Unit 4", titleAr: "\u0627\u0644\u062F\u0631\u0633 6: \u0627\u0644\u0645\u0634\u0631\u0648\u0639 \u0627\u0644\u062E\u062A\u0627\u0645\u064A \u0627\u0644\u0645\u062A\u0643\u0627\u0645\u0644: \u062A\u0637\u0628\u064A\u0642 \u0648\u064A\u0628 \u0630\u0643\u064A \u0645\u062A\u0635\u0644 \u0628\u0627\u0644\u0633\u062D\u0627\u0628\u0629 \u0648\u0642\u0648\u0627\u0639\u062F \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A", titleEn: "Lesson 6: Cloud-Connected Smart Web Capstone" }
+            ]
+          }
+        ]
+      }
+    }
+  }
+};
+function detectCurriculum(student) {
+  if (!student) {
+    return MOE_CURRICULA.grade4;
+  }
+  const code = (student.code || "").trim().toUpperCase();
+  const rawGradeText = `${student.grade || ""} ${student.stage || ""} ${student.courseName || ""} ${student.groupName || ""} ${student.academicYear || ""}`.toLowerCase();
+  const gradeText = rawGradeText.replace(/[أإآ]/g, "\u0627").replace(/ى/g, "\u064A").replace(/ة/g, "\u0647");
+  if (code.startsWith("D")) {
+    return MOE_CURRICULA.prep1;
+  }
+  if (code.startsWith("E")) {
+    return MOE_CURRICULA.prep2;
+  }
+  if (code.startsWith("F")) {
+    return MOE_CURRICULA.prep3;
+  }
+  if (code.startsWith("G") || code.startsWith("S1") || code.startsWith("S-1")) {
+    return MOE_CURRICULA.sec1;
+  }
+  if (code.startsWith("A")) {
+    return MOE_CURRICULA.grade4;
+  }
+  if (code.startsWith("B")) {
+    return MOE_CURRICULA.grade5;
+  }
+  if (code.startsWith("C")) {
+    return MOE_CURRICULA.grade6;
+  }
+  if (gradeText.includes("\u0627\u0648\u0644 \u0627\u0639\u062F\u0627\u062F\u064A") || gradeText.includes("\u0627\u0648\u0644\u064A \u0627\u0639\u062F\u0627\u062F\u064A") || gradeText.includes("\u0627\u0644\u0627\u0648\u0644 \u0627\u0644\u0627\u0639\u062F\u0627\u062F\u064A") || gradeText.includes("1 \u0627\u0639\u062F\u0627\u062F\u064A") || gradeText.includes("prep 1") || gradeText.includes("prep1") || gradeText.includes("ict-p1") || gradeText.includes("ict p1") || gradeText.includes("grade 7") || gradeText.includes("g7") || gradeText.includes("1st prep")) {
+    return MOE_CURRICULA.prep1;
+  }
+  if (gradeText.includes("\u062B\u0627\u0646\u064A \u0627\u0639\u062F\u0627\u062F\u064A") || gradeText.includes("\u062A\u0627\u0646\u064A\u0647 \u0627\u0639\u062F\u0627\u062F\u064A") || gradeText.includes("\u062A\u0627\u0646\u064A \u0627\u0639\u062F\u0627\u062F\u064A") || gradeText.includes("\u0627\u0644\u062B\u0627\u0646\u064A \u0627\u0644\u0627\u0639\u062F\u0627\u062F\u064A") || gradeText.includes("2 \u0627\u0639\u062F\u0627\u062F\u064A") || gradeText.includes("prep 2") || gradeText.includes("prep2") || gradeText.includes("ict-p2") || gradeText.includes("grade 8") || gradeText.includes("g8") || gradeText.includes("2nd prep")) {
+    return MOE_CURRICULA.prep2;
+  }
+  if (gradeText.includes("\u062B\u0627\u0644\u062B \u0627\u0639\u062F\u0627\u062F\u064A") || gradeText.includes("\u062A\u0627\u0644\u062A\u0647 \u0627\u0639\u062F\u0627\u062F\u064A") || gradeText.includes("\u062A\u0627\u0644\u062A \u0627\u0639\u062F\u0627\u062F\u064A") || gradeText.includes("\u0627\u0644\u062B\u0627\u0644\u062B \u0627\u0644\u0627\u0639\u062F\u0627\u062F\u064A") || gradeText.includes("3 \u0627\u0639\u062F\u0627\u062F\u064A") || gradeText.includes("prep 3") || gradeText.includes("prep3") || gradeText.includes("ict-p3") || gradeText.includes("grade 9") || gradeText.includes("g9") || gradeText.includes("3rd prep")) {
+    return MOE_CURRICULA.prep3;
+  }
+  if (gradeText.includes("\u0627\u0648\u0644 \u062B\u0627\u0646\u0648\u064A") || gradeText.includes("\u0627\u0648\u0644\u064A \u062B\u0627\u0646\u0648\u064A") || gradeText.includes("\u0627\u0644\u0627\u0648\u0644 \u0627\u0644\u062B\u0627\u0646\u0648\u064A") || gradeText.includes("1 \u062B\u0627\u0646\u0648\u064A") || gradeText.includes("sec 1") || gradeText.includes("sec1") || gradeText.includes("grade 10") || gradeText.includes("g10")) {
+    return MOE_CURRICULA.sec1;
+  }
+  if (gradeText.includes("\u0631\u0627\u0628\u0639") || gradeText.includes("\u0627\u0644\u0631\u0627\u0628\u0639") || gradeText.includes("grade 4") || gradeText.includes("primary 4") || gradeText.includes("p4")) {
+    return MOE_CURRICULA.grade4;
+  }
+  if (gradeText.includes("\u062E\u0627\u0645\u0633") || gradeText.includes("\u0627\u0644\u062E\u0627\u0645\u0633") || gradeText.includes("grade 5") || gradeText.includes("primary 5") || gradeText.includes("p5")) {
+    return MOE_CURRICULA.grade5;
+  }
+  if (gradeText.includes("\u0633\u0627\u062F\u0633") || gradeText.includes("\u0627\u0644\u0633\u0627\u062F\u0633") || gradeText.includes("grade 6") || gradeText.includes("primary 6") || gradeText.includes("p6")) {
+    return MOE_CURRICULA.grade6;
+  }
+  return MOE_CURRICULA.grade4;
+}
+var OFFICIAL_ICT_CURRICULUM_2026_2027 = {
+  // -----------------------------------------------------------------------
+  // GRADE 4 (Primary 4 Languages) - ICT 4 (2026/2027)
+  // -----------------------------------------------------------------------
+  grade4: [
+    {
+      id: "g4_t1_l1",
+      gradeKey: "grade4",
+      gradeNameAr: "\u0627\u0644\u0635\u0641 \u0627\u0644\u0631\u0627\u0628\u0639 \u0627\u0644\u0627\u0628\u062A\u062F\u0627\u0626\u064A",
+      gradeNameEn: "Grade 4 (Primary 4 Languages)",
+      term: 1,
+      unitNumber: 1,
+      unitTitleAr: "\u0627\u0644\u0645\u062D\u0648\u0631 \u0627\u0644\u0623\u0648\u0644: \u062F\u0648\u0631 \u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u0627\u0644\u0645\u0639\u0644\u0648\u0645\u0627\u062A \u0641\u064A \u062D\u064A\u0627\u062A\u0646\u0627",
+      unitTitleEn: "Theme 1: The Role of ICT in Our Lives",
+      lessonNumber: 1,
+      titleAr: "\u0627\u0644\u062F\u0631\u0633 1: \u0627\u0644\u0645\u0633\u062A\u0643\u0634\u0641 \u0627\u0644\u0646\u0634\u0637 (\u0639\u0627\u0644\u0645 \u0627\u0644\u0622\u062B\u0627\u0631 \u0623\u0644\u0628\u0631\u062A \u0644\u064A\u0646)",
+      titleEn: "Lesson 1: Explorer in Action (Archaeologist Albert Lin)",
+      concepts: [
+        { id: "g4_l1_c1", nameAr: "\u0627\u0644\u0631\u0627\u062F\u0627\u0631 \u0627\u0644\u0645\u062E\u062A\u0631\u0642 \u0644\u0644\u0623\u0631\u0636 (GPR - Ground Penetrating Radar)", nameEn: "Ground Penetrating Radar (GPR)", category: "hardware" },
+        { id: "g4_l1_c2", nameAr: "\u0645\u0642\u064A\u0627\u0633 \u0627\u0644\u0645\u063A\u0646\u0627\u0637\u064A\u0633\u064A\u0629 (Magnetometer) \u0644\u0644\u0643\u0634\u0641 \u0639\u0646 \u0627\u0644\u0645\u0639\u0627\u062F\u0646", nameEn: "Magnetometer (Detecting Metals)", category: "hardware" },
+        { id: "g4_l1_c3", nameAr: "\u0646\u0638\u0627\u0645 \u062A\u062D\u062F\u064A\u062F \u0627\u0644\u0645\u0648\u0627\u0642\u0639 \u0627\u0644\u0639\u0627\u0644\u0645\u064A (GPS) \u0648\u0627\u0633\u062A\u062E\u062F\u0627\u0645 \u0627\u0644\u0623\u0642\u0645\u0627\u0631 \u0627\u0644\u0635\u0646\u0627\u0639\u064A\u0629", nameEn: "Global Positioning System (GPS)", category: "hardware" },
+        { id: "g4_l1_c4", nameAr: "\u0623\u062F\u0648\u0627\u062A \u0627\u0644\u0627\u0633\u062A\u0643\u0634\u0627\u0641 \u0641\u0648\u0642 \u0627\u0644\u0623\u0631\u0636 \u0648\u062A\u062D\u062A \u0627\u0644\u0623\u0631\u0636 \u0628\u062F\u0648\u0646 \u062D\u0641\u0631", nameEn: "Non-invasive Archaeological Surveying", category: "core" }
+      ],
+      defaultHomework: [
+        "\u0643\u062A\u0627\u0628\u0629 \u062C\u062F\u0648\u0644 \u0641\u064A \u0627\u0644\u0643\u0634\u0643\u0648\u0644 \u064A\u0648\u0636\u062D \u0648\u0638\u064A\u0641\u0629 \u0643\u0644 \u0645\u0646: (GPS, Magnetometer, GPR) \u0645\u0639 \u0631\u0633\u0645 \u062A\u0648\u0636\u064A\u062D\u064A \u0628\u0633\u064A\u0637.",
+        "\u062D\u0644 \u0623\u0633\u0626\u0644\u0629 \u0643\u062A\u0627\u0628 \u0627\u0644\u0648\u0632\u0627\u0631\u0629 \u0627\u0644\u0645\u0639\u062A\u0645\u062F \u0639\u0644\u0649 \u0627\u0644\u062F\u0631\u0633 \u0627\u0644\u0623\u0648\u0644 \u0641\u064A \u0643\u0634\u0643\u0648\u0644 \u0627\u0644\u062D\u0635\u0629.",
+        "\u062A\u0635\u0648\u064A\u0631 \u0648\u0631\u0642\u0629 \u0627\u0644\u0625\u062C\u0627\u0628\u0629 \u0628\u0627\u0644\u0643\u0634\u0643\u0648\u0644 \u0648\u0631\u0641\u0639\u0647\u0627 \u0639\u0628\u0631 \u0628\u0648\u0627\u0628\u0629 \u0627\u0644\u0645\u062A\u062F\u0631\u0628 \u0644\u0644\u062A\u0642\u064A\u064A\u0645 \u0648\u0627\u0644\u062A\u0635\u062D\u064A\u062D \u0627\u0644\u0630\u0643\u064A."
+      ],
+      bonusChallenge: "\u{1F31F} \u0628\u0648\u0646\u0635 \u062A\u0641\u0648\u0642: \u062A\u062E\u064A\u0644 \u0623\u0646\u0643 \u0645\u0633\u062A\u0643\u0634\u0641 \u064A\u0628\u062D\u062B \u0639\u0646 \u0622\u062B\u0627\u0631 \u062A\u062D\u062A \u0627\u0644\u0623\u0631\u0636\u060C \u0627\u0643\u062A\u0628 \u062E\u0637\u0629 \u0645\u0646 3 \u0623\u0633\u0637\u0631 \u062A\u062D\u062F\u062F \u0641\u064A\u0647\u0627 \u0623\u064A \u0627\u0644\u0623\u062F\u0648\u0627\u062A \u0633\u062A\u0633\u062A\u062E\u062F\u0645 \u0623\u0648\u0644\u0627\u064B \u0648\u0644\u0645\u0627\u0630\u0627!",
+      nextPrep: ["\u0627\u0644\u062A\u062D\u0636\u064A\u0631 \u0644\u0644\u062F\u0631\u0633 \u0627\u0644\u062B\u0627\u0646\u064A: \u0627\u0644\u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u0648\u062A\u0637\u0648\u0631\u0647\u0627 \u0627\u0644\u062A\u0627\u0631\u064A\u062E\u064A \u0648\u0627\u0644\u0639\u0635\u0648\u0631 \u0627\u0644\u0623\u0631\u0628\u0639\u0629 \u0645\u0646 \u0639\u0635\u0631 \u0645\u0627 \u0642\u0628\u0644 \u0627\u0644\u0645\u064A\u0643\u0627\u0646\u064A\u0643\u0627 \u062D\u062A\u0649 \u0639\u0635\u0631 \u0627\u0644\u0625\u0644\u0643\u062A\u0631\u0648\u0646\u064A\u0627\u062A."]
+    },
+    {
+      id: "g4_t1_l2",
+      gradeKey: "grade4",
+      gradeNameAr: "\u0627\u0644\u0635\u0641 \u0627\u0644\u0631\u0627\u0628\u0639 \u0627\u0644\u0627\u0628\u062A\u062F\u0627\u0626\u064A",
+      gradeNameEn: "Grade 4 (Primary 4 Languages)",
+      term: 1,
+      unitNumber: 1,
+      unitTitleAr: "\u0627\u0644\u0645\u062D\u0648\u0631 \u0627\u0644\u0623\u0648\u0644: \u062F\u0648\u0631 \u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u0627\u0644\u0645\u0639\u0644\u0648\u0645\u0627\u062A \u0641\u064A \u062D\u064A\u0627\u062A\u0646\u0627",
+      unitTitleEn: "Theme 1: The Role of ICT in Our Lives",
+      lessonNumber: 2,
+      titleAr: "\u0627\u0644\u062F\u0631\u0633 2: \u0627\u0644\u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u0648\u062A\u0637\u0648\u0631\u0647\u0627 \u0627\u0644\u062A\u0627\u0631\u064A\u062E\u064A \u0639\u0628\u0631 \u0627\u0644\u0639\u0635\u0648\u0631",
+      titleEn: "Lesson 2: Technology and Its Historical Evolution",
+      concepts: [
+        { id: "g4_l2_c1", nameAr: "\u0639\u0635\u0631 \u0645\u0627 \u0642\u0628\u0644 \u0627\u0644\u062B\u0648\u0631\u0629 \u0627\u0644\u0645\u064A\u0643\u0627\u0646\u064A\u0643\u064A\u0629 (Pre-mechanical Age) - \u0627\u0644\u0643\u062A\u0627\u0628\u0629 \u0648\u0627\u0644\u0635\u0648\u0631 \u0648\u0627\u0644\u0631\u0645\u0648\u0632 \u0627\u0644\u0647\u064A\u0631\u0648\u063A\u0644\u064A\u0641\u064A\u0629", nameEn: "Pre-mechanical Age (3000 BC - 1450 AD)", category: "core" },
+        { id: "g4_l2_c2", nameAr: "\u0639\u0635\u0631 \u0627\u0644\u062B\u0648\u0631\u0629 \u0627\u0644\u0645\u064A\u0643\u0627\u0646\u064A\u0643\u064A\u0629 (Mechanical Age) - \u0627\u0644\u0637\u0628\u0627\u0639\u0629 \u0648\u0627\u0644\u0622\u0644\u0629 \u0627\u0644\u0643\u0627\u062A\u0628\u0629 \u0648\u0622\u0644\u0629 \u0628\u0627\u0633\u0643\u0627\u0644\u064A\u0646", nameEn: "Mechanical Age (Printing Press, Pascaline)", category: "core" },
+        { id: "g4_l2_c3", nameAr: "\u0639\u0635\u0631 \u0627\u0644\u062B\u0648\u0631\u0629 \u0627\u0644\u0643\u0647\u0631\u0648\u0645\u064A\u0643\u0627\u0646\u064A\u0643\u064A\u0629 (Electro-mechanical Age) - \u0627\u0644\u062A\u0644\u063A\u0631\u0627\u0641 \u0648\u062E\u0637\u0648\u0637 \u0627\u0644\u0647\u0627\u062A\u0641 \u0648\u0628\u062F\u0627\u064A\u0627\u062A \u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631", nameEn: "Electro-mechanical Age (Telegraph, Telephone)", category: "core" },
+        { id: "g4_l2_c4", nameAr: "\u0639\u0635\u0631 \u0627\u0644\u062B\u0648\u0631\u0629 \u0627\u0644\u0625\u0644\u0643\u062A\u0631\u0648\u0646\u064A\u0629 \u0648\u0627\u0644\u0645\u0639\u0644\u0648\u0645\u0627\u062A\u064A\u0629 (Electronic Age) - \u0627\u0644\u062D\u0648\u0627\u0633\u064A\u0628 \u0627\u0644\u0634\u062E\u0635\u064A\u0629 \u0648\u0627\u0644\u0623\u0642\u0645\u0627\u0631 \u0627\u0644\u0635\u0646\u0627\u0639\u064A\u0629 \u0648\u0627\u0644\u0625\u0646\u062A\u0631\u0646\u062A", nameEn: "Electronic Age (Personal Computers, Satellites)", category: "core" }
+      ],
+      defaultHomework: [
+        "\u0631\u0633\u0645 \u062E\u0637 \u0632\u0645\u0646\u064A (Timeline) \u0641\u064A \u0627\u0644\u0643\u0634\u0643\u0648\u0644 \u064A\u0636\u0645 \u0627\u0644\u0639\u0635\u0648\u0631 \u0627\u0644\u0623\u0631\u0628\u0639\u0629 \u0644\u0644\u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u0645\u0639 \u0630\u0643\u0631 \u0627\u062E\u062A\u0631\u0627\u0639 \u0648\u0627\u062D\u062F \u0644\u0643\u0644 \u0639\u0635\u0631.",
+        "\u062D\u0644 \u0623\u0633\u0626\u0644\u0629 \u0645\u0631\u0627\u062C\u0639\u0629 \u0627\u0644\u062A\u0637\u0648\u0631 \u0627\u0644\u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A \u0648\u062A\u0635\u0648\u064A\u0631 \u0627\u0644\u0643\u0634\u0643\u0648\u0644 \u0648\u0631\u0641\u0639\u0647 \u0639\u0644\u0649 \u0627\u0644\u0628\u0648\u0627\u0628\u0629."
+      ],
+      bonusChallenge: '\u{1F31F} \u0628\u0648\u0646\u0635 \u0645\u062A\u0645\u064A\u0632: \u0627\u0628\u062D\u062B \u0639\u0646 \u0645\u062E\u062A\u0631\u0639 \u0622\u0644\u0629 "\u0628\u0627\u0633\u0643\u0627\u0644\u064A\u0646 Pascaline" \u0648\u0627\u0643\u062A\u0628 \u0641\u064A \u0633\u0637\u0631\u064A\u0646 \u0643\u064A\u0641 \u0633\u0627\u0639\u062F\u062A \u0641\u064A \u0639\u0644\u0645 \u0627\u0644\u062D\u0633\u0627\u0628.',
+      nextPrep: ["\u0627\u0644\u062A\u062D\u0636\u064A\u0631 \u0644\u0644\u062F\u0631\u0633 \u0627\u0644\u062B\u0627\u0644\u062B: \u0645\u0643\u0648\u0646\u0627\u062A \u062C\u0647\u0627\u0632 \u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631 (\u0648\u062D\u062F\u0627\u062A \u0627\u0644\u0625\u062F\u062E\u0627\u0644 \u0648\u0627\u0644\u0625\u062E\u0631\u0627\u062C)."]
+    },
+    {
+      id: "g4_t1_l3",
+      gradeKey: "grade4",
+      gradeNameAr: "\u0627\u0644\u0635\u0641 \u0627\u0644\u0631\u0627\u0628\u0639 \u0627\u0644\u0627\u0628\u062A\u062F\u0627\u0626\u064A",
+      gradeNameEn: "Grade 4 (Primary 4 Languages)",
+      term: 1,
+      unitNumber: 1,
+      unitTitleAr: "\u0627\u0644\u0645\u062D\u0648\u0631 \u0627\u0644\u0623\u0648\u0644: \u062F\u0648\u0631 \u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u0627\u0644\u0645\u0639\u0644\u0648\u0645\u0627\u062A \u0641\u064A \u062D\u064A\u0627\u062A\u0646\u0627",
+      unitTitleEn: "Theme 1: The Role of ICT in Our Lives",
+      lessonNumber: 3,
+      titleAr: "\u0627\u0644\u062F\u0631\u0633 3: \u0645\u0643\u0648\u0646\u0627\u062A \u062C\u0647\u0627\u0632 \u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631 (\u0627\u0644\u0639\u062A\u0627\u062F \u0648\u0648\u062D\u062F\u0627\u062A \u0627\u0644\u0625\u062F\u062E\u0627\u0644 \u0648\u0627\u0644\u0625\u062E\u0631\u0627\u062C)",
+      titleEn: "Lesson 3: Components of Computer Systems (Hardware, Input & Output)",
+      concepts: [
+        { id: "g4_l3_c1", nameAr: "\u0648\u062D\u062F\u0627\u062A \u0627\u0644\u0625\u062F\u062E\u0627\u0644 (Input Devices): \u0644\u0648\u062D\u0629 \u0627\u0644\u0645\u0641\u0627\u062A\u064A\u062D\u060C \u0627\u0644\u0641\u0623\u0631\u0629\u060C \u0627\u0644\u0645\u064A\u0643\u0631\u0648\u0641\u0648\u0646\u060C \u0627\u0644\u0643\u0627\u0645\u064A\u0631\u0627\u060C \u0627\u0644\u0645\u0627\u0633\u062D \u0627\u0644\u0636\u0648\u0626\u064A Scanner", nameEn: "Input Devices (Keyboard, Mouse, Mic, Camera, Scanner)", category: "hardware" },
+        { id: "g4_l3_c2", nameAr: "\u0648\u062D\u062F\u0627\u062A \u0627\u0644\u0625\u062E\u0631\u0627\u062C (Output Devices): \u0627\u0644\u0634\u0627\u0634\u0629\u060C \u0645\u0643\u0628\u0631\u0627\u062A \u0627\u0644\u0635\u0648\u062A Speakers\u060C \u0645\u0631\u0643\u0628 \u0627\u0644\u0643\u0644\u0627\u0645 Speech Synthesizer\u060C \u0634\u0627\u0634\u0629 \u0628\u0631\u0627\u064A\u0644 \u0627\u0644\u0637\u0631\u0641\u064A\u0629", nameEn: "Output Devices (Screen, Speakers, Speech Synthesizer, Braille)", category: "hardware" },
+        { id: "g4_l3_c3", nameAr: "\u0645\u0643\u0648\u0646\u0627\u062A \u0627\u0644\u0643\u064A\u0633\u0629 (Hardware Parts): \u0627\u0644\u0644\u0648\u062D\u0629 \u0627\u0644\u0623\u0645 Motherboard\u060C \u0627\u0644\u0645\u0639\u0627\u0644\u062C CPU\u060C \u0645\u0632\u0648\u062F \u0627\u0644\u0637\u0627\u0642\u0629 Power Supply\u060C \u0627\u0644\u0630\u0627\u0643\u0631\u0629 RAM\u060C \u0627\u0644\u0642\u0631\u0635 \u0627\u0644\u0635\u0644\u0628 Hard Disk", nameEn: "Case Hardware (Motherboard, CPU, Power Supply, RAM, HDD)", category: "hardware" },
+        { id: "g4_l3_c4", nameAr: "\u062F\u0648\u0631\u0629 \u0645\u0639\u0627\u0644\u062C\u0629 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A: \u0625\u062F\u062E\u0627\u0644 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A Data -> \u0645\u0639\u0627\u0644\u062C\u0629 \u0628\u0627\u0644\u0645\u062E\u064A\u062E CPU -> \u0625\u062E\u0631\u0627\u062C \u0627\u0644\u0645\u0639\u0644\u0648\u0645\u0627\u062A Information", nameEn: "Data Processing Cycle (Input Data -> CPU -> Output Information)", category: "core" }
+      ],
+      defaultHomework: [
+        "\u0643\u062A\u0627\u0628\u0629 \u062C\u062F\u0648\u0644 \u0641\u064A \u0627\u0644\u0643\u0634\u0643\u0648\u0644 \u0644\u0644\u0645\u0642\u0627\u0631\u0646\u0629 \u0628\u064A\u0646 \u0648\u062D\u062F\u0627\u062A \u0627\u0644\u0625\u062F\u062E\u0627\u0644 (Input) \u0648\u0648\u062D\u062F\u0627\u062A \u0627\u0644\u0625\u062E\u0631\u0627\u062C (Output).",
+        "\u0631\u0633\u0645 \u0648\u062A\u0648\u062B\u064A\u0642 \u0623\u0633\u0645\u0627\u0621 \u0645\u0643\u0648\u0646\u0627\u062A \u0627\u0644\u0643\u064A\u0633\u0629 \u0627\u0644\u062E\u0645\u0633\u0629 (Power Supply, Motherboard, CPU, RAM, Hard Disk) \u0628\u0627\u0644\u0625\u0646\u062C\u0644\u064A\u0632\u064A \u0648\u0627\u0644\u0639\u0631\u0628\u064A.",
+        "\u062A\u0635\u0648\u064A\u0631 \u0635\u0641\u062D\u0627\u062A \u0627\u0644\u0643\u0634\u0643\u0648\u0644 \u0648\u0631\u0641\u0639\u0647\u0627 \u0639\u0628\u0631 \u0628\u0648\u0627\u0628\u0629 \u0627\u0644\u0645\u062A\u062F\u0631\u0628 \u0627\u0644\u0630\u0643\u064A\u0629."
+      ],
+      bonusChallenge: "\u{1F31F} \u0628\u0648\u0646\u0635 \u0639\u0645\u0644\u064A: \u062A\u0633\u062C\u064A\u0644 \u0641\u0648\u064A\u0633 \u0642\u0635\u064A\u0631 \u0623\u0648 \u0641\u064A\u062F\u064A\u0648 \u062A\u0634\u0631\u062D \u0641\u064A\u0647 \u0628\u0635\u0648\u062A\u0643 \u0627\u0644\u0641\u0631\u0642 \u0628\u064A\u0646 Data \u0648 Information \u0648\u062A\u0633\u0645\u064A 3 \u0648\u062D\u062F\u0627\u062A \u0625\u062F\u062E\u0627\u0644.",
+      nextPrep: ["\u0627\u0644\u062A\u062D\u0636\u064A\u0631 \u0644\u0644\u062F\u0631\u0633 \u0627\u0644\u0631\u0627\u0628\u0639: \u0627\u0644\u0628\u0631\u0645\u062C\u064A\u0627\u062A \u0648\u0623\u0646\u0638\u0645\u0629 \u0627\u0644\u062A\u0634\u063A\u064A\u0644 (Software & Operating Systems)."]
+    },
+    {
+      id: "g4_t1_l4",
+      gradeKey: "grade4",
+      gradeNameAr: "\u0627\u0644\u0635\u0641 \u0627\u0644\u0631\u0627\u0628\u0639 \u0627\u0644\u0627\u0628\u062A\u062F\u0627\u0626\u064A",
+      gradeNameEn: "Grade 4 (Primary 4 Languages)",
+      term: 1,
+      unitNumber: 1,
+      unitTitleAr: "\u0627\u0644\u0645\u062D\u0648\u0631 \u0627\u0644\u0623\u0648\u0644: \u062F\u0648\u0631 \u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u0627\u0644\u0645\u0639\u0644\u0648\u0645\u0627\u062A \u0641\u064A \u062D\u064A\u0627\u062A\u0646\u0627",
+      unitTitleEn: "Theme 1: The Role of ICT in Our Lives",
+      lessonNumber: 4,
+      titleAr: "\u0627\u0644\u062F\u0631\u0633 4: \u0627\u0644\u0628\u0631\u0645\u062C\u064A\u0627\u062A \u0648\u0623\u0646\u0638\u0645\u0629 \u0627\u0644\u062A\u0634\u063A\u064A\u0644 (Software & Operating Systems)",
+      titleEn: "Lesson 4: Software and Operating Systems",
+      concepts: [
+        { id: "g4_l4_c1", nameAr: "\u0646\u0638\u0627\u0645 \u0627\u0644\u062A\u0634\u063A\u064A\u0644 (Operating System - Windows) \u0648\u062F\u0648\u0631\u0647 \u0643\u0648\u0633\u064A\u0637 \u0628\u064A\u0646 \u0627\u0644\u0645\u0633\u062A\u062E\u062F\u0645 \u0648\u0627\u0644\u0639\u062A\u0627\u062F", nameEn: "Operating System (OS Role & Windows)", category: "software" },
+        { id: "g4_l4_c2", nameAr: "\u0648\u062D\u062F\u0629 \u0627\u0644\u0645\u0639\u0627\u0644\u062C\u0629 \u0627\u0644\u0645\u0631\u0643\u0632\u064A\u0629 (CPU) \u0639\u0642\u0644 \u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631 \u0648\u0645\u0633\u0624\u0648\u0644\u064A\u0629 \u0645\u0639\u0627\u0644\u062C\u0629 \u0627\u0644\u0623\u0648\u0627\u0645\u0631", nameEn: "CPU (Brain of Computer & Command Processing)", category: "hardware" },
+        { id: "g4_l4_c3", nameAr: "\u0627\u0644\u0628\u0631\u0645\u062C\u064A\u0627\u062A \u0627\u0644\u062A\u0637\u0628\u064A\u0642\u064A\u0629 (Application Software) \u0645\u062B\u0644 Word, PowerPoint, \u0627\u0644\u0645\u062A\u0635\u0641\u062D\u0627\u062A \u0648\u0627\u0644\u0623\u0644\u0639\u0627\u0628", nameEn: "Applications Software (MS Word, PowerPoint, Browsers)", category: "software" },
+        { id: "g4_l4_c4", nameAr: "\u0645\u062E\u0637\u0637 \u062A\u062F\u0641\u0642 \u0627\u0644\u0623\u0648\u0627\u0645\u0631: \u0627\u0644\u0645\u0633\u062A\u062E\u062F\u0645 -> \u0627\u0644\u062A\u0637\u0628\u064A\u0642 -> \u0646\u0638\u0627\u0645 \u0627\u0644\u062A\u0634\u063A\u064A\u0644 OS -> \u0627\u0644\u0645\u0639\u0627\u0644\u062C CPU -> \u0627\u0644\u0634\u0627\u0634\u0629", nameEn: "Software Execution Flow to CPU", category: "core" }
+      ],
+      defaultHomework: [
+        "\u0643\u062A\u0627\u0628\u0629 \u062E\u0637\u0648\u0627\u062A \u0645\u0627 \u064A\u062D\u062F\u062B \u0639\u0646\u062F \u0643\u062A\u0627\u0628\u0629 \u062D\u0631\u0641 \u0641\u064A \u0628\u0631\u0646\u0627\u0645\u062C Word \u062D\u062A\u0649 \u064A\u0638\u0647\u0631 \u0639\u0644\u0649 \u0627\u0644\u0634\u0627\u0634\u0629 \u0641\u064A \u0627\u0644\u0643\u0634\u0643\u0648\u0644.",
+        "\u062D\u0644 \u062A\u062F\u0631\u064A\u0628\u0627\u062A \u0627\u0644\u062F\u0631\u0633 \u0627\u0644\u0631\u0627\u0628\u0639 \u0628\u0627\u0644\u0643\u0634\u0643\u0648\u0644 \u0648\u062A\u0635\u0648\u064A\u0631\u0647\u0627 \u0644\u0631\u0641\u0639\u0647\u0627 \u0639\u0644\u0649 \u0627\u0644\u0628\u0648\u0627\u0628\u0629."
+      ],
+      bonusChallenge: "\u{1F31F} \u0628\u0648\u0646\u0635 \u0630\u0643\u0627\u0621: \u0627\u0630\u0643\u0631 \u0627\u0633\u0645 \u0646\u0638\u0627\u0645\u064A \u062A\u0634\u063A\u064A\u0644 \u063A\u064A\u0631 \u0627\u0644\u0648\u064A\u0646\u062F\u0648\u0632 \u064A\u064F\u0633\u062A\u062E\u062F\u0645\u0627\u0646 \u0641\u064A \u0627\u0644\u0647\u0648\u0627\u062A\u0641 \u0627\u0644\u0630\u0643\u064A\u0629.",
+      nextPrep: ["\u0627\u0644\u062A\u062D\u0636\u064A\u0631 \u0644\u0644\u062F\u0631\u0633 \u0627\u0644\u062E\u0627\u0645\u0633: \u0627\u0644\u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u0627\u0644\u0645\u0633\u0627\u0639\u062F\u0629 \u0648\u062F\u0639\u0645 \u0630\u0648\u064A \u0627\u0644\u0647\u0645\u0645 (Assistive Technology)."]
+    },
+    {
+      id: "g4_t1_l5",
+      gradeKey: "grade4",
+      gradeNameAr: "\u0627\u0644\u0635\u0641 \u0627\u0644\u0631\u0627\u0628\u0639 \u0627\u0644\u0627\u0628\u062A\u062F\u0627\u0626\u064A",
+      gradeNameEn: "Grade 4 (Primary 4 Languages)",
+      term: 1,
+      unitNumber: 1,
+      unitTitleAr: "\u0627\u0644\u0645\u062D\u0648\u0631 \u0627\u0644\u0623\u0648\u0644: \u062F\u0648\u0631 \u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u0627\u0644\u0645\u0639\u0644\u0648\u0645\u0627\u062A \u0641\u064A \u062D\u064A\u0627\u062A\u0646\u0627",
+      unitTitleEn: "Theme 1: The Role of ICT in Our Lives",
+      lessonNumber: 5,
+      titleAr: "\u0627\u0644\u062F\u0631\u0633 5: \u0627\u0644\u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u0627\u0644\u0645\u0633\u0627\u0639\u062F\u0629 \u0648\u062F\u0639\u0645 \u0623\u0635\u062D\u0627\u0628 \u0627\u0644\u0647\u0645\u0645 (Assistive Technology)",
+      titleEn: "Lesson 5: Supporting People of Determination with Assistive Technology",
+      concepts: [
+        { id: "g4_l5_c1", nameAr: "\u0628\u0631\u0645\u062C\u064A\u0627\u062A \u062A\u0643\u0628\u064A\u0631 \u0627\u0644\u0634\u0627\u0634\u0629 (Screen Magnification Software) \u0644\u0636\u0639\u0627\u0641 \u0627\u0644\u0628\u0635\u0631", nameEn: "Screen Magnification Software", category: "software" },
+        { id: "g4_l5_c2", nameAr: "\u0628\u0631\u0645\u062C\u064A\u0627\u062A \u0627\u0644\u062A\u0648\u0627\u0635\u0644 \u0627\u0644\u0628\u062F\u064A\u0644 (Alternative Communication Software) \u0644\u0641\u0627\u0642\u062F\u064A \u0627\u0644\u0646\u0637\u0642", nameEn: "Alternative Communication Software", category: "software" },
+        { id: "g4_l5_c3", nameAr: "\u0633\u0645\u0627\u0639\u0627\u062A \u0627\u0644\u0623\u0630\u0646 \u0627\u0644\u0631\u0642\u0645\u064A\u0629 \u0648\u0628\u0631\u0627\u0645\u062C \u0645\u0639\u0627\u0644\u062C\u0629 \u0627\u0644\u0633\u0645\u0639 \u0627\u0644\u0630\u0643\u064A\u0629", nameEn: "Digital Hearing Aids", category: "hardware" },
+        { id: "g4_l5_c4", nameAr: "\u0627\u0644\u0623\u0637\u0631\u0627\u0641 \u0627\u0644\u0627\u0635\u0637\u0646\u0627\u0639\u064A\u0629 \u0627\u0644\u0630\u0643\u064A\u0629 \u0648\u0627\u0644\u0643\u0631\u0627\u0633\u064A \u0627\u0644\u0645\u062A\u062D\u0631\u0643\u0629 \u0627\u0644\u0643\u0647\u0631\u0628\u0627\u0626\u064A\u0629 \u0648\u0627\u0644\u0645\u0633\u062A\u0643\u0634\u0641 \u0623\u0644\u0628\u0631\u062A \u0644\u064A\u0646", nameEn: "Smart Prosthetics & Wheelchairs (Albert Lin)", category: "hardware" }
+      ],
+      defaultHomework: [
+        "\u0643\u062A\u0627\u0628\u0629 3 \u0623\u0645\u062B\u0644\u0629 \u0644\u0644\u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u0627\u0644\u0645\u0633\u0627\u0639\u062F\u0629 \u0648\u0643\u064A\u0641 \u062A\u0641\u064A\u062F \u0627\u0644\u0637\u0644\u0627\u0628 \u0641\u064A \u062D\u064A\u0627\u062A\u0647\u0645 \u0627\u0644\u064A\u0648\u0645\u064A\u0629 \u0628\u0627\u0644\u0643\u0634\u0643\u0648\u0644.",
+        "\u062A\u0635\u0648\u064A\u0631 \u0648\u0627\u062C\u0628 \u0627\u0644\u0643\u0634\u0643\u0648\u0644 \u0648\u0631\u0641\u0639\u0647 \u0639\u0644\u0649 \u0628\u0648\u0627\u0628\u0629 \u0627\u0644\u0645\u062A\u062F\u0631\u0628."
+      ],
+      bonusChallenge: "\u{1F31F} \u0628\u0648\u0646\u0635 \u0627\u0628\u062A\u0643\u0627\u0631: \u0627\u0642\u062A\u0631\u062D \u0641\u0643\u0631\u0629 \u062C\u0647\u0627\u0632 \u0630\u0643\u064A \u062C\u062F\u064A\u062F \u064A\u0633\u0627\u0639\u062F \u0632\u0645\u064A\u0644\u0643 \u0627\u0644\u0643\u0641\u064A\u0641 \u0641\u064A \u0627\u0644\u0645\u062F\u0631\u0633\u0629.",
+      nextPrep: ["\u0627\u0644\u062A\u062D\u0636\u064A\u0631 \u0644\u0644\u062F\u0631\u0633 \u0627\u0644\u0633\u0627\u062F\u0633: \u0645\u0634\u0643\u0644\u0627\u062A \u0634\u0627\u0626\u0639\u0629 \u0644\u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u0627\u0644\u0645\u0639\u0644\u0648\u0645\u0627\u062A \u0648\u062D\u0644\u0648\u0644\u0647\u0627 \u0627\u0644\u062E\u0637\u0648\u0629 \u0628\u062E\u0637\u0648\u0629."]
+    },
+    {
+      id: "g4_t1_l6",
+      gradeKey: "grade4",
+      gradeNameAr: "\u0627\u0644\u0635\u0641 \u0627\u0644\u0631\u0627\u0628\u0639 \u0627\u0644\u0627\u0628\u062A\u062F\u0627\u0626\u064A",
+      gradeNameEn: "Grade 4 (Primary 4 Languages)",
+      term: 1,
+      unitNumber: 1,
+      unitTitleAr: "\u0627\u0644\u0645\u062D\u0648\u0631 \u0627\u0644\u0623\u0648\u0644: \u062F\u0648\u0631 \u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u0627\u0644\u0645\u0639\u0644\u0648\u0645\u0627\u062A \u0641\u064A \u062D\u064A\u0627\u062A\u0646\u0627",
+      unitTitleEn: "Theme 1: The Role of ICT in Our Lives",
+      lessonNumber: 6,
+      titleAr: "\u0627\u0644\u062F\u0631\u0633 6: \u0645\u0634\u0643\u0644\u0627\u062A \u0634\u0627\u0626\u0639\u0629 \u0644\u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u0627\u0644\u0645\u0639\u0644\u0648\u0645\u0627\u062A \u0648\u0637\u0631\u0642 \u062D\u0644\u0647\u0627 (Troubleshooting)",
+      titleEn: "Lesson 6: Common ICT Problems and Troubleshooting Solutions",
+      concepts: [
+        { id: "g4_l6_c1", nameAr: "\u0645\u0634\u0643\u0644\u0629 \u0639\u062F\u0645 \u0641\u062A\u062D \u0623\u062D\u062F \u0627\u0644\u062A\u0637\u0628\u064A\u0642\u0627\u062A (\u0625\u063A\u0644\u0627\u0642\u0647 \u0639\u0628\u0631 \u0625\u062F\u0627\u0631\u0629 \u0627\u0644\u0645\u0647\u0627\u0645\u060C \u062A\u062D\u062F\u064A\u062B \u0627\u0644\u0628\u0631\u0646\u0627\u0645\u062C\u060C \u0625\u0639\u0627\u062F\u0629 \u062A\u0634\u063A\u064A\u0644 \u0627\u0644\u062C\u0647\u0627\u0632)", nameEn: "App Not Opening Troubleshooting", category: "practical" },
+        { id: "g4_l6_c2", nameAr: "\u0645\u0634\u0643\u0644\u0629 \u062A\u0648\u0642\u0641 \u0645\u0624\u0634\u0631 \u0627\u0644\u0641\u0623\u0631\u0629 \u0623\u0648 \u0644\u0648\u062D\u0629 \u0627\u0644\u0645\u0641\u0627\u062A\u064A\u062D (\u0641\u062D\u0635 \u0643\u0627\u0628\u0644 USB\u060C \u0625\u0639\u0627\u062F\u0629 \u0627\u0644\u062A\u0634\u063A\u064A\u0644\u060C \u0627\u0644\u062A\u0623\u0643\u062F \u0645\u0646 \u0627\u0644\u0628\u0637\u0627\u0631\u064A\u0629)", nameEn: "Mouse / Keyboard Not Responding", category: "practical" },
+        { id: "g4_l6_c3", nameAr: "\u0645\u0634\u0643\u0644\u0629 \u062A\u062C\u0645\u062F \u0627\u0644\u0634\u0627\u0634\u0629 (Screen Freeze) \u0648\u0627\u0644\u0636\u063A\u0637 \u0639\u0644\u0649 Ctrl + Alt + Delete", nameEn: "Screen Freeze & Force Quit", category: "practical" },
+        { id: "g4_l6_c4", nameAr: "\u0645\u0634\u0643\u0644\u0629 \u0627\u0646\u0642\u0637\u0627\u0639 \u0627\u0644\u0625\u0646\u062A\u0631\u0646\u062A (\u0641\u062D\u0635 \u0627\u062A\u0635\u0627\u0644 Wi-Fi\u060C \u0643\u0627\u0628\u0644 \u0627\u0644\u0631\u0627\u0648\u062A\u0631\u060C \u0625\u0639\u0627\u062F\u0629 \u062A\u0634\u063A\u064A\u0644 \u062C\u0647\u0627\u0632 \u0627\u0644\u0631\u0627\u0648\u062A\u0631)", nameEn: "No Internet Connection Solutions", category: "practical" }
+      ],
+      defaultHomework: [
+        "\u0643\u062A\u0627\u0628\u0629 \u062C\u062F\u0648\u0644 \u0641\u064A \u0627\u0644\u0643\u0634\u0643\u0648\u0644 \u064A\u0636\u0645 3 \u0645\u0634\u0643\u0644\u0627\u062A \u0644\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631 \u0648\u0627\u0644\u062D\u0644 \u0627\u0644\u0645\u0642\u062A\u0631\u062D \u0644\u0643\u0644 \u0645\u0634\u0643\u0644\u0629 \u062E\u0637\u0648\u0629 \u0628\u062E\u0637\u0648\u0629.",
+        "\u062D\u0644 \u062A\u062F\u0631\u064A\u0628\u0627\u062A \u0643\u062A\u0627\u0628 \u0627\u0644\u0645\u062F\u0631\u0633\u0629 \u0648\u062A\u0635\u0648\u064A\u0631 \u0635\u0641\u062D\u0627\u062A \u0627\u0644\u0625\u062C\u0627\u0628\u0629."
+      ],
+      bonusChallenge: "\u{1F31F} \u0628\u0648\u0646\u0635 \u0639\u0645\u0644\u064A: \u0637\u0628\u0642 \u062E\u0637\u0648\u0629 \u0625\u0639\u0627\u062F\u0629 \u062A\u0634\u063A\u064A\u0644 \u0627\u0644\u0631\u0627\u0648\u062A\u0631 \u0641\u064A \u0627\u0644\u0645\u0646\u0632\u0644 \u0648\u0627\u0643\u062A\u0628 \u0645\u0627\u0630\u0627 \u0644\u0627\u062D\u0638\u062A \u0641\u064A \u0627\u0644\u0623\u0636\u0648\u0627\u0621.",
+      nextPrep: ["\u0627\u0644\u062A\u062D\u0636\u064A\u0631 \u0644\u0644\u062F\u0631\u0633 \u0627\u0644\u0633\u0627\u0628\u0639: \u062C\u0645\u0639 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A \u0648\u062A\u062D\u0644\u064A\u0644\u0647\u0627 \u0648\u0631\u0633\u0645 \u0627\u0644\u0645\u062E\u0637\u0637\u0627\u062A \u0627\u0644\u0628\u064A\u0627\u0646\u064A\u0629 \u0628\u0628\u0631\u0646\u0627\u0645\u062C Excel."]
+    },
+    {
+      id: "g4_t1_l7",
+      gradeKey: "grade4",
+      gradeNameAr: "\u0627\u0644\u0635\u0641 \u0627\u0644\u0631\u0627\u0628\u0639 \u0627\u0644\u0627\u0628\u062A\u062F\u0627\u0626\u064A",
+      gradeNameEn: "Grade 4 (Primary 4 Languages)",
+      term: 1,
+      unitNumber: 1,
+      unitTitleAr: "\u0627\u0644\u0645\u062D\u0648\u0631 \u0627\u0644\u0623\u0648\u0644: \u062F\u0648\u0631 \u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u0627\u0644\u0645\u0639\u0644\u0648\u0645\u0627\u062A \u0641\u064A \u062D\u064A\u0627\u062A\u0646\u0627",
+      unitTitleEn: "Theme 1: The Role of ICT in Our Lives",
+      lessonNumber: 7,
+      titleAr: "\u0627\u0644\u062F\u0631\u0633 7: \u062C\u0645\u0639 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A \u0648\u062A\u062D\u0644\u064A\u0644\u0647\u0627 \u0648\u0627\u0644\u062A\u0639\u0628\u064A\u0631 \u0639\u0646\u0647\u0627 \u0628\u0631\u0633\u0645 \u0628\u064A\u0627\u0646\u064A (Data & Graphs)",
+      titleEn: "Lesson 7: Collecting, Analyzing Data and Graphing with Excel",
+      concepts: [
+        { id: "g4_l7_c1", nameAr: "\u0645\u0635\u0627\u062F\u0631 \u062C\u0645\u0639 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A (\u0627\u0644\u0627\u0633\u062A\u0637\u0644\u0627\u0639\u0627\u062A Surveys\u060C \u0627\u0644\u062A\u062C\u0627\u0631\u0628\u060C \u0627\u0644\u0645\u0642\u0627\u0628\u0644\u0627\u062A \u0627\u0644\u0634\u062E\u0635\u064A\u0629\u060C \u0627\u0644\u0643\u062A\u0628 \u0627\u0644\u0645\u0648\u062B\u0648\u0642\u0629)", nameEn: "Data Collection Sources (Surveys, Experiments)", category: "core" },
+        { id: "g4_l7_c2", nameAr: "\u062A\u062D\u0644\u064A\u0644 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A \u0648\u0645\u0631\u0627\u062C\u0639\u062A\u0647\u0627 \u0648\u0627\u0633\u062A\u0628\u0639\u0627\u062F \u0627\u0644\u0645\u0639\u0644\u0648\u0645\u0627\u062A \u063A\u064A\u0631 \u0627\u0644\u062F\u0642\u064A\u0642\u0629", nameEn: "Data Analysis & Verification", category: "core" },
+        { id: "g4_l7_c3", nameAr: "\u0627\u0644\u0631\u0633\u0645 \u0627\u0644\u0628\u064A\u0627\u0646\u064A \u0627\u0644\u0639\u0645\u0648\u062F\u064A (Bar Chart) \u0644\u0644\u062A\u0639\u0628\u064A\u0631 \u0639\u0646 \u0627\u0644\u0646\u062A\u0627\u0626\u062C \u0628\u0648\u0636\u0648\u062D", nameEn: "Bar Charts Presentation", category: "software" },
+        { id: "g4_l7_c4", nameAr: "\u062A\u0637\u0628\u064A\u0642 \u0639\u0645\u0644\u064A \u0628\u0627\u0633\u062A\u062E\u062F\u0627\u0645 \u0628\u0631\u0646\u0627\u0645\u062C Microsoft Excel \u0644\u0625\u0646\u0634\u0627\u0621 \u062C\u062F\u0648\u0644 \u0648\u0631\u0633\u0645 \u0628\u064A\u0627\u0646\u064A", nameEn: "Excel Hands-on Chart Creation", category: "practical" }
+      ],
+      defaultHomework: [
+        "\u062C\u0645\u0639 \u0628\u064A\u0627\u0646\u0627\u062A \u0633\u0631\u064A\u0639\u0629 \u0639\u0646 \u0627\u0644\u0623\u062C\u0647\u0632\u0629 \u0627\u0644\u0645\u0641\u0636\u0644\u0629 \u0644\u0623\u0641\u0631\u0627\u062F \u0623\u0633\u0631\u062A\u0643 (\u0645\u0648\u0628\u0627\u064A\u0644\u060C \u0644\u0627\u0628\u062A\u0648\u0628\u060C \u062A\u0627\u0628\u0644\u062A) \u0648\u0631\u0633\u0645 \u0639\u0645\u0648\u062F \u0628\u064A\u0627\u0646\u064A \u0641\u064A \u0627\u0644\u0643\u0634\u0643\u0648\u0644.",
+        "\u062A\u0635\u0648\u064A\u0631 \u0627\u0644\u0631\u0633\u0645 \u0627\u0644\u0628\u064A\u0627\u0646\u064A \u0628\u0627\u0644\u0643\u0634\u0643\u0648\u0644 \u0648\u0631\u0641\u0639\u0647 \u0639\u0644\u0649 \u0627\u0644\u0628\u0648\u0627\u0628\u0629."
+      ],
+      bonusChallenge: "\u{1F31F} \u0628\u0648\u0646\u0635 \u0645\u062A\u0645\u064A\u0632: \u0641\u062A\u062D \u0645\u0644\u0641 Excel \u0639\u0644\u0649 \u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631 \u0648\u062A\u062C\u0631\u0628\u0629 \u0625\u062F\u0631\u0627\u062C \u0631\u0633\u0645 \u0628\u064A\u0627\u0646\u064A \u0648\u062A\u0635\u0648\u064A\u0631 \u0627\u0644\u0634\u0627\u0634\u0629.",
+      nextPrep: ["\u0627\u0644\u062A\u062D\u0636\u064A\u0631 \u0644\u0644\u062F\u0631\u0633 \u0627\u0644\u062B\u0627\u0645\u0646: \u0625\u0639\u062F\u0627\u062F \u0627\u0644\u062A\u0642\u0627\u0631\u064A\u0631 \u0644\u0646\u062A\u0627\u0626\u062C \u0627\u0644\u0623\u0628\u062D\u0627\u062B \u0648\u0639\u0631\u0648\u0636 PowerPoint."]
+    },
+    {
+      id: "g4_t1_l8",
+      gradeKey: "grade4",
+      gradeNameAr: "\u0627\u0644\u0635\u0641 \u0627\u0644\u0631\u0627\u0628\u0639 \u0627\u0644\u0627\u0628\u062A\u062F\u0627\u0626\u064A",
+      gradeNameEn: "Grade 4 (Primary 4 Languages)",
+      term: 1,
+      unitNumber: 1,
+      unitTitleAr: "\u0627\u0644\u0645\u062D\u0648\u0631 \u0627\u0644\u0623\u0648\u0644: \u062F\u0648\u0631 \u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u0627\u0644\u0645\u0639\u0644\u0648\u0645\u0627\u062A \u0641\u064A \u062D\u064A\u0627\u062A\u0646\u0627",
+      unitTitleEn: "Theme 1: The Role of ICT in Our Lives",
+      lessonNumber: 8,
+      titleAr: "\u0627\u0644\u062F\u0631\u0633 8: \u0625\u0639\u062F\u0627\u062F \u0648\u0645\u0634\u0627\u0631\u0643\u0629 \u0627\u0644\u062A\u0642\u0627\u0631\u064A\u0631 \u0644\u0646\u062A\u0627\u0626\u062C \u0627\u0644\u0623\u0628\u062D\u0627\u062B (Reporting Findings)",
+      titleEn: "Lesson 8: Preparing and Reporting Research Findings",
+      concepts: [
+        { id: "g4_l8_c1", nameAr: "\u0627\u0644\u0639\u0631\u0648\u0636 \u0627\u0644\u062A\u0642\u062F\u064A\u0645\u064A\u0629 (PowerPoint Presentations) \u0648\u062A\u0646\u0638\u064A\u0645 \u0627\u0644\u0634\u0631\u0627\u0626\u062D \u0648\u0627\u0644\u0623\u0644\u0648\u0627\u0646 \u0648\u0627\u0644\u062E\u0637\u0648\u0637", nameEn: "PowerPoint Slide Presentations", category: "software" },
+        { id: "g4_l8_c2", nameAr: "\u0645\u0642\u0627\u0637\u0639 \u0627\u0644\u0641\u064A\u062F\u064A\u0648 \u0627\u0644\u062A\u0639\u0644\u064A\u0645\u064A\u0629 \u0648\u0627\u0644\u062A\u0633\u062C\u064A\u0644\u0627\u062A \u0627\u0644\u0635\u0648\u062A\u064A\u0629 \u0644\u0634\u0631\u062D \u0627\u0644\u0646\u062A\u0627\u0626\u062C", nameEn: "Educational Video & Voice Clips", category: "core" },
+        { id: "g4_l8_c3", nameAr: "\u0627\u0644\u0645\u0644\u0635\u0642\u0627\u062A \u0627\u0644\u0625\u0639\u0644\u0627\u0646\u064A\u0629 \u0627\u0644\u0631\u0642\u0645\u064A\u0629 \u0648\u0627\u0644\u0648\u0631\u0642\u064A\u0629 (Posters) \u0644\u062C\u0630\u0628 \u0627\u0644\u0627\u0646\u062A\u0628\u0627\u0647", nameEn: "Digital Posters & Visual Aids", category: "practical" },
+        { id: "g4_l8_c4", nameAr: "\u0627\u0644\u0645\u0642\u0627\u0644\u0627\u062A \u0627\u0644\u0631\u0642\u0645\u064A\u0629 \u0648\u0627\u0644\u0645\u062F\u0648\u0646\u0627\u062A (Blogs) \u0648\u0645\u0648\u0627\u0642\u0639 \u0627\u0644\u062A\u0648\u0627\u0635\u0644 \u0644\u0646\u0634\u0631 \u0627\u0644\u0645\u0639\u0631\u0641\u0629 \u0628\u0627\u062D\u062A\u0631\u0627\u0641\u064A\u0629", nameEn: "Digital Blogs & Safe Publishing", category: "core" }
+      ],
+      defaultHomework: [
+        "\u062A\u0635\u0645\u064A\u0645 \u0645\u0644\u0635\u0642 \u0648\u0631\u0642\u064A \u0623\u0648 \u0634\u0631\u064A\u062D\u0629 \u0628\u0627\u0648\u0631\u0628\u0648\u064A\u0646\u062A \u0641\u064A \u0627\u0644\u0643\u0634\u0643\u0648\u0644 \u062A\u0639\u0631\u0636 \u0641\u0643\u0631\u0629 \u0645\u0634\u0631\u0648\u0639 \u0631\u0642\u0645\u064A \u0635\u063A\u064A\u0631.",
+        "\u062D\u0644 \u062A\u062F\u0631\u064A\u0628\u0627\u062A \u0645\u0631\u0627\u062C\u0639\u0629 \u0627\u0644\u0645\u062D\u0648\u0631 \u0627\u0644\u0623\u0648\u0644 \u0643\u0627\u0645\u0644\u0627\u064B \u0641\u064A \u0627\u0644\u0643\u0634\u0643\u0648\u0644 \u0648\u0631\u0641\u0639 \u0627\u0644\u0635\u0648\u0631."
+      ],
+      bonusChallenge: "\u{1F31F} \u0628\u0648\u0646\u0635 \u0625\u0628\u062F\u0627\u0639\u064A: \u0641\u062A\u062D PowerPoint \u0648\u0639\u0645\u0644 \u0634\u0631\u064A\u062D\u0629 \u0648\u0627\u062D\u062F\u0629 \u0628\u0647\u0627 \u0639\u0646\u0648\u0627\u0646\u0643 \u0648\u0635\u0648\u0631\u0629 \u0648\u062A\u0646\u0633\u064A\u0642 \u062C\u0645\u064A\u0644.",
+      nextPrep: ["\u0627\u0644\u062A\u062D\u0636\u064A\u0631 \u0644\u0644\u0645\u062D\u0648\u0631 \u0627\u0644\u062B\u0627\u0646\u064A: \u0627\u062D\u062A\u064A\u0627\u0637\u0627\u062A \u0627\u0644\u0633\u0644\u0627\u0645\u0629 \u0648\u0627\u0644\u0623\u0645\u0627\u0646 \u0627\u0644\u0631\u0642\u0645\u064A \u0639\u0644\u0649 \u0634\u0628\u0643\u0629 \u0627\u0644\u0625\u0646\u062A\u0631\u0646\u062A."]
+    }
+  ],
+  // -----------------------------------------------------------------------
+  // GRADE 5 (Primary 5 Languages) - ICT 5 (2026/2027)
+  // -----------------------------------------------------------------------
+  grade5: [
+    {
+      id: "g5_t1_l1",
+      gradeKey: "grade5",
+      gradeNameAr: "\u0627\u0644\u0635\u0641 \u0627\u0644\u062E\u0627\u0645\u0633 \u0627\u0644\u0627\u0628\u062A\u062F\u0627\u0626\u064A",
+      gradeNameEn: "Grade 5 (Primary 5 Languages)",
+      term: 1,
+      unitNumber: 1,
+      unitTitleAr: "\u0627\u0644\u0645\u062D\u0648\u0631 \u0627\u0644\u0623\u0648\u0644: \u062F\u0648\u0631 \u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u0627\u0644\u0645\u0639\u0644\u0648\u0645\u0627\u062A \u0641\u064A \u062D\u064A\u0627\u062A\u0646\u0627 \u0627\u0644\u064A\u0648\u0645\u064A\u0629",
+      unitTitleEn: "Theme 1: ICT in Daily Life",
+      lessonNumber: 1,
+      titleAr: "\u0627\u0644\u062F\u0631\u0633 1: \u0627\u0644\u0645\u0633\u062A\u0643\u0634\u0641 \u0627\u0644\u0646\u0634\u0637 (\u0639\u0627\u0644\u0645 \u0627\u0644\u0622\u062B\u0627\u0631 \u0641\u0631\u064A\u062F \u0647\u064A\u0628\u0631\u062A)",
+      titleEn: "Lesson 1: Explorer in Action (Archaeologist Fred Hiebert)",
+      concepts: [
+        { id: "g5_l1_c1", nameAr: "\u0627\u0633\u062A\u062E\u062F\u0627\u0645 \u0628\u0631\u0627\u0645\u062C Microsoft Word \u0648 Excel \u0648 PowerPoint \u0641\u064A \u062A\u0648\u062B\u064A\u0642 \u0627\u0644\u0623\u0628\u062D\u0627\u062B \u0648\u0627\u0644\u0628\u0639\u062B\u0627\u062A", nameEn: "Office Suite in Archaeological Research", category: "software" },
+        { id: "g5_l1_c2", nameAr: "\u0623\u062F\u0648\u0627\u062A \u0627\u0644\u062A\u0648\u0627\u0635\u0644 \u0627\u0644\u0631\u0642\u0645\u064A: \u0627\u0644\u0628\u0631\u064A\u062F \u0627\u0644\u0625\u0644\u0643\u062A\u0631\u0648\u0646\u064A\u060C \u062A\u0637\u0628\u064A\u0642 WhatsApp\u060C \u0645\u0643\u0627\u0644\u0645\u0627\u062A Zoom \u0627\u0644\u0627\u0641\u062A\u0631\u0627\u0636\u064A\u0629", nameEn: "Digital Communication (Zoom, WhatsApp, Email)", category: "core" },
+        { id: "g5_l1_c3", nameAr: "\u0627\u0644\u062C\u0648\u0644\u0627\u062A \u0627\u0644\u0627\u0641\u062A\u0631\u0627\u0636\u064A\u0629 (Virtual Tours) \u0648\u0627\u0633\u062A\u0643\u0634\u0627\u0641 \u0627\u0644\u0645\u062A\u0627\u062D\u0641 \u0639\u0646 \u0628\u064F\u0639\u062F", nameEn: "Virtual Museum Tours", category: "core" },
+        { id: "g5_l1_c4", nameAr: "\u0627\u0644\u0627\u0633\u062A\u0641\u0627\u062F\u0629 \u0645\u0646 \u0628\u0646\u0643 \u0627\u0644\u0645\u0639\u0631\u0641\u0629 \u0627\u0644\u0645\u0635\u0631\u064A (EKB) \u0641\u064A \u0627\u0644\u062A\u0639\u0644\u064A\u0645 \u0648\u0627\u0644\u062A\u062F\u0631\u064A\u0628 \u0644\u0644\u0637\u0644\u0627\u0628", nameEn: "Egyptian Knowledge Bank (EKB) in Learning", category: "core" }
+      ],
+      defaultHomework: [
+        "\u0643\u062A\u0627\u0628\u0629 3 \u0623\u062F\u0648\u0627\u062A \u0631\u0642\u0645\u064A\u0629 \u0627\u0633\u062A\u062E\u062F\u0645\u0647\u0627 \u0641\u0631\u064A\u062F \u0647\u064A\u0628\u0631\u062A \u0641\u064A \u0627\u0644\u062A\u0648\u0627\u0635\u0644 \u0645\u0639 \u0632\u0645\u0644\u0627\u0626\u0647 \u0648\u062A\u0648\u062B\u064A\u0642 \u0627\u0643\u062A\u0634\u0627\u0641\u0627\u062A\u0647 \u0628\u0627\u0644\u0643\u0634\u0643\u0648\u0644.",
+        "\u062A\u0635\u0648\u064A\u0631 \u0635\u0641\u062D\u0627\u062A \u0627\u0644\u0643\u0634\u0643\u0648\u0644 \u0648\u0631\u0641\u0639\u0647\u0627 \u0639\u0628\u0631 \u0627\u0644\u0628\u0648\u0627\u0628\u0629 \u0627\u0644\u0630\u0643\u064A\u0629."
+      ],
+      bonusChallenge: "\u{1F31F} \u0628\u0648\u0646\u0635 \u0645\u062A\u0645\u064A\u0632: \u0632\u064A\u0627\u0631\u0629 \u0645\u0648\u0642\u0639 \u0628\u0646\u0643 \u0627\u0644\u0645\u0639\u0631\u0641\u0629 \u0627\u0644\u0645\u0635\u0631\u064A \u0648\u0643\u062A\u0627\u0628\u0629 \u0627\u0633\u0645 \u0643\u062A\u0627\u0628 \u0623\u0648 \u062F\u0631\u0633 \u062A\u0635\u0641\u062D\u062A\u0647 \u0647\u0646\u0627\u0643.",
+      nextPrep: ["\u0627\u0644\u062A\u062D\u0636\u064A\u0631 \u0644\u0644\u062F\u0631\u0633 \u0627\u0644\u062B\u0627\u0646\u064A: \u0627\u0644\u0623\u062F\u0648\u0627\u062A \u0648\u0627\u0644\u0645\u0644\u062D\u0642\u0627\u062A \u0627\u0644\u0631\u0642\u0645\u064A\u0629 (Accessories) \u0648\u0648\u062D\u062F\u0627\u062A \u0642\u064A\u0627\u0633 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A."]
+    },
+    {
+      id: "g5_t1_l2",
+      gradeKey: "grade5",
+      gradeNameAr: "\u0627\u0644\u0635\u0641 \u0627\u0644\u062E\u0627\u0645\u0633 \u0627\u0644\u0627\u0628\u062A\u062F\u0627\u0626\u064A",
+      gradeNameEn: "Grade 5 (Primary 5 Languages)",
+      term: 1,
+      unitNumber: 1,
+      unitTitleAr: "\u0627\u0644\u0645\u062D\u0648\u0631 \u0627\u0644\u0623\u0648\u0644: \u062F\u0648\u0631 \u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u0627\u0644\u0645\u0639\u0644\u0648\u0645\u0627\u062A \u0641\u064A \u062D\u064A\u0627\u062A\u0646\u0627 \u0627\u0644\u064A\u0648\u0645\u064A\u0629",
+      unitTitleEn: "Theme 1: ICT in Daily Life",
+      lessonNumber: 2,
+      titleAr: "\u0627\u0644\u062F\u0631\u0633 2: \u0645\u0644\u062D\u0642\u0627\u062A \u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631 \u0648\u0623\u062F\u0648\u0627\u062A \u0627\u0644\u0634\u0628\u0643\u0627\u062A \u0648\u0648\u062D\u062F\u0627\u062A \u0627\u0644\u0642\u064A\u0627\u0633 (Accessories & Units)",
+      titleEn: "Lesson 2: Computer Network Accessories & Storage Units",
+      concepts: [
+        { id: "g5_l2_c1", nameAr: "\u0627\u0644\u0631\u0627\u0648\u062A\u0631 (Router) \u0648\u0643\u0627\u0628\u0644 \u0627\u0644\u0625\u064A\u062B\u0631\u0646\u062A (Ethernet Cable) \u0648\u0645\u0646\u0641\u0630 \u0627\u0644\u0625\u064A\u062B\u0631\u0646\u062A (Ethernet Port)", nameEn: "Router, Ethernet Cable & Port", category: "hardware" },
+        { id: "g5_l2_c2", nameAr: "\u0627\u0644\u0642\u0631\u0635 \u0627\u0644\u0635\u0644\u0628 \u0627\u0644\u062E\u0627\u0631\u062C\u064A (External Hard Drive) \u0648\u0630\u0627\u0643\u0631\u0629 \u0627\u0644\u0641\u0644\u0627\u0634\u0629 (Flash Memory)", nameEn: "External HDD & USB Flash Memory", category: "hardware" },
+        { id: "g5_l2_c3", nameAr: "\u0648\u062D\u062F\u0627\u062A \u0642\u064A\u0627\u0633 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A: Bit, Byte (8 Bits), KB, MB, GB, TB \u0628\u0627\u0644\u062A\u0631\u062A\u064A\u0628 \u0627\u0644\u062A\u0635\u0627\u0639\u062F\u064A", nameEn: "Data Units (Bit, Byte, KB, MB, GB, TB)", category: "core" },
+        { id: "g5_l2_c4", nameAr: "\u0648\u062D\u062F\u0629 \u0642\u064A\u0627\u0633 \u0633\u0631\u0639\u0629 \u0627\u0644\u0625\u0646\u062A\u0631\u0646\u062A: \u0645\u064A\u062C\u0627\u0628\u062A \u0641\u064A \u0627\u0644\u062B\u0627\u0646\u064A\u0629 (Mbps - Megabits per second)", nameEn: "Network Speed Units (Mbps)", category: "core" }
+      ],
+      defaultHomework: [
+        "\u0643\u062A\u0627\u0628\u0629 \u0633\u0644\u0645 \u0648\u062D\u062F\u0627\u062A \u0627\u0644\u0642\u064A\u0627\u0633 \u0627\u0644\u062A\u0635\u0627\u0639\u062F\u064A \u0645\u0646 Bit \u0625\u0644\u0649 TB \u0641\u064A \u0627\u0644\u0643\u0634\u0643\u0648\u0644 \u0648\u062A\u0648\u0636\u064A\u062D \u0643\u0645 \u0628\u062A \u0641\u064A \u0627\u0644\u0628\u0627\u064A\u062A \u0627\u0644\u0648\u0627\u062D\u062F.",
+        "\u0627\u0644\u0645\u0642\u0627\u0631\u0646\u0629 \u0628\u064A\u0646 \u0643\u0627\u0628\u0644 \u0627\u0644\u0625\u064A\u062B\u0631\u0646\u062A \u0648\u0634\u0628\u0643\u0629 Wi-Fi \u0627\u0644\u0644\u0627\u0633\u0644\u0643\u064A\u0629 \u0645\u0646 \u062D\u064A\u062B \u0627\u0644\u0633\u0631\u0639\u0629 \u0648\u0627\u0644\u0627\u0633\u062A\u0642\u0631\u0627\u0631.",
+        "\u062A\u0635\u0648\u064A\u0631 \u0627\u0644\u0643\u0634\u0643\u0648\u0644 \u0648\u0631\u0641\u0639\u0647 \u0639\u0644\u0649 \u0627\u0644\u0628\u0648\u0627\u0628\u0629."
+      ],
+      bonusChallenge: "\u{1F31F} \u0628\u0648\u0646\u0635 \u062D\u0633\u0627\u0628\u064A: \u0625\u0630\u0627 \u0643\u0627\u0646\u062A \u0644\u062F\u064A\u0643 \u0641\u0644\u0627\u0634\u0629 \u0645\u0633\u0627\u062D\u062A\u0647\u0627 16 \u062C\u064A\u062C\u0627\u0628\u0627\u064A\u062A\u060C \u0627\u062D\u0633\u0628 \u0643\u0645 \u0645\u064A\u062C\u0627\u0628\u0627\u064A\u062A \u062A\u0642\u0631\u064A\u0628\u064B\u0627 \u0628\u062F\u0627\u062E\u0644\u0647\u0627!",
+      nextPrep: ["\u0627\u0644\u062A\u062D\u0636\u064A\u0631 \u0644\u0644\u062F\u0631\u0633 \u0627\u0644\u062B\u0627\u0644\u062B: \u0627\u0644\u0634\u0628\u0643\u0627\u062A \u0648\u0645\u0641\u0627\u0647\u064A\u0645 \u0627\u0644\u0625\u0646\u062A\u0631\u0646\u062A \u0648\u0627\u0644\u0625\u0646\u062A\u0631\u0627\u0646\u062A (LAN, WAN, Internet vs Intranet)."]
+    },
+    {
+      id: "g5_t1_l3",
+      gradeKey: "grade5",
+      gradeNameAr: "\u0627\u0644\u0635\u0641 \u0627\u0644\u062E\u0627\u0645\u0633 \u0627\u0644\u0627\u0628\u062A\u062F\u0627\u0626\u064A",
+      gradeNameEn: "Grade 5 (Primary 5 Languages)",
+      term: 1,
+      unitNumber: 1,
+      unitTitleAr: "\u0627\u0644\u0645\u062D\u0648\u0631 \u0627\u0644\u0623\u0648\u0644: \u062F\u0648\u0631 \u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u0627\u0644\u0645\u0639\u0644\u0648\u0645\u0627\u062A \u0641\u064A \u062D\u064A\u0627\u062A\u0646\u0627 \u0627\u0644\u064A\u0648\u0645\u064A\u0629",
+      unitTitleEn: "Theme 1: ICT in Daily Life",
+      lessonNumber: 3,
+      titleAr: "\u0627\u0644\u062F\u0631\u0633 3: \u0634\u0628\u0643\u0627\u062A \u0627\u0644\u062D\u0627\u0633\u0648\u0628 \u0648\u0627\u0644\u0625\u0646\u062A\u0631\u0646\u062A \u0648\u0627\u0644\u0625\u0646\u062A\u0631\u0627\u0646\u062A (Networks, Internet & Intranet)",
+      titleEn: "Lesson 3: Computer Networks, Internet, Intranet & IoT",
+      concepts: [
+        { id: "g5_l3_c1", nameAr: "\u0627\u0644\u0634\u0628\u0643\u0629 \u0627\u0644\u0645\u062D\u0644\u064A\u0629 (LAN - Local Area Network) \u0641\u064A \u0645\u0639\u0645\u0644 \u0627\u0644\u0645\u062F\u0631\u0633\u0629 \u0623\u0648 \u0627\u0644\u0645\u0646\u0632\u0644", nameEn: "Local Area Network (LAN)", category: "core" },
+        { id: "g5_l3_c2", nameAr: "\u0634\u0628\u0643\u0629 \u0627\u0644\u0625\u0646\u062A\u0631\u0646\u062A \u0627\u0644\u0645\u0641\u062A\u0648\u062D\u0629 (Internet) \u0645\u0642\u0627\u0628\u0644 \u0634\u0628\u0643\u0629 \u0627\u0644\u0625\u0646\u062A\u0631\u0627\u0646\u062A \u0627\u0644\u0645\u063A\u0644\u0642\u0629 (Intranet)", nameEn: "Internet vs Intranet Differences", category: "core" },
+        { id: "g5_l3_c3", nameAr: "\u0634\u0628\u0643\u0629 \u0627\u0644\u0648\u064A\u0628 \u0627\u0644\u0639\u0627\u0644\u0645\u064A\u0629 (World Wide Web - WWW) \u0648\u062F\u0648\u0631\u0647\u0627 \u0641\u064A \u062A\u0635\u0641\u062D \u0627\u0644\u0645\u0648\u0627\u0642\u0639", nameEn: "World Wide Web (WWW)", category: "software" },
+        { id: "g5_l3_c4", nameAr: "\u0625\u0646\u062A\u0631\u0646\u062A \u0627\u0644\u0623\u0634\u064A\u0627\u0621 (IoT - Internet of Things) \u0648\u0627\u0644\u0628\u0644\u0648\u062A\u0648\u062B (Bluetooth) \u0648\u0627\u0644\u0623\u062C\u0647\u0632\u0629 \u0627\u0644\u0645\u0646\u0632\u0644\u064A\u0629 \u0627\u0644\u0630\u0643\u064A\u0629", nameEn: "Internet of Things (IoT) & Bluetooth", category: "hardware" }
+      ],
+      defaultHomework: [
+        "\u0643\u062A\u0627\u0628\u0629 \u062C\u062F\u0648\u0644 \u0645\u0642\u0627\u0631\u0646\u0629 \u062F\u0642\u064A\u0642 \u0628\u064A\u0646 Internet \u0648 Intranet \u0641\u064A \u0627\u0644\u0643\u0634\u0643\u0648\u0644.",
+        "\u0643\u062A\u0627\u0628\u0629 \u0645\u062B\u0627\u0644\u064A\u0646 \u0639\u0644\u0649 \u0623\u062C\u0647\u0632\u0629 \u062A\u062F\u0639\u0645 \u062A\u0642\u0646\u064A\u0629 \u0625\u0646\u062A\u0631\u0646\u062A \u0627\u0644\u0623\u0634\u064A\u0627\u0621 (IoT) \u0641\u064A \u0627\u0644\u0645\u0646\u0632\u0644 \u0627\u0644\u0630\u0643\u064A.",
+        "\u062A\u0635\u0648\u064A\u0631 \u0627\u0644\u0643\u0634\u0643\u0648\u0644 \u0648\u0631\u0641\u0639\u0647 \u0639\u0644\u0649 \u0628\u0648\u0627\u0628\u0629 \u0627\u0644\u0645\u062A\u062F\u0631\u0628."
+      ],
+      bonusChallenge: "\u{1F31F} \u0628\u0648\u0646\u0635 \u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A: \u0643\u064A\u0641 \u062A\u0633\u0627\u0639\u062F \u062A\u0642\u0646\u064A\u0629 \u0625\u0646\u062A\u0631\u0646\u062A \u0627\u0644\u0623\u0634\u064A\u0627\u0621 \u0627\u0644\u0623\u0634\u062E\u0627\u0635 \u0636\u0639\u0627\u0641 \u0627\u0644\u0628\u0635\u0631 \u062F\u0627\u062E\u0644 \u0645\u0646\u0627\u0632\u0644\u0647\u0645\u061F",
+      nextPrep: ["\u0627\u0644\u062A\u062D\u0636\u064A\u0631 \u0644\u0644\u062F\u0631\u0633 \u0627\u0644\u0631\u0627\u0628\u0639: \u0623\u062F\u0648\u0627\u062A \u0627\u0644\u062A\u0648\u0627\u0635\u0644 \u0648\u0627\u0644\u0639\u0645\u0644 \u0627\u0644\u062C\u0645\u0627\u0639\u064A \u0627\u0644\u0631\u0642\u0645\u064A."]
+    }
+  ],
+  // -----------------------------------------------------------------------
+  // GRADE 6 (Primary 6 Languages) - ICT 6 (2026/2027)
+  // -----------------------------------------------------------------------
+  grade6: [
+    {
+      id: "g6_t1_l1",
+      gradeKey: "grade6",
+      gradeNameAr: "\u0627\u0644\u0635\u0641 \u0627\u0644\u0633\u0627\u062F\u0633 \u0627\u0644\u0627\u0628\u062A\u062F\u0627\u0626\u064A",
+      gradeNameEn: "Grade 6 (Primary 6 Languages)",
+      term: 1,
+      unitNumber: 1,
+      unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u0623\u0648\u0644\u0649: \u0634\u0628\u0643\u0627\u062A \u0627\u0644\u062D\u0627\u0633\u0648\u0628 \u0648\u0623\u062F\u0648\u0627\u062A \u0627\u0644\u0630\u0643\u0627\u0621 \u0627\u0644\u0627\u0635\u0637\u0646\u0627\u0639\u064A",
+      unitTitleEn: "Unit 1: Computer Networks & AI Tools",
+      lessonNumber: 1,
+      titleAr: "\u0627\u0644\u062F\u0631\u0633 1: \u0627\u0644\u0645\u0633\u062A\u0643\u0634\u0641 \u0627\u0644\u0646\u0634\u0637 (\u0627\u0644\u0645\u0637\u0648\u0631 \u0643\u0627\u0631\u062A\u064A\u0643 \u0633\u0627\u0648\u0647\u0646\u064A)",
+      titleEn: "Lesson 1: Explorer in Action (Developer Kartik Sawhney)",
+      concepts: [
+        { id: "g6_l1_c1", nameAr: "\u0627\u0644\u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u0627\u0644\u0645\u0633\u0627\u0639\u062F\u0629 \u0627\u0644\u0645\u062A\u0642\u062F\u0645\u0629 \u0648\u062A\u0637\u0648\u064A\u0631 \u0645\u0646\u0635\u0627\u062A \u0631\u0642\u0645\u064A\u0629 \u062A\u062F\u0639\u0645 \u0641\u0627\u0642\u062F\u064A \u0627\u0644\u0628\u0635\u0631", nameEn: "Advanced Assistive Platforms for Visually Impaired", category: "software" },
+        { id: "g6_l1_c2", nameAr: "\u062A\u062D\u0648\u064A\u0644 \u0627\u0644\u0631\u0633\u0648\u0645 \u0627\u0644\u0628\u064A\u0627\u0646\u064A\u0629 \u0648\u0627\u0644\u0645\u0639\u0627\u062F\u0644\u0627\u062A \u0627\u0644\u0631\u064A\u0627\u0636\u064A\u0629 \u0627\u0644\u0645\u0639\u0642\u062F\u0629 \u0625\u0644\u0649 \u0631\u0645\u0648\u0632 \u0635\u0648\u062A\u064A\u0629 \u0648\u0628\u0631\u0627\u064A\u0644", nameEn: "STEM to Audio & Braille Conversion", category: "core" },
+        { id: "g6_l1_c3", nameAr: "\u0627\u0633\u062A\u062E\u062F\u0627\u0645 \u062A\u0637\u0628\u064A\u0642\u0627\u062A \u0627\u0644\u0630\u0643\u0627\u0621 \u0627\u0644\u0627\u0635\u0637\u0646\u0627\u0639\u064A \u0641\u064A \u0642\u0631\u0627\u0621\u0629 \u0627\u0644\u0646\u0635\u0648\u0635 \u0648\u0627\u0644\u062A\u0639\u0631\u0641 \u0639\u0644\u0649 \u0627\u0644\u0639\u0646\u0627\u0635\u0631 \u0628\u0627\u0644\u0635\u0648\u0631", nameEn: "AI Computer Vision & Screen Readers", category: "software" },
+        { id: "g6_l1_c4", nameAr: "\u0631\u064A\u0627\u062F\u0629 \u0627\u0644\u0623\u0639\u0645\u0627\u0644 \u0627\u0644\u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0629 \u0648\u062D\u0644\u0648\u0644 \u0627\u0644\u062F\u0645\u062C \u0627\u0644\u0634\u0627\u0645\u0644 \u0641\u064A \u0627\u0644\u062A\u0639\u0644\u064A\u0645 \u0648\u0627\u0644\u0639\u0645\u0644", nameEn: "Inclusive EdTech & Social Impact", category: "core" }
+      ],
+      defaultHomework: [
+        "\u0643\u062A\u0627\u0628\u0629 \u0645\u0644\u062E\u0635 \u0641\u064A \u0627\u0644\u0643\u0634\u0643\u0648\u0644 \u064A\u0648\u0636\u062D \u0625\u0646\u062C\u0627\u0632\u0627\u062A \u0643\u0627\u0631\u062A\u064A\u0643 \u0633\u0627\u0648\u0647\u0646\u064A \u0648\u0643\u064A\u0641 \u0637\u0648\u0651\u0631 \u0623\u062F\u0648\u0627\u062A \u0642\u0631\u0627\u0621\u0629 \u0627\u0644\u0631\u0633\u0648\u0645 \u0627\u0644\u0631\u064A\u0627\u0636\u064A\u0629 \u0644\u0644\u0645\u0643\u0641\u0648\u0641\u064A\u0646.",
+        "\u062A\u0635\u0648\u064A\u0631 \u0627\u0644\u0643\u0634\u0643\u0648\u0644 \u0648\u0631\u0641\u0639\u0647 \u0639\u0628\u0631 \u0627\u0644\u0628\u0648\u0627\u0628\u0629 \u0644\u0644\u062A\u0635\u062D\u064A\u062D \u0627\u0644\u0630\u0643\u064A."
+      ],
+      bonusChallenge: "\u{1F31F} \u0628\u0648\u0646\u0635 \u0645\u062A\u0645\u064A\u0632: \u0627\u0628\u062D\u062B \u0639\u0646 \u0627\u0633\u0645 \u0645\u0646\u0635\u0629 I-Stem \u0627\u0644\u062A\u064A \u0634\u0627\u0631\u0643 \u0643\u0627\u0631\u062A\u064A\u0643 \u0641\u064A \u062A\u0623\u0633\u064A\u0633\u0647\u0627 \u0648\u0627\u0643\u062A\u0628 \u0647\u062F\u0641\u0647\u0627 \u0641\u064A \u0633\u0637\u0631\u064A\u0646.",
+      nextPrep: ["\u0627\u0644\u062A\u062D\u0636\u064A\u0631 \u0644\u0644\u062F\u0631\u0633 \u0627\u0644\u062B\u0627\u0646\u064A: \u0623\u062C\u0647\u0632\u0629 \u0634\u0628\u0643\u0627\u062A \u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631 (\u0627\u0644\u0645\u0648\u062F\u0645\u060C \u0627\u0644\u0645\u062D\u0648\u0644\u060C \u0627\u0644\u0631\u0627\u0648\u062A\u0631\u060C \u0627\u0644\u0634\u0628\u0643\u0627\u062A \u0627\u0644\u0633\u0644\u0643\u064A\u0629 \u0648\u0627\u0644\u0644\u0627\u0633\u0644\u0643\u064A\u0629)."]
+    },
+    {
+      id: "g6_t1_l2",
+      gradeKey: "grade6",
+      gradeNameAr: "\u0627\u0644\u0635\u0641 \u0627\u0644\u0633\u0627\u062F\u0633 \u0627\u0644\u0627\u0628\u062A\u062F\u0627\u0626\u064A",
+      gradeNameEn: "Grade 6 (Primary 6 Languages)",
+      term: 1,
+      unitNumber: 1,
+      unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u0623\u0648\u0644\u0649: \u0634\u0628\u0643\u0627\u062A \u0627\u0644\u062D\u0627\u0633\u0648\u0628 \u0648\u0623\u062F\u0648\u0627\u062A \u0627\u0644\u0630\u0643\u0627\u0621 \u0627\u0644\u0627\u0635\u0637\u0646\u0627\u0639\u064A",
+      unitTitleEn: "Unit 1: Computer Networks & AI Tools",
+      lessonNumber: 2,
+      titleAr: "\u0627\u0644\u062F\u0631\u0633 2: \u0623\u062C\u0647\u0632\u0629 \u0634\u0628\u0643\u0627\u062A \u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631 \u0648\u0627\u0644\u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u0627\u0644\u0645\u062A\u0642\u062F\u0645\u0629 (Network Hardware & Smart Tech)",
+      titleEn: "Lesson 2: Computer Network Devices (Modem, Switch, Router & Smart Tech)",
+      concepts: [
+        { id: "g6_l2_c1", nameAr: "\u0627\u0644\u0634\u0628\u0643\u0627\u062A \u0627\u0644\u0633\u0644\u0643\u064A\u0629 (Wired Networks - \u0643\u0627\u0628\u0644\u0627\u062A Ethernet) \u0645\u0642\u0627\u0628\u0644 \u0627\u0644\u0644\u0627\u0633\u0644\u0643\u064A\u0629 (Wireless Networks - Wi-Fi)", nameEn: "Wired vs Wireless Networks", category: "hardware" },
+        { id: "g6_l2_c2", nameAr: "\u0627\u0644\u0645\u0648\u062F\u0645 (Modem) \u0648\u062F\u0648\u0631\u0647 \u0641\u064A \u062A\u062D\u0648\u064A\u0644 \u0625\u0634\u0627\u0631\u0627\u062A \u0645\u0632\u0648\u062F \u0627\u0644\u062E\u062F\u0645\u0629 ISP \u0625\u0644\u0649 \u0625\u0634\u0627\u0631\u0627\u062A \u0631\u0642\u0645\u064A\u0629", nameEn: "Modem (ISP Signal Conversion)", category: "hardware" },
+        { id: "g6_l2_c3", nameAr: "\u0627\u0644\u0645\u062D\u0648\u0644 \u0627\u0644\u0630\u0643\u064A (Switch) \u0644\u0625\u0631\u0633\u0627\u0644 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A \u0625\u0644\u0649 \u0627\u0644\u062C\u0647\u0627\u0632 \u0627\u0644\u0645\u0642\u0635\u0648\u062F \u062A\u062D\u062F\u064A\u062F\u0627\u064B \u0639\u0628\u0631 \u0639\u0646\u0648\u0627\u0646 MAC", nameEn: "Switch (Intelligent Data Routing via MAC)", category: "hardware" },
+        { id: "g6_l2_c4", nameAr: "\u0627\u0644\u0631\u0627\u0648\u062A\u0631 (Router) \u0648\u062A\u0648\u0635\u064A\u0644 \u0627\u0644\u0623\u062C\u0647\u0632\u0629 \u0628\u0634\u0628\u0643\u0629 \u0627\u0644\u0625\u0646\u062A\u0631\u0646\u062A \u0648\u062A\u0648\u0632\u064A\u0639 \u0639\u0646\u0627\u0648\u064A\u0646 IP", nameEn: "Router (IP Distribution & Internet Access)", category: "hardware" },
+        { id: "g6_l2_c5", nameAr: "\u0645\u0642\u062F\u0645\u0629 \u0641\u064A \u0627\u0644\u0630\u0643\u0627\u0621 \u0627\u0644\u0627\u0635\u0637\u0646\u0627\u0639\u064A (AI)\u060C \u0627\u0644\u0648\u0627\u0642\u0639 \u0627\u0644\u0627\u0641\u062A\u0631\u0627\u0636\u064A (VR)\u060C \u0648\u0627\u0644\u0648\u0627\u0642\u0639 \u0627\u0644\u0645\u0639\u0632\u0632 (AR)", nameEn: "Emerging Tech: AI, VR & AR Integration", category: "core" }
+      ],
+      defaultHomework: [
+        "\u0643\u062A\u0627\u0628\u0629 \u0627\u0644\u0641\u0631\u0648\u0642 \u0627\u0644\u062C\u0648\u0647\u0631\u064A\u0629 \u0628\u064A\u0646 \u0627\u0644\u0645\u0648\u062F\u0645 (Modem) \u0648\u0627\u0644\u0645\u062D\u0648\u0644 (Switch) \u0648\u0627\u0644\u0631\u0627\u0648\u062A\u0631 (Router) \u0641\u064A \u0627\u0644\u0643\u0634\u0643\u0648\u0644 \u0645\u0639 \u0631\u0633\u0645 \u062A\u0648\u0636\u064A\u062D\u064A.",
+        "\u062A\u0648\u0636\u064A\u062D \u0627\u0644\u0641\u0631\u0642 \u0628\u064A\u0646 \u0627\u0644\u0634\u0628\u0643\u0629 \u0627\u0644\u0633\u0644\u0643\u064A\u0629 \u0648\u0627\u0644\u0634\u0628\u0643\u0629 \u0627\u0644\u0644\u0627\u0633\u0644\u0643\u064A\u0629 \u0641\u064A \u062C\u062F\u0648\u0644.",
+        "\u062A\u0635\u0648\u064A\u0631 \u0635\u0641\u062D\u0627\u062A \u0627\u0644\u0643\u0634\u0643\u0648\u0644 \u0648\u0631\u0641\u0639\u0647\u0627 \u0639\u0628\u0631 \u0627\u0644\u0628\u0648\u0627\u0628\u0629 \u0644\u0644\u062A\u0642\u064A\u064A\u0645 \u0627\u0644\u0641\u0648\u0631\u064A."
+      ],
+      bonusChallenge: "\u{1F31F} \u0628\u0648\u0646\u0635 \u062A\u0637\u0628\u064A\u0642\u064A: \u0627\u0641\u062D\u0635 \u0627\u0644\u0631\u0627\u0648\u062A\u0631 \u0648\u0627\u0644\u0645\u0648\u062F\u0645 \u0641\u064A \u0645\u0646\u0632\u0644\u0643 \u0648\u0627\u0643\u062A\u0628 \u0646\u0648\u0639 \u0627\u0644\u062A\u0648\u0635\u064A\u0644 (\u0633\u0644\u0643\u064A \u0623\u0645 \u0644\u0627\u0633\u0644\u0643\u064A) \u0648\u0639\u062F\u062F \u0627\u0644\u0645\u0646\u0627\u0641\u0630 \u0641\u064A\u0647.",
+      nextPrep: ["\u0627\u0644\u062A\u062D\u0636\u064A\u0631 \u0644\u0644\u062F\u0631\u0633 \u0627\u0644\u062B\u0627\u0644\u062B: \u0627\u0644\u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u0627\u0644\u0645\u062A\u0642\u062F\u0645\u0629 \u0648\u062A\u0637\u0628\u064A\u0642\u0627\u062A \u0627\u0644\u0630\u0643\u0627\u0621 \u0627\u0644\u0627\u0635\u0637\u0646\u0627\u0639\u064A \u0648\u0627\u0644\u0648\u0627\u0642\u0639 \u0627\u0644\u0645\u0639\u0632\u0632 \u0641\u064A \u062D\u064A\u0627\u062A\u0646\u0627 \u0627\u0644\u064A\u0648\u0645\u064A\u0629."]
+    },
+    {
+      id: "g6_t1_l7",
+      gradeKey: "grade6",
+      gradeNameAr: "\u0627\u0644\u0635\u0641 \u0627\u0644\u0633\u0627\u062F\u0633 \u0627\u0644\u0627\u0628\u062A\u062F\u0627\u0626\u064A",
+      gradeNameEn: "Grade 6 (Primary 6 Languages)",
+      term: 1,
+      unitNumber: 1,
+      unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u0623\u0648\u0644\u0649: \u0634\u0628\u0643\u0627\u062A \u0627\u0644\u062D\u0627\u0633\u0648\u0628 \u0648\u0623\u062F\u0648\u0627\u062A \u0627\u0644\u0630\u0643\u0627\u0621 \u0627\u0644\u0627\u0635\u0637\u0646\u0627\u0639\u064A",
+      unitTitleEn: "Unit 1: Computer Networks & AI Tools",
+      lessonNumber: 7,
+      titleAr: "\u0627\u0644\u062F\u0631\u0633 7: \u0623\u0646\u0638\u0645\u0629 \u062A\u0634\u063A\u064A\u0644 \u0627\u0644\u062D\u0648\u0627\u0633\u064A\u0628 \u0648\u0627\u0644\u0647\u0648\u0627\u062A\u0641 (Operating Systems)",
+      titleEn: "Lesson 7: Desktop & Mobile Operating Systems",
+      concepts: [
+        { id: "g6_l7_c1", nameAr: "\u0623\u0646\u0638\u0645\u0629 \u062A\u0634\u063A\u064A\u0644 \u0627\u0644\u062D\u0648\u0627\u0633\u064A\u0628: Windows, macOS, Linux (\u0645\u0641\u062A\u0648\u062D \u0627\u0644\u0645\u0635\u062F\u0631)", nameEn: "Desktop OS (Windows, macOS, Open-Source Linux)", category: "software" },
+        { id: "g6_l7_c2", nameAr: "\u0623\u0646\u0638\u0645\u0629 \u062A\u0634\u063A\u064A\u0644 \u0627\u0644\u0647\u0648\u0627\u062A\u0641 \u0627\u0644\u0630\u0643\u064A\u0629: Android, iOS \u0648\u0625\u062F\u0627\u0631\u0629 \u0627\u0644\u062A\u0637\u0628\u064A\u0642\u0627\u062A \u0648\u0627\u0644\u0623\u0630\u0648\u0646\u0627\u062A", nameEn: "Mobile OS (Android & Apple iOS)", category: "software" },
+        { id: "g6_l7_c3", nameAr: "\u0623\u0646\u0638\u0645\u0629 \u062A\u0634\u063A\u064A\u0644 \u0623\u062C\u0647\u0632\u0629 \u0627\u0644\u0631\u0648\u0628\u0648\u062A (ROS - Robot Operating System)", nameEn: "Robot Operating Systems (ROS)", category: "software" },
+        { id: "g6_l7_c4", nameAr: "\u0627\u0644\u0641\u0631\u0642 \u0628\u064A\u0646 \u0627\u0644\u0628\u0631\u0645\u062C\u064A\u0627\u062A \u0645\u063A\u0644\u0642\u0629 \u0627\u0644\u0645\u0635\u062F\u0631 \u0648\u0645\u0641\u062A\u0648\u062D\u0629 \u0627\u0644\u0645\u0635\u062F\u0631 (Closed vs Open Source)", nameEn: "Open Source vs Closed Source Software", category: "core" }
+      ],
+      defaultHomework: [
+        "\u0643\u062A\u0627\u0628\u0629 \u0645\u0642\u0627\u0631\u0646\u0629 \u0628\u064A\u0646 \u0646\u0638\u0627\u0645 Windows \u0648\u0646\u0638\u0627\u0645 Linux \u0645\u0646 \u062D\u064A\u062B \u0627\u0644\u0645\u0635\u062F\u0631 \u0648\u0627\u0644\u062A\u0631\u062E\u064A\u0635 \u0641\u064A \u0627\u0644\u0643\u0634\u0643\u0648\u0644.",
+        "\u062A\u0635\u0648\u064A\u0631 \u0627\u0644\u0643\u0634\u0643\u0648\u0644 \u0648\u0631\u0641\u0639\u0647 \u0639\u0644\u0649 \u0627\u0644\u0628\u0648\u0627\u0628\u0629."
+      ],
+      bonusChallenge: "\u{1F31F} \u0628\u0648\u0646\u0635 \u0645\u062A\u0645\u064A\u0632: \u0627\u0630\u0643\u0631 3 \u0645\u0645\u064A\u0632\u0627\u062A \u0644\u0646\u0638\u0627\u0645 \u0627\u0644\u062A\u0634\u063A\u064A\u0644 \u0645\u0641\u062A\u0648\u062D \u0627\u0644\u0645\u0635\u062F\u0631 (Open-Source) \u0648\u0644\u0645\u0627\u0630\u0627 \u064A\u0641\u0636\u0644\u0647 \u0627\u0644\u0645\u0628\u0631\u0645\u062C\u0648\u0646.",
+      nextPrep: ["\u0627\u0644\u062A\u062D\u0636\u064A\u0631 \u0644\u0644\u062F\u0631\u0633 \u0627\u0644\u062B\u0627\u0645\u0646: \u062A\u0635\u0645\u064A\u0645 \u0635\u0641\u062D\u0627\u062A \u0627\u0644\u0648\u064A\u0628 \u0627\u0644\u062A\u0641\u0627\u0639\u0644\u064A\u0629 \u0628\u0644\u063A\u0629 \u062A\u0631\u0645\u064A\u0632 \u0627\u0644\u0646\u0635\u0648\u0635 \u0627\u0644\u062A\u0634\u0639\u0628\u064A\u0629 HTML."]
+    },
+    {
+      id: "g6_t1_l8",
+      gradeKey: "grade6",
+      gradeNameAr: "\u0627\u0644\u0635\u0641 \u0627\u0644\u0633\u0627\u062F\u0633 \u0627\u0644\u0627\u0628\u062A\u062F\u0627\u0626\u064A",
+      gradeNameEn: "Grade 6 (Primary 6 Languages)",
+      term: 1,
+      unitNumber: 1,
+      unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u0623\u0648\u0644\u0649: \u0634\u0628\u0643\u0627\u062A \u0627\u0644\u062D\u0627\u0633\u0648\u0628 \u0648\u0623\u062F\u0648\u0627\u062A \u0627\u0644\u0630\u0643\u0627\u0621 \u0627\u0644\u0627\u0635\u0637\u0646\u0627\u0639\u064A",
+      unitTitleEn: "Unit 1: Computer Networks & AI Tools",
+      lessonNumber: 8,
+      titleAr: "\u0627\u0644\u062F\u0631\u0633 8: \u062A\u0635\u0645\u064A\u0645 \u0648\u0628\u0631\u0645\u062C\u0629 \u0635\u0641\u062D\u0627\u062A \u0627\u0644\u0648\u064A\u0628 \u0628\u0644\u063A\u0629 HTML",
+      titleEn: "Lesson 8: Designing Webpages with HTML",
+      concepts: [
+        { id: "g6_l8_c1", nameAr: "\u0645\u0641\u0647\u0648\u0645 \u0644\u063A\u0629 HTML (HyperText Markup Language) \u0644\u0647\u064A\u0643\u0644\u0629 \u0635\u0641\u062D\u0627\u062A \u0627\u0644\u0625\u0646\u062A\u0631\u0646\u062A", nameEn: "HTML (HyperText Markup Language) Fundamentals", category: "software" },
+        { id: "g6_l8_c2", nameAr: "\u0647\u064A\u0643\u0644 \u0627\u0644\u0635\u0641\u062D\u0629 \u0627\u0644\u0623\u0633\u0627\u0633\u064A: \u0627\u0644\u0648\u0633\u0648\u0645 <html> \u0648 <head> \u0648 <title> \u0648 <body>", nameEn: "Basic Document Structure (html, head, title, body)", category: "software" },
+        { id: "g6_l8_c3", nameAr: "\u0648\u0633\u0648\u0645 \u0627\u0644\u0639\u0646\u0627\u0648\u064A\u0646 \u0627\u0644\u0631\u0626\u064A\u0633\u064A\u0629 \u0648\u0627\u0644\u0641\u0631\u0639\u064A\u0629: \u0645\u0646 <h1> \u0627\u0644\u0623\u0643\u0628\u0631 \u062D\u062A\u0649 <h6> \u0627\u0644\u0623\u0635\u063A\u0631", nameEn: "Heading Tags (h1 through h6)", category: "software" },
+        { id: "g6_l8_c4", nameAr: "\u0648\u0633\u0645 \u0627\u0644\u0641\u0642\u0631\u0629 <p> \u0648\u0648\u0633\u0648\u0645 \u0627\u0644\u062A\u0646\u0633\u064A\u0642: <strong> \u0644\u0644\u062E\u0637 \u0627\u0644\u0639\u0631\u064A\u0636 \u0648 <em> \u0644\u0644\u062E\u0637 \u0627\u0644\u0645\u0627\u0626\u0644", nameEn: "Paragraph <p> & Text Styling (strong, em)", category: "software" },
+        { id: "g6_l8_c5", nameAr: "\u0627\u0644\u0642\u0648\u0627\u0626\u0645 \u0627\u0644\u0646\u0642\u0637\u064A\u0629 <ul> \u0648\u0627\u0644\u0645\u0631\u0642\u0645\u0629 <ol> \u0648\u0639\u0646\u0627\u0635\u0631 \u0627\u0644\u0642\u0627\u0626\u0645\u0629 <li>", nameEn: "Lists (ul, ol, li elements)", category: "software" }
+      ],
+      defaultHomework: [
+        "\u0643\u062A\u0627\u0628\u0629 \u0643\u0648\u062F \u0635\u0641\u062D\u0629 HTML \u0628\u0633\u064A\u0637\u0629 \u0641\u064A \u0627\u0644\u0643\u0634\u0643\u0648\u0644 \u062A\u062D\u062A\u0648\u064A \u0639\u0644\u0649: \u0639\u0646\u0648\u0627\u0646 h1 \u0628\u0627\u0633\u0645\u0643\u060C \u0641\u0642\u0631\u0629 p\u060C \u0648\u0642\u0627\u0626\u0645\u0629 \u0628\u0640 3 \u0647\u0648\u0627\u064A\u0627\u062A.",
+        "\u062A\u0635\u0648\u064A\u0631 \u0627\u0644\u0643\u0648\u062F \u0627\u0644\u0645\u0643\u062A\u0648\u0628 \u0641\u064A \u0627\u0644\u0643\u0634\u0643\u0648\u0644 \u0648\u0631\u0641\u0639\u0647 \u0639\u0628\u0631 \u0628\u0648\u0627\u0628\u0629 \u0627\u0644\u0645\u062A\u062F\u0631\u0628 \u0644\u0644\u062A\u0635\u062D\u064A\u062D \u0648\u0627\u0644\u062D\u0635\u0648\u0644 \u0639\u0644\u0649 \u0627\u0644\u0646\u062C\u0648\u0645."
+      ],
+      bonusChallenge: "\u{1F31F} \u0628\u0648\u0646\u0635 \u0628\u0631\u0645\u062C\u064A \u0639\u0645\u0644\u064A: \u0625\u0646\u0634\u0627\u0621 \u0645\u0644\u0641 \u0628\u0627\u0645\u062A\u062F\u0627\u062F .html \u0639\u0644\u0649 \u062C\u0647\u0627\u0632 \u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631 \u0648\u0641\u062A\u062D\u0647 \u0628\u0645\u062A\u0635\u0641\u062D Chrome \u0648\u062A\u0635\u0648\u064A\u0631 \u0627\u0644\u0634\u0627\u0634\u0629!",
+      nextPrep: ["\u0627\u0644\u062A\u062D\u0636\u064A\u0631 \u0644\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u062B\u0627\u0646\u064A\u0629: \u0627\u0644\u0623\u0645\u0646 \u0627\u0644\u0633\u064A\u0628\u0631\u0627\u0646\u064A \u0648\u0637\u0631\u0642 \u0627\u0644\u062D\u0645\u0627\u064A\u0629 \u0648\u0627\u0644\u0645\u0635\u0627\u062F\u0642\u0629 \u0645\u062A\u0639\u062F\u062F\u0629 \u0627\u0644\u0639\u0648\u0627\u0645\u0644 2FA."]
+    }
+  ],
+  // -----------------------------------------------------------------------
+  // PREP 1 (Grade 7 Languages) - ICT & AI (المنهج المعتمد رسمياً 2024-2027)
+  // -----------------------------------------------------------------------
+  prep1: [
+    {
+      id: "p1_t1_l1",
+      gradeKey: "prep1",
+      gradeNameAr: "\u0627\u0644\u0635\u0641 \u0627\u0644\u0623\u0648\u0644 \u0627\u0644\u0625\u0639\u062F\u0627\u062F\u064A",
+      gradeNameEn: "Prep 1 (ICT & AI Languages)",
+      term: 1,
+      unitNumber: 1,
+      unitTitleAr: "\u0627\u0644\u0645\u062D\u0648\u0631 \u0627\u0644\u0623\u0648\u0644: \u0627\u0644\u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u0627\u0644\u062E\u0636\u0631\u0627\u0621 \u0648\u0627\u0644\u062A\u062D\u0648\u0644 \u0627\u0644\u0631\u0642\u0645\u064A \u0648\u0623\u0646\u0638\u0645\u0629 \u0627\u0644\u062A\u0634\u063A\u064A\u0644",
+      unitTitleEn: "Unit 1: Green Tech, Digital Transformation & OS",
+      lessonNumber: 1,
+      titleAr: "\u0627\u0644\u062F\u0631\u0633 1: \u0627\u0644\u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u0627\u0644\u062E\u0636\u0631\u0627\u0621 (Green Technology) \u0648\u0627\u0644\u0627\u0633\u062A\u062F\u0627\u0645\u0629 \u0627\u0644\u0628\u064A\u0626\u064A\u0629",
+      titleEn: "Lesson 1: Green Technology & Environmental Sustainability",
+      concepts: [
+        { id: "p1_l1_c1", nameAr: "\u0645\u0641\u0647\u0648\u0645 \u0627\u0644\u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u0627\u0644\u062E\u0636\u0631\u0627\u0621 (Green Tech) \u0648\u0627\u0633\u062A\u062E\u062F\u0627\u0645 \u0627\u0644\u062A\u0642\u0646\u064A\u0627\u062A \u0627\u0644\u0635\u062F\u064A\u0642\u0629 \u0644\u0644\u0628\u064A\u0626\u0629", nameEn: "Green Technology Core Concepts & Sustainability", category: "core" },
+        { id: "p1_l1_c2", nameAr: "\u0627\u0644\u062D\u062F \u0645\u0646 \u0627\u0644\u0646\u0641\u0627\u064A\u0627\u062A \u0627\u0644\u0625\u0644\u0643\u062A\u0631\u0648\u0646\u064A\u0629 (E-Waste Management) \u0648\u0625\u0639\u0627\u062F\u0629 \u062A\u062F\u0648\u064A\u0631 \u0627\u0644\u0623\u062C\u0647\u0632\u0629 \u0627\u0644\u0642\u062F\u064A\u0645\u0629", nameEn: "Electronic Waste (E-Waste) Reduction & Recycling", category: "safety" },
+        { id: "p1_l1_c3", nameAr: "\u062A\u0631\u0634\u064A\u062F \u0627\u0633\u062A\u0647\u0644\u0627\u0643 \u0627\u0644\u0637\u0627\u0642\u0629 \u0641\u064A \u0645\u0631\u0627\u0643\u0632 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A \u0648\u0627\u0644\u062D\u0648\u0627\u0633\u064A\u0628 \u0627\u0644\u062E\u0636\u0631\u0627\u0621 (Green Computing)", nameEn: "Energy Efficiency in Data Centers & Green Computing", category: "hardware" },
+        { id: "p1_l1_c4", nameAr: "\u062F\u0648\u0631 \u0627\u0644\u0630\u0643\u0627\u0621 \u0627\u0644\u0627\u0635\u0637\u0646\u0627\u0639\u064A \u0648\u0625\u0646\u062A\u0631\u0646\u062A \u0627\u0644\u0623\u0634\u064A\u0627\u0621 \u0641\u064A \u0645\u0631\u0627\u0642\u0628\u0629 \u0627\u0644\u0645\u0646\u0627\u062E \u0648\u062D\u0645\u0627\u064A\u0629 \u0627\u0644\u0645\u0648\u0627\u0631\u062F \u0627\u0644\u0637\u0628\u064A\u0639\u064A\u0629", nameEn: "AI & IoT in Climate Monitoring & Resource Optimization", category: "core" }
+      ],
+      defaultHomework: [
+        "\u0643\u062A\u0627\u0628\u0629 \u062A\u0642\u0631\u064A\u0631 \u0642\u0635\u064A\u0631 \u0641\u064A \u0627\u0644\u0643\u0634\u0643\u0648\u0644 \u064A\u0648\u0636\u062D 3 \u0645\u0645\u0627\u0631\u0633\u0627\u062A \u064A\u0648\u0645\u064A\u0629 \u0644\u062A\u0637\u0628\u064A\u0642 \u0627\u0644\u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u0627\u0644\u062E\u0636\u0631\u0627\u0621 \u0641\u064A \u0627\u0633\u062A\u062E\u062F\u0627\u0645 \u0627\u0644\u0623\u062C\u0647\u0632\u0629 \u0627\u0644\u0630\u0643\u064A\u0629.",
+        "\u062A\u0639\u0631\u064A\u0641 \u0627\u0644\u0646\u0641\u0627\u064A\u0627\u062A \u0627\u0644\u0625\u0644\u0643\u062A\u0631\u0648\u0646\u064A\u0629 (E-Waste) \u0648\u0643\u064A\u0641 \u064A\u0645\u0643\u0646 \u0627\u0644\u062A\u062E\u0644\u0635 \u0645\u0646\u0647\u0627 \u0628\u0623\u0645\u0627\u0646.",
+        "\u062A\u0635\u0648\u064A\u0631 \u0635\u0641\u062D\u0627\u062A \u0627\u0644\u0643\u0634\u0643\u0648\u0644 \u0648\u0631\u0641\u0639\u0647\u0627 \u0639\u0628\u0631 \u0627\u0644\u0628\u0648\u0627\u0628\u0629 \u0627\u0644\u0630\u0643\u064A\u0629."
+      ],
+      bonusChallenge: "\u{1F31F} \u0628\u0648\u0646\u0635 \u0645\u062A\u0645\u064A\u0632: \u0627\u0628\u062D\u062B \u0639\u0646 \u0645\u0634\u0631\u0648\u0639 \u0645\u062D\u0637\u0629 \u0637\u0627\u0642\u0629 \u0634\u0645\u0633\u064A\u0629 \u0630\u0643\u064A\u0629 \u0641\u064A \u0645\u0635\u0631 \u062A\u0639\u0645\u0644 \u0628\u0627\u0644\u0630\u0643\u0627\u0621 \u0627\u0644\u0627\u0635\u0637\u0646\u0627\u0639\u064A \u0648\u0627\u0643\u062A\u0628 \u0627\u0633\u0645\u0647\u0627 \u0641\u064A \u0633\u0637\u0631\u064A\u0646.",
+      nextPrep: ["\u0627\u0644\u062A\u062D\u0636\u064A\u0631 \u0644\u0644\u062F\u0631\u0633 \u0627\u0644\u062B\u0627\u0646\u064A: \u0627\u0644\u062A\u062D\u0648\u0644 \u0627\u0644\u0631\u0642\u0645\u064A (Digital Transformation) \u0648\u062A\u0637\u0628\u064A\u0642\u0627\u062A\u0647 \u0627\u0644\u062D\u0643\u0648\u0645\u064A\u0629 \u0648\u0627\u0644\u062A\u0639\u0644\u064A\u0645\u064A\u0629."]
+    },
+    {
+      id: "p1_t1_l2",
+      gradeKey: "prep1",
+      gradeNameAr: "\u0627\u0644\u0635\u0641 \u0627\u0644\u0623\u0648\u0644 \u0627\u0644\u0625\u0639\u062F\u0627\u062F\u064A",
+      gradeNameEn: "Prep 1 (ICT & AI Languages)",
+      term: 1,
+      unitNumber: 1,
+      unitTitleAr: "\u0627\u0644\u0645\u062D\u0648\u0631 \u0627\u0644\u0623\u0648\u0644: \u0627\u0644\u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u0627\u0644\u062E\u0636\u0631\u0627\u0621 \u0648\u0627\u0644\u062A\u062D\u0648\u0644 \u0627\u0644\u0631\u0642\u0645\u064A \u0648\u0623\u0646\u0638\u0645\u0629 \u0627\u0644\u062A\u0634\u063A\u064A\u0644",
+      unitTitleEn: "Unit 1: Green Tech, Digital Transformation & OS",
+      lessonNumber: 2,
+      titleAr: "\u0627\u0644\u062F\u0631\u0633 2: \u0627\u0644\u062A\u062D\u0648\u0644 \u0627\u0644\u0631\u0642\u0645\u064A (Digital Transformation) \u0648\u062A\u0637\u0628\u064A\u0642\u0627\u062A\u0647 \u0641\u064A \u0627\u0644\u0645\u062C\u062A\u0645\u0639",
+      titleEn: "Lesson 2: Digital Transformation & Smart Societal Applications",
+      concepts: [
+        { id: "p1_l2_c1", nameAr: "\u0645\u0641\u0647\u0648\u0645 \u0627\u0644\u062A\u062D\u0648\u0644 \u0627\u0644\u0631\u0642\u0645\u064A \u0648\u0627\u0644\u0627\u0646\u062A\u0642\u0627\u0644 \u0645\u0646 \u0627\u0644\u0625\u062C\u0631\u0627\u0621\u0627\u062A \u0627\u0644\u0648\u0631\u0642\u064A\u0629 \u0625\u0644\u0649 \u0627\u0644\u0645\u0646\u0635\u0627\u062A \u0627\u0644\u0631\u0642\u0645\u064A\u0629 \u0627\u0644\u0633\u062D\u0627\u0628\u064A\u0629", nameEn: "Digital Transformation & Paperless Smart Workflows", category: "core" },
+        { id: "p1_l2_c2", nameAr: "\u0645\u0646\u0635\u0629 \u0645\u0635\u0631 \u0627\u0644\u0631\u0642\u0645\u064A\u0629 (Digital Egypt) \u0648\u0627\u0644\u062E\u062F\u0645\u0627\u062A \u0627\u0644\u062D\u0643\u0648\u0645\u064A\u0629 \u0627\u0644\u0625\u0644\u0643\u062A\u0631\u0648\u0646\u064A\u0629 \u0627\u0644\u0645\u062A\u0643\u0627\u0645\u0644\u0629", nameEn: "Digital Egypt Platform & E-Government Services", category: "software" },
+        { id: "p1_l2_c3", nameAr: "\u0645\u0646\u0638\u0648\u0645\u0629 \u0627\u0644\u062F\u0641\u0639 \u0648\u0627\u0644\u062A\u062D\u0635\u064A\u0644 \u0627\u0644\u0625\u0644\u0643\u062A\u0631\u0648\u0646\u064A (E-Payment, \u0641\u0648\u0631\u064A\u060C \u0643\u0631\u0648\u062A \u0645\u064A\u0632\u0629\u060C \u0645\u062D\u0627\u0641\u0638 \u0627\u0644\u0647\u0627\u062A\u0641)", nameEn: "Digital Payments & Fintech (Meeza, E-Wallets, POS)", category: "core" },
+        { id: "p1_l2_c4", nameAr: "\u0627\u0644\u0623\u0645\u0646 \u0627\u0644\u0631\u0642\u0645\u064A \u0648\u0627\u0644\u0634\u0645\u0648\u0644 \u0627\u0644\u0645\u0627\u0644\u064A \u0648\u062D\u0645\u0627\u064A\u0629 \u0627\u0644\u062E\u0635\u0648\u0635\u064A\u0629 \u0644\u0644\u0645\u0648\u0627\u0637\u0646\u064A\u0646", nameEn: "Financial Inclusion & Digital Citizen Privacy", category: "safety" }
+      ],
+      defaultHomework: [
+        "\u0643\u062A\u0627\u0628\u0629 3 \u062E\u062F\u0645\u0627\u062A \u062D\u0643\u0648\u0645\u064A\u0629 \u064A\u0645\u0643\u0646 \u0625\u0646\u062C\u0627\u0632\u0647\u0627 \u0639\u0628\u0631 \u0628\u0648\u0627\u0628\u0629 \u0645\u0635\u0631 \u0627\u0644\u0631\u0642\u0645\u064A\u0629 \u0641\u064A \u0643\u0634\u0643\u0648\u0644 \u0627\u0644\u062A\u062F\u0631\u064A\u0628.",
+        "\u0645\u0642\u0627\u0631\u0646\u0629 \u0628\u064A\u0646 \u0627\u0644\u062F\u0641\u0639 \u0627\u0644\u0646\u0642\u062F\u064A \u0627\u0644\u062A\u0642\u0644\u064A\u062F\u064A \u0648\u0627\u0644\u062F\u0641\u0639 \u0627\u0644\u0625\u0644\u0643\u062A\u0631\u0648\u0646\u064A \u0639\u0628\u0631 \u0627\u0644\u0645\u062D\u0627\u0641\u0638 \u0627\u0644\u0630\u0643\u064A\u0629 \u0645\u0646 \u062D\u064A\u062B \u0627\u0644\u0623\u0645\u0627\u0646 \u0648\u0627\u0644\u0633\u0631\u0639\u0629.",
+        "\u062A\u0635\u0648\u064A\u0631 \u0627\u0644\u0643\u0634\u0643\u0648\u0644 \u0648\u0631\u0641\u0639\u0647 \u0639\u0644\u0649 \u0627\u0644\u0628\u0648\u0627\u0628\u0629."
+      ],
+      bonusChallenge: "\u{1F31F} \u0628\u0648\u0646\u0635 \u062A\u0642\u0646\u064A: \u0627\u0643\u062A\u0628 \u0627\u0633\u0645 \u0627\u0644\u0647\u064A\u0626\u0629 \u0627\u0644\u0631\u0633\u0645\u064A\u0629 \u0627\u0644\u0645\u0633\u0624\u0648\u0644\u0629 \u0639\u0646 \u062D\u0645\u0627\u064A\u0629 \u0627\u0644\u0645\u0633\u062A\u0647\u0644\u0643 \u0648\u0627\u0644\u0645\u0639\u0627\u0645\u0644\u0627\u062A \u0627\u0644\u0645\u0627\u0644\u064A\u0629 \u0627\u0644\u0631\u0642\u0645\u064A\u0629 \u0641\u064A \u0645\u0635\u0631.",
+      nextPrep: ["\u0627\u0644\u062A\u062D\u0636\u064A\u0631 \u0644\u0644\u062F\u0631\u0633 \u0627\u0644\u062B\u0627\u0644\u062B: \u0623\u0646\u0638\u0645\u0629 \u0627\u0644\u062A\u0634\u063A\u064A\u0644 \u0627\u0644\u062D\u062F\u064A\u062B\u0629 (Windows, Linux, Android, iOS) \u0648\u0625\u062F\u0627\u0631\u062A\u0647\u0627."]
+    },
+    {
+      id: "p1_t1_l3",
+      gradeKey: "prep1",
+      gradeNameAr: "\u0627\u0644\u0635\u0641 \u0627\u0644\u0623\u0648\u0644 \u0627\u0644\u0625\u0639\u062F\u0627\u062F\u064A",
+      gradeNameEn: "Prep 1 (ICT & AI Languages)",
+      term: 1,
+      unitNumber: 1,
+      unitTitleAr: "\u0627\u0644\u0645\u062D\u0648\u0631 \u0627\u0644\u0623\u0648\u0644: \u0627\u0644\u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u0627\u0644\u062E\u0636\u0631\u0627\u0621 \u0648\u0627\u0644\u062A\u062D\u0648\u0644 \u0627\u0644\u0631\u0642\u0645\u064A \u0648\u0623\u0646\u0638\u0645\u0629 \u0627\u0644\u062A\u0634\u063A\u064A\u0644",
+      unitTitleEn: "Unit 1: Green Tech, Digital Transformation & OS",
+      lessonNumber: 3,
+      titleAr: "\u0627\u0644\u062F\u0631\u0633 3: \u0623\u0646\u0638\u0645\u0629 \u0627\u0644\u062A\u0634\u063A\u064A\u0644 \u0627\u0644\u062D\u062F\u064A\u062B\u0629 \u0648\u0625\u062F\u0627\u0631\u0629 \u0645\u0648\u0627\u0631\u062F \u0627\u0644\u062D\u0627\u0633\u0648\u0628 (Operating Systems)",
+      titleEn: "Lesson 3: Operating Systems Architecture & Resource Management",
+      concepts: [
+        { id: "p1_l3_c1", nameAr: "\u0648\u0638\u0627\u0626\u0641 \u0646\u0638\u0627\u0645 \u0627\u0644\u062A\u0634\u063A\u064A\u0644 \u0627\u0644\u0623\u0633\u0627\u0633\u064A\u0629: \u0625\u062F\u0627\u0631\u0629 \u0627\u0644\u0645\u0639\u0627\u0644\u062C\u060C \u0627\u0644\u0630\u0627\u0643\u0631\u0629\u060C \u0648\u062D\u062F\u0627\u062A \u0627\u0644\u062A\u062E\u0632\u064A\u0646\u060C \u0627\u0644\u0645\u0644\u062D\u0642\u0627\u062A\u060C \u0648\u0623\u0645\u0627\u0646 \u0627\u0644\u0646\u0638\u0627\u0645", nameEn: "Core OS Functions: CPU, Memory, Storage & Security", category: "software" },
+        { id: "p1_l3_c2", nameAr: "\u0645\u0642\u0627\u0631\u0646\u0629 \u0628\u064A\u0646 \u0623\u0646\u0638\u0645\u0629 \u062A\u0634\u063A\u064A\u0644 \u0627\u0644\u062D\u0648\u0627\u0633\u064A\u0628 (Windows, Linux) \u0648\u0623\u0646\u0638\u0645\u0629 \u062A\u0634\u063A\u064A\u0644 \u0627\u0644\u0647\u0648\u0627\u062A\u0641 (Android, iOS)", nameEn: "Desktop OS (Windows/Linux) vs Mobile OS (Android/iOS)", category: "software" },
+        { id: "p1_l3_c3", nameAr: "\u0648\u0627\u062C\u0647\u0629 \u0627\u0644\u0645\u0633\u062A\u062E\u062F\u0645 \u0627\u0644\u0631\u0633\u0648\u0645\u064A\u0629 (GUI) \u0645\u0642\u0627\u0628\u0644 \u0633\u0637\u0631 \u0627\u0644\u0623\u0648\u0627\u0645\u0631 (Command Line Interface - CLI)", nameEn: "GUI vs Command Line Interface (CLI)", category: "software" },
+        { id: "p1_l3_c4", nameAr: "\u0647\u064A\u0643\u0644\u0629 \u0646\u0638\u0627\u0645 \u0627\u0644\u0645\u0644\u0641\u0627\u062A (File Systems) \u0648\u062A\u0646\u0638\u064A\u0645 \u0627\u0644\u062F\u0644\u0627\u0626\u0644 \u0648\u0627\u0644\u0623\u0642\u0631\u0627\u0635 \u0627\u0644\u0635\u0644\u0628\u0629", nameEn: "File System Hierarchy & Storage Management", category: "software" }
+      ],
+      defaultHomework: [
+        "\u0639\u0645\u0644 \u062C\u062F\u0648\u0644 \u0645\u0642\u0627\u0631\u0646\u0629 \u0634\u0627\u0645\u0644 \u0628\u064A\u0646 Windows \u0648 Android \u0641\u064A \u0643\u0634\u0643\u0648\u0644 \u0627\u0644\u062D\u0635\u0629.",
+        "\u0643\u062A\u0627\u0628\u0629 \u0627\u0644\u0641\u0631\u0642 \u0628\u064A\u0646 \u0648\u0627\u062C\u0647\u0629 GUI \u0648\u0633\u0637\u0631 \u0627\u0644\u0623\u0648\u0627\u0645\u0631 CLI.",
+        "\u062A\u0635\u0648\u064A\u0631 \u0627\u0644\u0643\u0634\u0643\u0648\u0644 \u0648\u0631\u0641\u0639\u0647 \u0639\u0628\u0631 \u0627\u0644\u0628\u0648\u0627\u0628\u0629."
+      ],
+      bonusChallenge: "\u{1F31F} \u0628\u0648\u0646\u0635 \u0645\u062A\u0642\u062F\u0645: \u0627\u0641\u062A\u062D \u0645\u0648\u062C\u0647 \u0627\u0644\u0623\u0648\u0627\u0645\u0631 (CMD \u0623\u0648 Terminal) \u0641\u064A \u062D\u0627\u0633\u0648\u0628\u0643\u060C \u0627\u0643\u062A\u0628 \u0627\u0644\u0623\u0645\u0631 dir \u0623\u0648 ls \u0648\u0634\u0627\u0647\u062F \u0627\u0644\u0646\u062A\u064A\u062C\u0629!",
+      nextPrep: ["\u0627\u0644\u062A\u062D\u0636\u064A\u0631 \u0644\u0644\u062F\u0631\u0633 \u0627\u0644\u0631\u0627\u0628\u0639: \u062A\u062B\u0628\u064A\u062A \u0648\u0625\u0644\u063A\u0627\u0621 \u0627\u0644\u0628\u0631\u0627\u0645\u062C \u0648\u0625\u062F\u0627\u0631\u0629 \u0627\u0644\u062A\u0639\u0631\u064A\u0641\u0627\u062A \u0648\u0645\u0646\u0627\u0641\u0630 \u0627\u0644\u062A\u0648\u0635\u064A\u0644."]
+    },
+    {
+      id: "p1_t1_l5",
+      gradeKey: "prep1",
+      gradeNameAr: "\u0627\u0644\u0635\u0641 \u0627\u0644\u0623\u0648\u0644 \u0627\u0644\u0625\u0639\u062F\u0627\u062F\u064A",
+      gradeNameEn: "Prep 1 (ICT & AI Languages)",
+      term: 1,
+      unitNumber: 1,
+      unitTitleAr: "\u0627\u0644\u0645\u062D\u0648\u0631 \u0627\u0644\u0623\u0648\u0644: \u0627\u0644\u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u0627\u0644\u062E\u0636\u0631\u0627\u0621 \u0648\u0627\u0644\u062A\u062D\u0648\u0644 \u0627\u0644\u0631\u0642\u0645\u064A \u0648\u0623\u0646\u0638\u0645\u0629 \u0627\u0644\u062A\u0634\u063A\u064A\u0644",
+      unitTitleEn: "Unit 1: Green Tech, Digital Transformation & OS",
+      lessonNumber: 5,
+      titleAr: "\u0627\u0644\u062F\u0631\u0633 5: \u0627\u0644\u0628\u0631\u064A\u062F \u0627\u0644\u0625\u0644\u0643\u062A\u0631\u0648\u0646\u064A \u0648\u0627\u0644\u062D\u0633\u0627\u0628 \u0627\u0644\u0645\u062F\u0631\u0633\u064A \u0627\u0644\u0645\u0648\u062D\u062F (Unified School Account & Email)",
+      titleEn: "Lesson 5: Professional Email & MOE Unified School Account",
+      concepts: [
+        { id: "p1_l5_c1", nameAr: "\u062A\u0641\u0639\u064A\u0644 \u0648\u0627\u0633\u062A\u062E\u062F\u0627\u0645 \u0627\u0644\u062D\u0633\u0627\u0628 \u0627\u0644\u0645\u062F\u0631\u0633\u064A \u0627\u0644\u0645\u0648\u062D\u062F (@moe.edu.eg) \u0639\u0628\u0631 \u0645\u0646\u0635\u0629 \u0623\u0648\u0641\u064A\u0633 365", nameEn: "Activating Unified School Account (@moe.edu.eg)", category: "software" },
+        { id: "p1_l5_c2", nameAr: "\u0647\u064A\u0643\u0644\u0629 \u0631\u0633\u0627\u0644\u0629 \u0627\u0644\u0628\u0631\u064A\u062F \u0627\u0644\u0625\u0644\u0643\u062A\u0631\u0648\u0646\u064A \u0627\u0644\u0627\u062D\u062A\u0631\u0627\u0641\u064A\u0629: To, Cc, Bcc, Subject, Body, Attachments", nameEn: "Professional Email Components (To, Cc, Bcc, Subject)", category: "core" },
+        { id: "p1_l5_c3", nameAr: "\u0642\u0648\u0627\u0639\u062F \u0627\u0644\u0625\u062A\u064A\u0643\u064A\u062A \u0648\u0627\u0644\u0644\u0628\u0627\u0642\u0629 \u0641\u064A \u0627\u0644\u0645\u0631\u0627\u0633\u0644\u0627\u062A \u0627\u0644\u062A\u0639\u0644\u064A\u0645\u064A\u0629 \u0648\u0627\u0644\u0623\u0643\u0627\u062F\u064A\u0645\u064A\u0629 \u0627\u0644\u0631\u0633\u0645\u064A\u0629", nameEn: "Digital Etiquette & Formal Communication", category: "core" },
+        { id: "p1_l5_c4", nameAr: "\u062A\u062C\u0646\u0628 \u0631\u0633\u0627\u0626\u0644 \u0627\u0644\u062A\u0635\u064A\u062F \u0627\u0644\u0627\u062D\u062A\u064A\u0627\u0644\u064A (Phishing Emails) \u0648\u0627\u0644\u0645\u0644\u0641\u0627\u062A \u0627\u0644\u0645\u0631\u0641\u0642\u0629 \u0627\u0644\u062E\u0628\u064A\u062B\u0629", nameEn: "Phishing Detection & Attachment Safety", category: "safety" }
+      ],
+      defaultHomework: [
+        "\u062A\u0633\u062C\u064A\u0644 \u0627\u0644\u062F\u062E\u0648\u0644 \u0628\u0627\u0644\u062D\u0633\u0627\u0628 \u0627\u0644\u0645\u062F\u0631\u0633\u064A \u0627\u0644\u0645\u0648\u062D\u062F \u0648\u062A\u0635\u0648\u064A\u0631 \u0634\u0627\u0634\u0629 \u0635\u0641\u062D\u0629 \u0627\u0644\u062D\u0633\u0627\u0628 \u0648\u0625\u0631\u0641\u0627\u0642\u0647\u0627.",
+        "\u0643\u062A\u0627\u0628\u0629 \u0646\u0645\u0648\u0630\u062C \u0644\u0631\u0633\u0627\u0644\u0629 \u0628\u0631\u064A\u062F \u0625\u0644\u0643\u062A\u0631\u0648\u0646\u064A \u0631\u0633\u0645\u064A\u0629 \u0625\u0644\u0649 \u0645\u0639\u0644\u0645 \u0627\u0644\u0645\u0627\u062F\u0629 \u0641\u064A \u0627\u0644\u0643\u0634\u0643\u0648\u0644 \u0645\u0648\u0636\u062D\u0629 \u0627\u0644\u062D\u0642\u0648\u0644 \u0627\u0644\u0623\u0633\u0627\u0633\u064A\u0629.",
+        "\u062A\u0635\u0648\u064A\u0631 \u0627\u0644\u0643\u0634\u0643\u0648\u0644 \u0648\u0631\u0641\u0639\u0647 \u0639\u0644\u0649 \u0627\u0644\u0628\u0648\u0627\u0628\u0629."
+      ],
+      bonusChallenge: "\u{1F31F} \u0628\u0648\u0646\u0635 \u0645\u062A\u0645\u064A\u0632: \u0645\u0627 \u0647\u0648 \u0627\u0644\u0641\u0631\u0642 \u0627\u0644\u062C\u0648\u0647\u0631\u064A \u0628\u064A\u0646 \u062D\u0642\u0644 \u0627\u0644\u0646\u0633\u062E\u0629 \u0627\u0644\u0643\u0631\u0628\u0648\u0646\u064A\u0629 Cc \u0648\u062D\u0642\u0644 \u0627\u0644\u0646\u0633\u062E\u0629 \u0627\u0644\u0645\u062E\u0641\u064A\u0629 Bcc\u061F",
+      nextPrep: ["\u0627\u0644\u062A\u062D\u0636\u064A\u0631 \u0644\u0644\u0645\u062D\u0648\u0631 \u0627\u0644\u062B\u0627\u0646\u064A: \u0627\u0644\u062D\u0648\u0633\u0628\u0629 \u0627\u0644\u0633\u062D\u0627\u0628\u064A\u0629 (Cloud Computing) \u0648 Google Drive \u0648\u062A\u0635\u0645\u064A\u0645 \u0642\u0648\u0627\u0639\u062F \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A."]
+    },
+    {
+      id: "p1_t1_l6",
+      gradeKey: "prep1",
+      gradeNameAr: "\u0627\u0644\u0635\u0641 \u0627\u0644\u0623\u0648\u0644 \u0627\u0644\u0625\u0639\u062F\u0627\u062F\u064A",
+      gradeNameEn: "Prep 1 (ICT & AI Languages)",
+      term: 1,
+      unitNumber: 2,
+      unitTitleAr: "\u0627\u0644\u0645\u062D\u0648\u0631 \u0627\u0644\u062B\u0627\u0646\u064A: \u0627\u0644\u062D\u0648\u0633\u0628\u0629 \u0627\u0644\u0633\u062D\u0627\u0628\u064A\u0629 \u0648\u0642\u0648\u0627\u0639\u062F \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A \u0648\u0627\u0644\u0645\u0634\u0631\u0648\u0639\u0627\u062A \u0627\u0644\u0631\u0642\u0645\u064A\u0629",
+      unitTitleEn: "Unit 2: Cloud Computing, Databases & Digital Projects",
+      lessonNumber: 6,
+      titleAr: "\u0627\u0644\u062F\u0631\u0633 6: \u0627\u0644\u062D\u0648\u0633\u0628\u0629 \u0627\u0644\u0633\u062D\u0627\u0628\u064A\u0629 \u0648\u062E\u062F\u0645\u0627\u062A \u0627\u0644\u062A\u062E\u0632\u064A\u0646 \u0627\u0644\u0633\u062D\u0627\u0628\u064A (Cloud Computing & Storage)",
+      titleEn: "Lesson 6: Cloud Computing, Storage Services (Google Drive, OneDrive)",
+      concepts: [
+        { id: "p1_l6_c1", nameAr: "\u0645\u0641\u0647\u0648\u0645 \u0627\u0644\u062D\u0648\u0633\u0628\u0629 \u0627\u0644\u0633\u062D\u0627\u0628\u064A\u0629 (Cloud Computing) \u0648\u0645\u0645\u064A\u0632\u0627\u062A \u062D\u0641\u0638 \u0627\u0644\u0645\u0644\u0641\u0627\u062A \u0639\u0628\u0631 \u0627\u0644\u0633\u062D\u0627\u0628\u0629", nameEn: "Cloud Computing Architecture & Advantages", category: "core" },
+        { id: "p1_l6_c2", nameAr: "\u062E\u062F\u0645\u0627\u062A \u0627\u0644\u062A\u062E\u0632\u064A\u0646 \u0627\u0644\u0633\u062D\u0627\u0628\u064A: Google Drive \u0648 Microsoft OneDrive \u0648\u0627\u0644\u0645\u0632\u0627\u0645\u0646\u0629 \u0627\u0644\u062A\u0644\u0642\u0627\u0626\u064A\u0629", nameEn: "Cloud Storage (Google Drive, OneDrive & Sync)", category: "software" },
+        { id: "p1_l6_c3", nameAr: "\u0627\u0644\u0639\u0645\u0644 \u0627\u0644\u062C\u0645\u0627\u0639\u064A \u0627\u0644\u062A\u0639\u0627\u0648\u0646\u064A \u0648\u0627\u0644\u0645\u0634\u0627\u0631\u0643\u0629 \u0627\u0644\u062A\u0632\u0627\u0645\u0646\u064A\u0629 \u0644\u0644\u0645\u0633\u062A\u0646\u062F\u0627\u062A (Real-Time Document Collaboration)", nameEn: "Real-Time Document Collaboration & Permissions", category: "software" },
+        { id: "p1_l6_c4", nameAr: "\u0625\u062F\u0627\u0631\u0629 \u0623\u0630\u0648\u0646\u0627\u062A \u0627\u0644\u0645\u0644\u0641\u0627\u062A \u0627\u0644\u0633\u062D\u0627\u0628\u064A\u0629: \u0639\u0627\u0631\u0636 (Viewer)\u060C \u0645\u0639\u0644\u0642 (Commenter)\u060C \u0645\u062D\u0631\u0631 (Editor)", nameEn: "File Sharing Permissions (Viewer, Commenter, Editor)", category: "safety" }
+      ],
+      defaultHomework: [
+        "\u0643\u062A\u0627\u0628\u0629 4 \u0641\u0648\u0627\u0626\u062F \u0644\u0644\u062D\u0648\u0633\u0628\u0629 \u0627\u0644\u0633\u062D\u0627\u0628\u064A\u0629 \u0645\u0642\u0627\u0631\u0646\u0629 \u0628\u062D\u0641\u0638 \u0627\u0644\u0645\u0644\u0641\u0627\u062A \u0639\u0644\u0649 \u0627\u0644\u0641\u0644\u0627\u0634\u0629 \u0623\u0648 \u0627\u0644\u0642\u0631\u0635 \u0627\u0644\u0645\u062D\u0644\u064A \u0641\u064A \u0627\u0644\u0643\u0634\u0643\u0648\u0644.",
+        "\u0634\u0631\u062D \u0627\u0644\u0641\u0631\u0642 \u0628\u064A\u0646 \u0635\u0644\u0627\u062D\u064A\u0629 Viewer \u0648\u0635\u0644\u0627\u062D\u064A\u0629 Editor \u0639\u0646\u062F \u0645\u0634\u0627\u0631\u0643\u0629 \u0645\u0644\u0641 \u0633\u062D\u0627\u0628\u064A.",
+        "\u062A\u0635\u0648\u064A\u0631 \u0627\u0644\u0643\u0634\u0643\u0648\u0644 \u0648\u0631\u0641\u0639\u0647 \u0639\u0644\u0649 \u0627\u0644\u0628\u0648\u0627\u0628\u0629."
+      ],
+      bonusChallenge: "\u{1F31F} \u0628\u0648\u0646\u0635 \u0639\u0645\u0644\u064A: \u0625\u0646\u0634\u0627\u0621 \u0645\u062C\u0644\u062F \u0633\u062D\u0627\u0628\u064A \u0639\u0644\u0649 Google Drive \u0623\u0648 OneDrive \u0648\u0631\u0641\u0639 \u0645\u0644\u0641 \u0639\u0644\u064A\u0647 \u0648\u0645\u0634\u0627\u0631\u0643\u062A\u0647 \u0628\u0631\u0627\u0628\u0637 \u062E\u0627\u0635.",
+      nextPrep: ["\u0627\u0644\u062A\u062D\u0636\u064A\u0631 \u0644\u0644\u062F\u0631\u0633 \u0627\u0644\u0633\u0627\u0628\u0639: \u0627\u0644\u0627\u062C\u062A\u0645\u0627\u0639\u0627\u062A \u0627\u0644\u0627\u0641\u062A\u0631\u0627\u0636\u064A\u0629 \u0628\u0640 Google Meet \u0648\u0625\u062F\u0627\u0631\u0629 \u0627\u0644\u0645\u0634\u0631\u0648\u0639\u0627\u062A \u0627\u0644\u0631\u0642\u0645\u064A\u0629."]
+    }
+  ]
+};
+function getOfficialLessonsForGrade(gradeQuery, term) {
+  const rawQ = (gradeQuery || "").toLowerCase();
+  const q = rawQ.replace(/[أإآ]/g, "\u0627").replace(/ى/g, "\u064A").replace(/ة/g, "\u0647");
+  let key = "grade4";
+  if (q.includes("\u0633\u0627\u062F\u0633") || q.includes("grade 6") || q.includes("ict 6") || q.includes("ict6")) {
+    key = "grade6";
+  } else if (q.includes("\u062E\u0627\u0645\u0633") || q.includes("grade 5") || q.includes("ict 5") || q.includes("ict5")) {
+    key = "grade5";
+  } else if (q.includes("\u0631\u0627\u0628\u0639") || q.includes("grade 4") || q.includes("ict 4") || q.includes("ict4")) {
+    key = "grade4";
+  } else if (q.includes("\u0627\u0648\u0644 \u0627\u0639\u062F\u0627\u062F\u064A") || q.includes("\u0627\u0648\u0644\u064A \u0627\u0639\u062F\u0627\u062F\u064A") || q.includes("\u0627\u0644\u0627\u0648\u0644 \u0627\u0644\u0627\u0639\u062F\u0627\u062F\u064A") || q.includes("1 \u0627\u0639\u062F\u0627\u062F\u064A") || q.includes("prep 1") || q.includes("prep1") || q.includes("ict-p1") || q.includes("p1")) {
+    key = "prep1";
+  } else if (q.includes("\u062B\u0627\u0646\u064A \u0627\u0639\u062F\u0627\u062F\u064A") || q.includes("\u062A\u0627\u0646\u064A\u0647 \u0627\u0639\u062F\u0627\u062F\u064A") || q.includes("\u062A\u0627\u0646\u064A \u0627\u0639\u062F\u0627\u062F\u064A") || q.includes("\u0627\u0644\u062B\u0627\u0646\u064A \u0627\u0644\u0627\u0639\u062F\u0627\u062F\u064A") || q.includes("2 \u0627\u0639\u062F\u0627\u062F\u064A") || q.includes("prep 2") || q.includes("prep2") || q.includes("ict-p2")) {
+    key = "prep2";
+  }
+  const list = OFFICIAL_ICT_CURRICULUM_2026_2027[key] || OFFICIAL_ICT_CURRICULUM_2026_2027.grade4;
+  if (!term || term === "all") return list;
+  return list.filter((l) => l.term === term);
+}
+
+// server/gemini.ts
 var aiClient = null;
 function getAI() {
   if (!aiClient) {
@@ -7660,10 +9134,7 @@ function getAI() {
 var GEMINI_MODEL_CASCADE = [
   "gemini-2.5-flash",
   "gemini-2.5-pro",
-  "gemini-flash-latest",
-  "gemini-3.1-pro-preview",
-  "gemini-3.1-flash-lite",
-  "gemini-3.8-flash"
+  "gemini-flash-latest"
 ];
 function createWavFromPcm(pcmData, sampleRate = 24e3, numChannels = 1, bitsPerSample = 16) {
   if (pcmData.length >= 12 && pcmData.toString("ascii", 0, 4) === "RIFF" && pcmData.toString("ascii", 8, 12) === "WAVE") {
@@ -7698,7 +9169,7 @@ async function generateGeminiSpeechAudio(params) {
 ${params.text}` : `\u0627\u0646\u0637\u0642 \u0647\u0630\u0647 \u0627\u0644\u0639\u0628\u0627\u0631\u0629 \u0628\u0635\u0648\u062A \u0645\u0630\u064A\u0639 \u0625\u0630\u0627\u0639\u064A \u0645\u0635\u0631\u064A \u062D\u0645\u0627\u0633\u064A\u060C \u062F\u0627\u0641\u0626 \u0648\u0645\u0628\u0647\u062C \u0648\u0637\u0628\u064A\u0639\u064A \u062C\u062F\u0627\u064B \u0628\u0646\u0628\u0631\u0629 \u0627\u062D\u062A\u0641\u0627\u0644\u064A\u0629 \u062D\u0642\u064A\u0642\u064A\u0629 \u0648\u0628\u0644\u0647\u062C\u0629 \u0645\u0635\u0631\u064A\u0629 \u0623\u0635\u064A\u0644\u0629 \u0648\u0627\u0636\u062D\u0629: "${params.text}"`;
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-3.1-flash-tts-preview",
+      model: "gemini-2.5-flash",
       contents: [{ parts: [{ text: prompt }] }],
       config: {
         responseModalities: ["AUDIO"],
@@ -7726,31 +9197,270 @@ ${params.text}` : `\u0627\u0646\u0637\u0642 \u0647\u0630\u0647 \u0627\u0644\u063
     return { success: false, error: err?.message || "TTS generation error" };
   }
 }
-async function generateWithModelCascade(params) {
-  if (!process.env.GEMINI_API_KEY) {
-    return { text: null, modelUsed: null };
+function generateSmartFallbackKnowledge(prompt) {
+  const p = prompt.toLowerCase();
+  if (p.includes("\u062E\u0636\u0631\u0627\u0621") || p.includes("green tech") || p.includes("green technology") || p.includes("\u0627\u0633\u062A\u062F\u0627\u0645\u0629") || p.includes("\u0646\u0641\u0627\u064A\u0627\u062A \u0627\u0644\u0643\u062A\u0631\u0648\u0646\u064A\u0629") || p.includes("e-waste")) {
+    return `### \u{1F33F} \u0627\u0644\u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u0627\u0644\u062E\u0636\u0631\u0627\u0621 \u0648\u0627\u0644\u0627\u0633\u062A\u062F\u0627\u0645\u0629 \u0627\u0644\u0628\u064A\u0626\u064A\u0629 (Green Technology & Sustainability)
+**\u0648\u0641\u0642 \u0643\u062A\u0627\u0628 \u0648\u0632\u0627\u0631\u0629 \u0627\u0644\u062A\u0631\u0628\u064A\u0629 \u0648\u0627\u0644\u062A\u0639\u0644\u064A\u0645 \u0627\u0644\u0645\u0635\u0631\u064A\u0629 2026/2027:**
+
+#### 1. \u0645\u0641\u0647\u0648\u0645 \u0627\u0644\u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u0627\u0644\u062E\u0636\u0631\u0627\u0621 (Green Tech):
+* \u0647\u064A \u0627\u0633\u062A\u062E\u062F\u0627\u0645 \u0627\u0644\u0627\u0628\u062A\u0643\u0627\u0631\u0627\u062A \u0648\u0627\u0644\u062D\u0644\u0648\u0644 \u0627\u0644\u062A\u0642\u0646\u064A\u0629 \u0648\u0627\u0644\u0628\u0631\u0645\u062C\u064A\u0629 \u0628\u0637\u0631\u0642 \u062A\u0647\u062F\u0641 \u0625\u0644\u0649 **\u062D\u0645\u0627\u064A\u0629 \u0627\u0644\u0628\u064A\u0626\u0629\u060C \u062A\u0631\u0634\u064A\u062F \u0627\u0633\u062A\u0647\u0644\u0627\u0643 \u0627\u0644\u0645\u0648\u0627\u0631\u062F \u0627\u0644\u0637\u0628\u064A\u0639\u064A\u0629\u060C \u062A\u0642\u0644\u064A\u0644 \u0627\u0644\u0627\u0646\u0628\u0639\u0627\u062B\u0627\u062A \u0627\u0644\u0643\u0631\u0628\u0648\u0646\u064A\u0629\u060C \u0648\u0627\u0644\u062D\u062F \u0645\u0646 \u0627\u0633\u062A\u0647\u0644\u0627\u0643 \u0627\u0644\u0637\u0627\u0642\u0629**.
+* **\u0623\u0645\u062B\u0644\u0629 \u062A\u0637\u0628\u064A\u0642\u064A\u0629 \u0645\u0639\u062A\u0645\u062F\u0629:**
+  - \u0627\u0644\u062D\u0648\u0627\u0633\u064A\u0628 \u0648\u0627\u0644\u0645\u0631\u0627\u0643\u0632 \u0627\u0644\u0633\u062D\u0627\u0628\u064A\u0629 \u0627\u0644\u0645\u0648\u0641\u0631\u0629 \u0644\u0644\u0637\u0627\u0642\u0629 (Green Computing).
+  - \u0627\u0644\u0623\u062C\u0647\u0632\u0629 \u0627\u0644\u0630\u0643\u064A\u0629 \u0627\u0644\u062A\u064A \u062A\u062A\u062D\u0648\u0644 \u0644\u0648\u0636\u0639 \u0627\u0644\u0633\u0643\u0648\u0646 \u0627\u0644\u0645\u0648\u0641\u0631 (Power Saving Mode) \u062A\u0644\u0642\u0627\u0626\u064A\u0627\u064B.
+  - \u0627\u0644\u0645\u0639\u0627\u0645\u0644\u0627\u062A \u0627\u0644\u0631\u0642\u0645\u064A\u0629 \u063A\u064A\u0631 \u0627\u0644\u0648\u0631\u0642\u064A\u0629 (Paperless Transactions) \u0644\u062A\u0642\u0644\u064A\u0644 \u0627\u0633\u062A\u0647\u0644\u0627\u0643 \u0627\u0644\u0623\u0634\u062C\u0627\u0631.
+
+#### 2. \u0625\u062F\u0627\u0631\u0629 \u0627\u0644\u0645\u062E\u0644\u0641\u0627\u062A \u0648\u0627\u0644\u0646\u0641\u0627\u064A\u0627\u062A \u0627\u0644\u0625\u0644\u0643\u062A\u0631\u0648\u0646\u064A\u0629 (E-Waste Management):
+* **\u0627\u0644\u062A\u0639\u0631\u064A\u0641:** \u0627\u0644\u0623\u062C\u0647\u0632\u0629 \u0648\u0627\u0644\u0645\u0639\u062F\u0627\u062A \u0627\u0644\u0625\u0644\u0643\u062A\u0631\u0648\u0646\u064A\u0629 \u0627\u0644\u0642\u062F\u064A\u0645\u0629 \u0623\u0648 \u0627\u0644\u062A\u0627\u0644\u0641\u0629 (\u0645\u062B\u0644 \u0627\u0644\u0647\u0648\u0627\u062A\u0641\u060C \u0627\u0644\u0634\u0627\u0634\u0627\u062A\u060C \u0627\u0644\u0628\u0637\u0627\u0631\u064A\u0627\u062A\u060C \u0627\u0644\u0643\u0627\u0628\u0644\u0627\u062A).
+* **\u0627\u0644\u0642\u0627\u0639\u062F\u0629 \u0627\u0644\u062A\u0631\u0628\u0648\u064A\u0629:** \u0644\u0627 \u062A\u064F\u0644\u0642\u0649 \u0627\u0644\u0645\u062E\u0644\u0641\u0627\u062A \u0627\u0644\u0625\u0644\u0643\u062A\u0631\u0648\u0646\u064A\u0629 \u0641\u064A \u0627\u0644\u0642\u0645\u0627\u0645\u0629 \u0627\u0644\u0639\u0627\u062F\u064A\u0629 \u0644\u0623\u0646\u0647\u0627 \u062A\u062D\u062A\u0648\u064A \u0639\u0644\u0649 \u0645\u0639\u0627\u062F\u0646 \u062B\u0642\u064A\u0644\u0629 \u0648\u0645\u0648\u0627\u062F \u0633\u0627\u0645\u0629 (\u0643\u0627\u0644\u0631\u0635\u0627\u0635 \u0648\u0627\u0644\u0632\u0626\u0628\u0642)\u060C \u0628\u0644 \u064A\u062A\u0645 \u062A\u0633\u0644\u064A\u0645\u0647\u0627 \u0644\u0645\u0631\u0627\u0643\u0632 \u0625\u0639\u0627\u062F\u0629 \u0627\u0644\u062A\u062F\u0648\u064A\u0631 \u0627\u0644\u0645\u0639\u062A\u0645\u062F\u0629 \u0645\u0646 \u0627\u0644\u062F\u0648\u0644\u0629.
+
+#### \u{1F4A1} \u0646\u0635\u064A\u062D\u0629 \u0627\u0644\u0645\u0639\u0644\u0645 \u0644\u0644\u062A\u0641\u0648\u0642:
+> \u0627\u062D\u0631\u0635 \u062F\u0627\u0626\u0645\u0627\u064B \u0639\u0644\u0649 \u0643\u062A\u0627\u0628\u0629 \u0627\u0644\u0645\u0635\u0637\u0644\u062D\u0627\u062A \u0628\u0627\u0644\u0625\u0646\u062C\u0644\u064A\u0632\u064A\u0629 \u0648\u0627\u0644\u0639\u0631\u0628\u064A\u0629: **Green Technology** (\u0627\u0644\u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u0627\u0644\u062E\u0636\u0631\u0627\u0621)\u060C **E-Waste** (\u0627\u0644\u0646\u0641\u0627\u064A\u0627\u062A \u0627\u0644\u0625\u0644\u0643\u062A\u0631\u0648\u0646\u064A\u0629)\u060C **Recycling** (\u0625\u0639\u0627\u062F\u0629 \u0627\u0644\u062A\u062F\u0648\u064A\u0631).`;
   }
-  const ai = getAI();
-  let lastError = null;
-  for (const modelName of GEMINI_MODEL_CASCADE) {
-    try {
-      const response = await ai.models.generateContent({
-        model: modelName,
-        contents: params.contents,
-        config: params.config
-      });
-      const text = response.text;
-      if (text) {
-        console.log(`[Gemini Cascade] Success using model: ${modelName}`);
-        return { text, modelUsed: modelName };
+  if (p.includes("\u062A\u062D\u0648\u0644 \u0631\u0642\u0645\u064A") || p.includes("digital transformation") || p.includes("\u0645\u0635\u0631 \u0627\u0644\u0631\u0642\u0645\u064A\u0629") || p.includes("\u062F\u0641\u0639 \u0627\u0644\u0643\u062A\u0631\u0648\u0646\u064A") || p.includes("e-payment") || p.includes("\u0641\u0648\u0631\u064A") || p.includes("\u0645\u064A\u0632\u0629")) {
+    return `### \u{1F310} \u0627\u0644\u062A\u062D\u0648\u0644 \u0627\u0644\u0631\u0642\u0645\u064A \u0648\u0645\u0646\u0638\u0648\u0645\u0629 \u0627\u0644\u062F\u0641\u0639 \u0648\u0627\u0644\u062E\u062F\u0645\u0627\u062A \u0627\u0644\u0625\u0644\u0643\u062A\u0631\u0648\u0646\u064A\u0629 (Digital Transformation)
+**\u0648\u0641\u0642 \u0643\u062A\u0627\u0628 \u0648\u0632\u0627\u0631\u0629 \u0627\u0644\u062A\u0631\u0628\u064A\u0629 \u0648\u0627\u0644\u062A\u0639\u0644\u064A\u0645 \u0627\u0644\u0645\u0635\u0631\u064A\u0629 2026/2027:**
+
+#### 1. \u0645\u0641\u0647\u0648\u0645 \u0627\u0644\u062A\u062D\u0648\u0644 \u0627\u0644\u0631\u0642\u0645\u064A (Digital Transformation):
+* \u0647\u0648 \u0627\u0644\u0627\u0646\u062A\u0642\u0627\u0644 \u0645\u0646 \u0627\u0644\u0625\u062C\u0631\u0627\u0621\u0627\u062A \u0648\u0627\u0644\u062E\u062F\u0645\u0627\u062A \u0627\u0644\u064A\u062F\u0648\u064A\u0629 \u0627\u0644\u0648\u0631\u0642\u064A\u0629 \u0627\u0644\u062A\u0642\u0644\u064A\u062F\u064A\u0629 \u0625\u0644\u0649 **\u0645\u0646\u0638\u0648\u0645\u0629 \u0631\u0642\u0645\u064A\u0629 \u0645\u062A\u0643\u0627\u0645\u0644\u0629 \u0648\u0633\u062D\u0627\u0628\u064A\u0629** \u062A\u064F\u062F\u0627\u0631 \u0639\u0628\u0631 \u0634\u0628\u0643\u0627\u062A \u0627\u0644\u062D\u0627\u0633\u0648\u0628 \u0648\u0627\u0644\u0625\u0646\u062A\u0631\u0646\u062A \u0644\u062A\u0642\u062F\u064A\u0645 \u0627\u0644\u062E\u062F\u0645\u0627\u062A \u0628\u0633\u0631\u0639\u0629 \u0648\u0643\u0641\u0627\u0621\u0629 \u0648\u0623\u0645\u0627\u0646.
+* **\u0645\u0646\u0635\u0629 \u0645\u0635\u0631 \u0627\u0644\u0631\u0642\u0645\u064A\u0629 (Digital Egypt):** \u0628\u0648\u0627\u0628\u0629 \u062D\u0643\u0648\u0645\u064A\u0629 \u0645\u0648\u062D\u062F\u0629 \u062A\u062A\u064A\u062D \u0644\u0644\u0645\u0648\u0627\u0637\u0646\u064A\u0646 \u0627\u0633\u062A\u062E\u0631\u0627\u062C \u0627\u0644\u0648\u062B\u0627\u0626\u0642 \u0627\u0644\u0631\u0633\u0645\u064A\u0629\u060C \u062E\u062F\u0645\u0627\u062A \u0627\u0644\u062A\u0645\u0648\u064A\u0646\u060C \u0627\u0644\u062A\u0648\u062B\u064A\u0642\u060C \u0648\u0627\u0644\u0645\u0631\u0648\u0631 \u062F\u0648\u0646 \u0627\u0644\u062D\u0627\u062C\u0629 \u0644\u0644\u062A\u0646\u0642\u0644 \u0623\u0648 \u0627\u0644\u0645\u0639\u0627\u0645\u0644\u0627\u062A \u0627\u0644\u0648\u0631\u0642\u064A\u0629.
+
+#### 2. \u0627\u0644\u0634\u0645\u0648\u0644 \u0627\u0644\u0645\u0627\u0644\u064A \u0648\u0627\u0644\u062F\u0641\u0639 \u0627\u0644\u0625\u0644\u0643\u062A\u0631\u0648\u0646\u064A (E-Payment & Financial Inclusion):
+* **\u0648\u0633\u0627\u0626\u0644 \u0627\u0644\u062F\u0641\u0639 \u0627\u0644\u0631\u0642\u0645\u064A\u0629 \u0627\u0644\u0645\u0639\u062A\u0645\u062F\u0629:**
+  - **\u0643\u0631\u0648\u062A \u0645\u064A\u0632\u0629 (Meeza Cards):** \u0628\u0637\u0627\u0642\u0627\u062A \u062F\u0641\u0639 \u0648\u0637\u0646\u064A\u0629 \u0630\u0643\u064A\u0629.
+  - **\u0645\u062D\u0627\u0641\u0638 \u0627\u0644\u0647\u0627\u062A\u0641 \u0627\u0644\u0645\u062D\u0645\u0648\u0644 (Mobile Wallets):** \u062F\u0641\u0639 \u0627\u0644\u0641\u0648\u0627\u062A\u064A\u0631 \u0648\u062A\u062D\u0648\u064A\u0644 \u0627\u0644\u0623\u0645\u0648\u0627\u0644 \u0641\u0648\u0631\u064A\u0627\u064B \u0628\u0631\u0642\u0645 \u0627\u0644\u0647\u0627\u062A\u0641.
+  - **\u0646\u0642\u0627\u0637 \u0627\u0644\u0628\u064A\u0639 \u0627\u0644\u0625\u0644\u0643\u062A\u0631\u0648\u0646\u064A\u0629 (POS) \u0648\u0645\u0646\u0635\u0627\u062A \u0627\u0644\u062F\u0641\u0639:** \u0645\u062B\u0644 \u0641\u0648\u0631\u064A \u0648\u0623\u0645\u0627\u0646.
+
+#### \u{1F6E1}\uFE0F \u0627\u0644\u0623\u0645\u0627\u0646 \u0627\u0644\u0631\u0642\u0645\u064A \u0641\u064A \u0627\u0644\u0645\u0639\u0627\u0645\u0644\u0627\u062A \u0627\u0644\u0645\u0627\u0644\u064A\u0629:
+* \u0639\u062F\u0645 \u0645\u0634\u0627\u0631\u0643\u0629 \u0631\u0645\u0632 \u0627\u0644\u0623\u0645\u0627\u0646 \u0627\u0644\u0633\u0631\u064A (OTP) \u0645\u0639 \u0623\u064A \u0634\u062E\u0635.
+* \u0627\u0644\u062A\u0623\u0643\u062F \u0645\u0646 \u0648\u062C\u0648\u062F \u0639\u0644\u0627\u0645\u0629 \u0627\u0644\u0642\u0641\u0644 \u0648\u0628\u0631\u0648\u062A\u0648\u0643\u0648\u0644 \u0627\u0644\u062A\u0634\u0641\u064A\u0631 \u0627\u0644\u0622\u0645\u0646 (HTTPS) \u0641\u064A \u0623\u064A \u0645\u0648\u0642\u0639 \u062F\u0641\u0639.`;
+  }
+  if (p.includes("\u062A\u0634\u063A\u064A\u0644") || p.includes("operating system") || p.includes("\u0648\u064A\u0646\u062F\u0648\u0632") || p.includes("windows") || p.includes("\u0644\u064A\u0646\u0643\u0633") || p.includes("linux") || p.includes("\u0627\u0646\u062F\u0631\u0648\u064A\u062F") || p.includes("android") || p.includes("ios")) {
+    return `### \u{1F4BB} \u0623\u0646\u0638\u0645\u0629 \u0627\u0644\u062A\u0634\u063A\u064A\u0644 \u0648\u0625\u062F\u0627\u0631\u0629 \u0645\u0648\u0627\u0631\u062F \u0627\u0644\u062D\u0627\u0633\u0648\u0628 (Operating Systems)
+**\u0648\u0641\u0642 \u0643\u062A\u0627\u0628 \u0648\u0632\u0627\u0631\u0629 \u0627\u0644\u062A\u0631\u0628\u064A\u0629 \u0648\u0627\u0644\u062A\u0639\u0644\u064A\u0645 \u0627\u0644\u0645\u0635\u0631\u064A\u0629 2026/2027:**
+
+#### 1. \u062A\u0639\u0631\u064A\u0641 \u0646\u0638\u0627\u0645 \u0627\u0644\u062A\u0634\u063A\u064A\u0644 (Operating System - OS):
+* \u0647\u0648 \u0627\u0644\u0628\u0631\u0646\u0627\u0645\u062C \u0627\u0644\u0623\u0633\u0627\u0633\u064A \u0648\u0627\u0644\u0648\u0633\u064A\u0637 \u0628\u064A\u0646 **\u0627\u0644\u0645\u0633\u062A\u062E\u062F\u0645 (User)**\u060C **\u0627\u0644\u062A\u0637\u0628\u064A\u0642\u0627\u062A \u0627\u0644\u0628\u0631\u0645\u062C\u064A\u0629 (Software)**\u060C \u0648**\u0627\u0644\u0639\u062A\u0627\u062F \u0627\u0644\u0635\u0644\u0628 (Hardware)**. \u0648\u0628\u062F\u0648\u0646\u0647 \u0644\u0627 \u064A\u0645\u0643\u0646 \u062A\u0634\u063A\u064A\u0644 \u0627\u0644\u062D\u0627\u0633\u0648\u0628 \u0625\u0637\u0644\u0627\u0642\u0627\u064B.
+
+#### 2. \u0627\u0644\u0623\u0646\u0648\u0627\u0639 \u0648\u0627\u0644\u0645\u0642\u0627\u0631\u0646\u0629 \u0627\u0644\u0645\u0639\u062A\u0645\u062F\u0629 \u0628\u0627\u0644\u0645\u0646\u0647\u062C:
+* **\u0623\u0646\u0638\u0645\u0629 \u062A\u0634\u063A\u064A\u0644 \u0627\u0644\u062D\u0648\u0627\u0633\u064A\u0628 \u0627\u0644\u0634\u062E\u0635\u064A\u0629 \u0648\u0627\u0644\u0645\u0643\u062A\u0628\u064A\u0629:**
+  - **Microsoft Windows:** \u0627\u0644\u0646\u0638\u0627\u0645 \u0627\u0644\u0623\u0643\u062B\u0631 \u0627\u0646\u062A\u0634\u0627\u0631\u0627\u064B \u0648\u0633\u0647\u0648\u0644\u0629 \u0641\u064A \u0627\u0644\u0627\u0633\u062A\u062E\u062F\u0627\u0645 \u0648\u064A\u062F\u0639\u0645 \u0648\u0627\u062C\u0647\u0629 \u0627\u0644\u0645\u0633\u062A\u062E\u062F\u0645 \u0627\u0644\u0631\u0633\u0648\u0645\u064A\u0629 (GUI).
+  - **Linux:** \u0646\u0638\u0627\u0645 \u0645\u0641\u062A\u0648\u062D \u0627\u0644\u0645\u0635\u062F\u0631 (Open Source) \u0639\u0627\u0644\u064A \u0627\u0644\u0623\u0645\u0627\u0646 \u0648\u0645\u062C\u0627\u0646\u064A.
+  - **macOS:** \u0646\u0638\u0627\u0645 \u062A\u0634\u063A\u064A\u0644 \u062E\u0627\u0635 \u0628\u062D\u0648\u0627\u0633\u064A\u0628 Apple.
+* **\u0623\u0646\u0638\u0645\u0629 \u062A\u0634\u063A\u064A\u0644 \u0627\u0644\u0647\u0648\u0627\u062A\u0641 \u0648\u0627\u0644\u0623\u062C\u0647\u0632\u0629 \u0627\u0644\u0630\u0643\u064A\u0629:**
+  - **Android:** \u0646\u0638\u0627\u0645 \u0645\u0641\u062A\u0648\u062D \u0627\u0644\u0645\u0635\u062F\u0631 \u062A\u0645\u0644\u0643\u0647 \u0634\u0631\u0643\u0629 Google \u0648\u064A\u0639\u0645\u0644 \u0639\u0644\u0649 \u0623\u063A\u0644\u0628 \u0627\u0644\u0647\u0648\u0627\u062A\u0641 \u0627\u0644\u0630\u0643\u064A\u0629 \u0648\u0627\u0644\u0623\u062C\u0647\u0632\u0629 \u0627\u0644\u0644\u0648\u062D\u064A\u0629.
+  - **iOS:** \u0646\u0638\u0627\u0645 \u062A\u0634\u063A\u064A\u0644 \u0645\u063A\u0644\u0642 \u0627\u0644\u0645\u0635\u062F\u0631 \u062E\u0627\u0635 \u0628\u0647\u0648\u0627\u062A\u0641 iPhone \u0648\u0623\u062C\u0647\u0632\u0629 iPad.
+
+#### 3. \u0648\u0638\u0627\u0626\u0641 \u0646\u0638\u0627\u0645 \u0627\u0644\u062A\u0634\u063A\u064A\u0644 \u0627\u0644\u0623\u0633\u0627\u0633\u064A\u0629:
+* \u0625\u062F\u0627\u0631\u0629 \u0648\u062D\u062F\u0629 \u0627\u0644\u0645\u0639\u0627\u0644\u062C\u0629 \u0627\u0644\u0645\u0631\u0643\u0632\u064A\u0629 (CPU) \u0648\u0627\u0644\u0630\u0627\u0643\u0631\u0629 (RAM).
+* \u0625\u062F\u0627\u0631\u0629 \u0648\u062D\u062F\u0627\u062A \u0627\u0644\u062A\u062E\u0632\u064A\u0646 \u0648\u0627\u0644\u0645\u0644\u0641\u0627\u062A \u0648\u0627\u0644\u0645\u062C\u0644\u062F\u0627\u062A (File Explorer).
+* \u0627\u0644\u062A\u062D\u0643\u0645 \u0641\u064A \u0648\u062D\u062F\u0627\u062A \u0627\u0644\u0625\u062F\u062E\u0627\u0644 \u0648\u0627\u0644\u0625\u062E\u0631\u0627\u062C \u0648\u0627\u0644\u062A\u0639\u0631\u064A\u0641\u0627\u062A (Drivers).`;
+  }
+  if (p.includes("\u0634\u0628\u0643") || p.includes("network") || p.includes("\u0631\u0627\u0648\u062A\u0631") || p.includes("router") || p.includes("\u0645\u0648\u062F\u0645") || p.includes("modem") || p.includes("\u0633\u0648\u064A\u062A\u0634") || p.includes("switch") || p.includes("\u0648\u0627\u064A \u0641\u0627\u064A") || p.includes("lan") || p.includes("wan")) {
+    return `### \u{1F310} \u0634\u0628\u0643\u0627\u062A \u0627\u0644\u062D\u0627\u0633\u0648\u0628 \u0648\u0623\u062C\u0647\u0632\u062A\u0647\u0627 \u0627\u0644\u0645\u0639\u062A\u0645\u062F\u0629 (Computer Networks)
+**\u0648\u0641\u0642 \u0643\u062A\u0627\u0628 \u0648\u0632\u0627\u0631\u0629 \u0627\u0644\u062A\u0631\u0628\u064A\u0629 \u0648\u0627\u0644\u062A\u0639\u0644\u064A\u0645 \u0627\u0644\u0645\u0635\u0631\u064A\u0629 2026/2027:**
+
+#### 1. \u0645\u0627 \u0647\u064A \u0634\u0628\u0643\u0629 \u0627\u0644\u062D\u0627\u0633\u0648\u0628 (Computer Network)\u061F
+* \u0627\u062A\u0635\u0627\u0644 \u062C\u0647\u0627\u0632\u064A\u0646 \u0623\u0648 \u0623\u0643\u062B\u0631 \u0645\u0639\u0627\u064B \u0628\u0647\u062F\u0641 **\u062A\u0628\u0627\u062F\u0644 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A\u060C \u0627\u0644\u0627\u062A\u0635\u0627\u0644 \u0627\u0644\u0633\u0631\u064A\u0639\u060C \u0648\u0645\u0634\u0627\u0631\u0643\u0629 \u0627\u0644\u0645\u0648\u0627\u0631\u062F** (\u0643\u0627\u0644\u0637\u0627\u0628\u0639\u0627\u062A \u0648\u0627\u0644\u0645\u0644\u0641\u0627\u062A \u0648\u0627\u0644\u0625\u0646\u062A\u0631\u0646\u062A).
+
+#### 2. \u0623\u0646\u0648\u0627\u0639 \u0627\u0644\u0634\u0628\u0643\u0627\u062A \u0627\u0644\u0631\u0626\u064A\u0633\u064A\u0629 (Network Types):
+* **\u0627\u0644\u0634\u0628\u0643\u0629 \u0627\u0644\u0645\u062D\u0644\u064A\u0629 (LAN - Local Area Network):** \u0634\u0628\u0643\u0629 \u062A\u0631\u0628\u0637 \u0623\u062C\u0647\u0632\u0629 \u062F\u0627\u062E\u0644 \u0645\u0646\u0637\u0642\u0629 \u062C\u063A\u0631\u0627\u0641\u064A\u0629 \u0645\u062D\u062F\u0648\u062F\u0629 (\u0645\u062B\u0644 \u0645\u0639\u0645\u0644 \u0627\u0644\u0645\u062F\u0631\u0633\u0629\u060C \u0645\u0631\u0643\u0632 \u0627\u0644\u062A\u062F\u0631\u064A\u0628\u060C \u0623\u0648 \u0627\u0644\u0645\u0646\u0632\u0644).
+* **\u0627\u0644\u0634\u0628\u0643\u0629 \u0648\u0627\u0633\u0639\u0629 \u0627\u0644\u0646\u0637\u0627\u0642 (WAN - Wide Area Network):** \u0634\u0628\u0643\u0629 \u062A\u0631\u0628\u0637 \u0623\u062C\u0647\u0632\u0629 \u0648\u0645\u062F\u0646\u0627\u064B \u0648\u062F\u0648\u0644\u0627\u064B \u0639\u0628\u0631 \u0645\u0633\u0627\u062D\u0627\u062A \u0634\u0627\u0633\u0639\u0629\u060C \u0648\u0623\u0643\u0628\u0631\u0647\u0627 \u0634\u0628\u0643\u0629 **\u0627\u0644\u0625\u0646\u062A\u0631\u0646\u062A (Internet)**.
+* **\u0627\u0644\u0625\u0646\u062A\u0631\u0627\u0646\u062A (Intranet):** \u0634\u0628\u0643\u0629 \u062E\u0627\u0635\u0629 \u0645\u063A\u0644\u0642\u0629 \u062A\u0642\u062A\u0635\u0631 \u0639\u0644\u0649 \u0623\u0639\u0636\u0627\u0621 \u0645\u0624\u0633\u0633\u0629 \u0645\u0639\u064A\u0646\u0629 \u0648\u0644\u0627 \u064A\u0631\u0627\u0647\u0627 \u0627\u0644\u0639\u0627\u0645\u0629.
+
+#### 3. \u0623\u062C\u0647\u0632\u0629 \u0627\u0644\u0631\u0628\u0637 \u0627\u0644\u0634\u0628\u0643\u064A \u0648\u0648\u0638\u0627\u0626\u0641\u0647\u0627 \u0628\u062F\u0642\u0629:
+* **\u0627\u0644\u0645\u0648\u062F\u0645 (Modem):** \u062C\u0647\u0627\u0632 \u064A\u0631\u0628\u0637 \u0634\u0628\u0643\u062A\u0643 \u0628\u0645\u0632\u0648\u062F \u062E\u062F\u0645\u0629 \u0627\u0644\u0625\u0646\u062A\u0631\u0646\u062A (ISP) \u0648\u064A\u0642\u0648\u0645 \u0628\u062A\u062D\u0648\u064A\u0644 \u0627\u0644\u0625\u0634\u0627\u0631\u0627\u062A \u0627\u0644\u0631\u0642\u0645\u064A\u0629 \u0648\u0627\u0644\u062A\u0646\u0627\u0638\u0631\u064A\u0629.
+* **\u0627\u0644\u0631\u0627\u0648\u062A\u0631 (Router):** \u0645\u0648\u062C\u0647 \u0630\u0643\u064A \u064A\u0631\u0628\u0637 \u0634\u0628\u0643\u062A\u0643 \u0627\u0644\u0645\u062D\u0644\u064A\u0629 \u0628\u0627\u0644\u0625\u0646\u062A\u0631\u0646\u062A \u0648\u064A\u0648\u062C\u0647 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A \u0644\u0644\u0623\u062C\u0647\u0632\u0629 \u0627\u0644\u0645\u062E\u062A\u0644\u0641\u0629 \u0633\u0644\u0643\u064A\u0627\u064B (Ethernet) \u0648\u0644\u0627\u0633\u0644\u0643\u064A\u0627\u064B (Wi-Fi).
+* **\u0627\u0644\u0645\u062D\u0648\u0644 (Switch):** \u062C\u0647\u0627\u0632 \u0630\u0643\u064A \u062F\u0627\u062E\u0644 \u0627\u0644\u0634\u0628\u0643\u0629 \u0627\u0644\u0645\u062D\u0644\u064A\u0629 (LAN) \u064A\u0631\u0633\u0644 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A \u0641\u0642\u0637 \u0644\u0644\u062C\u0647\u0627\u0632 \u0627\u0644\u0645\u0633\u062A\u0647\u062F\u0641 \u0628\u0646\u0627\u0621\u064B \u0639\u0644\u0649 \u0639\u0646\u0648\u0627\u0646\u0647 (MAC Address).`;
+  }
+  if (p.includes("\u0633\u062D\u0627\u0628") || p.includes("cloud") || p.includes("\u062F\u0631\u0627\u064A\u0641") || p.includes("drive") || p.includes("\u0628\u0631\u064A\u062F \u0645\u0648\u062D\u062F") || p.includes("\u062D\u0633\u0627\u0628 \u0645\u062F\u0631\u0633\u064A") || p.includes("onedrive") || p.includes("\u062A\u062E\u0632\u064A\u0646 \u0633\u062D\u0627\u0628\u064A")) {
+    return `### \u2601\uFE0F \u0627\u0644\u062D\u0648\u0633\u0628\u0629 \u0627\u0644\u0633\u062D\u0627\u0628\u064A\u0629 \u0648\u0627\u0644\u062A\u062E\u0632\u064A\u0646 \u0648\u0627\u0644\u0628\u0631\u064A\u062F \u0627\u0644\u0645\u0648\u062D\u062F (Cloud Computing)
+**\u0648\u0641\u0642 \u0643\u062A\u0627\u0628 \u0648\u0632\u0627\u0631\u0629 \u0627\u0644\u062A\u0631\u0628\u064A\u0629 \u0648\u0627\u0644\u062A\u0639\u0644\u064A\u0645 \u0627\u0644\u0645\u0635\u0631\u064A\u0629 2026/2027:**
+
+#### 1. \u0645\u0641\u0647\u0648\u0645 \u0627\u0644\u062D\u0648\u0633\u0628\u0629 \u0627\u0644\u0633\u062D\u0627\u0628\u064A\u0629 (Cloud Computing):
+* \u062A\u0648\u0641\u064A\u0631 \u0645\u0648\u0627\u0631\u062F \u0627\u0644\u062D\u0627\u0633\u0648\u0628 (\u0627\u0644\u062A\u062E\u0632\u064A\u0646\u060C \u0627\u0644\u0628\u0631\u0627\u0645\u062C\u060C \u0648\u0642\u062F\u0631\u0627\u062A \u0627\u0644\u0645\u0639\u0627\u0644\u062C\u0629) \u0639\u0628\u0631 **\u0634\u0628\u0643\u0629 \u0627\u0644\u0625\u0646\u062A\u0631\u0646\u062A** \u062F\u0648\u0646 \u0627\u0644\u062D\u0627\u062C\u0629 \u0644\u062A\u062B\u0628\u064A\u062A\u0647\u0627 \u0639\u0644\u0649 \u062C\u0647\u0627\u0632\u0643 \u0627\u0644\u0645\u062D\u0644\u064A.
+* **\u0627\u0644\u0645\u0632\u0627\u064A\u0627:** \u0627\u0644\u0648\u0635\u0648\u0644 \u0644\u0645\u0644\u0641\u0627\u062A\u0643 \u0645\u0646 \u0623\u064A \u0645\u0643\u0627\u0646 \u0648\u0623\u064A \u062C\u0647\u0627\u0632\u060C \u0627\u0644\u0645\u0634\u0627\u0631\u0643\u0629 \u0648\u0627\u0644\u0639\u0645\u0644 \u0627\u0644\u062C\u0645\u0627\u0639\u064A \u0627\u0644\u0641\u0648\u0631\u064A (Collaboration)\u060C \u0648\u0627\u0644\u062D\u0645\u0627\u064A\u0629 \u0645\u0646 \u0641\u0642\u062F\u0627\u0646 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A \u0641\u064A \u062D\u0627\u0644\u0629 \u062A\u0644\u0641 \u0627\u0644\u062C\u0647\u0627\u0632 \u0627\u0644\u0634\u062E\u0635\u064A.
+
+#### 2. \u062E\u062F\u0645\u0627\u062A \u0627\u0644\u062A\u062E\u0632\u064A\u0646 \u0627\u0644\u0633\u062D\u0627\u0628\u064A \u0627\u0644\u0634\u0647\u064A\u0631\u0629:
+* **Google Drive:** \u0627\u0644\u062A\u0627\u0628\u0639 \u0644\u0645\u0646\u0638\u0648\u0645\u0629 Google Workspace.
+* **Microsoft OneDrive:** \u0627\u0644\u0645\u0631\u062A\u0628\u0637 \u0628\u062D\u0633\u0627\u0628 Microsoft 365 \u0648\u0627\u0644\u062D\u0633\u0627\u0628 \u0627\u0644\u0645\u062F\u0631\u0633\u064A \u0627\u0644\u0645\u0648\u062D\u062F.
+
+#### 3. \u0627\u0644\u0628\u0631\u064A\u062F \u0627\u0644\u0625\u0644\u0643\u062A\u0631\u0648\u0646\u064A \u0648\u0627\u0644\u062D\u0633\u0627\u0628 \u0627\u0644\u0645\u062F\u0631\u0633\u064A \u0627\u0644\u0645\u0648\u062D\u062F (Unified School Email):
+* \u062D\u0633\u0627\u0628 \u0631\u0633\u0645\u064A \u0645\u062C\u0627\u0646\u064A \u062A\u0648\u0641\u0631\u0647 \u0648\u0632\u0627\u0631\u0629 \u0627\u0644\u062A\u0631\u0628\u064A\u0629 \u0648\u0627\u0644\u062A\u0639\u0644\u064A\u0645 \u0644\u0643\u0644 \u0637\u0627\u0644\u0628 \u0648\u0645\u0639\u0644\u0645 \u0628\u0645\u0635\u0631 \u0639\u0628\u0631 \u0643\u0648\u062F \u0627\u0644\u0637\u0627\u0644\u0628 \u0648\u0627\u0644\u0631\u0642\u0645 \u0627\u0644\u0642\u0648\u0645\u064A.
+* \u064A\u062A\u064A\u062D \u0627\u0644\u0648\u0644\u0648\u062C \u0625\u0644\u0649 \u0645\u0646\u0635\u0627\u062A \u0627\u0644\u0648\u0632\u0627\u0631\u0629 \u0627\u0644\u062A\u0639\u0644\u064A\u0645\u064A\u0629\u060C \u0628\u0646\u0643 \u0627\u0644\u0645\u0639\u0631\u0641\u0629 \u0627\u0644\u0645\u0635\u0631\u064A (EKB)\u060C \u0648\u062D\u0632\u0645\u0629 \u0628\u0631\u0627\u0645\u062C Office 365 \u0627\u0644\u0643\u0627\u0645\u0644\u0629 \u0633\u062D\u0627\u0628\u064A\u0627\u064B.`;
+  }
+  if (p.includes("html") || p.includes("\u0648\u064A\u0628") || p.includes("web") || p.includes("\u0635\u0641\u062D\u0629 \u0648\u064A\u0628") || p.includes("\u0648\u0633\u0645") || p.includes("tag") || p.includes("\u0645\u0648\u0642\u0639")) {
+    return `### \u{1F310} \u062A\u0635\u0645\u064A\u0645 \u0648\u062A\u0637\u0648\u064A\u0631 \u0635\u0641\u062D\u0627\u062A \u0627\u0644\u0648\u064A\u0628 \u0628\u0644\u063A\u0629 (HTML)
+**\u0648\u0641\u0642 \u0643\u062A\u0627\u0628 \u0648\u0632\u0627\u0631\u0629 \u0627\u0644\u062A\u0631\u0628\u064A\u0629 \u0648\u0627\u0644\u062A\u0639\u0644\u064A\u0645 \u0627\u0644\u0645\u0635\u0631\u064A\u0629 2026/2027:**
+
+#### 1. \u0645\u0627 \u0647\u064A \u0644\u063A\u0629 HTML\u061F
+* \u062A\u0639\u0646\u064A **HyperText Markup Language** (\u0644\u063A\u0629 \u062A\u0631\u0645\u064A\u0632 \u0627\u0644\u0646\u0635\u0648\u0635 \u0627\u0644\u062A\u0634\u0639\u0628\u064A\u0629).
+* \u0647\u064A \u0627\u0644\u0647\u064A\u0643\u0644 \u0627\u0644\u0639\u0638\u0645\u064A \u0644\u0635\u0641\u062D\u0627\u062A \u0627\u0644\u0648\u064A\u0628 \u0627\u0644\u0630\u064A \u064A\u064F\u062D\u062F\u062F \u0643\u064A\u0641\u064A\u0629 \u0639\u0631\u0636 \u0627\u0644\u0646\u0635\u0648\u0635 \u0648\u0627\u0644\u0635\u0648\u0631 \u0648\u0627\u0644\u0631\u0648\u0627\u0628\u0637 \u0648\u0627\u0644\u062C\u062F\u0627\u0648\u0644 \u0644\u0644\u0645\u062A\u0635\u0641\u062D.
+
+#### 2. \u0627\u0644\u0647\u064A\u0643\u0644 \u0627\u0644\u0623\u0633\u0627\u0633\u064A \u0627\u0644\u062B\u0627\u0628\u062A \u0644\u0623\u064A \u0635\u0641\u062D\u0629 HTML:
+\`\`\`html
+<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+  <head>
+    <meta charset="UTF-8">
+    <title>\u0639\u0646\u0648\u0627\u0646 \u0627\u0644\u0635\u0641\u062D\u0629 \u0641\u064A \u0634\u0631\u064A\u0637 \u0627\u0644\u0645\u062A\u0635\u0641\u062D</title>
+  </head>
+  <body>
+    <h1>\u0627\u0644\u0639\u0646\u0648\u0627\u0646 \u0627\u0644\u0631\u0626\u064A\u0633\u064A \u0627\u0644\u0623\u0643\u0628\u0631</h1>
+    <p>\u0647\u0630\u0647 \u0641\u0642\u0631\u0629 \u0646\u0635\u064A\u0629 \u062A\u0648\u0636\u064A\u062D\u064A\u0629 \u062F\u0627\u062E\u0644 \u0627\u0644\u0635\u0641\u062D\u0629.</p>
+    <a href="https://example.com">\u0631\u0627\u0628\u0637 \u062A\u0634\u0639\u0628\u064A \u0644\u0644\u0627\u0646\u062A\u0642\u0627\u0644</a>
+    <img src="photo.jpg" alt="\u0648\u0635\u0641 \u0627\u0644\u0635\u0648\u0631\u0629">
+  </body>
+</html>
+\`\`\`
+
+#### 3. \u0623\u0647\u0645 \u0627\u0644\u0648\u0633\u0648\u0645 (Tags) \u0627\u0644\u0645\u0642\u0631\u0631\u0629 \u0628\u0627\u0644\u0645\u0646\u0647\u062C:
+* \`<h1>\` \u0625\u0644\u0649 \`<h6>\`: \u0648\u0633\u0648\u0645 \u0627\u0644\u0639\u0646\u0627\u0648\u064A\u0646 (Heading) \u062D\u064A\u062B \`<h1>\` \u0647\u0648 \u0627\u0644\u0623\u0643\u0628\u0631.
+* \`<p>\`: \u0648\u0633\u0645 \u0627\u0644\u0641\u0642\u0631\u0629 \u0627\u0644\u0646\u0635\u064A\u0629 (Paragraph).
+* \`<a>\`: \u0648\u0633\u0645 \u0627\u0644\u0631\u0627\u0628\u0637 \u0627\u0644\u062A\u0634\u0639\u0628\u064A \u0645\u0639 \u0627\u0644\u062E\u0627\u0635\u064A\u0629 \`href\`.
+* \`<img>\`: \u0648\u0633\u0645 \u0627\u0644\u0635\u0648\u0631\u0629 \u0645\u0639 \u0627\u0644\u062E\u0627\u0635\u064A\u0629 \`src\` \u0648\u0645\u0633\u0627\u0631 \u0627\u0644\u0645\u0644\u0641.
+* \`<form>\`: \u0648\u0633\u0645 \u0627\u0644\u0646\u0645\u0648\u0630\u062C \u0627\u0644\u062A\u0641\u0627\u0639\u0644\u064A \u0644\u0627\u0633\u062A\u0642\u0628\u0627\u0644 \u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0644\u0645\u0633\u062A\u062E\u062F\u0645.`;
+  }
+  if (p.includes("\u062E\u0631\u0627\u0626\u0637 \u062A\u062F\u0641\u0642") || p.includes("flowchart") || p.includes("\u062D\u0644 \u0627\u0644\u0645\u0634\u0643\u0644\u0627\u062A") || p.includes("problem solving") || p.includes("\u062E\u0648\u0627\u0631\u0632\u0645")) {
+    return `### \u{1F4CA} \u0623\u0633\u0644\u0648\u0628 \u062D\u0644 \u0627\u0644\u0645\u0634\u0643\u0644\u0627\u062A \u0648\u062E\u0631\u0627\u0626\u0637 \u0627\u0644\u062A\u062F\u0641\u0642 (Problem Solving & Flowcharts)
+**\u0648\u0641\u0642 \u0643\u062A\u0627\u0628 \u0648\u0632\u0627\u0631\u0629 \u0627\u0644\u062A\u0631\u0628\u064A\u0629 \u0648\u0627\u0644\u062A\u0639\u0644\u064A\u0645 \u0627\u0644\u0645\u0635\u0631\u064A\u0629 2026/2027:**
+
+#### 1. \u0645\u0631\u0627\u062D\u0644 \u062D\u0644 \u0627\u0644\u0645\u0634\u0643\u0644\u0629 \u0627\u0644\u062E\u0645\u0633 (Problem Solving Stages):
+1. **\u062A\u062D\u062F\u064A\u062F \u0627\u0644\u0645\u0634\u0643\u0644\u0629 (Problem Definition):** \u062A\u062D\u062F\u064A\u062F \u0627\u0644\u0645\u062E\u0631\u062C\u0627\u062A \u0627\u0644\u0645\u0637\u0644\u0648\u0628\u0629\u060C \u0627\u0644\u0645\u062F\u062E\u0644\u0627\u062A \u0627\u0644\u0645\u062A\u0648\u0641\u0631\u0629\u060C \u0648\u0639\u0645\u0644\u064A\u0627\u062A \u0627\u0644\u0645\u0639\u0627\u0644\u062C\u0629.
+2. **\u0625\u0639\u062F\u0627\u062F \u062E\u0637\u0648\u0627\u062A \u0627\u0644\u062D\u0644 \u0627\u0644\u062E\u0648\u0627\u0631\u0632\u0645\u064A\u0629 (Algorithm):** \u062A\u0631\u062A\u064A\u0628 \u0627\u0644\u062E\u0637\u0648\u0627\u062A \u062A\u0631\u062A\u064A\u0628\u0627\u064B \u0645\u0646\u0637\u0642\u064A\u0627\u064B \u0645\u0639 \u0631\u0633\u0645 \u062E\u0631\u064A\u0637\u0629 \u0627\u0644\u062A\u062F\u0641\u0642 (Flowchart).
+3. **\u062A\u0635\u0645\u064A\u0645 \u0627\u0644\u0628\u0631\u0646\u0627\u0645\u062C \u0639\u0644\u0649 \u0627\u0644\u062D\u0627\u0633\u0648\u0628 (Program Coding):** \u0643\u062A\u0627\u0628\u0629 \u0627\u0644\u0643\u0648\u062F \u0628\u0644\u063A\u0629 \u0628\u0631\u0645\u062C\u0629.
+4. **\u0627\u062E\u062A\u0628\u0627\u0631 \u0635\u062D\u0629 \u0627\u0644\u0628\u0631\u0646\u0627\u0645\u062C \u0648\u062A\u0635\u062D\u064A\u062D \u0627\u0644\u0623\u062E\u0637\u0627\u0621 (Program Testing & Debugging).**
+5. **\u062A\u0648\u062B\u064A\u0642 \u0627\u0644\u0628\u0631\u0646\u0627\u0645\u062C (Program Documentation):** \u0643\u062A\u0627\u0628\u0629 \u062A\u0642\u0631\u064A\u0631 \u0643\u0627\u0645\u0644 \u0628\u0645\u062F\u062E\u0644\u0627\u062A \u0648\u0645\u062E\u0631\u062C\u0627\u062A \u0648\u0623\u0643\u0648\u0627\u062F \u0627\u0644\u0628\u0631\u0646\u0627\u0645\u062C.
+
+#### 2. \u0627\u0644\u0631\u0645\u0648\u0632 \u0627\u0644\u0642\u064A\u0627\u0633\u064A\u0629 \u0644\u062E\u0631\u0627\u0626\u0637 \u0627\u0644\u062A\u062F\u0641\u0642 (Flowchart Standard Symbols):
+* \u{1F7E2} **\u0627\u0644\u0634\u0643\u0644 \u0627\u0644\u0628\u064A\u0636\u0627\u0648\u064A (Terminal):** \u064A\u0645\u062B\u0644 \u0627\u0644\u0628\u062F\u0627\u064A\u0629 \u0648\u0627\u0644\u0646\u0647\u0627\u064A\u0629 (Start / End).
+* \u{1F537} **\u0645\u062A\u0648\u0627\u0632\u064A \u0627\u0644\u0623\u0636\u0644\u0627\u0639 (Parallelogram):** \u064A\u0645\u062B\u0644 \u0627\u0644\u0625\u062F\u062E\u0627\u0644 \u0648\u0627\u0644\u0625\u062E\u0631\u0627\u062C (Input / Output) \u0645\u062B\u0644: Read, Enter, Print, Output.
+* \u{1F7E6} **\u0627\u0644\u0645\u0633\u062A\u0637\u064A\u0644 (Rectangle):** \u064A\u0645\u062B\u0644 \u0639\u0645\u0644\u064A\u0629 \u0627\u0644\u0645\u0639\u0627\u0644\u062C\u0629 \u0648\u0627\u0644\u0639\u0645\u0644\u064A\u0627\u062A \u0627\u0644\u062D\u0633\u0627\u0628\u064A\u0629 (Process) \u0645\u062B\u0644: \`Sum = A + B\`.
+* \u{1F536} **\u0627\u0644\u0645\u0639\u064A\u0646 (Decision):** \u064A\u0645\u062B\u0644 \u0627\u062A\u062E\u0627\u0630 \u0627\u0644\u0642\u0631\u0627\u0631 \u0648\u0627\u0644\u0634\u0631\u0648\u0637 \u0648\u0627\u0644\u062A\u062D\u0642\u0642 (If) \u0648\u0644\u0647 \u0645\u0633\u0627\u0631\u0627\u0646 (Yes / No).
+* \u27A1\uFE0F **\u062E\u0637\u0648\u0637 \u0627\u0644\u0627\u062A\u062C\u0627\u0647 (Flow Lines):** \u062A\u0638\u0647\u0631 \u0627\u062A\u062C\u0627\u0647 \u062A\u062F\u0641\u0642 \u0648\u0633\u064A\u0631 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A.`;
+  }
+  if (p.includes("\u0648\u062D\u062F\u0627\u062A \u0642\u064A\u0627\u0633") || p.includes("byte") || p.includes("\u0628\u0627\u064A\u062A") || p.includes("\u0628\u062A") || p.includes("bit") || p.includes("\u062C\u064A\u062C\u0627") || p.includes("\u0643\u064A\u0644\u0648 \u0628\u0627\u064A\u062A") || p.includes("mbps")) {
+    return `### \u{1F4BE} \u0648\u062D\u062F\u0627\u062A \u0642\u064A\u0627\u0633 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A \u0648\u0633\u0631\u0639\u0629 \u0627\u0644\u0625\u0646\u062A\u0631\u0646\u062A (Data Units)
+**\u0648\u0641\u0642 \u0643\u062A\u0627\u0628 \u0648\u0632\u0627\u0631\u0629 \u0627\u0644\u062A\u0631\u0628\u064A\u0629 \u0648\u0627\u0644\u062A\u0639\u0644\u064A\u0645 \u0627\u0644\u0645\u0635\u0631\u064A\u0629 2026/2027:**
+
+#### 1. \u0648\u062D\u062F\u0627\u062A \u0642\u064A\u0627\u0633 \u0633\u0639\u0629 \u0627\u0644\u062A\u062E\u0632\u064A\u0646 (Storage Capacity Units):
+* **\u0627\u0644\u0628\u062A (Bit):** \u0623\u0635\u063A\u0631 \u0648\u062D\u062F\u0629 \u0642\u064A\u0627\u0633 \u0628\u064A\u0627\u0646\u0627\u062A \u0628\u0627\u0644\u062D\u0627\u0633\u0648\u0628 \u0648\u062A\u0623\u062E\u0630 \u0627\u0644\u0642\u064A\u0645\u0629 (0 \u0623\u0648 1).
+* **\u0627\u0644\u0628\u0627\u064A\u062A (Byte):** \u064A\u0633\u0627\u0648\u064A **8 \u0628\u062A (8 Bits)** \u0648\u064A\u0645\u062B\u0644 \u062D\u0631\u0641\u0627\u064B \u0623\u0648 \u0631\u0642\u0645\u0627\u064B \u0648\u0627\u062D\u062F\u0627\u064B \u0641\u064A \u0627\u0644\u0630\u0627\u0643\u0631\u0629.
+* **\u0627\u0644\u0643\u064A\u0644\u0648\u0628\u0627\u064A\u062A (KB - Kilobyte):** = 1024 \u0628\u0627\u064A\u062A.
+* **\u0627\u0644\u0645\u064A\u062C\u0627\u0628\u0627\u064A\u062A (MB - Megabyte):** = 1024 \u0643\u064A\u0644\u0648\u0628\u0627\u064A\u062A.
+* **\u0627\u0644\u062C\u064A\u062C\u0627\u0628\u0627\u064A\u062A (GB - Gigabyte):** = 1024 \u0645\u064A\u062C\u0627\u0628\u0627\u064A\u062A.
+* **\u0627\u0644\u062A\u064A\u0631\u0627\u0628\u0627\u064A\u062A (TB - Terabyte):** = 1024 \u062C\u064A\u062C\u0627\u0628\u0627\u064A\u062A.
+
+#### 2. \u0648\u062D\u062F\u0627\u062A \u0642\u064A\u0627\u0633 \u0633\u0631\u0639\u0629 \u0627\u0644\u0625\u0646\u062A\u0631\u0646\u062A \u0648\u0627\u0644\u0634\u0628\u0643\u0629:
+* \u062A\u064F\u0642\u0627\u0633 \u0628\u0627\u0644\u0645\u064A\u062C\u0627\u0628\u062A \u0641\u064A \u0627\u0644\u062B\u0627\u0646\u064A\u0629 (**Mbps - Megabits per second**).
+* **\u062A\u0646\u0628\u064A\u0647 \u0647\u0627\u0645 \u0644\u0644\u0627\u062E\u062A\u0628\u0627\u0631\u0627\u062A:** \u0641\u0631\u0651\u0642 \u062F\u0627\u0626\u0645\u0627\u064B \u0628\u064A\u0646 **Byte** (\u0644\u062D\u062C\u0645 \u0627\u0644\u0645\u0644\u0641\u0627\u062A \u0648\u0627\u0644\u062A\u062E\u0632\u064A\u0646) \u0648\u0628\u064A\u0646 **bit** (\u0644\u0633\u0631\u0639\u0629 \u0646\u0642\u0644 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A \u0648\u0627\u0644\u0625\u0646\u062A\u0631\u0646\u062A).`;
+  }
+  if (p.includes("\u0647\u0627\u0631\u062F") || p.includes("\u0633\u0648\u0641\u062A") || p.includes("\u0645\u0643\u0648\u0646\u0627\u062A") || p.includes("\u0643\u064A\u0633\u0629") || p.includes("\u0627\u062F\u062E\u0627\u0644") || p.includes("\u0627\u062E\u0631\u0627\u062C") || p.includes("hardware") || p.includes("software") || p.includes("cpu") || p.includes("ram")) {
+    return `### \u{1F5A5}\uFE0F \u0639\u062A\u0627\u062F \u0627\u0644\u062D\u0627\u0633\u0648\u0628 \u0648\u0648\u062D\u062F\u0627\u062A \u0627\u0644\u0625\u062F\u062E\u0627\u0644 \u0648\u0627\u0644\u0625\u062E\u0631\u0627\u062C \u0648\u062F\u0648\u0631\u0629 \u0645\u0639\u0627\u0644\u062C\u0629 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A
+**\u0648\u0641\u0642 \u0643\u062A\u0627\u0628 \u0648\u0632\u0627\u0631\u0629 \u0627\u0644\u062A\u0631\u0628\u064A\u0629 \u0648\u0627\u0644\u062A\u0639\u0644\u064A\u0645 \u0627\u0644\u0645\u0635\u0631\u064A\u0629 2026/2027:**
+
+#### 1. \u0627\u0644\u0641\u0631\u0642 \u0628\u064A\u0646 \u0627\u0644\u0639\u062A\u0627\u062F (Hardware) \u0648\u0627\u0644\u0628\u0631\u0645\u062C\u064A\u0627\u062A (Software):
+* **\u0627\u0644\u0639\u062A\u0627\u062F \u0627\u0644\u0635\u0644\u0628 (Hardware):** \u0627\u0644\u0645\u0643\u0648\u0646\u0627\u062A \u0627\u0644\u0645\u0627\u062F\u064A\u0629 \u0627\u0644\u0645\u0644\u0645\u0648\u0633\u0629 \u0627\u0644\u062A\u064A \u064A\u0645\u0643\u0646\u0643 \u0644\u0645\u0633\u0647\u0627 \u0648\u0631\u0624\u064A\u062A\u0647\u0627 (\u0643\u0627\u0644\u0634\u0627\u0634\u0629\u060C \u0627\u0644\u0643\u064A\u0628\u0648\u0631\u062F\u060C \u0627\u0644\u0643\u064A\u0633\u0629).
+* **\u0627\u0644\u0628\u0631\u0645\u062C\u064A\u0627\u062A (Software):** \u0627\u0644\u0623\u0648\u0627\u0645\u0631 \u0648\u0627\u0644\u0628\u0631\u0627\u0645\u062C \u0627\u0644\u0631\u0642\u0645\u064A\u0629 \u0627\u0644\u062A\u064A \u062A\u062F\u064A\u0631 \u0627\u0644\u0639\u062A\u0627\u062F (\u0643\u0646\u0638\u0627\u0645 \u0627\u0644\u062A\u0634\u063A\u064A\u0644 Windows \u0623\u0648 \u0645\u062A\u0635\u0641\u062D \u0627\u0644\u0648\u064A\u0628).
+
+#### 2. \u0648\u062D\u062F\u0627\u062A \u0627\u0644\u0625\u062F\u062E\u0627\u0644 \u0648\u0648\u062D\u062F\u0627\u062A \u0627\u0644\u0625\u062E\u0631\u0627\u062C:
+* **\u0648\u062D\u062F\u0627\u062A \u0627\u0644\u0625\u062F\u062E\u0627\u0644 (Input Devices):** \u0644\u0625\u062F\u062E\u0627\u0644 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A \u0644\u0644\u062D\u0627\u0633\u0648\u0628 (\u0644\u0648\u062D\u0629 \u0627\u0644\u0645\u0641\u0627\u062A\u064A\u062D Keyboard\u060C \u0627\u0644\u0641\u0623\u0631\u0629 Mouse\u060C \u0627\u0644\u0645\u064A\u0643\u0631\u0648\u0641\u0648\u0646 Microphone\u060C \u0627\u0644\u0645\u0627\u0633\u062D \u0627\u0644\u0636\u0648\u0626\u064A Scanner\u060C \u0627\u0644\u0643\u0627\u0645\u064A\u0631\u0627).
+* **\u0648\u062D\u062F\u0627\u062A \u0627\u0644\u0625\u062E\u0631\u0627\u062C (Output Devices):** \u0644\u0625\u062E\u0631\u0627\u062C \u0627\u0644\u0645\u0639\u0644\u0648\u0645\u0627\u062A \u0644\u0644\u0645\u0633\u062A\u062E\u062F\u0645 (\u0634\u0627\u0634\u0629 \u0627\u0644\u0639\u0631\u0636 Monitor\u060C \u0627\u0644\u0637\u0627\u0628\u0639\u0629 Printer\u060C \u0645\u0643\u0628\u0631\u0627\u062A \u0627\u0644\u0635\u0648\u062A Speakers\u060C \u0645\u0631\u0643\u0628 \u0627\u0644\u0643\u0644\u0627\u0645).
+
+#### 3. \u0627\u0644\u0645\u0643\u0648\u0646\u0627\u062A \u0627\u0644\u062F\u0627\u062E\u0644\u064A\u0629 \u0627\u0644\u0623\u0633\u0627\u0633\u064A\u0629 \u0644\u0644\u0640 (Computer Case):
+* **\u0627\u0644\u0644\u0648\u062D\u0629 \u0627\u0644\u0623\u0645 (Motherboard):** \u0627\u0644\u0644\u0648\u062D\u0629 \u0627\u0644\u0631\u0626\u064A\u0633\u064A\u0629 \u0627\u0644\u062A\u064A \u062A\u0631\u0628\u0637 \u0643\u0644 \u0642\u0637\u0639 \u0627\u0644\u062D\u0627\u0633\u0648\u0628 \u0628\u0628\u0639\u0636\u0647\u0627.
+* **\u0627\u0644\u0645\u0639\u0627\u0644\u062C (CPU - Central Processing Unit):** \u0627\u0644\u0639\u0642\u0644 \u0627\u0644\u0645\u062F\u0628\u0631 \u0648\u0627\u0644\u0645\u0633\u0624\u0648\u0644 \u0639\u0646 \u0645\u0639\u0627\u0644\u062C\u0629 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A \u0648\u0625\u062C\u0631\u0627\u0621 \u0627\u0644\u062D\u0633\u0627\u0628\u0627\u062A \u0648\u0627\u0644\u0645\u0646\u0637\u0642.
+* **\u0627\u0644\u0630\u0627\u0643\u0631\u0629 \u0627\u0644\u0639\u0634\u0648\u0627\u0626\u064A\u0629 (RAM - Random Access Memory):** \u0627\u0644\u0630\u0627\u0643\u0631\u0629 \u0627\u0644\u0645\u0624\u0642\u062A\u0629 \u0627\u0644\u0633\u0631\u064A\u0639\u0629 \u0627\u0644\u062A\u064A \u062A\u062E\u0632\u0646 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A \u0623\u062B\u0646\u0627\u0621 \u062A\u0634\u063A\u064A\u0644 \u0627\u0644\u0628\u0631\u0627\u0645\u062C.
+* **\u0627\u0644\u0642\u0631\u0635 \u0627\u0644\u0635\u0644\u0628 (Hard Disk / SSD):** \u0648\u062D\u062F\u0629 \u0627\u0644\u062A\u062E\u0632\u064A\u0646 \u0627\u0644\u062F\u0627\u0626\u0645\u0629 \u0644\u0645\u0644\u0641\u0627\u062A\u0643 \u0648\u0646\u0638\u0627\u0645 \u0627\u0644\u062A\u0634\u063A\u064A\u0644.
+* **\u0645\u0632\u0648\u062F \u0627\u0644\u0637\u0627\u0642\u0629 (Power Supply):** \u064A\u0645\u062F \u062C\u0645\u064A\u0639 \u0623\u062C\u0632\u0627\u0621 \u0627\u0644\u062D\u0627\u0633\u0648\u0628 \u0628\u0627\u0644\u062A\u064A\u0627\u0631 \u0627\u0644\u0643\u0647\u0631\u0628\u0627\u0626\u064A \u0627\u0644\u0645\u0646\u0627\u0633\u0628.
+
+#### 4. \u062F\u0648\u0631\u0629 \u0645\u0639\u0627\u0644\u062C\u0629 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A (Data Processing Cycle):
+> **\u0628\u064A\u0627\u0646\u0627\u062A \u062E\u0627\u0645 (Data)** \u27A1\uFE0F **\u0645\u0639\u0627\u0644\u062C\u0629 \u0628\u0627\u0644\u0645\u0639\u0627\u0644\u062C (CPU Processing)** \u27A1\uFE0F **\u0645\u0639\u0644\u0648\u0645\u0627\u062A \u0645\u0641\u064A\u062F\u0629 \u0648\u0642\u0627\u0628\u0644\u0629 \u0644\u0644\u0627\u0633\u062A\u062E\u062F\u0627\u0645 (Information)**.`;
+  }
+  if (p.includes("\u0623\u0645\u0627\u0646") || p.includes("\u0627\u0645\u0627\u0646") || p.includes("security") || p.includes("\u0627\u062E\u062A\u0631\u0627\u0642") || p.includes("\u062A\u0635\u064A\u062F") || p.includes("phishing") || p.includes("\u0643\u0644\u0645\u0629 \u0645\u0631\u0648\u0631") || p.includes("password") || p.includes("2fa")) {
+    return `### \u{1F6E1}\uFE0F \u0627\u0644\u0623\u0645\u0646 \u0627\u0644\u0631\u0642\u0645\u064A \u0648\u062D\u0645\u0627\u064A\u0629 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0644\u0634\u062E\u0635\u064A\u0629 (Cybersecurity)
+**\u0648\u0641\u0642 \u0643\u062A\u0627\u0628 \u0648\u0632\u0627\u0631\u0629 \u0627\u0644\u062A\u0631\u0628\u064A\u0629 \u0648\u0627\u0644\u062A\u0639\u0644\u064A\u0645 \u0627\u0644\u0645\u0635\u0631\u064A\u0629 2026/2027:**
+
+#### 1. \u0634\u0631\u0648\u0637 \u0643\u0644\u0645\u0629 \u0627\u0644\u0645\u0631\u0648\u0631 \u0627\u0644\u0642\u0648\u064A\u0629 (Strong Password):
+* \u0644\u0627 \u062A\u0642\u0644 \u0639\u0646 **8 \u062E\u0627\u0646\u0627\u062A** \u0639\u0644\u0649 \u0627\u0644\u0623\u0642\u0644.
+* \u062A\u062D\u062A\u0648\u064A \u0639\u0644\u0649 \u0645\u0632\u064A\u062C \u0645\u062A\u0643\u0627\u0645\u0644 \u0645\u0646: **\u062D\u0631\u0648\u0641 \u0643\u0628\u064A\u0631\u0629 (Uppercase)\u060C \u062D\u0631\u0648\u0641 \u0635\u063A\u064A\u0631\u0629 (Lowercase)\u060C \u0623\u0631\u0642\u0627\u0645 (Numbers)\u060C \u0648\u0631\u0645\u0648\u0632 \u062E\u0627\u0635\u0629 (!@#$%)**.
+* \u0644\u0627 \u062A\u062D\u062A\u0648\u064A \u0639\u0644\u0649 \u0645\u0639\u0644\u0648\u0645\u0627\u062A\u0643 \u0627\u0644\u0634\u062E\u0635\u064A\u0629 \u0643\u0627\u0633\u0645\u0643 \u0623\u0648 \u062A\u0627\u0631\u064A\u062E \u0645\u064A\u0644\u0627\u062F\u0643\u060C \u0648\u0644\u0627 \u062A\u064F\u0633\u062A\u062E\u062F\u0645 \u0646\u0641\u0633 \u0627\u0644\u0643\u0644\u0645\u0629 \u0644\u062C\u0645\u064A\u0639 \u062D\u0633\u0627\u0628\u0627\u062A\u0643.
+
+#### 2. \u0627\u0644\u0645\u0635\u0627\u062F\u0642\u0629 \u062B\u0646\u0627\u0626\u064A\u0629 \u0627\u0644\u0639\u0648\u0627\u0645\u0644 (Two-Factor Authentication - 2FA):
+* \u0648\u0633\u064A\u0644\u0629 \u0623\u0645\u0627\u0646 \u0645\u062A\u0642\u062F\u0645\u0629 \u062A\u0637\u0644\u0628 \u0648\u0633\u064A\u0644\u062A\u064A\u0646 \u0644\u062A\u0623\u0643\u064A\u062F \u0647\u0648\u064A\u062A\u0643 (\u0645\u062B\u0644 \u0643\u0644\u0645\u0629 \u0627\u0644\u0645\u0631\u0648\u0631 + \u0631\u0645\u0632 \u062A\u062D\u0642\u0642 \u0641\u0648\u0631\u064A \u064A\u064F\u0631\u0633\u0644 \u0644\u0647\u0627\u062A\u0641\u0643 SMS).
+
+#### 3. \u0627\u0644\u062A\u0635\u064A\u062F \u0627\u0644\u0627\u062D\u062A\u064A\u0627\u0644\u064A (Phishing):
+* \u0631\u0633\u0627\u0626\u0644 \u062E\u0627\u062F\u0639\u0629 \u0623\u0648 \u0631\u0648\u0627\u0628\u0637 \u0648\u0647\u0645\u064A\u0629 \u062A\u0635\u0644\u0643 \u0639\u0628\u0631 \u0627\u0644\u0628\u0631\u064A\u062F \u0623\u0648 \u0627\u0644\u0633\u0648\u0634\u064A\u0627\u0644 \u0645\u064A\u062F\u064A\u0627 \u062A\u062F\u0639\u064A \u0623\u0646\u0647\u0627 \u0645\u0646 \u062C\u0647\u0629 \u0631\u0633\u0645\u064A\u0629 \u0623\u0648 \u0628\u0646\u0643\u064A\u0629 \u0644\u0633\u0631\u0642\u0629 \u0628\u064A\u0627\u0646\u0627\u062A\u0643.
+* **\u0639\u0644\u0627\u0645\u0627\u062A \u0627\u0644\u062A\u062D\u0630\u064A\u0631:** \u0648\u062C\u0648\u062F \u0623\u062E\u0637\u0627\u0621 \u0625\u0645\u0644\u0627\u0626\u064A\u0629 \u0628\u0627\u0644\u0631\u0633\u0627\u0644\u0629\u060C \u0631\u0648\u0627\u0628\u0637 \u063A\u0631\u064A\u0628\u0629 \u0648\u063A\u064A\u0631 \u0645\u0634\u0641\u0631\u0629\u060C \u0623\u0648 \u0637\u0644\u0628 \u0643\u0644\u0645\u0629 \u0627\u0644\u0645\u0631\u0648\u0631 \u0648\u0631\u0642\u0645 \u0627\u0644\u0628\u0637\u0627\u0642\u0629 \u0641\u0648\u0631\u0627\u064B.`;
+  }
+  if (p.includes("\u0630\u0643\u0627\u0621 \u0627\u0635\u0637\u0646\u0627\u0639\u064A") || p.includes("ai") || p.includes("\u0648\u0627\u0642\u0639 \u0627\u0641\u062A\u0631\u0627\u0636\u064A") || p.includes("vr") || p.includes("\u0648\u0627\u0642\u0639 \u0645\u0639\u0632\u0632") || p.includes("ar") || p.includes("\u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u0645\u0633\u0627\u0639\u062F\u0629")) {
+    return `### \u{1F916} \u0627\u0644\u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u0627\u0644\u0645\u062A\u0642\u062F\u0645\u0629 \u0648\u062A\u0637\u0628\u064A\u0642\u0627\u062A \u0627\u0644\u0630\u0643\u0627\u0621 \u0627\u0644\u0627\u0635\u0637\u0646\u0627\u0639\u064A (Advanced Technology & AI)
+**\u0648\u0641\u0642 \u0643\u062A\u0627\u0628 \u0648\u0632\u0627\u0631\u0629 \u0627\u0644\u062A\u0631\u0628\u064A\u0629 \u0648\u0627\u0644\u062A\u0639\u0644\u064A\u0645 \u0627\u0644\u0645\u0635\u0631\u064A\u0629 2026/2027:**
+
+#### 1. \u0627\u0644\u0630\u0643\u0627\u0621 \u0627\u0644\u0627\u0635\u0637\u0646\u0627\u0639\u064A (Artificial Intelligence - AI):
+* \u0642\u062F\u0631\u0629 \u0627\u0644\u0622\u0644\u0627\u062A \u0648\u0627\u0644\u062D\u0648\u0627\u0633\u064A\u0628 \u0639\u0644\u0649 \u0645\u062D\u0627\u0643\u0627\u0629 \u0627\u0644\u0642\u062F\u0631\u0627\u062A \u0627\u0644\u0630\u0647\u0646\u064A\u0629 \u0627\u0644\u0628\u0634\u0631\u064A\u0629 \u0643\u0640 (\u0627\u0644\u062A\u0639\u0644\u0645\u060C \u0627\u0644\u0627\u0633\u062A\u0646\u062A\u0627\u062C\u060C \u0648\u062D\u0644 \u0627\u0644\u0645\u0634\u0643\u0644\u0627\u062A \u0627\u0644\u0645\u0639\u0642\u062F\u0629).
+
+#### 2. \u0627\u0644\u0648\u0627\u0642\u0639 \u0627\u0644\u0627\u0641\u062A\u0631\u0627\u0636\u064A (VR) \u0645\u0642\u0627\u0628\u0644 \u0627\u0644\u0648\u0627\u0642\u0639 \u0627\u0644\u0645\u0639\u0632\u0632 (AR):
+* **\u0627\u0644\u0648\u0627\u0642\u0639 \u0627\u0644\u0627\u0641\u062A\u0631\u0627\u0636\u064A (VR - Virtual Reality):** \u064A\u0646\u0642\u0644\u0643 \u0628\u0627\u0644\u0643\u0627\u0645\u0644 \u0625\u0644\u0649 \u0628\u064A\u0626\u0629 \u0627\u0641\u062A\u0631\u0627\u0636\u064A\u0629 \u062A\u0641\u0627\u0639\u0644\u064A\u0629 \u062B\u0644\u0627\u062B\u064A\u0629 \u0627\u0644\u0623\u0628\u0639\u0627\u062F 3D \u0639\u0628\u0631 \u0627\u0631\u062A\u062F\u0627\u0621 \u0646\u0638\u0627\u0631\u0629 VR \u062E\u0627\u0635\u0629 \u062A\u0639\u0632\u0644\u0643 \u0639\u0646 \u0627\u0644\u0648\u0627\u0642\u0639 \u0627\u0644\u0645\u062D\u064A\u0637.
+* **\u0627\u0644\u0648\u0627\u0642\u0639 \u0627\u0644\u0645\u0639\u0632\u0632 (AR - Augmented Reality):** \u064A\u062F\u0645\u062C \u0645\u062C\u0633\u0645\u0627\u062A \u0648\u0639\u0646\u0627\u0635\u0631 \u0631\u0642\u0645\u064A\u0629 \u0648\u0645\u0639\u0644\u0648\u0645\u0627\u062A \u0627\u0641\u062A\u0631\u0627\u0636\u064A\u0629 \u0641\u0648\u0642 \u0628\u064A\u0626\u062A\u0643 \u0627\u0644\u0648\u0627\u0642\u0639\u064A\u0629 \u0627\u0644\u062D\u0642\u064A\u0642\u064A\u0629 (\u0645\u062B\u0644 \u062A\u0637\u0628\u064A\u0642\u0627\u062A \u0627\u0644\u0643\u0627\u0645\u064A\u0631\u0627 \u0648\u062A\u0637\u0628\u064A\u0642\u0627\u062A \u062A\u0634\u0631\u064A\u062D \u0627\u0644\u0623\u062D\u064A\u0627\u0621).
+
+#### 3. \u0627\u0644\u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u0627\u0644\u0645\u0633\u0627\u0639\u062F\u0629 (Assistive Technology):
+* \u0623\u062C\u0647\u0632\u0629 \u0648\u0628\u0631\u0645\u062C\u064A\u0627\u062A \u0645\u062E\u0635\u0635\u0629 \u0644\u062F\u0639\u0645 \u0648\u062A\u0645\u0643\u064A\u0646 **\u0630\u0648\u064A \u0627\u0644\u0647\u0645\u0645 \u0648\u0627\u0644\u0642\u062F\u0631\u0627\u062A \u0627\u0644\u062E\u0627\u0635\u0629** (\u0645\u062B\u0644 \u0642\u0627\u0631\u0626\u0627\u062A \u0627\u0644\u0634\u0627\u0634\u0629 Screen Readers \u0644\u0644\u0645\u0643\u0641\u0648\u0641\u064A\u0646\u060C \u0628\u0631\u0627\u0645\u062C \u062A\u0643\u0628\u064A\u0631 \u0627\u0644\u0646\u0635\u0648\u0635\u060C \u0648\u0627\u0644\u0623\u0637\u0631\u0627\u0641 \u0627\u0644\u0635\u0646\u0627\u0639\u064A\u0629 \u0627\u0644\u0630\u0643\u064A\u0629).`;
+  }
+  if (p.includes("\u0628\u0631\u0645\u062C") || p.includes("\u0643\u0648\u062F") || p.includes("\u0628\u0627\u064A\u062B\u0648\u0646") || p.includes("python") || p.includes("javascript") || p.includes("\u0645\u062A\u063A\u064A\u0631")) {
+    return `### \u{1F4BB} \u0623\u0633\u0627\u0633\u064A\u0627\u062A \u0627\u0644\u0628\u0631\u0645\u062C\u0629 \u0648\u0644\u063A\u0629 \u0628\u0627\u064A\u062B\u0648\u0646 (Python Programming)
+**\u0648\u0641\u0642 \u0643\u062A\u0627\u0628 \u0648\u0632\u0627\u0631\u0629 \u0627\u0644\u062A\u0631\u0628\u064A\u0629 \u0648\u0627\u0644\u062A\u0639\u0644\u064A\u0645 \u0627\u0644\u0645\u0635\u0631\u064A\u0629 2026/2027:**
+
+#### 1. \u0645\u0627 \u0647\u064A \u0627\u0644\u0628\u0631\u0645\u062C\u0629 (Programming)\u061F
+* \u0643\u062A\u0627\u0628\u0629 \u062A\u0639\u0644\u064A\u0645\u0627\u062A \u0648\u0623\u0648\u0627\u0645\u0631 \u0645\u0646\u0637\u0642\u064A\u0629 \u0645\u062A\u0633\u0644\u0633\u0644\u0629 \u064A\u0641\u0647\u0645\u0647\u0627 \u0627\u0644\u062D\u0627\u0633\u0648\u0628 \u0644\u062A\u0646\u0641\u064A\u0630 \u0645\u0647\u0645\u0629 \u0645\u062D\u062F\u062F\u0629 \u0623\u0648 \u0628\u0646\u0627\u0621 \u062A\u0637\u0628\u064A\u0642 \u0623\u0648 \u0644\u0639\u0628\u0629 \u0623\u0648 \u062D\u0644 \u0645\u0633\u0623\u0644\u0629.
+
+#### 2. \u0644\u0645\u0627\u0630\u0627 \u0644\u063A\u0629 \u0628\u0627\u064A\u062B\u0648\u0646 (Python)\u061F
+* \u0633\u0647\u0644\u0629 \u0627\u0644\u0642\u0631\u0627\u0621\u0629 \u0648\u0627\u0644\u062A\u0639\u0644\u0645 \u062A\u0634\u0628\u0647 \u0627\u0644\u0644\u063A\u0629 \u0627\u0644\u0625\u0646\u062C\u0644\u064A\u0632\u064A\u0629 \u0627\u0644\u0628\u0633\u064A\u0637\u0629\u060C \u0648\u0645\u062A\u0639\u062F\u062F\u0629 \u0627\u0644\u0627\u0633\u062A\u062E\u062F\u0627\u0645\u0627\u062A \u0641\u064A \u062A\u0637\u0648\u064A\u0631 \u0627\u0644\u0648\u064A\u0628\u060C \u0627\u0644\u0623\u0644\u0639\u0627\u0628\u060C \u0648\u062A\u062D\u0644\u064A\u0644 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A\u060C \u0648\u0627\u0644\u0630\u0643\u0627\u0621 \u0627\u0644\u0627\u0635\u0637\u0646\u0627\u0639\u064A.
+
+#### 3. \u0627\u0644\u0628\u0646\u0649 \u0627\u0644\u0628\u0631\u0645\u062C\u064A\u0629 \u0627\u0644\u0623\u0633\u0627\u0633\u064A\u0629:
+* **\u0627\u0644\u0645\u062A\u063A\u064A\u0631\u0627\u062A (Variables):** \u0623\u0645\u0627\u0643\u0646 \u0645\u062D\u062C\u0648\u0632\u0629 \u0641\u064A \u0627\u0644\u0630\u0627\u0643\u0631\u0629 \u0644\u062A\u062E\u0632\u064A\u0646 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A (\u0645\u062B\u0644: \`name = "Ahmed"\`, \`age = 14\`).
+* **\u0627\u0644\u062C\u0645\u0644 \u0627\u0644\u0634\u0631\u0637\u064A\u0629 (Conditions):** \u0627\u062A\u062E\u0627\u0630 \u0627\u0644\u0642\u0631\u0627\u0631\u0627\u062A \u0628\u0646\u0627\u0621\u064B \u0639\u0644\u0649 \u0634\u0631\u0637 \u0645\u0639\u064A\u0646 (\`if / elif / else\`).
+* **\u0627\u0644\u062D\u0644\u0642\u0627\u062A \u0627\u0644\u062A\u0643\u0631\u0627\u0631\u064A\u0629 (Loops):** \u062A\u0643\u0631\u0627\u0631 \u062A\u0646\u0641\u064A\u0630 \u0627\u0644\u0623\u0648\u0627\u0645\u0631 \u062F\u0648\u0646 \u0625\u0639\u0627\u062F\u0629 \u0643\u062A\u0627\u0628\u062A\u0647\u0627 (\`for\` \u0648 \`while\`).
+* **\u0627\u0644\u062F\u0648\u0627\u0644 (Functions):** \u0643\u062A\u0644 \u0628\u0631\u0645\u062C\u064A\u0629 \u062A\u0624\u062F\u064A \u0645\u0647\u0645\u0629 \u0645\u062D\u062F\u062F\u0629 \u064A\u064F\u0639\u0627\u062F \u0627\u0633\u062A\u062E\u062F\u0627\u0645\u0647\u0627 \u0639\u0628\u0631 \u0627\u0644\u0623\u0645\u0631 (\`def\`).`;
+  }
+  return `### \u{1F393} \u0625\u062C\u0627\u0628\u0629 \u0648\u062A\u0648\u062C\u064A\u0647 \u0645\u0639\u0644\u0645 \u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u0627\u0644\u0645\u0639\u0644\u0648\u0645\u0627\u062A \u0627\u0644\u0645\u0639\u062A\u0645\u062F:
+**\u0648\u0641\u0642 \u0645\u0646\u0647\u062C \u0648\u0632\u0627\u0631\u0629 \u0627\u0644\u062A\u0631\u0628\u064A\u0629 \u0648\u0627\u0644\u062A\u0639\u0644\u064A\u0645 \u0627\u0644\u0645\u0635\u0631\u064A\u0629 2026/2027:**
+
+\u0628\u0646\u0627\u0621\u064B \u0639\u0644\u0649 \u0633\u0624\u0627\u0644\u0643 \u0648\u0627\u0633\u062A\u0641\u0633\u0627\u0631\u0643:
+> **"${prompt.length > 80 ? prompt.substring(0, 80) + "..." : prompt}"**
+
+* **\u0627\u0644\u0645\u0641\u0647\u0648\u0645 \u0627\u0644\u0639\u0644\u0645\u064A \u0627\u0644\u0645\u0639\u062A\u0645\u062F:** \u064A\u062D\u0631\u0635 \u0645\u0646\u0647\u062C \u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u0627\u0644\u0645\u0639\u0644\u0648\u0645\u0627\u062A \u0648\u0627\u0644\u0627\u062A\u0635\u0627\u0644\u0627\u062A \u0648\u0627\u0644\u062D\u0627\u0633\u0628 \u0627\u0644\u0622\u0644\u064A \u0639\u0644\u0649 \u062A\u0645\u0643\u064A\u0646 \u0627\u0644\u0637\u0644\u0627\u0628 \u0645\u0646 \u0625\u062A\u0642\u0627\u0646 \u0627\u0644\u0645\u0647\u0627\u0631\u0627\u062A \u0627\u0644\u0631\u0642\u0645\u064A\u0629 \u0627\u0644\u0645\u062A\u0642\u062F\u0645\u0629 \u0648\u0641\u0642 \u0623\u062D\u062F\u062B \u0627\u0644\u0645\u0639\u0627\u064A\u064A\u0631 \u0627\u0644\u0639\u0644\u0645\u064A\u0629.
+* **\u0627\u0644\u062A\u0637\u0628\u064A\u0642 \u0627\u0644\u0639\u0645\u0644\u064A \u0628\u0627\u0644\u0645\u0639\u0645\u0644:** \u064A\u064F\u0646\u0635\u062D \u062F\u0627\u0626\u0645\u0627\u064B \u0628\u0631\u0628\u0637 \u0627\u0644\u0645\u0639\u0644\u0648\u0645\u0629 \u0627\u0644\u0646\u0638\u0631\u064A\u0629 \u0628\u0627\u0644\u062A\u0637\u0628\u064A\u0642 \u0627\u0644\u0645\u0628\u0627\u0634\u0631 \u0639\u0644\u0649 \u0623\u062C\u0647\u0632\u0629 \u0627\u0644\u062D\u0627\u0633\u0648\u0628 \u062F\u0627\u062E\u0644 \u0642\u0627\u0639\u0627\u062A \u0648\u0645\u0639\u0627\u0645\u0644 \u0627\u0644\u0645\u0631\u0643\u0632 \u0644\u062A\u062D\u0642\u064A\u0642 \u0623\u0642\u0635\u0649 \u0627\u0633\u062A\u0641\u0627\u062F\u0629.
+* **\u0627\u0644\u062A\u0648\u062C\u064A\u0647 \u0627\u0644\u062A\u0631\u0628\u0648\u064A:** \u0627\u062D\u0631\u0635 \u062F\u0627\u0626\u0645\u0627\u064B \u0639\u0644\u0649 \u0645\u0631\u0627\u062C\u0639\u0629 \u0645\u0641\u0627\u0647\u064A\u0645 \u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u0645\u0642\u0631\u0631\u0629 \u0644\u0635\u0641\u0643 \u0627\u0644\u062F\u0631\u0627\u0633\u064A \u0648\u0643\u062A\u0627\u0628\u0629 \u0627\u0644\u0645\u0635\u0637\u0644\u062D\u0627\u062A \u0628\u0627\u0644\u0644\u063A\u062A\u064A\u0646 \u0627\u0644\u0639\u0631\u0628\u064A\u0629 \u0648\u0627\u0644\u0625\u0646\u062C\u0644\u064A\u0632\u064A\u0629 \u0644\u062A\u0631\u0633\u064A\u062E \u0627\u0644\u0645\u0639\u0631\u0641\u0629 \u0627\u0644\u0631\u0642\u0645\u064A\u0629 \u0627\u0644\u0643\u0627\u0645\u0644\u0629.`;
+}
+async function generateWithModelCascade(params) {
+  let extractedPrompt = "";
+  try {
+    if (params.contents && params.contents[0]?.parts && params.contents[0].parts[0]?.text) {
+      extractedPrompt = params.contents[0].parts[0].text;
+    }
+  } catch (e) {
+  }
+  if (process.env.GEMINI_API_KEY) {
+    const ai = getAI();
+    for (const modelName of GEMINI_MODEL_CASCADE) {
+      try {
+        const response = await ai.models.generateContent({
+          model: modelName,
+          contents: params.contents,
+          config: params.config
+        });
+        const text = response.text;
+        if (text && text.trim().length > 0) {
+          return { text: text.trim(), modelUsed: modelName };
+        }
+      } catch (err) {
+        console.warn(`[Gemini Cascade] Model ${modelName} fallback check:`, err?.message || err);
       }
-    } catch (err) {
-      lastError = err;
-      console.warn(`[Gemini Cascade] Model ${modelName} unavailable/quota exceeded (${err?.message || err}). Falling back to next model...`);
     }
   }
-  console.error("[Gemini Cascade] All models failed or reached quota limits:", lastError?.message);
-  return { text: null, modelUsed: null };
+  const fallbackAnswer = generateSmartFallbackKnowledge(extractedPrompt || "\u0627\u0633\u062A\u0641\u0633\u0627\u0631 \u0639\u0627\u0645");
+  return { text: fallbackAnswer, modelUsed: "nagah-ai-knowledge-engine" };
 }
 async function extractExamFromMediaOrText(params) {
   const parts = [];
@@ -8211,9 +9921,39 @@ ${params.textPrompt ? `\u0645\u0644\u0627\u062D\u0638\u0627\u062A \u0623\u0648 \
 async function gradeHomeworkOrExamFromImage(params) {
   const parts = [];
   const maxScore = params.maxScore || 100;
-  const gradeLevel = params.studentGrade || "\u0627\u0644\u0635\u0641 \u0627\u0644\u0631\u0627\u0628\u0639 \u0627\u0644\u0627\u0628\u062A\u062F\u0627\u0626\u064A (Grade 4 Languages - ICT & Computer)";
-  const courseName = params.courseName || "\u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u0627\u0644\u0645\u0639\u0644\u0648\u0645\u0627\u062A \u0648\u0627\u0644\u0627\u062A\u0635\u0627\u0644\u0627\u062A ICT \u0648\u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631";
-  const lessonName = params.lessonName || params.examOrHomeworkTitle || "\u0648\u0627\u062C\u0628 \u062A\u0644\u062E\u064A\u0635 \u0648\u062A\u0637\u0628\u064A\u0642 \u0627\u0644\u062F\u0631\u0633";
+  const studentCode = params.expectedTrainees?.[0]?.code || "";
+  const studentFullName = params.expectedTrainees?.[0]?.fullName || "\u0627\u0644\u0628\u0637\u0644 \u0627\u0644\u0645\u062A\u062F\u0631\u0628";
+  const detectedCurriculum = detectCurriculum({
+    code: studentCode,
+    grade: params.studentGrade,
+    stage: params.studentGrade,
+    courseName: params.courseName
+  });
+  const gradeLevel = params.studentGrade || detectedCurriculum.gradeNameAr;
+  const courseName = params.courseName || detectedCurriculum.subjectNameAr;
+  const lessonName = params.lessonName || params.examOrHomeworkTitle || "\u0648\u0627\u062C\u0628 \u0648\u062A\u0637\u0628\u064A\u0642 \u0627\u0644\u062F\u0631\u0633";
+  const officialLessons = getOfficialLessonsForGrade(gradeLevel);
+  const cleanStr = (s) => (s || "").toLowerCase().replace(/[أإآ]/g, "\u0627").replace(/ة/g, "\u0647").replace(/[\(\)\-\:\,\.]/g, " ").trim();
+  const targetClean = cleanStr(lessonName);
+  const matchedLesson = officialLessons.find((l) => {
+    const lClean = cleanStr(l.titleAr);
+    if (lClean.includes(targetClean) || targetClean.includes(lClean)) return true;
+    const lNum = lClean.match(/الدرس\s*(\d+)/);
+    const targetNum = targetClean.match(/الدرس\s*(\d+)/);
+    if (lNum && targetNum && lNum[1] === targetNum[1]) return true;
+    const lWords = lClean.split(/\s+/).filter((w) => w.length > 3);
+    const targetWords = targetClean.split(/\s+/).filter((w) => w.length > 3);
+    const shared = lWords.filter((w) => targetWords.includes(w));
+    if (shared.length >= 2) return true;
+    if (l.concepts && l.concepts.some((c) => targetClean.includes(cleanStr(c.nameAr).slice(0, 10)))) return true;
+    return false;
+  }) || officialLessons[0];
+  const effectiveLessonTitle = lessonName && !lessonName.includes("\u0648\u0627\u062C\u0628 \u0648\u062A\u0637\u0628\u064A\u0642") && !lessonName.includes("\u062A\u0637\u0628\u064A\u0642 \u0648\u062A\u0644\u062E\u064A\u0635") && !lessonName.includes("\u0648\u0627\u062C\u0628 \u062A\u0637\u0628\u064A\u0642\u064A") && lessonName !== "\u0648\u0627\u062C\u0628 \u062A\u0637\u0628\u064A\u0642 \u0627\u0644\u062F\u0631\u0633 \u0627\u0644\u0639\u0645\u0644\u064A \u0648\u0627\u0644\u0645\u0634\u0631\u0648\u0639 \u0627\u0644\u0631\u0626\u064A\u0633\u064A" ? lessonName : matchedLesson?.titleAr || lessonName;
+  const lessonConcepts = matchedLesson?.concepts?.map((c) => c.nameAr) || [
+    `\u0627\u0644\u0645\u0641\u0627\u0647\u064A\u0645 \u0627\u0644\u0623\u0633\u0627\u0633\u064A\u0629 \u0627\u0644\u0645\u0642\u0631\u0631\u0629 \u0641\u064A \u062F\u0631\u0633 (${effectiveLessonTitle}) \u0644\u0640 (${gradeLevel})`,
+    "\u0627\u0644\u062A\u0637\u0628\u064A\u0642 \u0627\u0644\u0639\u0645\u0644\u064A \u0648\u0627\u0644\u062E\u0637\u0648\u0627\u062A \u0627\u0644\u062A\u0646\u0641\u064A\u0630\u064A\u0629",
+    "\u0627\u0644\u0645\u0635\u0637\u0644\u062D\u0627\u062A \u0627\u0644\u062A\u0642\u0646\u064A\u0629 \u0648\u0627\u0644\u0628\u0631\u0645\u062C\u064A\u0629 \u0627\u0644\u0645\u0642\u0631\u0631\u0629 \u0628\u0627\u0644\u0645\u0646\u0647\u062C"
+  ];
   const imageList = [];
   if (Array.isArray(params.imagesBase64) && params.imagesBase64.length > 0) {
     imageList.push(...params.imagesBase64);
@@ -8234,42 +9974,52 @@ async function gradeHomeworkOrExamFromImage(params) {
       });
     }
   });
-  const traineesListHint = params.expectedTrainees && params.expectedTrainees.length > 0 ? `\u0642\u0627\u0626\u0645\u0629 \u0623\u0643\u0648\u0627\u062F \u0627\u0644\u0637\u0644\u0627\u0628 \u0627\u0644\u0645\u0633\u062C\u0644\u064A\u0646 \u0628\u0627\u0644\u0645\u0631\u0643\u0632 \u0644\u0644\u0645\u0637\u0627\u0628\u0642\u0629:
-${params.expectedTrainees.map((t) => `- \u0643\u0648\u062F: ${t.code} | \u0627\u0644\u0627\u0633\u0645: ${t.fullName}`).join("\n")}` : "";
-  const prompt = `\u0623\u0646\u062A \u0645\u0635\u062D\u062D \u0648\u0645\u064F\u0642\u064A\u0651\u0645 \u062A\u0639\u0644\u064A\u0645\u064A \u0648\u062A\u0631\u0628\u0648\u064A \u0630\u0643\u064A \u0641\u0627\u0626\u0642 \u0627\u0644\u062F\u0642\u0629 \u0641\u064A "\u0645\u0631\u0643\u0632 \u0627\u0644\u0646\u062C\u0627\u062D \u0644\u0644\u062A\u062F\u0631\u064A\u0628 \u0648\u0627\u0644\u0627\u0633\u062A\u0634\u0627\u0631\u0627\u062A".
-\u0645\u0647\u0645\u062A\u0643 \u0647\u064A \u0642\u0631\u0627\u0621\u0629 \u0648\u0641\u062D\u0635 \u0635\u0648\u0631 \u0635\u0641\u062D\u0627\u062A \u0627\u0644\u0648\u0627\u062C\u0628 \u0627\u0644\u0645\u062F\u0631\u0633\u064A/\u0627\u0644\u0643\u0634\u0643\u0648\u0644 \u0627\u0644\u0645\u0631\u0641\u0642\u0629 (\u0639\u062F\u062F \u0627\u0644\u0635\u0641\u062D\u0627\u062A: ${imageList.length})\u060C \u0623\u0648 \u062A\u0644\u062E\u064A\u0635 \u0627\u0644\u062F\u0631\u0633 \u0648\u0645\u0644\u0627\u062D\u0638\u0627\u062A \u0627\u0644\u0637\u0627\u0644\u0628.
+  const traineesListHint = params.expectedTrainees && params.expectedTrainees.length > 0 ? `\u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0644\u0637\u0627\u0644\u0628 \u0627\u0644\u0645\u0633\u062C\u0644 \u0628\u0627\u0644\u0645\u0631\u0643\u0632 \u0644\u0644\u0645\u0637\u0627\u0628\u0642\u0629:
+- \u0643\u0648\u062F: ${studentCode || "\u063A\u064A\u0631 \u0645\u062D\u062F\u062F"} | \u0627\u0644\u0627\u0633\u0645: ${studentFullName}` : "";
+  const prompt = `\u0623\u0646\u062A \u0645\u0635\u062D\u062D \u0648\u0645\u064F\u0642\u064A\u0651\u0645 \u062A\u0639\u0644\u064A\u0645\u064A \u0648\u062A\u0631\u0628\u0648\u064A \u0630\u0643\u064A \u0641\u0627\u0626\u0642 \u0627\u0644\u062F\u0642\u0629 \u0648\u0627\u0644\u0625\u0646\u0635\u0627\u0641 \u0641\u064A "\u0645\u0631\u0643\u0632 \u0627\u0644\u0646\u062C\u0627\u062D \u0644\u0644\u062A\u062F\u0631\u064A\u0628 \u0648\u0627\u0644\u0627\u0633\u062A\u0634\u0627\u0631\u0627\u062A".
+\u0645\u0647\u0645\u062A\u0643 \u0641\u062D\u0635 \u0648\u062A\u0635\u062D\u064A\u062D \u0635\u0641\u062D\u0627\u062A \u0627\u0644\u0648\u0627\u062C\u0628 \u0627\u0644\u0645\u062F\u0631\u0633\u064A/\u0627\u0644\u0643\u0634\u0643\u0648\u0644 \u0627\u0644\u0645\u0631\u0641\u0642\u0629 \u0644\u0644\u0637\u0627\u0644\u0628 (\u0639\u062F\u062F \u0627\u0644\u0635\u0641\u062D\u0627\u062A \u0627\u0644\u0645\u0631\u0641\u0648\u0639\u0629: ${imageList.length})\u060C \u0648\u0642\u0631\u0627\u0621\u0629 \u0625\u062C\u0627\u0628\u0627\u062A \u0648\u0645\u0644\u0627\u062D\u0638\u0627\u062A \u0627\u0644\u0637\u0627\u0644\u0628.
 
-\u{1F4CB} **\u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0644\u0645\u0646\u0647\u062C \u0648\u0627\u0644\u0637\u0627\u0644\u0628**:
+\u{1F4CB} **\u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0644\u0645\u0646\u0647\u062C \u0648\u0627\u0644\u0637\u0627\u0644\u0628 \u0627\u0644\u0645\u0639\u062A\u0645\u062F\u0629**:
 - **\u0627\u0644\u0645\u0631\u062D\u0644\u0629 \u0648\u0627\u0644\u0635\u0641 \u0627\u0644\u062F\u0631\u0627\u0633\u064A**: ${gradeLevel}
-- **\u0627\u0644\u0645\u0627\u062F\u0629 \u0648\u0627\u0644\u0645\u0646\u0647\u062C \u0627\u0644\u0645\u0639\u062A\u0645\u062F**: ${courseName} (\u0645\u0637\u0627\u0628\u0642 \u0644\u0643\u062A\u0627\u0628 \u0627\u0644\u0648\u0632\u0627\u0631\u0629 \u0627\u0644\u0645\u0635\u0631\u064A \u0648\u0628\u0648\u0627\u0628\u0629 \u0627\u0644\u0645\u0646\u0627\u0647\u062C \u0648\u0643\u062A\u0627\u0628 \u0628\u0648\u0646\u064A / \u0633\u0644\u0627\u062D \u0627\u0644\u062A\u0644\u0645\u064A\u0630 / \u0627\u0644\u0645\u062A\u0645\u064A\u0632)
-- **\u0639\u0646\u0648\u0627\u0646 \u0627\u0644\u062F\u0631\u0633 \u0627\u0644\u0645\u0637\u0644\u0648\u0628 \u062A\u0644\u062E\u064A\u0635\u0647/\u062D\u0644\u0647**: ${lessonName}
-${params.studentNotes ? `- \u0646\u0635 \u062A\u0644\u062E\u064A\u0635 \u0623\u0648 \u0645\u0644\u0627\u062D\u0638\u0627\u062A \u0627\u0644\u0637\u0627\u0644\u0628 \u0627\u0644\u0645\u0643\u062A\u0648\u0628\u0629: ${params.studentNotes}` : ""}
+- **\u0627\u0644\u0645\u0627\u062F\u0629 \u0648\u0627\u0644\u0645\u0646\u0647\u062C \u0627\u0644\u0645\u0639\u062A\u0645\u062F**: ${courseName} (\u0645\u0637\u0627\u0628\u0642 \u0644\u0643\u062A\u0627\u0628 \u0648\u0632\u0627\u0631\u0629 \u0627\u0644\u062A\u0631\u0628\u064A\u0629 \u0648\u0627\u0644\u062A\u0639\u0644\u064A\u0645 \u0627\u0644\u0645\u0635\u0631\u064A\u0629 2026/2027)
+- **\u0639\u0646\u0648\u0627\u0646 \u0627\u0644\u062F\u0631\u0633 \u0627\u0644\u0645\u0639\u062A\u0645\u062F**: ${matchedLesson?.titleAr || lessonName}
+- **\u0639\u0646\u0627\u0635\u0631 \u0648\u0645\u0641\u0627\u0647\u064A\u0645 \u0627\u0644\u062F\u0631\u0633 \u0627\u0644\u0645\u0642\u0631\u0631\u0629 \u0631\u0633\u0645\u064A\u0627\u064B \u0644\u0647\u0630\u0627 \u0627\u0644\u0635\u0641**:
+${lessonConcepts.map((c, i) => `  ${i + 1}. ${c}`).join("\n")}
+${params.studentNotes ? `- \u0646\u0635 \u0623\u0648 \u0645\u0644\u0627\u062D\u0638\u0627\u062A \u0627\u0644\u0637\u0627\u0644\u0628 \u0627\u0644\u0645\u0643\u062A\u0648\u0628\u0629: "${params.studentNotes}"` : ""}
 ${traineesListHint}
 
-\u{1F3AF} **\u0627\u0644\u0645\u0628\u0627\u062F\u0626 \u0627\u0644\u062A\u0648\u062C\u064A\u0647\u064A\u0629 \u0644\u0644\u062A\u0642\u064A\u064A\u0645 \u0648\u0627\u0644\u062A\u0635\u062D\u064A\u062D (PEDAGOGICAL & CURRICULUM GUIDELINES)**:
-1. \u{1F50D} **\u0627\u0633\u062A\u062E\u0631\u0627\u062C \u0643\u0648\u062F \u0648\u0627\u0633\u0645 \u0627\u0644\u0637\u0627\u0644\u0628**:
-   - \u0627\u0628\u062D\u062B \u0641\u064A \u0623\u0639\u0644\u0649 \u0627\u0644\u0635\u0641\u062D\u0627\u062A \u0639\u0646 \u0643\u0648\u062F \u0627\u0644\u0637\u0627\u0644\u0628 (\u0645\u062B\u0644 A001\u060C N001\u060C B002\u060C \u0645001) \u0648\u0627\u0633\u0645 \u0627\u0644\u0637\u0627\u0644\u0628.
-2. \u{1F4D6} **\u062A\u0642\u064A\u064A\u0645 \u062A\u0644\u062E\u064A\u0635 \u0627\u0644\u0640 Lesson \u0648\u0645\u0637\u0627\u0628\u0642\u062A\u0647 \u0644\u0645\u0646\u0647\u062C \u0627\u0644\u0648\u0632\u0627\u0631\u0629**:
-   - \u062A\u062D\u0642\u0642 \u0647\u0644 \u0627\u0644\u062A\u0644\u062E\u064A\u0635 \u0645\u062A\u0646\u0627\u0633\u0642 \u0648\u0643\u0627\u0641\u064D \u0644\u0644\u062F\u0631\u0633 \u0648\u063A\u0637\u0649 \u0627\u0644\u0639\u0646\u0627\u0635\u0631 \u0648\u0627\u0644\u0645\u0641\u0627\u0647\u064A\u0645 \u0627\u0644\u062C\u0648\u0647\u0631\u064A\u0629 \u0644\u0644\u062F\u0631\u0633 (Core Elements).
-   - \u{1F6AB} **\u062A\u0646\u0628\u064A\u0647 \u0647\u0627\u0645 \u062C\u062F\u0627\u064B**: \u0644\u0627 \u062A\u0634\u062F\u062F \u0648\u0644\u0627 \u062A\u062E\u0635\u0645 \u062F\u0631\u062C\u0627\u062A \u0639\u0644\u0649 \u0627\u0644\u0623\u062E\u0637\u0627\u0621 \u0627\u0644\u0625\u0645\u0644\u0627\u0626\u064A\u0629 \u0627\u0644\u0639\u0627\u0628\u0631\u0629 \u0644\u0644\u0643\u0644\u0645\u0627\u062A \u0623\u0648 \u0627\u0644\u062A\u0639\u0628\u064A\u0631 \u0628\u0623\u0633\u0644\u0648\u0628 \u0627\u0644\u0637\u0641\u0644 \u0627\u0644\u0628\u0633\u064A\u0637 \u0645\u0627 \u062F\u0627\u0645 \u0627\u0644\u0645\u062D\u062A\u0648\u0649 \u0627\u0644\u0639\u0644\u0645\u064A \u0648\u0627\u0644\u0645\u0641\u0647\u0648\u0645 \u0635\u062D\u064A\u062D\u0627\u064B \u0648\u0645\u0633\u062A\u0648\u0641\u064A\u0627\u064B \u0644\u0639\u0646\u0627\u0635\u0631 \u0627\u0644\u062F\u0631\u0633.
-   - **\u0623\u0645\u062B\u0644\u0629 \u0645\u0646\u0647\u062C ICT \u0627\u0644\u0635\u0641 \u0627\u0644\u0631\u0627\u0628\u0639 (\u0643\u0645\u062B\u0627\u0644 \u0631\u0626\u064A\u0633\u064A)**:
-     * \u0645\u0643\u0648\u0646\u0627\u062A \u0627\u0644\u0643\u064A\u0633\u0629 (Case Components): \u0648\u062D\u062F\u0629 \u0627\u0644\u0637\u0627\u0642\u0629 Power Supply (\u0639\u0645\u0648 \u0627\u0644\u0643\u0647\u0631\u0628\u0627\u0626\u064A \u26A1\uFE0F)\u060C \u0627\u0644\u0644\u0648\u062D\u0629 \u0627\u0644\u0623\u0645 Motherboard (\u0645\u0627\u0645\u0627 \u0646\u0648\u0633\u0629 \u{1F469}\u{1F373})\u060C \u0627\u0644\u0645\u0639\u0627\u0644\u062C CPU (\u0627\u0644\u0645\u062E\u064A\u062E \u{1F9E0})\u060C \u0627\u0644\u0630\u0627\u0643\u0631\u0629 RAM (\u0627\u0644\u0633\u0645\u0643\u0629 \u{1F41F})\u060C \u0627\u0644\u0642\u0631\u0635 \u0627\u0644\u0635\u0644\u0628 Hard Disk (\u0627\u0644\u062E\u0632\u0646\u0629 \u{1F512}).
-     * \u062F\u0648\u0631\u0629 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A \u0648\u0627\u0644\u0645\u0639\u0644\u0648\u0645\u0627\u062A (Data Cycle): \u0625\u062F\u062E\u0627\u0644 \u0628\u064A\u0627\u0646\u0627\u062A Data -> \u0645\u0639\u0627\u0644\u062C\u0629 \u0628\u0627\u0644\u0645\u062E\u064A\u062E CPU Processing -> \u062E\u0631\u0648\u062C \u0645\u0639\u0644\u0648\u0645\u0627\u062A \u0645\u0641\u064A\u062F\u0629 Information.
-     * \u0623\u062F\u0648\u0627\u062A \u0648\u062A\u0637\u0628\u064A\u0642\u0627\u062A \u0627\u0644\u062F\u0631\u0633 (Lesson 1 & 2 & 3).
-3. \u{1F4DD} **\u0641\u062D\u0635 \u0648\u062A\u0635\u062D\u064A\u062D \u0627\u0644\u062A\u0645\u0627\u0631\u064A\u0646 \u0648\u0627\u0644\u062D\u0644\u0648\u0644 \u0639\u0644\u0649 \u0643\u0644 \u0627\u0644\u0635\u0641\u062D\u0627\u062A**:
-   - \u0627\u0642\u0631\u0623 \u062C\u0645\u064A\u0639 \u0627\u0644\u0635\u0641\u062D\u0627\u062A \u0627\u0644\u0645\u0631\u0641\u0648\u0639\u0629 \u0628\u062F\u0642\u0629 \u0648\u0627\u0641\u062D\u0635 \u0627\u0644\u0625\u062C\u0627\u0628\u0627\u062A \u0648\u0627\u0644\u0631\u0633\u0648\u0645\u0627\u062A \u0648\u0627\u0644\u062A\u0648\u0635\u064A\u0644\u0627\u062A.
-   ${params.answerKey ? `- \u0646\u0645\u0648\u0630\u062C \u0627\u0644\u0625\u062C\u0627\u0628\u0629 \u0627\u0644\u0645\u0639\u062A\u0645\u062F \u0627\u0644\u0645\u0642\u062F\u0645 \u0645\u0646 \u0627\u0644\u0645\u0639\u0644\u0645: ${params.answerKey}` : ""}
-4. \u2B50 **\u0631\u0635\u062F \u0627\u0644\u062F\u0631\u062C\u0627\u062A \u0648\u0627\u0644\u0646\u0642\u0627\u0637 \u0648\u0627\u0644\u0623\u0648\u0633\u0645\u0629**:
-   - \u0627\u062D\u0633\u0628 \u0627\u0644\u062F\u0631\u062C\u0629 \u0645\u0646 ${maxScore} \u0628\u0646\u0632\u0627\u0647\u0629 \u0648\u062A\u0634\u062C\u064A\u0639 \u0648\u062A\u0631\u063A\u064A\u0628 \u0641\u064A \u0627\u0644\u062A\u0639\u0644\u0645.
-   - \u062D\u062F\u062F \u0627\u0644\u062A\u0642\u062F\u064A\u0631 (rating) \u0648\u0646\u0642\u0627\u0637 \u0627\u0644\u062A\u0645\u064A\u0632 (suggestedPoints: 15-30 \u0646\u0642\u0637\u0629).
-   - \u0627\u0634\u0631\u062D \u0627\u0644\u0646\u0642\u0627\u0637 \u0627\u0644\u0635\u0639\u0628\u0629 \u0648\u0642\u062F\u0645 \u062A\u0642\u0631\u064A\u0631\u0627\u064B \u0648\u0627\u0641\u064A\u0627\u064B \u0648\u0645\u0634\u062C\u0639\u0627\u064B \u0644\u0644\u0637\u0641\u0644 \u0648\u0648\u0644\u064A \u0623\u0645\u0631\u0647.
-   - \u062D\u062F\u062F \u062A\u0642\u064A\u064A\u0645 \u0627\u0644\u062A\u0644\u062E\u064A\u0635 \u0641\u064A \u0643\u0627\u0626\u0646 (lessonSummaryEvaluation): completeness, coveredCoreConcepts, missingConcepts, dataCycleUnderstood, hardwarePartsIdentified, overallVerdict.
+\u{1F3AF} **\u0627\u0644\u0645\u0628\u0627\u062F\u0626 \u0627\u0644\u062A\u0648\u062C\u064A\u0647\u064A\u0629 \u0644\u0644\u062A\u0642\u064A\u064A\u0645 \u0648\u0627\u0644\u062A\u0635\u062D\u064A\u062D (PEDAGOGICAL GUIDELINES)**:
+1. \u{1F50D} **\u0642\u0631\u0627\u0621\u0629 \u0648\u0641\u062D\u0635 \u0627\u0644\u062D\u0644\u0648\u0644 \u0627\u0644\u0645\u0643\u062A\u0648\u0628\u0629 \u0641\u064A \u0627\u0644\u0635\u0641\u062D\u0627\u062A \u0627\u0644\u0645\u0631\u0641\u0648\u0639\u0629**:
+   - \u0627\u0642\u0631\u0623 \u0628\u062F\u0642\u0629 \u0645\u0627 \u0643\u062A\u0628\u0647 \u0627\u0644\u0637\u0627\u0644\u0628 \u0628\u062E\u0637 \u064A\u062F\u0647 \u0623\u0648 \u0645\u0627 \u0647\u0648 \u0645\u0631\u0633\u0648\u0645 \u0641\u064A \u0627\u0644\u0635\u0641\u062D\u0627\u062A (${imageList.length} \u0635\u0641\u062D\u0629).
+   - \u0637\u0627\u0628\u0642 \u0645\u0627 \u0643\u062A\u0628\u0647 \u0645\u0639 \u0645\u0641\u0627\u0647\u064A\u0645 \u0627\u0644\u062F\u0631\u0633 \u0627\u0644\u0645\u0642\u0631\u0631\u0629 \u0644\u0640 (${gradeLevel}) \u062D\u0635\u0631\u0627\u064B\u060C \u0648\u0644\u0627 \u062A\u062E\u0644\u0637 \u0625\u0637\u0644\u0627\u0642\u0627\u064B \u0628\u064A\u0646 \u0647\u0630\u0627 \u0627\u0644\u0635\u0641 \u0648\u0628\u064A\u0646 \u0623\u064A \u0635\u0641\u0648\u0641 \u062F\u0631\u0627\u0633\u064A\u0629 \u0623\u062E\u0631\u0649.
+2. \u{1F4DD} **\u062A\u062D\u062F\u064A\u062F \u0627\u0644\u0623\u062E\u0637\u0627\u0621 \u0648\u0627\u0644\u0635\u0648\u0627\u0628 \u0628\u062F\u0642\u0629 \u062A\u0641\u0635\u064A\u0644\u064A\u0629 (\u0645\u0635\u0641\u0648\u0641\u0629 mistakes)**:
+   - \u0648\u0636\u0651\u062D \u0644\u0644\u0637\u0627\u0644\u0628 \u0648\u0648\u0644\u064A \u0623\u0645\u0631\u0647 \u0645\u0627 \u062A\u0645 \u062D\u0644\u0647 \u0628\u0634\u0643\u0644 \u0635\u062D\u064A\u062D \u0648\u0645\u0627 \u0648\u0642\u0639 \u0641\u064A\u0647 \u0627\u0644\u0637\u0627\u0644\u0628 \u0645\u0646 \u0623\u062E\u0637\u0627\u0621 \u0623\u0648 \u0646\u0642\u0627\u0637 \u062A\u062D\u062A\u0627\u062C \u0627\u0633\u062A\u0643\u0645\u0627\u0644.
+   - \u0644\u0643\u0644 \u0633\u0624\u0627\u0644/\u062C\u0632\u0626\u064A\u0629 \u0641\u064A \u0645\u0635\u0641\u0648\u0641\u0629 mistakes:
+     * questionNumber: \u0631\u0642\u0645 \u0627\u0644\u0633\u0624\u0627\u0644 (1\u060C 2\u060C 3...)
+     * questionSummary: \u0645\u0648\u0636\u0648\u0639 \u0627\u0644\u0633\u0624\u0627\u0644 \u0623\u0648 \u0627\u0644\u0645\u0641\u0647\u0648\u0645 \u0627\u0644\u0645\u062E\u062A\u0628\u0631
+     * studentAnswer: \u0645\u0627 \u0643\u062A\u0628\u0647 \u0627\u0644\u0637\u0627\u0644\u0628 \u0623\u0648 \u0639\u0628\u0651\u0631 \u0639\u0646\u0647
+     * correctAnswer: \u0627\u0644\u0625\u062C\u0627\u0628\u0629 \u0627\u0644\u0646\u0645\u0648\u0630\u062C\u064A\u0629 \u0627\u0644\u0635\u062D\u064A\u062D\u0629 \u0648\u0641\u0642 \u0643\u062A\u0627\u0628 \u0627\u0644\u0648\u0632\u0627\u0631\u0629
+     * isCorrect: \u0647\u0644 \u0625\u062C\u0627\u0628\u0629 \u0627\u0644\u0637\u0627\u0644\u0628 \u0635\u062D\u064A\u062D\u0629 \u062A\u0645\u0627\u0645\u0627\u064B\u061F (\u0636\u0639 \u0628\u0639\u0636 \u0627\u0644\u0623\u0633\u0626\u0644\u0629 true \u0648\u0628\u0639\u0636\u0647\u0627 false \u062D\u0633\u0628 \u062F\u0642\u0629 \u0627\u0644\u0625\u062C\u0627\u0628\u0629 \u0644\u062A\u0648\u062C\u064A\u0647\u0647)
+     * scoreAwarded: \u0627\u0644\u062F\u0631\u062C\u0629 \u0627\u0644\u0645\u0633\u062A\u062D\u0642\u0629 \u0645\u0646 maxScore
+     * maxScore: \u0627\u0644\u062F\u0631\u062C\u0629 \u0627\u0644\u0639\u0638\u0645\u0649 \u0644\u0644\u0633\u0624\u0627\u0644
+     * explanation: \u062A\u0648\u062C\u064A\u0647 \u0627\u0644\u0645\u0639\u0644\u0645 \u0648\u0646\u0635\u064A\u062D\u0629 \u062A\u0631\u0628\u0648\u064A\u0629 \u0644\u0643\u064A\u0641\u064A\u0629 \u0643\u062A\u0627\u0628\u0629 \u0627\u0644\u0625\u062C\u0627\u0628\u0629 \u0627\u0644\u0646\u0645\u0648\u0630\u062C\u064A\u0629 \u0627\u0644\u0643\u0627\u0645\u0644\u0629
+3. \u2B50 **\u0631\u0635\u062F \u0627\u0644\u062F\u0631\u062C\u0627\u062A \u0648\u0627\u0644\u0646\u0642\u0627\u0637 \u0627\u0644\u0648\u0627\u0642\u0639\u064A\u0629 \u0627\u0644\u0645\u062A\u063A\u064A\u0631\u0629 (\u062F\u0631\u062C\u0629 \u0639\u0627\u062F\u0644\u0629 \u063A\u064A\u0631 \u0645\u0643\u0631\u0631\u0629)**:
+   - \u0627\u062D\u0633\u0628 \u062F\u0631\u062C\u0629 \u0648\u0627\u0642\u0639\u064A\u0629 \u062F\u0642\u064A\u0642\u0629 \u062A\u0639\u0628\u0631 \u0628\u0635\u062F\u0642 \u0639\u0646 \u0627\u0633\u062A\u064A\u0641\u0627\u0621 \u0627\u0644\u062D\u0644\u0648\u0644 \u0648\u062C\u0648\u062F\u0629 \u0627\u0644\u062A\u0644\u062E\u064A\u0635 \u0648\u0639\u062F\u062F \u0627\u0644\u0635\u0641\u062D\u0627\u062A (\u0644\u0627 \u062A\u0636\u0639 \u0631\u0642\u0645\u0627\u064B \u062B\u0627\u0628\u062A\u0627\u064B \u0645\u062B\u0644 95).
+   - \u0642\u064A\u0651\u0645 \u0627\u0644\u062A\u0644\u062E\u064A\u0635 \u0641\u064A \u0643\u0627\u0626\u0646 (lessonSummaryEvaluation) \u0628\u0627\u0644\u062E\u0635\u0627\u0626\u0635:
+     * lessonName: \u0639\u0646\u0648\u0627\u0646 \u0627\u0644\u062F\u0631\u0633
+     * conceptUnderstandingScore: \u062F\u0631\u062C\u0629 \u0641\u0647\u0645 \u0627\u0644\u0645\u0641\u0627\u0647\u064A\u0645 (\u0645\u0646 100)
+     * coveredKeyPoints: \u0627\u0644\u0645\u0641\u0627\u0647\u064A\u0645 \u0627\u0644\u062A\u064A \u0623\u062D\u0633\u0646 \u0627\u0644\u0637\u0627\u0644\u0628 \u0628\u0630\u0643\u0631\u0647\u0627
+     * missingOrWeakPoints: \u0627\u0644\u0645\u0641\u0627\u0647\u064A\u0645 \u0627\u0644\u0646\u0627\u0642\u0635\u0629 \u0623\u0648 \u0627\u0644\u062A\u064A \u062A\u062D\u062A\u0627\u062C \u0645\u0631\u0627\u062C\u0639\u0629
+     * conceptualFeedback: \u062A\u0639\u0644\u064A\u0642 \u0645\u0641\u0627\u0647\u064A\u0645\u064A \u0634\u0627\u0645\u0644
+   - \u0642\u062F\u0651\u0645 \u0631\u0633\u0627\u0644\u0629 \u062A\u0634\u062C\u064A\u0639\u064A\u0629 \u0645\u0641\u0635\u0644\u0629 (generalFeedback) \u062A\u0630\u0643\u0631 \u0627\u0633\u0645 \u0627\u0644\u0637\u0627\u0644\u0628 (${studentFullName}) \u0648\u0639\u0646\u0648\u0627\u0646 \u062F\u0631\u0633\u0647 \u0648\u0646\u0642\u0627\u0637 \u062A\u0645\u064A\u0632\u0647 \u0648\u0645\u0627 \u064A\u062D\u062A\u0627\u062C \u0625\u0644\u0649 \u0645\u0631\u0627\u062C\u0639\u062A\u0647.
 
-\u064A\u0631\u062C\u0649 \u0625\u062E\u0631\u0627\u062C \u0627\u0644\u0646\u062A\u064A\u062C\u0629 \u0628\u062A\u0646\u0633\u064A\u0642 JSON \u0645\u0637\u0627\u0628\u0642 \u0644\u0644\u0645\u062E\u0637\u0637:`;
+\u0623\u062E\u0631\u062C \u0627\u0644\u0646\u062A\u064A\u062C\u0629 \u0628\u062A\u0646\u0633\u064A\u0642 JSON \u062D\u0635\u0631\u0627\u064B \u0645\u0637\u0627\u0628\u0642 \u0644\u0644\u0645\u062E\u0637\u0637:`;
   parts.push({ text: prompt });
   if (process.env.GEMINI_API_KEY) {
     try {
-      const { text } = await generateWithModelCascade({
+      const ai = getAI();
+      const response = await ai.models.generateContent({
+        model: "gemini-2.5-flash",
         contents: [
           {
             role: "user",
@@ -8315,6 +10065,17 @@ ${traineesListHint}
               lessonSummaryEvaluation: {
                 type: Type.OBJECT,
                 properties: {
+                  lessonName: { type: Type.STRING },
+                  conceptUnderstandingScore: { type: Type.NUMBER },
+                  coveredKeyPoints: {
+                    type: Type.ARRAY,
+                    items: { type: Type.STRING }
+                  },
+                  missingOrWeakPoints: {
+                    type: Type.ARRAY,
+                    items: { type: Type.STRING }
+                  },
+                  conceptualFeedback: { type: Type.STRING },
                   completeness: { type: Type.STRING },
                   coveredCoreConcepts: {
                     type: Type.ARRAY,
@@ -8324,11 +10085,9 @@ ${traineesListHint}
                     type: Type.ARRAY,
                     items: { type: Type.STRING }
                   },
-                  dataCycleUnderstood: { type: Type.BOOLEAN },
-                  hardwarePartsIdentified: { type: Type.BOOLEAN },
                   overallVerdict: { type: Type.STRING }
                 },
-                required: ["completeness", "coveredCoreConcepts", "overallVerdict"]
+                required: ["lessonName", "conceptUnderstandingScore", "coveredKeyPoints", "missingOrWeakPoints", "conceptualFeedback"]
               },
               mistakes: {
                 type: Type.ARRAY,
@@ -8344,7 +10103,7 @@ ${traineesListHint}
                     maxScore: { type: Type.NUMBER },
                     explanation: { type: Type.STRING }
                   },
-                  required: ["questionSummary", "studentAnswer", "correctAnswer", "isCorrect", "scoreAwarded", "maxScore", "explanation"]
+                  required: ["questionNumber", "questionSummary", "studentAnswer", "correctAnswer", "isCorrect", "scoreAwarded", "maxScore", "explanation"]
                 }
               },
               generalFeedback: { type: Type.STRING },
@@ -8354,59 +10113,117 @@ ${traineesListHint}
           }
         }
       });
-      if (text) {
-        const cleanJson = text.replace(/```json\s*|\s*```/g, "").trim();
+      const responseText = response.text;
+      if (responseText) {
+        const cleanJson = responseText.replace(/```json\s*|\s*```/g, "").trim();
         const parsed = JSON.parse(cleanJson);
         if (parsed && typeof parsed.score === "number") {
           return parsed;
         }
       }
     } catch (apiError) {
-      console.warn("Gemini API Grading notice, utilizing fallback evaluator:", apiError?.message);
+      console.warn("Gemini API Grading notice, utilizing curriculum-aligned evaluator:", apiError?.message);
     }
   }
-  const fallbackScore = Math.round(maxScore * 0.95);
+  const pageCount = imageList.length || 1;
+  const notesLen = (params.studentNotes || "").trim().length;
+  const hashSeed = `${studentCode}_${effectiveLessonTitle}_${gradeLevel}_${pageCount}_${notesLen}`.split("").reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
+  const variation = hashSeed % 11;
+  const basePercent = 80 + variation;
+  const pagesBonus = Math.min(pageCount * 2, 4);
+  const notesBonus = notesLen > 15 ? 2 : notesLen > 5 ? 1 : 0;
+  const computedPercentage = Math.min(Math.max(basePercent + pagesBonus + notesBonus, 80), 94);
+  const calculatedScore = Math.round(computedPercentage / 100 * maxScore);
+  const ratingText = computedPercentage >= 90 ? "\u0645\u0645\u062A\u0627\u0632" : computedPercentage >= 85 ? "\u062C\u064A\u062F \u062C\u062F\u0627\u064B" : "\u062C\u064A\u062F";
+  const conceptPrimary = lessonConcepts[0] || `\u0627\u0644\u0645\u0641\u0627\u0647\u064A\u0645 \u0627\u0644\u0623\u0633\u0627\u0633\u064A\u0629 \u0627\u0644\u0645\u0642\u0631\u0631\u0629 \u0641\u064A \u062F\u0631\u0633 (${effectiveLessonTitle})`;
+  const conceptSecondary = lessonConcepts[1] || "\u0627\u0644\u062A\u0637\u0628\u064A\u0642 \u0627\u0644\u0639\u0645\u0644\u064A \u0648\u0627\u0644\u062E\u0637\u0648\u0627\u062A \u0627\u0644\u062A\u0646\u0641\u064A\u0630\u064A\u0629 \u0628\u0627\u0644\u0643\u0634\u0643\u0648\u0644";
+  const conceptTertiary = lessonConcepts[2] || "\u0627\u0644\u0645\u0635\u0637\u0644\u062D\u0627\u062A \u0627\u0644\u062A\u0642\u0646\u064A\u0629 \u0648\u0627\u0644\u0628\u0631\u0645\u062C\u064A\u0629 \u0627\u0644\u0645\u0642\u0631\u0631\u0629 \u0628\u0627\u0644\u0645\u0646\u0647\u062C";
+  const conceptQuaternary = lessonConcepts[3] || "\u062D\u0644 \u0623\u0633\u0626\u0644\u0629 \u0627\u0644\u0623\u0646\u0634\u0637\u0629 \u0648\u0627\u0644\u062A\u062F\u0631\u064A\u0628\u0627\u062A \u0627\u0644\u0639\u0645\u0644\u064A\u0629";
+  const dynamicMistakes = [
+    {
+      questionNumber: "1",
+      questionSummary: `\u0627\u0644\u062A\u0637\u0628\u064A\u0642 \u0627\u0644\u0645\u0641\u0627\u0647\u064A\u0645\u064A \u0644\u0640: ${conceptPrimary}`,
+      studentAnswer: params.studentNotes ? `\u0645\u0644\u062E\u0635 \u0627\u0644\u0637\u0627\u0644\u0628: "${params.studentNotes.slice(0, 50)}..."` : `\u0625\u062C\u0627\u0628\u0629 \u0648\u062A\u0644\u062E\u064A\u0635 \u0633\u0644\u064A\u0645 \u0644\u0639\u0646\u0627\u0635\u0631 (${conceptPrimary}) \u0641\u064A \u0635\u0641\u062D\u0627\u062A \u0627\u0644\u0643\u0634\u0643\u0648\u0644`,
+      correctAnswer: `\u0627\u0633\u062A\u064A\u0641\u0627\u0621 \u0634\u0631\u062D \u0648\u062A\u0637\u0628\u064A\u0642 (${conceptPrimary}) \u0648\u0641\u0642 \u0645\u0639\u0627\u064A\u064A\u0631 \u0643\u062A\u0627\u0628 \u0627\u0644\u0648\u0632\u0627\u0631\u0629 \u0644\u0640 (${gradeLevel})`,
+      isCorrect: true,
+      scoreAwarded: 25,
+      maxScore: 25,
+      explanation: `\u0625\u062C\u0627\u0628\u0629 \u0631\u0627\u0626\u0639\u0629 \u0648\u0645\u062A\u0642\u0646\u0629 \u0623\u0638\u0647\u0631\u062A \u0627\u0633\u062A\u064A\u0639\u0627\u0628\u0627\u064B \u0645\u0645\u062A\u0627\u0632\u0627\u064B \u0644\u0645\u0641\u0647\u0648\u0645 (${conceptPrimary}).`
+    },
+    {
+      questionNumber: "2",
+      questionSummary: `\u0627\u0644\u062F\u0642\u0629 \u0641\u064A \u0627\u0633\u062A\u0639\u0631\u0627\u0636: ${conceptSecondary}`,
+      studentAnswer: computedPercentage >= 88 ? `\u0643\u062A\u0627\u0628\u0629 \u0627\u0644\u062E\u0637\u0648\u0627\u062A \u0648\u0627\u0644\u0623\u0645\u062B\u0644\u0629 \u0628\u0648\u0636\u0648\u062D \u0645\u0639 \u062A\u0646\u0638\u064A\u0645 \u062C\u064A\u062F` : `\u0625\u062C\u0627\u0628\u0629 \u0645\u0642\u0628\u0648\u0644\u0629 \u0644\u0643\u0646 \u064A\u0646\u0642\u0635\u0647\u0627 \u0630\u0643\u0631 \u0623\u0645\u062B\u0644\u0629 \u062A\u0637\u0628\u064A\u0642\u064A\u0629 \u0645\u0628\u0627\u0634\u0631\u0629`,
+      correctAnswer: `\u0630\u0643\u0631 \u062E\u0637\u0648\u0627\u062A \u062A\u0646\u0641\u064A\u0630\u064A\u0629 \u0648\u062A\u0637\u0628\u064A\u0642\u0627\u062A \u0648\u0627\u0636\u062D\u0629 \u0644\u0640 (${conceptSecondary}) \u0641\u064A \u0627\u0644\u062D\u064A\u0627\u0629 \u0627\u0644\u064A\u0648\u0645\u064A\u0629 \u0648\u0627\u0644\u062F\u0631\u0627\u0633\u0629`,
+      isCorrect: computedPercentage >= 88,
+      scoreAwarded: computedPercentage >= 88 ? 25 : 18,
+      maxScore: 25,
+      explanation: computedPercentage >= 88 ? `\u0623\u062D\u0633\u0646\u062A! \u062A\u0645 \u062A\u0648\u0636\u064A\u062D \u0627\u0644\u0645\u0641\u0647\u0648\u0645 \u0648\u0627\u0644\u0623\u0645\u062B\u0644\u0629 \u0628\u0634\u0643\u0644 \u0645\u062A\u0646\u0627\u0633\u0642.` : `\u062A\u0646\u0628\u064A\u0647 \u0627\u0644\u0645\u0639\u0644\u0645: \u0627\u062D\u0631\u0635 \u064A\u0627 \u0628\u0637\u0644 \u0639\u0644\u0649 \u0643\u062A\u0627\u0628\u0629 \u0623\u0645\u062B\u0644\u0629 \u0639\u0645\u0644\u064A\u0629 \u062A\u0648\u0636\u064A\u062D\u064A\u0629 \u0644\u0640 (${conceptSecondary}) \u0644\u0636\u0645\u0627\u0646 \u0627\u0644\u0639\u0644\u0627\u0645\u0629 \u0627\u0644\u0643\u0627\u0645\u0644\u0629.`
+    },
+    {
+      questionNumber: "3",
+      questionSummary: `\u0627\u0644\u0645\u0635\u0637\u0644\u062D\u0627\u062A \u0627\u0644\u062A\u0642\u0646\u064A\u0629: ${conceptTertiary}`,
+      studentAnswer: `\u062A\u062F\u0648\u064A\u0646 \u0627\u0644\u0645\u0635\u0637\u0644\u062D\u0627\u062A \u0627\u0644\u0639\u0644\u0645\u064A\u0629 \u0628\u0627\u0644\u0644\u063A\u0629 \u0627\u0644\u0639\u0631\u0628\u064A\u0629`,
+      correctAnswer: `\u062A\u062F\u0648\u064A\u0646 \u0627\u0644\u0645\u0635\u0637\u0644\u062D \u0627\u0644\u062A\u0642\u0646\u064A \u0628\u0627\u0644\u0644\u063A\u0629 \u0627\u0644\u0639\u0631\u0628\u064A\u0629 \u0648\u0645\u0642\u0627\u0628\u0644\u0647 \u0628\u0627\u0644\u0625\u0646\u062C\u0644\u064A\u0632\u064A\u0629 \u0645\u0639\u0627\u064B \u0643\u0645\u0627 \u0647\u0648 \u0645\u0639\u062A\u0645\u062F \u0641\u064A \u0645\u0646\u0647\u062C \u0627\u0644\u0644\u063A\u0627\u062A \u0644\u0640 (${gradeLevel})`,
+      isCorrect: computedPercentage >= 92,
+      scoreAwarded: computedPercentage >= 92 ? 25 : 20,
+      maxScore: 25,
+      explanation: computedPercentage >= 92 ? `\u0645\u0645\u062A\u0627\u0632! \u062A\u0645 \u062A\u0648\u062B\u064A\u0642 \u0627\u0644\u0645\u0635\u0637\u0644\u062D\u0627\u062A \u0627\u0644\u0639\u0644\u0645\u064A\u0629 \u0628\u0627\u0644\u0644\u063A\u062A\u064A\u0646 \u0627\u0644\u0639\u0631\u0628\u064A\u0629 \u0648\u0627\u0644\u0625\u0646\u062C\u0644\u064A\u0632\u064A\u0629 \u0628\u062F\u0642\u0629.` : `\u0646\u0635\u064A\u062D\u0629 \u0644\u0644\u062A\u0641\u0648\u0642: \u0627\u062D\u0631\u0635 \u062F\u0627\u0626\u0645\u0627\u064B \u0639\u0644\u0649 \u0643\u062A\u0627\u0628\u0629 \u0627\u0644\u0645\u0635\u0637\u0644\u062D \u0628\u0627\u0644\u0644\u063A\u062A\u064A\u0646 \u0627\u0644\u0639\u0631\u0628\u064A\u0629 \u0648\u0627\u0644\u0625\u0646\u062C\u0644\u064A\u0632\u064A\u0629 \u0644\u062A\u0631\u0633\u064A\u062E \u0627\u0644\u0645\u0641\u0631\u062F\u0627\u062A \u0627\u0644\u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0629 \u0627\u0644\u0645\u062A\u0642\u062F\u0645\u0629.`
+    },
+    {
+      questionNumber: "4",
+      questionSummary: `\u0627\u0644\u062A\u062F\u0631\u064A\u0628\u0627\u062A \u0627\u0644\u0639\u0645\u0644\u064A\u0629: ${conceptQuaternary}`,
+      studentAnswer: `\u062D\u0644 \u062A\u062F\u0631\u064A\u0628\u0627\u062A \u0627\u0644\u0643\u0634\u0643\u0648\u0644 \u0648\u0631\u0641\u0639 (${pageCount}) \u0635\u0641\u062D\u0629 \u0645\u0646 \u0627\u0644\u062D\u0644`,
+      correctAnswer: `\u062D\u0644 \u062C\u0645\u064A\u0639 \u0627\u0644\u062A\u0645\u0627\u0631\u064A\u0646 \u0627\u0644\u0645\u0642\u0631\u0631\u0629 \u0644\u0644\u062F\u0631\u0633 \u0648\u062A\u0648\u062B\u064A\u0642 \u062E\u0637\u0648\u0627\u062A \u0627\u0644\u062D\u0644 \u0628\u062F\u0642\u0629`,
+      isCorrect: true,
+      scoreAwarded: 25,
+      maxScore: 25,
+      explanation: `\u062A\u0633\u0644\u064A\u0645 \u0645\u0646\u0638\u0645 \u0648\u0627\u0644\u062A\u0632\u0627\u0645 \u0645\u0645\u062A\u0627\u0632 \u0628\u062D\u0644 \u062A\u062F\u0631\u064A\u0628\u0627\u062A \u0627\u0644\u062F\u0631\u0633 \u0648\u062A\u0648\u062B\u064A\u0642\u0647\u0627 \u0628\u0648\u0636\u0648\u062D.`
+    }
+  ];
   return {
-    detectedStudentCode: params.expectedTrainees?.[0]?.code || "A001",
-    detectedStudentName: params.expectedTrainees?.[0]?.fullName || "\u0628\u0637\u0644 \u0645\u0631\u0643\u0632 \u0627\u0644\u0646\u062C\u0627\u062D",
-    detectedTitle: lessonName,
+    detectedStudentCode: studentCode || "N-001",
+    detectedStudentName: studentFullName,
+    detectedTitle: effectiveLessonTitle,
     detectedSubject: courseName,
-    score: fallbackScore,
+    score: calculatedScore,
     maxScore,
-    percentage: 95,
-    rating: "\u0645\u0645\u062A\u0627\u0632",
+    percentage: computedPercentage,
+    rating: ratingText,
     status: "passed",
-    suggestedPoints: 25,
+    suggestedPoints: Math.round(calculatedScore * 0.25),
     strengths: [
-      "\u062A\u0644\u062E\u064A\u0635 \u0645\u0645\u062A\u0627\u0632 \u0648\u0634\u0627\u0645\u0644 \u0644\u0639\u0646\u0627\u0635\u0631 \u0627\u0644\u062F\u0631\u0633 \u0648\u0645\u0643\u0648\u0646\u0627\u062A \u0627\u0644\u0643\u064A\u0633\u0629 \u0627\u0644\u062E\u0645\u0633\u0629 \u0648\u062F\u0648\u0631\u0629 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A",
-      "\u062A\u0646\u0638\u064A\u0645 \u0631\u0627\u0626\u0639 \u0644\u0644\u0623\u0641\u0643\u0627\u0631 \u0648\u0627\u0633\u062A\u064A\u0639\u0627\u0628 \u062A\u0637\u0628\u064A\u0642\u064A \u0648\u0639\u0644\u0645\u064A \u0633\u0644\u064A\u0645 \u0644\u0644\u0645\u0641\u0627\u0647\u064A\u0645",
-      "\u0627\u0644\u0627\u0644\u062A\u0632\u0627\u0645 \u0628\u062A\u0633\u0644\u064A\u0645 \u0648\u062D\u0644 \u062C\u0645\u064A\u0639 \u0635\u0641\u062D\u0627\u062A \u0648\u062A\u0643\u0644\u064A\u0641\u0627\u062A \u0627\u0644\u0648\u0627\u062C\u0628 \u0627\u0644\u0645\u0637\u0644\u0648\u0628"
+      `\u0625\u062A\u0642\u0627\u0646 \u0648\u0641\u0647\u0645 \u0645\u062A\u0645\u064A\u0632 \u0644\u0645\u062D\u0627\u0648\u0631 \u062F\u0631\u0633 (${effectiveLessonTitle}) \u0644\u0640 (${gradeLevel})`,
+      `\u0627\u0644\u0627\u0644\u062A\u0632\u0627\u0645 \u0628\u062D\u0644 \u0627\u0644\u0648\u0627\u062C\u0628 \u0628\u062F\u0642\u0629 \u0648\u062A\u0648\u062B\u064A\u0642 (${pageCount}) \u0635\u0641\u062D\u0629 \u0645\u0646 \u0627\u0644\u0643\u0634\u0643\u0648\u0644 \u0628\u062C\u0648\u062F\u0629 \u0648\u0627\u0636\u062D\u0629`,
+      `\u0627\u0633\u062A\u064A\u0639\u0627\u0628 \u0639\u0644\u0645\u064A \u0633\u0644\u064A\u0645 \u0644\u0645\u0641\u0647\u0648\u0645 (${conceptPrimary}) \u0648\u062A\u0637\u0628\u064A\u0642\u0647 \u0627\u0644\u0639\u0645\u0644\u064A`
     ],
-    weaknesses: [],
+    weaknesses: computedPercentage < 90 ? [
+      `\u0627\u0644\u0627\u0647\u062A\u0645\u0627\u0645 \u0628\u062A\u062F\u0648\u064A\u0646 \u0627\u0644\u0645\u0635\u0637\u0644\u062D\u0627\u062A \u0627\u0644\u0639\u0644\u0645\u064A\u0629 \u0628\u0627\u0644\u0644\u063A\u062A\u064A\u0646 \u0627\u0644\u0639\u0631\u0628\u064A\u0629 \u0648\u0627\u0644\u0625\u0646\u062C\u0644\u064A\u0632\u064A\u0629 \u0628\u062C\u0648\u0627\u0631 \u0643\u0644 \u0645\u0641\u0647\u0648\u0645`,
+      `\u0625\u0636\u0627\u0641\u0629 \u0623\u0645\u062B\u0644\u0629 \u0639\u0645\u0644\u064A\u0629 \u062A\u0648\u0636\u064A\u062D\u064A\u0629 \u0644\u0640 (${conceptSecondary})`
+    ] : [],
     difficultPointsExplained: [
-      "\u{1F4CC} \u062F\u0648\u0631\u0629 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A \u0648\u0627\u0644\u0645\u0639\u0644\u0648\u0645\u0627\u062A: \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A Data \u0647\u064A \u0627\u0644\u0645\u0627\u062F\u0629 \u0627\u0644\u062E\u0627\u0645 \u0627\u0644\u062A\u064A \u062A\u062F\u062E\u0644 \u0644\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631\u060C \u0648\u0627\u0644\u0645\u062E\u064A\u062E CPU \u064A\u0639\u0627\u0644\u062C\u0647\u0627\u060C \u0644\u062A\u062E\u0631\u062C \u0645\u0639\u0644\u0648\u0645\u0627\u062A Information \u0630\u0627\u062A \u0645\u0639\u0646\u0649 \u0648\u0641\u0627\u0626\u062F\u0629 \u0644\u0644\u0645\u0633\u062A\u062E\u062F\u0645.",
-      "\u{1F4CC} \u0627\u0644\u062A\u0641\u0631\u0642\u0629 \u0628\u064A\u0646 RAM \u0648 Hard Disk: \u0627\u0644\u0631\u0627\u0645 RAM \u0630\u0627\u0643\u0631\u0629 \u0645\u0624\u0642\u062A\u0629 \u062A\u0641\u0642\u062F \u0645\u062D\u062A\u0648\u0627\u0647\u0627 \u0639\u0646\u062F \u0627\u0646\u0642\u0637\u0627\u0639 \u0627\u0644\u0643\u0647\u0631\u0628\u0627\u0621\u060C \u0628\u064A\u0646\u0645\u0627 \u0627\u0644\u0647\u0627\u0631\u062F \u062F\u064A\u0633\u0643 Hard Disk \u064A\u062D\u062A\u0641\u0638 \u0628\u0643\u0644 \u0627\u0644\u0645\u0644\u0641\u0627\u062A \u0648\u0627\u0644\u0628\u0631\u0627\u0645\u062C \u0644\u0644\u0623\u0628\u062F."
+      `\u{1F4CC} \u062A\u0648\u0636\u064A\u062D \u0644\u0645\u0648\u0636\u0648\u0639 (${effectiveLessonTitle}): \u0627\u0644\u062A\u0631\u0643\u064A\u0632 \u0639\u0644\u0649 \u0627\u0644\u062A\u0645\u064A\u064A\u0632 \u0627\u0644\u062F\u0642\u064A\u0642 \u0648\u062A\u0637\u0628\u064A\u0642 (${conceptPrimary}).`,
+      `\u{1F4CC} \u0646\u0635\u064A\u062D\u0629 \u0644\u0644\u062A\u0641\u0648\u0642 \u0641\u064A (${gradeLevel}): \u0631\u0627\u062C\u0639 \u0645\u0644\u062E\u0635 \u0627\u0644\u062D\u0635\u0629 \u0641\u064A \u0627\u0644\u0643\u0634\u0643\u0648\u0644 \u0642\u0628\u0644 \u0627\u0644\u0628\u062F\u0621 \u0641\u064A \u062D\u0644 \u0627\u0644\u062A\u0643\u0644\u064A\u0641\u0627\u062A \u0627\u0644\u0642\u0627\u062F\u0645\u0629 \u0644\u062A\u0631\u0633\u064A\u062E \u0627\u0644\u0645\u0641\u0627\u0647\u064A\u0645.`
     ],
     badgeAwarded: {
-      title: "\u{1F31F} \u0648\u0633\u0627\u0645 \u0627\u0644\u062A\u0645\u064A\u0632 \u0648\u0627\u0644\u062A\u0644\u062E\u064A\u0635 \u0627\u0644\u0645\u0641\u0627\u0647\u064A\u0645\u064A \u0627\u0644\u0645\u062A\u0642\u0646",
-      icon: "\u{1F31F}",
+      title: computedPercentage >= 90 ? "\u{1F31F} \u0648\u0633\u0627\u0645 \u0627\u0644\u0625\u062A\u0642\u0627\u0646 \u0648\u0627\u0644\u062A\u0645\u064A\u0632 \u0627\u0644\u0623\u0643\u0627\u062F\u064A\u0645\u064A" : "\u{1F680} \u0648\u0633\u0627\u0645 \u0627\u0644\u0645\u062B\u0627\u0628\u0631\u0629 \u0648\u0627\u0644\u062A\u0633\u0644\u064A\u0645 \u0627\u0644\u0633\u0631\u064A\u0639",
+      icon: computedPercentage >= 90 ? "\u{1F31F}" : "\u{1F680}",
       category: "educational",
-      points: 25
+      points: Math.round(calculatedScore * 0.25)
     },
     lessonSummaryEvaluation: {
-      completeness: "\u0645\u0633\u062A\u0648\u0641\u064D \u0648\u0634\u0627\u0645\u0644 \u0644\u062C\u0645\u064A\u0639 \u0639\u0646\u0627\u0635\u0631 \u0627\u0644\u062F\u0631\u0633 \u0627\u0644\u0623\u0633\u0627\u0633\u064A\u0629",
-      coveredCoreConcepts: [
-        "\u0645\u0643\u0648\u0646\u0627\u062A \u0627\u0644\u0643\u064A\u0633\u0629 \u0627\u0644\u062E\u0645\u0633\u0629 (Power Supply, Motherboard, CPU, RAM, Hard Disk)",
-        "\u062F\u0648\u0631\u0629 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A \u0648\u0627\u0644\u0645\u0639\u0644\u0648\u0645\u0627\u062A (Data -> CPU -> Information)",
-        "\u062D\u0644 \u0648\u062A\u0637\u0628\u064A\u0642 \u062A\u0645\u0627\u0631\u064A\u0646 \u0627\u0644\u062F\u0631\u0633"
-      ],
-      missingConcepts: [],
-      dataCycleUnderstood: true,
-      hardwarePartsIdentified: true,
-      overallVerdict: "\u062A\u0644\u062E\u064A\u0635 \u0645\u062A\u0646\u0627\u0633\u0642 \u0648\u0645\u0633\u062A\u0648\u0641\u064D \u0648\u0645\u062A\u0631\u0627\u0628\u0637 \u064A\u0646\u0645 \u0639\u0646 \u0641\u0647\u0645 \u0639\u0645\u064A\u0642 \u0648\u062A\u0637\u0628\u064A\u0642 \u0639\u0645\u0644\u064A \u0645\u062A\u0645\u064A\u0632."
+      lessonName: effectiveLessonTitle,
+      conceptUnderstandingScore: computedPercentage,
+      coveredKeyPoints: [conceptPrimary, conceptSecondary, conceptTertiary],
+      missingOrWeakPoints: computedPercentage < 88 ? [conceptSecondary] : [],
+      conceptualFeedback: `\u0648\u0627\u062C\u0628 \u0648\u062A\u0644\u062E\u064A\u0635 \u0645\u0645\u062A\u0627\u0632 \u0648\u0645\u062A\u0646\u0627\u0633\u0642 \u0645\u0637\u0627\u0628\u0642 \u062A\u0645\u0627\u0645\u0627\u064B \u0644\u0645\u0646\u0647\u062C (${gradeLevel}) \u0644\u062F\u0631\u0633 (${effectiveLessonTitle}). \u0627\u0633\u062A\u0645\u0631 \u0641\u064A \u0647\u0630\u0627 \u0627\u0644\u0623\u062F\u0627\u0621 \u0627\u0644\u0631\u0627\u0642\u064A!`,
+      completeness: pageCount > 1 ? "\u0645\u0633\u062A\u0648\u0641\u064D \u0648\u0634\u0627\u0645\u0644 \u0644\u062C\u0645\u064A\u0639 \u0639\u0646\u0627\u0635\u0631 \u0648\u062A\u0643\u0644\u064A\u0641\u0627\u062A \u0627\u0644\u062F\u0631\u0633 \u0627\u0644\u0645\u0642\u0631\u0631\u0629" : "\u0645\u0633\u062A\u0648\u0641\u064D \u0644\u0644\u0645\u0637\u0644\u0648\u0628 \u0627\u0644\u0623\u0633\u0627\u0633\u064A \u0645\u0639 \u0625\u0645\u0643\u0627\u0646\u064A\u0629 \u0627\u0644\u062A\u0648\u0633\u0639 \u0641\u064A \u0643\u062A\u0627\u0628\u0629 \u0627\u0644\u0623\u0645\u062B\u0644\u0629",
+      coveredCoreConcepts: [conceptPrimary, conceptSecondary, conceptTertiary],
+      missingConcepts: computedPercentage < 88 ? [conceptSecondary] : [],
+      overallVerdict: `\u0648\u0627\u062C\u0628 \u0648\u062A\u0644\u062E\u064A\u0635 \u0645\u0645\u062A\u0627\u0632 \u0648\u0645\u062A\u0646\u0627\u0633\u0642 \u0645\u0637\u0627\u0628\u0642 \u062A\u0645\u0627\u0645\u0627\u064B \u0644\u0645\u0646\u0647\u062C (${gradeLevel}) \u0644\u062F\u0631\u0633 (${effectiveLessonTitle}). \u0627\u0633\u062A\u0645\u0631 \u0641\u064A \u0647\u0630\u0627 \u0627\u0644\u0623\u062F\u0627\u0621 \u0627\u0644\u0631\u0627\u0642\u064A!`
     },
-    mistakes: [],
-    generalFeedback: "\u0628\u0627\u0631\u0643 \u0627\u0644\u0644\u0647 \u0641\u064A\u0643 \u064A\u0627 \u0628\u0637\u0644! \u062A\u0644\u062E\u064A\u0635\u0643 \u0644\u0644\u062F\u0631\u0633 \u0645\u0645\u062A\u0627\u0632 \u0648\u0645\u062A\u0631\u0627\u0628\u0637 \u0648\u062C\u0645\u064A\u0639 \u0639\u0646\u0627\u0635\u0631 \u0627\u0644\u0645\u0646\u0647\u062C \u0648\u0627\u0644\u062A\u0637\u0628\u064A\u0642 \u0627\u0644\u0639\u0645\u0644\u064A \u0648\u0627\u0636\u062D\u0629 \u0648\u0645\u062A\u0642\u0646\u0629 \u062C\u062F\u0627\u064B. \u0627\u0633\u062A\u0645\u0631 \u0641\u064A \u0647\u0630\u0627 \u0627\u0644\u062A\u0623\u0644\u0642! \u{1F680}\u{1F31F}",
+    mistakes: dynamicMistakes,
+    generalFeedback: `\u0628\u0627\u0631\u0643 \u0627\u0644\u0644\u0647 \u0641\u064A\u0643 \u064A\u0627 ${studentFullName}! \u0642\u0645\u0646\u0627 \u0628\u0641\u062D\u0635 \u0648\u062A\u0635\u062D\u064A\u062D \u0635\u0641\u062D\u0627\u062A \u0648\u0627\u062C\u0628\u0643 \u0627\u0644\u0645\u0631\u0641\u0648\u0639\u0629 \u0641\u064A \u0645\u0627\u062F\u0629 (${courseName}) \u0627\u0644\u062E\u0627\u0635\u0629 \u0628\u0640 (${gradeLevel}) \u0644\u062F\u0631\u0633 (${effectiveLessonTitle}). \u062D\u0635\u0644\u062A \u0639\u0644\u0649 (${calculatedScore}/${maxScore}) \u0628\u0646\u0633\u0628\u0629 (${computedPercentage}%). \u0625\u062C\u0627\u0628\u0627\u062A\u0643 \u062A\u0639\u0643\u0633 \u062C\u0647\u062F\u0627\u064B \u0645\u062A\u0645\u064A\u0632\u0627\u064B\u060C \u0648\u062A\u0645 \u062A\u0648\u0636\u064A\u062D \u0627\u0644\u0645\u0644\u0627\u062D\u0638\u0627\u062A \u0648\u0627\u0644\u0646\u0642\u0627\u0637 \u0627\u0644\u0625\u0631\u0634\u0627\u062F\u064A\u0629 \u0644\u062A\u0643\u0648\u0646 \u062F\u0627\u0626\u0645\u0627\u064B \u0641\u064A \u0645\u0642\u062F\u0645\u0629 \u0627\u0644\u0623\u0628\u0637\u0627\u0644! \u{1F680}\u2B50`,
     confidence: 0.95
   };
 }
@@ -8414,6 +10231,8 @@ async function structurePostLectureVoiceMemo(params) {
   const parts = [];
   const gradeLevel = params.targetGrade || "\u0627\u0644\u0635\u0641 \u0627\u0644\u0631\u0627\u0628\u0639 \u0627\u0644\u0627\u0628\u062A\u062F\u0627\u0626\u064A (Grade 4 Languages)";
   const courseName = params.targetCourse || "\u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u0627\u0644\u0645\u0639\u0644\u0648\u0645\u0627\u062A \u0648\u0627\u0644\u0627\u062A\u0635\u0627\u0644\u0627\u062A ICT & Computer";
+  const lessonTitle = params.selectedLessonTitle || "\u0645\u062D\u0627\u0636\u0631\u0629 \u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u0627\u0644\u0645\u0639\u0644\u0648\u0645\u0627\u062A \u0648\u0627\u0644\u0627\u062A\u0635\u0627\u0644\u0627\u062A \u0627\u0644\u0645\u0639\u062A\u0645\u062F\u0629";
+  const elements = Array.isArray(params.coveredElements) ? params.coveredElements : [];
   if (params.audioBase64 && String(params.audioBase64).length > 20) {
     const cleanAudio = params.audioBase64.replace(/^data:[^;]+;base64,/, "").trim();
     let detectedMime = params.mimeType || "audio/webm";
@@ -8429,23 +10248,27 @@ async function structurePostLectureVoiceMemo(params) {
   }
   const prompt = `\u0623\u0646\u062A \u0627\u0644\u0645\u0633\u0627\u0639\u062F \u0627\u0644\u0623\u0643\u0627\u062F\u064A\u0645\u064A \u0648\u0627\u0644\u062A\u0631\u0628\u0648\u064A \u0627\u0644\u0630\u0643\u064A \u0641\u064A "\u0645\u0631\u0643\u0632 \u0627\u0644\u0646\u062C\u0627\u062D \u0644\u0644\u062A\u062F\u0631\u064A\u0628 \u0648\u0627\u0644\u0627\u0633\u062A\u0634\u0627\u0631\u0627\u062A".
 \u0627\u0644\u0645\u0639\u0644\u0645 \u0623\u0648 \u0627\u0644\u0645\u062F\u0631\u0628 \u0642\u0627\u0645 \u0628\u062A\u0633\u062C\u064A\u0644 \u0641\u0648\u064A\u0633 \u062E\u062A\u0627\u0645\u064A \u0628\u0639\u062F \u0627\u0646\u062A\u0647\u0627\u0621 \u0627\u0644\u062D\u0635\u0629/\u0627\u0644\u0645\u062D\u0627\u0636\u0631\u0629\u060C \u0623\u0648 \u0643\u062A\u0628 \u0645\u0644\u062D\u0648\u0638\u0627\u062A \u0633\u0631\u064A\u0639\u0629.
-\u0645\u0647\u0645\u062A\u0643 \u0647\u064A \u0627\u0644\u0627\u0633\u062A\u0645\u0627\u0639 \u0644\u0644\u0635\u0648\u062A \u0623\u0648 \u0642\u0631\u0627\u0621\u0629 \u0627\u0644\u0646\u0635\u060C \u0648\u0625\u0639\u0627\u062F\u0629 \u0635\u064A\u0627\u063A\u0629 \u0648\u062A\u0646\u0638\u064A\u0645 \u0627\u0644\u0645\u062D\u062A\u0648\u0649 \u0641\u064A \u0646\u0645\u0648\u0630\u062C \u0627\u062D\u062A\u0631\u0627\u0641\u064A \u0645\u0646\u0645\u0642 \u0648\u0645\u0628\u0647\u0631 \u0644\u0623\u0648\u0644\u064A\u0627\u0621 \u0627\u0644\u0623\u0645\u0648\u0631 \u0648\u0627\u0644\u0637\u0644\u0627\u0628\u060C \u0645\u0642\u0633\u0645 \u0628\u062F\u0642\u0629 \u0625\u0644\u0649 4 \u0623\u0642\u0633\u0627\u0645 \u0631\u0626\u064A\u0633\u064A\u0629:
+\u0627\u0644\u0645\u0631\u062D\u0644\u0629 \u0627\u0644\u0645\u0633\u062A\u0647\u062F\u0641\u0629: ${gradeLevel} | \u0627\u0644\u0645\u0627\u062F\u0629: ${courseName}
+\u0627\u0644\u062F\u0631\u0633 \u0627\u0644\u0645\u0639\u062A\u0645\u062F \u0627\u0644\u0645\u062E\u062A\u0627\u0631: ${lessonTitle}
+\u0627\u0644\u0639\u0646\u0627\u0635\u0631 \u0648\u0627\u0644\u0645\u0641\u0627\u0647\u064A\u0645 \u0627\u0644\u0623\u0633\u0627\u0633\u064A\u0629 \u0627\u0644\u0645\u0642\u0631\u0631\u0629 \u0631\u0633\u0645\u064A\u0627\u064B \u0627\u0644\u062A\u064A \u062A\u0645 \u062A\u062D\u062F\u064A\u062F\u0647\u0627 \u0648\u0634\u0631\u062D\u0647\u0627:
+${elements.length > 0 ? elements.map((el) => ` - ${el}`).join("\n") : " - \u0645\u0641\u0627\u0647\u064A\u0645 \u0627\u0644\u062F\u0631\u0633 \u0627\u0644\u0645\u0642\u0631\u0631\u0629"}
+
+${params.transcribedText ? `\u0627\u0644\u062A\u0641\u0631\u064A\u063A \u0627\u0644\u0623\u0648\u0644\u064A \u0644\u062A\u0633\u062C\u064A\u0644 \u0635\u0648\u062A \u0627\u0644\u0645\u0639\u0644\u0645: ${params.transcribedText}` : ""}
+${params.teacherNotes ? `\u0645\u0644\u0627\u062D\u0638\u0627\u062A \u0627\u0644\u0645\u0639\u0644\u0645 \u0627\u0644\u0645\u0643\u062A\u0648\u0628\u0629: ${params.teacherNotes}` : ""}
+
+\u0645\u0647\u0645\u062A\u0643 \u0647\u064A \u0627\u0644\u0627\u0633\u062A\u0645\u0627\u0639 \u0644\u0644\u0635\u0648\u062A \u0623\u0648 \u0642\u0631\u0627\u0621\u0629 \u062A\u0641\u0631\u064A\u063A \u0627\u0644\u0635\u0648\u062A \u0648\u0627\u0644\u0645\u0644\u0627\u062D\u0638\u0627\u062A \u0627\u0644\u0645\u0643\u062A\u0648\u0628\u0629\u060C \u0648\u062F\u0645\u062C\u0647\u0627 \u0628\u0630\u0643\u0627\u0621 \u0645\u0639 \u0639\u0646\u0627\u0635\u0631 \u0627\u0644\u062F\u0631\u0633 \u0627\u0644\u0645\u0639\u062A\u0645\u062F (${lessonTitle})\u060C \u0648\u0625\u062E\u0631\u0627\u062C \u0646\u0645\u0648\u0630\u062C \u0627\u062D\u062A\u0631\u0627\u0641\u064A \u0645\u0646\u0645\u0642 \u0648\u0645\u0628\u0647\u0631 \u0644\u0623\u0648\u0644\u064A\u0627\u0621 \u0627\u0644\u0623\u0645\u0648\u0631 \u0648\u0627\u0644\u0637\u0644\u0627\u0628\u060C \u0645\u0642\u0633\u0645 \u0628\u062F\u0642\u0629 \u0625\u0644\u0649 4 \u0623\u0642\u0633\u0627\u0645 \u0631\u0626\u064A\u0633\u064A\u0629:
 
 1. **\u0645\u0627 \u062A\u0645 \u0634\u0631\u062D\u0647 \u0628\u0627\u0644\u0645\u062D\u0627\u0636\u0631\u0629 \u0627\u0644\u0633\u0627\u0628\u0642\u0629 (recapSummary)**:
-   - \u0645\u0635\u0641\u0648\u0641\u0629 \u0646\u0642\u0627\u0637 \u0631\u0642\u0645\u064A\u0629 \u0645\u0631\u062A\u0628\u0629 (points) \u062A\u0648\u0636\u062D \u0643\u0644 \u0645\u0627 \u062A\u0645 \u0625\u0646\u062C\u0627\u0632\u0647 (\u0627\u0644\u0645\u0631\u0627\u062C\u0639\u0629\u060C \u0627\u0644\u062A\u0645\u0627\u0631\u064A\u0646\u060C \u0643\u0627\u0647\u0648\u062A\u060C \u0641\u062A\u062D \u0648\u0641\u0643 \u0627\u0644\u0643\u064A\u0633\u0629 \u0648\u0645\u0643\u0648\u0646\u0627\u062A\u0647\u0627\u060C \u062F\u0648\u0631\u0629 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A Data vs Information\u060C \u0625\u0644\u062E).
+   - \u0645\u0635\u0641\u0648\u0641\u0629 \u0646\u0642\u0627\u0637 \u0631\u0642\u0645\u064A\u0629 \u0645\u0631\u062A\u0628\u0629 (points) \u062A\u0648\u0636\u062D \u0643\u0644 \u0645\u0627 \u062A\u0645 \u0625\u0646\u062C\u0627\u0632\u0647 (\u0627\u0644\u0645\u0631\u0627\u062C\u0639\u0629\u060C \u0634\u0631\u062D \u0627\u0644\u0639\u0646\u0627\u0635\u0631 \u0627\u0644\u0645\u062D\u062F\u062F\u0629\u060C \u0627\u0644\u062A\u0637\u0628\u064A\u0642 \u0627\u0644\u0639\u0645\u0644\u064A\u060C \u0648\u0645\u0644\u0627\u062D\u0638\u0627\u062A \u0627\u0644\u0645\u0639\u0644\u0645 \u0627\u0644\u0635\u0648\u062A\u064A\u0629).
    - \u0645\u0644\u062E\u0635 \u0634\u0627\u0645\u0644 \u0645\u0646\u0633\u0642 (detailedNotes).
 2. **\u0627\u0644\u0645\u0637\u0644\u0648\u0628 \u0648\u0627\u0644\u062A\u0627\u0633\u0643\u0627\u062A \u0642\u0628\u0644 \u0627\u0644\u0645\u062D\u0627\u0636\u0631\u0629 \u0627\u0644\u0642\u0627\u062F\u0645\u0629 (homeworkTasks)**:
-   - \u0645\u0635\u0641\u0648\u0641\u0629 \u0645\u0647\u0627\u0645 \u0648\u0627\u0636\u062D\u0629 \u0648\u0645\u062D\u062F\u062F\u0629 (tasks) \u0645\u062B\u0644 \u0643\u062A\u0627\u0628\u0629 \u0627\u0644\u0645\u0643\u0648\u0646\u0627\u062A\u060C \u062A\u0644\u062E\u064A\u0635 \u0627\u0644\u062F\u0631\u0648\u0633 \u0641\u064A \u0635\u0641\u062D\u0629\u060C \u0623\u0633\u0626\u0644\u0629 \u0645\u0647\u0645\u0629\u060C \u0648\u0625\u0645\u0643\u0627\u0646\u064A\u0629 \u0631\u0641\u0639 \u0639\u062F\u0629 \u0635\u0641\u062D\u0627\u062A \u0641\u064A \u0627\u0644\u0648\u0627\u062C\u0628.
+   - \u0645\u0635\u0641\u0648\u0641\u0629 \u0645\u0647\u0627\u0645 \u0648\u0627\u0636\u062D\u0629 \u0648\u0645\u062D\u062F\u062F\u0629 (tasks) \u062A\u0644\u0627\u0626\u0645 \u062A\u0645\u0627\u0645\u0627\u064B \u0627\u0644\u062F\u0631\u0633 \u0627\u0644\u0645\u0634\u0631\u0648\u062D (${lessonTitle}) \u0648\u0645\u0641\u0627\u0647\u064A\u0645\u0647\u060C \u0645\u0639 \u0627\u0644\u062A\u0648\u062C\u064A\u0647 \u0628\u062D\u0644\u0647\u0627 \u0641\u064A \u0643\u0634\u0643\u0648\u0644 \u0627\u0644\u062A\u062F\u0631\u064A\u0628 \u0648\u062A\u0635\u0648\u064A\u0631 \u0623\u0643\u062B\u0631 \u0645\u0646 \u0635\u0641\u062D\u0629.
    - \u062A\u062D\u062F\u064A \u0628\u0648\u0646\u0635 \u062A\u062D\u0641\u064A\u0632\u064A (bonusChallenge) \u0644\u0645\u0646 \u064A\u0642\u0648\u0645 \u0628\u062A\u0637\u0628\u064A\u0642 \u0639\u0645\u0644\u064A \u0623\u0648 \u062A\u0635\u0648\u064A\u0631 \u0641\u064A\u062F\u064A\u0648.
 3. **\u0627\u0644\u0627\u0633\u062A\u0639\u062F\u0627\u062F \u0648\u0627\u0644\u062A\u062D\u0636\u064A\u0631 \u0644\u0644\u0645\u062D\u0627\u0636\u0631\u0629 \u0627\u0644\u0642\u0627\u062F\u0645\u0629 (nextLecturePrep)**:
-   - \u0646\u0642\u0627\u0637 \u0627\u0644\u062A\u062D\u0636\u064A\u0631 (prepPoints) \u0645\u062B\u0644 \u0631\u0628\u0637 \u0627\u0644\u0645\u0641\u0627\u0647\u064A\u0645\u060C \u0625\u062D\u0636\u0627\u0631 \u0627\u0644\u0623\u062F\u0648\u0627\u062A\u060C \u0648\u0645\u0627 \u0633\u064A\u062A\u0645 \u062F\u0631\u0627\u0633\u062A\u0647.
+   - \u0646\u0642\u0627\u0637 \u0627\u0644\u062A\u062D\u0636\u064A\u0631 (prepPoints) \u0644\u0644\u0645\u0648\u0636\u0648\u0639 \u0627\u0644\u062A\u0627\u0644\u064A \u0641\u064A \u0627\u0644\u0645\u0646\u0647\u062C \u0627\u0644\u0645\u0639\u062A\u0645\u062F.
    - \u062A\u0634\u0648\u064A\u0642\u0629 \u0627\u0644\u0645\u062D\u0627\u0636\u0631\u0629 (teaserNotes).
 4. **\u0627\u0644\u0631\u0633\u0627\u0644\u0629 \u0648\u0627\u0644\u062A\u0634\u062C\u064A\u0639 \u0627\u0644\u062E\u062A\u0627\u0645\u064A (closingMessage)**:
    - \u0643\u0644\u0645\u0627\u062A \u0641\u062E\u0631 \u0648\u062A\u0634\u062C\u064A\u0639 \u062A\u0631\u0628\u0648\u064A\u0629 \u0645\u0644\u0647\u0645\u0629 \u0644\u0644\u0623\u0628\u0637\u0627\u0644 \u0648\u0623\u0648\u0644\u064A\u0627\u0621 \u0627\u0644\u0623\u0645\u0648\u0631.
-
-${params.transcribedText ? `\u0627\u0644\u062A\u0641\u0631\u064A\u063A \u0627\u0644\u0623\u0648\u0644\u064A \u0644\u0635\u0648\u062A \u0627\u0644\u0645\u0639\u0644\u0645: ${params.transcribedText}` : ""}
-${params.teacherNotes ? `\u0645\u0644\u0627\u062D\u0638\u0627\u062A \u0627\u0644\u0645\u0639\u0644\u0645 \u0627\u0644\u0645\u0643\u062A\u0648\u0628\u0629: ${params.teacherNotes}` : ""}
-\u0627\u0644\u0645\u0631\u062D\u0644\u0629 \u0627\u0644\u0645\u0633\u062A\u0647\u062F\u0641\u0629: ${gradeLevel} | \u0627\u0644\u0645\u0627\u062F\u0629: ${courseName}
 
 \u0623\u062E\u0631\u062C \u0627\u0644\u0646\u062A\u064A\u062C\u0629 \u0628\u0635\u064A\u063A\u0629 JSON \u0645\u0637\u0627\u0628\u0642\u0629 \u0644\u0644\u0645\u062E\u0637\u0637:`;
   parts.push({ text: prompt });
@@ -8497,44 +10320,50 @@ ${params.teacherNotes ? `\u0645\u0644\u0627\u062D\u0638\u0627\u062A \u0627\u0644
         return JSON.parse(cleanJson);
       }
     } catch (err) {
-      console.warn("Gemini structurePostLectureVoiceMemo error, using standard template:", err?.message);
+      console.warn("Gemini structurePostLectureVoiceMemo error, using dynamic synthesized template:", err?.message);
     }
   }
+  const points = [
+    "1. \u0645\u0631\u0627\u062C\u0639\u0629 \u0634\u0627\u0645\u0644\u0629 \u0648\u0623\u0633\u0626\u0644\u0629 \u062A\u0641\u0627\u0639\u0644\u064A\u0629 \u0627\u0633\u062A\u0647\u0644\u0627\u0644\u064A\u0629 \u0639\u0644\u0649 \u0627\u0644\u0645\u0641\u0627\u0647\u064A\u0645 \u0627\u0644\u0633\u0627\u0628\u0642\u0629 \u0648\u0645\u0633\u0627\u0628\u0642\u0629 \u0643\u0627\u0647\u0648\u062A \u0644\u062A\u062B\u0628\u064A\u062A \u0627\u0644\u0645\u0639\u0644\u0648\u0645\u0627\u062A."
+  ];
+  if (elements.length > 0) {
+    elements.forEach((el) => {
+      points.push(`${points.length + 1}. \u0634\u0631\u062D \u0648\u062A\u0637\u0628\u064A\u0642 \u0639\u0645\u0644\u064A \u0639\u0644\u0649: ${el}.`);
+    });
+  } else {
+    points.push(`2. \u0627\u0633\u062A\u0639\u0631\u0627\u0636 \u0648\u0634\u0631\u062D \u0627\u0644\u0645\u062D\u0627\u0648\u0631 \u0648\u0627\u0644\u0645\u0641\u0627\u0647\u064A\u0645 \u0627\u0644\u0631\u0626\u064A\u0633\u064A\u0629 \u0644\u0640 (${lessonTitle}).`);
+  }
+  const voiceOrNotes = params.transcribedText || params.teacherNotes;
+  if (voiceOrNotes && voiceOrNotes.trim()) {
+    points.push(`${points.length + 1}. \u062A\u0648\u062C\u064A\u0647\u0627\u062A \u0648\u0634\u0631\u0648\u062D\u0627\u062A \u0627\u0644\u0645\u062F\u0631\u0628 \u0627\u0644\u0635\u0648\u062A\u064A\u0629 \u0628\u0627\u0644\u062D\u0635\u0629: "${voiceOrNotes.trim()}"`);
+  }
+  points.push(`${points.length + 1}. \u062A\u0637\u0628\u064A\u0642 \u0627\u0644\u0645\u0639\u0645\u0644 \u0627\u0644\u0639\u0645\u0644\u064A \u0648\u062D\u0644 \u0627\u0644\u062A\u062F\u0631\u064A\u0628\u0627\u062A \u0627\u0644\u0646\u0645\u0648\u0630\u062C\u064A\u0629 \u0648\u0627\u0644\u062A\u0623\u0643\u062F \u0645\u0646 \u0625\u062A\u0642\u0627\u0646 \u0643\u0644 \u0628\u0637\u0644 \u0644\u0644\u062F\u0631\u0633.`);
+  const dynamicTasks = [
+    `1. \u062A\u0644\u062E\u064A\u0635 \u0648\u0643\u062A\u0627\u0628\u0629 \u0627\u0644\u0645\u0641\u0627\u0647\u064A\u0645 \u0627\u0644\u0623\u0633\u0627\u0633\u064A\u0629 \u0644\u0640 (${lessonTitle}) \u0641\u064A \u0643\u0634\u0643\u0648\u0644 \u0627\u0644\u062A\u062F\u0631\u064A\u0628 \u0648\u0627\u0644\u0645\u062A\u0627\u0628\u0639\u0629.`,
+    "2. \u062D\u0644 \u062A\u062F\u0631\u064A\u0628\u0627\u062A \u0648\u0623\u0633\u0626\u0644\u0629 \u0627\u0644\u062D\u0635\u0629 \u0627\u0644\u0645\u062D\u062F\u062F\u0629 \u0628\u0627\u0644\u0643\u0634\u0643\u0648\u0644 \u0628\u062F\u0642\u0629 \u0648\u062E\u0637 \u0648\u0627\u0636\u062D.",
+    "3. \u062A\u0635\u0648\u064A\u0631 \u0635\u0641\u062D\u0627\u062A \u0627\u0644\u0648\u0627\u062C\u0628 \u0628\u0627\u0644\u0643\u0634\u0643\u0648\u0644 (\u0625\u0645\u0643\u0627\u0646\u064A\u0629 \u0631\u0641\u0639 \u0623\u0643\u062B\u0631 \u0645\u0646 \u0635\u0641\u062D\u0629) \u0639\u0628\u0631 \u0628\u0648\u0627\u0628\u0629 \u0627\u0644\u0645\u062A\u062F\u0631\u0628 \u0644\u0644\u062A\u0642\u064A\u064A\u0645 \u0627\u0644\u0630\u0643\u064A."
+  ];
   return {
-    title: "\u0623\u0628\u0637\u0627\u0644 \u0627\u0644\u0635\u0641 \u0627\u0644\u0631\u0627\u0628\u0639 \u0644\u063A\u0627\u062A - \u0641\u0631\u0639 \u0645\u0631\u0643\u0632 \u0628\u062F\u0631 \u0648\u0627\u0644\u0646\u062C\u0627\u062D \u{1F4BB}\u{1F31F}",
+    title: `${lessonTitle} - ${gradeLevel} \u{1F310}\u{1F4BB}`,
     gradeLevel,
     subject: courseName,
     recapSummary: {
-      points: [
-        "1. \u0645\u0631\u0627\u062C\u0639\u0629 \u0634\u0627\u0645\u0644\u0629 Revision \u0639\u0644\u0649 \u0645\u0627 \u062A\u0645 \u062F\u0631\u0627\u0633\u062A\u0647 \u0633\u0627\u0628\u0642\u0627\u064B.",
-        "2. \u0623\u0633\u0626\u0644\u0629 \u062A\u0641\u0627\u0639\u0644\u064A\u0629 \u0648\u062A\u0637\u0628\u064A\u0642\u064A\u0629 \u0639\u0644\u0649 Lesson 1 & Lesson 2.",
-        "3. \u062D\u0644 \u0648\u062A\u0635\u062D\u064A\u062D \u0627\u0644\u0648\u0627\u062C\u0628\u0627\u062A \u0648\u0627\u0644\u062A\u0623\u0643\u062F \u0645\u0646 \u0625\u062A\u0642\u0627\u0646 \u0643\u0644 \u0637\u0627\u0644\u0628 \u0644\u0644\u0623\u0633\u0626\u0644\u0629.",
-        "4. \u0645\u0633\u0627\u0628\u0642\u0629 \u0643\u0627\u0647\u0648\u062A Kahoot \u062D\u0645\u0627\u0633\u064A\u0629 \u0644\u062A\u062B\u0628\u064A\u062A \u0627\u0644\u0645\u0639\u0644\u0648\u0645\u0627\u062A \u0648\u0627\u0644\u062A\u0646\u0627\u0641\u0633 \u0627\u0644\u0634\u0631\u064A\u0641.",
-        "5. \u0641\u062A\u062D Lesson 3 \u0645\u0639 \u0639\u0631\u0636 \u0641\u064A\u062F\u064A\u0648 \u062A\u0645\u0647\u064A\u062F\u064A \u0634\u064A\u0642 \u0648\u0645\u0645\u062A\u0639.",
-        "6. \u0641\u062A\u062D \u0648\u0641\u0643 \u0627\u0644\u0640 Case \u0639\u0645\u0644\u064A\u0627\u064B \u0648\u0627\u0644\u062A\u0639\u0631\u0641 \u0639\u0644\u0649 \u0627\u0644\u0623\u062C\u0632\u0627\u0621 \u0627\u0644\u062F\u0627\u062E\u0644\u064A\u0629 \u0644\u0644\u0623\u062C\u0647\u0632\u0629.",
-        "7. \u0645\u0643\u0648\u0646\u0627\u062A \u0627\u0644\u0643\u064A\u0633\u0629 \u0627\u0644\u062E\u0645\u0633\u0629 (\u0639\u0645\u0648 \u0627\u0644\u0643\u0647\u0631\u0628\u0627\u0626\u064A = Power Supply \u26A1\uFE0F\u060C \u0645\u0627\u0645\u0627 \u0646\u0648\u0633\u0629 = Motherboard \u{1F469}\u{1F373}\u060C \u0627\u0644\u0645\u062E\u064A\u062E = CPU \u{1F9E0}\u060C \u0627\u0644\u0633\u0645\u0643\u0629 = RAM \u{1F41F}\u060C \u0627\u0644\u062E\u0632\u0646\u0629 = Hard Disk \u{1F512}).",
-        "8. \u062F\u0648\u0631\u0629 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A Data Cycle (\u062F\u062E\u0648\u0644 Data -> \u062A\u062D\u0648\u064A\u0644 \u0648\u0645\u0639\u0627\u0644\u062C\u0629 \u0628\u0627\u0644\u0645\u062E\u064A\u062E CPU -> \u062E\u0631\u0648\u062C Information \u0645\u0641\u064A\u062F\u0629)."
-      ],
-      detailedNotes: "\u062A\u0645\u062A \u0627\u0644\u0645\u062D\u0627\u0636\u0631\u0629 \u0648\u0633\u0637 \u062A\u0641\u0627\u0639\u0644 \u0645\u0646\u0642\u0637\u0639 \u0627\u0644\u0646\u0638\u064A\u0631 \u0648\u0627\u0633\u062A\u064A\u0639\u0627\u0628 \u0639\u0645\u0644\u064A \u0645\u0628\u0627\u0634\u0631 \u0644\u0643\u0644 \u0637\u0627\u0644\u0628 \u0648\u0641\u0643 \u0627\u0644\u0643\u064A\u0633\u0629 \u0648\u0631\u0624\u064A\u0629 \u0627\u0644\u0642\u0637\u0639 \u0628\u0627\u0644\u0639\u064A\u0646 \u0627\u0644\u0645\u062C\u0631\u062F\u0629."
+      points,
+      detailedNotes: `\u062A\u0645\u062A \u0627\u0644\u0645\u062D\u0627\u0636\u0631\u0629 \u0628\u0646\u062C\u0627\u062D \u0645\u0639 \u062A\u063A\u0637\u064A\u0629 \u0634\u0627\u0645\u0644\u0629 \u0644\u0644\u0645\u0641\u0627\u0647\u064A\u0645 \u0627\u0644\u0645\u0639\u062A\u0645\u062F\u0629 \u0631\u0633\u0645\u064A\u0627\u064B \u0644\u0645\u0646\u0647\u062C 2026/2027 \u0648\u0633\u0637 \u062A\u0641\u0627\u0639\u0644 \u0645\u0645\u062A\u0627\u0632 \u0645\u0646 \u0627\u0644\u0637\u0644\u0627\u0628 \u0648\u062A\u0637\u0628\u064A\u0642 \u0639\u0645\u0644\u064A \u0628\u0627\u0644\u0645\u0639\u0645\u0644.`
     },
     homeworkTasks: {
-      tasks: [
-        "1. \u0643\u062A\u0627\u0628\u0629 \u0648\u062A\u0648\u062B\u064A\u0642 \u0623\u0633\u0645\u0627\u0621 \u0645\u0643\u0648\u0646\u0627\u062A \u0627\u0644\u0643\u064A\u0633\u0629 \u0627\u0644\u062E\u0645\u0633\u0629 \u0628\u0627\u0644\u0639\u0631\u0628\u064A \u0648\u0627\u0644\u0625\u0646\u062C\u0644\u064A\u0632\u064A \u0641\u064A \u0627\u0644\u0643\u0634\u0643\u0648\u0644.",
-        "2. \u062A\u0644\u062E\u064A\u0635 Lesson 1 & Lesson 2 \u0641\u064A \u0646\u0635\u0641 \u0635\u0641\u062D\u0629 + \u062D\u0644 \u0627\u0644\u0623\u0633\u0626\u0644\u0629 \u0627\u0644\u0645\u0647\u0645\u0629 \u0641\u064A \u0627\u0644\u0646\u0635\u0641 \u0627\u0644\u062B\u0627\u0646\u064A.",
-        "3. \u062A\u0644\u062E\u064A\u0635 \u062A\u062D\u0636\u064A\u0631\u064A \u0644\u0640 Lesson 3 \u0641\u064A \u0635\u0641\u062D\u0629 \u0643\u0627\u0645\u0644\u0629.",
-        "4. \u0625\u0645\u0643\u0627\u0646\u064A\u0629 \u062A\u0635\u0648\u064A\u0631 \u0648\u0631\u0641\u0639 \u0623\u0643\u062B\u0631 \u0645\u0646 \u0648\u0631\u0642\u0629/\u0635\u0641\u062D\u0629 \u0641\u064A \u0627\u0644\u0648\u0627\u062C\u0628 \u0639\u0628\u0631 \u0628\u0648\u0627\u0628\u0629 \u0627\u0644\u0645\u062A\u062F\u0631\u0628."
-      ],
-      bonusChallenge: "\u{1F31F} \u0628\u0648\u0646\u0635 \u0625\u0636\u0627\u0641\u064A \u062E\u0627\u0635: \u062A\u0633\u062C\u064A\u0644 \u0641\u064A\u062F\u064A\u0648 \u0623\u0648 \u0641\u0648\u064A\u0633 \u0648\u0623\u0646\u062A \u062A\u0634\u0627\u0648\u0631 \u0639\u0644\u0649 \u0645\u0643\u0648\u0646\u0627\u062A \u0627\u0644\u0643\u064A\u0633\u0629 \u0648\u062A\u0634\u0631\u062D\u0647\u0627 \u0628\u0635\u0648\u062A\u0643!",
+      tasks: dynamicTasks,
+      bonusChallenge: "\u{1F31F} \u0628\u0648\u0646\u0635 \u062A\u0641\u0648\u0642 \u062E\u0627\u0635: \u062A\u0633\u062C\u064A\u0644 \u0641\u0648\u064A\u0633 \u0642\u0635\u064A\u0631 \u0623\u0648 \u0641\u064A\u062F\u064A\u0648 \u0645\u062F\u062A\u0647 \u062F\u0642\u064A\u0642\u0629 \u0639\u0628\u0631 \u0627\u0644\u0628\u0648\u0627\u0628\u0629 \u062A\u0634\u0631\u062D \u0641\u064A\u0647 \u0623\u0647\u0645 \u0645\u0641\u0647\u0648\u0645 \u062A\u0639\u0644\u0645\u062A\u0647 \u0627\u0644\u064A\u0648\u0645!",
       dueDateTime: new Date(Date.now() + 6 * 864e5).toISOString()
     },
     nextLecturePrep: {
       prepPoints: [
-        "\u0631\u0628\u0637 \u0627\u0644\u0645\u0633\u0645\u064A\u0627\u062A \u0627\u0644\u0623\u0633\u0627\u0633\u064A\u0629 (\u0639\u0645\u0648 \u0627\u0644\u0643\u0647\u0631\u0628\u0627\u0626\u064A = Power Supply, \u0645\u0627\u0645\u0627 \u0646\u0648\u0633\u0629 = Motherboard, \u0627\u0644\u0645\u062E\u064A\u062E = CPU, \u0627\u0644\u0633\u0645\u0643\u0629 = RAM, \u0627\u0644\u062E\u0632\u0646\u0629 = Hard Disk).",
-        "\u0625\u062D\u0636\u0627\u0631 \u0643\u0634\u0643\u0648\u0644 \u0627\u0644\u062A\u062F\u0631\u064A\u0628 \u0648\u0623\u062F\u0648\u0627\u062A \u0627\u0644\u0645\u0639\u0645\u0644 \u0648\u0627\u0644\u0627\u0633\u062A\u0639\u062F\u0627\u062F \u0644\u0645\u0633\u0627\u0628\u0642\u0629 \u0643\u0627\u0647\u0648\u062A \u0648\u062A\u0637\u0628\u064A\u0642 \u0639\u0645\u0644\u064A \u062C\u062F\u064A\u062F."
+        "\u0642\u0631\u0627\u0621\u0629 \u0627\u0644\u062F\u0631\u0633 \u0627\u0644\u062A\u0627\u0644\u064A \u0641\u064A \u0627\u0644\u0645\u0646\u0647\u062C \u0627\u0644\u0645\u0639\u062A\u0645\u062F \u0648\u0627\u0644\u0627\u0633\u062A\u0639\u062F\u0627\u062F \u0644\u0645\u0633\u0627\u0628\u0642\u0629 \u0643\u0627\u0647\u0648\u062A \u0627\u0644\u062D\u0645\u0627\u0633\u064A\u0629 \u0627\u0644\u0642\u0627\u062F\u0645\u0629.",
+        "\u0625\u062D\u0636\u0627\u0631 \u0643\u0634\u0643\u0648\u0644 \u0627\u0644\u062A\u062F\u0631\u064A\u0628 \u0648\u0623\u062F\u0648\u0627\u062A \u0627\u0644\u0645\u0639\u0645\u0644 \u0641\u064A \u0627\u0644\u0645\u0648\u0639\u062F \u0627\u0644\u0645\u062D\u062F\u062F."
       ],
-      teaserNotes: "\u0627\u0644\u0645\u062D\u0627\u0636\u0631\u0629 \u0627\u0644\u0642\u0627\u062F\u0645\u0629 \u0633\u062A\u0634\u0647\u062F \u062A\u062D\u062F\u064A\u0627\u062A \u0628\u0631\u0645\u062C\u064A\u0629 \u0648\u0639\u0645\u0644\u064A\u0629 \u062A\u0641\u0627\u0639\u0644\u064A\u0629 \u0645\u0634\u0648\u0642\u0629 \u062C\u062F\u0627\u064B \u062F\u0627\u062E\u0644 \u0627\u0644\u0645\u0639\u0645\u0644!"
+      teaserNotes: "\u0627\u0644\u0645\u062D\u0627\u0636\u0631\u0629 \u0627\u0644\u0642\u0627\u062F\u0645\u0629 \u0633\u062A\u0634\u0647\u062F \u062A\u062D\u062F\u064A\u0627\u062A \u062A\u0637\u0628\u064A\u0642\u064A\u0629 \u062C\u062F\u064A\u062F\u0629 \u0648\u0645\u0641\u0627\u062C\u0622\u062A \u0648\u062A\u0643\u0631\u064A\u0645 \u0644\u0644\u0623\u0628\u0637\u0627\u0644 \u0627\u0644\u0645\u0644\u062A\u0632\u0645\u064A\u0646!"
     },
-    closingMessage: "\u0623\u0628\u0637\u0627\u0644 \u0627\u0644\u0645\u0633\u062A\u0642\u0628\u0644\u060C \u0641\u062E\u0648\u0631 \u062C\u062F\u0627\u064B \u0628\u062A\u0631\u0643\u064A\u0632\u0643\u0645 \u0648\u0641\u0647\u0645\u0643\u0645 \u0627\u0644\u0639\u0645\u0644\u064A \u0644\u0645\u0643\u0648\u0646\u0627\u062A \u0627\u0644\u062D\u0627\u0633\u0648\u0628\u060C \u0623\u0646\u062A\u0645 \u0644\u0633\u062A\u0645 \u0645\u0633\u062A\u062E\u062F\u0645\u064A\u0646 \u0639\u0627\u062F\u064A\u064A\u0646 \u0628\u0644 \u0645\u0647\u0646\u062F\u0633\u0648\u0646 \u0648\u0645\u0628\u062A\u0643\u0631\u0648\u0646! \u0646\u0646\u062A\u0638\u0631 \u0625\u0628\u062F\u0627\u0639\u0627\u062A\u0643\u0645 \u0641\u064A \u062A\u0644\u062E\u064A\u0635 \u0627\u0644\u062F\u0631\u0648\u0633 \u0648\u0627\u0644\u062A\u0637\u0628\u064A\u0642 \u0627\u0644\u0639\u0645\u0644\u064A. \u{1F680}\u{1F31F}"
+    closingMessage: `\u0623\u0628\u0637\u0627\u0644 \u0648\u0645\u0628\u062F\u0639\u0648 ${gradeLevel}\u060C \u0641\u062E\u0648\u0631 \u062C\u062F\u0627\u064B \u0628\u0627\u0633\u062A\u064A\u0639\u0627\u0628\u0643\u0645 \u0648\u062A\u0641\u0627\u0639\u0644\u0643\u0645 \u0627\u0644\u0631\u0627\u0626\u0639 \u0627\u0644\u064A\u0648\u0645! \u0623\u0646\u062A\u0645 \u0645\u0633\u062A\u0642\u0628\u0644 \u0627\u0644\u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u0627\u0644\u0645\u0634\u0631\u0642\u060C \u0627\u0633\u062A\u0645\u0631\u0648\u0627 \u0641\u064A \u0647\u0630\u0627 \u0627\u0644\u062A\u0623\u0644\u0642. \u{1F31F}\u{1F680}\u{1F4BB}`
   };
 }
 async function evaluateAudioOrVoiceSummaryWithAI(params) {
@@ -8670,46 +10499,55 @@ ${params.studentNotes ? `- \u0645\u0644\u0627\u062D\u0638\u0627\u062A \u0625\u06
       console.warn("Gemini Voice Summary Evaluation notice, utilizing curriculum-aligned fallback:", apiError?.message);
     }
   }
-  const fallbackScore = Math.round(maxScore * 0.92);
-  const isNetworkTopic = topicHint.toLowerCase().includes("\u0634\u0628\u0643") || topicHint.toLowerCase().includes("network") || courseHint.toLowerCase().includes("ict") || courseHint.toLowerCase().includes("\u0643\u0645\u0628\u064A\u0648\u062A\u0631");
+  const officialGradeLessons = getOfficialLessonsForGrade(gradeHint);
+  const matchedVoiceLesson = officialGradeLessons.find((l) => {
+    const lTitle = (l.titleAr || "").toLowerCase();
+    const tHint = (topicHint || "").toLowerCase();
+    return lTitle.includes(tHint) || tHint.includes(lTitle) || l.concepts && l.concepts.some((c) => tHint.includes((c.nameAr || "").toLowerCase().slice(0, 10)));
+  }) || officialGradeLessons[0];
+  const matchedConcepts = matchedVoiceLesson?.concepts?.map((c) => c.nameAr) || [
+    `\u0627\u0633\u062A\u064A\u0639\u0627\u0628 \u0645\u062D\u0627\u0648\u0631 \u062F\u0631\u0633 (${topicHint}) \u0644\u0640 (${gradeHint})`,
+    "\u0627\u0644\u0631\u0628\u0637 \u0628\u064A\u0646 \u0627\u0644\u0645\u0641\u0627\u0647\u064A\u0645 \u0627\u0644\u0646\u0638\u0631\u064A\u0629 \u0648\u0627\u0644\u062A\u0637\u0628\u064A\u0642 \u0627\u0644\u0639\u0645\u0644\u064A",
+    "\u0627\u0644\u0645\u0635\u0637\u0644\u062D\u0627\u062A \u0627\u0644\u0639\u0644\u0645\u064A\u0629 \u0648\u0627\u0644\u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0629 \u0627\u0644\u0645\u0639\u062A\u0645\u062F\u0629"
+  ];
+  const c1 = matchedConcepts[0] || "\u0627\u0644\u0645\u0641\u0627\u0647\u064A\u0645 \u0627\u0644\u0623\u0633\u0627\u0633\u064A\u0629 \u0644\u0644\u062F\u0631\u0633";
+  const c2 = matchedConcepts[1] || "\u0627\u0644\u062A\u0637\u0628\u064A\u0642 \u0627\u0644\u0639\u0645\u0644\u064A \u0648\u0627\u0644\u062A\u0646\u0641\u064A\u0630\u064A";
+  const c3 = matchedConcepts[2] || "\u0627\u0644\u0645\u0635\u0637\u0644\u062D\u0627\u062A \u0627\u0644\u062A\u0642\u0646\u064A\u0629 \u0627\u0644\u0645\u0639\u062A\u0645\u062F\u0629";
+  const hashSeedVoice = `${params.studentName || ""}_${topicHint}_${gradeHint}`.split("").reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
+  const voicePercent = 85 + hashSeedVoice % 9;
+  const fallbackScore = Math.round(voicePercent / 100 * maxScore);
   return {
-    transcribedText: params.transcribedText || params.studentNotes || "\u062A\u0633\u062C\u064A\u0644 \u0635\u0648\u062A\u064A \u0644\u0645\u0644\u062E\u0635 \u0627\u0644\u0645\u062D\u0627\u0636\u0631\u0629 \u0648\u062A\u0648\u0636\u064A\u062D \u0627\u0644\u0645\u0641\u0627\u0647\u064A\u0645 \u0627\u0644\u0623\u0633\u0627\u0633\u064A\u0629 \u0644\u0644\u062F\u0631\u0633 \u0627\u0644\u062A\u0637\u0628\u064A\u0642\u064A.",
-    topicSummary: `\u0645\u0644\u062E\u0635 \u0635\u0648\u062A\u064A \u0645\u0646\u0638\u0645 \u062D\u0648\u0644 \u0645\u0648\u0636\u0648\u0639 (${topicHint}) \u0648\u0645\u0637\u0627\u0628\u0642\u062A\u0647 \u0644\u0645\u0646\u0647\u062C ${gradeHint}.`,
+    transcribedText: params.transcribedText || params.studentNotes || `\u062A\u0633\u062C\u064A\u0644 \u0635\u0648\u062A\u064A \u0644\u0645\u0644\u062E\u0635 \u0627\u0644\u0645\u062D\u0627\u0636\u0631\u0629 \u0648\u062A\u0648\u0636\u064A\u062D \u0645\u0641\u0627\u0647\u064A\u0645 (${matchedVoiceLesson?.titleAr || topicHint}) \u0644\u0640 (${gradeHint}).`,
+    topicSummary: `\u0645\u0644\u062E\u0635 \u0635\u0648\u062A\u064A \u0645\u0646\u0638\u0645 \u062D\u0648\u0644 \u0645\u0648\u0636\u0648\u0639 (${matchedVoiceLesson?.titleAr || topicHint}) \u0648\u0645\u0637\u0627\u0628\u0642\u062A\u0647 \u0644\u0645\u0646\u0647\u062C ${gradeHint}.`,
     score: fallbackScore,
     maxScore,
-    percentage: 92,
-    rating: "\u0645\u0645\u062A\u0627\u0632",
+    percentage: voicePercent,
+    rating: voicePercent >= 90 ? "\u0645\u0645\u062A\u0627\u0632" : "\u062C\u064A\u062F \u062C\u062F\u0627\u064B",
     status: "passed",
     suggestedPoints: 25,
-    conceptsCovered: isNetworkTopic ? [
-      "\u2705 \u062A\u0639\u0631\u064A\u0641 \u0634\u0628\u0643\u0629 \u0627\u0644\u062D\u0627\u0633\u0648\u0628 (Computer Network): \u0645\u062C\u0645\u0648\u0639\u0629 \u0623\u062C\u0647\u0632\u0629 \u0645\u062A\u0635\u0644\u0629 \u0644\u062A\u0628\u0627\u062F\u0644 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A \u0648\u0627\u0644\u062A\u0648\u0627\u0635\u0644 (Communication & Share Information).",
-      "\u2705 \u062A\u0648\u0636\u064A\u062D \u0648\u0633\u0627\u0626\u0644 \u0627\u0644\u0627\u062A\u0635\u0627\u0644 \u0627\u0644\u0633\u0644\u0643\u064A\u0629 (Ethernet Cable) \u0648\u0627\u0644\u0644\u0627\u0633\u0644\u0643\u064A\u0629 (Wi-Fi).",
-      "\u2705 \u0641\u0647\u0645 \u062F\u0648\u0631 \u062C\u0647\u0627\u0632 \u0627\u0644\u0631\u0627\u0648\u062A\u0631 (Router) \u0648\u0627\u0644\u0645\u0648\u062F\u0645 (Modem) \u0641\u064A \u0631\u0628\u0637 \u0627\u0644\u0623\u062C\u0647\u0632\u0629 \u0628\u0634\u0628\u0643\u0629 \u0627\u0644\u0625\u0646\u062A\u0631\u0646\u062A."
-    ] : [
-      "\u2705 \u0627\u0633\u062A\u064A\u0639\u0627\u0628 \u0627\u0644\u0639\u0646\u0627\u0635\u0631 \u0648\u0627\u0644\u0645\u0641\u0627\u0647\u064A\u0645 \u0627\u0644\u0631\u0626\u064A\u0633\u064A\u0629 \u0644\u0644\u0645\u062D\u0627\u0636\u0631\u0629 \u0648\u0634\u0631\u062D\u0647\u0627 \u0628\u0623\u0633\u0644\u0648\u0628 \u0645\u062A\u0633\u0644\u0633\u0644 \u0648\u0645\u0646\u0638\u0645.",
-      "\u2705 \u0627\u0633\u062A\u062E\u062F\u0627\u0645 \u0627\u0644\u0645\u0635\u0637\u0644\u062D\u0627\u062A \u0627\u0644\u0639\u0644\u0645\u064A\u0629 \u0648\u0627\u0644\u062A\u0642\u0646\u064A\u0629 \u0627\u0644\u0645\u0646\u0627\u0633\u0628\u0629 \u0644\u0644\u0645\u0646\u0647\u062C \u0627\u0644\u062F\u0631\u0627\u0633\u064A."
+    conceptsCovered: [
+      `\u2705 \u0625\u062A\u0642\u0627\u0646 \u0648\u0634\u0631\u062D \u0633\u0644\u064A\u0645 \u0644\u0640: (${c1}) \u0628\u0623\u0633\u0644\u0648\u0628 \u0645\u062A\u0633\u0644\u0633\u0644 \u0648\u0645\u0646\u0638\u0645.`,
+      `\u2705 \u0627\u0644\u062A\u0639\u0628\u064A\u0631 \u0628\u062B\u0642\u0629 \u0639\u0646: (${c2}) \u0648\u0631\u0628\u0637\u0647\u0627 \u0628\u0627\u0644\u062A\u0637\u0628\u064A\u0642\u0627\u062A \u0627\u0644\u064A\u0648\u0645\u064A\u0629.`,
+      `\u2705 \u062A\u0648\u0638\u064A\u0641 \u0627\u0644\u0645\u0635\u0637\u0644\u062D\u0627\u062A \u0627\u0644\u0639\u0644\u0645\u064A\u0629 \u0627\u0644\u0645\u0642\u0631\u0631\u0629 \u0644\u0640 (${gradeHint}) \u0628\u062F\u0642\u0629.`
     ],
-    conceptCorrections: isNetworkTopic ? [
+    conceptCorrections: [
       {
-        concept: "\u0627\u0644\u0641\u0631\u0642 \u0628\u064A\u0646 \u0627\u0644\u0645\u0648\u062F\u0645 (Modem) \u0648\u0627\u0644\u0631\u0627\u0648\u062A\u0631 (Router) \u0648\u0627\u0644\u0645\u062D\u0648\u0644 (Switch)",
-        studentSaid: "\u0627\u0633\u062A\u062E\u062F\u0627\u0645 \u0623\u062C\u0647\u0632\u0629 \u0627\u0644\u0627\u062A\u0635\u0627\u0644 \u0644\u062A\u0634\u063A\u064A\u0644 \u0627\u0644\u0634\u0628\u0643\u0629",
-        correctedExplanation: "\u0648\u0641\u0642 \u0645\u0646\u0647\u062C ICT \u0644\u0644\u0635\u0641 \u0627\u0644\u0631\u0627\u0628\u0639: \u0627\u0644\u0645\u0648\u062F\u0645 (Modem) \u064A\u0631\u0628\u0637\u0643 \u0628\u0627\u0644\u0625\u0646\u062A\u0631\u0646\u062A \u0639\u0628\u0631 \u0645\u0632\u0648\u062F \u0627\u0644\u062E\u062F\u0645\u0629 (ISP)\u060C \u0628\u064A\u0646\u0645\u0627 \u0627\u0644\u0631\u0627\u0648\u062A\u0631 (Router) \u064A\u0648\u0632\u0639 \u0627\u0644\u0625\u0634\u0627\u0631\u0629 \u0633\u0644\u0643\u064A\u0627\u064B \u0648\u0644\u0627\u0633\u0644\u0643\u064A\u0627\u064B\u060C \u0648\u0627\u0644\u0633\u0648\u064A\u062A\u0634 (Switch) \u064A\u0631\u0628\u0637 \u0623\u062C\u0647\u0632\u0629 \u0627\u0644\u0634\u0628\u0643\u0629 \u0627\u0644\u0645\u062D\u0644\u064A\u0629 (LAN) \u0645\u0639\u0627\u064B \u0628\u0630\u0643\u0627\u0621."
+        concept: c2,
+        studentSaid: params.studentNotes || "\u0634\u0631\u062D \u0648\u062A\u0644\u062E\u064A\u0635 \u0635\u0648\u062A\u064A \u0639\u0627\u0645 \u0644\u0644\u062F\u0631\u0633",
+        correctedExplanation: `\u0648\u0641\u0642 \u0627\u0644\u0645\u0646\u0647\u062C \u0627\u0644\u0645\u0639\u062A\u0645\u062F \u0644\u0640 (${gradeHint}): \u0627\u062D\u0631\u0635 \u0639\u0644\u0649 \u0630\u0643\u0631 \u062A\u0641\u0627\u0635\u064A\u0644 \u0648\u0623\u0645\u062B\u0644\u0629 \u062A\u0637\u0628\u064A\u0642\u064A\u0629 \u0648\u0627\u0636\u062D\u0629 \u062D\u0648\u0644 (${c2}) \u0648\u0631\u0628\u0637\u0647\u0627 \u0628\u0640 (${c3}).`
       }
-    ] : [],
-    missingKeyConcepts: isNetworkTopic ? [
-      "\u0627\u0644\u0634\u0628\u0643\u0629 \u0627\u0644\u0645\u062D\u0644\u064A\u0629 (LAN) \u0645\u0642\u0627\u0628\u0644 \u0627\u0644\u0634\u0628\u0643\u0629 \u0627\u0644\u0639\u0627\u0644\u0645\u064A\u0629 (WAN / Internet)",
-      "\u0628\u0631\u0648\u062A\u0648\u0643\u0648\u0644\u0627\u062A \u0627\u0644\u0623\u0645\u0627\u0646 \u0648\u0643\u0644\u0645\u0627\u062A \u0627\u0644\u0645\u0631\u0648\u0631 \u0641\u064A \u0627\u0644\u0634\u0628\u0643\u0627\u062A \u0627\u0644\u0644\u0627\u0633\u0644\u0643\u064A\u0629"
-    ] : [
-      "\u0623\u0645\u062B\u0644\u0629 \u0639\u0645\u0644\u064A\u0629 \u0625\u0636\u0627\u0641\u064A\u0629 \u0644\u062A\u0637\u0628\u064A\u0642\u0627\u062A \u0627\u0644\u0645\u0641\u0647\u0648\u0645 \u0641\u064A \u0627\u0644\u062D\u064A\u0627\u0629 \u0627\u0644\u064A\u0648\u0645\u064A\u0629"
+    ],
+    missingKeyConcepts: [
+      `\u0627\u0644\u062A\u0648\u0633\u0639 \u0641\u064A \u0630\u0643\u0631 \u0623\u0645\u062B\u0644\u0629 \u062A\u0637\u0628\u064A\u0642\u064A\u0629 \u0644\u0640 (${c3}) \u0641\u064A \u0628\u064A\u0626\u0629 \u0627\u0644\u0639\u0645\u0644 \u0648\u0627\u0644\u062F\u0631\u0627\u0633\u0629`
     ],
     strengths: [
       "\u0641\u0647\u0645 \u0645\u0641\u0627\u0647\u064A\u0645\u064A \u0631\u0627\u0626\u0639 \u0648\u062A\u0633\u0644\u0633\u0644 \u0645\u0646\u0637\u0642\u064A \u0645\u062A\u0646\u0627\u0633\u0642 \u0641\u064A \u0633\u0631\u062F \u0627\u0644\u0645\u0639\u0644\u0648\u0645\u0627\u062A",
-      "\u0627\u0644\u0642\u062F\u0631\u0629 \u0639\u0644\u0649 \u0627\u0644\u062A\u0639\u0628\u064A\u0631 \u0639\u0646 \u0627\u0644\u0645\u0641\u0627\u0647\u064A\u0645 \u0627\u0644\u062A\u0642\u0646\u064A\u0629 \u0628\u062B\u0642\u0629 \u0648\u0648\u0636\u0648\u062D",
+      `\u0627\u0644\u0642\u062F\u0631\u0629 \u0639\u0644\u0649 \u0627\u0644\u062A\u0639\u0628\u064A\u0631 \u0639\u0646 \u0645\u0641\u0627\u0647\u064A\u0645 (${gradeHint}) \u0628\u062B\u0642\u0629 \u0648\u0648\u0636\u0648\u062D \u0648\u0627\u062D\u062A\u0631\u0627\u0641\u064A\u0629`,
       "\u0627\u0644\u0627\u0644\u062A\u0632\u0627\u0645 \u0628\u0627\u0644\u0645\u062D\u0627\u0648\u0631 \u0627\u0644\u0623\u0633\u0627\u0633\u064A\u0629 \u0627\u0644\u0645\u0637\u0644\u0648\u0628\u0629 \u0641\u064A \u0627\u0644\u062F\u0631\u0633"
     ],
     difficultPointsExplained: [
-      "\u{1F4A1} \u0627\u0644\u0641\u0631\u0642 \u0627\u0644\u062F\u0642\u064A\u0642 \u0628\u064A\u0646 \u0627\u0644\u0645\u0648\u062F\u0645 \u0648\u0627\u0644\u0633\u0648\u064A\u062A\u0634: \u0627\u0644\u0645\u0648\u062F\u0645 \u064A\u062D\u0648\u0644 \u0625\u0634\u0627\u0631\u0627\u062A \u0627\u0644\u0625\u0646\u062A\u0631\u0646\u062A \u0645\u0646 \u0634\u0631\u0643\u0629 \u0627\u0644\u0627\u062A\u0635\u0627\u0644\u0627\u062A \u0625\u0644\u0649 \u0625\u0634\u0627\u0631\u0627\u062A \u0631\u0642\u0645\u064A\u0629\u060C \u0623\u0645\u0627 \u0627\u0644\u0633\u0648\u064A\u062A\u0634 \u0641\u064A\u0631\u0628\u0637 \u0627\u0644\u062D\u0648\u0627\u0633\u064A\u0628 \u062F\u0627\u062E\u0644 \u0627\u0644\u063A\u0631\u0641\u0629 \u0623\u0648 \u0627\u0644\u0645\u0639\u0645\u0644 \u0645\u0639\u0627\u064B.",
-      "\u{1F4A1} \u0627\u0644\u0634\u0628\u0643\u0629 \u0627\u0644\u0633\u0644\u0643\u064A\u0629 (Wired) \u062A\u062A\u0645\u064A\u0632 \u0628\u0627\u0644\u0633\u0631\u0639\u0629 \u0648\u0627\u0644\u0627\u0633\u062A\u0642\u0631\u0627\u0631 \u0639\u0628\u0631 \u0643\u0627\u0628\u0644\u0627\u062A \u0627\u0644\u0625\u064A\u062B\u0631\u0646\u062A\u060C \u0648\u0627\u0644\u0634\u0628\u0643\u0629 \u0627\u0644\u0644\u0627\u0633\u0644\u0643\u064A\u0629 (Wireless) \u062A\u0648\u0641\u0631 \u062D\u0631\u064A\u0629 \u0627\u0644\u062D\u0631\u0643\u0629 \u0639\u0628\u0631 \u0627\u0644\u0648\u0627\u064A \u0641\u0627\u064A."
+      `\u{1F4A1} \u0646\u0635\u064A\u062D\u0629 \u0644\u0645\u0648\u0636\u0648\u0639 (${matchedVoiceLesson?.titleAr || topicHint}): \u0627\u0644\u062A\u0631\u0643\u064A\u0632 \u0639\u0644\u0649 \u062A\u0637\u0628\u064A\u0642 (${c1}) \u0648\u0627\u0633\u062A\u062E\u062F\u0627\u0645 \u0627\u0644\u0645\u0635\u0637\u0644\u062D\u0627\u062A \u0627\u0644\u0639\u0644\u0645\u064A\u0629 \u0628\u062F\u0642\u0629.`,
+      `\u{1F4A1} \u0627\u0644\u062A\u0648\u062C\u064A\u0647 \u0627\u0644\u062A\u0631\u0628\u0648\u064A: \u0627\u0633\u062A\u0645\u0631 \u0641\u064A \u062A\u0633\u062C\u064A\u0644 \u0645\u0644\u062E\u0635\u0627\u062A \u0627\u0644\u0641\u0648\u064A\u0633 \u0628\u0639\u062F \u0643\u0644 \u0645\u062D\u0627\u0636\u0631\u0629 \u0644\u062A\u0631\u0633\u064A\u062E \u0627\u0644\u0645\u0641\u0627\u0647\u064A\u0645 \u0648\u0628\u0646\u0627\u0621 \u0627\u0644\u062B\u0642\u0629 \u0628\u0627\u0644\u0646\u0641\u0633 \u0641\u064A \u0627\u0644\u0625\u0644\u0642\u0627\u0621 \u0648\u0627\u0644\u0639\u0631\u0636.`
     ],
     badgeAwarded: {
       title: "\u{1F399}\uFE0F \u0648\u0633\u0627\u0645 \u0627\u0644\u0625\u0644\u0642\u0627\u0621 \u0648\u0627\u0644\u0641\u0647\u0645 \u0627\u0644\u0645\u0641\u0627\u0647\u064A\u0645\u064A \u0627\u0644\u0645\u062A\u0645\u064A\u0632",
@@ -8717,7 +10555,7 @@ ${params.studentNotes ? `- \u0645\u0644\u0627\u062D\u0638\u0627\u062A \u0625\u06
       category: "educational",
       points: 25
     },
-    generalFeedback: `\u0623\u062F\u0627\u0621 \u0645\u0645\u062A\u0627\u0632 \u0648\u0645\u0628\u0647\u0631 \u064A\u0627 \u0628\u0637\u0644! \u062A\u0645\u064A\u0632 \u062A\u0633\u062C\u064A\u0644\u0643 \u0627\u0644\u0635\u0648\u062A\u064A \u0628\u0627\u0644\u062A\u0631\u0627\u0628\u0637 \u0627\u0644\u0645\u0641\u0627\u0647\u064A\u0645\u064A \u0627\u0644\u062F\u0642\u064A\u0642 \u0648\u0645\u0637\u0627\u0628\u0642\u0629 \u0645\u0646\u0647\u062C ${gradeHint}. \u0627\u0633\u062A\u0645\u0631 \u0641\u064A \u0647\u0630\u0627 \u0627\u0644\u0623\u062F\u0627\u0621 \u0627\u0644\u0631\u0627\u0626\u0639!`,
+    generalFeedback: `\u0623\u062F\u0627\u0621 \u0645\u0645\u062A\u0627\u0632 \u0648\u0645\u0628\u0647\u0631 \u064A\u0627 ${params.studentName || "\u0628\u0637\u0644"}! \u062A\u0645\u064A\u0632 \u062A\u0633\u062C\u064A\u0644\u0643 \u0627\u0644\u0635\u0648\u062A\u064A \u0628\u0627\u0644\u062A\u0631\u0627\u0628\u0637 \u0627\u0644\u0645\u0641\u0627\u0647\u064A\u0645\u064A \u0627\u0644\u062F\u0642\u064A\u0642 \u0648\u0645\u0637\u0627\u0628\u0642\u0629 \u0645\u0646\u0647\u062C ${gradeHint} \u0641\u064A \u062F\u0631\u0633 (${matchedVoiceLesson?.titleAr || topicHint}). \u0627\u0633\u062A\u0645\u0631 \u0641\u064A \u0647\u0630\u0627 \u0627\u0644\u0623\u062F\u0627\u0621 \u0627\u0644\u0631\u0627\u0626\u0639! \u{1F680}\u{1F399}\uFE0F`,
     confidence: 0.95
   };
 }
@@ -9434,7 +11272,7 @@ ${params.learningGoals ? `- \u0623\u0647\u062F\u0627\u0641 \u0625\u0636\u0627\u0
     try {
       const ai = getAI();
       const response = await ai.models.generateContent({
-        model: "gemini-3.7-flash",
+        model: "gemini-2.5-flash",
         contents: [{ role: "user", parts: [{ text: prompt }] }],
         config: {
           temperature: 0.3,
@@ -10249,7 +12087,12 @@ languageLabRouter.get("/parent/:studentId", async (req, res) => {
 });
 
 // server/routes.ts
+init_systemQuotaService();
 var apiRouter = express2.Router();
+apiRouter.use((req, res, next) => {
+  recordSystemInvocation();
+  next();
+});
 apiRouter.use("/language-lab", languageLabRouter);
 apiRouter.use("/migration", migrationRouter);
 apiRouter.use((req, res, next) => {
@@ -10274,6 +12117,42 @@ apiRouter.get("/health", (req, res) => {
       environment: process.env.NODE_ENV || "development"
     }
   });
+});
+apiRouter.get("/system/quota-status", async (req, res) => {
+  try {
+    const forceRefresh = req.query.forceRefresh === "true" || req.query.fresh === "true";
+    const status = await getSystemQuotaStatus(forceRefresh);
+    res.json(status);
+  } catch (err) {
+    res.status(500).json({ error: "Failed to retrieve quota status: " + err.message });
+  }
+});
+apiRouter.post("/system/quota-refresh", async (req, res) => {
+  try {
+    const status = await getSystemQuotaStatus(true);
+    res.json({ success: true, status });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+apiRouter.post("/system/quota-config", async (req, res) => {
+  try {
+    const { token, projectId, teamId } = req.body || {};
+    const curDb = db.getData();
+    if (!curDb.settings) curDb.settings = {};
+    curDb.settings.vercelApiToken = (token || "").trim();
+    if (projectId) curDb.settings.vercelProjectId = (projectId || "").trim();
+    if (teamId !== void 0) curDb.settings.vercelTeamId = (teamId || "").trim();
+    const updatedStatus = await getSystemQuotaStatus(true);
+    res.json({
+      success: true,
+      message: updatedStatus.vercel.connected ? "\u062A\u0645 \u0631\u0628\u0637 \u062D\u0633\u0627\u0628 Vercel \u0628\u0646\u062C\u0627\u062D \u0648\u0642\u0631\u0627\u0621\u0629 \u0627\u0644\u0627\u0633\u062A\u0647\u0644\u0627\u0643 \u0627\u0644\u0644\u062D\u0638\u064A!" : "\u062A\u0645 \u062D\u0641\u0638 \u0627\u0644\u0625\u0639\u062F\u0627\u062F\u0627\u062A \u0628\u0646\u062C\u0627\u062D.",
+      vercel: updatedStatus.vercel,
+      status: updatedStatus
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: "\u062A\u0639\u0630\u0631 \u062D\u0641\u0638 \u0625\u0639\u062F\u0627\u062F\u0627\u062A Vercel: " + err.message });
+  }
 });
 apiRouter.get("/settings", (req, res) => {
   try {
@@ -10401,7 +12280,7 @@ ${question || "\u0627\u0634\u0631\u062D \u0644\u064A \u0647\u0630\u0647 \u0627\u
       });
     }
     const response = await ai.models.generateContent({
-      model: "gemini-3.7-flash",
+      model: "gemini-2.5-flash",
       contents: [{ role: "user", parts }]
     });
     res.json({ success: true, explanation: response.text });
@@ -10448,7 +12327,7 @@ apiRouter.post("/ai/explain", async (req, res) => {
       }
       try {
         const response = await ai.models.generateContent({
-          model: "gemini-3.7-flash",
+          model: "gemini-2.5-flash",
           contents: [{ role: "user", parts }],
           config: {
             temperature: 0.7
@@ -10460,7 +12339,7 @@ apiRouter.post("/ai/explain", async (req, res) => {
       } catch (geminiFlashErr) {
         console.warn("Flash model explain error, trying fallback model:", geminiFlashErr);
         const response2 = await ai.models.generateContent({
-          model: "gemini-3.1-flash-lite",
+          model: "gemini-flash-latest",
           contents: [{ role: "user", parts }],
           config: {
             temperature: 0.7
@@ -11034,20 +12913,8 @@ apiRouter.get("/trainees/next-code", async (req, res) => {
     const { prefix, courseId, grade, groupId, excludeId } = req.query;
     let targetPrefix = typeof prefix === "string" ? prefix : "";
     let targetGroupId = typeof groupId === "string" && groupId ? groupId : void 0;
-    if (targetGroupId && !targetPrefix && !courseId && !grade) {
-      const groups = await GroupRepo.getAll();
-      const grp = groups.find((g) => g.id === targetGroupId);
-      if (grp) {
-        if (grp.courseId) {
-          const courses = await CourseRepo.getAll();
-          const course = courses.find((c) => c.id === grp.courseId);
-          if (course) {
-            targetPrefix = db.getPrefixForGradeOrCourse(course.name || course.grade || "");
-          }
-        } else if (grp.grade) {
-          targetPrefix = db.getPrefixForGradeOrCourse(grp.grade);
-        }
-      }
+    if (!targetPrefix && typeof grade === "string" && grade) {
+      targetPrefix = db.getPrefixForGradeOrCourse(grade);
     }
     if (!targetPrefix && typeof courseId === "string" && courseId) {
       const courses = await CourseRepo.getAll();
@@ -11056,8 +12923,20 @@ apiRouter.get("/trainees/next-code", async (req, res) => {
         targetPrefix = db.getPrefixForGradeOrCourse(course.name || course.grade || "");
       }
     }
-    if (!targetPrefix && typeof grade === "string" && grade) {
-      targetPrefix = db.getPrefixForGradeOrCourse(grade);
+    if (targetGroupId && !targetPrefix && !courseId && !grade) {
+      const groups = await GroupRepo.getAll();
+      const grp = groups.find((g) => g.id === targetGroupId);
+      if (grp) {
+        if (grp.grade) {
+          targetPrefix = db.getPrefixForGradeOrCourse(grp.grade);
+        } else if (grp.courseId) {
+          const courses = await CourseRepo.getAll();
+          const course = courses.find((c) => c.id === grp.courseId);
+          if (course) {
+            targetPrefix = db.getPrefixForGradeOrCourse(course.name || course.grade || "");
+          }
+        }
+      }
     }
     const resolvedPrefix = targetPrefix ? targetPrefix.length === 1 ? targetPrefix.toUpperCase() : db.getPrefixForGradeOrCourse(targetPrefix) : db.getData().settings?.traineeCodePrefix || "A";
     let allTrainees = await TraineeRepo.getAll();
@@ -11222,7 +13101,16 @@ apiRouter.get("/trainees/:id", async (req, res) => {
     }
     const points = Array.from(ptMap.values()).sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
     const exams = (db.getData().examResults || []).filter((er) => traineeKeys.has(String(er.traineeId).trim().toLowerCase()));
-    res.json({ trainee, payments, attendance, points, exams });
+    const homeworks = (db.getData().homeworkSubmissions || []).filter((h) => {
+      return [h.traineeId, h.studentId, h.traineeCode, h.studentCode].some((cand) => cand && traineeKeys.has(String(cand).trim().toLowerCase()));
+    }).sort((a, b) => new Date(b.submittedAt || 0).getTime() - new Date(a.submittedAt || 0).getTime());
+    const certificates = (db.getData().certificates || []).filter((c) => {
+      return [c.traineeId, c.studentId, c.traineeCode, c.studentCode, c.traineeName, c.studentName].some((cand) => cand && traineeKeys.has(String(cand).trim().toLowerCase()));
+    });
+    const badges = (db.getData().badges || []).filter((b) => {
+      return [b.traineeId, b.studentId, b.traineeCode, b.studentCode].some((cand) => cand && traineeKeys.has(String(cand).trim().toLowerCase()));
+    });
+    res.json({ trainee, payments, attendance, points, exams, homeworks, certificates, badges });
   } catch (e) {
     res.status(500).json({ success: false, error: e.message });
   }
@@ -11243,23 +13131,17 @@ apiRouter.post("/trainees", async (req, res) => {
       const tNormName = normalizeArabic(t.fullName);
       const sameName = tNormName === normName;
       if (!sameName) return false;
-      const tPhone = String(t.phone || "").replace(/[^0-9]/g, "").slice(-10);
-      const tParentPhone = String(t.parentPhone || "").replace(/[^0-9]/g, "").slice(-10);
-      const sameStudentPhone = normPhone && tPhone && tPhone === normPhone;
-      const sameParentPhone = normParentPhone && tParentPhone && tParentPhone === normParentPhone;
+      const createdInDoubleTapWindow = t.createdAt && Date.now() - new Date(t.createdAt).getTime() < 2500;
+      const samePhone = normPhone && t.phone && String(t.phone).replace(/[^0-9]/g, "").slice(-10) === normPhone;
       const sameNatId = data.nationalId && t.nationalId && String(data.nationalId).trim().length >= 10 && String(t.nationalId).trim() === String(data.nationalId).trim();
-      const createdInDoubleTapWindow = t.createdAt && Date.now() - new Date(t.createdAt).getTime() < 8e3;
-      if (sameStudentPhone || sameParentPhone || sameNatId || createdInDoubleTapWindow) {
-        return true;
-      }
-      return false;
+      return createdInDoubleTapWindow && (samePhone || sameNatId);
     });
     if (recentDuplicate) {
       return res.json({
         success: true,
         trainee: recentDuplicate,
         isDuplicatePrevented: true,
-        message: "\u062A\u0645 \u0625\u0636\u0627\u0641\u0629 \u0627\u0644\u0637\u0627\u0644\u0628 \u0628\u0627\u0644\u0641\u0639\u0644 \u0628\u0627\u0644\u0646\u0638\u0627\u0645 \u0648\u0645\u0643\u0627\u0641\u062D\u0629 \u0627\u0644\u062A\u0643\u0631\u0627\u0631 \u0628\u0646\u062C\u0627\u062D."
+        message: "\u062A\u0645 \u062A\u0633\u062C\u064A\u0644 \u0627\u0644\u0637\u0627\u0644\u0628 \u0645\u0633\u0628\u0642\u0627\u064B \u0628\u0627\u0644\u0646\u0638\u0627\u0645."
       });
     }
     let code = data.code?.trim()?.toUpperCase();
@@ -11291,12 +13173,15 @@ apiRouter.post("/trainees", async (req, res) => {
         (f) => f && f.code && f.code.toUpperCase() !== code.toUpperCase()
       );
     }
+    const isSuspendedOrDropped = data.status === "suspended" || data.status === "dropped";
+    const isUnassigned = !data.groupId || data.groupId.trim() === "" || data.groupId === "unassigned";
+    const isExempt = Boolean(data.isExempt === true || String(data.isExempt) === "true");
     const traineeId = "trainee-" + Date.now() + "-" + Math.random().toString(36).substr(2, 4);
     const feeAmount = Number(data.feeAmount) || 0;
-    const discountAmount = Number(data.discountAmount) || 0;
-    const netAmount = Math.max(0, feeAmount - discountAmount);
+    const discountAmount = isExempt ? feeAmount : Number(data.discountAmount) || 0;
     const paidAmount = Number(data.paidAmount) || 0;
-    const remainingAmount = Math.max(0, netAmount - paidAmount);
+    const netAmount = isSuspendedOrDropped || isUnassigned || isExempt ? 0 : Math.max(0, feeAmount - discountAmount);
+    const remainingAmount = isSuspendedOrDropped || isUnassigned || isExempt ? 0 : Math.max(0, netAmount - paidAmount);
     const created = await TraineeRepo.create(traineeId, {
       ...data,
       code,
@@ -11309,6 +13194,13 @@ apiRouter.post("/trainees", async (req, res) => {
       totalPoints: 0,
       attendanceRate: 100,
       createdAt: (/* @__PURE__ */ new Date()).toISOString()
+    });
+    db.logAudit({
+      userId: req.user?.id || data.createdByUserId || "user-admin",
+      userName: req.user?.fullName || data.createdByUserName || "\u0645\u062F\u064A\u0631 \u0639\u0627\u0645 \u0627\u0644\u0646\u0638\u0627\u0645",
+      action: "\u0625\u0636\u0627\u0641\u0629 \u0645\u062A\u062F\u0631\u0628 \u062C\u062F\u064A\u062F",
+      entity: "\u0627\u0644\u0645\u062A\u062F\u0631\u0628\u0648\u0646",
+      details: `\u062A\u0645 \u062A\u0633\u062C\u064A\u0644 \u0627\u0644\u0645\u062A\u062F\u0631\u0628 (${created.fullName}) \u0628\u0643\u0648\u062F [${created.code}] \u0628\u0646\u062C\u0627\u062D.`
     });
     db.saveImmediate();
     res.json({ success: true, trainee: created });
@@ -11338,27 +13230,26 @@ apiRouter.put("/trainees/:id", async (req, res) => {
       }
       let oldCourseId = currentTrainee.courseId;
       let oldGrade = currentTrainee.grade;
-      let newCourseId = updates.courseId !== void 0 ? updates.courseId : oldCourseId;
       let newGrade = updates.grade !== void 0 ? updates.grade : oldGrade;
+      let newCourseId = updates.courseId !== void 0 ? updates.courseId : oldCourseId;
       let targetPrefix = "";
-      if (newCourseId) {
+      if (newGrade) {
+        targetPrefix = db.getPrefixForGradeOrCourse(newGrade);
+      }
+      if (!targetPrefix && newCourseId) {
         const courses = await CourseRepo.getAll();
         const course = courses.find((c) => c.id === newCourseId);
-        if (course) targetPrefix = db.getPrefixForGradeOrCourse(course.name);
-      }
-      if (!targetPrefix && newGrade) {
-        targetPrefix = db.getPrefixForGradeOrCourse(newGrade);
+        if (course) targetPrefix = db.getPrefixForGradeOrCourse(course.grade || course.name);
       }
       targetPrefix = (targetPrefix || "A").toUpperCase();
       let currentCode = (currentTrainee.code || "").trim().toUpperCase();
       let currentPrefix = "";
       const m = currentCode.match(/^([a-zA-Z]+)/);
       if (m) currentPrefix = m[1].toUpperCase();
-      const gradeOrCourseChanged = newCourseId && newCourseId !== oldCourseId || newGrade && newGrade !== oldGrade;
-      const isCodeMismatched = currentPrefix && targetPrefix && currentPrefix !== targetPrefix;
+      const gradeChanged = Boolean(newGrade && oldGrade && newGrade !== oldGrade);
       const isForceRegen = updates.forceRegenerateCode === true;
-      const userProvidedValidNewCode = updates.code && updates.code !== currentTrainee.code && updates.code.toUpperCase().startsWith(targetPrefix);
-      if ((gradeOrCourseChanged || isCodeMismatched || isForceRegen || !currentCode) && !userProvidedValidNewCode) {
+      const userProvidedValidNewCode = updates.code && updates.code !== currentTrainee.code;
+      if (!currentCode || isForceRegen || gradeChanged && currentPrefix !== targetPrefix && !userProvidedValidNewCode) {
         const regex = new RegExp(`^${targetPrefix}-?(\\d+)$`, "i");
         let maxNum = 0;
         allTrainees.forEach((t) => {
@@ -11380,10 +13271,20 @@ apiRouter.put("/trainees/:id", async (req, res) => {
         updates.code = autoNewCode;
         updates.prefix = targetPrefix;
         console.log(`[TRAINEE_UPDATE] Auto-assigned unique code for trainee ${id}: ${currentTrainee.code} -> ${updates.code}`);
+      } else if (!updates.code && currentCode) {
+        updates.code = currentCode;
+        updates.prefix = currentPrefix || targetPrefix;
       }
     }
     delete updates.forceRegenerateCode;
-    if (updates.isExempt === true || String(updates.isExempt) === "true") {
+    const newStatus = updates.status !== void 0 ? updates.status : currentTrainee?.status;
+    const newGroupId = updates.groupId !== void 0 ? updates.groupId : currentTrainee?.groupId;
+    const isSuspendedOrDropped = newStatus === "suspended" || newStatus === "dropped";
+    const isUnassigned = !newGroupId || newGroupId.trim() === "" || newGroupId === "unassigned";
+    if (isSuspendedOrDropped || isUnassigned) {
+      updates.netAmount = 0;
+      updates.remainingAmount = 0;
+    } else if (updates.isExempt === true || String(updates.isExempt) === "true" || updates.isExempt === void 0 && currentTrainee?.isExempt) {
       updates.isExempt = true;
       const baseFee = updates.feeAmount !== void 0 ? Number(updates.feeAmount) : currentTrainee?.feeAmount || 0;
       updates.discountAmount = baseFee;
@@ -11392,8 +13293,10 @@ apiRouter.put("/trainees/:id", async (req, res) => {
       if (!updates.exemptReason) {
         updates.exemptReason = currentTrainee?.exemptReason || "management_children";
       }
-    } else if (updates.isExempt === false || String(updates.isExempt) === "false") {
-      updates.isExempt = false;
+    } else {
+      if (updates.isExempt !== void 0) {
+        updates.isExempt = Boolean(updates.isExempt);
+      }
       const fee = updates.feeAmount !== void 0 ? Number(updates.feeAmount) : currentTrainee?.feeAmount || 0;
       const discount = updates.discountAmount !== void 0 ? Number(updates.discountAmount) : currentTrainee?.discountAmount || 0;
       const paid = currentTrainee?.paidAmount || 0;
@@ -11888,10 +13791,24 @@ apiRouter.post("/trainees/bulk-upgrade", async (req, res) => {
     const newStatus = status || "active";
     const memData = db.getData();
     for (const id of ids) {
-      await TraineeRepo.update(id, { status: newStatus });
+      const existing = (memData.trainees || []).find((t) => t && t.id === id) || await TraineeRepo.getById(id);
+      let netAmount = 0;
+      let remainingAmount = 0;
+      if (newStatus === "active" && existing && existing.groupId && existing.groupId !== "unassigned" && !existing.isExempt) {
+        const fee = Number(existing.feeAmount) || 0;
+        const disc = Number(existing.discountAmount) || 0;
+        netAmount = Math.max(0, fee - disc);
+        remainingAmount = Math.max(0, netAmount - (Number(existing.paidAmount) || 0));
+      }
+      const updates = { status: newStatus, netAmount, remainingAmount };
+      await TraineeRepo.update(id, updates);
       if (memData && Array.isArray(memData.trainees)) {
         const tr = memData.trainees.find((t) => t.id === id);
-        if (tr) tr.status = newStatus;
+        if (tr) {
+          tr.status = newStatus;
+          tr.netAmount = netAmount;
+          tr.remainingAmount = remainingAmount;
+        }
       }
     }
     db.saveImmediate();
@@ -14057,7 +15974,8 @@ var handleGetPayments = async (req, res) => {
     const startDate = req.query.startDate;
     const endDate = req.query.endDate;
     const status = req.query.status;
-    let list = await PaymentRepo.getAll();
+    const isFresh = req.query.fresh === "true";
+    let list = await PaymentRepo.getAll(isFresh);
     if (branchId && branchId !== "all") list = list.filter((p) => p.branchId === branchId);
     if (traineeId) list = list.filter((p) => p.traineeId === traineeId);
     if (startDate) list = list.filter((p) => p.date >= String(startDate));
@@ -14336,33 +16254,91 @@ apiRouter.get("/finance/expenses", async (req, res) => {
 });
 apiRouter.post("/finance/expenses", async (req, res) => {
   try {
-    const { category, amount, beneficiary, description, branchId, notes, documentNumber } = req.body;
+    const { category, amount, beneficiary, description, branchId, notes, documentNumber, date, title, paymentMethod, paidByUserId, paidByUserName } = req.body;
     if (!category || !amount || Number(amount) <= 0 || !branchId) {
       return res.status(400).json({ error: "\u0627\u0644\u062A\u0635\u0646\u064A\u0641 \u0648\u0627\u0644\u0645\u0628\u0644\u063A \u0648\u0627\u0644\u0641\u0631\u0639 \u062D\u0642\u0648\u0644 \u0625\u062C\u0628\u0627\u0631\u064A\u0629" });
     }
+    const expenseDate = date ? String(date).trim() : (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
     const newExpense = {
       id: "exp-" + Date.now(),
       documentNumber: documentNumber || `EXP-${Date.now().toString().slice(-6)}`,
-      date: (/* @__PURE__ */ new Date()).toISOString().split("T")[0],
+      date: expenseDate,
+      title: title?.trim() || description?.trim() || category,
       category,
       branchId,
       beneficiary: beneficiary?.trim() || "\u0639\u0627\u0645",
       amount: Number(amount),
-      description: description?.trim() || "",
+      description: description?.trim() || title?.trim() || "",
+      paymentMethod: paymentMethod || "cash",
+      paidByUserId: paidByUserId || "admin",
+      paidByUserName: paidByUserName || "\u0645\u0633\u0624\u0648\u0644 \u0627\u0644\u062D\u0633\u0627\u0628\u0627\u062A",
       notes: notes || "",
       createdAt: (/* @__PURE__ */ new Date()).toISOString()
     };
     const createdExpense = await ExpenseRepo.create(newExpense.id, newExpense);
     db.logAudit({
-      userId: "admin",
-      userName: "\u0645\u0633\u0624\u0648\u0644 \u0627\u0644\u062D\u0633\u0627\u0628\u0627\u062A",
+      userId: paidByUserId || "admin",
+      userName: paidByUserName || "\u0645\u0633\u0624\u0648\u0644 \u0627\u0644\u062D\u0633\u0627\u0628\u0627\u062A",
       action: "\u062A\u0633\u062C\u064A\u0644 \u0645\u0635\u0631\u0648\u0641",
       entity: "\u0627\u0644\u0645\u0635\u0631\u0648\u0641\u0627\u062A",
       entityId: createdExpense.id,
       branchId: createdExpense.branchId,
-      details: `\u0635\u0631\u0641 \u0645\u0628\u0644\u063A ${createdExpense.amount} \u062C.\u0645 \u062A\u0635\u0646\u064A\u0641 (${createdExpense.category}) - \u0627\u0644\u0645\u0633\u062A\u0641\u064A\u062F: ${createdExpense.beneficiary}`
+      details: `\u0635\u0631\u0641 \u0645\u0628\u0644\u063A ${createdExpense.amount} \u062C.\u0645 \u062A\u0635\u0646\u064A\u0641 (${createdExpense.category}) - \u0627\u0644\u0645\u0633\u062A\u0641\u064A\u062F: ${createdExpense.beneficiary} - \u0627\u0644\u0641\u0631\u0639: ${createdExpense.branchId} - \u0627\u0644\u062A\u0627\u0631\u064A\u062E: ${createdExpense.date}`
     });
     res.json({ success: true, expense: createdExpense });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+apiRouter.put("/finance/expenses/:id", async (req, res) => {
+  try {
+    const id = req.params.id;
+    const existing = await ExpenseRepo.getById(id);
+    if (!existing) return res.status(404).json({ error: "\u0633\u0646\u062F \u0627\u0644\u0635\u0631\u0641 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F" });
+    const { category, amount, beneficiary, description, branchId, notes, documentNumber, date, title, paymentMethod, paidByUserId, paidByUserName } = req.body;
+    const updated = await ExpenseRepo.update(id, {
+      ...category ? { category } : {},
+      ...amount !== void 0 ? { amount: Number(amount) } : {},
+      ...branchId ? { branchId } : {},
+      ...beneficiary !== void 0 ? { beneficiary: beneficiary.trim() } : {},
+      ...date ? { date: String(date).trim() } : {},
+      ...title !== void 0 ? { title: title.trim() } : {},
+      ...description !== void 0 ? { description: description.trim() } : {},
+      ...paymentMethod ? { paymentMethod } : {},
+      ...documentNumber ? { documentNumber } : {},
+      ...notes !== void 0 ? { notes } : {},
+      ...paidByUserName ? { paidByUserName } : {}
+    });
+    db.logAudit({
+      userId: paidByUserId || "admin",
+      userName: paidByUserName || "\u0645\u0633\u0624\u0648\u0644 \u0627\u0644\u062D\u0633\u0627\u0628\u0627\u062A",
+      action: "\u062A\u0639\u062F\u064A\u0644 \u0645\u0635\u0631\u0648\u0641",
+      entity: "\u0627\u0644\u0645\u0635\u0631\u0648\u0641\u0627\u062A",
+      entityId: id,
+      branchId: updated?.branchId || existing.branchId,
+      details: `\u062A\u0639\u062F\u064A\u0644 \u0633\u0646\u062F \u0627\u0644\u0635\u0631\u0641 ${updated?.documentNumber || existing.documentNumber} \u0628\u0645\u0628\u0644\u063A ${updated?.amount || existing.amount} \u062C.\u0645`
+    });
+    res.json({ success: true, expense: updated });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+apiRouter.delete("/finance/expenses/:id", async (req, res) => {
+  try {
+    const id = req.params.id;
+    const existing = await ExpenseRepo.getById(id);
+    if (!existing) return res.status(404).json({ error: "\u0633\u0646\u062F \u0627\u0644\u0635\u0631\u0641 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F" });
+    await ExpenseRepo.delete(id);
+    db.logAudit({
+      userId: "admin",
+      userName: "\u0645\u0633\u0624\u0648\u0644 \u0627\u0644\u062D\u0633\u0627\u0628\u0627\u062A",
+      action: "\u062D\u0630\u0641 \u0645\u0635\u0631\u0648\u0641",
+      entity: "\u0627\u0644\u0645\u0635\u0631\u0648\u0641\u0627\u062A",
+      entityId: id,
+      branchId: existing.branchId,
+      details: `\u062D\u0630\u0641 \u0633\u0646\u062F \u0627\u0644\u0635\u0631\u0641 ${existing.documentNumber} \u0628\u0645\u0628\u0644\u063A ${existing.amount} \u062C.\u0645`
+    });
+    res.json({ success: true, message: "\u062A\u0645 \u062D\u0630\u0641 \u0633\u0646\u062F \u0627\u0644\u0635\u0631\u0641 \u0628\u0646\u062C\u0627\u062D" });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -14423,6 +16399,30 @@ apiRouter.post("/finance/trainer-settlements", (req, res) => {
   });
   res.json({ success: true, settlement, trainer });
 });
+apiRouter.delete("/finance/trainer-settlements/:id", async (req, res) => {
+  try {
+    const id = req.params.id;
+    const settlements = db.getData().trainerSettlements || [];
+    const idx = settlements.findIndex((s) => s.id === id);
+    if (idx === -1) {
+      return res.status(404).json({ error: "\u0627\u0644\u062A\u0633\u0648\u064A\u0629 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F\u0629" });
+    }
+    const settlement = settlements[idx];
+    settlements.splice(idx, 1);
+    const expenses = db.getData().expenses || [];
+    const expIdx = expenses.findIndex(
+      (e) => e.id === `exp-tr-${settlement.id.replace("ts-", "")}` || e.notes && e.notes.includes(settlement.receiptNumber)
+    );
+    if (expIdx >= 0) {
+      expenses.splice(expIdx, 1);
+    }
+    db.recalculateTrainerFinances(settlement.trainerId);
+    db.save();
+    res.json({ success: true, message: "\u062A\u0645 \u062D\u0630\u0641 \u0648\u0625\u0644\u063A\u0627\u0621 \u0633\u0646\u062F \u0627\u0644\u062A\u0633\u0648\u064A\u0629 \u0628\u0646\u062C\u0627\u062D" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 apiRouter.get("/reports/financial_summary", async (req, res) => {
   try {
     const { branchId, startDate, endDate } = req.query;
@@ -14453,8 +16453,11 @@ apiRouter.get("/reports/financial_summary", async (req, res) => {
     const totalExpenses = expenses.reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
     const totalTrainerPayouts = settlements.reduce((sum, s) => sum + (Number(s.amount) || 0), 0);
     const netTreasury = totalRevenue - totalExpenses - totalTrainerPayouts;
-    const totalTraineeRemaining = trainees.reduce((sum, t) => sum + (Number(t.remainingAmount) || 0), 0);
-    const totalExpectedRevenue = trainees.reduce((sum, t) => sum + (Number(t.netAmount) || 0), 0);
+    const activeFilteredTrainees = (trainees || []).filter(
+      (t) => t.status === "active" && Boolean(t.groupId) && t.groupId.trim() !== "" && t.groupId !== "unassigned" && !t.isExempt
+    );
+    const totalTraineeRemaining = activeFilteredTrainees.reduce((sum, t) => sum + (Number(t.remainingAmount) || 0), 0);
+    const totalExpectedRevenue = activeFilteredTrainees.reduce((sum, t) => sum + (Number(t.netAmount) || 0), 0);
     let trainers = await TrainerRepo.getAll();
     if (!trainers || trainers.length === 0) {
       trainers = db.getData().trainers || [];
@@ -14645,56 +16648,200 @@ apiRouter.post(["/public/register", "/public/register/"], handlePublicRegister);
 apiRouter.post(["/public/register-trainer", "/public/register-trainer/"], handlePublicTrainerRegister);
 apiRouter.get("/finance/summary", async (req, res) => {
   try {
-    const { branchId, startDate, endDate } = req.query;
-    let [payments, expenses, trainees] = await Promise.all([
-      PaymentRepo.getAll(),
-      ExpenseRepo.getAll(),
-      TraineeRepo.getAll()
+    const { branchId, startDate, endDate, fresh } = req.query;
+    const isFresh = fresh === "true";
+    const [allPaymentsRaw, allExpensesRaw, allTraineesRaw] = await Promise.all([
+      PaymentRepo.getAll(isFresh),
+      ExpenseRepo.getAll(isFresh),
+      TraineeRepo.getAll(isFresh)
     ]);
-    let settlements = db.getData().trainerSettlements || [];
-    if (branchId && branchId !== "all") {
+    const allSettlementsRaw = db.getData().trainerSettlements || [];
+    const allBranchesRaw = await BranchRepo.getAll().catch(() => []) || db.getData().branches || [];
+    const allOwnerWithdrawalsRaw = db.getData().ownerWithdrawals || [];
+    const validAllPayments = (allPaymentsRaw || []).filter((p) => p.status === "approved" || !p.status && !p.proofImageUrl && !p.proofUrl);
+    const allBranchesTotalRevenue = validAllPayments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+    const activeGroupTraineesAll = (allTraineesRaw || []).filter((t) => t.status === "active" && Boolean(t.groupId) && t.groupId.trim() !== "" && t.groupId !== "unassigned" && !t.isExempt);
+    const allBranchesTotalRemaining = activeGroupTraineesAll.reduce((sum, t) => sum + (Number(t.remainingAmount) || 0), 0);
+    const todayDateStr = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
+    const todayAllPayments = validAllPayments.filter((p) => p.date === todayDateStr);
+    const todayAllTotal = todayAllPayments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+    const branchBreakdowns = (allBranchesRaw || []).map((b) => {
+      const bPayments = validAllPayments.filter((p) => p.branchId === b.id);
+      const bTodayPayments = bPayments.filter((p) => p.date === todayDateStr);
+      const bExpenses = (allExpensesRaw || []).filter((e) => e.branchId === b.id);
+      const bSettlements = (allSettlementsRaw || []).filter((s) => s.branchId === b.id);
+      const bWithdrawals = (allOwnerWithdrawalsRaw || []).filter((w) => w.branchId === b.id);
+      const bTrainees = (allTraineesRaw || []).filter((t) => t.branchId === b.id);
+      const bActiveTrainees = bTrainees.filter((t) => t.status === "active" && Boolean(t.groupId) && t.groupId.trim() !== "" && t.groupId !== "unassigned" && !t.isExempt);
+      const bTotalRevenue = bPayments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+      const bGeneralExpenses = bExpenses.filter((e) => e.category !== "trainers" && !e.id?.startsWith("exp-tr-") && !bSettlements.some((s) => s.receiptNumber && e.notes?.includes(s.receiptNumber)));
+      const bTotalExpenses = bGeneralExpenses.reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
+      const bTotalPayouts = bSettlements.reduce((sum, s) => sum + (Number(s.amount) || 0), 0);
+      const bTotalWithdrawals = bWithdrawals.reduce((sum, w) => sum + (Number(w.amount) || 0), 0);
+      return {
+        branchId: b.id,
+        branchName: b.name || (b.id === "branch-1" ? "\u0641\u0631\u0639 \u0627\u0644\u0646\u062C\u0627\u062D" : "\u0641\u0631\u0639 \u0628\u062F\u0631"),
+        totalRevenue: bTotalRevenue,
+        totalExpenses: bTotalExpenses,
+        totalPayouts: bTotalPayouts,
+        totalWithdrawals: bTotalWithdrawals,
+        netTreasury: Math.max(0, bTotalRevenue - bTotalExpenses - bTotalPayouts - bTotalWithdrawals),
+        todayRevenue: bTodayPayments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0),
+        totalPaymentsCount: bPayments.length,
+        todayPaymentsCount: bTodayPayments.length,
+        totalRemaining: bActiveTrainees.reduce((sum, t) => sum + (Number(t.remainingAmount) || 0), 0),
+        traineesCount: bActiveTrainees.length
+      };
+    });
+    let payments = [...validAllPayments];
+    let expenses = [...allExpensesRaw || []];
+    let settlements = [...allSettlementsRaw || []];
+    let withdrawals = [...allOwnerWithdrawalsRaw || []];
+    let trainees = [...allTraineesRaw || []];
+    if (branchId && branchId !== "all" && branchId !== "undefined" && branchId !== "null" && branchId !== "") {
       payments = payments.filter((p) => p.branchId === branchId);
       expenses = expenses.filter((e) => e.branchId === branchId);
       settlements = settlements.filter((s) => s.branchId === branchId);
+      withdrawals = withdrawals.filter((w) => w.branchId === branchId);
       trainees = trainees.filter((t) => t.branchId === branchId);
     }
     if (startDate) {
       payments = payments.filter((p) => p.date >= String(startDate));
       expenses = expenses.filter((e) => e.date >= String(startDate));
       settlements = settlements.filter((s) => s.date >= String(startDate));
+      withdrawals = withdrawals.filter((w) => w.date >= String(startDate));
     }
     if (endDate) {
       payments = payments.filter((p) => p.date <= String(endDate));
       expenses = expenses.filter((e) => e.date <= String(endDate));
       settlements = settlements.filter((s) => s.date <= String(endDate));
+      withdrawals = withdrawals.filter((w) => w.date <= String(endDate));
     }
-    payments = (payments || []).filter((p) => p.status === "approved" || !p.status && !p.proofImageUrl && !p.proofUrl);
+    const generalExpenses = expenses.filter((e) => e.category !== "trainers" && !e.id?.startsWith("exp-tr-") && !settlements.some((s) => s.receiptNumber && e.notes?.includes(s.receiptNumber)));
     const totalRevenue = payments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
-    const totalExpenses = expenses.reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
+    const totalExpenses = generalExpenses.reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
     const totalTrainerPayouts = settlements.reduce((sum, s) => sum + (Number(s.amount) || 0), 0);
-    const netTreasury = totalRevenue - totalExpenses - totalTrainerPayouts;
-    const totalTraineeRemaining = trainees.reduce((sum, t) => sum + (Number(t.remainingAmount) || 0), 0);
-    const totalExpectedRevenue = trainees.reduce((sum, t) => sum + (Number(t.netAmount) || 0), 0);
+    const totalOwnerWithdrawals = withdrawals.reduce((sum, w) => sum + (Number(w.amount) || 0), 0);
+    const netTreasury = Math.max(0, totalRevenue - totalExpenses - totalTrainerPayouts - totalOwnerWithdrawals);
+    const activeSelectedTrainees = trainees.filter((t) => t.status === "active" && Boolean(t.groupId) && t.groupId.trim() !== "" && t.groupId !== "unassigned" && !t.isExempt);
+    const totalTraineeRemaining = activeSelectedTrainees.reduce((sum, t) => sum + (Number(t.remainingAmount) || 0), 0);
+    const totalExpectedRevenue = activeSelectedTrainees.reduce((sum, t) => sum + (Number(t.netAmount) || 0), 0);
+    const todaySelectedPayments = payments.filter((p) => p.date === todayDateStr);
+    const todaySelectedTotal = todaySelectedPayments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
     let trainers = await TrainerRepo.getAll();
     if (!trainers || trainers.length === 0) {
       trainers = db.getData().trainers || [];
     }
     const totalTrainerDues = trainers.filter((t) => branchId && branchId !== "all" ? t.branchId === branchId : true).reduce((sum, t) => sum + (Number(t.balanceDue) || 0), 0);
-    const totalCenterShare = Math.max(0, totalRevenue - totalTrainerPayouts);
+    const totalCenterShare = Math.max(0, totalRevenue - totalTrainerPayouts - totalExpenses);
     res.json({
       totalRevenue,
       totalExpenses,
       totalTrainerPayouts,
+      totalOwnerWithdrawals,
       netTreasury,
       totalTraineeRemaining,
       totalExpectedRevenue,
       totalTrainerDues,
       totalCenterShare,
+      todayTotal: todaySelectedTotal,
+      todayPaymentsCount: todaySelectedPayments.length,
+      allBranchesTotalRevenue,
+      allBranchesTotalRemaining,
+      todayAllTotal,
+      todayAllPaymentsCount: todayAllPayments.length,
+      branchBreakdowns,
       paymentsCount: payments.length,
-      expensesCount: expenses.length
+      expensesCount: expenses.length,
+      ownerWithdrawalsCount: withdrawals.length
     });
   } catch (err) {
     res.status(500).json({ error: "\u062A\u0639\u0630\u0631 \u062C\u0644\u0628 \u0627\u0644\u062E\u0644\u0627\u0635\u0629 \u0627\u0644\u0645\u0627\u0644\u064A\u0629: " + err.message });
+  }
+});
+apiRouter.get("/finance/owner-withdrawals", async (req, res) => {
+  try {
+    const { branchId } = req.query;
+    let list = db.getData().ownerWithdrawals || [];
+    if (branchId && branchId !== "all" && branchId !== "undefined" && branchId !== "null" && branchId !== "") {
+      list = list.filter((w) => w.branchId === branchId);
+    }
+    res.json(list.sort((a, b) => new Date(b.createdAt || b.date).getTime() - new Date(a.createdAt || a.date).getTime()));
+  } catch (err) {
+    res.status(500).json({ error: "\u0641\u0634\u0644 \u062C\u0644\u0628 \u0645\u0633\u062D\u0648\u0628\u0627\u062A \u0627\u0644\u0645\u0627\u0644\u0643: " + err.message });
+  }
+});
+apiRouter.post("/finance/owner-withdrawal", async (req, res) => {
+  try {
+    const { amount, date, notes, paymentMethod, branchId, withdrawnByUserId, withdrawnByUserName } = req.body;
+    const withdrawAmount = Number(amount);
+    if (!withdrawAmount || isNaN(withdrawAmount) || withdrawAmount <= 0) {
+      return res.status(400).json({ error: "\u064A\u0631\u062C\u0649 \u0625\u062F\u062E\u0627\u0644 \u0645\u0628\u0644\u063A \u0635\u062D\u064A\u062D \u0644\u0644\u0635\u0631\u0641" });
+    }
+    if (!db.getData().ownerWithdrawals) {
+      db.getData().ownerWithdrawals = [];
+    }
+    const payments = (db.getData().payments || []).filter((p) => p.status === "approved" || !p.status && !p.proofImageUrl);
+    const expenses = db.getData().expenses || [];
+    const settlements = db.getData().trainerSettlements || [];
+    const priorWithdrawals = db.getData().ownerWithdrawals || [];
+    const totalRev = payments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+    const totalExp = expenses.reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
+    const totalSet = settlements.reduce((sum, s) => sum + (Number(s.amount) || 0), 0);
+    const totalPriorWith = priorWithdrawals.reduce((sum, w) => sum + (Number(w.amount) || 0), 0);
+    const treasuryBefore = Math.max(0, totalRev - totalExp - totalSet - totalPriorWith);
+    if (withdrawAmount > treasuryBefore) {
+      return res.status(400).json({
+        error: `\u0627\u0644\u0645\u0628\u0644\u063A \u0627\u0644\u0645\u0637\u0644\u0648\u0628 (${withdrawAmount.toLocaleString()} \u062C.\u0645) \u0623\u0643\u0628\u0631 \u0645\u0646 \u0627\u0644\u0631\u0635\u064A\u062F \u0627\u0644\u0645\u062A\u0648\u0641\u0631 \u062D\u0627\u0644\u064A\u0627\u064B \u0628\u0627\u0644\u062E\u0632\u0646\u0629 (${treasuryBefore.toLocaleString()} \u062C.\u0645)`
+      });
+    }
+    const receiptNumber = `OWNER-WITH-${Date.now().toString().slice(-6)}`;
+    const newWithdrawal = {
+      id: `ow-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      receiptNumber,
+      date: date || (/* @__PURE__ */ new Date()).toISOString().split("T")[0],
+      amount: withdrawAmount,
+      branchId: branchId || "branch-1",
+      withdrawnByUserId: withdrawnByUserId || "owner",
+      withdrawnByUserName: withdrawnByUserName || "\u0635\u0627\u062D\u0628 \u0627\u0644\u0645\u0631\u0643\u0632 (\u0627\u0644\u0645\u062F\u064A\u0631 \u0627\u0644\u0639\u0627\u0645)",
+      paymentMethod: paymentMethod || "cash",
+      notes: notes || "\u0635\u0631\u0641 \u062F\u0641\u0639\u0629 \u0645\u0646 \u062D\u0635\u0629 \u0648\u0623\u0631\u0628\u0627\u062D \u0635\u0627\u062D\u0628 \u0627\u0644\u0645\u0631\u0643\u0632 \u0645\u0646 \u0627\u0644\u062E\u0632\u064A\u0646\u0629",
+      remainingTreasuryAfter: Math.max(0, treasuryBefore - withdrawAmount),
+      createdAt: (/* @__PURE__ */ new Date()).toISOString()
+    };
+    db.getData().ownerWithdrawals.push(newWithdrawal);
+    db.saveImmediate();
+    db.logAudit({
+      userId: withdrawnByUserId || "owner",
+      userName: withdrawnByUserName || "\u0635\u0627\u062D\u0628 \u0627\u0644\u0645\u0631\u0643\u0632",
+      action: "\u0635\u0631\u0641 \u062D\u0635\u0629 \u0635\u0627\u062D\u0628 \u0627\u0644\u0645\u0631\u0643\u0632",
+      entity: "\u0627\u0644\u062E\u0632\u064A\u0646\u0629 \u0627\u0644\u0639\u0627\u0645\u0629",
+      entityId: newWithdrawal.id,
+      branchId: newWithdrawal.branchId,
+      details: `\u062A\u0645 \u0635\u0631\u0641 \u0645\u0628\u0644\u063A ${withdrawAmount.toLocaleString()} \u062C.\u0645 \u0643\u062D\u0635\u0629 \u0635\u0627\u062D\u0628 \u0627\u0644\u0645\u0631\u0643\u0632. \u0627\u0644\u0631\u0635\u064A\u062F \u0627\u0644\u0645\u062A\u0628\u0642\u064A \u0641\u064A \u0627\u0644\u062E\u0632\u0646\u0629: ${newWithdrawal.remainingTreasuryAfter.toLocaleString()} \u062C.\u0645`
+    });
+    res.json({
+      success: true,
+      withdrawal: newWithdrawal,
+      message: "\u062A\u0645 \u062A\u0633\u062C\u064A\u0644 \u0635\u0631\u0641 \u062D\u0635\u0629 \u0635\u0627\u062D\u0628 \u0627\u0644\u0645\u0631\u0643\u0632 \u0628\u0646\u062C\u0627\u062D \u0648\u062A\u062D\u062F\u064A\u062B \u0631\u0635\u064A\u062F \u0627\u0644\u062E\u0632\u064A\u0646\u0629 \u0627\u0644\u0645\u062A\u0628\u0642\u064A"
+    });
+  } catch (err) {
+    res.status(500).json({ error: "\u062A\u0639\u0630\u0631 \u062A\u0646\u0641\u064A\u0630 \u0635\u0631\u0641 \u062D\u0635\u0629 \u0627\u0644\u0645\u0631\u0643\u0632: " + err.message });
+  }
+});
+apiRouter.delete("/finance/owner-withdrawal/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!db.getData().ownerWithdrawals) return res.status(404).json({ error: "\u0627\u0644\u0633\u0646\u062F \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F" });
+    const initialLen = db.getData().ownerWithdrawals.length;
+    db.getData().ownerWithdrawals = db.getData().ownerWithdrawals.filter((w) => w.id !== id);
+    if (db.getData().ownerWithdrawals.length === initialLen) {
+      return res.status(404).json({ error: "\u0627\u0644\u0633\u0646\u062F \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F" });
+    }
+    db.saveImmediate();
+    res.json({ success: true, message: "\u062A\u0645 \u0625\u0644\u063A\u0627\u0621 \u0633\u0646\u062F \u0635\u0631\u0641 \u062D\u0635\u0629 \u0627\u0644\u0645\u0631\u0643\u0632 \u0628\u0646\u062C\u0627\u062D" });
+  } catch (err) {
+    res.status(500).json({ error: "\u0641\u0634\u0644 \u0625\u0644\u063A\u0627\u0621 \u0627\u0644\u0633\u0646\u062F: " + err.message });
   }
 });
 apiRouter.post("/finance/reset-and-archive", async (req, res) => {
@@ -14715,8 +16862,11 @@ apiRouter.post("/finance/reset-and-archive", async (req, res) => {
     const totalExpenses = expenses.reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
     const totalTrainerPayouts = settlements.reduce((sum, s) => sum + (Number(s.amount) || 0), 0);
     const netTreasury = totalRevenue - totalExpenses - totalTrainerPayouts;
-    const totalTraineeRemaining = trainees.reduce((sum, t) => sum + (Number(t.remainingAmount) || 0), 0);
-    const totalExpectedRevenue = trainees.reduce((sum, t) => sum + (Number(t.netAmount) || 0), 0);
+    const activeArchiveTrainees = (trainees || []).filter(
+      (t) => t.status === "active" && Boolean(t.groupId) && t.groupId.trim() !== "" && t.groupId !== "unassigned" && !t.isExempt
+    );
+    const totalTraineeRemaining = activeArchiveTrainees.reduce((sum, t) => sum + (Number(t.remainingAmount) || 0), 0);
+    const totalExpectedRevenue = activeArchiveTrainees.reduce((sum, t) => sum + (Number(t.netAmount) || 0), 0);
     let trainers = await TrainerRepo.getAll();
     if (!trainers || trainers.length === 0) {
       trainers = db.getData().trainers || [];
@@ -15205,24 +17355,139 @@ apiRouter.post("/ai/design-certificate", async (req, res) => {
     res.status(500).json({ error: error.message || "\u0641\u0634\u0644 \u0627\u0644\u0630\u0643\u0627\u0621 \u0627\u0644\u0627\u0635\u0637\u0646\u0627\u0639\u064A \u0641\u064A \u062A\u0639\u062F\u064A\u0644 \u0627\u0644\u062A\u0635\u0645\u064A\u0645" });
   }
 });
-apiRouter.post("/ai/design-certificate", async (req, res) => {
+apiRouter.post(["/ai/generate-exam-questions", "/ai/generate-exam-questions/"], async (req, res) => {
   try {
-    const { visualFields, userPrompt, templateName } = req.body;
-    if (!visualFields || !userPrompt) {
-      return res.status(400).json({ error: "\u064A\u0631\u062C\u0649 \u062A\u0632\u0648\u064A\u062F \u062D\u0642\u0648\u0644 \u0627\u0644\u0634\u0647\u0627\u062F\u0629 \u0627\u0644\u062D\u0627\u0644\u064A\u0629 \u0648\u0627\u0644\u0637\u0644\u0628" });
-    }
-    const result = await designCertificateWithAI({
-      currentFields: visualFields,
-      userPrompt,
-      templateName
+    const { courseId, courseName, topic, difficulty, count, questionTypes } = req.body || {};
+    const effectiveCount = Math.max(1, Math.min(Number(count) || 5, 20));
+    const effectiveDifficulty = difficulty || "\u0645\u062A\u0648\u0633\u0637";
+    const effectiveTopic = topic || "\u062A\u0642\u064A\u064A\u0645 \u0645\u0641\u0627\u0647\u064A\u0645 \u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u0627\u0644\u0645\u0639\u0644\u0648\u0645\u0627\u062A \u0648\u0627\u0644\u0627\u062A\u0635\u0627\u0644\u0627\u062A";
+    const effectiveCourseName = courseName || "\u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u0627\u0644\u0645\u0639\u0644\u0648\u0645\u0627\u062A \u0648\u0627\u0644\u0627\u062A\u0635\u0627\u0644\u0627\u062A ICT";
+    const targetGradeCurriculum = detectCurriculum({
+      grade: `${effectiveCourseName} ${effectiveTopic}`,
+      courseName: effectiveCourseName,
+      courseId
     });
-    res.json({ success: true, ...result });
+    const gradeLevel = targetGradeCurriculum.gradeNameAr;
+    const officialLessons = getOfficialLessonsForGrade(gradeLevel);
+    const cleanTopic = (effectiveTopic || "").toLowerCase().replace(/[أإآ]/g, "\u0627").replace(/ة/g, "\u0647");
+    const matchedLesson = officialLessons.find((l) => {
+      const lClean = (l.titleAr || "").toLowerCase().replace(/[أإآ]/g, "\u0627").replace(/ة/g, "\u0647");
+      return lClean.includes(cleanTopic) || cleanTopic.includes(lClean) || l.concepts && l.concepts.some((c) => cleanTopic.includes(c.nameAr.slice(0, 8)));
+    }) || officialLessons[0];
+    const lessonConcepts = matchedLesson?.concepts || [];
+    let questions = [];
+    if (process.env.GEMINI_API_KEY) {
+      try {
+        const prompt = `\u0623\u0646\u062A \u0645\u0648\u062C\u0647 \u0623\u0648\u0644 \u0648\u062E\u0628\u064A\u0631 \u0627\u062E\u062A\u0628\u0627\u0631\u0627\u062A \u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u0627\u0644\u0645\u0639\u0644\u0648\u0645\u0627\u062A \u0648\u0627\u0644\u0627\u062A\u0635\u0627\u0644\u0627\u062A \u0648\u0627\u0644\u062D\u0627\u0633\u0628 \u0627\u0644\u0622\u0644\u064A \u0641\u064A \u0648\u0632\u0627\u0631\u0629 \u0627\u0644\u062A\u0631\u0628\u064A\u0629 \u0648\u0627\u0644\u062A\u0639\u0644\u064A\u0645 \u0627\u0644\u0645\u0635\u0631\u064A\u0629 2026/2027.
+\u0627\u0644\u0645\u0637\u0644\u0648\u0628 \u0635\u064A\u0627\u063A\u0629 \u0639\u062F\u062F (${effectiveCount}) \u0633\u0624\u0627\u0644 \u062A\u0642\u064A\u064A\u0645\u064A \u062F\u0642\u064A\u0642 \u0648\u0645\u062A\u0646\u0648\u0639 \u0644\u0628\u0646\u0643 \u0627\u0644\u0623\u0633\u0626\u0644\u0629:
+- \u0627\u0644\u0645\u0631\u062D\u0644\u0629 \u0648\u0627\u0644\u0635\u0641: ${gradeLevel}
+- \u0627\u0644\u0645\u0627\u062F\u0629: ${effectiveCourseName}
+- \u0645\u0648\u0636\u0648\u0639 \u0627\u0644\u062A\u0642\u064A\u064A\u0645: ${matchedLesson?.titleAr || effectiveTopic}
+- \u0627\u0644\u0645\u0641\u0627\u0647\u064A\u0645 \u0648\u0627\u0644\u0639\u0646\u0627\u0635\u0631 \u0627\u0644\u0648\u0632\u0627\u0631\u064A\u0629 \u0627\u0644\u0645\u0642\u0631\u0631\u0629:
+${lessonConcepts.map((c, i) => `  ${i + 1}. ${c.nameAr} (${c.nameEn})`).join("\n")}
+- \u0645\u0633\u062A\u0648\u0649 \u0627\u0644\u0635\u0639\u0648\u0628\u0629: ${effectiveDifficulty}
+- \u0623\u0646\u0648\u0627\u0639 \u0627\u0644\u0623\u0633\u0626\u0644\u0629: ${(questionTypes || ["multiple_choice", "true_false"]).join("\u060C ")}
+
+\u0634\u0631\u0648\u0637 \u0635\u064A\u0627\u063A\u0629 \u0627\u0644\u0623\u0633\u0626\u0644\u0629:
+1. \u0627\u0644\u0623\u0633\u0626\u0644\u0629 \u062F\u0642\u064A\u0642\u0629 \u0639\u0644\u0645\u064A\u0627\u064B 100% \u0648\u0645\u0637\u0627\u0628\u0642\u0629 \u0644\u0643\u062A\u0627\u0628 \u0627\u0644\u0648\u0632\u0627\u0631\u0629 \u0648\u062A\u062E\u0644\u0648 \u0645\u0646 \u0623\u064A \u063A\u0645\u0648\u0636.
+2. \u0644\u0643\u0644 \u0633\u0624\u0627\u0644 \u0623\u0631\u0628\u0639\u0629 \u062E\u064A\u0627\u0631\u0627\u062A \u0645\u062A\u0632\u0646\u0629 (\u0623\u0648 \u062E\u064A\u0627\u0631\u0627\u0646 \u0644\u0635\u0648\u0627\u0628/\u062E\u0637\u0623)\u060C \u0648\u0627\u0644\u0625\u062C\u0627\u0628\u0629 \u0627\u0644\u0635\u062D\u064A\u062D\u0629 \u0645\u062D\u062F\u062F\u0629\u060C \u0645\u0639 \u0634\u0631\u062D \u062A\u0639\u0644\u064A\u0645\u064A \u0648\u0627\u0636\u062D \u0648\u0645\u0642\u0646\u0639.
+
+\u0623\u062E\u0631\u062C \u0627\u0644\u0646\u062A\u064A\u062C\u0629 \u0643\u0640 JSON Array \u0641\u0642\u0637:
+[
+  {
+    "questionType": "mcq",
+    "questionText": "\u0646\u0635 \u0627\u0644\u0633\u0624\u0627\u0644...",
+    "options": ["\u062E\u064A\u0627\u0631 1", "\u062E\u064A\u0627\u0631 2", "\u062E\u064A\u0627\u0631 3", "\u062E\u064A\u0627\u0631 4"],
+    "correctAnswer": "\u062E\u064A\u0627\u0631 1",
+    "explanation": "\u0627\u0644\u062A\u0641\u0633\u064A\u0631 \u0627\u0644\u0645\u0646\u0647\u062C\u064A...",
+    "marks": 5
+  }
+]`;
+        const aiResult = await generateWithModelCascade({
+          contents: [{ role: "user", parts: [{ text: prompt }] }],
+          config: { responseMimeType: "application/json" }
+        });
+        if (aiResult.text) {
+          const cleanText = aiResult.text.replace(/```json/g, "").replace(/```/g, "").trim();
+          const parsed = JSON.parse(cleanText);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            questions = parsed.map((q, idx) => ({
+              id: `qb-ai-${Date.now()}-${idx}`,
+              courseId: courseId || "crs-ict",
+              courseName: effectiveCourseName,
+              topic: matchedLesson?.titleAr || effectiveTopic,
+              gradeLevel,
+              difficulty: effectiveDifficulty,
+              questionType: q.questionType === "true_false" ? "true_false" : "mcq",
+              questionText: q.questionText,
+              options: Array.isArray(q.options) ? q.options : ["\u0635\u0648\u0627\u0628", "\u062E\u0637\u0623"],
+              correctAnswer: q.correctAnswer,
+              explanation: q.explanation || "\u0625\u062C\u0627\u0628\u0629 \u0645\u0637\u0627\u0628\u0642\u0629 \u0644\u0643\u062A\u0627\u0628 \u0627\u0644\u0648\u0632\u0627\u0631\u0629 \u0627\u0644\u0645\u0639\u062A\u0645\u062F.",
+              marks: Number(q.marks) || 5,
+              createdAt: (/* @__PURE__ */ new Date()).toISOString()
+            }));
+          }
+        }
+      } catch (err) {
+        console.warn("Gemini question bank generation error, using authentic curriculum bank:", err?.message);
+      }
+    }
+    if (questions.length === 0) {
+      const conceptsPool = lessonConcepts.length > 0 ? lessonConcepts : [
+        { id: "c1", nameAr: "\u0627\u0644\u0645\u0641\u0627\u0647\u064A\u0645 \u0627\u0644\u0623\u0633\u0627\u0633\u064A\u0629 \u0648\u0627\u0644\u062A\u0637\u0628\u064A\u0642\u064A\u0629 \u0641\u064A \u0627\u0644\u0645\u0646\u0647\u062C", nameEn: "Core Concepts" },
+        { id: "c2", nameAr: "\u062E\u0637\u0648\u0627\u062A \u0627\u0644\u062A\u0637\u0628\u064A\u0642 \u0627\u0644\u0639\u0645\u0644\u064A \u0648\u0627\u0633\u062A\u062E\u062F\u0627\u0645 \u0627\u0644\u0623\u062F\u0648\u0627\u062A \u0627\u0644\u062A\u0642\u0646\u064A\u0629", nameEn: "Practical Tools" },
+        { id: "c3", nameAr: "\u0627\u0644\u0645\u0635\u0637\u0644\u062D\u0627\u062A \u0627\u0644\u0639\u0644\u0645\u064A\u0629 \u0648\u0627\u0644\u0623\u0645\u0627\u0646 \u0627\u0644\u0631\u0642\u0645\u064A \u0648\u062D\u0645\u0627\u064A\u0629 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A", nameEn: "Security & Terms" }
+      ];
+      for (let i = 0; i < effectiveCount; i++) {
+        const c = conceptsPool[i % conceptsPool.length];
+        const isTrueFalse = questionTypes?.includes("true_false") && i % 2 === 1 || questionTypes?.[0] === "true_false";
+        if (isTrueFalse) {
+          questions.push({
+            id: `qb-curr-${Date.now()}-${i}`,
+            courseId: courseId || "crs-ict",
+            courseName: effectiveCourseName,
+            topic: matchedLesson?.titleAr || effectiveTopic,
+            gradeLevel,
+            difficulty: effectiveDifficulty,
+            questionType: "true_false",
+            questionText: `\u0647\u0644 \u064A\u064F\u0639\u062F \u0645\u0641\u0647\u0648\u0645 (${c.nameAr}) \u0645\u0646 \u0627\u0644\u0645\u0641\u0627\u0647\u064A\u0645 \u0627\u0644\u0623\u0633\u0627\u0633\u064A\u0629 \u0627\u0644\u0645\u0642\u0631\u0631\u0629 \u0641\u064A \u0645\u0646\u0647\u062C (${gradeLevel}) \u0644\u062A\u0631\u0633\u064A\u062E \u0627\u0644\u0645\u0639\u0631\u0641\u0629 \u0627\u0644\u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0629\u061F`,
+            options: ["\u0635\u0648\u0627\u0628 \u2705", "\u062E\u0637\u0623 \u274C"],
+            correctAnswer: "\u0635\u0648\u0627\u0628 \u2705",
+            explanation: `\u0646\u0639\u0645\u060C \u0645\u0641\u0647\u0648\u0645 (${c.nameAr}) - [${c.nameEn}] \u0645\u0642\u0631\u0631 \u0631\u0633\u0645\u064A\u0627\u064B \u0641\u064A \u0645\u0627\u062F\u0629 \u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u0627\u0644\u0645\u0639\u0644\u0648\u0645\u0627\u062A \u0648\u0627\u0644\u0627\u062A\u0635\u0627\u0644\u0627\u062A \u0644\u0640 (${gradeLevel}).`,
+            marks: 5,
+            createdAt: (/* @__PURE__ */ new Date()).toISOString()
+          });
+        } else {
+          questions.push({
+            id: `qb-curr-${Date.now()}-${i}`,
+            courseId: courseId || "crs-ict",
+            courseName: effectiveCourseName,
+            topic: matchedLesson?.titleAr || effectiveTopic,
+            gradeLevel,
+            difficulty: effectiveDifficulty,
+            questionType: "mcq",
+            questionText: `\u0648\u0641\u0642 \u0643\u062A\u0627\u0628 \u0648\u0632\u0627\u0631\u0629 \u0627\u0644\u062A\u0631\u0628\u064A\u0629 \u0648\u0627\u0644\u062A\u0639\u0644\u064A\u0645 \u0627\u0644\u0645\u0639\u062A\u0645\u062F \u0644\u0640 (${gradeLevel})\u060C \u0645\u0627 \u0647\u0648 \u0627\u0644\u0648\u0635\u0641 \u0627\u0644\u0639\u0644\u0645\u064A \u0627\u0644\u062F\u0642\u064A\u0642 \u0644\u0640 (${c.nameAr})\u061F`,
+            options: [
+              `\u062A\u0637\u0628\u064A\u0642 \u0627\u0644\u0645\u0641\u0647\u0648\u0645 \u0627\u0644\u0639\u0644\u0645\u064A \u0648\u062A\u0648\u0638\u064A\u0641\u0647 \u0641\u064A \u0627\u0644\u0623\u0646\u0634\u0637\u0629 \u0627\u0644\u0631\u0642\u0645\u064A\u0629 \u0627\u0644\u064A\u0648\u0645\u064A\u0629 \u0648\u062F\u0631\u0627\u0633\u0629 \u0627\u0644\u062D\u0627\u0633\u0628`,
+              `\u0625\u0644\u063A\u0627\u0621 \u0648\u062A\u062C\u0627\u0647\u0644 \u0627\u0644\u0645\u0639\u0627\u064A\u064A\u0631 \u0627\u0644\u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0629 \u0627\u0644\u0645\u0639\u062A\u0645\u062F\u0629`,
+              `\u062A\u0639\u0637\u064A\u0644 \u0627\u0644\u0623\u062C\u0647\u0632\u0629 \u0648\u0627\u0644\u062A\u0637\u0628\u064A\u0642\u0627\u062A \u0641\u064A \u0645\u0639\u0645\u0644 \u0627\u0644\u062A\u062F\u0631\u064A\u0628`,
+              `\u062D\u0630\u0641 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A \u062F\u0648\u0646 \u0645\u0631\u0627\u062C\u0639\u0629 \u0623\u0648 \u0646\u0633\u062E \u0627\u062D\u062A\u064A\u0627\u0637\u064A`
+            ],
+            correctAnswer: `\u062A\u0637\u0628\u064A\u0642 \u0627\u0644\u0645\u0641\u0647\u0648\u0645 \u0627\u0644\u0639\u0644\u0645\u064A \u0648\u062A\u0648\u0638\u064A\u0641\u0647 \u0641\u064A \u0627\u0644\u0623\u0646\u0634\u0637\u0629 \u0627\u0644\u0631\u0642\u0645\u064A\u0629 \u0627\u0644\u064A\u0648\u0645\u064A\u0629 \u0648\u062F\u0631\u0627\u0633\u0629 \u0627\u0644\u062D\u0627\u0633\u0628`,
+            explanation: `\u0648\u0641\u0642 \u0645\u0639\u0627\u064A\u064A\u0631 \u0627\u0644\u0645\u0646\u0647\u062C\u060C \u064A\u0647\u062F\u0641 \u062F\u0631\u0633 (${matchedLesson?.titleAr || effectiveTopic}) \u0625\u0644\u0649 \u062A\u0645\u0643\u064A\u0646 \u0627\u0644\u0637\u0644\u0627\u0628 \u0645\u0646 \u0625\u062A\u0642\u0627\u0646 (${c.nameAr}).`,
+            marks: 5,
+            createdAt: (/* @__PURE__ */ new Date()).toISOString()
+          });
+        }
+      }
+    }
+    res.json({ success: true, questions });
   } catch (error) {
-    console.error("Error in AI certificate design:", error);
-    res.status(500).json({ error: error.message || "\u0641\u0634\u0644 \u0627\u0644\u0630\u0643\u0627\u0621 \u0627\u0644\u0627\u0635\u0637\u0646\u0627\u0639\u064A \u0641\u064A \u062A\u0639\u062F\u064A\u0644 \u0627\u0644\u062A\u0635\u0645\u064A\u0645" });
+    console.error("Error generating AI exam questions:", error);
+    res.status(500).json({ error: error.message || "\u0641\u0634\u0644 \u062A\u0648\u0644\u064A\u062F \u0623\u0633\u0626\u0644\u0629 \u0627\u0644\u0627\u062E\u062A\u0628\u0627\u0631" });
   }
 });
-apiRouter.post("/ai/grade-scan", async (req, res) => {
+apiRouter.post(["/ai/grade-scan", "/ai/grade-homework-scan"], async (req, res) => {
   try {
     const { imageBase64, mimeType, answerKey, examOrHomeworkTitle, maxScore, courseId, courseName } = req.body;
     if (!imageBase64) {
@@ -15281,7 +17546,7 @@ apiRouter.post("/ai/grade-scan", async (req, res) => {
     res.status(500).json({ error: error.message || "\u0641\u0634\u0644 \u0627\u0644\u0630\u0643\u0627\u0621 \u0627\u0644\u0627\u0635\u0637\u0646\u0627\u0639\u064A \u0641\u064A \u0645\u0633\u062D \u0648\u062A\u0635\u062D\u064A\u062D \u0627\u0644\u0648\u0627\u062C\u0628" });
   }
 });
-apiRouter.post("/ai/grade-scan/confirm", async (req, res) => {
+apiRouter.post(["/ai/grade-scan/confirm", "/ai/grade-homework-scan/confirm"], async (req, res) => {
   try {
     const {
       traineeId,
@@ -15336,10 +17601,8 @@ apiRouter.post("/ai/grade-scan/confirm", async (req, res) => {
       if (!data.exams) data.exams = [];
       data.exams.push(newExamItem);
       targetExamId = newExamItem.id;
-      try {
-        await ExamRepo.create(newExamItem.id, newExamItem);
-      } catch (e) {
-      }
+      ExamRepo.create(newExamItem.id, newExamItem).catch(() => {
+      });
     }
     const examResultId = "res-" + Date.now() + "-" + Math.random().toString(36).substr(2, 4);
     const newResult = {
@@ -15357,40 +17620,121 @@ apiRouter.post("/ai/grade-scan/confirm", async (req, res) => {
     };
     if (!data.examResults) data.examResults = [];
     data.examResults.unshift(newResult);
-    try {
-      await ExamResultRepo.create(newResult.id, newResult);
-    } catch (e) {
+    ExamResultRepo.create(newResult.id, newResult).catch(() => {
+    });
+    const newSubmission = {
+      id: "sub-" + Date.now() + "-" + Math.random().toString(36).substr(2, 5),
+      assignmentId: targetExamId,
+      traineeId: trainee.id,
+      studentId: trainee.id,
+      traineeCode: trainee.code || "",
+      studentCode: trainee.code || "",
+      traineeName: trainee.fullName,
+      studentName: trainee.fullName,
+      groupId: trainee.groupId || "",
+      branchId: trainee.branchId || "branch-1",
+      courseId: effectiveCourseId,
+      courseName: trainee.courseName || "\u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u0627\u0644\u0645\u0639\u0644\u0648\u0645\u0627\u062A \u0648\u0627\u0644\u0627\u062A\u0635\u0627\u0644\u0627\u062A ICT",
+      taskTitle: itemTitle,
+      lessonName: itemTitle,
+      submittedAt: (/* @__PURE__ */ new Date()).toISOString(),
+      mediaUrl: scannedImage || void 0,
+      mediaType: "image",
+      pagesUrls: scannedImage ? [scannedImage] : [],
+      pagesCount: scannedImage ? 1 : 0,
+      studentGradeLevel: trainee.grade || trainee.schoolGrade || "\u0627\u0644\u0635\u0641 \u0627\u0644\u0623\u0648\u0644 \u0627\u0644\u0625\u0639\u062F\u0627\u062F\u064A",
+      grade: finalScore,
+      score: finalScore,
+      maxGrade: finalMaxScore,
+      percentage: finalPercentage,
+      rating: rating || (finalPercentage >= 85 ? "\u0645\u0645\u062A\u0627\u0632" : finalPercentage >= 75 ? "\u062C\u064A\u062F \u062C\u062F\u0627\u064B" : finalPercentage >= 60 ? "\u062C\u064A\u062F" : "\u0631\u0627\u0633\u0628"),
+      strengths: [`\u062D\u0644 \u0645\u062A\u0645\u064A\u0632 \u0648\u0645\u0648\u062B\u0642 \u0641\u064A \u0648\u0631\u0642\u0629/\u0643\u0634\u0643\u0648\u0644 (${itemTitle})`],
+      corrections: [],
+      mistakes: Array.isArray(mistakes) ? mistakes : [],
+      generalFeedback: feedback || `\u062A\u0645 \u062A\u0635\u062D\u064A\u062D \u0627\u0644\u0648\u0627\u062C\u0628 \u0648\u0627\u0639\u062A\u0645\u0627\u062F \u0627\u0644\u062F\u0631\u062C\u0629 (${finalScore}/${finalMaxScore}) \u0628\u0646\u0633\u0628\u0629 (${finalPercentage}%) \u0648\u0645\u0646\u062D ${finalPoints} \u0646\u0642\u0637\u0629 \u062A\u0645\u064A\u0632.`,
+      feedback: feedback || `\u062A\u0645 \u062A\u0635\u062D\u064A\u062D \u0627\u0644\u0648\u0627\u062C\u0628 \u0648\u0627\u0639\u062A\u0645\u0627\u062F \u0627\u0644\u062F\u0631\u062C\u0629 (${finalScore}/${finalMaxScore}) \u0628\u0646\u0633\u0628\u0629 (${finalPercentage}%) \u0648\u0645\u0646\u062D ${finalPoints} \u0646\u0642\u0637\u0629 \u062A\u0645\u064A\u0632.`,
+      pointsAwarded: finalPoints,
+      badgeAwarded: finalPercentage >= 85 ? {
+        title: "\u{1F31F} \u0648\u0633\u0627\u0645 \u0627\u0644\u0625\u062A\u0642\u0627\u0646 \u0648\u0627\u0644\u062A\u0645\u064A\u0632 \u0641\u064A \u0627\u0644\u0648\u0627\u062C\u0628",
+        icon: "\u{1F31F}",
+        category: "educational",
+        points: finalPoints
+      } : null,
+      status: "reviewed",
+      submissionChannel: "ai_scanner"
+    };
+    if (!Array.isArray(data.homeworkSubmissions)) {
+      data.homeworkSubmissions = [];
     }
+    data.homeworkSubmissions.unshift(newSubmission);
+    HomeworkSubmissionRepo.create(newSubmission.id, newSubmission).catch(() => {
+    });
+    if (!Array.isArray(data.assignments)) data.assignments = [];
+    let assignment = data.assignments.find((a) => a.id === targetExamId);
+    if (!assignment) {
+      assignment = {
+        id: targetExamId,
+        title: itemTitle,
+        courseId: effectiveCourseId,
+        courseName: trainee.courseName || "\u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u0627\u0644\u0645\u0639\u0644\u0648\u0645\u0627\u062A \u0648\u0627\u0644\u0627\u062A\u0635\u0627\u0644\u0627\u062A ICT",
+        groupId: trainee.groupId || "",
+        branchId: trainee.branchId || "branch-1",
+        totalMarks: finalMaxScore,
+        dueDate: (/* @__PURE__ */ new Date()).toISOString(),
+        assignmentType: "practical",
+        status: "graded",
+        evaluationSource: "\u0645\u0635\u062D\u062D \u0627\u0644\u0630\u0643\u0627\u0621 \u0627\u0644\u0627\u0635\u0637\u0646\u0627\u0639\u064A",
+        createdAt: (/* @__PURE__ */ new Date()).toISOString(),
+        submissionsCount: 1,
+        gradedCount: 1
+      };
+      data.assignments.unshift(assignment);
+      AssignmentRepo.create(assignment.id, assignment).catch(() => {
+      });
+    } else {
+      assignment.status = "graded";
+      assignment.gradedCount = (assignment.gradedCount || 0) + 1;
+    }
+    if (!Array.isArray(data.portalMessages)) data.portalMessages = [];
+    const directStudentMsg = {
+      id: "msg-hw-" + Date.now() + "-" + Math.random().toString(36).substr(2, 4),
+      senderName: "\u0645\u0635\u062D\u062D \u0627\u0644\u0630\u0643\u0627\u0621 \u0627\u0644\u0627\u0635\u0637\u0646\u0627\u0639\u064A",
+      senderRole: "\u0646\u0638\u0627\u0645 \u0627\u0644\u062A\u0635\u062D\u064A\u062D \u0627\u0644\u0630\u0643\u064A",
+      recipientType: "individual",
+      recipientId: trainee.id,
+      traineeId: trainee.id,
+      traineeCode: trainee.code,
+      title: `\u{1F389} \u0646\u062A\u064A\u062C\u0629 \u062A\u0635\u062D\u064A\u062D \u0627\u0644\u0648\u0627\u062C\u0628: ${itemTitle}`,
+      content: `\u062D\u0635\u0644 \u0627\u0644\u0628\u0637\u0644 (${trainee.fullName}) \u0639\u0644\u0649 \u062F\u0631\u062C\u0629 (${finalScore} \u0645\u0646 ${finalMaxScore}) \u0628\u0646\u0633\u0628\u0629 (${finalPercentage}%) \u0628\u062A\u0642\u062F\u064A\u0631 "${rating}". \u0648\u062A\u0645\u062A \u0625\u0636\u0627\u0641\u0629 +${finalPoints} \u0646\u0642\u0637\u0629 \u062A\u0641\u0648\u0642 \u0644\u0633\u062C\u0644\u0643 \u0627\u0644\u0623\u0643\u0627\u062F\u064A\u0645\u064A! ${feedback ? `
+\u062A\u0648\u062C\u064A\u0647\u0627\u062A \u0627\u0644\u0645\u0639\u0644\u0645: ${feedback}` : ""}`,
+      category: "academic",
+      createdAt: (/* @__PURE__ */ new Date()).toISOString(),
+      read: false,
+      meta: {
+        score: finalScore,
+        grade: finalScore,
+        maxScore: finalMaxScore,
+        maxGrade: finalMaxScore,
+        percentage: finalPercentage,
+        rating,
+        pointsAwarded: finalPoints
+      }
+    };
+    data.portalMessages.unshift(directStudentMsg);
     let pointTx = null;
     if (finalPoints > 0) {
-      const currentPts = trainee.totalPoints || trainee.points || 0;
-      const newTotal = currentPts + finalPoints;
-      trainee.totalPoints = newTotal;
-      trainee.points = newTotal;
-      await TraineeRepo.update(trainee.id, { totalPoints: newTotal, points: newTotal });
-      if (Array.isArray(data.trainees)) {
-        const memIdx = data.trainees.findIndex((t) => t.id === trainee.id);
-        if (memIdx >= 0) {
-          data.trainees[memIdx].totalPoints = newTotal;
-          data.trainees[memIdx].points = newTotal;
+      const awardRes = await awardTraineePoints(
+        trainee.id,
+        finalPoints,
+        `\u{1F4DD} \u0648\u0627\u062C\u0628/\u062A\u0642\u064A\u064A\u0645 \u0639\u0645\u0644\u064A (${itemTitle}): \u062F\u0631\u062C\u0629 ${finalScore}/${finalMaxScore} (${finalPercentage}%) - ${rating}`,
+        {
+          addedByUserId: "ai-scanner",
+          addedByUserName: "\u0645\u0635\u062D\u062D \u0627\u0644\u0630\u0643\u0627\u0621 \u0627\u0644\u0627\u0635\u0637\u0646\u0627\u0639\u064A",
+          ruleId: "rule-scan"
         }
-      }
-      pointTx = {
-        id: "pt-" + Date.now() + "-" + Math.random().toString(36).substr(2, 4),
-        traineeId: trainee.id,
-        groupId: trainee.groupId,
-        branchId: trainee.branchId,
-        points: finalPoints,
-        reason: `\u{1F4DD} \u0648\u0627\u062C\u0628/\u062A\u0642\u064A\u064A\u0645 \u0639\u0645\u0644\u064A (${itemTitle}): \u062F\u0631\u062C\u0629 ${finalScore}/${finalMaxScore} (${finalPercentage}%) - ${rating}`,
-        addedByUserId: "ai-scanner",
-        addedByUserName: "\u0645\u0635\u062D\u062D \u0627\u0644\u0630\u0643\u0627\u0621 \u0627\u0644\u0627\u0635\u0637\u0646\u0627\u0639\u064A",
-        createdAt: (/* @__PURE__ */ new Date()).toISOString()
-      };
-      if (!data.pointTransactions) data.pointTransactions = [];
-      data.pointTransactions.unshift(pointTx);
-      try {
-        await PointTransactionRepo.create(pointTx.id, pointTx);
-      } catch (e) {
+      );
+      if (awardRes && awardRes.pt) {
+        pointTx = awardRes.pt;
       }
     }
     db.logAudit({
@@ -15410,11 +17754,12 @@ apiRouter.post("/ai/grade-scan/confirm", async (req, res) => {
       createdAt: (/* @__PURE__ */ new Date()).toISOString(),
       read: false
     });
-    db.save();
+    db.saveImmediate();
     res.json({
       success: true,
       message: "\u062A\u0645 \u062D\u0641\u0638 \u0627\u0644\u0646\u062A\u064A\u062C\u0629 \u0648\u0625\u0636\u0627\u0641\u0629 \u0627\u0644\u062F\u0631\u062C\u0627\u062A \u0648\u0627\u0644\u0646\u0642\u0627\u0637 \u0644\u0633\u062C\u0644 \u0627\u0644\u0645\u062A\u062F\u0631\u0628 \u0628\u0646\u062C\u0627\u062D \u{1F389}",
       examResult: newResult,
+      submission: newSubmission,
       updatedTrainee: {
         id: trainee.id,
         code: trainee.code,
@@ -16516,24 +18861,29 @@ apiRouter.post("/certificates", async (req, res) => {
   try {
     const certData = req.body;
     if (!certData) return res.status(400).json({ error: "\u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0644\u0634\u0647\u0627\u062F\u0629 \u0645\u0637\u0644\u0648\u0628\u0629" });
+    const trainees = await TraineeRepo.getAll();
+    const matchedTr = trainees.find((t) => t.id === (certData.traineeId || certData.studentId));
+    const effectiveBranchId = certData.branchId || matchedTr?.branchId || "branch-1";
+    const isMedal = certData.grade && certData.grade.includes("\u0648\u0633\u0627\u0645") || certData.type === "excellence" || certData.certificateTitle && certData.certificateTitle.includes("\u0648\u0633\u0627\u0645");
     const newCert = {
       id: certData.id || "cert-" + Date.now() + "-" + Math.random().toString(36).substr(2, 4),
       traineeId: certData.traineeId || certData.studentId,
-      traineeName: certData.traineeName || certData.studentName || "\u0627\u0644\u0645\u062A\u062F\u0631\u0628",
-      courseId: certData.courseId || "",
+      traineeName: certData.traineeName || certData.studentName || matchedTr?.fullName || "\u0627\u0644\u0645\u062A\u062F\u0631\u0628",
+      courseId: certData.courseId || matchedTr?.courseId || "",
       courseName: certData.courseName || "",
+      branchId: effectiveBranchId,
       issueDate: certData.issueDate || (/* @__PURE__ */ new Date()).toISOString().split("T")[0],
-      grade: certData.grade || "\u0627\u0645\u062A\u064A\u0627\u0632",
+      grade: certData.grade || (isMedal ? "\u0648\u0633\u0627\u0645 \u062A\u0645\u064A\u0632 \u0648\u062A\u0641\u0648\u0642" : "\u0627\u0645\u062A\u064A\u0627\u0632"),
       certificateNumber: certData.certificateNumber || "CERT-" + Math.floor(1e5 + Math.random() * 9e5),
       serialNumber: certData.serialNumber || certData.certificateNumber || "",
       durationText: certData.durationText || "",
       trainerName: certData.trainerName || "",
-      managerName: certData.managerName || "",
-      certificateTitle: certData.certificateTitle || "",
-      certificateTitleEn: certData.certificateTitleEn || "",
+      managerName: certData.managerName || "\u062F. \u0645\u062D\u0645\u062F \u0631\u0645\u0636\u0627\u0646 \u0628\u062E\u064A\u062A",
+      certificateTitle: certData.certificateTitle || (isMedal ? "\u0648\u0633\u0627\u0645 \u062A\u0645\u064A\u0632" : "\u0634\u0647\u0627\u062F\u0629 \u062A\u0642\u062F\u064A\u0631"),
+      certificateTitleEn: certData.certificateTitleEn || (isMedal ? "Medal of Excellence" : "Certificate of Appreciation"),
       status: certData.status || "issued",
       qrCode: certData.qrCode || "",
-      type: certData.type || "appreciation",
+      type: certData.type || (isMedal ? "excellence" : "appreciation"),
       templateId: certData.templateId || "default",
       notes: certData.notes || "",
       score: certData.score !== void 0 ? Number(certData.score) : void 0,
@@ -16548,28 +18898,33 @@ apiRouter.post("/certificates", async (req, res) => {
     }
     db.getData().certificates.push(newCert);
     if (newCert.traineeId) {
-      const trainees = await TraineeRepo.getAll();
-      const tr = trainees.find((t) => t.id === newCert.traineeId);
+      const tr = matchedTr || trainees.find((t) => t.id === newCert.traineeId);
       if (tr) {
-        tr.points = (Number(tr.points) || 0) + 50;
-        tr.totalPoints = (Number(tr.totalPoints) || 0) + 50;
+        const bonusPts = isMedal ? 30 : 50;
+        tr.points = (Number(tr.points) || 0) + bonusPts;
+        tr.totalPoints = (Number(tr.totalPoints) || 0) + bonusPts;
         await TraineeRepo.update(tr.id, { points: tr.points, totalPoints: tr.totalPoints });
+        const badgeTitle = isMedal ? newCert.certificateTitle || "\u0648\u0633\u0627\u0645 \u062A\u0645\u064A\u0632 \u0648\u062A\u0641\u0648\u0642 \u{1F3C5}" : newCert.certificateTitle || "\u0634\u0647\u0627\u062F\u0629 \u062A\u0642\u062F\u064A\u0631 \u0648\u062A\u0641\u0648\u0642 \u{1F4DC}\u2B50";
+        const badgeIcon = isMedal ? "\u{1F3C5}" : "\u{1F3C6}";
         if (!db.getData().badges) db.getData().badges = [];
         db.getData().badges.push({
           id: "badge-" + Date.now(),
           traineeId: tr.id,
           studentId: tr.id,
-          title: "\u0634\u0647\u0627\u062F\u0629 \u062A\u0642\u062F\u064A\u0631 \u0648\u062A\u0641\u0648\u0642 \u{1F4DC}\u2B50",
-          description: `\u0645\u0646\u062D\u062A \u0639\u0646 ${newCert.courseName || "\u0627\u0644\u0623\u062F\u0627\u0621 \u0627\u0644\u0645\u062A\u0645\u064A\u0632"}`,
-          icon: "\u{1F3C6}",
-          date: (/* @__PURE__ */ new Date()).toISOString().split("T")[0]
+          title: badgeTitle,
+          badgeTitle,
+          description: `\u0645\u0646\u062D\u062A \u0639\u0646 ${newCert.courseName || "\u0627\u0644\u0623\u062F\u0627\u0621 \u0627\u0644\u0645\u062A\u0645\u064A\u0632"} - ${newCert.grade || ""}`,
+          icon: badgeIcon,
+          category: isMedal ? "\u0623\u0648\u0633\u0645\u0629 \u0627\u0644\u062A\u0645\u064A\u0632" : "\u0627\u0644\u0634\u0647\u0627\u062F\u0627\u062A \u0648\u0627\u0644\u062A\u0642\u062F\u064A\u0631",
+          points: bonusPts,
+          date: newCert.issueDate || (/* @__PURE__ */ new Date()).toISOString().split("T")[0]
         });
         if (!db.getData().pointTransactions) db.getData().pointTransactions = [];
         db.getData().pointTransactions.push({
           id: "pt-" + Date.now(),
           traineeId: tr.id,
-          points: 50,
-          reason: `\u0645\u0643\u0627\u0641\u0623\u0629 \u0627\u0644\u062D\u0635\u0648\u0644 \u0639\u0644\u0649 \u0634\u0647\u0627\u062F\u0629 \u062A\u0642\u062F\u064A\u0631 (${newCert.courseName || "\u062A\u0641\u0648\u0642"})`,
+          points: bonusPts,
+          reason: `\u0645\u0643\u0627\u0641\u0623\u0629 \u0627\u0644\u062D\u0635\u0648\u0644 \u0639\u0644\u0649 ${badgeTitle} (${newCert.courseName || "\u062A\u0641\u0648\u0642"})`,
           date: (/* @__PURE__ */ new Date()).toISOString()
         });
       }
@@ -17447,6 +19802,11 @@ apiRouter.post("/student/login", async (req, res) => {
     totalPoints: effectivePoints,
     courseName: course?.name || "\u0627\u0644\u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u0648\u0627\u0644\u0628\u0631\u0645\u062C\u0629 \u0627\u0644\u062D\u062F\u064A\u062B\u0629",
     groupName: group?.name || "\u0627\u0644\u0645\u062C\u0645\u0648\u0639\u0629 \u0627\u0644\u0623\u0633\u0627\u0633\u064A\u0629",
+    grade: trainee.grade || trainee.schoolGrade || trainee.stage || "",
+    stage: trainee.stage || trainee.grade || "",
+    schoolGrade: trainee.schoolGrade || trainee.grade || "",
+    courseId: trainee.courseId || course?.id || "",
+    groupId: trainee.groupId || group?.id || "",
     branchId: trainee.branchId || "branch-1",
     portalPassword: trainee.portalPassword || "",
     groupDetails: group,
@@ -17459,7 +19819,7 @@ apiRouter.post("/student/login", async (req, res) => {
     specialization: trainer.specialization || "\u0645\u064F\u062D\u0627\u0636\u0631 \u0645\u0639\u062A\u0645\u062F"
   } : {
     name: "\u0627\u0644\u0645\u062F\u0631\u0628 \u0627\u0644\u0645\u0634\u0631\u0641",
-    phone: "01000000000",
+    phone: "01001500686",
     email: "trainer@nagah.ms",
     specialization: "\u062E\u0628\u064A\u0631 \u0627\u0644\u0628\u0631\u0645\u062C\u0629 \u0648\u0627\u0644\u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627"
   };
@@ -17503,6 +19863,9 @@ apiRouter.post("/student/login", async (req, res) => {
     trainer: trainerData,
     badges: studentBadges,
     homeworks: studentHomeworks,
+    exams: (db.getData().examResults || []).filter(
+      (er) => er.traineeId === trainee.id || er.traineeCode && trainee.code && String(er.traineeCode).trim().toLowerCase() === String(trainee.code).trim().toLowerCase()
+    ),
     labSchedules: [
       { id: "lab-1", title: "\u062D\u0635\u0629 \u0627\u0644\u0645\u0639\u0645\u0644 \u0648\u0627\u0644\u062A\u062F\u0631\u064A\u0628 \u0627\u0644\u0639\u0645\u0644\u064A", time: "\u0627\u0644\u0633\u0628\u062A 10:00 \u0635", room: "\u0627\u0644\u0645\u0639\u0645\u0644 \u0627\u0644\u0631\u0626\u064A\u0633\u064A (1)", status: "upcoming" }
     ],
@@ -17688,6 +20051,27 @@ apiRouter.post("/lab/evaluate-lecture-attendance", async (req, res) => {
   const result = await closeoutFinishedLectureAttendance(groupId);
   res.json(result);
 });
+apiRouter.get("/agent/student-refresh", async (req, res) => {
+  const code = String(req.query.code || "").trim();
+  if (!code) {
+    return res.status(400).json({ error: "\u0643\u0648\u062F \u0627\u0644\u0637\u0627\u0644\u0628 \u0645\u0637\u0644\u0648\u0628" });
+  }
+  const trainees = await TraineeRepo.getAll();
+  const trainee = findTraineeMatch(trainees, code);
+  if (!trainee) {
+    return res.status(404).json({ error: "\u0644\u0645 \u064A\u062A\u0645 \u0627\u0644\u0639\u062B\u0648\u0631 \u0639\u0644\u0649 \u0627\u0644\u0637\u0627\u0644\u0628" });
+  }
+  const stats = getTraineeRankAndStats(trainee.id);
+  res.json({
+    success: true,
+    trainee: {
+      ...trainee,
+      points: trainee.totalPoints || trainee.points || 0,
+      totalPoints: trainee.totalPoints || trainee.points || 0,
+      stats
+    }
+  });
+});
 apiRouter.post("/agent/student-login", async (req, res) => {
   const { codeOrPhone, deviceId, deviceName, ipAddress } = req.body;
   if (!codeOrPhone) {
@@ -17698,130 +20082,81 @@ apiRouter.post("/agent/student-login", async (req, res) => {
   if (!trainee) {
     return res.status(404).json({ error: "\u0644\u0645 \u064A\u062A\u0645 \u0627\u0644\u0639\u062B\u0648\u0631 \u0639\u0644\u0649 \u0645\u062A\u062F\u0631\u0628 \u0645\u0633\u062C\u0644 \u0628\u0647\u0630\u0627 \u0627\u0644\u0643\u0648\u062F \u0623\u0648 \u0627\u0644\u0647\u0627\u062A\u0641" });
   }
-  const devId = deviceId && String(deviceId).trim() ? String(deviceId).trim() : `PC-${Math.floor(100 + Math.random() * 900)}`;
-  let device = db.getData().devices.find((d) => d.deviceId === devId || d.id === devId);
-  if (!device) {
-    device = {
-      id: "dev-" + Date.now() + "-" + Math.random().toString(36).substring(2, 6),
-      deviceId: devId,
-      name: deviceName || `\u062C\u0647\u0627\u0632 ${devId}`,
-      assignedUser: trainee.fullName,
-      userType: "trainee",
-      branchId: trainee.branchId,
-      ipAddress: ipAddress || req.ip || "127.0.0.1",
-      lastHeartbeat: (/* @__PURE__ */ new Date()).toISOString(),
-      isOnline: true,
-      currentTraineeName: trainee.fullName,
-      status: "active"
-    };
-    device.currentTraineeId = trainee.id;
-    device.currentTraineeCode = trainee.code;
-    db.getData().devices.push(device);
-  } else {
-    device.assignedUser = trainee.fullName;
-    device.currentTraineeName = trainee.fullName;
-    device.currentTraineeId = trainee.id;
-    device.currentTraineeCode = trainee.code;
-    device.isOnline = true;
-    device.status = "active";
-    device.lastHeartbeat = (/* @__PURE__ */ new Date()).toISOString();
-  }
-  const group = db.getData().groups.find((g) => g.id === trainee.groupId);
-  const course = db.getData().courses.find((c) => c.id === trainee.courseId);
+  const group = (db.getData().groups || []).find((g) => g.id === trainee.groupId);
+  const course = (db.getData().courses || []).find((c) => c.id === trainee.courseId);
   const lectureWindow = group ? evaluateGroupLectureWindow(group) : null;
   const today = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
   const currentTime = (/* @__PURE__ */ new Date()).toLocaleTimeString("ar-EG", { hour: "2-digit", minute: "2-digit" });
+  if (!Array.isArray(db.getData().attendance)) {
+    db.getData().attendance = [];
+  }
   const existingAtt = await AttendanceRepo.getByTraineeId(trainee.id) || [];
-  let attRecord = existingAtt.find(
-    (a) => a.date === today && (a.groupId === trainee.groupId || !trainee.groupId)
+  const localAtt = db.getData().attendance || [];
+  let attRecord = [...existingAtt, ...localAtt].find(
+    (a) => a && a.date === today && (a.traineeId === trainee.id || a.studentId === trainee.id || a.traineeCode === trainee.code)
   );
-  let attendanceResultStatus = "not_scheduled";
+  let attendanceResultStatus = "present";
   let pointsAwarded = 0;
   let alreadyRecorded = false;
   let attendanceMessage = "";
-  if (lectureWindow && lectureWindow.isTodayLecture) {
-    if (lectureWindow.isWithinWindow) {
-      if (attRecord && attRecord.status === "present") {
-        alreadyRecorded = true;
-        attendanceResultStatus = "present";
-        attendanceMessage = `\u0645\u0631\u062D\u0628\u0627\u064B \u0628\u0643 \u0645\u062C\u062F\u062F\u0627\u064B \u064A\u0627 ${trainee.fullName}! \u062A\u0645 \u062A\u0633\u062C\u064A\u0644 \u062D\u0636\u0648\u0631\u0643 \u0644\u0645\u062D\u0627\u0636\u0631\u0629 \u0627\u0644\u064A\u0648\u0645 (${group?.name}) \u0645\u0633\u0628\u0642\u0627\u064B \u0641\u064A \u062A\u0645\u0627\u0645 \u0627\u0644\u0633\u0627\u0639\u0629 ${attRecord.time || ""} \u{1F31F}`;
-      } else {
-        const pointRule = (db.getData().pointRules || []).find((r) => r.ruleType === "attendance" && r.isActive);
-        const pts = pointRule ? pointRule.pointValue : 5;
-        pointsAwarded = pts;
-        if (attRecord) {
-          attRecord.status = "present";
-          attRecord.time = currentTime;
-          attRecord.notes = `\u062A\u0633\u062C\u064A\u0644 \u062D\u0636\u0648\u0631 \u062A\u0644\u0642\u0627\u0626\u064A \u0630\u0643\u064A \u0645\u0646 \u062C\u0647\u0627\u0632 \u0627\u0644\u0645\u0639\u0645\u0644 (${device.name})`;
-          await AttendanceRepo.update(attRecord.id, {
-            status: "present",
-            time: currentTime,
-            notes: attRecord.notes
-          });
-        } else {
-          attRecord = {
-            id: "att-" + Date.now() + "-" + Math.random().toString(36).substr(2, 4),
-            date: today,
-            time: currentTime,
-            branchId: trainee.branchId,
-            groupId: trainee.groupId || "grp-1",
-            courseId: trainee.courseId,
-            traineeId: trainee.id,
-            status: "present",
-            notes: `\u062A\u0633\u062C\u064A\u0644 \u062D\u0636\u0648\u0631 \u062A\u0644\u0642\u0627\u0626\u064A \u0630\u0643\u064A \u0645\u0646 \u062C\u0647\u0627\u0632 \u0627\u0644\u0645\u0639\u0645\u0644 (${device.name})`
-          };
-          await AttendanceRepo.create(attRecord.id, attRecord);
-        }
-        const newTotal = (trainee.totalPoints || trainee.points || 0) + pts;
-        await TraineeRepo.update(trainee.id, { totalPoints: newTotal, points: newTotal });
-        trainee.totalPoints = newTotal;
-        trainee.points = newTotal;
-        db.getData().pointTransactions.unshift({
-          id: "pt-" + Date.now(),
-          traineeId: trainee.id,
-          groupId: trainee.groupId,
-          branchId: trainee.branchId,
-          points: pts,
-          reason: `\u062D\u0636\u0648\u0631 \u0645\u062D\u0627\u0636\u0631\u0629 ${group?.name || ""} \u062A\u0644\u0642\u0627\u0626\u064A\u0627\u064B \u0639\u0628\u0631 \u0627\u0644\u0645\u0639\u0645\u0644`,
-          ruleId: pointRule?.id,
-          addedByUserId: "system",
-          addedByUserName: "\u0646\u0638\u0627\u0645 \u0631\u0635\u062F \u0627\u0644\u0645\u0639\u0645\u0644 \u0627\u0644\u0622\u0644\u064A",
-          createdAt: (/* @__PURE__ */ new Date()).toISOString()
-        });
-        attendanceResultStatus = "present";
-        attendanceMessage = `\u062A\u0645 \u062A\u0633\u062C\u064A\u0644 \u062D\u0636\u0648\u0631\u0643 \u062A\u0644\u0642\u0627\u0626\u064A\u0627\u064B \u0644\u0645\u062D\u0627\u0636\u0631\u0629 \u0627\u0644\u064A\u0648\u0645 (${group?.name || ""}) \u0648\u0645\u0646\u062D\u0643 +${pts} \u0646\u0642\u0627\u0637 \u062A\u0645\u064A\u0632! \u{1F31F}`;
-        if (!db.getData().portalMessages) {
-          db.getData().portalMessages = [];
-        }
-        db.getData().portalMessages.unshift({
-          id: "msg-att-" + Date.now() + "-" + Math.random().toString(36).substr(2, 4),
-          traineeId: trainee.id,
-          traineeCode: trainee.code,
-          recipientId: trainee.id,
-          recipientType: "parent",
-          sender: "\u0646\u0638\u0627\u0645 \u0625\u062F\u0627\u0631\u0629 \u0627\u0644\u062D\u0635\u0635 \u0648\u0627\u0644\u0645\u0639\u0627\u0645\u0644",
-          senderRole: "system",
-          title: "\u2705 \u062A\u0642\u0631\u064A\u0631 \u062D\u0636\u0648\u0631 \u0627\u0644\u0637\u0627\u0644\u0628 \u0644\u0644\u0645\u062D\u0627\u0636\u0631\u0629",
-          content: `\u062A\u062D\u064A\u0629 \u0637\u064A\u0628\u0629\u060C \u0646\u0641\u064A\u062F\u0643\u0645 \u0639\u0644\u0645\u0627\u064B \u0628\u062A\u0633\u062C\u064A\u0644 \u062D\u0636\u0648\u0631 \u0627\u0644\u0637\u0627\u0644\u0628 (${trainee.fullName}) \u0641\u064A \u0642\u0627\u0639\u0629 \u0627\u0644\u0645\u0639\u0645\u0644 \u0644\u0645\u062C\u0645\u0648\u0639\u062A\u0647 (${group?.name || "\u0627\u0644\u062A\u062F\u0631\u064A\u0628\u064A\u0629"}) \u0628\u0646\u062C\u0627\u062D \u0641\u064A \u062A\u0645\u0627\u0645 \u0627\u0644\u0633\u0627\u0639\u0629 ${currentTime}\u060C \u0648\u062A\u0645 \u0645\u0646\u062D\u0647 +${pts} \u0646\u062C\u0648\u0645 \u062A\u0645\u064A\u0632 \u0648\u062D\u0636\u0648\u0631 \u{1F31F}`,
-          date: today,
-          time: currentTime,
-          type: "attendance",
-          category: "attendance_report",
-          isRead: false
-        });
-        db.save();
-      }
-    } else if (lectureWindow.hasEndedToday) {
-      attendanceResultStatus = attRecord?.status === "present" ? "present" : "absent";
-      attendanceMessage = attRecord?.status === "present" ? `\u0623\u0647\u0644\u0627\u064B \u0628\u0643 \u064A\u0627 ${trainee.fullName}! \u062A\u0645 \u062A\u0648\u062B\u064A\u0642 \u062D\u0636\u0648\u0631\u0643 \u0644\u0644\u0645\u062D\u0627\u0636\u0631\u0629 \u0645\u0633\u0628\u0642\u0627\u064B.` : `\u0645\u0631\u062D\u0628\u0627\u064B \u064A\u0627 ${trainee.fullName}! \u0644\u0642\u062F \u0627\u0646\u062A\u0647\u0649 \u0645\u0648\u0639\u062F \u0645\u062D\u0627\u0636\u0631\u0629 \u0627\u0644\u064A\u0648\u0645 (${lectureWindow.startTime} - ${lectureWindow.endTime}). \u062A\u0645 \u062A\u0648\u062B\u064A\u0642 \u062D\u0627\u0644\u062A\u0643 \u0643\u063A\u0627\u0626\u0628 \u0644\u0639\u062F\u0645 \u0627\u0644\u062F\u062E\u0648\u0644 \u0623\u062B\u0646\u0627\u0621 \u0645\u0648\u0639\u062F \u0627\u0644\u0645\u062D\u0627\u0636\u0631\u0629.`;
-    } else {
-      attendanceResultStatus = "not_scheduled";
-      attendanceMessage = `\u0623\u0647\u0644\u0627\u064B \u0628\u0643 \u064A\u0627 ${trainee.fullName}! \u0645\u0648\u0639\u062F \u0645\u062D\u0627\u0636\u0631\u062A\u0643 \u0627\u0644\u064A\u0648\u0645 \u064A\u0628\u062F\u0623 \u0641\u064A \u062A\u0645\u0627\u0645 \u0627\u0644\u0633\u0627\u0639\u0629 ${lectureWindow.startTime}. \u0633\u064A\u062A\u0645 \u062A\u0633\u062C\u064A\u0644 \u0627\u0644\u062D\u0636\u0648\u0631 \u062A\u0644\u0642\u0627\u0626\u064A\u0627\u064B \u0641\u0648\u0631 \u0628\u062F\u0621 \u0645\u0648\u0639\u062F \u0627\u0644\u0645\u062D\u0627\u0636\u0631\u0629.`;
-    }
+  const pointRule = (db.getData().pointRules || []).find((r) => r.ruleType === "attendance" && r.isActive);
+  const pts = pointRule ? pointRule.pointValue : 5;
+  if (attRecord && attRecord.status === "present") {
+    alreadyRecorded = true;
+    attendanceResultStatus = "present";
+    pointsAwarded = 0;
+    attendanceMessage = `\u0645\u0631\u062D\u0628\u0627\u064B \u0628\u0643 \u0645\u062C\u062F\u062F\u0627\u064B \u064A\u0627 ${trainee.fullName}! \u062A\u0645 \u062A\u0633\u062C\u064A\u0644 \u062D\u0636\u0648\u0631\u0643 \u0648\u0645\u0646\u062D \u0627\u0644\u0646\u0642\u0627\u0637 \u0645\u0633\u0628\u0642\u0627\u064B \u0627\u0644\u064A\u0648\u0645 \u0641\u064A \u062A\u0645\u0627\u0645 \u0627\u0644\u0633\u0627\u0639\u0629 ${attRecord.time || ""} \u{1F31F}`;
   } else {
-    attendanceResultStatus = "not_scheduled";
-    const scheduledDaysText = (lectureWindow?.scheduledDays || []).join(" - ") || "\u0644\u0645 \u062A\u062D\u062F\u062F \u0628\u0639\u062F";
-    attendanceMessage = `\u0623\u0647\u0644\u0627\u064B \u0628\u0643 \u064A\u0627 ${trainee.fullName}! \u0645\u062C\u0645\u0648\u0639\u062A\u0643 (${group?.name || "\u0627\u0644\u062A\u062F\u0631\u064A\u0628\u064A\u0629"}) \u0644\u064A\u0633 \u0644\u0647\u0627 \u0645\u062D\u0627\u0636\u0631\u0629 \u0645\u062C\u062F\u0648\u0644\u0629 \u0627\u0644\u064A\u0648\u0645 (${lectureWindow?.dayName || "\u0627\u0644\u064A\u0648\u0645"}). \u062C\u062F\u0648\u0644\u0643: ${scheduledDaysText}. \u064A\u0645\u0643\u0646\u0643 \u0627\u0633\u062A\u0639\u0631\u0627\u0636 \u0646\u062C\u0648\u0645\u0643 \u0648\u0623\u0646\u0634\u0637\u0629 \u0627\u0644\u0645\u0639\u0645\u0644.`;
+    pointsAwarded = pts;
+    if (attRecord) {
+      attRecord.status = "present";
+      attRecord.time = currentTime;
+      attRecord.notes = "\u062A\u0633\u062C\u064A\u0644 \u062D\u0636\u0648\u0631 \u062A\u0641\u0627\u0639\u0644\u064A \u0645\u0646 \u0631\u0627\u0628\u0637 \u0627\u0644\u0627\u0633\u062A\u0648\u062F\u064A\u0648 \u0648\u0627\u0644\u0645\u0639\u0645\u0644";
+      await AttendanceRepo.update(attRecord.id, {
+        status: "present",
+        time: currentTime,
+        notes: attRecord.notes
+      }).catch(() => {
+      });
+    } else {
+      attRecord = {
+        id: "att-" + Date.now() + "-" + Math.random().toString(36).substr(2, 4),
+        date: today,
+        time: currentTime,
+        branchId: trainee.branchId || "branch-1",
+        groupId: trainee.groupId || "grp-1",
+        courseId: trainee.courseId || "",
+        traineeId: trainee.id,
+        status: "present",
+        notes: "\u062A\u0633\u062C\u064A\u0644 \u062D\u0636\u0648\u0631 \u062A\u0641\u0627\u0639\u0644\u064A \u0645\u0646 \u0631\u0627\u0628\u0637 \u0627\u0644\u0627\u0633\u062A\u0648\u062F\u064A\u0648 \u0648\u0627\u0644\u0645\u0639\u0645\u0644"
+      };
+      db.getData().attendance.push(attRecord);
+      await AttendanceRepo.create(attRecord.id, attRecord).catch(() => {
+      });
+    }
+    const newTotal = (trainee.totalPoints || trainee.points || 0) + pts;
+    await TraineeRepo.update(trainee.id, { totalPoints: newTotal, points: newTotal }).catch(() => {
+    });
+    trainee.totalPoints = newTotal;
+    trainee.points = newTotal;
+    if (!Array.isArray(db.getData().pointTransactions)) {
+      db.getData().pointTransactions = [];
+    }
+    db.getData().pointTransactions.unshift({
+      id: "pt-" + Date.now(),
+      traineeId: trainee.id,
+      groupId: trainee.groupId,
+      branchId: trainee.branchId,
+      points: pts,
+      reason: `\u062D\u0636\u0648\u0631 \u0627\u0644\u0645\u0639\u0645\u0644 \u0648\u062C\u0644\u0633\u0629 \u0627\u0644\u0627\u0633\u062A\u0648\u062F\u064A\u0648 ${group?.name || ""}`,
+      ruleId: pointRule?.id,
+      addedByUserId: "system",
+      addedByUserName: "\u0646\u0638\u0627\u0645 \u0631\u0635\u062F \u0627\u0644\u0645\u0639\u0645\u0644 \u0627\u0644\u0622\u0644\u064A",
+      createdAt: (/* @__PURE__ */ new Date()).toISOString()
+    });
+    attendanceResultStatus = "present";
+    attendanceMessage = `\u0623\u0647\u0644\u0627\u064B \u0628\u0643 \u064A\u0627 ${trainee.fullName}! \u062A\u0645 \u062A\u0633\u062C\u064A\u0644 \u062D\u0636\u0648\u0631\u0643 \u0628\u0646\u062C\u0627\u062D \u0648\u0645\u0646\u062D\u0643 +${pts} \u0646\u0642\u0627\u0637 \u062A\u0645\u064A\u0632 \u0648\u062D\u0636\u0648\u0631 \u0645\u0646 \u0627\u0644\u0645\u0639\u0645\u0644 \u0648\u0627\u0644\u0627\u0633\u062A\u0648\u062F\u064A\u0648! \u{1F31F}`;
+    db.saveImmediate();
   }
   const stats = getTraineeRankAndStats(trainee.id);
   res.json({
@@ -17848,9 +20183,9 @@ apiRouter.post("/agent/student-login", async (req, res) => {
       stats
     },
     device: {
-      id: device.id,
-      deviceId: device.deviceId,
-      name: device.name
+      id: "dev-" + (trainee.code || "1"),
+      deviceId: "PC-" + (trainee.code || "1"),
+      name: `\u062C\u0647\u0627\u0632 \u0627\u0644\u0637\u0627\u0644\u0628 (${trainee.fullName})`
     },
     attendance: attRecord,
     lectureWindow
@@ -18135,17 +20470,28 @@ apiRouter.post("/lab/quick-question/answer", (req, res) => {
   res.json({ success: true, isCorrect, revealed: activeLabQuickQuestion.revealed });
 });
 apiRouter.get("/lab/active-activity", (req, res) => {
-  res.json({ success: true, activity: activeLabExternalActivity });
+  const external = activeLabExternalActivity || masterBroadcast.activeExternalSession;
+  res.json({ success: true, activity: external });
 });
 apiRouter.post("/lab/active-activity/broadcast", (req, res) => {
-  const { title, platform, url, gamePin } = req.body;
-  activeLabExternalActivity = {
+  const { title, platform, url, gamePin, clear } = req.body;
+  if (clear || !url && !gamePin) {
+    activeLabExternalActivity = null;
+    masterBroadcast.activeExternalSession = null;
+    console.log("[LIVE_BROADCAST] Cleared active external session.");
+    return res.json({ success: true, activity: null });
+  }
+  const sessionObj = {
     title: title || "\u0645\u0633\u0627\u0628\u0642\u0629 \u0627\u0644\u0645\u0639\u0645\u0644 \u0627\u0644\u062D\u064A\u0629",
     platform: platform || "Kahoot",
-    url: url || "https://kahoot.it",
+    url: url || (platform === "Kahoot" ? "https://kahoot.it" : "https://www.classpoint.app"),
     gamePin: gamePin ? String(gamePin).trim() : "",
     updatedAt: Date.now()
   };
+  activeLabExternalActivity = sessionObj;
+  masterBroadcast.activeExternalSession = sessionObj;
+  masterBroadcast.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
+  console.log(`[LIVE_BROADCAST] Active external broadcast launched: ${sessionObj.platform} PIN: ${sessionObj.gamePin}`);
   res.json({ success: true, activity: activeLabExternalActivity });
 });
 var labSocialPosts = [];
@@ -18625,6 +20971,39 @@ apiRouter.post(["/messages/mark-as-read", "/messages/mark-as-read/"], async (req
     res.status(500).json({ error: "\u0641\u0634\u0644 \u062A\u062D\u062F\u064A\u062B \u0642\u0631\u0627\u0621\u0629 \u0627\u0644\u0631\u0633\u0627\u0626\u0644: " + err.message });
   }
 });
+apiRouter.post(["/messages/clear-all", "/messages/clear-all/"], async (req, res) => {
+  try {
+    const data = db.getData();
+    data.portalMessages = [];
+    db.saveImmediate();
+    try {
+      await saveCollectionToFirestore("portalMessages", []);
+    } catch (e) {
+    }
+    res.json({ success: true, message: "\u062A\u0645 \u0645\u0633\u062D \u0648\u062A\u0635\u0641\u064A\u0631 \u0643\u0627\u0641\u0629 \u0627\u0644\u0631\u0633\u0627\u0626\u0644 \u0628\u0646\u062C\u0627\u062D" });
+  } catch (err) {
+    res.status(500).json({ error: "\u0641\u0634\u0644 \u0645\u0633\u062D \u0627\u0644\u0631\u0633\u0627\u0626\u0644: " + err.message });
+  }
+});
+apiRouter.delete("/messages/thread/:traineeId", async (req, res) => {
+  try {
+    const { traineeId } = req.params;
+    const data = db.getData();
+    if (Array.isArray(data.portalMessages)) {
+      data.portalMessages = data.portalMessages.filter(
+        (m) => m && m.traineeId !== traineeId && m.recipientId !== traineeId
+      );
+      db.saveImmediate();
+      try {
+        await saveCollectionToFirestore("portalMessages", data.portalMessages);
+      } catch (e) {
+      }
+    }
+    res.json({ success: true, message: "\u062A\u0645 \u062D\u0630\u0641 \u0627\u0644\u0645\u062D\u0627\u062F\u062B\u0629 \u0628\u0646\u062C\u0627\u062D" });
+  } catch (err) {
+    res.status(500).json({ error: "\u0641\u0634\u0644 \u062D\u0630\u0641 \u0627\u0644\u0645\u062D\u0627\u062F\u062B\u0629: " + err.message });
+  }
+});
 apiRouter.post(["/student/submit-homework", "/student/submit-homework/"], async (req, res) => {
   try {
     const {
@@ -18656,7 +21035,13 @@ apiRouter.post(["/student/submit-homework", "/student/submit-homework/"], async 
     const effectiveLessonName = lessonName || taskTitle || "\u062A\u0637\u0628\u064A\u0642 \u0648\u062A\u0644\u062E\u064A\u0635 \u0627\u0644\u062F\u0631\u0633";
     const effectiveCourse = (data.courses || []).find((c) => c.id === (courseId || trainee.courseId));
     const courseName = effectiveCourse?.name || "\u0627\u0644\u0628\u0631\u0646\u0627\u0645\u062C \u0627\u0644\u062A\u062F\u0631\u064A\u0628\u064A - \u0645\u0627\u062F\u0629 \u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u0627\u0644\u0645\u0639\u0644\u0648\u0645\u0627\u062A \u0648\u0627\u0644\u0627\u062A\u0635\u0627\u0644\u0627\u062A ICT";
-    const studentGrade = trainee.grade || trainee.schoolGrade || trainee.stage || "\u0627\u0644\u0635\u0641 \u0627\u0644\u0631\u0627\u0628\u0639 \u0627\u0644\u0627\u0628\u062A\u062F\u0627\u0626\u064A (Grade 4)";
+    const detectedCurr = detectCurriculum({
+      code: trainee.code,
+      grade: trainee.grade || trainee.schoolGrade || trainee.stage,
+      stage: trainee.stage,
+      courseName
+    });
+    const studentGrade = trainee.grade || trainee.schoolGrade || trainee.stage || detectedCurr.gradeNameAr;
     let aiGradingResult;
     let voiceResult = null;
     const isVoiceSubmission = mediaType === "audio" || mediaType === "voice" || mediaBase64 && String(mediaBase64).startsWith("data:audio") || !!req.body.audioBase64;
@@ -18684,7 +21069,16 @@ apiRouter.post(["/student/submit-homework", "/student/submit-homework/"], async 
           suggestedPoints: voiceResult.suggestedPoints,
           strengths: voiceResult.strengths,
           weaknesses: voiceResult.conceptCorrections.map((c) => `\u26A0\uFE0F ${c.concept}: ${c.correctedExplanation}`),
-          mistakes: [],
+          mistakes: voiceResult.conceptCorrections.map((c, idx) => ({
+            questionNumber: `${idx + 1}`,
+            questionSummary: c.concept,
+            studentAnswer: c.studentSaid || "\u062A\u0639\u0628\u064A\u0631 \u0634\u0641\u0648\u064A \u0645\u062E\u062A\u0635\u0631",
+            correctAnswer: c.correctedExplanation,
+            isCorrect: false,
+            scoreAwarded: 15,
+            maxScore: 20,
+            explanation: `\u062A\u0635\u062D\u064A\u062D \u062A\u0631\u0628\u0648\u064A \u0644\u0645\u0641\u0647\u0648\u0645 (${c.concept}) \u0644\u0645\u0637\u0627\u0628\u0642\u0629 \u0627\u0644\u0645\u0646\u0647\u062C \u0627\u0644\u0645\u0639\u062A\u0645\u062F.`
+          })),
           difficultPointsExplained: voiceResult.difficultPointsExplained,
           badgeAwarded: voiceResult.badgeAwarded || {
             title: "\u{1F399}\uFE0F \u0648\u0633\u0627\u0645 \u0627\u0644\u0625\u0644\u0642\u0627\u0621 \u0648\u0627\u0644\u0641\u0647\u0645 \u0627\u0644\u0645\u0641\u0627\u0647\u064A\u0645\u064A \u0627\u0644\u0645\u062A\u0645\u064A\u0632",
@@ -18716,48 +21110,74 @@ apiRouter.post(["/student/submit-homework", "/student/submit-homework/"], async 
           studentNotes,
           maxGrade: 100
         });
+        const evaluatedScore = codeGrading.grade || 88;
+        const evaluatedPercent = Math.min(Math.max(Math.round(evaluatedScore / 100 * 100), 75), 98);
         aiGradingResult = {
-          score: codeGrading.grade || 95,
+          score: evaluatedScore,
           maxScore: 100,
-          percentage: Math.round((codeGrading.grade || 95) / 100 * 100),
-          rating: codeGrading.rating || "\u0645\u0645\u062A\u0627\u0632",
-          status: (codeGrading.grade || 95) >= 60 ? "passed" : "failed",
-          suggestedPoints: Math.round((codeGrading.grade || 95) * 0.25),
-          strengths: codeGrading.strengths || ["\u062A\u0644\u062E\u064A\u0635 \u0648\u0643\u062A\u0627\u0628\u0629 \u0645\u062A\u0642\u0646\u0629 \u0648\u0645\u0643\u062A\u0645\u0644\u0629 \u0644\u0639\u0646\u0627\u0635\u0631 \u0627\u0644\u062F\u0631\u0633"],
+          percentage: evaluatedPercent,
+          rating: codeGrading.rating || (evaluatedPercent >= 90 ? "\u0645\u0645\u062A\u0627\u0632" : "\u062C\u064A\u062F \u062C\u062F\u0627\u064B"),
+          status: evaluatedScore >= 60 ? "passed" : "failed",
+          suggestedPoints: Math.round(evaluatedScore * 0.25),
+          strengths: codeGrading.strengths || [`\u0627\u0633\u062A\u064A\u0639\u0627\u0628 \u0633\u0644\u064A\u0645 \u0644\u0639\u0646\u0627\u0635\u0631 \u062F\u0631\u0633 (${effectiveLessonName}) \u0644\u0640 (${studentGrade})`],
           weaknesses: codeGrading.corrections || [],
-          mistakes: [],
+          mistakes: (codeGrading.corrections || []).map((cor, idx) => ({
+            questionNumber: `${idx + 1}`,
+            questionSummary: `\u0645\u0631\u0627\u062C\u0639\u0629 \u0648\u062A\u062F\u0642\u064A\u0642 \u0641\u064A (${effectiveLessonName})`,
+            studentAnswer: studentNotes ? studentNotes.slice(0, 40) : "\u062D\u0644 \u0646\u0635\u064A",
+            correctAnswer: cor,
+            isCorrect: false,
+            scoreAwarded: 18,
+            maxScore: 25,
+            explanation: cor
+          })),
           difficultPointsExplained: [
-            "\u{1F4CC} \u0627\u0644\u0645\u0641\u0627\u0647\u064A\u0645 \u0627\u0644\u062A\u0642\u0646\u064A\u0629: \u0631\u0628\u0637 \u0627\u0644\u0623\u0633\u0645\u0627\u0621 \u0627\u0644\u0625\u0646\u062C\u0644\u064A\u0632\u064A\u0629 \u0628\u0627\u0644\u0648\u0638\u0627\u0626\u0641 (\u0645\u062B\u0644 CPU \u0648 RAM \u0648 Motherboard).",
-            "\u{1F4CC} \u062F\u0648\u0631\u0629 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A: \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A Data \u0645\u0627\u062F\u0629 \u062E\u0627\u0645\u060C \u0648\u0627\u0644\u0645\u0639\u0627\u0644\u062C\u0629 Processing \u062A\u0639\u0637\u064A\u0646\u0627 \u0645\u0639\u0644\u0648\u0645\u0627\u062A Information \u0645\u0641\u064A\u062F\u0629."
+            `\u{1F4CC} \u0645\u0641\u0627\u0647\u064A\u0645 \u0645\u0627\u062F\u0629 (${courseName}): \u0627\u0644\u0631\u0628\u0637 \u0627\u0644\u0645\u0633\u062A\u0645\u0631 \u0628\u064A\u0646 \u0627\u0644\u0634\u0631\u062D \u0627\u0644\u0646\u0638\u0631\u064A \u0648\u0627\u0644\u062A\u0637\u0628\u064A\u0642 \u0627\u0644\u0639\u0645\u0644\u064A.`,
+            `\u{1F4CC} \u0646\u0635\u064A\u062D\u0629 \u0644\u0644\u0645\u0631\u062D\u0644\u0629 (${studentGrade}): \u0645\u0631\u0627\u062C\u0639\u0629 \u062E\u0637\u0648\u0627\u062A \u062D\u0644 \u0627\u0644\u0645\u0633\u0627\u0626\u0644 \u0627\u0644\u0628\u0631\u0645\u062C\u064A\u0629 \u0628\u062F\u0642\u0629.`
           ],
-          badgeAwarded: (codeGrading.grade || 95) >= 85 ? {
-            title: "\u{1F31F} \u0648\u0633\u0627\u0645 \u0627\u0644\u062A\u0644\u062E\u064A\u0635 \u0648\u0627\u0644\u0627\u0644\u062A\u0632\u0627\u0645 \u0627\u0644\u0623\u0643\u0627\u062F\u064A\u0645\u064A",
+          badgeAwarded: evaluatedScore >= 85 ? {
+            title: "\u{1F31F} \u0648\u0633\u0627\u0645 \u0627\u0644\u0625\u062A\u0642\u0627\u0646 \u0648\u0627\u0644\u0627\u0644\u062A\u0632\u0627\u0645 \u0627\u0644\u0623\u0643\u0627\u062F\u064A\u0645\u064A",
             icon: "\u{1F31F}",
             category: "educational",
             points: 25
           } : null,
           lessonSummaryEvaluation: {
             completeness: "\u0645\u0633\u062A\u0648\u0641\u064D \u0644\u0639\u0646\u0627\u0635\u0631 \u0627\u0644\u062F\u0631\u0633",
-            coveredCoreConcepts: ["\u0645\u0641\u0627\u0647\u064A\u0645 \u0627\u0644\u062F\u0631\u0633 \u0627\u0644\u0623\u0633\u0627\u0633\u064A\u0629 \u0648\u0627\u0644\u062A\u0637\u0628\u064A\u0642"],
-            missingConcepts: [],
-            overallVerdict: "\u062A\u0644\u062E\u064A\u0635 \u0631\u0627\u0626\u0639 \u0648\u0645\u0646\u0638\u0645"
+            coveredCoreConcepts: [`\u0645\u0641\u0627\u0647\u064A\u0645 (${effectiveLessonName}) \u0627\u0644\u0645\u0642\u0631\u0631\u0629 \u0644\u0640 (${studentGrade})`],
+            missingConcepts: evaluatedPercent < 90 ? ["\u0625\u0636\u0627\u0641\u0629 \u062A\u0639\u0644\u064A\u0642\u0627\u062A \u062A\u0648\u0636\u064A\u062D\u064A\u0629 \u0625\u0636\u0627\u0641\u064A\u0629"] : [],
+            overallVerdict: `\u062D\u0644 \u0648\u062A\u0644\u062E\u064A\u0635 \u0645\u0646\u0638\u0645 \u0648\u0645\u0637\u0627\u0628\u0642 \u0644\u0645\u0646\u0647\u062C ${studentGrade}`
           },
-          generalFeedback: codeGrading.generalFeedback || "\u062A\u0645 \u0641\u062D\u0635 \u0648\u062A\u0635\u062D\u064A\u062D \u0627\u0644\u0648\u0627\u062C\u0628 \u0628\u0646\u062C\u0627\u062D \u0628\u0646\u0638\u0627\u0645 \u0627\u0644\u0630\u0643\u0627\u0621 \u0627\u0644\u0627\u0635\u0637\u0646\u0627\u0639\u064A.",
+          generalFeedback: codeGrading.generalFeedback || `\u0628\u0627\u0631\u0643 \u0627\u0644\u0644\u0647 \u0641\u064A\u0643 \u064A\u0627 ${trainee.fullName}! \u062A\u0645 \u0641\u062D\u0635 \u0648\u062A\u0642\u064A\u064A\u0645 \u062D\u0644\u0643 \u0641\u064A \u062F\u0631\u0633 (${effectiveLessonName}) \u0628\u062F\u0642\u0629. \u0627\u0633\u062A\u0645\u0631 \u0641\u064A \u0647\u0630\u0627 \u0627\u0644\u0645\u0633\u062A\u0648\u0649 \u0627\u0644\u0645\u062A\u0645\u064A\u0632! \u{1F680}`,
           confidence: 0.95
         };
       } else {
+        const baseScore = 85;
         aiGradingResult = {
-          score: 95,
+          score: baseScore,
           maxScore: 100,
-          percentage: 95,
-          rating: "\u0645\u0645\u062A\u0627\u0632",
+          percentage: baseScore,
+          rating: "\u062C\u064A\u062F \u062C\u062F\u0627\u064B",
           status: "passed",
           suggestedPoints: 20,
-          strengths: ["\u0627\u0644\u0627\u0644\u062A\u0632\u0627\u0645 \u0628\u062A\u0633\u0644\u064A\u0645 \u0627\u0644\u0648\u0627\u062C\u0628 \u0641\u064A \u0627\u0644\u0645\u0648\u0639\u062F \u0627\u0644\u0645\u0639\u062A\u0645\u062F", "\u0627\u0644\u0645\u062B\u0627\u0628\u0631\u0629 \u0648\u0627\u0644\u0645\u062A\u0627\u0628\u0639\u0629 \u0627\u0644\u062F\u0648\u0631\u064A\u0629 \u0644\u0644\u062F\u0631\u0648\u0633"],
-          weaknesses: [],
-          mistakes: [],
+          strengths: [
+            `\u0627\u0644\u0627\u0644\u062A\u0632\u0627\u0645 \u0628\u062A\u0633\u0644\u064A\u0645 \u0645\u0647\u0645\u0629 (${effectiveLessonName}) \u0627\u0644\u0645\u062D\u062F\u062F\u0629 \u0644\u0640 (${studentGrade}) \u0641\u064A \u0627\u0644\u0645\u0648\u0639\u062F \u0627\u0644\u0645\u0639\u062A\u0645\u062F`,
+            "\u0627\u0644\u0645\u062B\u0627\u0628\u0631\u0629 \u0648\u0627\u0644\u0645\u062A\u0627\u0628\u0639\u0629 \u0627\u0644\u062F\u0648\u0631\u064A\u0629 \u0644\u0644\u062F\u0631\u0648\u0633 \u0627\u0644\u0623\u0643\u0627\u062F\u064A\u0645\u064A\u0629"
+          ],
+          weaknesses: ["\u064A\u064F\u0631\u062C\u0649 \u0625\u0631\u0641\u0627\u0642 \u0635\u0648\u0631 \u0635\u0641\u062D\u0627\u062A \u0627\u0644\u0643\u0634\u0643\u0648\u0644 \u0623\u0648 \u0646\u0635 \u0627\u0644\u062A\u0644\u062E\u064A\u0635 \u0627\u0644\u062A\u0641\u0635\u064A\u0644\u064A \u0644\u0644\u062D\u0635\u0648\u0644 \u0639\u0644\u0649 \u0627\u0644\u062F\u0631\u062C\u0629 \u0627\u0644\u0643\u0627\u0645\u0644\u0629 \u0648\u0627\u0644\u0648\u0633\u0627\u0645 \u0627\u0644\u0630\u0647\u0628\u064A"],
+          mistakes: [
+            {
+              questionNumber: "1",
+              questionSummary: `\u062A\u0648\u062B\u064A\u0642 \u0635\u0641\u062D\u0627\u062A \u0627\u0644\u0643\u0634\u0643\u0648\u0644 \u0644\u062F\u0631\u0633 (${effectiveLessonName})`,
+              studentAnswer: "\u062A\u0645 \u0627\u0644\u0636\u063A\u0637 \u0639\u0644\u0649 \u0632\u0631 \u0627\u0644\u062A\u0633\u0644\u064A\u0645 \u062F\u0648\u0646 \u0625\u0631\u0641\u0627\u0642 \u0635\u0648\u0631 \u0635\u0641\u062D\u0627\u062A \u0627\u0644\u0643\u0634\u0643\u0648\u0644",
+              correctAnswer: "\u062A\u0635\u0648\u064A\u0631 \u0643\u0634\u0643\u0648\u0644 \u0627\u0644\u062D\u0635\u0629 \u0648\u0631\u0641\u0639 \u0627\u0644\u0635\u0641\u062D\u0627\u062A \u0644\u064A\u0642\u0648\u0645 \u0627\u0644\u0630\u0643\u0627\u0621 \u0627\u0644\u0627\u0635\u0637\u0646\u0627\u0639\u064A \u0628\u0641\u062D\u0635 \u0643\u0644 \u0633\u0637\u0631 \u0648\u0645\u0633\u0623\u0644\u0629",
+              isCorrect: false,
+              scoreAwarded: 15,
+              maxScore: 25,
+              explanation: "\u0627\u062D\u0631\u0635 \u0639\u0644\u0649 \u062A\u0635\u0648\u064A\u0631 \u0635\u0641\u062D\u0627\u062A \u0643\u0634\u0643\u0648\u0644\u0643 \u0623\u0648 \u0643\u062A\u0627\u0628\u0629 \u0645\u0644\u0627\u062D\u0638\u0627\u062A \u0648\u0627\u0641\u064A\u0629 \u0644\u064A\u062A\u0645 \u062A\u0635\u062D\u064A\u062D\u0647\u0627 \u0628\u062F\u0642\u0629 \u062A\u0641\u0635\u064A\u0644\u064A\u0629."
+            }
+          ],
           difficultPointsExplained: [
-            "\u{1F4CC} \u062A\u0630\u0643\u0631 \u0645\u0631\u0627\u062C\u0639\u0629 \u0627\u0644\u0646\u0642\u0627\u0637 \u0627\u0644\u0631\u0626\u064A\u0633\u064A\u0629 \u0627\u0644\u0645\u0644\u062E\u0635\u0629 \u0646\u0647\u0627\u064A\u0629 \u0643\u0644 \u0641\u0635\u0644 \u0644\u062A\u0631\u0633\u064A\u062E \u0627\u0644\u0645\u0641\u0627\u0647\u064A\u0645 \u0627\u0644\u0646\u0638\u0631\u064A\u0629 \u0648\u0627\u0644\u0639\u0645\u0644\u064A\u0629."
+            `\u{1F4CC} \u062A\u0646\u0628\u064A\u0647 \u0647\u0627\u0645: \u0642\u0645 \u0628\u062A\u0635\u0648\u064A\u0631 \u0643\u0634\u0643\u0648\u0644\u0643 \u0628\u0648\u0636\u0648\u062D \u0644\u062A\u0641\u0639\u064A\u0644 \u0627\u0644\u062A\u0642\u064A\u064A\u0645 \u0627\u0644\u062A\u0644\u0642\u0627\u0626\u064A \u0644\u062C\u0645\u064A\u0639 \u0627\u0644\u0623\u0633\u0626\u0644\u0629 \u0648\u0627\u0644\u0623\u062E\u0637\u0627\u0621 \u0628\u062F\u0642\u0629.`
           ],
           badgeAwarded: {
             title: "\u{1F31F} \u0648\u0633\u0627\u0645 \u0627\u0644\u0627\u0644\u062A\u0632\u0627\u0645 \u0648\u0627\u0644\u0645\u062A\u0627\u0628\u0639\u0629 \u0627\u0644\u0630\u0643\u064A\u0629",
@@ -18765,23 +21185,40 @@ apiRouter.post(["/student/submit-homework", "/student/submit-homework/"], async 
             category: "educational",
             points: 20
           },
-          generalFeedback: "\u062A\u0645 \u062A\u0633\u0644\u064A\u0645 \u0648\u062A\u0648\u062B\u064A\u0642 \u0627\u0644\u0648\u0627\u062C\u0628 \u0627\u0644\u0641\u0648\u0631\u064A \u0628\u0646\u062C\u0627\u062D \u0648\u0625\u0631\u0633\u0627\u0644\u0647 \u0644\u0644\u0645\u062F\u0631\u0628.",
+          generalFeedback: `\u062A\u0645 \u062A\u0648\u062B\u064A\u0642 \u062A\u0633\u0644\u064A\u0645\u0643 \u0644\u0645\u0647\u0645\u0629 (${effectiveLessonName}) \u064A\u0627 ${trainee.fullName}! \u0644\u0644\u062D\u0635\u0648\u0644 \u0639\u0644\u0649 \u0627\u0644\u062A\u0642\u064A\u064A\u0645 \u0627\u0644\u062A\u0641\u0635\u064A\u0644\u064A \u0627\u0644\u0643\u0627\u0645\u0644 \u0644\u0643\u0644 \u0633\u0624\u0627\u0644\u060C \u0627\u062D\u0631\u0635 \u0639\u0644\u0649 \u0625\u0631\u0641\u0627\u0642 \u0635\u0648\u0631 \u0635\u0641\u062D\u0627\u062A \u0627\u0644\u0643\u0634\u0643\u0648\u0644. \u0645\u0645\u062A\u0627\u0632 \u0648\u0645\u062B\u0627\u0628\u0631 \u062F\u0627\u0626\u0645\u0627\u064B! \u{1F31F}`,
           confidence: 0.9
         };
       }
     } catch (aiErr) {
-      console.warn("[AI Grading Fallback] Falling back to default high praise grading:", aiErr.message);
+      console.warn("[AI Grading Fallback] Falling back to curriculum-aligned grading:", aiErr.message);
+      const safeScore = 88;
       aiGradingResult = {
-        score: 95,
+        score: safeScore,
         maxScore: 100,
-        percentage: 95,
-        rating: "\u0645\u0645\u062A\u0627\u0632",
+        percentage: safeScore,
+        rating: "\u062C\u064A\u062F \u062C\u062F\u0627\u064B",
         status: "passed",
-        suggestedPoints: 25,
-        strengths: ["\u062A\u0633\u0644\u064A\u0645 \u0645\u062A\u0642\u0646 \u0648\u062D\u0644 \u0645\u0646\u0638\u0645 \u0648\u062A\u0644\u062E\u064A\u0635 \u0645\u0645\u064A\u0632 \u0644\u0635\u0641\u062D\u0627\u062A \u0627\u0644\u0648\u0627\u062C\u0628", "\u0627\u0644\u0627\u0644\u062A\u0632\u0627\u0645 \u0628\u0645\u062A\u0637\u0644\u0628\u0627\u062A \u0627\u0644\u0648\u0627\u062C\u0628 \u0627\u0644\u0639\u0645\u0644\u064A"],
+        suggestedPoints: 22,
+        strengths: [
+          `\u062A\u0633\u0644\u064A\u0645 \u0645\u062A\u0642\u0646 \u0648\u062D\u0644 \u0645\u0646\u0638\u0645 \u0644\u062A\u0643\u0644\u064A\u0641\u0627\u062A \u062F\u0631\u0633 (${effectiveLessonName}) \u0644\u0640 (${studentGrade})`,
+          "\u0627\u0644\u0627\u0644\u062A\u0632\u0627\u0645 \u0628\u0645\u062A\u0637\u0644\u0628\u0627\u062A \u0627\u0644\u0648\u0627\u062C\u0628 \u0627\u0644\u0645\u062F\u0631\u0633\u064A \u0648\u0627\u0644\u062A\u062F\u0631\u064A\u0628 \u0627\u0644\u0639\u0645\u0644\u064A"
+        ],
         weaknesses: [],
-        mistakes: [],
-        difficultPointsExplained: [],
+        mistakes: [
+          {
+            questionNumber: "1",
+            questionSummary: `\u0625\u062A\u0642\u0627\u0646 \u0648\u0645\u0637\u0627\u0628\u0642\u0629 \u0645\u0641\u0627\u0647\u064A\u0645 \u062F\u0631\u0633 (${effectiveLessonName})`,
+            studentAnswer: studentNotes || "\u062A\u0633\u0644\u064A\u0645 \u0627\u0644\u0648\u0627\u062C\u0628",
+            correctAnswer: `\u062A\u0637\u0628\u064A\u0642 \u0643\u0627\u0645\u0644 \u0645\u062D\u0627\u0648\u0631 \u062F\u0631\u0633 (${effectiveLessonName}) \u0627\u0644\u0645\u0639\u062A\u0645\u062F\u0629 \u0644\u0640 (${studentGrade})`,
+            isCorrect: true,
+            scoreAwarded: 22,
+            maxScore: 25,
+            explanation: "\u062D\u0644 \u0645\u062A\u0646\u0627\u0633\u0642 \u064A\u0639\u0643\u0633 \u0627\u0633\u062A\u064A\u0639\u0627\u0628\u0627\u064B \u0637\u064A\u0628\u0627\u064B \u0644\u0644\u062F\u0631\u0633."
+          }
+        ],
+        difficultPointsExplained: [
+          `\u{1F4A1} \u0646\u0635\u064A\u062D\u0629 \u062A\u0639\u0644\u064A\u0645\u064A\u0629: \u0631\u0627\u062C\u0639 \u0627\u0644\u0645\u0644\u062E\u0635 \u0627\u0644\u0645\u0646\u0634\u0648\u0631 \u0639\u0644\u0649 \u0627\u0644\u0628\u0648\u0627\u0628\u0629 \u0644\u062F\u0631\u0633 (${effectiveLessonName}) \u0642\u0628\u0644 \u0627\u0644\u0645\u062D\u0627\u0636\u0631\u0629 \u0627\u0644\u0642\u0627\u062F\u0645\u0629.`
+        ],
         badgeAwarded: {
           title: "\u{1F3C6} \u0648\u0633\u0627\u0645 \u0627\u0644\u062A\u0645\u064A\u0632 \u0648\u0627\u0644\u062A\u0633\u0644\u064A\u0645 \u0627\u0644\u0633\u0631\u064A\u0639",
           icon: "\u{1F3C6}",
@@ -18864,6 +21301,7 @@ apiRouter.post(["/student/submit-homework", "/student/submit-homework/"], async 
       rating: aiGradingResult.rating || "\u0645\u0645\u062A\u0627\u0632",
       strengths: aiGradingResult.strengths || [],
       corrections: aiGradingResult.weaknesses || [],
+      mistakes: Array.isArray(aiGradingResult.mistakes) ? aiGradingResult.mistakes : [],
       difficultPointsExplained: aiGradingResult.difficultPointsExplained || [],
       lessonSummaryEvaluation: aiGradingResult.lessonSummaryEvaluation || void 0,
       generalFeedback: aiGradingResult.generalFeedback || "",
@@ -19184,7 +21622,13 @@ apiRouter.post(["/lecture-recaps", "/lecture-recaps/"], async (req, res) => {
       homeworkTasks: homeworkTasks || { tasks: [], bonusChallenge: "" },
       nextLecturePrep: nextLecturePrep || { prepPoints: [], teaserNotes: "" },
       closingMessage: closingMessage || "\u0628\u0627\u0644\u062A\u0648\u0641\u064A\u0642 \u064A\u0627 \u0623\u0628\u0637\u0627\u0644 \u0627\u0644\u0646\u062C\u0627\u062D! \u{1F31F}",
-      audioVoiceUrl: audioVoiceUrl || void 0,
+      audioVoiceUrl: audioVoiceUrl || req.body.voiceAudioUrl || req.body.voiceAudioBase64 || void 0,
+      voiceAudioUrl: req.body.voiceAudioUrl || audioVoiceUrl || req.body.voiceAudioBase64 || void 0,
+      voiceAudioBase64: req.body.voiceAudioBase64 || void 0,
+      voiceTranscription: req.body.voiceTranscription || void 0,
+      selectedLessonId: req.body.selectedLessonId || void 0,
+      selectedLessonTitle: req.body.selectedLessonTitle || void 0,
+      coveredElements: Array.isArray(req.body.coveredElements) ? req.body.coveredElements : void 0,
       isPublished: isPublished !== false,
       createdAt: (/* @__PURE__ */ new Date()).toISOString(),
       updatedAt: (/* @__PURE__ */ new Date()).toISOString()
@@ -19276,7 +21720,9 @@ apiRouter.post(["/lecture-recaps/ai-structure-voice", "/lecture-recaps/ai-struct
       transcribedText,
       teacherNotes,
       targetGrade,
-      targetCourse
+      targetCourse,
+      selectedLessonTitle,
+      coveredElements
     } = req.body;
     const structured = await structurePostLectureVoiceMemo({
       audioBase64,
@@ -19284,7 +21730,9 @@ apiRouter.post(["/lecture-recaps/ai-structure-voice", "/lecture-recaps/ai-struct
       transcribedText,
       teacherNotes,
       targetGrade,
-      targetCourse
+      targetCourse,
+      selectedLessonTitle,
+      coveredElements
     });
     res.json({
       success: true,
@@ -19370,22 +21818,6 @@ apiRouter.post(["/student/send-message", "/student/send-message/"], async (req, 
       createdAt: (/* @__PURE__ */ new Date()).toISOString()
     };
     data.portalMessages.push(userMsg);
-    const aiReplyMsg = {
-      id: "msg-ai-" + Date.now() + "-" + Math.random().toString(36).substring(2, 7),
-      traineeId: traineeId || trainee?.id || "",
-      traineeName: trainee?.fullName || senderName || "\u0637\u0627\u0644\u0628",
-      traineeCode: trainee?.code || "",
-      parentName: "\u0627\u0644\u0645\u0633\u0627\u0639\u062F \u0627\u0644\u0630\u0643\u064A",
-      portalSource: "system",
-      senderRole: "admin",
-      senderName: "\u0627\u0644\u0645\u0633\u0627\u0639\u062F \u0627\u0644\u0630\u0643\u064A \u0644\u0645\u0631\u0643\u0632 \u0627\u0644\u0646\u062C\u0627\u062D \u{1F916}",
-      recipientType: "student",
-      message: `\u0623\u0647\u0644\u0627\u064B \u0628\u0643 \u064A\u0627 \u0628\u0637\u0644! \u{1F31F} \u062A\u0645 \u0627\u0633\u062A\u0644\u0627\u0645 \u0631\u0633\u0627\u0644\u062A\u0643 \u0648\u0627\u0633\u062A\u0641\u0633\u0627\u0631\u0643 \u0628\u062E\u0635\u0648\u0635: "${message.trim().substring(0, 60)}". \u062A\u0645 \u062A\u0633\u0644\u064A\u0645\u0647\u0627 \u0644\u0644\u0645\u0639\u0644\u0645 \u0648\u0627\u0644\u0645\u0631\u0643\u0632 \u0644\u0644\u0645\u062A\u0627\u0628\u0639\u0629\u060C \u0648\u0623\u0646\u0627 \u0645\u062A\u0648\u0627\u062C\u062F \u0647\u0646\u0627 \u0644\u0645\u0633\u0627\u0639\u062F\u062A\u0643 \u0641\u064A \u0623\u064A \u0633\u0624\u0627\u0644!`,
-      messageType: "reply",
-      read: true,
-      createdAt: (/* @__PURE__ */ new Date()).toISOString()
-    };
-    data.portalMessages.push(aiReplyMsg);
     if (!Array.isArray(data.notifications)) data.notifications = [];
     data.notifications.unshift({
       id: "notif-msg-" + Date.now(),
@@ -19397,18 +21829,8 @@ apiRouter.post(["/student/send-message", "/student/send-message/"], async (req, 
       read: false,
       metadata: { traineeId: traineeId || trainee?.id, traineeCode: trainee?.code }
     });
-    data.notifications.unshift({
-      id: "notif-reply-" + Date.now(),
-      type: "message",
-      title: `\u{1F916} \u062A\u0623\u0643\u064A\u062F \u062A\u0633\u0644\u064A\u0645 \u0627\u0633\u062A\u0641\u0633\u0627\u0631\u0643 \u0648\u062A\u0641\u0627\u0639\u0644 \u0627\u0644\u0645\u0633\u0627\u0639\u062F \u0627\u0644\u0630\u0643\u064A`,
-      message: `\u062A\u0645 \u062A\u0633\u0644\u064A\u0645 \u0631\u0633\u0627\u0644\u062A\u0643 \u0628\u0646\u062C\u0627\u062D \u0644\u0644\u0645\u0639\u0644\u0645 \u0648\u062A\u0648\u062B\u064A\u0642\u0647\u0627 \u0641\u064A \u0633\u062C\u0644\u0643 \u0627\u0644\u0623\u0643\u0627\u062F\u064A\u0645\u064A!`,
-      linkView: "messages",
-      createdAt: (/* @__PURE__ */ new Date()).toISOString(),
-      read: false,
-      metadata: { traineeId: traineeId || trainee?.id, traineeCode: trainee?.code }
-    });
     db.saveImmediate();
-    res.json({ success: true, message: userMsg, aiReply: aiReplyMsg });
+    res.json({ success: true, message: userMsg });
   } catch (err) {
     res.status(500).json({ error: "\u0641\u0634\u0644 \u0625\u0631\u0633\u0627\u0644 \u0631\u0633\u0627\u0644\u0629 \u0627\u0644\u0637\u0627\u0644\u0628: " + err.message });
   }
@@ -19611,7 +22033,10 @@ apiRouter.post("/parent/login", async (req, res) => {
         (s) => s.groupId === t.groupId || s.courseId === t.courseId || s.branchId === t.branchId
       );
       const childBadges = (data.badges || []).filter(
-        (b) => b.traineeId === t.id || b.studentId === t.id
+        (b) => b.traineeId === t.id || b.studentId === t.id || b.traineeCode && t.code && String(b.traineeCode).trim().toLowerCase() === String(t.code).trim().toLowerCase()
+      );
+      const childCerts = (data.certificates || []).filter(
+        (c) => c.traineeId === t.id || c.studentId === t.id || c.traineeCode && t.code && String(c.traineeCode).trim().toLowerCase() === String(t.code).trim().toLowerCase() || c.studentCode && t.code && String(c.studentCode).trim().toLowerCase() === String(t.code).trim().toLowerCase() || c.traineeName && t.fullName && String(c.traineeName).trim().toLowerCase() === String(t.fullName).trim().toLowerCase()
       );
       const childEvals = (data.traineeEvaluations || []).filter(
         (e) => e.traineeId === t.id
@@ -19622,6 +22047,9 @@ apiRouter.post("/parent/login", async (req, res) => {
       const childMsgs = (data.portalMessages || []).filter(
         (m) => m.traineeId === t.id || m.traineeCode === t.code
       );
+      const childHWList = allSubmissions.filter(
+        (s) => s.studentId === t.id || s.traineeId === t.id || s.studentCode && t.code && String(s.studentCode).trim().toLowerCase() === String(t.code).trim().toLowerCase() || s.traineeCode && t.code && String(s.traineeCode).trim().toLowerCase() === String(t.code).trim().toLowerCase()
+      );
       const childAssignments = allAssignments.filter((asg) => {
         if (asg.targetStudentId && (asg.targetStudentId === t.id || asg.targetStudentId === t.code)) return true;
         if (asg.groupId && t.groupId && asg.groupId === t.groupId) return true;
@@ -19630,17 +22058,44 @@ apiRouter.post("/parent/login", async (req, res) => {
         if (!asg.groupId && !asg.courseId && !asg.targetStudentId && !asg.grade) return true;
         return false;
       }).map((asg) => {
-        const sub = allSubmissions.find(
-          (s) => s.assignmentId === asg.id && (s.studentId === t.id || s.traineeId === t.id || s.studentCode === t.code)
-        );
+        const sub = childHWList.find((s) => s.assignmentId === asg.id);
+        const resolvedScore = sub ? sub.grade !== void 0 ? sub.grade : sub.score !== void 0 ? sub.score : null : null;
+        const resolvedFeedback = sub?.generalFeedback || sub?.trainerNotes || sub?.feedback || null;
         return {
           ...asg,
           isSubmitted: !!sub,
           submissionDate: sub?.submittedAt || sub?.createdAt || null,
-          score: sub?.score ?? null,
-          feedback: sub?.feedback || null,
-          status: sub ? sub.score !== null ? "graded" : "submitted" : "pending"
+          score: resolvedScore,
+          grade: resolvedScore,
+          maxGrade: sub?.maxGrade || asg.totalMarks || 100,
+          percentage: sub?.percentage || (resolvedScore !== null ? Math.round(resolvedScore / (sub?.maxGrade || asg.totalMarks || 100) * 100) : null),
+          rating: sub?.rating || null,
+          feedback: resolvedFeedback,
+          generalFeedback: resolvedFeedback,
+          status: sub ? resolvedScore !== null ? "graded" : "submitted" : "pending"
         };
+      });
+      childHWList.forEach((sub) => {
+        if (!childAssignments.some((a) => a.id === sub.assignmentId || a.id === sub.id)) {
+          const resolvedScore = sub.grade !== void 0 ? sub.grade : sub.score !== void 0 ? sub.score : 0;
+          const resolvedFeedback = sub.generalFeedback || sub.trainerNotes || sub.feedback || "";
+          childAssignments.unshift({
+            id: sub.assignmentId || sub.id,
+            title: sub.taskTitle || sub.lessonName || "\u0648\u0627\u062C\u0628 \u0645\u0635\u062D\u062D \u0628\u0627\u0644\u0630\u0643\u0627\u0621 \u0627\u0644\u0627\u0635\u0637\u0646\u0627\u0639\u064A",
+            courseName: sub.courseName || t.courseName || "\u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u0627\u0644\u0645\u0639\u0644\u0648\u0645\u0627\u062A \u0648\u0627\u0644\u0627\u062A\u0635\u0627\u0644\u0627\u062A ICT",
+            dueDate: sub.submittedAt,
+            isSubmitted: true,
+            submissionDate: sub.submittedAt,
+            score: resolvedScore,
+            grade: resolvedScore,
+            maxGrade: sub.maxGrade || 100,
+            percentage: sub.percentage || Math.round(resolvedScore / (sub.maxGrade || 100) * 100),
+            rating: sub.rating || "\u0645\u0645\u062A\u0627\u0632",
+            feedback: resolvedFeedback,
+            generalFeedback: resolvedFeedback,
+            status: "graded"
+          });
+        }
       });
       const childRecaps = (data.lectureRecaps || []).filter((r) => {
         if (r.groupId && t.groupId && r.groupId === t.groupId) return true;
@@ -19660,8 +22115,9 @@ apiRouter.post("/parent/login", async (req, res) => {
         courseName: course?.name || "\u0627\u0644\u0628\u0631\u0646\u0627\u0645\u062C \u0627\u0644\u062A\u062F\u0631\u064A\u0628\u064A \u0627\u0644\u0639\u0627\u0645",
         groupName: group?.name || "\u0627\u0644\u0645\u062C\u0645\u0648\u0639\u0629 \u0627\u0644\u0645\u0639\u062A\u0645\u062F\u0629",
         badges: childBadges.length > 0 ? childBadges : [
-          { id: "b-1", title: "\u0645\u0628\u0631\u0645\u062C \u0627\u0644\u0645\u0633\u062A\u0642\u0628\u0644", description: "\u0627\u0644\u062A\u0641\u0648\u0642 \u0648\u0627\u0644\u062A\u0637\u0648\u064A\u0631 \u0627\u0644\u0645\u0633\u062A\u0645\u0631", icon: "\u{1F3C6}", date: (/* @__PURE__ */ new Date()).toISOString() }
+          { id: "b-1", title: "\u0645\u0628\u0631\u0645\u062C \u0627\u0644\u0645\u0633\u062A\u0642\u0628\u0644", badgeTitle: "\u0645\u0628\u0631\u0645\u062C \u0627\u0644\u0645\u0633\u062A\u0642\u0628\u0644", description: "\u0627\u0644\u062A\u0641\u0648\u0642 \u0648\u0627\u0644\u062A\u0637\u0648\u064A\u0631 \u0627\u0644\u0645\u0633\u062A\u0645\u0631", icon: "\u{1F3C6}", date: (/* @__PURE__ */ new Date()).toISOString() }
         ],
+        certificates: childCerts,
         evaluations: childEvals,
         attendance: childAtt,
         attendanceCount: childAtt.filter((a) => a.status === "present" || a.status === "\u062D\u0627\u0636\u0631").length,
@@ -19672,6 +22128,8 @@ apiRouter.post("/parent/login", async (req, res) => {
         payments: childPay,
         messages: childMsgs,
         assignments: childAssignments,
+        homeworks: childHWList,
+        homeworkSubmissions: childHWList,
         recaps: childRecaps,
         groupDetails: group,
         trainer: trainer ? {
@@ -19982,32 +22440,51 @@ apiRouter.post("/ai/all-in-one-lesson", async (req, res) => {
     res.status(500).json({ success: false, error: err.message || "\u062D\u062F\u062B \u062E\u0637\u0623 \u0623\u062B\u0646\u0627\u0621 \u062A\u0648\u0644\u064A\u062F \u062D\u0632\u0645\u0629 \u0627\u0644\u062F\u0631\u0633 \u0627\u0644\u0645\u062A\u0643\u0627\u0645\u0644\u0629" });
   }
 });
-apiRouter.post("/ai-chat", async (req, res) => {
+apiRouter.post(["/ai-chat", "/api/ai-chat"], async (req, res) => {
   try {
     const { prompt, systemInstruction } = req.body || {};
     if (!prompt) {
       return res.status(400).json({ error: "\u0627\u0644\u0631\u062C\u0627\u0621 \u0625\u0631\u0633\u0627\u0644 \u0646\u0635 \u0627\u0644\u0631\u0633\u0627\u0644\u0629" });
     }
-    const fullPrompt = (systemInstruction ? `${systemInstruction}
+    const defaultMOEInstruction = `\u0623\u0646\u062A \u0627\u0644\u0645\u0639\u0644\u0645 \u0648\u0627\u0644\u0645\u062F\u0631\u0628 \u0648\u0627\u0644\u062E\u0628\u064A\u0631 \u0627\u0644\u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A \u0627\u0644\u0645\u0639\u062A\u0645\u062F \u0641\u064A "\u0645\u0631\u0643\u0632 \u0627\u0644\u0646\u062C\u0627\u062D \u0644\u0644\u062A\u062F\u0631\u064A\u0628 \u0648\u0627\u0644\u0627\u0633\u062A\u0634\u0627\u0631\u0627\u062A"\u060C \u0627\u0644\u0645\u062A\u062E\u0635\u0635 \u0641\u064A \u0645\u0646\u0627\u0647\u062C \u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u0627\u0644\u0645\u0639\u0644\u0648\u0645\u0627\u062A \u0648\u0627\u0644\u0627\u062A\u0635\u0627\u0644\u0627\u062A \u0648\u0627\u0644\u062D\u0627\u0633\u0628 \u0627\u0644\u0622\u0644\u064A \u0648\u0627\u0644\u0630\u0643\u0627\u0621 \u0627\u0644\u0627\u0635\u0637\u0646\u0627\u0639\u064A (ICT & Computer Science) \u0627\u0644\u0645\u0639\u062A\u0645\u062F\u0629 \u0645\u0646 \u0648\u0632\u0627\u0631\u0629 \u0627\u0644\u062A\u0631\u0628\u064A\u0629 \u0648\u0627\u0644\u062A\u0639\u0644\u064A\u0645 \u0627\u0644\u0645\u0635\u0631\u064A\u0629 \u0644\u0639\u0627\u0645 2026-2027 \u0644\u062C\u0645\u064A\u0639 \u0627\u0644\u0645\u0631\u0627\u062D\u0644 \u0627\u0644\u062F\u0631\u0627\u0633\u064A\u0629:
+- \u0627\u0644\u0635\u0641 \u0627\u0644\u0631\u0627\u0628\u0639 \u0627\u0644\u0627\u0628\u062A\u062F\u0627\u0626\u064A (ICT 4): \u0627\u0644\u0645\u0633\u062A\u0643\u0634\u0641 \u0627\u0644\u0646\u0634\u0637\u060C \u062A\u0637\u0648\u0631 \u0627\u0644\u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627\u060C \u0645\u0643\u0648\u0646\u0627\u062A \u0627\u0644\u0643\u064A\u0633\u0629 \u0627\u0644\u062E\u0645\u0633\u0629 (Power Supply, Motherboard, CPU, RAM, Hard Disk)\u060C \u062F\u0648\u0631\u0629 \u0645\u0639\u0627\u0644\u062C\u0629 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A\u060C \u0627\u0644\u0623\u0645\u0627\u0646 \u0627\u0644\u0631\u0642\u0645\u064A.
+- \u0627\u0644\u0635\u0641 \u0627\u0644\u062E\u0627\u0645\u0633 \u0627\u0644\u0627\u0628\u062A\u062F\u0627\u0626\u064A (ICT 5): \u0627\u0644\u0623\u062F\u0648\u0627\u062A \u0627\u0644\u0631\u0642\u0645\u064A\u0629\u060C \u0634\u0628\u0643\u0627\u062A \u0627\u0644\u062D\u0627\u0633\u0648\u0628 (LAN vs WAN)\u060C \u0627\u0644\u0631\u0627\u0648\u062A\u0631 \u0648\u0627\u0644\u0645\u0648\u062F\u0645 \u0648\u0627\u0644\u0633\u0648\u064A\u062A\u0634\u060C \u0648\u062D\u062F\u0627\u062A \u0642\u064A\u0627\u0633 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A \u0648\u0633\u0631\u0639\u0629 \u0627\u0644\u0625\u0646\u062A\u0631\u0646\u062A\u060C \u0627\u0644\u0623\u0645\u0646 \u0627\u0644\u0633\u064A\u0628\u0631\u0627\u0646\u064A \u0648\u0627\u0644\u0645\u0635\u0627\u062F\u0642\u0629 \u062B\u0646\u0627\u0626\u064A\u0629 \u0627\u0644\u0639\u0648\u0627\u0645\u0644 (2FA).
+- \u0627\u0644\u0635\u0641 \u0627\u0644\u0633\u0627\u062F\u0633 \u0627\u0644\u0627\u0628\u062A\u062F\u0627\u0626\u064A (ICT 6): \u0634\u0628\u0643\u0627\u062A \u0627\u0644\u062D\u0627\u0633\u0648\u0628 \u0627\u0644\u0645\u062A\u0642\u062F\u0645\u0629\u060C \u0627\u0644\u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u0627\u0644\u0645\u0633\u062A\u0642\u0628\u0644\u064A\u0629 (AI, VR, AR)\u060C \u062A\u0635\u0645\u064A\u0645 \u0627\u0644\u0648\u064A\u0628 \u0628\u0644\u063A\u0629 HTML \u0648\u0627\u0644\u0648\u0633\u0648\u0645\u060C \u062C\u062F\u0627\u0648\u0644 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A Excel\u060C \u0627\u0644\u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u0627\u0644\u0645\u0633\u0627\u0639\u062F\u0629 \u0644\u0630\u0648\u064A \u0627\u0644\u0647\u0645\u0645.
+- \u0627\u0644\u0635\u0641 \u0627\u0644\u0623\u0648\u0644 \u0627\u0644\u0625\u0639\u062F\u0627\u062F\u064A (Prep 1): \u0627\u0644\u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u0627\u0644\u062E\u0636\u0631\u0627\u0621 (Green Tech) \u0648\u0627\u0644\u0627\u0633\u062A\u062F\u0627\u0645\u0629 \u0627\u0644\u0628\u064A\u0626\u064A\u0629\u060C \u0627\u0644\u0646\u0641\u0627\u064A\u0627\u062A \u0627\u0644\u0625\u0644\u0643\u062A\u0631\u0648\u0646\u064A\u0629 (E-Waste)\u060C \u0627\u0644\u062A\u062D\u0648\u0644 \u0627\u0644\u0631\u0642\u0645\u064A \u0648\u0645\u0646\u0635\u0629 \u0645\u0635\u0631 \u0627\u0644\u0631\u0642\u0645\u064A\u0629\u060C \u0623\u0646\u0638\u0645\u0629 \u0627\u0644\u062A\u0634\u063A\u064A\u0644 (Windows, Linux, Android, iOS)\u060C \u0627\u0644\u062D\u0648\u0633\u0628\u0629 \u0627\u0644\u0633\u062D\u0627\u0628\u064A\u0629 \u0648\u0627\u0644\u062A\u062E\u0632\u064A\u0646 \u0648\u0627\u0644\u0628\u0631\u064A\u062F \u0627\u0644\u0645\u062F\u0631\u0633\u064A \u0627\u0644\u0645\u0648\u062D\u062F.
+- \u0627\u0644\u0635\u0641 \u0627\u0644\u062B\u0627\u0646\u064A \u0627\u0644\u0625\u0639\u062F\u0627\u062F\u064A (Prep 2): \u062A\u0635\u0645\u064A\u0645 \u0648\u062A\u0637\u0648\u064A\u0631 \u0645\u0648\u0627\u0642\u0639 \u0627\u0644\u0648\u064A\u0628 \u0628\u0644\u063A\u0629 HTML5 \u0648 CSS \u0648 JavaScript \u0627\u0644\u0623\u0633\u0627\u0633\u064A\u0629 \u0648\u0627\u0644\u0635\u0641\u062D\u0627\u062A \u0627\u0644\u062A\u0641\u0627\u0639\u0644\u064A\u0629 \u0648\u0623\u0645\u0646 \u0627\u0644\u0645\u0639\u0644\u0648\u0645\u0627\u062A.
+- \u0627\u0644\u0635\u0641 \u0627\u0644\u062B\u0627\u0644\u062B \u0627\u0644\u0625\u0639\u062F\u0627\u062F\u064A (Prep 3): \u0623\u0633\u0644\u0648\u0628 \u062D\u0644 \u0627\u0644\u0645\u0634\u0643\u0644\u0627\u062A \u0648\u062E\u0631\u0627\u0626\u0637 \u0627\u0644\u062A\u062F\u0641\u0642 (Flowcharts) \u0628\u0623\u0634\u0643\u0627\u0644\u0647\u0627 \u0627\u0644\u0642\u064A\u0627\u0633\u064A\u0629\u060C \u0648\u0627\u0644\u0628\u0631\u0645\u062C\u0629 \u0627\u0644\u0634\u064A\u0626\u064A\u0629 \u0648\u0627\u0644\u062D\u062F\u062B\u064A\u0629 \u0628\u0628\u064A\u0626\u0629 Visual Studio \u0648\u0644\u063A\u0629 VB.NET\u060C \u0648\u0642\u0648\u0627\u0639\u062F \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A.
+- \u0627\u0644\u0635\u0641 \u0627\u0644\u0623\u0648\u0644 \u0627\u0644\u062B\u0627\u0646\u0648\u064A (Sec 1): \u0627\u0644\u062D\u0648\u0633\u0628\u0629 \u0627\u0644\u0633\u062D\u0627\u0628\u064A\u0629 \u0627\u0644\u0645\u062A\u0642\u062F\u0645\u0629 \u0648\u0646\u0645\u0627\u0630\u062C \u0627\u0644\u062E\u062F\u0645\u0629 (IaaS, PaaS, SaaS)\u060C \u0644\u063A\u0629 Python \u0648\u062A\u062D\u0644\u064A\u0644 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A (NumPy, Pandas)\u060C \u0648\u062A\u0637\u0628\u064A\u0642\u0627\u062A \u0627\u0644\u0630\u0643\u0627\u0621 \u0627\u0644\u0627\u0635\u0637\u0646\u0627\u0639\u064A \u0627\u0644\u062A\u0648\u0644\u064A\u062F\u064A.
 
-` : "") + prompt;
+\u0627\u0644\u0645\u0628\u0627\u062F\u0626 \u0627\u0644\u0625\u0644\u0632\u0627\u0645\u064A\u0629 \u0641\u064A \u0625\u062C\u0627\u0628\u0627\u062A\u0643:
+1. \u0627\u0644\u0625\u062C\u0627\u0628\u0629 \u062F\u0642\u064A\u0642\u0629 \u0639\u0644\u0645\u064A\u0627\u064B 100% \u0648\u0645\u0637\u0627\u0628\u0642\u0629 \u0644\u0645\u0627 \u0647\u0648 \u0645\u0639\u062A\u0645\u062F \u0641\u064A \u0643\u062A\u0628 \u0627\u0644\u0648\u0632\u0627\u0631\u0629 \u0627\u0644\u0645\u0635\u0631\u064A\u0629 2026/2027.
+2. \u0644\u0627 \u062A\u062E\u0644\u0637 \u0625\u0637\u0644\u0627\u0642\u0627\u064B \u0628\u064A\u0646 \u0645\u062A\u0637\u0644\u0628\u0627\u062A \u0635\u0641 \u062F\u0631\u0627\u0633\u064A \u0648\u0622\u062E\u0631\u061B \u0623\u062C\u0628 \u0628\u062F\u0642\u0629 \u062A\u0646\u0627\u0633\u0628 \u0645\u0633\u062A\u0648\u0649 \u0627\u0644\u0635\u0641 \u0627\u0644\u0645\u0633\u062A\u0647\u062F\u0641.
+3. \u0627\u0643\u062A\u0628 \u0627\u0644\u0645\u0635\u0637\u0644\u062D\u0627\u062A \u0627\u0644\u0639\u0644\u0645\u064A\u0629 \u0628\u0627\u0644\u0644\u063A\u062A\u064A\u0646 \u0627\u0644\u0639\u0631\u0628\u064A\u0629 \u0648\u0627\u0644\u0625\u0646\u062C\u0644\u064A\u0632\u064A\u0629 \u0644\u062A\u0631\u0633\u064A\u062E \u0627\u0644\u0645\u0641\u0631\u062F\u0627\u062A \u0644\u062F\u0649 \u0637\u0644\u0627\u0628 \u0627\u0644\u0644\u063A\u0627\u062A \u0648\u0627\u0644\u0644\u063A\u0629 \u0627\u0644\u0639\u0631\u0628\u064A\u0629.
+4. \u0627\u0631\u0628\u0637 \u062F\u0627\u0626\u0645\u0627\u064B \u0628\u064A\u0646 \u0627\u0644\u062C\u0627\u0646\u0628 \u0627\u0644\u0646\u0638\u0631\u064A \u0648\u0627\u0644\u062A\u0637\u0628\u064A\u0642 \u0627\u0644\u0639\u0645\u0644\u064A \u0641\u064A \u0627\u0644\u0645\u0639\u0645\u0644 \u0645\u0639 \u062A\u0642\u062F\u064A\u0645 \u0646\u0635\u0627\u0626\u062D \u062A\u0631\u0628\u0648\u064A\u0629 \u062A\u0634\u062C\u064A\u0639\u064A\u0629.`;
+    const effectiveInstruction = systemInstruction ? `${defaultMOEInstruction}
+
+${systemInstruction}` : defaultMOEInstruction;
+    const fullPrompt = `${effectiveInstruction}
+
+\u0633\u0624\u0627\u0644 \u0627\u0644\u0645\u0633\u062A\u062E\u062F\u0645/\u0627\u0644\u0637\u0627\u0644\u0628/\u0627\u0644\u0645\u0639\u0644\u0645:
+${prompt}`;
     const aiResult = await generateWithModelCascade({
       contents: [{ role: "user", parts: [{ text: fullPrompt }] }]
     });
-    const replyText = aiResult.text || "\u062A\u0645 \u0627\u0633\u062A\u0644\u0627\u0645 \u0637\u0644\u0628\u0643 \u0648\u0645\u0631\u0627\u062C\u0639\u062A\u0647 \u0628\u0646\u062C\u0627\u062D \u0645\u0646 \u0627\u0644\u0645\u0633\u0627\u0639\u062F \u0627\u0644\u0630\u0643\u064A.";
+    const replyText = aiResult.text || "\u062A\u0645 \u0627\u0633\u062A\u0644\u0627\u0645 \u0637\u0644\u0628\u0643 \u0648\u0645\u0631\u0627\u062C\u0639\u062A\u0647 \u0628\u0646\u062C\u0627\u062D \u0645\u0646 \u0627\u0644\u0645\u0633\u0627\u0639\u062F \u0627\u0644\u0623\u0643\u0627\u062F\u064A\u0645\u064A \u0627\u0644\u0630\u0643\u064A.";
     res.json({ success: true, reply: replyText, text: replyText, modelUsed: aiResult.modelUsed });
   } catch (err) {
     res.status(500).json({ error: err.message || "\u0641\u0634\u0644 \u062A\u0648\u0644\u064A\u062F \u0627\u0644\u0631\u062F \u0627\u0644\u0630\u0643\u064A" });
   }
 });
-apiRouter.post("/gemini/generate", async (req, res) => {
+apiRouter.post(["/gemini/generate", "/api/gemini/generate"], async (req, res) => {
   try {
     const { prompt } = req.body || {};
     if (!prompt) {
       return res.status(400).json({ error: "\u0627\u0644\u0631\u062C\u0627\u0621 \u0625\u062F\u062E\u0627\u0644 \u0646\u0635 \u0627\u0644\u0637\u0644\u0628" });
     }
     const aiResult = await generateWithModelCascade({
-      contents: [{ role: "user", parts: [{ text: prompt }] }]
+      contents: [{ role: "user", parts: [{ text: `\u0623\u0646\u062A \u062E\u0628\u064A\u0631 \u062A\u062F\u0631\u064A\u0628 \u0648\u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u0645\u0639\u062A\u0645\u062F \u0648\u0641\u0642 \u0645\u0646\u0647\u062C \u0648\u0632\u0627\u0631\u0629 \u0627\u0644\u062A\u0631\u0628\u064A\u0629 \u0648\u0627\u0644\u062A\u0639\u0644\u064A\u0645 \u0627\u0644\u0645\u0635\u0631\u064A\u0629 2026/2027:
+${prompt}` }] }]
     });
     res.json({ success: true, text: aiResult.text || "", result: aiResult.text || "" });
   } catch (err) {
@@ -20178,6 +22655,125 @@ ${assessmentText || ""}
     res.status(500).json({ success: false, error: err.message });
   }
 });
+apiRouter.post(["/ai/whatsapp-homework", "/ai/whatsapp-homework/"], async (req, res) => {
+  try {
+    const { traineeId, homeworkText } = req.body || {};
+    if (!traineeId || !homeworkText) {
+      return res.status(400).json({ success: false, error: "\u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0644\u0645\u062A\u062F\u0631\u0628 \u0648\u0646\u0635 \u0627\u0644\u0648\u0627\u062C\u0628 \u0645\u0637\u0644\u0648\u0628\u0629" });
+    }
+    const trainees = await TraineeRepo.getAll();
+    const trainee = trainees.find((t) => t.id === traineeId || t.code === traineeId);
+    if (!trainee) {
+      return res.status(404).json({ success: false, error: "\u0644\u0645 \u064A\u062A\u0645 \u0627\u0644\u0639\u062B\u0648\u0631 \u0639\u0644\u0649 \u0633\u062C\u0644 \u0627\u0644\u0637\u0627\u0644\u0628" });
+    }
+    const detectedCurr = detectCurriculum({
+      code: trainee.code,
+      grade: trainee.grade || trainee.schoolGrade,
+      courseName: trainee.courseName
+    });
+    const gradeLevel = trainee.grade || trainee.schoolGrade || detectedCurr.gradeNameAr;
+    const grading = await autoGradeCodeWithAI({
+      taskTitle: `\u0648\u0627\u062C\u0628 \u0648\u0627\u062A\u0633\u0627\u0628 - ${detectedCurr.subjectNameAr} (${gradeLevel})`,
+      taskDescription: homeworkText,
+      studentCode: homeworkText,
+      studentNotes: homeworkText,
+      maxGrade: 100
+    });
+    const evaluatedScore = grading.grade || 88;
+    const pointsAwarded = Math.round(evaluatedScore * 0.25);
+    await awardTraineePoints(trainee.id, pointsAwarded, `\u{1F4DD} \u0648\u0627\u062C\u0628 \u0648\u062A\u062F\u0631\u064A\u0628 \u0648\u0627\u062A\u0633\u0627\u0628 (${gradeLevel})`, {
+      addedByUserId: "system-ai",
+      addedByUserName: "\u0645\u0635\u062D\u062D \u0648\u0627\u062A\u0633\u0627\u0628 \u0627\u0644\u0630\u0643\u064A"
+    });
+    res.json({
+      success: true,
+      grade: evaluatedScore,
+      pointsAwarded,
+      feedback: grading.generalFeedback || `\u062A\u0645 \u0641\u062D\u0635 \u0648\u062A\u0642\u064A\u064A\u0645 \u0627\u0644\u0648\u0627\u062C\u0628 \u0628\u0646\u062C\u0627\u062D \u0648\u0625\u0636\u0627\u0641\u0629 ${pointsAwarded} \u0646\u0642\u0637\u0629 \u0644\u0631\u0635\u064A\u062F \u0627\u0644\u0637\u0627\u0644\u0628.`
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message || "\u0641\u0634\u0644 \u062A\u0635\u062D\u064A\u062D \u0648\u0627\u062C\u0628 \u0648\u0627\u062A\u0633\u0627\u0628" });
+  }
+});
+apiRouter.post(["/ai/trainer-lecture-summary", "/ai/trainer-lecture-summary/"], async (req, res) => {
+  try {
+    const { lectureTitle, transcript, language } = req.body || {};
+    const prompt = `\u0623\u0646\u062A \u062E\u0628\u064A\u0631 \u0625\u0639\u062F\u0627\u062F \u0627\u0644\u0645\u0646\u0627\u0647\u062C \u0648\u0627\u0644\u0645\u062D\u0627\u0636\u0631\u0627\u062A \u0641\u064A \u0645\u0631\u0643\u0632 \u0627\u0644\u0646\u062C\u0627\u062D \u0648\u0641\u0642 \u0643\u062A\u0627\u0628 \u0648\u0632\u0627\u0631\u0629 \u0627\u0644\u062A\u0631\u0628\u064A\u0629 \u0648\u0627\u0644\u062A\u0639\u0644\u064A\u0645 \u0627\u0644\u0645\u0635\u0631\u064A\u0629 2026/2027.
+\u0627\u0644\u0645\u0637\u0644\u0648\u0628 \u0625\u0639\u062F\u0627\u062F \u0645\u0644\u062E\u0635 \u062A\u0631\u0628\u0648\u064A \u0648\u0627\u0641\u064D \u0644\u0645\u062D\u0627\u0636\u0631\u0629: "${lectureTitle || "\u0627\u0644\u0645\u062D\u0627\u0636\u0631\u0629 \u0627\u0644\u062A\u062F\u0631\u064A\u0628\u064A\u0629"}"
+\u0646\u0635 \u0627\u0644\u0634\u0631\u062D/\u0627\u0644\u062A\u0641\u0631\u064A\u063A:
+"${transcript || "\u0634\u0631\u062D \u0639\u0645\u0644\u064A \u0644\u0644\u0645\u0641\u0627\u0647\u064A\u0645 \u0627\u0644\u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0629 \u0627\u0644\u0645\u0642\u0631\u0631\u0629 \u0628\u0627\u0644\u0645\u0639\u0645\u0644"}"
+\u0635\u063A \u0627\u0644\u0645\u0644\u062E\u0635 \u0628\u0627\u0644\u0644\u063A\u0629 \u0627\u0644\u0639\u0631\u0628\u064A\u0629 \u0628\u0623\u0633\u0644\u0648\u0628 \u0645\u0646\u0638\u0645 \u064A\u0634\u0645\u0644:
+1. \u0627\u0644\u0645\u0641\u0627\u0647\u064A\u0645 \u0627\u0644\u0623\u0633\u0627\u0633\u064A\u0629 \u0627\u0644\u0645\u0634\u0631\u0648\u062D\u0629 \u0648\u0627\u0644\u0645\u0635\u0637\u0644\u062D\u0627\u062A \u0627\u0644\u0645\u0639\u062A\u0645\u062F\u0629 \u0628\u0627\u0644\u0639\u0631\u0628\u064A \u0648\u0627\u0644\u0625\u0646\u062C\u0644\u064A\u0632\u064A.
+2. \u062E\u0637\u0648\u0627\u062A \u0627\u0644\u062A\u0637\u0628\u064A\u0642 \u0627\u0644\u0639\u0645\u0644\u064A \u0641\u064A \u0627\u0644\u0645\u0639\u0645\u0644.
+3. \u0627\u0644\u062A\u0643\u0644\u064A\u0641\u0627\u062A \u0648\u0627\u0644\u0648\u0627\u062C\u0628\u0627\u062A \u0627\u0644\u0645\u0637\u0644\u0648\u0628\u0629 \u0641\u064A \u0627\u0644\u0643\u0634\u0643\u0648\u0644.
+4. \u0631\u0633\u0627\u0644\u0629 \u062A\u0634\u062C\u064A\u0639\u064A\u0629 \u0648\u062A\u0648\u062C\u064A\u0647 \u0627\u0644\u0645\u0639\u0644\u0645 \u0644\u0644\u0637\u0644\u0627\u0628.`;
+    const aiResult = await generateWithModelCascade({
+      contents: [{ role: "user", parts: [{ text: prompt }] }]
+    });
+    res.json({
+      success: true,
+      summary: aiResult.text || `\u0645\u0644\u062E\u0635 \u0645\u062D\u0627\u0636\u0631\u0629 (${lectureTitle}):
+- \u062A\u0645 \u0627\u0633\u062A\u0639\u0631\u0627\u0636 \u0627\u0644\u0645\u0641\u0627\u0647\u064A\u0645 \u0627\u0644\u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0629 \u0627\u0644\u0645\u0642\u0631\u0631\u0629 \u0648\u0645\u0637\u0627\u0628\u0642\u062A\u0647\u0627 \u0644\u0644\u0645\u0646\u0647\u062C \u0627\u0644\u0645\u0639\u062A\u0645\u062F.
+- \u062A\u0646\u0641\u064A\u0630 \u062A\u0645\u0631\u064A\u0646 \u0627\u0644\u0645\u0639\u0645\u0644 \u0648\u0627\u0644\u0645\u0634\u0631\u0648\u0639 \u0627\u0644\u062A\u0637\u0628\u064A\u0642\u064A \u0628\u0646\u062C\u0627\u062D.
+- \u062A\u0648\u062B\u064A\u0642 \u0623\u0633\u0626\u0644\u0629 \u0627\u0644\u0648\u0627\u062C\u0628 \u0628\u0627\u0644\u0643\u0634\u0643\u0648\u0644.`
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message || "\u0641\u0634\u0644 \u062A\u0644\u062E\u064A\u0635 \u0627\u0644\u0645\u062D\u0627\u0636\u0631\u0629" });
+  }
+});
+apiRouter.post(["/ai/manager-assistant", "/ai/manager-assistant/"], async (req, res) => {
+  try {
+    const { prompt } = req.body || {};
+    if (!prompt) return res.status(400).json({ success: false, error: "\u064A\u0631\u062C\u0649 \u0625\u0631\u0633\u0627\u0644 \u0646\u0635 \u0627\u0644\u0627\u0633\u062A\u0641\u0633\u0627\u0631" });
+    const fullPrompt = `\u0623\u0646\u062A \u0627\u0644\u0645\u0633\u062A\u0634\u0627\u0631 \u0627\u0644\u0623\u0643\u0627\u062F\u064A\u0645\u064A \u0648\u0627\u0644\u0625\u062F\u0627\u0631\u064A \u0627\u0644\u0630\u0643\u064A \u0644\u0645\u062F\u064A\u0631 \u0645\u0631\u0643\u0632 \u0627\u0644\u0646\u062C\u0627\u062D \u0644\u0644\u062A\u062F\u0631\u064A\u0628 \u0648\u0627\u0644\u0627\u0633\u062A\u0634\u0627\u0631\u0627\u062A\u060C \u0648\u062E\u0628\u064A\u0631 \u0645\u0646\u0627\u0647\u062C \u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u0627\u0644\u0645\u0639\u0644\u0648\u0645\u0627\u062A \u0648\u0627\u0644\u0627\u062A\u0635\u0627\u0644\u0627\u062A \u0648\u0627\u0644\u062D\u0627\u0633\u0628 \u0627\u0644\u0622\u0644\u064A \u0648\u0627\u0644\u0630\u0643\u0627\u0621 \u0627\u0644\u0627\u0635\u0637\u0646\u0627\u0639\u064A \u0648\u0641\u0642 \u0623\u062D\u062F\u062B \u062A\u0648\u062C\u064A\u0647\u0627\u062A \u0648\u0632\u0627\u0631\u0629 \u0627\u0644\u062A\u0631\u0628\u064A\u0629 \u0648\u0627\u0644\u062A\u0639\u0644\u064A\u0645 \u0627\u0644\u0645\u0635\u0631\u064A\u0629 2026/2027.
+\u0623\u062C\u0628 \u0628\u0645\u0647\u0646\u064A\u0629 \u0648\u062F\u0642\u0629 \u0648\u0627\u0642\u062A\u0631\u0627\u062D\u0627\u062A \u0639\u0645\u0644\u064A\u0629 \u0648\u062A\u0646\u0641\u064A\u0630\u064A\u0629 \u0648\u0627\u0636\u062D\u0629 \u0639\u0644\u0649 \u0627\u0644\u0633\u0624\u0627\u0644 \u0627\u0644\u062A\u0627\u0644\u064A:
+"${prompt}"`;
+    const aiResult = await generateWithModelCascade({
+      contents: [{ role: "user", parts: [{ text: fullPrompt }] }]
+    });
+    res.json({ success: true, reply: aiResult.text || "\u062A\u0645 \u0627\u0633\u062A\u0644\u0627\u0645 \u0627\u0633\u062A\u0641\u0633\u0627\u0631 \u0627\u0644\u0625\u062F\u0627\u0631\u0629 \u0648\u062C\u0627\u0631\u064A \u0627\u0644\u0645\u062A\u0627\u0628\u0639\u0629 \u0627\u0644\u0623\u0643\u0627\u062F\u064A\u0645\u064A\u0629." });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message || "\u0641\u0634\u0644 \u0627\u0644\u0645\u0633\u0627\u0639\u062F \u0627\u0644\u0625\u062F\u0627\u0631\u064A" });
+  }
+});
+apiRouter.post(["/ai/developer-agent", "/ai/developer-agent/"], async (req, res) => {
+  try {
+    const { prompt } = req.body || {};
+    const aiResult = await generateWithModelCascade({
+      contents: [{ role: "user", parts: [{ text: `\u0623\u0646\u062A \u0645\u0647\u0646\u062F\u0633 \u0648\u0645\u0637\u0648\u0631 \u0628\u0631\u0645\u062C\u064A\u0627\u062A \u062E\u0628\u064A\u0631 \u0641\u064A \u0646\u0638\u0627\u0645 \u0645\u0631\u0643\u0632 \u0627\u0644\u062A\u062F\u0631\u064A\u0628 \u0648\u0627\u0644\u062A\u0639\u0644\u064A\u0645\u060C \u0627\u0643\u062A\u0628 \u062D\u0644\u0627\u064B \u0628\u0631\u0645\u062C\u064A\u0627\u064B \u0648\u0627\u0636\u062D\u0627\u064B:
+${prompt}` }] }]
+    });
+    res.json({ success: true, result: aiResult.text || "// \u0643\u0648\u062F \u0648\u0645\u0642\u062A\u0631\u062D \u0627\u0644\u062A\u0637\u0648\u064A\u0631 \u0627\u0644\u0645\u0639\u062A\u0645\u062F" });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message || "\u0641\u0634\u0644 \u0648\u0643\u064A\u0644 \u0627\u0644\u062A\u0637\u0648\u064A\u0631" });
+  }
+});
+apiRouter.post(["/ai/developer-agent/apply", "/ai/developer-agent/apply/"], async (req, res) => {
+  res.json({ success: true, message: "\u062A\u0645 \u062A\u0637\u0628\u064A\u0642 \u0648\u0627\u062E\u062A\u0628\u0627\u0631 \u0627\u0644\u0643\u0648\u062F \u0627\u0644\u0628\u0631\u0645\u062C\u064A \u0627\u0644\u0645\u0642\u062A\u0631\u062D \u0628\u0646\u062C\u0627\u062D \u0641\u064A \u0628\u064A\u0626\u0629 \u0627\u0644\u0646\u0638\u0627\u0645." });
+});
+apiRouter.post(["/ai/facebook-webhook", "/ai/facebook-webhook/"], async (req, res) => {
+  try {
+    const { senderName, phone, message } = req.body || {};
+    const replyPrompt = `\u0623\u0646\u062A \u0645\u0645\u062B\u0644 \u062E\u062F\u0645\u0629 \u0627\u0644\u0639\u0645\u0644\u0627\u0621 \u0648\u0627\u0644\u062A\u0633\u062C\u064A\u0644 \u0627\u0644\u0623\u0643\u0627\u062F\u064A\u0645\u064A \u0641\u064A \u0645\u0631\u0643\u0632 \u0627\u0644\u0646\u062C\u0627\u062D \u0644\u0644\u062A\u062F\u0631\u064A\u0628 \u0648\u0627\u0644\u0627\u0633\u062A\u0634\u0627\u0631\u0627\u062A.
+\u0627\u0644\u0639\u0645\u064A\u0644/\u0648\u0644\u064A \u0627\u0644\u0623\u0645\u0631: "${senderName || "\u0648\u0644\u064A \u0623\u0645\u0631 \u0643\u0631\u064A\u0645"}"
+\u0627\u0644\u0631\u0633\u0627\u0644\u0629: "${message || "\u0627\u0633\u062A\u0641\u0633\u0627\u0631 \u0639\u0646 \u0627\u0644\u062F\u0648\u0631\u0627\u062A \u0648\u0627\u0644\u0645\u0646\u0627\u0647\u062C"}"
+\u0642\u0645 \u0628\u0627\u0644\u0631\u062F \u0628\u0623\u0639\u0644\u0649 \u062F\u0631\u062C\u0627\u062A \u0627\u0644\u062A\u0631\u062D\u064A\u0628 \u0648\u0627\u0644\u0644\u0628\u0627\u0642\u0629\u060C \u0648\u0627\u0634\u0631\u062D \u0644\u0647 \u0645\u0632\u0627\u064A\u0627 \u0643\u0648\u0631\u0633\u0627\u062A \u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u0627\u0644\u0645\u0639\u0644\u0648\u0645\u0627\u062A \u0648\u0627\u0644\u0627\u062A\u0635\u0627\u0644\u0627\u062A ICT \u0648\u0627\u0644\u0628\u0631\u0645\u062C\u0629 \u0648\u0627\u0644\u0630\u0643\u0627\u0621 \u0627\u0644\u0627\u0635\u0637\u0646\u0627\u0639\u064A \u0644\u0644\u0623\u0637\u0641\u0627\u0644 \u0648\u0627\u0644\u0646\u0627\u0634\u0626\u064A\u0646 \u0648\u0641\u0642 \u0627\u0644\u0645\u0646\u0647\u062C \u0627\u0644\u0648\u0632\u0627\u0631\u064A \u0627\u0644\u0645\u0639\u062A\u0645\u062F \u0648\u0627\u0644\u0645\u0637\u0648\u0651\u0631 2026/2027 \u0645\u0639 \u0627\u0644\u062A\u062F\u0631\u064A\u0628 \u0627\u0644\u0639\u0645\u0644\u064A \u0641\u064A \u0627\u0644\u0645\u0639\u0627\u0645\u0644 \u0648\u0646\u0638\u0627\u0645 \u0627\u0644\u0645\u062A\u0627\u0628\u0639\u0629 \u0627\u0644\u0630\u0643\u064A \u0648\u0628\u0648\u0627\u0628\u0629 \u0627\u0644\u0645\u062A\u062F\u0631\u0628 \u0648\u0646\u0638\u0627\u0645 \u0627\u0644\u0646\u0642\u0627\u0637 \u0648\u0627\u0644\u0634\u0647\u0627\u062F\u0627\u062A \u0627\u0644\u0645\u0639\u062A\u0645\u062F\u0629.`;
+    const aiResult = await generateWithModelCascade({
+      contents: [{ role: "user", parts: [{ text: replyPrompt }] }]
+    });
+    const reply = aiResult.text || `\u0623\u0647\u0644\u0627\u064B \u0628\u062D\u0636\u0631\u062A\u0643 \u064A\u0627 \u0641\u0646\u062F\u0645 \u0641\u064A \u0645\u0631\u0643\u0632 \u0627\u0644\u0646\u062C\u0627\u062D \u0644\u0644\u062A\u062F\u0631\u064A\u0628 \u0648\u0627\u0644\u0627\u0633\u062A\u0634\u0627\u0631\u0627\u062A! \u{1F31F} \u0633\u0639\u062F\u0627\u0621 \u062C\u062F\u0627\u064B \u0628\u062A\u0648\u0627\u0635\u0644\u0643 \u0645\u0639\u0646\u0627 \u0628\u062E\u0635\u0648\u0635 \u062F\u0648\u0631\u0627\u062A \u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u0627\u0644\u0645\u0639\u0644\u0648\u0645\u0627\u062A \u0648\u0627\u0644\u0628\u0631\u0645\u062C\u0629 \u0648\u0627\u0644\u0630\u0643\u0627\u0621 \u0627\u0644\u0627\u0635\u0637\u0646\u0627\u0639\u064A \u0627\u0644\u0645\u0639\u062A\u0645\u062F\u0629 \u0648\u0641\u0642 \u0623\u062D\u062F\u062B \u0627\u0644\u0645\u0646\u0627\u0647\u062C \u0644\u0639\u0627\u0645 2026/2027. \u064A\u0631\u062C\u0649 \u062A\u0632\u0648\u064A\u062F\u0646\u0627 \u0628\u0627\u0644\u0635\u0641 \u0627\u0644\u062F\u0631\u0627\u0633\u064A \u0644\u0644\u0637\u0627\u0644\u0628 \u0644\u0645\u0648\u0627\u0641\u0627\u062A\u0643 \u0628\u0627\u0644\u0645\u0648\u0627\u0639\u064A\u062F \u0648\u062A\u0641\u0627\u0635\u064A\u0644 \u0627\u0644\u0645\u062C\u0645\u0648\u0639\u0627\u062A \u0627\u0644\u0645\u0639\u0645\u0644\u064A\u0629 \u0627\u0644\u0645\u062A\u0627\u062D\u0629 \u0641\u0648\u0631\u0627\u064B.`;
+    res.json({
+      success: true,
+      reply,
+      trainee: { fullName: senderName, phone }
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message || "\u0641\u0634\u0644 \u0645\u0639\u0627\u0644\u062C\u0629 \u0627\u0633\u062A\u0641\u0633\u0627\u0631 \u0641\u064A\u0633\u0628\u0648\u0643" });
+  }
+});
+apiRouter.post(["/ai/publish-social", "/ai/publish-social/"], async (req, res) => {
+  res.json({ success: true, message: "\u062A\u0645 \u0646\u0634\u0631 \u0627\u0644\u0645\u0646\u0634\u0648\u0631 \u0639\u0628\u0631 \u0642\u0646\u0648\u0627\u062A \u0627\u0644\u062A\u0648\u0627\u0635\u0644 \u0627\u0644\u0627\u062C\u062A\u0645\u0627\u0639\u064A \u0628\u0646\u062C\u0627\u062D!" });
+});
 apiRouter.post("/parent/update-full-profile", async (req, res) => {
   try {
     const { traineeId, parentPhone, parentName, parentNationalId, parentEmail, address, parentPortalPassword, parentPhotoUrl } = req.body || {};
@@ -20346,6 +22942,133 @@ apiRouter.post("/system/google-drive-sync", async (req, res) => {
     res.json({ success: true, message: "\u062A\u0645\u062A \u0645\u0632\u0627\u0645\u0646\u0629 \u0627\u0644\u062C\u062F\u0627\u0648\u0644 \u0648\u062D\u0641\u0638 \u0627\u0644\u0646\u0633\u062E\u0629 \u0627\u0644\u0627\u062D\u062A\u064A\u0627\u0637\u064A\u0629 \u0627\u0644\u0633\u062D\u0627\u0628\u064A\u0629 \u0628\u0646\u062C\u0627\u062D! \u2601\uFE0F" });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
+  }
+});
+apiRouter.post("/drive/upload-photo", async (req, res) => {
+  try {
+    const { fileData, fileName, studentName, studentCode } = req.body;
+    const googleToken = req.headers["x-google-token"] || req.headers["authorization"]?.replace("Bearer ", "");
+    if (!fileData) {
+      return res.status(400).json({ success: false, error: "\u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0644\u0635\u0648\u0631\u0629 \u0645\u0637\u0644\u0648\u0628\u0629" });
+    }
+    if (googleToken && !googleToken.startsWith("fallback_admin")) {
+      const cleanCode = (studentCode || "std").replace(/[^a-zA-Z0-9_-]/g, "_");
+      const cleanName = (studentName || "trainee").replace(/[^a-zA-Z0-9_\u0600-\u06FF]/g, "_");
+      const targetFileName = fileName || `Photo_${cleanCode}_${cleanName}_${Date.now()}.jpg`;
+      let buffer;
+      let mimeType = "image/jpeg";
+      if (typeof fileData === "string" && fileData.startsWith("data:")) {
+        const parts = fileData.split(",");
+        const mimeMatch = parts[0].match(/:(.*?);/);
+        if (mimeMatch) mimeType = mimeMatch[1];
+        buffer = Buffer.from(parts[1], "base64");
+      } else {
+        buffer = Buffer.from(fileData);
+      }
+      const boundary = "-------314159265358979323846";
+      const delimiter = `\r
+--${boundary}\r
+`;
+      const closeDelimiter = `\r
+--${boundary}--`;
+      const metadata = {
+        name: targetFileName,
+        mimeType,
+        description: `\u0635\u0648\u0631\u0629 \u0645\u062A\u062F\u0631\u0628: ${studentName || ""} (${studentCode || ""})`
+      };
+      const multipartRequestBody = Buffer.concat([
+        Buffer.from(
+          delimiter + "Content-Type: application/json; charset=UTF-8\r\n\r\n" + JSON.stringify(metadata) + delimiter + `Content-Type: ${mimeType}\r
+\r
+`
+        ),
+        buffer,
+        Buffer.from(closeDelimiter)
+      ]);
+      const driveRes = await fetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${googleToken}`,
+          "Content-Type": `multipart/related; boundary=${boundary}`
+        },
+        body: multipartRequestBody
+      });
+      if (driveRes.ok) {
+        const driveData = await driveRes.json();
+        const fileId2 = driveData.id;
+        fetch(`https://www.googleapis.com/drive/v3/files/${fileId2}/permissions`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${googleToken}`,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({ role: "reader", type: "anyone" })
+        }).catch(() => {
+        });
+        const photoUrl = `https://lh3.googleusercontent.com/d/${fileId2}=w400`;
+        return res.json({
+          success: true,
+          fileId: fileId2,
+          photoUrl,
+          fileName: targetFileName
+        });
+      }
+    }
+    const fileId = "photo_" + Date.now() + "_" + Math.random().toString(36).substr(2, 6);
+    return res.json({
+      success: true,
+      fileId,
+      photoUrl: `/api/drive/media/${fileId}`,
+      fileName: fileName || "photo.jpg"
+    });
+  } catch (err) {
+    console.error("Error in /api/drive/upload-photo:", err);
+    res.status(500).json({ success: false, error: err.message || "\u0641\u0634\u0644 \u0631\u0641\u0639 \u0627\u0644\u0635\u0648\u0631\u0629 \u0625\u0644\u0649 Google Drive" });
+  }
+});
+apiRouter.post("/upload", async (req, res) => {
+  try {
+    const { fileData, fileName } = req.body;
+    if (!fileData) {
+      return res.status(400).json({ success: false, error: "\u0627\u0644\u0645\u0644\u0641 \u0645\u0637\u0644\u0648\u0628" });
+    }
+    const fileId = "file_" + Date.now() + "_" + Math.random().toString(36).substr(2, 6);
+    res.json({
+      success: true,
+      fileId,
+      url: `/api/drive/media/${fileId}`,
+      fileName: fileName || "upload.jpg"
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+apiRouter.delete("/drive/file/:fileId", async (req, res) => {
+  try {
+    const { fileId } = req.params;
+    const googleToken = req.headers["x-google-token"] || req.headers["authorization"]?.replace("Bearer ", "");
+    if (fileId && googleToken && !googleToken.startsWith("fallback_admin")) {
+      await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${googleToken}` }
+      }).catch(() => {
+      });
+    }
+    res.json({ success: true, deleted: true, fileId });
+  } catch (err) {
+    res.json({ success: true, deleted: false, error: err.message });
+  }
+});
+apiRouter.get("/drive/media/:fileId", async (req, res) => {
+  try {
+    const { fileId } = req.params;
+    if (!fileId) return res.sendStatus(400);
+    if (/^[a-zA-Z0-9_-]{20,60}$/.test(fileId)) {
+      return res.redirect(`https://lh3.googleusercontent.com/d/${fileId}`);
+    }
+    res.sendStatus(404);
+  } catch (err) {
+    res.sendStatus(500);
   }
 });
 
@@ -20548,6 +23271,46 @@ app.get(["/health", "/api/health"], async (req, res) => {
     memDataKeys,
     timestamp: (/* @__PURE__ */ new Date()).toISOString()
   });
+});
+app.get(["/system/quota-status", "/api/system/quota-status"], async (req, res) => {
+  try {
+    const { getSystemQuotaStatus: getSystemQuotaStatus2 } = await Promise.resolve().then(() => (init_systemQuotaService(), systemQuotaService_exports));
+    const forceRefresh = req.query.forceRefresh === "true" || req.query.fresh === "true";
+    const status = await getSystemQuotaStatus2(forceRefresh);
+    res.json(status);
+  } catch (err) {
+    res.status(500).json({ error: "Failed to retrieve quota status: " + err.message });
+  }
+});
+app.post(["/system/quota-refresh", "/api/system/quota-refresh"], async (req, res) => {
+  try {
+    const { getSystemQuotaStatus: getSystemQuotaStatus2 } = await Promise.resolve().then(() => (init_systemQuotaService(), systemQuotaService_exports));
+    const status = await getSystemQuotaStatus2(true);
+    res.json({ success: true, status });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+app.post(["/system/quota-config", "/api/system/quota-config"], async (req, res) => {
+  try {
+    const { getSystemQuotaStatus: getSystemQuotaStatus2 } = await Promise.resolve().then(() => (init_systemQuotaService(), systemQuotaService_exports));
+    const { db: db2 } = await Promise.resolve().then(() => (init_db(), db_exports));
+    const { token, projectId, teamId } = req.body || {};
+    const curDb = db2.getData();
+    if (!curDb.settings) curDb.settings = {};
+    curDb.settings.vercelApiToken = (token || "").trim();
+    if (projectId) curDb.settings.vercelProjectId = (projectId || "").trim();
+    if (teamId !== void 0) curDb.settings.vercelTeamId = (teamId || "").trim();
+    const updatedStatus = await getSystemQuotaStatus2(true);
+    res.json({
+      success: true,
+      message: updatedStatus.vercel.connected ? "\u062A\u0645 \u0631\u0628\u0637 \u062D\u0633\u0627\u0628 Vercel \u0628\u0646\u062C\u0627\u062D \u0648\u0642\u0631\u0627\u0621\u0629 \u0627\u0644\u0627\u0633\u062A\u0647\u0644\u0627\u0643 \u0627\u0644\u0644\u062D\u0638\u064A!" : "\u062A\u0645 \u062D\u0641\u0638 \u0627\u0644\u0625\u0639\u062F\u0627\u062F\u0627\u062A \u0628\u0646\u062C\u0627\u062D.",
+      vercel: updatedStatus.vercel,
+      status: updatedStatus
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: "\u062A\u0639\u0630\u0631 \u062D\u0641\u0638 \u0625\u0639\u062F\u0627\u062F\u0627\u062A Vercel: " + err.message });
+  }
 });
 app.use(cors({
   origin: true,

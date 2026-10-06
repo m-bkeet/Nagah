@@ -733,7 +733,7 @@ export const PublicTrainerPortalView: React.FC<PublicTrainerPortalViewProps> = (
             <form onSubmit={handleLoginSubmit} className="space-y-4">
               <div>
                 <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
-                  رقم الهاتف أو الكود أو البريد الإلكتروني *
+                  رقم الهاتف أو كود المحاضر *
                 </label>
                 <div className="relative">
                   <Phone className="w-4 h-4 text-slate-400 absolute right-3.5 top-3.5" />
@@ -742,7 +742,7 @@ export const PublicTrainerPortalView: React.FC<PublicTrainerPortalViewProps> = (
                     required
                     value={phoneOrCodeInput}
                     onChange={(e) => setPhoneOrCodeInput(e.target.value)}
-                    placeholder="مثال: 01012345678 أو DR01 أو email@domain.com"
+                    placeholder="أدخل كود المحاضر أو رقم الهاتف..."
                     className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-2xl pr-10 pl-3 py-3 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:border-indigo-500 font-mono shadow-xs"
                   />
                 </div>

@@ -46,7 +46,7 @@ function getDb(): Firestore | null {
 const collectionHashes = new Map<string, string>();
 let isQuotaExceeded = false;
 let quotaExceededNoticeTime = 0;
-const QUOTA_BACKOFF_MS = 30 * 1000; // Fast retry backoff (30s) if Google Cloud quota is hit
+const QUOTA_BACKOFF_MS = 5 * 60 * 1000; // 5 minutes circuit breaker backoff when Google Cloud daily quota is reached
 
 // In-memory Firestore Quota Tracking metrics
 let readsCountToday = 0;
@@ -107,14 +107,43 @@ function hashPayload(data: any): string {
 const isServerless = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.VERCEL_ENV);
 
 function sanitizeForFirestore(collectionName: string, items: any): any {
-  if (!Array.isArray(items)) return items;
+  if (!items) return items;
+
+  if (!Array.isArray(items)) {
+    if (collectionName === 'settings' && typeof items === 'object') {
+      const sanitized = { ...items };
+      if (typeof sanitized.logoUrl === 'string' && (sanitized.logoUrl.startsWith('data:image') || sanitized.logoUrl.startsWith('data:'))) {
+        delete sanitized.logoUrl;
+      }
+      return sanitized;
+    }
+    return items;
+  }
 
   if (collectionName === 'trainees') {
     return items.map((t: any) => {
       const sanitized = { ...t };
-      const resolvedPhoto = sanitized.photoUrl || sanitized.photo || '';
-      sanitized.photoUrl = resolvedPhoto;
-      sanitized.photo = resolvedPhoto;
+      
+      // If photoDriveFileId exists, enforce Google Drive CDN link
+      if (sanitized.photoDriveFileId && typeof sanitized.photoDriveFileId === 'string' && sanitized.photoDriveFileId.trim()) {
+        const cleanDriveId = sanitized.photoDriveFileId.trim();
+        sanitized.photoDriveFileId = cleanDriveId;
+        sanitized.photoUrl = `https://lh3.googleusercontent.com/d/${cleanDriveId}`;
+        delete sanitized.photo;
+      } else {
+        // STRICT ZERO BASE64 IN FIRESTORE: Purge raw data URLs
+        if (typeof sanitized.photoUrl === 'string' && (sanitized.photoUrl.startsWith('data:image') || sanitized.photoUrl.startsWith('data:'))) {
+          delete sanitized.photoUrl;
+        }
+        if (typeof sanitized.photo === 'string' && (sanitized.photo.startsWith('data:image') || sanitized.photo.startsWith('data:'))) {
+          delete sanitized.photo;
+        }
+      }
+
+      if (typeof sanitized.parentPhotoUrl === 'string' && sanitized.parentPhotoUrl.startsWith('data:')) {
+        delete sanitized.parentPhotoUrl;
+      }
+
       return sanitized;
     });
   }
@@ -125,8 +154,24 @@ function sanitizeForFirestore(collectionName: string, items: any): any {
       // Purge heavy base64 file payloads from Firestore
       delete sanitized.imageBase64;
       delete sanitized.fileData;
-      if (sanitized.attachmentUrl && sanitized.attachmentUrl.startsWith('data:image')) {
+      if (sanitized.attachmentUrl && (sanitized.attachmentUrl.startsWith('data:image') || sanitized.attachmentUrl.startsWith('data:'))) {
         delete sanitized.attachmentUrl;
+      }
+      return sanitized;
+    });
+  }
+
+  if (collectionName === 'courses') {
+    return items.map((c: any) => {
+      const sanitized = { ...c };
+      if (Array.isArray(sanitized.materials)) {
+        sanitized.materials = sanitized.materials.map((m: any) => {
+          const cleanM = { ...m };
+          if (typeof cleanM.fileUrl === 'string' && cleanM.fileUrl.startsWith('data:')) {
+            delete cleanM.fileUrl;
+          }
+          return cleanM;
+        });
       }
       return sanitized;
     });
@@ -340,7 +385,7 @@ export async function allocateNextTraineeCode(
   const usedCodes = new Set<string>();
   const usedNumbers = new Set<number>();
 
-  // 1. Scan in-memory trainees
+  // 1. Scan all in-memory trainees (instantly available and authoritative)
   if (Array.isArray(localTrainees)) {
     for (const t of localTrainees) {
       if (t && t.code) {
@@ -352,29 +397,6 @@ export async function allocateNextTraineeCode(
           if (!isNaN(num)) usedNumbers.add(num);
         }
       }
-    }
-  }
-
-  // 2. Scan remote Firestore trainees (nagah_store/trainees) if available
-  const db = getDb();
-  if (db) {
-    try {
-      const remoteList = await loadCollectionFromFirestore('trainees');
-      if (Array.isArray(remoteList)) {
-        for (const t of remoteList) {
-          if (t && t.code) {
-            const c = String(t.code).trim().toUpperCase();
-            usedCodes.add(c);
-            const m = c.match(regex);
-            if (m) {
-              const num = parseInt(m[1], 10);
-              if (!isNaN(num)) usedNumbers.add(num);
-            }
-          }
-        }
-      }
-    } catch (e) {
-      console.warn('[allocateNextTraineeCode] remote trainees scan notice:', e);
     }
   }
 
@@ -417,25 +439,6 @@ export async function allocateNextTraineeCode(
   while (usedCodes.has(candidate.toUpperCase())) {
     candidateNum++;
     candidate = `${pfx}${String(candidateNum).padStart(3, '0')}`;
-  }
-
-  // 4. Update persistent atomic counter in Firestore without blocking recycled gaps
-  if (db) {
-    try {
-      const counterRef = doc(db, 'nagah_store', 'code_counters');
-      const counterSnap = await withTimeout(getDoc(counterRef), 3000);
-      let countersMap: Record<string, number> = {};
-      if (counterSnap.exists()) {
-        countersMap = counterSnap.data()?.counters || {};
-      }
-      const existingVal = Number(countersMap[pfx]) || 0;
-      if (candidateNum > existingVal) {
-        countersMap[pfx] = candidateNum;
-        await withTimeout(setDoc(counterRef, { counters: countersMap, updatedAt: new Date().toISOString() }, { merge: true }), 3000);
-      }
-    } catch (e) {
-      console.warn('[allocateNextTraineeCode] Firestore code_counters update notice:', e);
-    }
   }
 
   console.log(`[allocateNextTraineeCode] Allocated unique code ${candidate} (prefix: ${pfx}, num: ${candidateNum})`);

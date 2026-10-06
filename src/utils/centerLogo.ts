@@ -30,7 +30,7 @@ export function getEffectiveCenterLogo(settingsLogo?: string | null): string {
     } catch {}
   }
 
-  // 3. Bundled real logo asset
+  // 3. User authentic official center logo
   return '/logo.png';
 }
 

@@ -907,7 +907,7 @@ export const LabScheduleView: React.FC = () => {
 
                 {/* Footer */}
                 <div className="pt-4 border-t border-slate-800 flex items-center justify-between text-xs text-slate-400">
-                  <p>📍 المقر الرئيسي: الفروع المعتمدة • هاتف: 01000000000</p>
+                  <p>📍 المقر الرئيسي: الفروع المعتمدة • هاتف: 01001500686</p>
                   <p className="font-bold text-amber-400">✨ طريقك نحو الاحتراف والتميز</p>
                 </div>
               </div>

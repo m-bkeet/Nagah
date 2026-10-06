@@ -471,28 +471,30 @@ export const ExamsView: React.FC = () => {
         setQuestionBank(prev => [...res.questions, ...prev]);
         showToast(`تم توليد ${res.questions.length} سؤالاً بنجاح بواسطة الذكاء الاصطناعي ✨`, 'success');
       } else {
-        // Fallback Client-side AI Simulation for instant visual feedback
-        const generatedMock: QuestionBankItem[] = Array.from({ length: aiGenCount }).map((_, idx) => ({
-          id: `ai-qb-${Date.now()}-${idx}`,
-          courseId: aiGenCourseId || 'crs-python',
-          courseName: selectedCourse?.name || 'الذكاء الاصطناعي والبرمجة',
-          topic: aiGenTopic || 'البرمجة المتقدمة',
-          difficulty: aiGenDifficulty,
-          questionType: idx % 2 === 0 ? 'coding' : 'mcq',
-          questionText: idx % 2 === 0
-            ? `تحدي AI #${idx + 1}: اكتب دالة لحساب القاسم المشترك الأكبر للعددين A و B.`
-            : `سؤال ذكي #${idx + 1}: ما هو التعقيد الزمني (Time Complexity) للبحث الثنائي (Binary Search)؟`,
-          options: idx % 2 === 0 ? undefined : ['O(1)', 'O(n)', 'O(log n)', 'O(n^2)'],
-          correctAnswer: idx % 2 === 0 ? 'def gcd(a, b):\n    return a if b == 0 else gcd(b, a % b)' : 'O(log n)',
-          marks: 10,
-          programmingLanguage: 'python',
-          codeTemplate: 'def solution(a, b):\n    # كود الحل التلقائي\n    pass',
-          testCases: idx % 2 === 0 ? [{ input: '12, 18', expectedOutput: '6', isHidden: false, points: 10 }] : undefined,
-          createdAt: new Date().toISOString()
-        }));
+        // Fallback: draw directly from authentic MOE ICT curriculum question bank
+        const gradeHint = selectedCourse?.name || aiGenTopic || 'ICT';
+        const isLang = (gradeHint || '').toLowerCase().includes('lang') || (gradeHint || '').toLowerCase().includes('لغات');
+        const currQuestions = getCurriculumExamQuestions(gradeHint, isLang ? 'en' : 'ar', 'qb-gen');
+        const generatedCurriculumItems: QuestionBankItem[] = Array.from({ length: aiGenCount }).map((_, idx) => {
+          const q = currQuestions[idx % currQuestions.length];
+          return {
+            id: `ai-qb-${Date.now()}-${idx}`,
+            courseId: aiGenCourseId || 'crs-ict',
+            courseName: selectedCourse?.name || 'تكنولوجيا المعلومات والاتصالات ICT',
+            topic: aiGenTopic || 'المفاهيم التكنولوجية المعتمدة',
+            difficulty: (aiGenDifficulty as any) || 'medium',
+            questionType: (q.questionType as any) || 'mcq',
+            questionText: q.questionText,
+            options: q.options,
+            correctAnswer: q.correctAnswer,
+            explanation: q.explanation || 'إجابة مطابقة لمنهج وزارة التربية والتعليم 2026/2027.',
+            marks: q.marks || 5,
+            createdAt: new Date().toISOString()
+          };
+        });
 
-        setQuestionBank(prev => [...generatedMock, ...prev]);
-        showToast(`تم توليد ${generatedMock.length} سؤالاً ذكياً وإضافتها لبنك الأسئلة!`, 'success');
+        setQuestionBank(prev => [...generatedCurriculumItems, ...prev]);
+        showToast(`تم توليد ${generatedCurriculumItems.length} سؤالاً بنجاح وفق منهج الوزارة المعتمد 2026/2027! ✨`, 'success');
       }
       setIsAiGeneratorModalOpen(false);
     } catch (e) {

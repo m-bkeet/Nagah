@@ -148,9 +148,10 @@ export const ClosingAccountReportModal: React.FC<ClosingAccountReportModalProps>
     todayCollected: number;
   }>();
 
-  const filteredTrainees = activeBranchId === 'all' 
+  const filteredTrainees = (activeBranchId === 'all' 
     ? trainees 
-    : trainees.filter(t => t.branchId === activeBranchId);
+    : trainees.filter(t => t.branchId === activeBranchId)
+  ).filter(t => t.status === 'active' && Boolean(t.groupId) && t.groupId.trim() !== '' && t.groupId !== 'unassigned');
 
   filteredTrainees.forEach(t => {
     const gName = normalizeGradeName(t);

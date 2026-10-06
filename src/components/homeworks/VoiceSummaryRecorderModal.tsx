@@ -29,30 +29,44 @@ import { detectCurriculum, getVoiceSummaryTopicsForGrade, getGradeLessonsList } 
 interface VoiceSummaryRecorderModalProps {
   isOpen: boolean;
   onClose: () => void;
-  student: {
-    id: string;
-    fullName: string;
+  student?: {
+    id?: string;
+    fullName?: string;
     code?: string;
+    studentCode?: string;
     courseName?: string;
+    courseId?: string;
+    groupId?: string;
+    groupName?: string;
     grade?: string;
     stage?: string;
+    schoolGrade?: string;
   };
+  studentData?: any;
   initialTopic?: string;
+  defaultTaskTitle?: string;
   onSubmitted?: (submission: any) => void;
+  onSubmissionSuccess?: (submission: any) => void;
   onShowToast?: (msg: string) => void;
 }
 
 export const VoiceSummaryRecorderModal: React.FC<VoiceSummaryRecorderModalProps> = ({
   isOpen,
   onClose,
-  student,
+  student: studentProp,
+  studentData,
   initialTopic = '',
+  defaultTaskTitle = '',
   onSubmitted,
+  onSubmissionSuccess,
   onShowToast
 }) => {
+  const effectiveStudent = studentProp || studentData || {};
+  const effectiveInitialTopic = initialTopic || defaultTaskTitle || 'ملخص المحاضرة والمفاهيم العلمية';
+
   // Mode: Record live mic vs Upload audio file
   const [activeMode, setActiveMode] = useState<'record' | 'upload'>('record');
-  const [topicTitle, setTopicTitle] = useState(initialTopic || 'ملخص المحاضرة والمفاهيم العلمية');
+  const [topicTitle, setTopicTitle] = useState(effectiveInitialTopic);
   const [studentNotes, setStudentNotes] = useState('');
   
   // Recording State
@@ -76,24 +90,32 @@ export const VoiceSummaryRecorderModal: React.FC<VoiceSummaryRecorderModalProps>
   const recognitionRef = useRef<any>(null);
   const audioElementRef = useRef<HTMLAudioElement | null>(null);
 
-  // Dynamic Grade & Curriculum detection
+  // Dynamic Grade & Curriculum detection (with full null safety)
   const studentCurriculum = useMemo(() => {
-    return detectCurriculum(student);
-  }, [student]);
+    try {
+      return detectCurriculum(effectiveStudent);
+    } catch {
+      return { gradeNameAr: 'الصف الأول الإعدادي', subjectNameAr: 'تكنولوجيا المعلومات ICT', gradeKey: 'prep1' } as any;
+    }
+  }, [effectiveStudent]);
 
-  const detectedGrade = student.grade || student.stage || studentCurriculum.gradeNameAr;
-  const courseName = student.courseName || studentCurriculum.subjectNameAr;
+  const detectedGrade = effectiveStudent?.grade || effectiveStudent?.stage || effectiveStudent?.schoolGrade || studentCurriculum?.gradeNameAr || 'الصف الأول الإعدادي';
+  const courseName = effectiveStudent?.courseName || studentCurriculum?.subjectNameAr || 'تكنولوجيا المعلومات والاتصالات ICT';
 
   // Grade-Specific Quick Curriculum Topics for Voice Summaries
   const curriculumTopics = useMemo(() => {
-    return getVoiceSummaryTopicsForGrade(studentCurriculum);
+    try {
+      return getVoiceSummaryTopicsForGrade(studentCurriculum);
+    } catch {
+      return [];
+    }
   }, [studentCurriculum]);
 
   useEffect(() => {
-    if (initialTopic) {
-      setTopicTitle(initialTopic);
+    if (effectiveInitialTopic) {
+      setTopicTitle(effectiveInitialTopic);
     }
-  }, [initialTopic]);
+  }, [effectiveInitialTopic]);
 
   // Handle Recording Timer
   useEffect(() => {
@@ -260,22 +282,42 @@ export const VoiceSummaryRecorderModal: React.FC<VoiceSummaryRecorderModalProps>
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const handleEvaluateAndSubmit = async () => {
-    if (!audioBase64 && !liveTranscription && !studentNotes) {
-      setErrorMsg('يرجى تسجيل الصوت أولاً أو كتابة ملاحظاتك لإجراء التقييم المفاهيمي.');
-      return;
-    }
+  const blobToBase64 = (blob: Blob): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  };
 
+  const handleEvaluateAndSubmit = async () => {
     setIsAnalyzing(true);
     setErrorMsg(null);
 
     try {
+      let finalBase64 = audioBase64;
+      if (!finalBase64 && audioBlob) {
+        try {
+          finalBase64 = await blobToBase64(audioBlob);
+          setAudioBase64(finalBase64);
+        } catch (e) {
+          console.warn('Base64 conversion notice:', e);
+        }
+      }
+
+      if (!finalBase64 && !liveTranscription && !studentNotes) {
+        setErrorMsg('يرجى تسجيل الصوت أولاً أو كتابة ملاحظاتك لإجراء التقييم المفاهيمي.');
+        setIsAnalyzing(false);
+        return;
+      }
+
       const payload = {
-        traineeId: student.id,
+        traineeId: effectiveStudent?.id || effectiveStudent?.code || effectiveStudent?.studentCode || 'student-active',
         taskTitle: topicTitle || 'ملخص فويس للمحاضرة والمفاهيم',
         mediaType: 'audio',
-        mediaBase64: audioBase64 || undefined,
-        audioBase64: audioBase64 || undefined,
+        mediaBase64: finalBase64 || undefined,
+        audioBase64: finalBase64 || undefined,
         audioDurationSeconds: recordingTime || 45,
         transcribedText: liveTranscription || undefined,
         studentNotes: studentNotes || undefined,
@@ -294,7 +336,7 @@ export const VoiceSummaryRecorderModal: React.FC<VoiceSummaryRecorderModalProps>
         throw new Error(data.error || 'فشل تقييم التسجيل الصوتي');
       }
 
-      setEvaluationResult(data.submission);
+      setEvaluationResult(data.submission || data.voiceResult);
       
       // Play celebratory chime
       try {
@@ -302,7 +344,10 @@ export const VoiceSummaryRecorderModal: React.FC<VoiceSummaryRecorderModalProps>
       } catch (e) {}
 
       if (onSubmitted) {
-        onSubmitted(data.submission);
+        onSubmitted(data.submission || data.voiceResult);
+      }
+      if (onSubmissionSuccess) {
+        onSubmissionSuccess(data.submission || data.voiceResult);
       }
 
       if (onShowToast) {

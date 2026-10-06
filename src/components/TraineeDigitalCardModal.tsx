@@ -33,6 +33,8 @@ import { useCenter } from '../context/CenterContext';
 import { useTheme } from '../context/ThemeContext';
 import { getPublicStudentPortalUrl } from '../utils/urlHelper';
 import { api } from '../services/api';
+import { GoogleDriveService } from '../services/googleDrive';
+import { resolveTraineePhotoUrl } from '../utils/googleDriveHelper';
 
 interface TraineeDigitalCardModalProps {
   isOpen: boolean;
@@ -105,9 +107,10 @@ export const TraineeDigitalCardModal: React.FC<TraineeDigitalCardModalProps> = (
 
   // Keep current photo synced if trainee changes
   useEffect(() => {
-    const resolved = trainee?.photoUrl || (trainee as any)?.photo || customData?.photoUrl || (trainee?.id ? localStorage.getItem('student_session_photo_' + trainee.id) || localStorage.getItem('student_session_photo_' + trainee.code) : '');
+    const rawPhoto = trainee?.photoUrl || (trainee as any)?.photo || customData?.photoUrl || (trainee?.id ? localStorage.getItem('student_session_photo_' + trainee.id) || localStorage.getItem('student_session_photo_' + trainee.code) : '');
+    const resolved = resolveTraineePhotoUrl(rawPhoto, trainee?.photoDriveFileId);
     setCurrentPhoto(resolved || undefined);
-  }, [trainee?.photoUrl, (trainee as any)?.photo, customData?.photoUrl, trainee?.id, trainee?.code]);
+  }, [trainee?.photoUrl, (trainee as any)?.photo, trainee?.photoDriveFileId, customData?.photoUrl, trainee?.id, trainee?.code]);
 
   // Generate high-resolution QR Code
   useEffect(() => {
@@ -134,7 +137,7 @@ export const TraineeDigitalCardModal: React.FC<TraineeDigitalCardModalProps> = (
 
   if (!isOpen) return null;
 
-  // Handle direct photo upload
+  // Handle direct photo upload to Google Drive
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -144,53 +147,67 @@ export const TraineeDigitalCardModal: React.FC<TraineeDigitalCardModalProps> = (
       return;
     }
 
-    if (file.size > 5 * 1024 * 1024) {
-      showToast('حجم الصورة كبير جداً، يرجى اختيار صورة أقل من 5 ميجابايت', 'error');
+    if (file.size > 10 * 1024 * 1024) {
+      showToast('حجم الصورة كبير جداً، يرجى اختيار صورة أقل من 10 ميجابايت', 'error');
       return;
     }
 
     setIsUploadingPhoto(true);
+    showToast('جاري رفع صورة المتدرب إلى Google Drive... ☁️', 'info');
+
     try {
+      // 1. Upload to Google Drive
+      const uploadRes = await GoogleDriveService.uploadStudentPhoto(
+        file,
+        trainee?.fullName || 'متدرب',
+        trainee?.code || 'م'
+      );
+
+      const newPhotoUrl = uploadRes.photoUrl || (uploadRes.fileId ? `https://lh3.googleusercontent.com/d/${uploadRes.fileId}=w400` : '');
+      const newDriveFileId = uploadRes.fileId;
+
+      setCurrentPhoto(newPhotoUrl);
+
+      // Clean up previous photo from Drive to prevent orphans
+      if (trainee?.photoDriveFileId && trainee.photoDriveFileId !== newDriveFileId) {
+        GoogleDriveService.deleteDriveFile(trainee.photoDriveFileId).catch(() => {});
+      }
+
+      if (trainee?.id) {
+        // Save to localStorage for instant multi-tab sync
+        localStorage.setItem('student_session_photo_' + trainee.id, newPhotoUrl);
+        if (trainee.code) {
+          localStorage.setItem('student_session_photo_' + trainee.code, newPhotoUrl);
+        }
+
+        // Sync to backend APIs (Storing URL and Drive File ID only)
+        await api.updateTrainee(trainee.id, {
+          photoUrl: newPhotoUrl,
+          photoDriveFileId: newDriveFileId
+        });
+
+        // Broadcast event
+        window.dispatchEvent(new CustomEvent('nagah_photo_updated', {
+          detail: { traineeId: trainee.id, code: trainee.code, photoUrl: newPhotoUrl, photoDriveFileId: newDriveFileId }
+        }));
+
+        if (onPhotoUpdated) {
+          onPhotoUpdated(trainee.id, newPhotoUrl);
+        }
+        showToast('تم رفع وتحديث صورة المتدرب بنجاح في Google Drive! 🌟', 'success');
+      } else {
+        showToast('تم رفع الصورة بنجاح إلى Google Drive', 'success');
+      }
+    } catch (err: any) {
+      console.error('Error uploading photo to Google Drive:', err);
+      // Fallback local reader for preview
       const reader = new FileReader();
-      reader.onload = async () => {
+      reader.onload = () => {
         const base64Data = reader.result as string;
         setCurrentPhoto(base64Data);
-
-        if (trainee?.id) {
-          try {
-            // Save to localStorage for instant persistence across tabs and portals
-            localStorage.setItem('student_session_photo_' + trainee.id, base64Data);
-            if (trainee.code) {
-              localStorage.setItem('student_session_photo_' + trainee.code, base64Data);
-            }
-
-            // Sync to backend APIs
-            await api.updateTrainee(trainee.id, { photoUrl: base64Data });
-            try {
-              await api.updateStudentPhoto({ traineeId: trainee.id, photoUrl: base64Data });
-            } catch {}
-
-            // Broadcast photo update event across open views
-            window.dispatchEvent(new CustomEvent('nagah_photo_updated', {
-              detail: { traineeId: trainee.id, code: trainee.code, photoUrl: base64Data }
-            }));
-
-            if (onPhotoUpdated) {
-              onPhotoUpdated(trainee.id, base64Data);
-            }
-            showToast('تم تحديث وحفظ صورة المتدرب بنجاح! ستظهر تلقائياً في كافة البطاقات والطباعات القادمة 🌟', 'success');
-          } catch (apiErr) {
-            console.error('Error saving photo to DB:', apiErr);
-            showToast('تم عرض الصورة في البطاقة مؤقتاً، يرجى حفظ بيانات المتدرب لتثبيتها', 'info');
-          }
-        } else {
-          showToast('تم تحديث صورة الكارت بنجاح', 'success');
-        }
       };
       reader.readAsDataURL(file);
-    } catch (err) {
-      console.error('Error processing photo:', err);
-      showToast('حدث خطأ أثناء معالجة الصورة', 'error');
+      showToast('تعذر الرفع المباشر إلى Google Drive، يرجى التحقق من اتصال الإنترنت', 'error');
     } finally {
       setIsUploadingPhoto(false);
     }

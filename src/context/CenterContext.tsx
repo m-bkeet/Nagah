@@ -75,62 +75,50 @@ export function deduplicateTraineeList(list: Trainee[]): Trainee[] {
   if (!Array.isArray(list) || list.length === 0) return [];
   const byId = new Map<string, Trainee>();
   const byCode = new Map<string, Trainee>();
-  const byNormName = new Map<string, Trainee>();
   const result: Trainee[] = [];
 
-  const cleanPhone = (p?: string) => String(p || '').replace(/\D/g, '').slice(-10);
-
   for (const t of list) {
-    if (!t) continue;
+    if (!t || typeof t !== 'object') continue;
     const id = t.id ? String(t.id).trim() : '';
-    const code = t.code ? String(t.code).trim().toUpperCase() : '';
-    const normName = normalizeArabicFull(t.fullName);
-    const phone = cleanPhone(t.phone);
-    const parentPhone = cleanPhone(t.parentPhone);
+    if (!id) continue;
 
+    const tNorm = normalizeArabicFull(t.fullName);
+
+    // Deduplication is STRICTLY by exact student ID, OR by valid National ID ONLY IF the student name ALSO matches!
+    // NEVER merge distinct students (e.g. siblings sharing parent's national ID or phone).
     let existing: Trainee | null = null;
-    if (id && byId.has(id)) {
+    if (byId.has(id)) {
       existing = byId.get(id)!;
-    } else if (normName && byNormName.has(normName)) {
-      const candidate = byNormName.get(normName)!;
-      const cPhone = cleanPhone(candidate.phone);
-      const cParentPhone = cleanPhone(candidate.parentPhone);
-      const samePhone = (phone && (phone === cPhone || phone === cParentPhone)) ||
-                        (parentPhone && (parentPhone === cPhone || parentPhone === cParentPhone));
-      const sameGroupOrCourse = (t.groupId && candidate.groupId && t.groupId === candidate.groupId) ||
-                                (t.courseId && candidate.courseId && t.courseId === candidate.courseId);
-      if (samePhone || sameGroupOrCourse || (!phone && !parentPhone && !cPhone && !cParentPhone)) {
-        existing = candidate;
-      }
-    } else if (code && byCode.has(code)) {
-      const candidate = byCode.get(code)!;
-      const candNorm = normArabic(candidate.fullName || candidate.name);
-      // Only merge by code if it is truly the same student (same normalized name or same national ID)
-      const sameName = candNorm && normName && candNorm === normName;
-      const sameNatId = t.nationalId && candidate.nationalId && String(t.nationalId).trim() === String(candidate.nationalId).trim();
-      if (sameName || sameNatId) {
-        existing = candidate;
+    } else if (t.nationalId && String(t.nationalId).trim().length >= 10 && tNorm) {
+      const cleanNat = String(t.nationalId).trim();
+      for (const prev of result) {
+        if (prev.nationalId && String(prev.nationalId).trim() === cleanNat) {
+          const prevNorm = normalizeArabicFull(prev.fullName);
+          if (prevNorm && prevNorm === tNorm) {
+            existing = prev;
+            break;
+          }
+        }
       }
     }
 
     if (existing) {
-      // Merge into existing record
+      // Merge into existing record safely
       const mergedTotalPoints = Math.max(
         Number(existing.totalPoints !== undefined ? existing.totalPoints : (existing.points || 0)),
         Number(t.totalPoints !== undefined ? t.totalPoints : (t.points || 0))
       );
       const mergedPaidAmount = Math.max(Number(existing.paidAmount || 0), Number(t.paidAmount || 0));
-      const mergedPhoto = t.photoUrl || (t as any).photo || existing.photoUrl || (existing as any).photo || (id ? localStorage.getItem('student_session_photo_' + id) : null) || (code ? localStorage.getItem('student_session_photo_' + code) : null) || '';
+      const mergedPhoto = t.photoUrl || (t as any).photo || existing.photoUrl || (existing as any).photo || (id ? localStorage.getItem('student_session_photo_' + id) : null) || (t.code ? localStorage.getItem('student_session_photo_' + t.code) : null) || '';
 
       Object.assign(existing, {
         ...t,
-        ...existing,
         id: existing.id || t.id,
         code: existing.code || t.code,
         fullName: existing.fullName || t.fullName,
-        phone: existing.phone || t.phone,
-        parentPhone: existing.parentPhone || t.parentPhone,
-        nationalId: existing.nationalId || t.nationalId,
+        phone: t.phone || existing.phone,
+        parentPhone: t.parentPhone || existing.parentPhone,
+        nationalId: t.nationalId || existing.nationalId,
         photoUrl: mergedPhoto,
         photo: mergedPhoto,
         totalPoints: mergedTotalPoints,
@@ -140,6 +128,7 @@ export function deduplicateTraineeList(list: Trainee[]): Trainee[] {
       });
     } else {
       const record = { ...t };
+      const code = record.code ? String(record.code).trim().toUpperCase() : '';
       if (!record.photoUrl) {
         const storedPhoto = (record.id ? localStorage.getItem('student_session_photo_' + record.id) : null) || (record.code ? localStorage.getItem('student_session_photo_' + record.code) : null) || (record as any).photo;
         if (storedPhoto) {
@@ -153,9 +142,8 @@ export function deduplicateTraineeList(list: Trainee[]): Trainee[] {
         record.code = `${code}-${suffix}`;
       }
       result.push(record);
-      if (id) byId.set(id, record);
-      if (record.code) byCode.set(record.code, record);
-      if (normName) byNormName.set(normName, record);
+      byId.set(id, record);
+      if (record.code) byCode.set(String(record.code).trim().toUpperCase(), record);
     }
   }
 
@@ -634,16 +622,17 @@ export const CenterProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             if (localT && localT.id) {
               const isPending = pendingUpdatesRef.current.has(localT.id);
               const existsOnServer = serverMap.has(localT.id);
+              const isRecentlyCreated = localT.createdAt && (Date.now() - new Date(localT.createdAt).getTime() < 300000); // 5 minutes safety buffer
 
               if (existsOnServer && isPending) {
                 // Keep the pending optimistic local state for existing trainee
                 const idx = merged.findIndex(m => m.id === localT.id);
                 if (idx >= 0) merged[idx] = localT;
-              } else if (!existsOnServer && isPending) {
-                // Only inject if it was genuinely submitted and pending, AND not already duplicated semantically on server
+              } else if (!existsOnServer && (isPending || isRecentlyCreated)) {
+                // Keep recently added student from being dropped if server is slightly behind
                 const localCode = (localT.code || '').trim().toUpperCase();
                 const localNormName = normalizeArabicFull(localT.fullName);
-                const isDupeOnServer = (localCode && serverCodes.has(localCode)) || (localNormName && serverNormNames.has(localNormName));
+                const isDupeOnServer = (localCode && serverCodes.has(localCode)) && (localNormName && serverNormNames.has(localNormName));
 
                 if (!isDupeOnServer) {
                   merged.unshift(localT);

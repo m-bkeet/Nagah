@@ -1,72 +1,65 @@
 {
-  "name": "النجاح للتدريب والاستشارات",
-  "short_name": "Nagah TC",
-  "description": "نظام إدارة مركز النجاح للتدريب والاستشارات - تطبيق Nagah M-S المتكامل",
-  "start_url": "/",
-  "id": "/",
+  "name": "بوابة الطلاب - النجاح",
+  "short_name": "بوابة النجاح",
+  "description": "بوابة الطلاب وأولياء الأمور - مركز النجاح للتدريب والاستشارات",
+  "id": "/?view=student_portal",
+  "start_url": "/?view=student_portal",
   "scope": "/",
   "display": "standalone",
-  "display_override": ["standalone", "minimal-ui"],
-  "background_color": "#0f172a",
-  "theme_color": "#0f172a",
+  "display_override": [
+    "standalone",
+    "minimal-ui",
+    "window-controls-overlay"
+  ],
+  "background_color": "#ffffff",
+  "theme_color": "#ffffff",
   "orientation": "any",
   "dir": "rtl",
   "lang": "ar",
-  "categories": ["education", "business", "productivity", "utilities"],
+  "categories": [
+    "education",
+    "productivity"
+  ],
   "icons": [
     {
-      "src": "/logo.svg",
-      "sizes": "192x192 512x512 any",
-      "type": "image/svg+xml",
-      "purpose": "any"
-    },
-    {
-      "src": "/logo.svg",
-      "sizes": "192x192 512x512 any",
-      "type": "image/svg+xml",
-      "purpose": "maskable"
-    },
-    {
-      "src": "/logo.png",
+      "src": "/icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/logo.png",
+      "src": "/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
+    },
+    {
+      "src": "/icon-maskable-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ],
   "shortcuts": [
     {
-      "name": "شؤون المتدربين",
-      "short_name": "المتدربين",
-      "description": "إدارة وتسجيل المتدربين الجدد",
-      "url": "/?view=trainees",
-      "icons": [{ "src": "/logo.svg", "sizes": "192x192" }]
+      "name": "بوابة المتدرب",
+      "short_name": "الطالب",
+      "description": "متابعة الحصص والدرجات والواجبات",
+      "url": "/?view=student_portal",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" }]
     },
     {
-      "name": "الخزينة والمحاسبة",
-      "short_name": "الخزينة",
-      "description": "سندات القبض وإدارة الخزينة والمصروفات",
-      "url": "/?view=finance",
-      "icons": [{ "src": "/logo.svg", "sizes": "192x192" }]
-    },
-    {
-      "name": "حضور المجموعات",
-      "short_name": "التحضير",
-      "description": "تسجيل الحضور والغياب اليومي",
-      "url": "/?view=attendance",
-      "icons": [{ "src": "/logo.svg", "sizes": "192x192" }]
-    },
-    {
-      "name": "لوحة المعامل الذكية",
-      "short_name": "المعامل",
-      "description": "التحكم في أجهزة معامل الكمبيوتر",
-      "url": "/?view=lab",
-      "icons": [{ "src": "/logo.svg", "sizes": "192x192" }]
+      "name": "بوابة ولي الأمر",
+      "short_name": "ولي الأمر",
+      "description": "متابعة تقارير حضور ومستوى الأبناء",
+      "url": "/?view=parent_portal",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" }]
     }
   ],
   "prefer_related_applications": false

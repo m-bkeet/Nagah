@@ -7,7 +7,6 @@ import { sessionEventsService, SessionEvent } from '../services/sessionEventsSer
 import { SessionCelebrationOverlay } from '../components/SessionCelebrationOverlay';
 import { AudioAutoplayUnlockBanner } from '../components/AudioAutoplayUnlockBanner';
 import { audioService } from '../services/audioService';
-import { isTrainerSessionActive } from '../utils/labSecurity';
 
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { detectCurriculum, getGradeLessonsList } from '../domain/curriculumRegistry';
@@ -89,6 +88,11 @@ interface StudentData {
   totalPoints: number;
   courseName: string;
   groupName: string;
+  grade?: string;
+  stage?: string;
+  schoolGrade?: string;
+  courseId?: string;
+  groupId?: string;
   branchId?: string;
   portalPassword?: string;
   groupDetails?: any;
@@ -144,13 +148,24 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
   const getInitialStudentSession = () => {
     try {
       if (typeof window === 'undefined') return null;
-      const activeStr = localStorage.getItem('nagah_student_active_session');
-      if (activeStr) {
-        const parsed = JSON.parse(activeStr);
+      // Only restore session if explicitly requested via session storage or active URL code
+      const urlParams = new URLSearchParams(window.location.search);
+      const urlCode = urlParams.get('code') || urlParams.get('studentCode') || urlParams.get('c');
+      if (urlCode) {
+        const activeStr = localStorage.getItem('nagah_student_active_session');
+        if (activeStr) {
+          const parsed = JSON.parse(activeStr);
+          if (parsed && parsed.student && (parsed.student.code === urlCode || parsed.student.id === urlCode)) {
+            return parsed;
+          }
+        }
+      }
+      // Check session storage (current tab only)
+      const tabSession = sessionStorage.getItem('nagah_student_tab_session');
+      if (tabSession) {
+        const parsed = JSON.parse(tabSession);
         if (parsed && parsed.student) return parsed;
       }
-      const cached = resilientOfflineService.getFromCache('student');
-      if (cached && cached.student) return cached;
     } catch (e) {
       console.warn('Initial session parse error:', e);
     }
@@ -159,8 +174,14 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
 
   const initialSession = getInitialStudentSession();
 
-  // Login State
-  const [studentCodeInput, setStudentCodeInput] = useState(() => initialSession?.student?.code || '');
+  // Login State - start with empty input unless a specific URL code was provided
+  const [studentCodeInput, setStudentCodeInput] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const p = new URLSearchParams(window.location.search);
+      return p.get('code') || p.get('studentCode') || p.get('c') || '';
+    }
+    return '';
+  });
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [loginError, setLoginError] = useState('');
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(() => !!initialSession?.student);
@@ -175,10 +196,12 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
     setGroupTasks([]);
     setCertificates([]);
     setPortalMessages([]);
+    setStudentCodeInput('');
     localStorage.removeItem('nagah_student_active_session');
     localStorage.removeItem('nagah_student_cache');
     localStorage.removeItem('student_session_code');
     localStorage.removeItem('student_session_password');
+    sessionStorage.removeItem('nagah_student_tab_session');
     try {
       resilientOfflineService.saveToCache('student', null);
     } catch (e) {}
@@ -322,9 +345,16 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
         setStudentCodeInput(urlCode);
       }
 
+      // Only perform auto-login if URL code exists or tab session is explicitly active
+      const tabSessionStr = typeof window !== 'undefined' ? sessionStorage.getItem('nagah_student_tab_session') : null;
+      if (!urlCode && !tabSessionStr) {
+        // Stay on login page cleanly with empty code input
+        return;
+      }
+
       // 1. Instantly load from local offline-first cache
       try {
-        const cachedData = resilientOfflineService.getFromCache('student') || getInitialStudentSession();
+        const cachedData = getInitialStudentSession();
         if (cachedData && cachedData.student && (!urlCode || cachedData.student.code === urlCode)) {
           const s = cachedData.student;
           const cachedPhoto = localStorage.getItem('student_session_photo_' + s.id) || localStorage.getItem('student_session_photo_' + s.code);
@@ -339,14 +369,13 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
           setCertificates(cachedData.certificates || []);
           setPortalMessages(cachedData.portalMessages || []);
           setIsLoggedIn(true);
-          console.log('[Auto-Login] Instantly loaded cached student session from device local storage.');
         }
       } catch (e) {
         console.warn('[Auto-Login] Error reading from cache:', e);
       }
 
-      // 2. Perform background revalidation or URL auto-login if online
-      const savedCode = urlCode || localStorage.getItem('student_session_code');
+      // 2. Perform background revalidation if online
+      const savedCode = urlCode || (tabSessionStr ? JSON.parse(tabSessionStr)?.student?.code : null);
       const savedPassword = localStorage.getItem('student_session_password') || '';
       if (savedCode && typeof navigator !== 'undefined' && navigator.onLine) {
         try {
@@ -372,16 +401,16 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
             setCertificates(data.certificates || []);
             setPortalMessages(data.portalMessages || []);
             setIsLoggedIn(true);
-            localStorage.setItem('student_session_code', data.student?.code || savedCode);
+            sessionStorage.setItem('nagah_student_tab_session', JSON.stringify(data));
             localStorage.setItem('nagah_student_active_session', JSON.stringify(data));
             resilientOfflineService.saveToCache('student', data);
             setIsOfflineFallbackData(false);
-            console.log('[Auto-Login] Background data revalidation successful. State updated silently.');
-          } else if (res.status === 404 || (data && !data.success)) {
+          } else if (data && !data.success) {
             // Invalid or deleted session - clear stale session
             localStorage.removeItem('student_session_code');
             localStorage.removeItem('student_session_password');
             localStorage.removeItem('nagah_student_active_session');
+            sessionStorage.removeItem('nagah_student_tab_session');
             setIsLoggedIn(false);
             setStudent(null);
           }
@@ -559,17 +588,26 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
   const handlePrintCert = (cert: any) => {
     const printWindow = window.open('', '_blank');
     if (!printWindow) return;
+    const certTitle = cert.title || cert.titleArabic || (
+      cert.type === 'appreciation' || cert.type === 'honor' || cert.certificateType === 'appreciation' || (cert.grade && cert.grade.includes('وسام'))
+        ? 'شهادة تقدير ووسام تميز'
+        : 'شهادة إتمام برنامج تدريبي معتمد'
+    );
+    const certStatement = (cert.type === 'appreciation' || cert.type === 'honor' || cert.certificateType === 'appreciation' || (cert.grade && cert.grade.includes('وسام')))
+      ? 'نظراً لتميزه وتفوقه الأخلاقي والأكاديمي واستحقاقه العالي في البرنامج التدريبي:'
+      : 'قد أتم/ت بنجاح ومتطلبات البرنامج التدريبي التخصصي:';
+
     printWindow.document.write(`
       <!DOCTYPE html>
       <html dir="rtl" lang="ar">
       <head>
         <meta charset="utf-8">
-        <title>شهادة تدريبية معتمدة - ${cert.traineeName}</title>
+        <title>${certTitle} - ${cert.traineeName}</title>
         <style>
           @page { size: A4 landscape; margin: 0; }
           body { font-family: 'Cairo', 'Tajawal', sans-serif; margin: 0; padding: 40px; background: #fff; color: #1e293b; display: flex; align-items: center; justify-content: center; min-h: 100vh; }
           .cert-container { width: 900px; padding: 40px; border: 12px double #b45309; border-radius: 16px; background: linear-gradient(135deg, #fffdfa 0%, #fff7ed 100%); text-align: center; position: relative; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
-          .header-logo { width: 90px; height: 90px; margin: 0 auto 10px; }
+          .header-logo { width: 100px; height: 100px; margin: 0 auto 10px; border-radius: 50%; object-fit: contain; }
           h1 { font-size: 32px; color: #78350f; margin: 5px 0 15px; font-weight: 900; }
           h2 { font-size: 20px; color: #d97706; margin-bottom: 25px; }
           .trainee-name { font-size: 34px; color: #0f172a; font-weight: 900; text-decoration: underline; text-decoration-color: #f59e0b; margin: 15px 0; }
@@ -582,14 +620,14 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
       </head>
       <body>
         <div class="cert-container">
-          <img src="/logo.svg" class="header-logo" />
+          <img src="/icon-512.png" class="header-logo" alt="مركز النجاح" />
           <h2>جمهورية مصر العربية - مركز النجاح للتدريب والاستشارات</h2>
-          <h1>شهادة إتمام برنامج تدريبي معتمد</h1>
+          <h1>${certTitle}</h1>
           <p class="meta-info">تشهد إدارة مركز النجاح للتدريب والاستشارات بأن المتدرب / المتدربة:</p>
           <div class="trainee-name">${cert.traineeName}</div>
-          <p class="meta-info">قد أتم/ت بنجاح ومتطلبات البرنامج التدريبي التخصصي:</p>
+          <p class="meta-info">${certStatement}</p>
           <div class="course-title">${cert.courseName}</div>
-          <p class="meta-info">بتقدير عام: <strong>${cert.grade || 'ممتاز'}</strong> | تاريخ الإصدار: ${cert.issueDate} | الرقم التسلسلي: ${cert.certificateNumber}</p>
+          <p class="meta-info">بتقدير عام: <strong>${cert.grade || 'وسام تميز وتفوق'}</strong> | تاريخ الإصدار: ${cert.issueDate} | الرقم التسلسلي: ${cert.certificateNumber}</p>
           <div class="footer">
             <div>
               <p>مُحاضر المادة / المدرب</p>
@@ -601,7 +639,7 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
             </div>
             <div>
               <p>مدير عام المركز</p>
-              <strong style="font-size:18px">${cert.managerName || 'د. مدير عام المركز'}</strong>
+              <strong style="font-size:18px">${cert.managerName || 'د. محمد رمضان بخيت'}</strong>
             </div>
           </div>
         </div>
@@ -654,18 +692,6 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
 
   // Tabs inside Student Portal
   const [activeTab, setActiveTab] = useState<'submit' | 'history' | 'badges' | 'schedule' | 'certificates' | 'profile' | 'finance' | 'recap_tasks'>('submit');
-  const [isTrainerLabSessionActive, setIsTrainerLabSessionActive] = useState<boolean>(() => isTrainerSessionActive(student?.branchId));
-
-  useEffect(() => {
-    const update = () => setIsTrainerLabSessionActive(isTrainerSessionActive(student?.branchId));
-    update();
-    window.addEventListener('nagah_lab_session_changed', update);
-    window.addEventListener('storage', update);
-    return () => {
-      window.removeEventListener('nagah_lab_session_changed', update);
-      window.removeEventListener('storage', update);
-    };
-  }, [student?.branchId]);
 
   const [myPayments, setMyPayments] = useState<any[]>([]);
 
@@ -799,6 +825,7 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
         setPortalMessages(data.portalMessages || []);
         
         resilientOfflineService.saveToCache('student', data);
+        sessionStorage.setItem('nagah_student_tab_session', JSON.stringify(data));
         localStorage.setItem('nagah_student_active_session', JSON.stringify(data));
         setIsOfflineFallbackData(false);
 
@@ -924,6 +951,11 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
           totalPoints: matchedTrainee.totalPoints || matchedTrainee.points || 0,
           courseName: course?.name || 'الدورة التدريبية',
           groupName: group?.name || 'المجموعة التدريبية',
+          grade: matchedTrainee.grade || (matchedTrainee as any).schoolGrade || (matchedTrainee as any).stage || '',
+          stage: (matchedTrainee as any).stage || matchedTrainee.grade || '',
+          schoolGrade: (matchedTrainee as any).schoolGrade || matchedTrainee.grade || '',
+          courseId: matchedTrainee.courseId || course?.id || '',
+          groupId: matchedTrainee.groupId || group?.id || '',
           branchId: matchedTrainee.branchId,
           portalPassword: matchedTrainee.portalPassword,
           groupDetails: group,
@@ -1243,61 +1275,6 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
     setSubmitSuccessMsg('');
     setSpeedBadgeWonAlert(false);
 
-    // If offline, save to the sync queue
-    if (!navigator.onLine || isOfflineFallbackData) {
-      const payload = {
-        traineeId: student.id,
-        taskTitle,
-        lessonName: selectedLessonName,
-        pagesBase64: pagesList,
-        mediaBase64: pagesList[0] || selectedImageBase64,
-        mediaType: pagesList.length > 1 ? 'multi_image' : mediaType,
-        studentNotes
-      };
-
-      resilientOfflineService.enqueueAction({
-        url: '/student/submit-homework',
-        method: 'POST',
-        body: payload,
-        description: `تسليم واجب (${pagesList.length} ورقة/صفحة): ${taskTitle}`
-      });
-
-      // Show mock result in history so student has immediate feedback
-      const mockResult: HomeworkSubmission = {
-        id: 'offline-' + Date.now(),
-        traineeId: student.id,
-        traineeCode: student.code || 'م001',
-        traineeName: student.fullName || 'طالب النجاح',
-        taskTitle,
-        lessonName: selectedLessonName,
-        pageCount: pagesList.length,
-        pagesUrls: pagesList,
-        mediaUrl: pagesList[0] || selectedImageBase64 || undefined,
-        mediaType: (pagesList.length > 1 ? 'multi_image' : mediaType) as any,
-        submittedAt: new Date().toISOString(),
-        grade: 10,
-        maxGrade: 10,
-        percentage: 100,
-        rating: 'ممتاز',
-        strengths: [`تم رفع عدد ${pagesList.length || 1} ورقة بنجاح`, 'مستوى متميز ومثابرة عالية في التعلم ومواصلة التدريب'],
-        corrections: [],
-        generalFeedback: `📝 تم تسجيل وحفظ الواجب (${pagesList.length || 1} صفحة) بنجاح في وضع الطوارئ المحلي (طابور العمليات). سيقوم النظام بمزامنته وتصحيحه بالذكاء الاصطناعي تلقائياً فور عودة اتصالك بالإنترنت! أنت ممتاز ومثابر يا بطل! 🚀`,
-        pointsAwarded: 10,
-        isSpeedWinner: false,
-        submissionChannel: 'home_student_portal'
-      };
-
-      setHomeworks(prev => [mockResult, ...prev]);
-      setSubmitSuccessMsg(`📡 تم حفظ واجبك (${pagesList.length || 1} صفحة) بنجاح في طابور العمليات وسيرتفع تلقائياً فور توفر الإنترنت!`);
-      setSelectedImageBase64(null);
-      setSelectedPages([]);
-      setSelectedVideoName(null);
-      setStudentNotes('');
-      setCustomTaskTitle('');
-      setIsSubmittingHomework(false);
-      return;
-    }
-
     try {
       const res = await fetch('/api/student/submit-homework', {
         method: 'POST',
@@ -1309,44 +1286,17 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
           pagesBase64: pagesList,
           mediaBase64: pagesList[0] || selectedImageBase64,
           mediaType: pagesList.length > 1 ? 'multi_image' : mediaType,
-          studentNotes
+          studentNotes,
+          studentGrade: student.grade || student.stage || student.schoolGrade,
+          courseName: student.courseName,
+          courseId: student.courseId,
+          groupId: student.groupId
         })
       });
 
       const data = await res.json();
       if (!res.ok || !data.success) {
-        // Safe fallback submission rather than blocking or logging out
-        const fallbackSub: HomeworkSubmission = {
-          id: 'sub-' + Date.now(),
-          traineeId: student.id,
-          traineeCode: student.code || 'م001',
-          traineeName: student.fullName || 'طالب المركز',
-          taskTitle,
-          lessonName: selectedLessonName,
-          pageCount: pagesList.length,
-          pagesUrls: pagesList,
-          mediaUrl: pagesList[0] || selectedImageBase64 || undefined,
-          mediaType: (pagesList.length > 1 ? 'multi_image' : mediaType) as any,
-          submittedAt: new Date().toISOString(),
-          grade: 95,
-          maxGrade: 100,
-          percentage: 95,
-          rating: 'ممتاز 🌟',
-          strengths: [`تم استلام ${pagesList.length || 1} صفحة وتوثيق الواجب بنجاح في سجلك الأكاديمي`],
-          corrections: [],
-          generalFeedback: `تم استلام الواجب (${pagesList.length || 1} ورقة) بنجاح وحفظه في سجلك الأكاديمي لمراجعته!`,
-          pointsAwarded: 20,
-          isSpeedWinner: false,
-          submissionChannel: 'home_student_portal'
-        };
-        setHomeworks(prev => [fallbackSub, ...prev]);
-        setSubmitSuccessMsg('🎉 تم استلام وتوثيق الواجب بنجاح في سجلك الأكاديمي!');
-        setSelectedImageBase64(null);
-        setSelectedPages([]);
-        setSelectedVideoName(null);
-        setStudentNotes('');
-        setCustomTaskTitle('');
-        return;
+        throw new Error(data.error || 'تعذر معالجة الواجب بالذكاء الاصطناعي');
       }
 
       setLastSubmissionResult(data.submission);
@@ -1374,52 +1324,58 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
         ]);
       }
 
-      setSubmitSuccessMsg(`🎉 تم فحص وتصحيح الواجب (${pagesList.length || 1} صفحة) بالذكاء الاصطناعي ورصد النقاط والتقرير بنجاح!`);
+      setSubmitSuccessMsg(`🎉 تم فحص وتصحيح الواجب (${pagesList.length || 1} صفحة) بالذكاء الاصطناعي بنتيجة (${data.submission.grade}/${data.submission.maxGrade || 100}) ورصد +${data.submission.pointsAwarded || 20} نقطة بنجاح!`);
       // Reset form media
       setSelectedImageBase64(null);
       setSelectedPages([]);
       setSelectedVideoName(null);
       setStudentNotes('');
       setCustomTaskTitle('');
+
+      // Auto scroll to result card
+      setTimeout(() => {
+        document.getElementById('ai-submission-result-card')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 200);
     } catch (err: any) {
-      console.warn('Network issue during submit homework:', err);
-      const fallbackSub: HomeworkSubmission = {
-        id: 'sub-' + Date.now(),
-        traineeId: student.id,
-        traineeCode: student.code || 'م001',
-        traineeName: student.fullName || 'طالب المركز',
-        taskTitle,
-        lessonName: selectedLessonName,
-        pageCount: pagesList.length,
-        pagesUrls: pagesList,
-        mediaUrl: pagesList[0] || selectedImageBase64 || undefined,
-        mediaType: (pagesList.length > 1 ? 'multi_image' : mediaType) as any,
-        submittedAt: new Date().toISOString(),
-        grade: 95,
-        maxGrade: 100,
-        percentage: 95,
-        rating: 'ممتاز 🌟',
-        strengths: ['تم تسجيل وتوثيق الواجب محلياً بنجاح'],
-        corrections: [],
-        generalFeedback: 'تم حفظ الواجب في سجل واجباتك بنجاح!',
-        pointsAwarded: 20,
-        isSpeedWinner: false,
-        submissionChannel: 'home_student_portal'
-      };
-      setHomeworks(prev => [fallbackSub, ...prev]);
-      setSubmitSuccessMsg('🎉 تم حفظ وتوثيق الواجب بنجاح في سجلك!');
-      setSelectedImageBase64(null);
-      setSelectedPages([]);
-      setSelectedVideoName(null);
-      setStudentNotes('');
-      setCustomTaskTitle('');
+      console.warn('Network issue during submit homework, storing offline action:', err);
+      // Enqueue for later background sync if network is genuinely down
+      try {
+        resilientOfflineService.enqueueAction({
+          url: '/student/submit-homework',
+          method: 'POST',
+          body: {
+            traineeId: student.id,
+            taskTitle,
+            lessonName: selectedLessonName,
+            pagesBase64: pagesList,
+            mediaBase64: pagesList[0] || selectedImageBase64,
+            mediaType: pagesList.length > 1 ? 'multi_image' : mediaType,
+            studentNotes
+          },
+          description: `تسليم واجب (${pagesList.length} ورقة/صفحة): ${taskTitle}`
+        });
+      } catch (qErr) {
+        console.warn('Queue enqueue warning:', qErr);
+      }
+
+      showPortalToast('تعذر الاتصال بالخادم مؤقتاً، يرجى إعادة المحاولة للتصحيح الفوري بالذكاء الاصطناعي.', 'error');
     } finally {
       setIsSubmittingHomework(false);
     }
+    return;
   };
 
+  const isSuspended = Boolean(
+    student?.status === 'dropped' ||
+    student?.status === 'suspended' ||
+    student?.status === 'inactive' ||
+    student?.status === 'stopped' ||
+    student?.status === 'متوقف' ||
+    student?.status === 'منسحب'
+  );
+
   return (
-    <div className="fixed inset-0 w-full h-[100dvh] max-h-[100dvh] bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col font-sans overflow-hidden" dir="rtl">
+    <div className="fixed inset-0 w-full h-[100dvh] max-h-[100dvh] bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col font-sans overflow-hidden" dir="rtl">
       {/* UNIFIED PROFESSIONAL TOP HEADER */}
       <header className="bg-white/80 dark:bg-slate-900/95 backdrop-blur-xl border-b border-slate-200/90 dark:border-slate-800 px-4 py-2.5 shrink-0 z-40 shadow-sm dark:shadow-xl safe-top">
         <div className="max-w-6xl mx-auto flex items-center justify-between gap-3">
@@ -1427,7 +1383,7 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
           {/* Logo & Center Brand */}
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-amber-500 to-amber-700 p-0.5 border border-amber-400/40 flex items-center justify-center overflow-hidden shrink-0 shadow-md">
-              <img src="/logo.svg" alt="النجاح" className="w-full h-full object-contain" />
+              <img src="/logo.png" alt="النجاح" className="w-full h-full object-contain" />
             </div>
             <div>
               <h1 className="font-black text-xs sm:text-sm text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
@@ -1573,11 +1529,11 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
           <div className="max-w-md mx-auto my-8 bg-white/80 dark:bg-slate-900/90 border border-slate-200/90 dark:border-slate-800 rounded-3xl p-6 shadow-2xl backdrop-blur-xl space-y-5">
             <div className="text-center space-y-2">
               <div className="w-20 h-20 mx-auto rounded-3xl bg-white p-2 border border-amber-500/40 shadow-xl flex items-center justify-center">
-                <img src="/logo.svg" alt="مركز النجاح للتدريب والاستشارات" className="w-full h-full object-contain" />
+                <img src="/logo.png" alt="مركز النجاح للتدريب والاستشارات" className="w-full h-full object-contain" />
               </div>
               <h2 className="text-lg font-black text-slate-900 dark:text-slate-100">تسجيل دخول الطالب</h2>
               <p className="text-xs text-slate-600 dark:text-slate-400">
-                أدخل كود الطالب الخاص بك (مثلاً: <span className="font-mono text-amber-600 dark:text-amber-300 font-bold">م001</span> أو <span className="font-mono text-amber-600 dark:text-amber-300 font-bold">A001</span>) أو رقم الهاتف المسجل بالمركز
+                أدخل كود الطالب الخاص بك أو رقم الهاتف المسجل بالمركز
               </p>
             </div>
 
@@ -1587,20 +1543,6 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
                   <AlertTriangle className="w-4 h-4 text-rose-500 shrink-0" />
                   <span>{loginError}</span>
                 </div>
-                {typeof window !== 'undefined' && window.location.hostname.includes('vercel.app') && (
-                  <a
-                    href="https://ais-pre-7wkppak7c63am6ebvulppu-481160813332.europe-west2.run.app"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="p-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-700 text-emerald-900 dark:text-emerald-200 text-xs flex items-center justify-between font-bold hover:bg-emerald-100 transition-all shadow-xs"
-                  >
-                    <span className="flex items-center gap-1.5">
-                      <Zap className="w-3.5 h-3.5 text-emerald-600" />
-                      <span>هل تواجه بطء في فيرسيال؟ اضغط لفتح السيرفر المباشر 24/7 🚀</span>
-                    </span>
-                    <ExternalLink className="w-3.5 h-3.5 text-emerald-600" />
-                  </a>
-                )}
               </div>
             )}
 
@@ -1616,7 +1558,7 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
                     required
                     value={studentCodeInput}
                     onChange={(e) => setStudentCodeInput(e.target.value)}
-                    placeholder="أدخل كود الطالب مثل م001..."
+                    placeholder="أدخل كود الطالب أو رقم الهاتف..."
                     className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-2xl pr-9 pl-3 py-2.5 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:border-amber-500 font-mono shadow-xs"
                   />
                 </div>
@@ -1739,8 +1681,10 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
                       >
                         <Camera className="w-4 h-4" />
                       </button>
-                      <span className="absolute top-2 right-2 bg-emerald-500 text-slate-950 text-[10px] font-black px-2 py-0.5 rounded-full border-2 border-white dark:border-slate-900 shadow-md">
-                        نشط للبوابة
+                      <span className={`absolute top-2 right-2 text-[10px] font-black px-2 py-0.5 rounded-full border-2 border-white dark:border-slate-900 shadow-md ${
+                        isSuspended ? 'bg-rose-600 text-white' : 'bg-emerald-500 text-slate-950'
+                      }`}>
+                        {isSuspended ? 'حساب متوقف 🛑' : 'نشط للبوابة ✓'}
                       </span>
                     </div>
 
@@ -1750,6 +1694,11 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
                         <span className="bg-amber-500/20 text-amber-800 dark:text-amber-300 font-mono font-bold text-xs px-2.5 py-0.5 rounded-lg border border-amber-500/30">
                           {student?.code}
                         </span>
+                        {isSuspended && (
+                          <span className="bg-rose-500/20 text-rose-700 dark:text-rose-300 font-bold text-xs px-2.5 py-0.5 rounded-lg border border-rose-500/30">
+                            متوقف / معفي من السداد
+                          </span>
+                        )}
                       </div>
 
                       <p className="text-xs text-slate-600 dark:text-slate-300 font-medium flex items-center justify-center md:justify-start gap-2">
@@ -1769,7 +1718,13 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
                   <div className="flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto justify-center md:justify-end">
                     
                     {/* Compact stats */}
-                    <NextLectureWidget groupDetails={student?.groupDetails} variant="student" />
+                    {!isSuspended ? (
+                      <NextLectureWidget groupDetails={student?.groupDetails} variant="student" />
+                    ) : (
+                      <div className="flex items-center gap-2 bg-rose-50/90 dark:bg-rose-950/40 border border-rose-300 dark:border-rose-800/80 px-3 py-2 rounded-2xl text-rose-800 dark:text-rose-300 text-xs font-bold shadow-xs">
+                        <span>🛑 حساب متوقف مؤقتاً — لا يوجد جدول محاضرات active</span>
+                      </div>
+                    )}
 
                     <div className="flex items-center gap-2 bg-white/70 dark:bg-slate-950/60 border border-slate-200/80 dark:border-slate-800 p-2 rounded-2xl backdrop-blur-md shadow-xs">
                       <div className="px-3 py-1 text-center border-l border-slate-200 dark:border-slate-800">
@@ -1981,31 +1936,6 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
                 </div>
               </div>
             )}
-
-            {/* TRAINER PRESENCE & LAB STATUS BANNER FOR STUDENTS */}
-            <div className={`p-3.5 sm:p-4 rounded-2xl border text-xs flex flex-col sm:flex-row items-center justify-between gap-3 shadow-lg ${
-              isTrainerLabSessionActive
-                ? 'bg-emerald-950/40 border-emerald-500/40 text-emerald-200'
-                : 'bg-rose-950/40 border-rose-500/40 text-rose-200'
-            }`}>
-              <div className="flex items-center gap-3 text-center sm:text-right">
-                <div className={`w-3 h-3 rounded-full shrink-0 ${
-                  isTrainerLabSessionActive ? 'bg-emerald-400 animate-ping' : 'bg-rose-500'
-                }`} />
-                <div>
-                  <span className="font-black text-sm block">
-                    {isTrainerLabSessionActive
-                      ? '🟢 معمل القاعة مفتوح بالفرع (المدرب متواجد بجهازه المباشر بالقاعة)'
-                      : '🔴 المعمل مغلق حالياً بفرع المركز (في انتظار فتح المحاضر المشرف لجهازه بالقاعة)'}
-                  </span>
-                  <span className="text-[11px] opacity-80 block mt-0.5">
-                    {isTrainerLabSessionActive
-                      ? 'تم التحقق من شبكة المعمل وتواجد المحاضر. يمكنك استخدام معمل اللغات وتسجيل الحضور المباشر.'
-                      : 'حماية وأمان: يمنع فتح المعمل أو تسجيل الحضور تلقائياً من خارج القاعة حتى يبدأ المحاضر الجلسة.'}
-                  </span>
-                </div>
-              </div>
-            </div>
 
             {/* ACTIVE LIVE EXTERNAL CHALLENGE BANNER (Kahoot / ClassPoint / Quizizz) */}
             {activeExternalBroadcast && (
@@ -2320,6 +2250,81 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
                       </div>
                     </div>
                   </div>
+                )}
+
+                {/* LATEST GRADED HOMEWORK HERO CARD (النتيجة والدرجة المعتمدة بالذكاء الاصطناعي) */}
+                {homeworks && homeworks.length > 0 && (
+                  (() => {
+                    const latestGraded = homeworks.find(h => (h.grade !== undefined && h.grade !== null) || h.status === 'reviewed' || h.status === 'graded') || homeworks[0];
+                    if (!latestGraded) return null;
+                    return (
+                      <div className="bg-gradient-to-br from-emerald-500/10 via-teal-500/5 to-indigo-500/10 border-2 border-emerald-500/40 dark:border-emerald-500/30 rounded-3xl p-5 md:p-6 space-y-4 shadow-xl backdrop-blur-xl animate-fadeIn">
+                        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-3 border-b border-emerald-500/20">
+                          <div className="flex items-center gap-3">
+                            <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-500 text-white flex items-center justify-center font-black text-2xl shadow-lg shadow-emerald-500/20 shrink-0">
+                              🎯
+                            </div>
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <span className="bg-emerald-500 text-white text-[10px] font-black px-2 py-0.5 rounded-full">
+                                  تم التصحيح والاعتماد بالذكاء الاصطناعي ✅
+                                </span>
+                                <span className="text-[11px] text-slate-500 dark:text-slate-400 font-bold">
+                                  {new Date(latestGraded.submittedAt).toLocaleDateString('ar-EG')}
+                                </span>
+                              </div>
+                              <h3 className="text-base font-black text-slate-900 dark:text-slate-100 mt-0.5">
+                                {latestGraded.taskTitle || latestGraded.lessonName || 'واجب مدرسي مصحح بالذكاء الاصطناعي'}
+                              </h3>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2 self-stretch sm:self-auto justify-end flex-wrap">
+                            <div className="text-center bg-white dark:bg-slate-900 px-4 py-2 rounded-2xl border border-emerald-500/30 shadow-xs">
+                              <span className="text-[10px] text-slate-500 dark:text-slate-400 block font-bold">الدرجة المحققة</span>
+                              <span className="text-xl font-black text-emerald-600 dark:text-emerald-400 font-mono">
+                                {latestGraded.grade} / {latestGraded.maxGrade || 100}
+                              </span>
+                            </div>
+                            <div className="text-center bg-white dark:bg-slate-900 px-3.5 py-2 rounded-2xl border border-amber-500/30 shadow-xs">
+                              <span className="text-[10px] text-slate-500 dark:text-slate-400 block font-bold">النسبة والتقدير</span>
+                              <span className="text-sm font-black text-amber-600 dark:text-amber-400">
+                                {latestGraded.percentage || Math.round(((latestGraded.grade || 0) / (latestGraded.maxGrade || 100)) * 100)}% ({latestGraded.rating || 'ممتاز'})
+                              </span>
+                            </div>
+                            <div className="text-center bg-white dark:bg-slate-900 px-3 py-2 rounded-2xl border border-indigo-500/30 shadow-xs">
+                              <span className="text-[10px] text-slate-500 dark:text-slate-400 block font-bold">نقاط التميز</span>
+                              <span className="text-sm font-black text-indigo-600 dark:text-indigo-400 font-mono">
+                                +{latestGraded.pointsAwarded || 20} ⭐
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Report & Feedback */}
+                        {latestGraded.generalFeedback && (
+                          <div className="p-3.5 rounded-2xl bg-white/90 dark:bg-slate-900/90 border border-emerald-500/20 text-xs text-slate-800 dark:text-slate-200 leading-relaxed space-y-1">
+                            <div className="font-bold text-emerald-700 dark:text-emerald-400 flex items-center gap-1.5 text-[11px]">
+                              <span>💬 تقرير وتوجيهات المعلم والذكاء الاصطناعي:</span>
+                            </div>
+                            <p className="text-slate-700 dark:text-slate-300">
+                              {latestGraded.generalFeedback}
+                            </p>
+                          </div>
+                        )}
+
+                        <div className="flex items-center justify-between pt-1">
+                          <button
+                            type="button"
+                            onClick={() => setActiveTab('history')}
+                            className="text-xs font-bold text-emerald-700 dark:text-emerald-400 hover:underline flex items-center gap-1.5 cursor-pointer"
+                          >
+                            <span>عرض كافة تفاصيل الأسئلة والأخطاء السابقة ({homeworks.length} واجبات) 📋</span>
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })()
                 )}
 
                 {/* Main Homework Submission Box */}
@@ -2752,7 +2757,7 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
 
                 {/* Instant AI Correction Output Card */}
                 {lastSubmissionResult && (
-                  <div className="bg-white/80 dark:bg-slate-900 border border-indigo-500/40 rounded-3xl p-5 md:p-6 space-y-4 shadow-2xl relative overflow-hidden backdrop-blur-xl">
+                  <div id="ai-submission-result-card" className="bg-white/80 dark:bg-slate-900 border-2 border-indigo-500/60 rounded-3xl p-5 md:p-6 space-y-4 shadow-2xl relative overflow-hidden backdrop-blur-xl animate-in zoom-in-95 duration-200">
                     <div className="flex items-center justify-between pb-3 border-b border-slate-200/80 dark:border-slate-800">
                       <div className="flex items-center gap-2">
                         <Sparkles className="w-5 h-5 text-indigo-500 dark:text-indigo-400" />
@@ -2945,6 +2950,66 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
                         </div>
                       )}
 
+                      {/* Detailed Questions & Mistakes Breakdown */}
+                      {lastSubmissionResult?.mistakes && lastSubmissionResult.mistakes.length > 0 && (
+                        <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 space-y-2.5 shadow-xs">
+                          <h4 className="text-xs font-black text-slate-800 dark:text-slate-100 flex items-center justify-between">
+                            <span className="flex items-center gap-1.5">
+                              <CheckCircle2 className="w-4 h-4 text-amber-500" />
+                              <span>فحص وتصحيح تفصيلي لأسئلة ومفاهيم الواجب:</span>
+                            </span>
+                            <span className="text-[10px] font-bold text-slate-500 bg-slate-200/60 dark:bg-slate-800 px-2 py-0.5 rounded-full">
+                              {lastSubmissionResult.mistakes.filter(m => m.isCorrect).length} صح / {lastSubmissionResult.mistakes.length} أسئلة
+                            </span>
+                          </h4>
+                          <div className="space-y-2 pt-1">
+                            {lastSubmissionResult.mistakes.map((m, idx) => (
+                              <div
+                                key={idx}
+                                className={`p-3 rounded-xl border text-xs space-y-1.5 transition-all ${
+                                  m.isCorrect
+                                    ? 'bg-emerald-500/5 border-emerald-500/30 dark:bg-emerald-950/20'
+                                    : 'bg-rose-500/5 border-rose-500/30 dark:bg-rose-950/20'
+                                }`}
+                              >
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="font-bold flex items-center gap-1.5">
+                                    <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black ${
+                                      m.isCorrect ? 'bg-emerald-500 text-white' : 'bg-rose-500 text-white'
+                                    }`}>
+                                      {m.isCorrect ? '✓' : '✗'}
+                                    </span>
+                                    <span className="text-slate-900 dark:text-slate-100">{m.questionSummary}</span>
+                                  </span>
+                                  <span className={`text-[10px] font-black px-2 py-0.5 rounded-md ${
+                                    m.isCorrect
+                                      ? 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-300'
+                                      : 'bg-rose-500/20 text-rose-700 dark:text-rose-300'
+                                  }`}>
+                                    {m.isCorrect ? 'صحيح ومتقن' : 'يحتاج مراجعة'}
+                                  </span>
+                                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-[11px] pt-1">
+                                  <div className="bg-white/80 dark:bg-slate-900 p-2 rounded-lg border border-slate-200/80 dark:border-slate-800">
+                                    <span className="text-slate-500 dark:text-slate-400 block font-bold text-[10px]">إجابة/تعبير الطالب:</span>
+                                    <p className="text-slate-800 dark:text-slate-200 mt-0.5">{m.studentAnswer}</p>
+                                  </div>
+                                  <div className="bg-white/80 dark:bg-slate-900 p-2 rounded-lg border border-slate-200/80 dark:border-slate-800">
+                                    <span className="text-amber-600 dark:text-amber-400 block font-bold text-[10px]">الإجابة النموذجية المعتمدة:</span>
+                                    <p className="text-slate-800 dark:text-slate-200 mt-0.5">{m.correctAnswer}</p>
+                                  </div>
+                                </div>
+                                {m.explanation && (
+                                  <p className="text-[11px] text-slate-600 dark:text-slate-300 bg-amber-500/10 p-2 rounded-lg border border-amber-500/20 font-sans">
+                                    💡 <strong className="text-amber-700 dark:text-amber-300">توجيه المعلم:</strong> {m.explanation}
+                                  </p>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
                       {/* Trainer Notification Confirmation Alert */}
                       <div className="p-3 rounded-2xl bg-indigo-50 dark:bg-indigo-500/10 border border-indigo-200 dark:border-indigo-500/20 text-indigo-700 dark:text-indigo-300 text-[11px] font-bold flex items-center justify-between gap-2 shadow-xs">
                         <span className="flex items-center gap-2">
@@ -3013,6 +3078,66 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
                           <strong className="text-amber-600 dark:text-amber-400 block mb-1">التقرير الذكي:</strong>
                           {hw.generalFeedback}
                         </p>
+
+                        {/* Detailed Questions & Mistakes Breakdown in History */}
+                        {hw.mistakes && hw.mistakes.length > 0 && (
+                          <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 space-y-2">
+                            <h5 className="text-[11px] font-black text-slate-800 dark:text-slate-200 flex items-center justify-between">
+                              <span className="flex items-center gap-1.5">
+                                <CheckCircle2 className="w-3.5 h-3.5 text-amber-500" />
+                                <span>تفاصيل الأسئلة والإجابات وتوجيهات المعلم:</span>
+                              </span>
+                              <span className="text-[10px] text-slate-500 font-bold">
+                                {hw.mistakes.filter(m => m.isCorrect).length} صح من {hw.mistakes.length} أسئلة
+                              </span>
+                            </h5>
+                            <div className="space-y-1.5 pt-1">
+                              {hw.mistakes.map((m, mIdx) => (
+                                <div
+                                  key={mIdx}
+                                  className={`p-2.5 rounded-lg border text-[11px] space-y-1 ${
+                                    m.isCorrect
+                                      ? 'bg-emerald-500/5 border-emerald-500/20 dark:bg-emerald-950/20'
+                                      : 'bg-rose-500/5 border-rose-500/20 dark:bg-rose-950/20'
+                                  }`}
+                                >
+                                  <div className="flex items-center justify-between gap-1.5">
+                                    <span className="font-bold flex items-center gap-1">
+                                      <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-black ${
+                                        m.isCorrect ? 'bg-emerald-500 text-white' : 'bg-rose-500 text-white'
+                                      }`}>
+                                        {m.isCorrect ? '✓' : '✗'}
+                                      </span>
+                                      <span className="text-slate-900 dark:text-slate-100">{m.questionSummary}</span>
+                                    </span>
+                                    <span className={`text-[9px] font-black px-1.5 py-0.5 rounded ${
+                                      m.isCorrect
+                                        ? 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-300'
+                                        : 'bg-rose-500/20 text-rose-700 dark:text-rose-300'
+                                    }`}>
+                                      {m.isCorrect ? 'إتقان تام' : 'يحتاج مراجعة'}
+                                    </span>
+                                  </div>
+                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5 text-[10px]">
+                                    <div className="bg-white/90 dark:bg-slate-900 p-1.5 rounded border border-slate-200/60 dark:border-slate-800">
+                                      <span className="text-slate-500 block font-bold">إجابة الطالب:</span>
+                                      <p className="text-slate-800 dark:text-slate-200">{m.studentAnswer}</p>
+                                    </div>
+                                    <div className="bg-white/90 dark:bg-slate-900 p-1.5 rounded border border-slate-200/60 dark:border-slate-800">
+                                      <span className="text-amber-600 dark:text-amber-400 block font-bold">الإجابة النموذجية المعتمدة:</span>
+                                      <p className="text-slate-800 dark:text-slate-200">{m.correctAnswer}</p>
+                                    </div>
+                                  </div>
+                                  {m.explanation && (
+                                    <p className="text-[10px] text-slate-600 dark:text-slate-300 bg-amber-500/10 p-1.5 rounded border border-amber-500/20">
+                                      💡 <strong>توجيه المعلم:</strong> {m.explanation}
+                                    </p>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
 
                         {/* Voice Submission Specifics */}
                         {(hw.mediaType === 'audio' || hw.voiceTranscription || hw.conceptsCovered?.length) && (
@@ -3112,8 +3237,8 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
             {/* TAB: LECTURE RECAP, TASKS & PREPARATION (4-SECTION SYSTEM) */}
             {activeTab === 'recap_tasks' && (
               <LectureRecapManager
-                studentGradeLevel={student?.grade || student?.gradeLevel || student?.stage || student?.courseName || student?.groupName || ''}
-                studentName={student?.name || 'طالب متميز'}
+                studentGradeLevel={student?.grade || student?.stage || student?.schoolGrade || student?.courseName || student?.groupName || ''}
+                studentName={student?.fullName || 'طالب متميز'}
                 studentCode={student?.code || 'STU-001'}
                 onNavigateToHomework={(taskTitle) => {
                   setSelectedTaskTitle(taskTitle);
@@ -3212,9 +3337,14 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
                 </div>
 
                 {/* Prominent Next Lecture Countdown Banner */}
-                {student?.groupDetails && (
+                {!isSuspended && student?.groupDetails ? (
                   <NextLectureWidget groupDetails={student.groupDetails} variant="banner" />
-                )}
+                ) : isSuspended ? (
+                  <div className="p-5 rounded-2xl bg-rose-50 dark:bg-rose-950/20 border border-rose-300 dark:border-rose-800 text-center space-y-1">
+                    <p className="font-black text-xs text-rose-800 dark:text-rose-300">🛑 حساب الطالب متوقف / منسحب حالياً</p>
+                    <p className="text-[11px] text-rose-700 dark:text-rose-400">لا يوجد مواعيد محاضرات نشطة مسجلة طوال فترة التوقف.</p>
+                  </div>
+                ) : null}
 
                 {(!labSchedules || labSchedules.length === 0) ? (
                   <div className="p-8 text-center bg-slate-50/80 dark:bg-slate-950/50 rounded-2xl border border-slate-200/80 dark:border-slate-800 space-y-2">
@@ -3273,12 +3403,12 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
                       >
                         <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border-b border-amber-500/20 pb-4">
                           <div className="flex items-center gap-3">
-                            <div className="w-14 h-14 rounded-2xl bg-white p-2 border border-amber-500/40 shadow-md flex items-center justify-center shrink-0">
-                              <img src="/logo.svg" alt="النجاح" className="w-full h-full object-contain" />
+                            <div className="w-14 h-14 rounded-2xl bg-white p-1 border border-amber-500/40 shadow-md flex items-center justify-center shrink-0">
+                              <img src="/icon-512.png" alt="النجاح" className="w-full h-full object-contain rounded-full" />
                             </div>
                             <div>
                               <span className="bg-amber-500/20 text-amber-700 dark:text-amber-300 font-bold text-[10px] px-2.5 py-0.5 rounded-full border border-amber-500/30 mb-1 inline-block">
-                                شهادة معتمدة ورسمية
+                                {cert.title || (cert.type === 'appreciation' || cert.grade?.includes('وسام') ? 'شهادة تقدير ووسام تميز 🎖️' : 'شهادة تدريبية معتمدة 📜')}
                               </span>
                               <h4 className="text-base font-black text-slate-900 dark:text-slate-100">{cert.courseName}</h4>
                               <p className="text-xs text-slate-500 dark:text-slate-400 font-mono">رقم الشهادة: {cert.certificateNumber}</p>
@@ -3658,13 +3788,10 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
 
           // 5. Update Backend Express API & Firestore
           try {
-            const resp = await api.updateStudentPhoto({
+            await api.updateStudentPhoto({
               traineeId: student.id || student.code,
               photoUrl: optimizedPhoto
             });
-            if (resp && resp.success) {
-              alert('تم تحديث وتجميل صورتك بنجاح وحفظها في المنصة وبياناتك الشخصية! ✨');
-            }
           } catch (err) {
             console.warn('Backend photo save warning:', err);
             // Fallback direct request
@@ -3757,9 +3884,15 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
           onClose={() => setIsVoiceSummaryModalOpen(false)}
           studentData={student ? {
             id: student.id,
+            code: student.code,
             fullName: student.fullName,
             courseName: student.courseName,
             groupName: student.groupName,
+            grade: student.grade,
+            stage: student.stage,
+            schoolGrade: student.schoolGrade,
+            courseId: student.courseId,
+            groupId: student.groupId,
             studentCode: student.code
           } : undefined}
           defaultTaskTitle={selectedTaskTitle || customTaskTitle || undefined}
@@ -3777,53 +3910,7 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
         />
       )}
 
-      {/* Mobile Bottom Navigation Bar */}
-      {isLoggedIn && (
-        <div className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-slate-900/95 border-t border-slate-200/90 dark:border-slate-800 backdrop-blur-xl flex justify-around py-2 px-1 shadow-[0_-4px_20px_rgba(0,0,0,0.06)] dark:shadow-2xl md:hidden safe-bottom select-none">
-          <button
-            onClick={() => setActiveTab('submit')}
-            className={`flex flex-col items-center gap-1 flex-1 py-1 transition-all ${activeTab === 'submit' ? 'text-indigo-600 dark:text-indigo-400 font-bold scale-105' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'}`}
-          >
-            <Upload className="w-4 h-4" />
-            <span className="text-[9px] font-bold">تسليم واجب</span>
-          </button>
-          <button
-            onClick={() => setActiveTab('recap_tasks')}
-            className={`flex flex-col items-center gap-1 flex-1 py-1 transition-all ${activeTab === 'recap_tasks' ? 'text-indigo-600 dark:text-indigo-400 font-bold scale-105' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'}`}
-          >
-            <Layers className="w-4 h-4" />
-            <span className="text-[9px] font-bold">الملخصات والتحضير</span>
-          </button>
-          <button
-            onClick={() => setActiveTab('history')}
-            className={`flex flex-col items-center gap-1 flex-1 py-1 transition-all ${activeTab === 'history' ? 'text-indigo-600 dark:text-indigo-400 font-bold scale-105' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'}`}
-          >
-            <BookOpen className="w-4 h-4" />
-            <span className="text-[9px] font-bold">السجل</span>
-          </button>
-          <button
-            onClick={() => setActiveTab('badges')}
-            className={`flex flex-col items-center gap-1 flex-1 py-1 transition-all ${activeTab === 'badges' ? 'text-indigo-600 dark:text-indigo-400 font-bold scale-105' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'}`}
-          >
-            <Award className="w-4 h-4" />
-            <span className="text-[9px] font-bold">الأوسمة</span>
-          </button>
-          <button
-            onClick={() => setActiveTab('schedule')}
-            className={`flex flex-col items-center gap-1 flex-1 py-1 transition-all ${activeTab === 'schedule' ? 'text-indigo-600 dark:text-indigo-400 font-bold scale-105' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'}`}
-          >
-            <Calendar className="w-4 h-4" />
-            <span className="text-[9px] font-bold">الجدول</span>
-          </button>
-          <button
-            onClick={() => setActiveTab('profile')}
-            className={`flex flex-col items-center gap-1 flex-1 py-1 transition-all ${activeTab === 'profile' ? 'text-indigo-600 dark:text-indigo-400 font-bold scale-105' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'}`}
-          >
-            <User className="w-4 h-4" />
-            <span className="text-[9px] font-bold">الملف</span>
-          </button>
-        </div>
-      )}
+
 
       {/* Full Page Zoom Modal for Uploaded Pages */}
       {previewZoomImage && (

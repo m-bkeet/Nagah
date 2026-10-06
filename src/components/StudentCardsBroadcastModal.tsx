@@ -22,6 +22,7 @@ import { getPublicStudentPortalUrl } from '../utils/urlHelper';
 import { useCenter } from '../context/CenterContext';
 import { useTheme } from '../context/ThemeContext';
 import { getEffectiveCenterLogo, handleLogoError } from '../utils/centerLogo';
+import { resolveTraineePhotoUrl } from '../utils/googleDriveHelper';
 
 interface StudentCardsBroadcastModalProps {
   isOpen: boolean;
@@ -165,7 +166,8 @@ export const StudentCardsBroadcastModal: React.FC<StudentCardsBroadcastModalProp
           );
           const groupObj = groups.find((g) => g.id === t.groupId);
           const qrCodeImg = qrCodesMap[t.id] || '';
-          const photo = t.photoUrl || (t as any).photo || (t.id ? localStorage.getItem('student_session_photo_' + t.id) : null) || (t.code ? localStorage.getItem('student_session_photo_' + t.code) : null) || '';
+          const rawPhoto = t.photoUrl || (t as any).photo || (t.id ? localStorage.getItem('student_session_photo_' + t.id) : null) || (t.code ? localStorage.getItem('student_session_photo_' + t.code) : null) || '';
+          const photo = resolveTraineePhotoUrl(rawPhoto, t.photoDriveFileId);
           const initialLetter = t.fullName?.charAt(0) || 'م';
           const branchName = branchObj ? branchObj.name : 'الفرع الرئيسي';
           const courseName = courseObj ? courseObj.name : 'الدورة التدريبية';

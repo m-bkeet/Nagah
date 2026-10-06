@@ -3764,12 +3764,11 @@ class DatabaseManager {
     
     const byId = new Map<string, any>();
     const byCode = new Map<string, any>();
-    const byNormName = new Map<string, any>();
     const result: any[] = [];
 
-    const normArabic = (s: string) => {
-      if (!s) return '';
-      return String(s).trim().toLowerCase()
+    const normName = (str: string) => {
+      if (!str) return '';
+      return String(str).trim().toLowerCase()
         .replace(/[\u064B-\u065F\u0670\u0640]/g, '')
         .replace(/[أإآٱ]/g, 'ا')
         .replace(/ة/g, 'ه')
@@ -3781,44 +3780,34 @@ class DatabaseManager {
         .trim();
     };
 
-    const cleanPhone = (p: string) => String(p || '').replace(/\D/g, '').slice(-10);
-
     for (const t of list) {
-      if (!t) continue;
+      if (!t || typeof t !== 'object') continue;
       const id = t.id ? String(t.id).trim() : '';
-      const code = t.code ? String(t.code).trim().toUpperCase() : '';
-      const normName = normArabic(t.fullName || t.name);
-      const phone = cleanPhone(t.phone);
-      const parentPhone = cleanPhone(t.parentPhone);
+      if (!id) continue;
 
-      // Check if this trainee matches any existing record
+      const tNorm = normName(t.fullName);
+
+      // Deduplication is STRICTLY by exact unique ID, OR by valid National ID ONLY IF the student name ALSO matches!
+      // Two students with DIFFERENT names must NEVER be merged (siblings sharing father's national ID or phone).
       let existing: any = null;
-      if (id && byId.has(id)) {
+      if (byId.has(id)) {
         existing = byId.get(id);
-      } else if (normName && byNormName.has(normName)) {
-        const candidate = byNormName.get(normName);
-        const cPhone = cleanPhone(candidate.phone);
-        const cParentPhone = cleanPhone(candidate.parentPhone);
-        const samePhone = (phone && (phone === cPhone || phone === cParentPhone)) ||
-                          (parentPhone && (parentPhone === cPhone || parentPhone === cParentPhone));
-        const sameGroupOrCourse = (t.groupId && candidate.groupId && t.groupId === candidate.groupId) ||
-                                  (t.courseId && candidate.courseId && t.courseId === candidate.courseId);
-        if (samePhone || sameGroupOrCourse || (!phone && !parentPhone && !cPhone && !cParentPhone)) {
-          existing = candidate;
-        }
-      } else if (code && byCode.has(code)) {
-        const candidate = byCode.get(code);
-        const candNorm = normArabic(candidate.fullName || candidate.name);
-        // Only merge by code if it is truly the same student (same normalized name or same national ID)
-        const sameName = candNorm && normName && candNorm === normName;
-        const sameNatId = t.nationalId && candidate.nationalId && String(t.nationalId).trim() === String(candidate.nationalId).trim();
-        if (sameName || sameNatId) {
-          existing = candidate;
+      } else if (t.nationalId && String(t.nationalId).trim().length >= 10 && tNorm) {
+        const cleanNat = String(t.nationalId).trim();
+        for (const prev of result) {
+          if (prev.nationalId && String(prev.nationalId).trim() === cleanNat) {
+            const prevNorm = normName(prev.fullName);
+            // ONLY merge if the student name is the same person!
+            if (prevNorm && prevNorm === tNorm) {
+              existing = prev;
+              break;
+            }
+          }
         }
       }
 
       if (existing) {
-        // Merge into existing record: keep whichever ID is non-empty, prefer existing canonical ID & code
+        // Merge updates into the existing record safely while preserving the student
         const mergedTotalPoints = Math.max(
           Number(existing.totalPoints !== undefined ? existing.totalPoints : (existing.points || 0)),
           Number(t.totalPoints !== undefined ? t.totalPoints : (t.points || 0))
@@ -3827,13 +3816,12 @@ class DatabaseManager {
         
         Object.assign(existing, {
           ...t,
-          ...existing,
           id: existing.id || t.id,
           code: existing.code || t.code,
           fullName: existing.fullName || t.fullName,
-          phone: existing.phone || t.phone,
-          parentPhone: existing.parentPhone || t.parentPhone,
-          nationalId: existing.nationalId || t.nationalId,
+          phone: t.phone || existing.phone,
+          parentPhone: t.parentPhone || existing.parentPhone,
+          nationalId: t.nationalId || existing.nationalId,
           totalPoints: mergedTotalPoints,
           points: mergedTotalPoints,
           paidAmount: mergedPaidAmount,
@@ -3841,15 +3829,15 @@ class DatabaseManager {
         });
       } else {
         const record = { ...t };
-        // If code collided with a different student, guarantee unique code so student is preserved
+        const code = record.code ? String(record.code).trim().toUpperCase() : '';
+        // If code collided with a previously registered student, assign a unique code suffix to protect both students!
         if (code && byCode.has(code)) {
           const suffix = Math.random().toString(36).substring(2, 5).toUpperCase();
           record.code = `${code}-${suffix}`;
         }
         result.push(record);
-        if (id) byId.set(id, record);
-        if (record.code) byCode.set(record.code, record);
-        if (normName) byNormName.set(normName, record);
+        byId.set(id, record);
+        if (record.code) byCode.set(String(record.code).trim().toUpperCase(), record);
       }
     }
 
@@ -3885,35 +3873,6 @@ class DatabaseManager {
           return;
         }
 
-        // Fast collection sync: if a specific collection was touched remotely, sync just that collection
-        if (this.isFirestoreHydrated && meta?.lastCollection && remoteTime > this.lastRemoteSyncMetaTime) {
-          const colName = meta.lastCollection;
-          const remoteItems = await loadCollectionFromFirestore(colName);
-          if (Array.isArray(remoteItems) && remoteItems.length > 0) {
-            console.log(`[DB] Fast-hydrated ${colName} from Firestore! Count:`, remoteItems.length);
-            const current = this.data || {} as any;
-            if (colName === 'trainees') {
-              const coursesList = Array.isArray(current.courses) ? current.courses : [];
-              const deduplicated = this.deduplicateTrainees(remoteItems);
-              current.trainees = deduplicated.map((t: any) => ({
-                ...t,
-                ...calculateTraineeFeeAndFinancials(t, coursesList)
-              }));
-            } else {
-              const remoteMap = new Map((remoteItems as any[]).map(item => [item.id, item]));
-              const localList = Array.isArray(current[colName]) ? current[colName] : [];
-              for (const loc of localList) {
-                if (loc && loc.id && !remoteMap.has(loc.id)) {
-                  remoteMap.set(loc.id, loc);
-                }
-              }
-              current[colName] = Array.from(remoteMap.values());
-            }
-            this.lastRemoteSyncMetaTime = remoteTime;
-            return;
-          }
-        }
-
         const remoteData = await loadFullDbFromFirestore();
         if (remoteData && Object.keys(remoteData).length > 0) {
           console.log('[DB] Hydrated from Firestore! Collections loaded:', Object.keys(remoteData).length);
@@ -3927,9 +3886,9 @@ class DatabaseManager {
                 // Remote Firestore is canonical for trainees
                 const remoteList = Array.isArray(val) ? val : [];
                 const localList = Array.isArray(merged[key]) ? merged[key] : [];
-                const remoteIdSet = new Set(remoteList.map((t: any) => t.id || t.code).filter(Boolean));
-                // Only keep local items that do not exist remotely yet
-                const localOnly = localList.filter((t: any) => t && t.id && !remoteIdSet.has(t.id) && (!t.code || !remoteIdSet.has(t.code)));
+                const remoteIdSet = new Set(remoteList.map((t: any) => t.id).filter(Boolean));
+                // Keep all local trainees that haven't been stored remotely yet
+                const localOnly = localList.filter((t: any) => t && t.id && !remoteIdSet.has(t.id));
                 merged[key] = this.deduplicateTrainees([...remoteList, ...localOnly]);
               } else if (Array.isArray(merged[key]) && merged[key].length > 0) {
                 const remoteMap = new Map((val as any[]).map(item => [item.id, item]));
@@ -3963,7 +3922,19 @@ class DatabaseManager {
           }
 
           this.data = merged;
+          this.isFirestoreHydrated = true;
           this.lastRemoteSyncMetaTime = remoteTime || Date.now();
+
+          // Persist hydrated data to local disk file so disk stays 100% in sync with Firestore
+          try {
+            this.ensureDataDir();
+            const jsonStr = JSON.stringify(this.data, null, 2);
+            const tempFile = `${DB_FILE}.tmp`;
+            fs.writeFileSync(tempFile, jsonStr, 'utf-8');
+            fs.renameSync(tempFile, DB_FILE);
+          } catch (diskErr) {
+            console.warn('[DB] Non-critical disk sync notice after hydration:', diskErr);
+          }
         }
       } catch (err) {
         console.warn('[DB] Firestore hydration notice:', err);
@@ -4186,14 +4157,11 @@ class DatabaseManager {
       console.warn('[DB] Note: saveDataDirect could not persist to local disk (stateless/read-only environment):', err);
     }
 
-    // Always sync state changes to cloud Firestore (immediately if requested, otherwise async debounced)
+    // Sync state changes to cloud Firestore in background (graceful on quota exhaust)
     try {
       await saveFullDbToFirestore(data, immediate);
     } catch (err) {
-      console.warn('[DB] Firestore sync error:', err);
-      if (immediate) {
-        throw err;
-      }
+      console.warn('[DB] Firestore sync non-fatal warning:', err);
     }
   }
 

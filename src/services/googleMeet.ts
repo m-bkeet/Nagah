@@ -24,7 +24,7 @@ export class GoogleMeetService {
     const token = await GoogleDriveService.requestAccessToken();
 
     // In case of local preview without active Google login token:
-    if (!token || token.startsWith('mock_drive_token_')) {
+    if (!token) {
       const randomCode = `${Math.random().toString(36).substring(2, 5)}-${Math.random().toString(36).substring(2, 6)}-${Math.random().toString(36).substring(2, 5)}`;
       return {
         name: `spaces/nagah-${Date.now()}`,

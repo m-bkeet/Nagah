@@ -27,6 +27,7 @@ import { aiFeedbackService } from "./src/server/aiFeedbackService.ts";
 import { domainRouter } from "./src/server/domainRoutes.ts";
 import { apiRouter } from "./server/routes.ts";
 import { db } from "./server/db.ts";
+import { gradeHomeworkOrExamFromImage } from "./server/gemini.ts";
 
 const { Pool } = pg;
 
@@ -36,12 +37,98 @@ const PORT = 3000;
 app.use((req, res, next) => {
   res.header("Access-Control-Allow-Origin", "*");
   res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
-  res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  res.header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With");
   if (req.method === "OPTIONS") {
     return res.sendStatus(200);
   }
   next();
 });
+
+// Explicit PWA Static Files & Icons with proper MIME types & CORS (Critical for PWABuilder & Mobile App Packaging)
+function getStaticFilePath(filename: string): string {
+  const inPublic = path.join(process.cwd(), "public", filename);
+  if (fs.existsSync(inPublic)) return inPublic;
+  const inDist = path.join(process.cwd(), "dist", filename);
+  if (fs.existsSync(inDist)) return inDist;
+  return path.join(process.cwd(), filename);
+}
+
+app.get("/.well-known/assetlinks.json", (req, res) => {
+  res.setHeader("Content-Type", "application/json; charset=utf-8");
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  const assetlinksPath = getStaticFilePath(".well-known/assetlinks.json");
+  if (fs.existsSync(assetlinksPath)) {
+    res.sendFile(assetlinksPath);
+  } else {
+    res.json([]);
+  }
+});
+
+app.get("/manifest.json", (req, res) => {
+  res.setHeader("Content-Type", "application/manifest+json; charset=utf-8");
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.sendFile(getStaticFilePath("manifest.json"));
+});
+
+app.get("/manifest-student.json", (req, res) => {
+  res.setHeader("Content-Type", "application/manifest+json; charset=utf-8");
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.sendFile(getStaticFilePath("manifest-student.json"));
+});
+
+app.get("/manifest-admin.json", (req, res) => {
+  res.setHeader("Content-Type", "application/manifest+json; charset=utf-8");
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.sendFile(getStaticFilePath("manifest-admin.json"));
+});
+
+app.get("/manifest-kiosk.json", (req, res) => {
+  res.setHeader("Content-Type", "application/manifest+json; charset=utf-8");
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.sendFile(getStaticFilePath("manifest-kiosk.json"));
+});
+
+app.get("/sw.js", (req, res) => {
+  res.setHeader("Content-Type", "application/javascript; charset=utf-8");
+  res.setHeader("Service-Worker-Allowed", "/");
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.sendFile(getStaticFilePath("sw.js"));
+});
+
+app.get("/icon-192.png", (req, res) => {
+  res.setHeader("Content-Type", "image/png");
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.sendFile(getStaticFilePath("icon-192.png"));
+});
+
+app.get("/icon-512.png", (req, res) => {
+  res.setHeader("Content-Type", "image/png");
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.sendFile(getStaticFilePath("icon-512.png"));
+});
+
+app.get("/icon-maskable-192.png", (req, res) => {
+  res.setHeader("Content-Type", "image/png");
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.sendFile(getStaticFilePath("icon-maskable-192.png"));
+});
+
+app.get("/icon-maskable-512.png", (req, res) => {
+  res.setHeader("Content-Type", "image/png");
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.sendFile(getStaticFilePath("icon-maskable-512.png"));
+});
+
+app.get("/apple-touch-icon.png", (req, res) => {
+  res.setHeader("Content-Type", "image/png");
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.sendFile(getStaticFilePath("apple-touch-icon.png"));
+});
+
+app.use(express.static(path.join(process.cwd(), "public")));
+if (fs.existsSync(path.join(process.cwd(), "dist"))) {
+  app.use(express.static(path.join(process.cwd(), "dist")));
+}
 
 app.use(express.json({ limit: "100mb" }));
 app.use(express.urlencoded({ extended: true, limit: "100mb" }));
@@ -81,7 +168,14 @@ function getDbPool(): pg.Pool | null {
 let aiClient: GoogleGenAI | null = null;
 try {
   if (process.env.GEMINI_API_KEY) {
-    aiClient = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+    aiClient = new GoogleGenAI({
+      apiKey: process.env.GEMINI_API_KEY,
+      httpOptions: {
+        headers: {
+          'User-Agent': 'aistudio-build',
+        }
+      }
+    });
   }
 } catch (e) {
   console.warn("Google Gen AI initialization warning:", e);
@@ -375,97 +469,70 @@ app.post("/api/student/login", async (req, res) => {
   }
 });
 
+// Student Photo Update Endpoint
+app.post("/api/student/update-photo", async (req, res) => {
+  try {
+    const { traineeId, photoUrl } = req.body;
+    if (!traineeId || !photoUrl) {
+      return sendResponse(res, false, null, "traineeId and photoUrl are required", 400);
+    }
+
+    if (cloudDb) {
+      try {
+        const traineesRef = cloudDb.collection("trainees");
+        const snapshot = await traineesRef.where("id", "==", traineeId).get();
+        if (!snapshot.empty) {
+          await snapshot.docs[0].ref.update({ photoUrl, photo: photoUrl, updatedAt: new Date().toISOString() });
+        } else {
+          const codeSnap = await traineesRef.where("code", "==", traineeId).get();
+          if (!codeSnap.empty) {
+            await codeSnap.docs[0].ref.update({ photoUrl, photo: photoUrl, updatedAt: new Date().toISOString() });
+          }
+        }
+      } catch (e) {
+        console.warn("Firestore photo update notice:", e);
+      }
+    }
+
+    sendResponse(res, true, { message: "Photo updated successfully", photoUrl });
+  } catch (err: any) {
+    sendResponse(res, false, null, "Error updating student photo: " + err.message, 500);
+  }
+});
+
 // Student AI Homework Evaluation & Submission Endpoint
 app.post("/api/student/submit-homework", async (req, res) => {
   try {
-    const { traineeId, taskTitle, mediaBase64, mediaType, studentNotes } = req.body;
+    const { traineeId, taskTitle, lessonName, mediaBase64, pagesBase64, mediaType, studentNotes, courseId } = req.body;
     if (!traineeId) {
       return sendResponse(res, false, null, "traineeId is required", 400);
     }
 
-    const title = taskTitle || "واجب تطبيقي";
-    let aiEvaluation: any = null;
+    const title = taskTitle || lessonName || "واجب تطبيقي";
+    const effectiveLesson = lessonName || taskTitle || "تطبيق وتلخيص الدرس";
 
-    // Evaluate via Google Gemini Generative AI if available
-    if (aiClient) {
-      try {
-        const parts: any[] = [];
-        
-        // Multimodal image support
-        if (mediaBase64 && typeof mediaBase64 === "string" && mediaBase64.includes("base64,")) {
-          const [header, base64Data] = mediaBase64.split("base64,");
-          const mimeTypeMatch = header.match(/:(.*?);/);
-          const mimeType = mimeTypeMatch ? mimeTypeMatch[1] : "image/jpeg";
-          
-          parts.push({
-            inlineData: {
-              mimeType,
-              data: base64Data
-            }
-          });
-        }
-
-        const prompt = `أنت معلم ومشرف برمجيات وتقنية خبير في مركز تدريب متقدم (مركز النجاح للتدريب).
-قم بتصحيح وتقييم هذا الواجب المرفوع من الطالب بعنوان: "${title}".
-ملاحظات وإجابة الطالب: "${studentNotes || 'مرفق صورة أو كود الواجب'}"
-
-المطلوب:
-تقييم الحل بدقة واحترافية وبأسلوب تربوي عربي مشجع ومحفز للتعلم.
-أخرج النتيجة بتنسيق JSON حصراً على النحو التالي (دون نصوص إضافية خارج الـ JSON):
-{
-  "grade": 95,
-  "maxGrade": 100,
-  "percentage": 95,
-  "rating": "ممتاز 🌟",
-  "strengths": ["نقطة قوة 1", "نقطة قوة 2", "نقطة قوة 3"],
-  "corrections": ["توجيه أو نصيحة برمجية لتحسين الحل"],
-  "generalFeedback": "رسالة توجيهية شاملة وتشجيعية وتفصيلية للطالب تبين تميزه وخطوته القادمة",
-  "pointsAwarded": 25
-}`;
-
-        parts.push({ text: prompt });
-
-        const response = await aiClient.models.generateContent({
-          model: "gemini-2.5-flash",
-          contents: parts
-        });
-
-        const rawText = response.text || "";
-        const jsonMatch = rawText.match(/\{[\s\S]*\}/);
-        if (jsonMatch) {
-          aiEvaluation = JSON.parse(jsonMatch[0]);
-        }
-      } catch (aiErr: any) {
-        console.warn("Gemini evaluation fallback:", aiErr?.message);
-      }
-    }
-
-    // High quality deterministic fallback if AI is not initialized or rate-limited
-    if (!aiEvaluation) {
-      const hasCodeOrNotes = Boolean(studentNotes && studentNotes.trim().length > 10);
-      const calculatedGrade = hasCodeOrNotes ? 95 : 90;
-      aiEvaluation = {
-        grade: calculatedGrade,
-        maxGrade: 100,
-        percentage: calculatedGrade,
-        rating: calculatedGrade >= 95 ? "مبدع ومتميز 🌟" : "أداء ممتاز ✨",
-        strengths: [
-          "إنجاز متقن للمطلوب ومراعاة الخطوات الأساسية في تطبيق الدرس",
-          "تنظيم واضح للحل وتسليم الواجب في موعده المحدد",
-          "مجهود تطبيقي عملي يعكس استيعاباً قوياً للمفاهيم التدريبية"
-        ],
-        corrections: [
-          "احرص على كتابة تعليقات توضيحية (Comments) داخل الكود لتوثيق الدوال والمتغيرات",
-          "جرب إضافة حالات اختبار إضافية لتغطية الحالات الشاذة (Edge Cases)"
-        ],
-        generalFeedback: `عمل رائع ومتقن يا بطل! أظهرت فهماً متميزاً لموضوع "${title}". استمر في هذا الشغف والتطبيق العملي المستمر لتكون دائماً في مقدمة لوحة الصدارة بالمركز! 🚀`,
-        pointsAwarded: 25
-      };
-    }
+    const existingTrainee = db.data.trainees.find(t => t.id === traineeId || t.code === traineeId);
+    const traineeCode = existingTrainee?.code || (typeof traineeId === 'string' && traineeId.length < 10 ? traineeId : "N-001");
+    const traineeFullName = existingTrainee?.fullName || "طالب النجاح";
+    const studentGrade = existingTrainee?.grade || (existingTrainee as any)?.schoolGrade || (existingTrainee as any)?.stage;
+    
+    // Evaluate via Google Gemini multimodal / curriculum-aligned grading engine
+    const pagesList = Array.isArray(pagesBase64) && pagesBase64.length > 0 ? pagesBase64 : (mediaBase64 ? [mediaBase64] : []);
+    const aiEvaluation = await gradeHomeworkOrExamFromImage({
+      imageBase64: mediaBase64,
+      imagesBase64: pagesList,
+      mimeType: "image/jpeg",
+      examOrHomeworkTitle: title,
+      lessonName: effectiveLesson,
+      studentNotes,
+      studentGrade,
+      courseName: existingTrainee?.courseName,
+      maxScore: 100,
+      expectedTrainees: [{ code: traineeCode, fullName: traineeFullName }]
+    });
 
     const submissionId = "sub_" + Date.now();
-    const existingTrainee = db.data.trainees.find(t => t.id === traineeId || t.code === traineeId);
-    const awardedPoints = Number(aiEvaluation.pointsAwarded) || 25;
+    const awardedPoints = Number(aiEvaluation.suggestedPoints || (aiEvaluation as any).pointsAwarded) || 25;
 
     let newTotalPoints = 125;
     if (existingTrainee) {
@@ -489,21 +556,32 @@ app.post("/api/student/submit-homework", async (req, res) => {
       db.data.pointTransactions.unshift(ptTransaction);
     }
 
+    const calculatedGrade = (aiEvaluation as any).score ?? (aiEvaluation as any).grade ?? 88;
+    const calculatedPercentage = (aiEvaluation as any).percentage ?? 88;
+
     const submission = {
       id: submissionId,
       traineeId: existingTrainee?.id || traineeId,
-      traineeCode: existingTrainee?.code || "م001",
-      traineeName: existingTrainee?.fullName || "طالب النجاح",
+      traineeCode: traineeCode,
+      traineeName: traineeFullName,
       taskTitle: title,
+      lessonName: effectiveLesson,
+      pageCount: pagesList.length || 1,
       mediaUrl: mediaBase64 ? (mediaBase64.startsWith("data:") ? mediaBase64 : `data:image/jpeg;base64,${mediaBase64}`) : undefined,
       mediaType: mediaType || "image",
       submittedAt: new Date().toISOString(),
-      grade: aiEvaluation.grade || 95,
-      maxGrade: aiEvaluation.maxGrade || 100,
-      percentage: aiEvaluation.percentage || 95,
+      grade: calculatedGrade,
+      maxGrade: (aiEvaluation as any).maxScore ?? (aiEvaluation as any).maxGrade ?? 100,
+      percentage: calculatedPercentage,
       rating: aiEvaluation.rating || "ممتاز 🌟",
       strengths: Array.isArray(aiEvaluation.strengths) ? aiEvaluation.strengths : ["إتقان الحل والمواظبة"],
-      corrections: Array.isArray(aiEvaluation.corrections) ? aiEvaluation.corrections : [],
+      corrections: Array.isArray(aiEvaluation.weaknesses) && aiEvaluation.weaknesses.length > 0 
+        ? aiEvaluation.weaknesses 
+        : (Array.isArray(aiEvaluation.mistakes) ? aiEvaluation.mistakes.filter((m: any) => !m.isCorrect).map((m: any) => `⚠️ ${m.questionSummary}: ${m.explanation}`) : []),
+      mistakes: Array.isArray(aiEvaluation.mistakes) ? aiEvaluation.mistakes : [],
+      difficultPointsExplained: Array.isArray(aiEvaluation.difficultPointsExplained) ? aiEvaluation.difficultPointsExplained : [],
+      lessonSummaryEvaluation: (aiEvaluation as any).lessonSummaryEvaluation,
+      badgeAwarded: (aiEvaluation as any).badgeAwarded,
       generalFeedback: aiEvaluation.generalFeedback || "مستوى ممتاز وجهد مشكور!",
       pointsAwarded: awardedPoints,
       isSpeedWinner: true,
@@ -1592,7 +1670,7 @@ app.post("/api/lecture-recaps/ai-structure-voice", async (req, res) => {
         parts.push({ text: prompt });
 
         const response = await aiClient.models.generateContent({
-          model: "gemini-2.5-flash",
+          model: "gemini-3.8-flash",
           contents: parts
         });
 
@@ -2151,7 +2229,7 @@ app.post("/api/ai/generate", async (req, res) => {
 
   try {
     let resultText = "";
-    const selectedModel = model || "gemini-2.5-flash";
+    const selectedModel = model || "gemini-3.8-flash";
 
     if (aiClient) {
       try {

@@ -6,13 +6,14 @@ import {
   X, Eye, BookOpen, User, Image as ImageIcon, MessageSquare, Star, Edit, Save,
   Plus, Sparkles, Clock, AlertTriangle, Download, Send, Mic, Play, Trash2,
   Award, TrendingUp, BarChart3, Filter, Code2, Link as LinkIcon, Paperclip, Check,
-  Share2, Printer, Upload, HelpCircle, Layers, Zap, Copy
+  Share2, Printer, Upload, HelpCircle, Layers, Zap, Copy, Camera
 } from 'lucide-react';
 import { useCenter } from '../context/CenterContext';
 import confetti from 'canvas-confetti';
 import { KahootGameModal } from '../components/homeworks/KahootGameModal';
 import { PrintAssignmentModal } from '../components/homeworks/PrintAssignmentModal';
 import { KahootStudio } from '../components/kahoot/KahootStudio';
+import { AIHomeworkScannerModal } from '../components/AIHomeworkScannerModal';
 import { getPublicBaseUrl } from '../utils/urlHelper';
 
 export const HomeworksView: React.FC = () => {
@@ -24,6 +25,7 @@ export const HomeworksView: React.FC = () => {
     trainees: ctxTrainees
   } = useCenter();
   const [activeTab, setActiveTab] = useState<'submissions' | 'create_task' | 'tasks_list' | 'analytics'>('tasks_list');
+  const [isScannerOpen, setIsScannerOpen] = useState(false);
 
   // Primary Data - Initialized from unified context for 0ms instant display
   const [homeworks, setHomeworks] = useState<HomeworkSubmission[]>([]);
@@ -559,6 +561,14 @@ export const HomeworksView: React.FC = () => {
 
         {/* Top Quick Actions */}
         <div className="flex items-center gap-2 flex-wrap">
+          <button
+            onClick={() => setIsScannerOpen(true)}
+            className="px-4 py-2.5 bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 hover:opacity-95 text-white text-xs font-bold rounded-2xl flex items-center gap-2 shadow-lg shadow-emerald-500/25 transition-all cursor-pointer animate-pulse"
+          >
+            <Camera className="w-4 h-4" />
+            <span>مصحح الواجبات والاختبارات بالذكاء الاصطناعي 📸</span>
+          </button>
+
           <button
             onClick={() => setIsLiveKahootStudioOpen(true)}
             className="px-4 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:opacity-95 text-white text-xs font-bold rounded-2xl flex items-center gap-2 shadow-lg shadow-purple-500/20 transition-all cursor-pointer"
@@ -1544,14 +1554,21 @@ export const HomeworksView: React.FC = () => {
                       </div>
                     </div>
 
-                    <div className="flex justify-between items-center">
-                      <div className="text-[11px] text-emerald-700 dark:text-emerald-400 font-bold bg-emerald-50 dark:bg-emerald-500/10 px-2 py-1 rounded-md flex items-center gap-1">
-                        <CheckCircle2 className="w-3.5 h-3.5" />
-                        <span>{hw.rating || 'تم التقييم'}</span>
+                    <div className="flex justify-between items-center gap-2 flex-wrap">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <div className="text-xs font-black font-mono bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 px-2.5 py-1 rounded-xl border border-emerald-500/30 flex items-center gap-1 shadow-xs">
+                          <span>الدرجة:</span>
+                          <span>{hw.grade !== undefined && hw.grade !== null ? hw.grade : (hw.score !== undefined ? hw.score : '-')} / {hw.maxGrade || 100}</span>
+                          {hw.percentage !== undefined && <span className="text-[10px] opacity-80">({hw.percentage}%)</span>}
+                        </div>
+                        <div className="text-[11px] text-indigo-700 dark:text-indigo-300 font-bold bg-indigo-50 dark:bg-indigo-500/10 px-2 py-1 rounded-md flex items-center gap-1 border border-indigo-200 dark:border-indigo-500/20">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-indigo-500" />
+                          <span>{hw.rating || 'تم التقييم'}</span>
+                        </div>
                       </div>
                       <button
                         onClick={() => setSelectedSubmission(hw)}
-                        className="text-xs bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 px-3 py-1.5 rounded-xl flex items-center gap-1.5 transition-colors font-bold cursor-pointer"
+                        className="text-xs bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 px-3 py-1.5 rounded-xl flex items-center gap-1.5 transition-colors font-bold cursor-pointer shrink-0"
                       >
                         <Eye className="w-3.5 h-3.5 text-amber-500 dark:text-amber-400" />
                         <span>عرض وتصحيح</span>

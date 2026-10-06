@@ -70,7 +70,7 @@ export const PublicHomeView: React.FC<PublicHomeViewProps> = ({ onNavigate }) =>
       return;
     }
     const selectedTypeLabel = issueTypes.find(t => t.id === issueType)?.label || issueType;
-    const centerPhone = settings?.phone || '01000000000';
+    const centerPhone = settings?.phone || '01001500686';
     const message = `السلام عليكم شؤون الطلاب بمركز النجاح للتدريب 🌸\nأرجو المساعدة في حل مشكلة الدخول للبوابة:\n👤 اسم الطالب: ${issueName}\n📱 رقم الهاتف: ${issuePhone}\n⚠️ نوع المشكلة: ${selectedTypeLabel}\n📝 تفاصيل إضافية: ${issueDetails || 'لا توجد'}`;
 
     const cleanPhone = centerPhone.replace(/[^0-9]/g, '');
@@ -113,8 +113,8 @@ export const PublicHomeView: React.FC<PublicHomeViewProps> = ({ onNavigate }) =>
           <div className="flex items-center gap-2.5 min-w-0">
             <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-white dark:bg-slate-950 p-1 border border-amber-500/40 shadow-xs flex items-center justify-center shrink-0">
               <img 
-                src="/logo.svg" 
-                alt="مركز النجاح" 
+                src="/logo.png" 
+                alt="مركز النجاح للتدريب والاستشارات" 
                 className="w-full h-full object-contain" 
               />
             </div>
