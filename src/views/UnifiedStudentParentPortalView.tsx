@@ -131,12 +131,11 @@ export const UnifiedStudentParentPortalView: React.FC<UnifiedStudentParentPortal
 
         if (res.ok && data.success && data.student) {
           localStorage.setItem('student_session_code', cleanInput);
-          localStorage.setItem('nagah_student_active_session', JSON.stringify({
-            student: data.student,
-            trainer: data.trainer,
-            group: data.group,
-            loginTimestamp: Date.now()
-          }));
+          if (password.trim()) {
+            localStorage.setItem('student_session_password', password.trim());
+          }
+          sessionStorage.setItem('nagah_student_tab_session', JSON.stringify(data));
+          localStorage.setItem('nagah_student_active_session', JSON.stringify(data));
           resilientOfflineService.saveToCache('student', data);
           setActivePortal('student');
         } else {
@@ -156,6 +155,8 @@ export const UnifiedStudentParentPortalView: React.FC<UnifiedStudentParentPortal
           if (password.trim()) {
             localStorage.setItem('parent_session_password', password.trim());
           }
+          sessionStorage.setItem('nagah_parent_tab_session', JSON.stringify(data));
+          localStorage.setItem('nagah_parent_cache', JSON.stringify(data));
           resilientOfflineService.saveToCache('parent', data);
           setActivePortal('parent');
         } else {

@@ -663,6 +663,24 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(paymentData)
     }),
+  quickPay: (data: { traineeId: string; targetMonth?: string; amount?: number; paymentMethod?: string; notes?: string }) =>
+    request<{ success: boolean; payment: Payment; trainee: Trainee }>('/finance/payments/quick-pay', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    }),
+  quickBatchPay: (data: { traineeIds: string[]; targetMonth?: string; paymentMethod?: string }) =>
+    request<{ success: boolean; count: number; payments: Payment[]; trainees: Trainee[] }>('/finance/payments/quick-batch-pay', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    }),
+  deletePayment: (paymentId: string) =>
+    request<{ success: boolean; message: string; deletedPaymentId: string; trainee?: Trainee }>(`/finance/payments/${paymentId}`, {
+      method: 'DELETE'
+    }),
+  migrateOctoberPayments: () =>
+    request<{ success: boolean; migratedPaymentsCount: number; migratedTraineesCount: number; message: string }>('/finance/payments/migrate-october-to-september', {
+      method: 'POST'
+    }),
 
   getExpenses: (params?: Record<string, string>) => {
     const query = new URLSearchParams(params || {}).toString();

@@ -371,3 +371,71 @@ export function getPaymentReceiptWhatsAppUrl(
   return `https://wa.me/${waNumber}?text=${encodeURIComponent(text)}`;
 }
 
+/**
+ * Extracts a normalized YYYY-MM key (e.g. "2026-09", "2026-10") from any ISO date or Arabic month text.
+ */
+export function parseYearMonthKey(val?: string | null): string | null {
+  if (!val) return null;
+  const str = String(val).trim();
+  const isoMatch = str.match(/^(\d{4})-(\d{2})/);
+  if (isoMatch) return `${isoMatch[1]}-${isoMatch[2]}`;
+
+  const monthMap: Record<string, string> = {
+    'يناير': '01', 'فبراير': '02', 'مارس': '03', 'أبريل': '04', 'ابريل': '04',
+    'مايو': '05', 'يونيو': '06', 'يوليو': '07', 'أغسطس': '08', 'اغسطس': '08',
+    'سبتمبر': '09', 'أكتوبر': '10', 'اكتوبر': '10', 'نوفمبر': '11', 'ديسمبر': '12'
+  };
+
+  const yearMatch = str.match(/202[4-9]/);
+  const year = yearMatch ? yearMatch[0] : '2026';
+
+  for (const [mName, mNum] of Object.entries(monthMap)) {
+    if (str.includes(mName)) {
+      return `${year}-${mNum}`;
+    }
+  }
+
+  const numMatch = str.match(/شهر\s*(\d{1,2})/);
+  if (numMatch) {
+    return `${year}-${numMatch[1].padStart(2, '0')}`;
+  }
+
+  return null;
+}
+
+/**
+ * Formats a YYYY-MM key (e.g. "2026-09") into a human-friendly Arabic month label.
+ */
+export function formatYearMonthName(key?: string | null): string {
+  if (!key) return '';
+  const [year, month] = key.split('-');
+  const names: Record<string, string> = {
+    '01': 'يناير', '02': 'فبراير', '03': 'مارس', '04': 'أبريل',
+    '05': 'مايو', '06': 'يونيو', '07': 'يوليو', '08': 'أغسطس',
+    '09': 'سبتمبر', '10': 'أكتوبر', '11': 'نوفمبر', '12': 'ديسمبر'
+  };
+  return `${names[month] || month} ${year || '2026'}`;
+}
+
+/**
+ * Returns the effective start month key (e.g. "2026-09" or "2026-10") when a trainee started their subscription.
+ */
+export function getTraineeStartMonthKey(trainee: any): string {
+  if (!trainee) return '2026-09';
+  const raw = trainee.subscriptionStartDate || trainee.startBillingMonth || trainee.registrationDate || trainee.createdAt;
+  const parsed = parseYearMonthKey(raw);
+  return parsed || '2026-09';
+}
+
+/**
+ * Determines whether a trainee was already enrolled and active during a given target month.
+ * If trainee joined in 2026-10, they are NOT enrolled in 2026-09, so no dues apply for September.
+ */
+export function isTraineeEnrolledInMonth(trainee: any, targetMonth: string): boolean {
+  if (!trainee || !targetMonth) return true;
+  const targetKey = parseYearMonthKey(targetMonth);
+  if (!targetKey) return true;
+  const startKey = getTraineeStartMonthKey(trainee);
+  return startKey <= targetKey;
+}
+

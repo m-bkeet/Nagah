@@ -389,6 +389,14 @@ export const PortalsQuickMenu: React.FC<PortalsQuickMenuProps> = ({ isOpen, onCl
         })}
       </div>
 
+      {/* DNS Troubleshooting Tip for Mobile Networks */}
+      <div className="px-3 py-2 bg-amber-500/10 border-t border-amber-500/20 text-[11px] text-amber-800 dark:text-amber-300 flex items-start gap-1.5 shrink-0">
+        <span className="shrink-0 text-xs">💡</span>
+        <div className="leading-relaxed">
+          <strong className="font-bold">حل خطأ DNS على باقات الموبايل (اتصالات / فودافون / وي):</strong> إذا ظهر خطأ <span className="font-mono text-[10px] bg-amber-500/20 px-1 py-0.5 rounded">DNS_PROBE</span>، فالحل هو الاتصال عبر <strong>Wi-Fi</strong> أو تفعيل <strong>Secure DNS</strong> من إعدادات Chrome بالموبايل.
+        </div>
+      </div>
+
       {/* Footer Actions */}
       <div className="p-2.5 bg-slate-50 dark:bg-slate-800/80 border-t border-slate-200 dark:border-slate-800 shrink-0 flex items-center justify-between gap-2">
         <button

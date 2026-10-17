@@ -25,7 +25,9 @@ const GRADE_OPTIONS = [
 import {
   getTraineePaymentStatusInfo,
   isPaymentReminderWindow,
-  isTraineeUnpaid
+  isTraineeUnpaid,
+  parseYearMonthKey,
+  formatYearMonthName
 } from '../utils/paymentUtils';
 import {
   Users,
@@ -721,6 +723,8 @@ export const TraineesView: React.FC = () => {
   const handleOpenAddModal = () => {
     setActiveTrainee(null);
     const initialBranch = activeBranchId && activeBranchId !== 'all' ? activeBranchId : (branches[0]?.id || '');
+    const todayStr = new Date().toISOString().split('T')[0];
+    const initialStartMonth = 'سبتمبر 2026';
     setFormData({
       fullName: '',
       code: '',
@@ -735,6 +739,9 @@ export const TraineesView: React.FC = () => {
       courseId: '',
       groupId: '',
       trainerId: '',
+      subscriptionStartDate: todayStr,
+      startBillingMonth: initialStartMonth,
+      registrationDate: todayStr,
       feeAmount: 0,
       discountAmount: 0,
       initialPayment: 0,
@@ -756,6 +763,8 @@ export const TraineesView: React.FC = () => {
       Boolean(t.exemptReason) || 
       /إعفاء|معفى|أبناء|منحة|مالك|إداري/i.test(note)
     );
+    const subStartDate = t.subscriptionStartDate || t.registrationDate || (t.createdAt ? t.createdAt.split('T')[0] : '2026-09-01');
+    const startMonth = t.startBillingMonth || formatYearMonthName(parseYearMonthKey(subStartDate)) || 'سبتمبر 2026';
     setFormData({
       fullName: t.fullName || '',
       code: t.code || '',
@@ -771,6 +780,9 @@ export const TraineesView: React.FC = () => {
       courseId: t.courseId || '',
       groupId: t.groupId || '',
       trainerId: t.trainerId || '',
+      subscriptionStartDate: subStartDate,
+      startBillingMonth: startMonth,
+      registrationDate: t.registrationDate || subStartDate,
       feeAmount: t.feeAmount || 0,
       discountAmount: t.discountAmount || (isExempt ? (t.feeAmount || 0) : 0),
       isExempt: isExempt,
@@ -809,8 +821,14 @@ export const TraineesView: React.FC = () => {
       const netAmt = (isSuspendedOrDropped || isUnassigned || isExempt) ? 0 : Math.max(0, feeAmt - discountAmt);
       const remainingAmt = (isSuspendedOrDropped || isUnassigned || isExempt) ? 0 : Math.max(0, netAmt - paidAmt);
 
+      const subStart = formData.subscriptionStartDate || formData.registrationDate || new Date().toISOString().split('T')[0];
+      const startMonth = formData.startBillingMonth || 'سبتمبر 2026';
+
       const payload = {
         ...formData,
+        subscriptionStartDate: subStart,
+        registrationDate: formData.registrationDate || subStart,
+        startBillingMonth: startMonth,
         netAmount: netAmt,
         paidAmount: paidAmt,
         remainingAmount: remainingAmt,
@@ -1165,6 +1183,38 @@ export const TraineesView: React.FC = () => {
       showToast(err.message || 'فشل تسجيل الدفعة', 'error');
     } finally {
       setIsSubmittingPayment(false);
+    }
+  };
+
+  // 🗑️ Delete/Cancel Trainee Payment (حذف وإلغاء سند السداد وإعادة ضبط حساب الطالب)
+  const handleDeleteTraineePayment = async (paymentId: string, receiptNumber: string, amount: number) => {
+    if (!window.confirm(`هل أنت متأكد من حذف وإلغاء سند السداد رقم (${receiptNumber || paymentId}) بمبلغ ${amount} ج.م؟\n\n⚠️ سيتم التراجع عن الدفعة وإعادة فتح استحقاق الطالب كغير مسدد فوراً.`)) {
+      return;
+    }
+    try {
+      const res = await api.deletePayment(paymentId);
+      if (res?.success) {
+        showToast('تم حذف سند السداد بنجاح وإعادة ضبط رصيد الطالب كغير مسدد 🗑️', 'success');
+        if (traineeProfileData) {
+          setTraineeProfileData({
+            ...traineeProfileData,
+            payments: (traineeProfileData.payments || []).filter((p: any) => p.id !== paymentId)
+          });
+        }
+        if (activeTrainee) {
+          const newPaid = Math.max(0, (activeTrainee.paidAmount || 0) - amount);
+          const fee = activeTrainee.isExempt ? 0 : (activeTrainee.netAmount || activeTrainee.feeAmount || 0);
+          const newRemaining = activeTrainee.isExempt ? 0 : Math.max(0, fee - newPaid);
+          setActiveTrainee({
+            ...activeTrainee,
+            paidAmount: newPaid,
+            remainingAmount: newRemaining
+          });
+        }
+        loadData();
+      }
+    } catch (err: any) {
+      showToast('تعذر حذف سند السداد: ' + (err.message || 'خطأ غير متوقع'), 'error');
     }
   };
 
@@ -1819,6 +1869,20 @@ export const TraineesView: React.FC = () => {
                         >
                           نسخ الرابط
                         </button>
+                        <button
+                          onClick={() => {
+                            let origin = window.location.origin;
+                            if (origin.includes('ais-dev-')) origin = origin.replace('ais-dev-', 'ais-pre-');
+                            const link = `${origin}/?view=student_portal`;
+                            const msg = encodeURIComponent(`🌟 *بوابة المتدرب الذكية - مركز النجاح للتدريب*\n\nرابط الدخول المباشر لمتابعة الواجبات والأنشطة والدرجات:\n🔗 ${link}`);
+                            window.open(`https://wa.me/?text=${msg}`, '_blank');
+                            setPortalsDropdownOpen(false);
+                          }}
+                          className="py-1 px-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-[10px] font-bold transition-all cursor-pointer"
+                          title="مشاركة عبر واتساب"
+                        >
+                          واتساب 💬
+                        </button>
                       </div>
                     </div>
 
@@ -1849,6 +1913,20 @@ export const TraineesView: React.FC = () => {
                           className="py-1 px-2 bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-300 rounded text-[10px] font-bold transition-all cursor-pointer"
                         >
                           نسخ الرابط
+                        </button>
+                        <button
+                          onClick={() => {
+                            let origin = window.location.origin;
+                            if (origin.includes('ais-dev-')) origin = origin.replace('ais-dev-', 'ais-pre-');
+                            const link = `${origin}/?view=parent_portal`;
+                            const msg = encodeURIComponent(`🌟 *بوابة ولي الأمر ومتابعة الأبناء - مركز النجاح للتدريب*\n\nرابط المتابعة المباشر لتقارير الحضور والدرجات والإيصالات:\n🔗 ${link}`);
+                            window.open(`https://wa.me/?text=${msg}`, '_blank');
+                            setPortalsDropdownOpen(false);
+                          }}
+                          className="py-1 px-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-[10px] font-bold transition-all cursor-pointer"
+                          title="مشاركة عبر واتساب"
+                        >
+                          واتساب 💬
                         </button>
                       </div>
                     </div>
@@ -2408,7 +2486,11 @@ export const TraineesView: React.FC = () => {
                         <p className="text-[11px] text-slate-600 dark:text-slate-400 font-medium truncate mt-0.5">
                           {course?.name || 'دورة تدريبية'} {group?.name ? `• ${group.name}` : ''}
                         </p>
-                        <p className="text-[10px] text-slate-500 dark:text-slate-500 font-mono">
+                        <div className="flex items-center gap-1 text-[10px] text-indigo-700 dark:text-indigo-400 font-bold mt-0.5">
+                          <Calendar className="w-3 h-3 shrink-0 text-indigo-500" />
+                          <span>بدء الاشتراك: {t.startBillingMonth || (t.subscriptionStartDate ? formatYearMonthName(parseYearMonthKey(t.subscriptionStartDate)) : 'سبتمبر 2026')}</span>
+                        </div>
+                        <p className="text-[10px] text-slate-500 dark:text-slate-500 font-mono mt-0.5">
                           {t.phone} {t.parentPhone ? `| و.أ: ${t.parentPhone}` : ''}
                         </p>
                       </div>
@@ -2733,6 +2815,10 @@ export const TraineesView: React.FC = () => {
                         <td className="p-3.5">
                           <div className="font-bold text-slate-900 dark:text-slate-100">{course?.name || 'دورة عامة'}</div>
                           <div className="text-[10px] text-slate-600 dark:text-slate-400 font-medium mt-0.5">{group?.name || 'مجموعة 1'}</div>
+                          <div className="text-[9px] text-indigo-700 dark:text-indigo-400 font-bold mt-0.5 flex items-center gap-1">
+                            <Calendar className="w-2.5 h-2.5" />
+                            <span>بدء: {t.startBillingMonth || (t.subscriptionStartDate ? formatYearMonthName(parseYearMonthKey(t.subscriptionStartDate)) : 'سبتمبر 2026')}</span>
+                          </div>
                         </td>
 
                         {/* Phone */}
@@ -3443,6 +3529,140 @@ export const TraineesView: React.FC = () => {
                 </div>
               </div>
 
+              {/* Row 4.5: Subscription Start & Billing Date (تاريخ الاشتراك وحساب المصروفات) */}
+              <div className="bg-gradient-to-r from-blue-50/80 via-indigo-50/60 to-purple-50/80 dark:from-slate-800/80 dark:via-indigo-950/30 dark:to-slate-800/80 p-3.5 rounded-2xl border-2 border-indigo-200 dark:border-indigo-500/40 space-y-2.5 shadow-xs">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-lg bg-indigo-600 text-white flex items-center justify-center font-bold shadow-xs">
+                      <Calendar className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <label className="block text-indigo-950 dark:text-indigo-200 font-black text-xs">
+                        📅 تاريخ بدء الاشتراك وحساب المصروفات (تاريخ الحضور والتسجيل) *
+                      </label>
+                      <span className="text-[10px] text-slate-500 dark:text-slate-400">
+                        يحدد هذا التاريخ الشهر الأكاديمي الذي تبدأ منه استحقاقات ومصروفات الطالب
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Quick Month Shortcuts */}
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="text-[10px] text-slate-500 dark:text-slate-400 font-bold">تحديد سريع:</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFormData({
+                          ...formData,
+                          subscriptionStartDate: '2026-09-01',
+                          registrationDate: '2026-09-01',
+                          startBillingMonth: 'سبتمبر 2026'
+                        });
+                      }}
+                      className={`px-2.5 py-1 rounded-lg text-[10px] font-black border transition-all cursor-pointer ${
+                        (formData.subscriptionStartDate?.startsWith('2026-09') || formData.startBillingMonth?.includes('سبتمبر'))
+                          ? 'bg-indigo-600 text-white border-indigo-700 shadow-xs'
+                          : 'bg-white dark:bg-slate-800 text-indigo-900 dark:text-indigo-300 border-indigo-200 hover:bg-indigo-50'
+                      }`}
+                    >
+                      ✨ سبتمبر 2026 (شهر 9)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFormData({
+                          ...formData,
+                          subscriptionStartDate: '2026-10-01',
+                          registrationDate: '2026-10-01',
+                          startBillingMonth: 'أكتوبر 2026'
+                        });
+                      }}
+                      className={`px-2.5 py-1 rounded-lg text-[10px] font-black border transition-all cursor-pointer ${
+                        (formData.subscriptionStartDate?.startsWith('2026-10') || formData.startBillingMonth?.includes('أكتوبر'))
+                          ? 'bg-indigo-600 text-white border-indigo-700 shadow-xs'
+                          : 'bg-white dark:bg-slate-800 text-indigo-900 dark:text-indigo-300 border-indigo-200 hover:bg-indigo-50'
+                      }`}
+                    >
+                      ✨ أكتوبر 2026 (شهر 10)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFormData({
+                          ...formData,
+                          subscriptionStartDate: '2026-11-01',
+                          registrationDate: '2026-11-01',
+                          startBillingMonth: 'نوفمبر 2026'
+                        });
+                      }}
+                      className={`px-2.5 py-1 rounded-lg text-[10px] font-black border transition-all cursor-pointer ${
+                        (formData.subscriptionStartDate?.startsWith('2026-11') || formData.startBillingMonth?.includes('نوفمبر'))
+                          ? 'bg-indigo-600 text-white border-indigo-700 shadow-xs'
+                          : 'bg-white dark:bg-slate-800 text-indigo-900 dark:text-indigo-300 border-indigo-200 hover:bg-indigo-50'
+                      }`}
+                    >
+                      ✨ نوفمبر 2026 (شهر 11)
+                    </button>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+                  <div>
+                    <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1 text-[11px]">
+                      تاريخ الاشتراك / بدء الحضور الفعلي
+                    </label>
+                    <input
+                      type="date"
+                      value={formData.subscriptionStartDate || formData.registrationDate || new Date().toISOString().split('T')[0]}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        const monthName = formatYearMonthName(parseYearMonthKey(val));
+                        setFormData({
+                          ...formData,
+                          subscriptionStartDate: val,
+                          registrationDate: val,
+                          startBillingMonth: monthName
+                        });
+                      }}
+                      className="w-full bg-white dark:bg-slate-800 border border-indigo-300 dark:border-indigo-500/40 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 font-mono font-bold text-xs focus:outline-none focus:border-indigo-500 shadow-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1 text-[11px]">
+                      شهر بدء استحقاق المصروفات
+                    </label>
+                    <select
+                      value={formData.startBillingMonth || formatYearMonthName(parseYearMonthKey(formData.subscriptionStartDate)) || 'أكتوبر 2026'}
+                      onChange={(e) => {
+                        const mName = e.target.value;
+                        const mKey = parseYearMonthKey(mName) || '2026-10';
+                        const newDate = `${mKey}-01`;
+                        setFormData({
+                          ...formData,
+                          startBillingMonth: mName,
+                          subscriptionStartDate: newDate,
+                          registrationDate: newDate
+                        });
+                      }}
+                      className="w-full bg-white dark:bg-slate-800 border border-indigo-300 dark:border-indigo-500/40 rounded-xl px-3 py-2 text-indigo-950 dark:text-indigo-200 font-bold text-xs focus:outline-none focus:border-indigo-500 shadow-xs"
+                    >
+                      <option value="سبتمبر 2026">📅 سبتمبر 2026 (شهر 9)</option>
+                      <option value="أكتوبر 2026">📅 أكتوبر 2026 (شهر 10)</option>
+                      <option value="نوفمبر 2026">📅 نوفمبر 2026 (شهر 11)</option>
+                      <option value="ديسمبر 2026">📅 ديسمبر 2026 (شهر 12)</option>
+                      <option value="يناير 2027">📅 يناير 2027 (شهر 1)</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="p-2 rounded-xl bg-indigo-50/80 dark:bg-indigo-950/40 border border-indigo-100 dark:border-indigo-900/50 text-[10px] text-indigo-900 dark:text-indigo-300 flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400 shrink-0" />
+                  <span>
+                    💡 <strong>تنبيه ذكي:</strong> إذا بدأ الطالب في شهر أكتوبر، فلن تظهر عليه أي مستحقات لشهر سبتمبر في الكشوفات أو الكوكبيت، ويبدأ حسابه من أكتوبر.
+                  </span>
+                </div>
+              </div>
+
               {/* Row 5: Financials (Fee, Discount, Initial Payment) */}
               <div className="bg-amber-50 dark:bg-amber-500/10 p-3 rounded-xl border border-amber-200 dark:border-amber-500/30 space-y-3">
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
@@ -3963,6 +4183,140 @@ export const TraineesView: React.FC = () => {
                       </option>
                     ))}
                   </select>
+                </div>
+              </div>
+
+              {/* Row 4.5: Subscription Start & Billing Date (تعديل تاريخ الاشتراك وحساب المصروفات) */}
+              <div className="bg-gradient-to-r from-blue-50/80 via-indigo-50/60 to-purple-50/80 dark:from-slate-800/80 dark:via-indigo-950/30 dark:to-slate-800/80 p-3.5 rounded-2xl border-2 border-indigo-200 dark:border-indigo-500/40 space-y-2.5 shadow-xs">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-lg bg-indigo-600 text-white flex items-center justify-center font-bold shadow-xs">
+                      <Calendar className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <label className="block text-indigo-950 dark:text-indigo-200 font-black text-xs">
+                        📅 تاريخ بدء الاشتراك وحساب المصروفات (تاريخ الحضور والتسجيل) *
+                      </label>
+                      <span className="text-[10px] text-slate-500 dark:text-slate-400">
+                        يحدد هذا التاريخ الشهر الأكاديمي الذي تبدأ منه استحقاقات ومصروفات الطالب
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Quick Month Shortcuts */}
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="text-[10px] text-slate-500 dark:text-slate-400 font-bold">تحديد سريع:</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFormData({
+                          ...formData,
+                          subscriptionStartDate: '2026-09-01',
+                          registrationDate: '2026-09-01',
+                          startBillingMonth: 'سبتمبر 2026'
+                        });
+                      }}
+                      className={`px-2.5 py-1 rounded-lg text-[10px] font-black border transition-all cursor-pointer ${
+                        (formData.subscriptionStartDate?.startsWith('2026-09') || formData.startBillingMonth?.includes('سبتمبر'))
+                          ? 'bg-indigo-600 text-white border-indigo-700 shadow-xs'
+                          : 'bg-white dark:bg-slate-800 text-indigo-900 dark:text-indigo-300 border-indigo-200 hover:bg-indigo-50'
+                      }`}
+                    >
+                      ✨ سبتمبر 2026 (شهر 9)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFormData({
+                          ...formData,
+                          subscriptionStartDate: '2026-10-01',
+                          registrationDate: '2026-10-01',
+                          startBillingMonth: 'أكتوبر 2026'
+                        });
+                      }}
+                      className={`px-2.5 py-1 rounded-lg text-[10px] font-black border transition-all cursor-pointer ${
+                        (formData.subscriptionStartDate?.startsWith('2026-10') || formData.startBillingMonth?.includes('أكتوبر'))
+                          ? 'bg-indigo-600 text-white border-indigo-700 shadow-xs'
+                          : 'bg-white dark:bg-slate-800 text-indigo-900 dark:text-indigo-300 border-indigo-200 hover:bg-indigo-50'
+                      }`}
+                    >
+                      ✨ أكتوبر 2026 (شهر 10)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFormData({
+                          ...formData,
+                          subscriptionStartDate: '2026-11-01',
+                          registrationDate: '2026-11-01',
+                          startBillingMonth: 'نوفمبر 2026'
+                        });
+                      }}
+                      className={`px-2.5 py-1 rounded-lg text-[10px] font-black border transition-all cursor-pointer ${
+                        (formData.subscriptionStartDate?.startsWith('2026-11') || formData.startBillingMonth?.includes('نوفمبر'))
+                          ? 'bg-indigo-600 text-white border-indigo-700 shadow-xs'
+                          : 'bg-white dark:bg-slate-800 text-indigo-900 dark:text-indigo-300 border-indigo-200 hover:bg-indigo-50'
+                      }`}
+                    >
+                      ✨ نوفمبر 2026 (شهر 11)
+                    </button>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+                  <div>
+                    <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1 text-[11px]">
+                      تاريخ الاشتراك / بدء الحضور الفعلي
+                    </label>
+                    <input
+                      type="date"
+                      value={formData.subscriptionStartDate || formData.registrationDate || '2026-09-01'}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        const monthName = formatYearMonthName(parseYearMonthKey(val));
+                        setFormData({
+                          ...formData,
+                          subscriptionStartDate: val,
+                          registrationDate: val,
+                          startBillingMonth: monthName
+                        });
+                      }}
+                      className="w-full bg-white dark:bg-slate-800 border border-indigo-300 dark:border-indigo-500/40 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 font-mono font-bold text-xs focus:outline-none focus:border-indigo-500 shadow-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1 text-[11px]">
+                      شهر بدء استحقاق المصروفات
+                    </label>
+                    <select
+                      value={formData.startBillingMonth || formatYearMonthName(parseYearMonthKey(formData.subscriptionStartDate)) || 'سبتمبر 2026'}
+                      onChange={(e) => {
+                        const mName = e.target.value;
+                        const mKey = parseYearMonthKey(mName) || '2026-09';
+                        const newDate = `${mKey}-01`;
+                        setFormData({
+                          ...formData,
+                          startBillingMonth: mName,
+                          subscriptionStartDate: newDate,
+                          registrationDate: newDate
+                        });
+                      }}
+                      className="w-full bg-white dark:bg-slate-800 border border-indigo-300 dark:border-indigo-500/40 rounded-xl px-3 py-2 text-indigo-950 dark:text-indigo-200 font-bold text-xs focus:outline-none focus:border-indigo-500 shadow-xs"
+                    >
+                      <option value="سبتمبر 2026">📅 سبتمبر 2026 (شهر 9)</option>
+                      <option value="أكتوبر 2026">📅 أكتوبر 2026 (شهر 10)</option>
+                      <option value="نوفمبر 2026">📅 نوفمبر 2026 (شهر 11)</option>
+                      <option value="ديسمبر 2026">📅 ديسمبر 2026 (شهر 12)</option>
+                      <option value="يناير 2027">📅 يناير 2027 (شهر 1)</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="p-2 rounded-xl bg-indigo-50/80 dark:bg-indigo-950/40 border border-indigo-100 dark:border-indigo-900/50 text-[10px] text-indigo-900 dark:text-indigo-300 flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400 shrink-0" />
+                  <span>
+                    💡 <strong>تنبيه ذكي:</strong> تحديد الشهر هنا يعفي الطالب تلقائياً من أي شهور سابقة لتاريخ التحاقه (مثال: إذا بدأ الطالب في شهر 10 فلن يُطالب بمصروفات شهر 9).
+                  </span>
                 </div>
               </div>
 
@@ -4560,8 +4914,17 @@ export const TraineesView: React.FC = () => {
                             <span className="text-slate-500 dark:text-slate-400 text-xs">طريقة: {p.paymentMethod}</span>
                             {p.notes && <span className="text-slate-400 dark:text-slate-500 text-xs italic">({p.notes})</span>}
                           </div>
-                          <div className="font-mono font-black text-emerald-600 dark:text-emerald-400 text-sm">
-                            {p.amount} ج.م
+                          <div className="flex items-center gap-2">
+                            <div className="font-mono font-black text-emerald-600 dark:text-emerald-400 text-sm">
+                              {p.amount} ج.م
+                            </div>
+                            <button
+                              onClick={() => handleDeleteTraineePayment(p.id, p.receiptNumber, Number(p.amount) || 0)}
+                              className="p-1.5 hover:bg-rose-100 dark:hover:bg-rose-950/70 text-rose-600 dark:text-rose-400 rounded-lg transition-colors cursor-pointer"
+                              title="حذف هذا السند وإلغاء الدفعة وإعادة فتح استحقاق الطالب"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
                           </div>
                         </div>
                       ))}

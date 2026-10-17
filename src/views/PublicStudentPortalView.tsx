@@ -148,23 +148,37 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
   const getInitialStudentSession = () => {
     try {
       if (typeof window === 'undefined') return null;
-      // Only restore session if explicitly requested via session storage or active URL code
       const urlParams = new URLSearchParams(window.location.search);
       const urlCode = urlParams.get('code') || urlParams.get('studentCode') || urlParams.get('c');
-      if (urlCode) {
-        const activeStr = localStorage.getItem('nagah_student_active_session');
-        if (activeStr) {
-          const parsed = JSON.parse(activeStr);
-          if (parsed && parsed.student && (parsed.student.code === urlCode || parsed.student.id === urlCode)) {
+
+      // 1. Check tab session storage (current tab)
+      const tabSession = sessionStorage.getItem('nagah_student_tab_session');
+      if (tabSession) {
+        const parsed = JSON.parse(tabSession);
+        if (parsed && parsed.student) {
+          if (!urlCode || parsed.student.code === urlCode || parsed.student.id === urlCode) {
             return parsed;
           }
         }
       }
-      // Check session storage (current tab only)
-      const tabSession = sessionStorage.getItem('nagah_student_tab_session');
-      if (tabSession) {
-        const parsed = JSON.parse(tabSession);
-        if (parsed && parsed.student) return parsed;
+
+      // 2. Check localStorage persistent active session (if matching urlCode or no explicit urlCode specified)
+      const activeStr = localStorage.getItem('nagah_student_active_session');
+      if (activeStr) {
+        const parsed = JSON.parse(activeStr);
+        if (parsed && parsed.student) {
+          if (!urlCode || parsed.student.code === urlCode || parsed.student.id === urlCode) {
+            return parsed;
+          }
+        }
+      }
+
+      // 3. Check resilient offline cache
+      const cached = resilientOfflineService.getFromCache('student');
+      if (cached && cached.student) {
+        if (!urlCode || cached.student.code === urlCode || cached.student.id === urlCode) {
+          return cached;
+        }
       }
     } catch (e) {
       console.warn('Initial session parse error:', e);
@@ -345,9 +359,11 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
         setStudentCodeInput(urlCode);
       }
 
-      // Only perform auto-login if URL code exists or tab session is explicitly active
+      // Only perform auto-login if URL code exists, or active session/credentials are saved
+      const savedCode = urlCode || localStorage.getItem('student_session_code');
       const tabSessionStr = typeof window !== 'undefined' ? sessionStorage.getItem('nagah_student_tab_session') : null;
-      if (!urlCode && !tabSessionStr) {
+      const activeSessionStr = typeof window !== 'undefined' ? localStorage.getItem('nagah_student_active_session') : null;
+      if (!urlCode && !tabSessionStr && !activeSessionStr && !savedCode) {
         // Stay on login page cleanly with empty code input
         return;
       }
@@ -375,14 +391,14 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
       }
 
       // 2. Perform background revalidation if online
-      const savedCode = urlCode || (tabSessionStr ? JSON.parse(tabSessionStr)?.student?.code : null);
+      const targetCode = urlCode || (tabSessionStr ? JSON.parse(tabSessionStr)?.student?.code : null) || (activeSessionStr ? JSON.parse(activeSessionStr)?.student?.code : null) || savedCode;
       const savedPassword = localStorage.getItem('student_session_password') || '';
-      if (savedCode && typeof navigator !== 'undefined' && navigator.onLine) {
+      if (targetCode && typeof navigator !== 'undefined' && navigator.onLine) {
         try {
           const data = await request<any>('/student/login', {
             method: 'POST',
             body: JSON.stringify({ 
-              codeOrPhone: savedCode,
+              codeOrPhone: targetCode,
               password: savedPassword
             })
           });
@@ -1629,10 +1645,37 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
               </button>
             </form>
 
-            <div className="pt-4 border-t border-slate-200 dark:border-slate-800 text-center">
-              <span className="text-[11px] text-slate-500">
-                مركز النجاح للتدريب - بوابة التعلم والواجبات المنزلية التفاعلية
-              </span>
+            {/* Quick Portal Switcher & Support Links */}
+            <div className="pt-3 border-t border-slate-200 dark:border-slate-800 space-y-2">
+              <a
+                href="/?view=parent_portal"
+                className="w-full py-2.5 px-3 rounded-xl bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/40 dark:hover:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 font-bold text-xs flex items-center justify-between transition-colors border border-indigo-200/60 dark:border-indigo-800/60"
+              >
+                <span>👨‍👩‍👧‍👦 أنا ولي أمر — الانتقال لبوابة ولي الأمر</span>
+                <ArrowRight className="w-3.5 h-3.5 rotate-180" />
+              </a>
+
+              <div className="flex items-center justify-between text-[11px] pt-1 text-slate-500">
+                <a
+                  href="/?view=register"
+                  className="text-amber-600 dark:text-amber-400 font-bold hover:underline"
+                >
+                  📝 تسجيل طالب جديد بالمركز
+                </a>
+                <a
+                  href="https://wa.me/201001500686"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-emerald-600 dark:text-emerald-400 font-bold hover:underline flex items-center gap-1"
+                >
+                  <Phone className="w-3 h-3" />
+                  <span>دعم واتساب</span>
+                </a>
+              </div>
+
+              <div className="pt-2 text-center text-[10px] text-slate-400">
+                مركز النجاح للتدريب — بوابة التعلم والواجبات المنزلية التفاعلية
+              </div>
             </div>
           </div>
         ) : (
@@ -3065,6 +3108,11 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
                           </div>
 
                           <div className="flex items-center gap-2">
+                            {hw.stars ? (
+                              <span className="bg-amber-500/10 text-amber-700 dark:text-amber-300 font-bold text-xs px-2.5 py-1 rounded-xl border border-amber-500/30 flex items-center gap-0.5">
+                                {'⭐'.repeat(Math.min(5, Math.max(1, hw.stars)))}
+                              </span>
+                            ) : null}
                             <span className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 font-mono font-bold text-xs px-2.5 py-1 rounded-xl border border-emerald-500/30">
                               {hw.grade} / {hw.maxGrade} ({hw.percentage}%)
                             </span>

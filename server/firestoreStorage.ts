@@ -46,7 +46,7 @@ function getDb(): Firestore | null {
 const collectionHashes = new Map<string, string>();
 let isQuotaExceeded = false;
 let quotaExceededNoticeTime = 0;
-const QUOTA_BACKOFF_MS = 5 * 60 * 1000; // 5 minutes circuit breaker backoff when Google Cloud daily quota is reached
+const QUOTA_BACKOFF_MS = 24 * 60 * 60 * 1000; // 24 Hours circuit breaker backoff when Google Cloud daily write quota is reached
 
 // In-memory Firestore Quota Tracking metrics
 let readsCountToday = 0;
@@ -154,8 +154,15 @@ function sanitizeForFirestore(collectionName: string, items: any): any {
       // Purge heavy base64 file payloads from Firestore
       delete sanitized.imageBase64;
       delete sanitized.fileData;
-      if (sanitized.attachmentUrl && (sanitized.attachmentUrl.startsWith('data:image') || sanitized.attachmentUrl.startsWith('data:'))) {
+      delete sanitized.audioBase64;
+      if (typeof sanitized.attachmentUrl === 'string' && sanitized.attachmentUrl.startsWith('data:')) {
         delete sanitized.attachmentUrl;
+      }
+      if (typeof sanitized.mediaUrl === 'string' && sanitized.mediaUrl.startsWith('data:')) {
+        delete sanitized.mediaUrl;
+      }
+      if (Array.isArray(sanitized.pagesUrls)) {
+        sanitized.pagesUrls = sanitized.pagesUrls.filter((p: any) => typeof p === 'string' && !p.startsWith('data:'));
       }
       return sanitized;
     });
@@ -249,7 +256,8 @@ export async function saveCollectionToFirestore(collectionName: string, rawItems
     if (errMsg.includes('RESOURCE_EXHAUSTED') || errMsg.includes('Quota limit exceeded')) {
       isQuotaExceeded = true;
       quotaExceededNoticeTime = now;
-      console.warn(`[FirestoreStorage] Cloud Firestore Quota reached. Backing off for 30s.`);
+      console.warn(`[FirestoreStorage] Cloud Firestore daily write quota reached. Backing off for 24h. Local JSON storage active & durable.`);
+      return true; // Transparent fallback to local database
     } else {
       console.warn(`[FirestoreStorage] Note for ${collectionName}:`, errMsg);
     }

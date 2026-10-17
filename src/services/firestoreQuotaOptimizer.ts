@@ -16,6 +16,7 @@ import {
   updateDoc, 
   increment,
   onSnapshot,
+  disableNetwork,
   Unsubscribe,
   DocumentData,
   QueryConstraint
@@ -42,6 +43,43 @@ class FirestoreQuotaOptimizer {
   private inMemoryCache: Map<string, CacheEntry<any>> = new Map();
   private DEFAULT_TTL_MS = 60 * 60 * 1000; // 1 Hour for static reference data
   private debouncedTimers: Map<string, NodeJS.Timeout> = new Map();
+  private quotaExceeded = false;
+
+  constructor() {
+    if (typeof window !== 'undefined') {
+      window.addEventListener('unhandledrejection', (event) => {
+        const msg = event.reason?.message || String(event.reason);
+        if (msg.includes('RESOURCE_EXHAUSTED') || msg.includes('Quota limit exceeded') || event.reason?.code === 'resource-exhausted') {
+          event.preventDefault();
+          this.checkQuotaError(event.reason);
+        }
+      });
+      window.addEventListener('error', (event) => {
+        const msg = event.message || String(event.error);
+        if (msg.includes('RESOURCE_EXHAUSTED') || msg.includes('Quota limit exceeded')) {
+          event.preventDefault();
+          this.checkQuotaError(event.error);
+        }
+      });
+    }
+  }
+
+  public isQuotaExceeded(): boolean {
+    return this.quotaExceeded;
+  }
+
+  private checkQuotaError(err: any): boolean {
+    const msg = err?.message || String(err);
+    if (msg.includes('RESOURCE_EXHAUSTED') || msg.includes('Quota limit exceeded') || err?.code === 'resource-exhausted') {
+      if (!this.quotaExceeded) {
+        this.quotaExceeded = true;
+        console.warn('[QuotaOptimizer] Firestore daily free quota reached. Disabling network and switching seamlessly to local Express backend.');
+        disableNetwork(db).catch(() => {});
+      }
+      return true;
+    }
+    return false;
+  }
 
   /**
    * --------------------------------------------------------------------------
@@ -220,12 +258,15 @@ class FirestoreQuotaOptimizer {
 
   /** Increment or decrement an aggregated counter doc in 1 write */
   async updateAggregatedStat(field: string, delta: number, statsDocId: string = 'center_summary'): Promise<void> {
+    if (this.quotaExceeded) return;
     const statsRef = doc(db, 'stats', statsDocId);
     try {
       await setDoc(statsRef, { [field]: increment(delta) }, { merge: true });
       console.log(`[QuotaOptimizer] Updated aggregated stat '${field}' by ${delta}`);
     } catch (e) {
-      console.warn(`[QuotaOptimizer] Failed to update stat counter:`, e);
+      if (!this.checkQuotaError(e)) {
+        console.warn(`[QuotaOptimizer] Failed to update stat counter:`, e);
+      }
     }
   }
 
@@ -242,7 +283,7 @@ class FirestoreQuotaOptimizer {
       data?: DocumentData;
     }[]
   ): Promise<{ success: boolean; count: number }> {
-    if (operations.length === 0) return { success: true, count: 0 };
+    if (this.quotaExceeded || operations.length === 0) return { success: true, count: 0 };
 
     const batch = writeBatch(db);
     let count = 0;
@@ -264,6 +305,7 @@ class FirestoreQuotaOptimizer {
       console.log(`[QuotaOptimizer] Successfully executed Batch Write for ${count} documents in single transaction.`);
       return { success: true, count };
     } catch (err) {
+      this.checkQuotaError(err);
       console.error('[QuotaOptimizer] Batch Write failed:', err);
       return { success: false, count: 0 };
     }
@@ -280,18 +322,22 @@ class FirestoreQuotaOptimizer {
     data: DocumentData, 
     delayMs: number = 2000
   ): void {
+    if (this.quotaExceeded) return;
     const key = `${collectionName}_${docId}`;
     if (this.debouncedTimers.has(key)) {
       clearTimeout(this.debouncedTimers.get(key));
     }
 
     const timer = setTimeout(async () => {
+      if (this.quotaExceeded) return;
       try {
         const docRef = doc(db, collectionName, docId);
         await setDoc(docRef, data, { merge: true });
         console.log(`[QuotaOptimizer] Debounced write executed for '${key}'`);
       } catch (e) {
-        console.warn(`[QuotaOptimizer] Debounced write error for '${key}':`, e);
+        if (!this.checkQuotaError(e)) {
+          console.warn(`[QuotaOptimizer] Debounced write error for '${key}':`, e);
+        }
       } finally {
         this.debouncedTimers.delete(key);
       }
@@ -321,7 +367,11 @@ class FirestoreQuotaOptimizer {
       const items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }) as T);
       callback(items);
     }, (error) => {
-      console.warn(`[QuotaOptimizer] Snapshot error on '${collectionName}':`, error);
+      if (error?.message?.includes('RESOURCE_EXHAUSTED') || (error as any)?.code === 'resource-exhausted') {
+        console.warn(`[QuotaOptimizer] Firestore daily free quota reached for '${collectionName}'. Client seamlessly operating on local memory & storage.`);
+      } else {
+        console.warn(`[QuotaOptimizer] Snapshot error on '${collectionName}':`, error);
+      }
     });
   }
 }

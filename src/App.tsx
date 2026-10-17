@@ -33,12 +33,15 @@ const lazyWithRetry = <T extends React.ComponentType<any>>(
       sessionStorage.removeItem('retry_lazy_refresh');
       return component;
     } catch (error) {
-      console.warn('[LazyRetry] Dynamic module fetch failed. Retrying with fresh reload...', error);
+      console.warn('[LazyRetry] Dynamic module fetch failed. Reloading fresh assets...', error);
       if (!pageHasBeenRefreshed) {
         sessionStorage.setItem('retry_lazy_refresh', 'true');
         window.location.reload();
+        return new Promise<{ default: T }>(() => {});
       }
-      throw error;
+      sessionStorage.removeItem('retry_lazy_refresh');
+      window.location.reload();
+      return new Promise<{ default: T }>(() => {});
     }
   });
 
@@ -117,7 +120,7 @@ const AppContent: React.FC = () => {
       const saved = localStorage.getItem('sidebar_collapsed');
       if (saved !== null) return saved === 'true';
     }
-    return true; // Collapsed by default as requested
+    return false; // Open menu by default ("يفتح بمانيو")
   });
 
   useEffect(() => {
@@ -194,10 +197,20 @@ const AppContent: React.FC = () => {
     if (searchParams.get('trainer_register') === 'true' || searchParams.get('role') === 'trainer_registration' || searchParams.get('register_trainer') === 'true') {
       return { tab: 'register-trainer', taskId };
     }
-    if (searchParams.get('role') === 'admin' || searchParams.get('login') === 'true') {
+    if (searchParams.get('role') === 'admin' || searchParams.get('login') === 'true' || searchParams.get('signin') === 'true') {
       return { tab: 'login', taskId };
     }
     if (searchParams.get('projector') === 'true') return { tab: 'dashboard', taskId };
+
+    // If no specific view or admin path is specified on the public URL, default unauthenticated users to public home portal hub
+    if (!view && (!pathname || pathname === '')) {
+      const hasAdminToken = typeof window !== 'undefined' 
+        ? Boolean(sessionStorage.getItem('success_v7_token') || localStorage.getItem('success_v7_token'))
+        : false;
+      if (!hasAdminToken) {
+        return { tab: 'public_home', taskId };
+      }
+    }
 
     return { tab: 'dashboard', taskId };
   };
@@ -257,9 +270,11 @@ const AppContent: React.FC = () => {
       case 'student':
       case 'student-portal':
       case 'student_portal':
+        return <PublicStudentPortalView directTaskId={directTaskId} onBack={() => setActiveTab('public_home')} />;
       case 'parent':
       case 'parent-portal':
       case 'parent_portal':
+        return <PublicParentPortalView onBack={() => setActiveTab('public_home')} />;
       case 'portal':
       case 'family':
         return <UnifiedStudentParentPortalView directTaskId={directTaskId} onBack={() => setActiveTab('public_home')} />;

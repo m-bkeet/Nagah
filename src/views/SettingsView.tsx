@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import * as XLSX from 'xlsx';
 import { useCenter } from '../context/CenterContext';
 import { ElectronicPaymentWidget } from '../components/ElectronicPaymentWidget';
-import { getPublicParentPortalUrl } from '../utils/urlHelper';
+import { getPublicParentPortalUrl, getPublicStudentPortalUrl } from '../utils/urlHelper';
 import { useAuth } from '../context/AuthContext';
 import { ALL_PERMISSIONS } from '../utils/permissions';
 import { api } from '../services/api';
@@ -895,47 +895,97 @@ export const SettingsView: React.FC = () => {
 
             {activeAccordion === 'parent_portal' && (
               <div className="bg-white dark:bg-slate-900 border border-purple-200 dark:border-indigo-500/40 rounded-b-2xl p-5 shadow-sm space-y-4">
-                <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
-                  <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100 flex items-center gap-2">
-                    <span className="text-xl">📱</span>
-                    رابط وتطبيق بوابة ولي الأمر (Mobile Web App)
-                  </h3>
-                  <span className="text-[11px] bg-purple-100 dark:bg-indigo-500/20 text-purple-800 dark:text-indigo-300 px-3 py-1 rounded-full border border-purple-200 dark:border-indigo-500/30 font-bold">
-                    مخصص لأولياء الأمور
-                  </span>
+                {/* 1. Student Portal Card */}
+                <div className="pb-4 border-b border-slate-100 dark:border-slate-800 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                      <span className="text-xl">🎓</span>
+                      رابط وتطبيق بوابة المتدرب والطالب (Mobile Web App)
+                    </h3>
+                    <span className="text-[11px] bg-amber-100 dark:bg-amber-500/20 text-amber-800 dark:text-amber-300 px-3 py-1 rounded-full border border-amber-200 dark:border-amber-500/30 font-bold">
+                      مخصص للطلاب والمتدربين
+                    </span>
+                  </div>
+
+                  <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+                    شارك هذا الرابط مع الطلاب والمتدربين للوصول المباشر للواجبات الإلكترونية، تسليم المهمات، الكارنيه الرقمي، ونقاط التفوق دون الحاجة لحساب مسؤول.
+                  </p>
+
+                  <div className="flex flex-col md:flex-row items-center gap-3">
+                    <input
+                      type="text"
+                      readOnly
+                      value={getPublicStudentPortalUrl()}
+                      className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5 text-xs text-amber-800 dark:text-amber-300 font-mono select-all text-right"
+                    />
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const url = getPublicStudentPortalUrl();
+                          navigator.clipboard.writeText(url);
+                          showToast('تم نسخ رابط بوابة الطالب بنجاح! 📋', 'success');
+                        }}
+                        className="px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs shadow transition-all flex items-center gap-1.5"
+                      >
+                        <span>نسخ الرابط 📋</span>
+                      </button>
+                      <a
+                        href="/?view=student_portal"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="px-4 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 font-bold text-xs shadow-sm transition-all flex items-center gap-1.5"
+                      >
+                        <span>فتح البوابة ↗</span>
+                      </a>
+                    </div>
+                  </div>
                 </div>
 
-                <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
-                  يمكنك مشاركة هذا الرابط مع أولياء الأمور عبر الواتساب أو طباعته كرمز استجابة سريع (QR Code) ليتسنى لهم متابعة حضور الأبناء، ساعات الدخول، المواعيد، التقييمات، والدرجات وتثبيت التطبيق على هواتفهم المحمولة بسهولة.
-                </p>
+                {/* 2. Parent Portal Card */}
+                <div className="space-y-3 pt-2">
+                  <div className="flex items-center justify-between pb-1">
+                    <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                      <span className="text-xl">👨‍👩‍👧‍👦</span>
+                      رابط وتطبيق بوابة ولي الأمر (Mobile Web App)
+                    </h3>
+                    <span className="text-[11px] bg-purple-100 dark:bg-indigo-500/20 text-purple-800 dark:text-indigo-300 px-3 py-1 rounded-full border border-purple-200 dark:border-indigo-500/30 font-bold">
+                      مخصص لأولياء الأمور
+                    </span>
+                  </div>
 
-                <div className="flex flex-col md:flex-row items-center gap-3">
-                  <input
-                    type="text"
-                    readOnly
-                    value={getPublicParentPortalUrl()}
-                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5 text-xs text-purple-800 dark:text-indigo-300 font-mono select-all text-right"
-                  />
-                  <div className="flex items-center gap-2 shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const url = getPublicParentPortalUrl();
-                        navigator.clipboard.writeText(url);
-                        showToast('تم نسخ رابط بوابة ولي الأمر بنجاح! 📋', 'success');
-                      }}
-                      className="px-4 py-2.5 rounded-xl bg-purple-700 hover:bg-purple-600 text-white font-bold text-xs shadow transition-all flex items-center gap-1.5"
-                    >
-                      <span>نسخ الرابط 📋</span>
-                    </button>
-                    <a
-                      href="/?view=parent_portal"
-                      target="_blank"
-                      rel="noreferrer"
-                      className="px-4 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 font-bold text-xs shadow-sm transition-all flex items-center gap-1.5"
-                    >
-                      <span>فتح البوابة ↗</span>
-                    </a>
+                  <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+                    يمكنك مشاركة هذا الرابط مع أولياء الأمور عبر الواتساب أو طباعته كرمز استجابة سريع (QR Code) لمتابعة حضور وغياب جميع الأبناء والتنقل بينهم بنقرة واحدة.
+                  </p>
+
+                  <div className="flex flex-col md:flex-row items-center gap-3">
+                    <input
+                      type="text"
+                      readOnly
+                      value={getPublicParentPortalUrl()}
+                      className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5 text-xs text-purple-800 dark:text-indigo-300 font-mono select-all text-right"
+                    />
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const url = getPublicParentPortalUrl();
+                          navigator.clipboard.writeText(url);
+                          showToast('تم نسخ رابط بوابة ولي الأمر بنجاح! 📋', 'success');
+                        }}
+                        className="px-4 py-2.5 rounded-xl bg-purple-700 hover:bg-purple-600 text-white font-bold text-xs shadow transition-all flex items-center gap-1.5"
+                      >
+                        <span>نسخ الرابط 📋</span>
+                      </button>
+                      <a
+                        href="/?view=parent_portal"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="px-4 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 font-bold text-xs shadow-sm transition-all flex items-center gap-1.5"
+                      >
+                        <span>فتح البوابة ↗</span>
+                      </a>
+                    </div>
                   </div>
                 </div>
               </div>

@@ -375,16 +375,14 @@ export const Header: React.FC<HeaderProps> = ({ toggleSidebar, onNavigate }) => 
 
       {/* Left Side: Server IP, Notifications, Clock, User Profile */}
       <div className="flex items-center gap-3 sm:gap-4">
-        {/* Server IP Info Icon Button */}
+        {/* Server & Public Portals Quick Share Button */}
         <button
           type="button"
           onClick={() => {
-            const ip = (serverIp === '127.0.0.1' || !serverIp) ? window.location.hostname : serverIp;
-            const fullAddress = `http://${ip}:3000`;
-            copyToClipboard(fullAddress, `تم نسخ عنوان الشبكة المحلية: ${fullAddress}`);
+            setShowPortalsMenu((prev) => !prev);
           }}
           className="p-1.5 text-emerald-400 hover:text-emerald-300 transition-all flex items-center justify-center relative group shrink-0 hover:scale-110 cursor-pointer"
-          title={`عنوان السيرفر المحلي: ${(serverIp === '127.0.0.1' || !serverIp) ? window.location.hostname : serverIp}:3000 (انقر لنسخ الرابط)`}
+          title="بوابات وروابط النظام العامة والمحلية (انقر لنسخ الرابط العام للطلاب والمعلمين بدون تشخيص)"
         >
           <Wifi className="w-5 h-5 filter drop-shadow-[0_0_8px_rgba(16,185,129,0.8)] animate-pulse" />
         </button>

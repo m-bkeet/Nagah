@@ -29,6 +29,14 @@ export class ErrorBoundary extends Component<Props, State> {
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error('[ErrorBoundary caught error]:', error, errorInfo);
     this.setState({ errorInfo });
+    // Auto-reload on Chunk / Dynamic import failure
+    if (error?.message && /Failed to fetch dynamically imported module|Importing a module script failed|Loading chunk/i.test(error.message)) {
+      const isChunkReload = sessionStorage.getItem('chunk_auto_reload');
+      if (!isChunkReload) {
+        sessionStorage.setItem('chunk_auto_reload', 'true');
+        window.location.reload();
+      }
+    }
   }
 
   private handleReload = () => {

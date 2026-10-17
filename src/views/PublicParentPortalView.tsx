@@ -83,6 +83,10 @@ export const PublicParentPortalView: React.FC<PublicParentPortalViewProps> = ({ 
   const [children, setChildren] = useState<ChildRecord[]>([]);
   const [selectedChildId, setSelectedChildId] = useState<string>('');
   const [isChildSelectorOpen, setIsChildSelectorOpen] = useState(false);
+  const [isLinkChildModalOpen, setIsLinkChildModalOpen] = useState(false);
+  const [linkChildInput, setLinkChildInput] = useState('');
+  const [isLinkingChild, setIsLinkingChild] = useState(false);
+  const [linkChildError, setLinkChildError] = useState('');
 
   // UI Navigation Tabs
   const [activeTab, setActiveTab] = useState<'overview' | 'courses' | 'recap' | 'finance' | 'messages'>('overview');
@@ -284,12 +288,56 @@ export const PublicParentPortalView: React.FC<PublicParentPortalViewProps> = ({ 
       setPaymentAccounts(data.paymentAccounts);
     }
     if (data.children && data.children.length > 0) {
+      // PRESERVE SELECTED CHILD: Do not overwrite if parent switched to another child!
+      setSelectedChildId(prevId => {
+        if (prevId && data.children.some((c: any) => c.id === prevId)) {
+          return prevId;
+        }
+        return data.children[0].id;
+      });
       const firstChild = data.children[0];
-      setSelectedChildId(firstChild.id);
       setParentPhone(firstChild.parentPhone || firstChild.phone || '');
       setParentNationalId((firstChild as any).parentNationalId || '');
       setParentEmail((firstChild as any).parentEmail || firstChild.email || '');
       setParentAddress(firstChild.address || '');
+    }
+  };
+
+  const handleLinkChildSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!linkChildInput.trim()) return;
+    setIsLinkingChild(true);
+    setLinkChildError('');
+    try {
+      const res = await fetch('/api/parent/link-child', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          studentCodeOrPhone: linkChildInput.trim(),
+          parentPhone: parentPhone || codeOrPhone
+        })
+      });
+      const data = await res.json();
+      if (res.ok && data.success && data.child) {
+        setChildren(prev => {
+          if (prev.some(c => c.id === data.child.id)) return prev;
+          const updated = [...prev, data.child];
+          const cached = resilientOfflineService.getFromCache('parent') || {};
+          cached.children = updated;
+          resilientOfflineService.saveToCache('parent', cached);
+          return updated;
+        });
+        setSelectedChildId(data.child.id);
+        setIsLinkChildModalOpen(false);
+        setLinkChildInput('');
+        showParentToast(data.message || `تم ربط الابن (${data.child.fullName}) بنجاح! 🎉`, 'success');
+      } else {
+        setLinkChildError(data.error || 'تعذر العثور على طالب بهذا الكود أو الهاتف. يرجى التأكد من الكود.');
+      }
+    } catch (err: any) {
+      setLinkChildError(err.message || 'حدث خطأ في الاتصال بالخادم');
+    } finally {
+      setIsLinkingChild(false);
     }
   };
 
@@ -978,6 +1026,82 @@ export const PublicParentPortalView: React.FC<PublicParentPortalViewProps> = ({ 
           /* LOGGED IN DASHBOARD */
           <div className="space-y-5">
 
+            {/* 2.5 DEDICATED 1-TAP FAMILY CHILDREN SWITCHER STRIP */}
+            <div className="bg-white dark:bg-slate-900 border-2 border-indigo-200 dark:border-indigo-900/60 rounded-3xl p-3 sm:p-4 shadow-md space-y-2.5">
+              <div className="flex flex-wrap items-center justify-between gap-2 px-1">
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-xl bg-indigo-100 dark:bg-indigo-900/50 flex items-center justify-center text-indigo-700 dark:text-indigo-300 font-bold text-xs shrink-0">
+                    👨‍👩‍👧‍👦
+                  </div>
+                  <div>
+                    <h3 className="text-xs font-black text-slate-900 dark:text-white flex items-center gap-1.5">
+                      <span>الأبناء المسجلون في المركز</span>
+                      <span className="bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 px-2 py-0.5 rounded-full font-mono text-[10px]">
+                        {children.length}
+                      </span>
+                    </h3>
+                    <p className="text-[10px] text-slate-500 dark:text-slate-400">
+                      اضغط على اسم أي ابن للتبديل الفوري ومتابعة درجاته وحصصه
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  {children.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => setIsChildSelectorOpen(true)}
+                      className="px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold text-[11px] transition-all flex items-center gap-1 cursor-pointer"
+                    >
+                      <Users className="w-3.5 h-3.5 text-indigo-500" />
+                      <span>قائمة الأبناء</span>
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLinkChildError('');
+                      setLinkChildInput('');
+                      setIsLinkChildModalOpen(true);
+                    }}
+                    className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-[11px] shadow-sm shadow-amber-500/20 active:scale-95 transition-all flex items-center gap-1 cursor-pointer"
+                  >
+                    <span>➕ ربط كود طالب إضافي</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* 1-Tap Child Pills */}
+              <div className="flex items-center gap-2 overflow-x-auto pb-1 custom-scrollbar">
+                {children.map((child) => {
+                  const isSelected = selectedChild?.id === child.id;
+                  return (
+                    <button
+                      key={child.id}
+                      type="button"
+                      onClick={() => setSelectedChildId(child.id)}
+                      className={`px-3.5 py-2 rounded-2xl font-black text-xs transition-all flex items-center gap-2 shrink-0 cursor-pointer ${
+                        isSelected
+                          ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-lg shadow-indigo-600/30 ring-2 ring-indigo-400 scale-[1.02]'
+                          : 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300'
+                      }`}
+                    >
+                      <div className="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center text-[10px] font-bold">
+                        {child.fullName?.charAt(0) || 'ط'}
+                      </div>
+                      <span className="truncate max-w-[130px]">{child.fullName}</span>
+                      <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded-full ${
+                        isSelected ? 'bg-white/20 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-400'
+                      }`}>
+                        {child.code}
+                      </span>
+                      {isSelected && <Check className="w-3.5 h-3.5 text-amber-300 shrink-0" />}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
             {/* 3. PROMINENT ELEGANT CHILD SELECTOR BAR (Day & Royal Gold Theme) */}
             <div className="bg-gradient-to-r from-amber-500 via-amber-600 to-amber-700 dark:from-purple-900 dark:via-indigo-900 dark:to-purple-950 p-4 sm:p-5 rounded-3xl border border-amber-300 dark:border-purple-500/40 shadow-xl flex flex-col sm:flex-row items-center justify-between gap-4 text-slate-950 dark:text-white">
               
@@ -1022,18 +1146,32 @@ export const PublicParentPortalView: React.FC<PublicParentPortalViewProps> = ({ 
                 </div>
               </div>
 
-              {/* Child Switcher Button (Opens popup modal) */}
-              {children.length > 1 && (
-                <button
-                  type="button"
-                  onClick={() => setIsChildSelectorOpen(true)}
-                  className="w-full sm:w-auto px-4 py-2.5 rounded-2xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs flex items-center justify-center gap-2 shadow-lg shadow-amber-500/25 transition-all active:scale-95 cursor-pointer"
-                >
-                  <Users className="w-4 h-4" />
-                  <span>تغيير الابن للمتابعة ({children.length})</span>
-                  <ChevronDown className="w-4 h-4" />
-                </button>
-              )}
+              {/* Child Switcher & Link Quick Action Buttons */}
+              <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto justify-end">
+                {children.length > 1 ? (
+                  <button
+                    type="button"
+                    onClick={() => setIsChildSelectorOpen(true)}
+                    className="w-full sm:w-auto px-4 py-2.5 rounded-2xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs flex items-center justify-center gap-2 shadow-lg shadow-amber-500/25 transition-all active:scale-95 cursor-pointer"
+                  >
+                    <Users className="w-4 h-4" />
+                    <span>تغيير الابن للمتابعة ({children.length})</span>
+                    <ChevronDown className="w-4 h-4" />
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLinkChildError('');
+                      setLinkChildInput('');
+                      setIsLinkChildModalOpen(true);
+                    }}
+                    className="w-full sm:w-auto px-4 py-2.5 rounded-2xl bg-white hover:bg-amber-50 text-slate-950 font-black text-xs flex items-center justify-center gap-2 shadow-md transition-all active:scale-95 cursor-pointer"
+                  >
+                    <span>➕ ربط ابن آخر بحسابك</span>
+                  </button>
+                )}
+              </div>
             </div>
 
             {/* 4. FACEBOOK PAGE STYLE TAB NAVIGATION */}
@@ -1816,6 +1954,99 @@ export const PublicParentPortalView: React.FC<PublicParentPortalViewProps> = ({ 
                 </button>
               ))}
             </div>
+
+            <div className="pt-2 border-t border-slate-800">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsChildSelectorOpen(false);
+                  setLinkChildError('');
+                  setLinkChildInput('');
+                  setIsLinkChildModalOpen(true);
+                }}
+                className="w-full py-2.5 px-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs flex items-center justify-center gap-1.5 transition-all shadow-md active:scale-98"
+              >
+                <span>➕ ربط ابن آخر بكود الطالب</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 5.5 LINK CHILD MODAL (Add / Bind another child to this parent session) */}
+      {isLinkChildModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 border-2 border-amber-400 dark:border-amber-500/40 rounded-3xl p-6 w-full max-w-md space-y-4 shadow-2xl dir-rtl">
+            <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400 flex items-center justify-center font-bold">
+                  ➕
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-slate-900 dark:text-white">
+                    ربط ابن آخر بحساب ولي الأمر
+                  </h3>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                    أدخل كود الطالب أو رقم هاتفه لإضافته فوراً إلى قائمة الأبناء
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsLinkChildModalOpen(false)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {linkChildError && (
+              <div className="p-3 rounded-2xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300 text-xs flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-rose-500 shrink-0" />
+                <span>{linkChildError}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleLinkChildSubmit} className="space-y-4 text-xs">
+              <div>
+                <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1.5">
+                  كود الطالب أو رقم هاتفه المسجل بالمركز
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={linkChildInput}
+                  onChange={(e) => setLinkChildInput(e.target.value)}
+                  placeholder="مثال: A05 أو TR-123 أو 0100..."
+                  autoFocus
+                  className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl px-3.5 py-3 text-sm text-slate-900 dark:text-white font-mono focus:outline-none focus:border-amber-500"
+                />
+              </div>
+
+              <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 text-[11px] text-slate-600 dark:text-slate-300 leading-relaxed">
+                💡 بمجرد ربط الابن، سيظهر مباشرة في شريط الأبناء بأعلى الشاشة، وستتمكن من التبديل بين تقاريره بنقرة واحدة.
+              </div>
+
+              <div className="flex items-center gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsLinkChildModalOpen(false)}
+                  className="flex-1 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-bold hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                >
+                  إلغاء
+                </button>
+                <button
+                  type="submit"
+                  disabled={isLinkingChild}
+                  className="flex-1 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black shadow-md shadow-amber-500/20 transition-all flex items-center justify-center gap-1.5 active:scale-98 disabled:opacity-60"
+                >
+                  {isLinkingChild ? (
+                    <span>جاري الربط...</span>
+                  ) : (
+                    <span>تأكيد ربط الابن 🔗</span>
+                  )}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

@@ -1,6 +1,8 @@
 import { Trainee, Trainer, Course, Group, Branch } from '../types';
 import { request } from './api';
 import { quotaOptimizer } from './firestoreQuotaOptimizer';
+import { doc, updateDoc, arrayUnion, collection, query, where, getDocs, limit } from 'firebase/firestore';
+import { db } from '../lib/firebase';
 
 export type Unsubscribe = () => void;
 
@@ -197,5 +199,119 @@ export const cloudDb = {
   },
 
   async syncStudentMessage(message: any): Promise<void> {},
-  async syncHomeworkSubmission(submission: any): Promise<void> {}
+  async syncHomeworkSubmission(submission: any): Promise<void> {},
+
+  /**
+   * 🎯 Rule 1 & 2: Direct Attendance Recording using arrayUnion directly on student document path
+   * Updates attendance without loading the entire trainee profile or collection (1 Write, 0 Reads)
+   */
+  async recordStudentAttendanceDirect(
+    traineeId: string,
+    attendanceData: {
+      date?: string;
+      status: string;
+      notes?: string;
+      groupId?: string;
+      courseId?: string;
+      trainerId?: string;
+    }
+  ): Promise<{ success: boolean; record: any }> {
+    try {
+      const today = attendanceData.date || new Date().toISOString().split('T')[0];
+      const record = {
+        id: `att-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+        date: today,
+        time: new Date().toLocaleTimeString('ar-EG'),
+        traineeId,
+        status: attendanceData.status || 'present',
+        notes: attendanceData.notes || '',
+        groupId: attendanceData.groupId || '',
+        courseId: attendanceData.courseId || '',
+        createdAt: new Date().toISOString()
+      };
+
+      // 1. Direct targeted update to Firestore student document path using arrayUnion (Zero full collection read)
+      try {
+        const studentRef = doc(db, 'trainees', traineeId);
+        await updateDoc(studentRef, {
+          attendance: arrayUnion(record),
+          lastAttendanceDate: today,
+          lastAttendanceStatus: attendanceData.status
+        });
+      } catch (fErr) {
+        console.warn('[CloudDb] Direct Firestore updateDoc notice:', fErr);
+      }
+
+      // 2. Synchronize via backend API
+      const apiRes = await request<any>('/attendance', {
+        method: 'POST',
+        body: JSON.stringify({
+          traineeId,
+          ...attendanceData
+        })
+      });
+
+      return { success: true, record: apiRes?.record || record };
+    } catch (err: any) {
+      console.error('[CloudDb] recordStudentAttendanceDirect error:', err);
+      return { success: false, record: null };
+    }
+  },
+
+  /**
+   * 🎯 Rule 3, 4 & 5: One-Time Fetching with conditional query (where) and zero onSnapshot listeners
+   * Fetches grade reports and attendance for the specific student only (No full scans, No continuous listening)
+   */
+  async getStudentGradesAndAttendanceReport(traineeId: string): Promise<{
+    trainee: any;
+    attendance: any[];
+    exams: any[];
+    homeworks: any[];
+    certificates: any[];
+  }> {
+    try {
+      // Rule 3: Single one-time fetch from API / backend
+      const details = await request<any>(`/trainees/${traineeId}`);
+      if (details && details.trainee) {
+        return {
+          trainee: details.trainee,
+          attendance: details.attendance || [],
+          exams: details.exams || [],
+          homeworks: details.homeworks || [],
+          certificates: details.certificates || []
+        };
+      }
+
+      // Fallback: Direct Firestore One-Time Queries with `where` & `getDocs` (NO onSnapshot)
+      const attendanceQuery = query(
+        collection(db, 'attendance'),
+        where('traineeId', '==', traineeId),
+        limit(100)
+      );
+      const examsQuery = query(
+        collection(db, 'examResults'),
+        where('traineeId', '==', traineeId),
+        limit(50)
+      );
+
+      const [attSnap, examSnap] = await Promise.all([
+        getDocs(attendanceQuery).catch(() => ({ docs: [] } as any)),
+        getDocs(examsQuery).catch(() => ({ docs: [] } as any))
+      ]);
+
+      const attendance = attSnap.docs.map((d: any) => ({ id: d.id, ...d.data() }));
+      const exams = examSnap.docs.map((d: any) => ({ id: d.id, ...d.data() }));
+
+      return {
+        trainee: null,
+        attendance,
+        exams,
+        homeworks: [],
+        certificates: []
+      };
+    } catch (err) {
+      console.warn('[CloudDb] getStudentGradesAndAttendanceReport error:', err);
+      return { trainee: null, attendance: [], exams: [], homeworks: [], certificates: [] };
+    }
+  }
 };

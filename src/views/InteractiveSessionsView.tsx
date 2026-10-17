@@ -73,7 +73,8 @@ export const InteractiveSessionsView: React.FC<InteractiveSessionsViewProps> = (
     courses: ctxCourses,
     trainees: ctxTrainees,
     setTrainees: setCtxTrainees,
-    refreshCoreData
+    refreshCoreData,
+    addPointsOptimistic
   } = useCenter();
   const [isWhiteboardOpen, setIsWhiteboardOpen] = useState(false);
   const [isAllInOneModalOpen, setIsAllInOneModalOpen] = useState(false);
@@ -598,7 +599,7 @@ export const InteractiveSessionsView: React.FC<InteractiveSessionsViewProps> = (
     const pVal = Number(pointsToAdd);
     if (isNaN(pVal) || pVal === 0) return;
 
-    setTrainees(prev =>
+    const updateFn = (prev: Trainee[]) =>
       prev.map(t => {
         if (t.id === trainee.id || (t.code && t.code === trainee.code)) {
           const current = Number(t.totalPoints !== undefined ? t.totalPoints : (t.points || 0));
@@ -606,8 +607,15 @@ export const InteractiveSessionsView: React.FC<InteractiveSessionsViewProps> = (
           return { ...t, totalPoints: next, points: next };
         }
         return t;
-      })
-    );
+      });
+
+    // 1. Instant local update for active session tab
+    setTrainees(updateFn);
+
+    // 2. Instant context & localStorage update so switching tabs never loses stars
+    if (setCtxTrainees) {
+      setCtxTrainees(updateFn);
+    }
 
     if (pVal > 0) {
       audioService.playStarSuccess();
@@ -617,11 +625,15 @@ export const InteractiveSessionsView: React.FC<InteractiveSessionsViewProps> = (
     }
 
     try {
-      await api.addPoints({
-        traineeIds: [trainee.id],
-        points: pVal,
-        reason: reason || 'تفاعل وتميز بالحصة التدريبية'
-      });
+      if (addPointsOptimistic) {
+        await addPointsOptimistic([trainee.id], pVal, reason || 'تفاعل وتميز بالحصة التدريبية');
+      } else {
+        await api.addPoints({
+          traineeIds: [trainee.id],
+          points: pVal,
+          reason: reason || 'تفاعل وتميز بالحصة التدريبية'
+        });
+      }
     } catch (err: any) {
       console.warn('Point award sync error:', err);
     }
@@ -638,7 +650,7 @@ export const InteractiveSessionsView: React.FC<InteractiveSessionsViewProps> = (
     const ids = presentTrainees.map(t => t.id);
     const idSet = new Set(ids);
 
-    setTrainees(prev =>
+    const updateMassFn = (prev: Trainee[]) =>
       prev.map(t => {
         if (idSet.has(t.id)) {
           const current = Number(t.totalPoints !== undefined ? t.totalPoints : (t.points || 0));
@@ -646,8 +658,12 @@ export const InteractiveSessionsView: React.FC<InteractiveSessionsViewProps> = (
           return { ...t, totalPoints: next, points: next };
         }
         return t;
-      })
-    );
+      });
+
+    setTrainees(updateMassFn);
+    if (setCtxTrainees) {
+      setCtxTrainees(updateMassFn);
+    }
 
     audioService.playFanfare();
     setCelebrationOverlay({
@@ -658,11 +674,15 @@ export const InteractiveSessionsView: React.FC<InteractiveSessionsViewProps> = (
     });
 
     try {
-      await api.addPoints({
-        traineeIds: ids,
-        points: pointsToAdd,
-        reason: 'مكافأة جماعية لتفاعل وتميز الحصة'
-      });
+      if (addPointsOptimistic) {
+        await addPointsOptimistic(ids, pointsToAdd, 'مكافأة جماعية لتفاعل وتميز الحصة');
+      } else {
+        await api.addPoints({
+          traineeIds: ids,
+          points: pointsToAdd,
+          reason: 'مكافأة جماعية لتفاعل وتميز الحصة'
+        });
+      }
     } catch (e) {}
   };
 

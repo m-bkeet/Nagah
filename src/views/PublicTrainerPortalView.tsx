@@ -231,6 +231,7 @@ export const PublicTrainerPortalView: React.FC<PublicTrainerPortalViewProps> = (
   const [reviewGrade, setReviewGrade] = useState<number>(100);
   const [reviewFeedback, setReviewFeedback] = useState<string>('');
   const [reviewPoints, setReviewPoints] = useState<number>(20);
+  const [reviewStars, setReviewStars] = useState<number>(5);
   const [isSavingReview, setIsSavingReview] = useState(false);
 
   // Toast / Notification
@@ -447,8 +448,9 @@ export const PublicTrainerPortalView: React.FC<PublicTrainerPortalViewProps> = (
   const handleOpenReviewHomework = (sub: HomeworkSubmission) => {
     setReviewModalSubmission(sub);
     setReviewGrade(sub.grade || 100);
-    setReviewFeedback(sub.trainerFeedback || '');
+    setReviewFeedback(sub.trainerFeedback || sub.generalFeedback || '');
     setReviewPoints(sub.pointsAwarded || 25);
+    setReviewStars(sub.stars || (sub.grade && sub.grade >= 90 ? 5 : sub.grade && sub.grade >= 80 ? 4 : 3));
   };
 
   const handleSaveHomeworkReview = async () => {
@@ -464,12 +466,13 @@ export const PublicTrainerPortalView: React.FC<PublicTrainerPortalViewProps> = (
           trainerId: trainer.id,
           grade: reviewGrade,
           trainerFeedback: reviewFeedback,
-          pointsToAward: reviewPoints
+          pointsToAward: reviewPoints,
+          stars: reviewStars
         })
       });
       const data = await res.json();
       if (data.success) {
-        showToast('تم حفظ تقييم الواجب ورصد النقاط بنجاح 🎉', 'success');
+        showToast('تم حفظ تقييم الواجب ورصد النقاط والنجوم بنجاح 🎉', 'success');
         setReviewModalSubmission(null);
         loadTrainerData(trainer.id);
       } else {
@@ -2292,6 +2295,27 @@ export const PublicTrainerPortalView: React.FC<PublicTrainerPortalViewProps> = (
                   onChange={(e) => setReviewGrade(Number(e.target.value))}
                   className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm font-bold text-emerald-600 dark:text-emerald-400 focus:outline-none focus:border-indigo-500 font-mono shadow-xs"
                 />
+              </div>
+
+              <div>
+                <label className="block text-slate-600 dark:text-slate-400 font-bold mb-1">نجوم التميز والتشجيع (⭐):</label>
+                <div className="flex items-center gap-2">
+                  {[1, 2, 3, 4, 5].map((s) => (
+                    <button
+                      key={s}
+                      type="button"
+                      onClick={() => setReviewStars(s)}
+                      className={`flex-1 py-1.5 rounded-xl font-bold text-xs flex items-center justify-center gap-1 cursor-pointer transition-all border ${
+                        reviewStars >= s
+                          ? 'bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-500/40 shadow-xs'
+                          : 'bg-slate-50 dark:bg-slate-800 text-slate-400 border-slate-200 dark:border-slate-700'
+                      }`}
+                    >
+                      <span>⭐</span>
+                      <span>{s}</span>
+                    </button>
+                  ))}
+                </div>
               </div>
 
               <div>

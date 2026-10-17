@@ -332,7 +332,8 @@ export const TrainersView: React.FC = () => {
 
   const handleOpenSettlement = (t: Trainer) => {
     setActiveTrainer(t);
-    setSettlementAmount(t.remainingDues > 0 ? t.remainingDues : 1000);
+    const calculatedDue = (t.remainingDues && t.remainingDues > 0) ? t.remainingDues : ((t.balanceDue && t.balanceDue > 0) ? t.balanceDue : 0);
+    setSettlementAmount(calculatedDue);
     setSettlementMethod('cash');
     setSettlementNotes(`صرف مستحقات تدريبية للمدرب ${t.name}`);
     setIsSettlementModalOpen(true);

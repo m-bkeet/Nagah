@@ -1,9 +1,10 @@
-import React, { useRef } from 'react';
-import { X, Printer, Download, Share2, CheckCircle2, ShieldCheck, Building2, Calendar, CreditCard, User, Receipt, FileText, Phone, Clock, HardDrive, Check, Copy } from 'lucide-react';
+import React, { useRef, useState } from 'react';
+import { X, Printer, Download, Share2, CheckCircle2, ShieldCheck, Building2, Calendar, CreditCard, User, Receipt, FileText, Phone, Clock, HardDrive, Check, Copy, Trash2 } from 'lucide-react';
 import { captureElementToCanvas } from '../utils/captureUtils';
 import { Payment } from '../types';
 import { numberToArabicWords } from '../utils/numberToArabicWords';
 import { getPublicBaseUrl } from '../utils/urlHelper';
+import { api } from '../services/api';
 
 interface OfficialReceiptModalProps {
   isOpen: boolean;
@@ -94,7 +95,7 @@ export const OfficialReceiptModal: React.FC<OfficialReceiptModalProps> = ({
   const displayBranch = branchName || 'الفرع الرئيسي';
   const displayGroupName = payment.groupName || groupName || '';
   const amountWords = numberToArabicWords(payment.amount);
-  const targetMonthStr = payment.targetMonth || 'سبتمبر 2026';
+  const targetMonthStr = payment.targetMonth || 'أكتوبر 2026';
   const displayNextDueDate = payment.nextDueDate || nextDueDate;
   const displayPreviousDebt = payment.previousDebt !== undefined ? payment.previousDebt : previousDebt;
   const displayDiscount = payment.discountAmount !== undefined ? payment.discountAmount : discountAmount;
@@ -236,6 +237,32 @@ export const OfficialReceiptModal: React.FC<OfficialReceiptModalProps> = ({
     setTimeout(() => setCopiedLink(false), 2500);
   };
 
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const handleDeleteReceipt = async () => {
+    if (!payment?.id) return;
+    const confirmMsg = `هل أنت متأكد من حذف وإلغاء سند السداد رقم (${payment.receiptNumber || payment.id}) للطالب:\n"${displayStudentName}"\nبمبلغ ${payment.amount} ج.م؟\n\n⚠️ سيتم التراجع عن الدفعة وإعادة فتح استحقاق الطالب كغير مسدد.`;
+    if (!window.confirm(confirmMsg)) return;
+
+    try {
+      setIsDeleting(true);
+      const res = await api.deletePayment(payment.id);
+      if (res?.success) {
+        alert('تم حذف سند السداد بنجاح وإعادة ضبط رصيد الطالب كغير مسدد 🗑️');
+        onClose();
+        try {
+          new BroadcastChannel('nagah_finance_channel').postMessage({ type: 'FINANCE_MUTATED' });
+          localStorage.setItem('nagah_last_financial_mutation', Date.now().toString());
+        } catch {}
+        window.location.reload();
+      }
+    } catch (err: any) {
+      alert('تعذر حذف السند: ' + (err.message || 'خطأ غير متوقع'));
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/75 backdrop-blur-md overflow-hidden print-modal-overlay" dir="rtl">
       <div className="relative w-full max-w-xl bg-white border border-slate-200 rounded-3xl shadow-2xl max-h-[92vh] flex flex-col overflow-hidden print-modal-box">
@@ -291,6 +318,15 @@ export const OfficialReceiptModal: React.FC<OfficialReceiptModalProps> = ({
             >
               <Share2 className="w-3.5 h-3.5" />
               <span>واتساب {formattedWhatsAppPhone ? `📱` : ''}</span>
+            </button>
+            <button
+              onClick={handleDeleteReceipt}
+              disabled={isDeleting}
+              className="py-1.5 px-2.5 rounded-xl bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/70 text-rose-700 dark:text-rose-300 border border-rose-300 dark:border-rose-500/40 text-xs font-bold flex items-center gap-1 transition-all cursor-pointer disabled:opacity-50"
+              title="إلغاء وحذف هذا السند وإعادة ضبط حساب الطالب كغير مسدد"
+            >
+              <Trash2 className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400" />
+              <span>حذف السند 🗑️</span>
             </button>
             <button
               onClick={onClose}

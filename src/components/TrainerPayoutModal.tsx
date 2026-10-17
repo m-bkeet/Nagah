@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, DollarSign, CreditCard, User, FileText, CheckCircle2, ShieldCheck, Printer } from 'lucide-react';
 import { Trainer, TrainerSettlement } from '../types';
 import { api } from '../services/api';
@@ -28,6 +28,13 @@ export const TrainerPayoutModal: React.FC<TrainerPayoutModalProps> = ({
   const [notes, setNotes] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [issuedSettlement, setIssuedSettlement] = useState<TrainerSettlement | null>(null);
+
+  useEffect(() => {
+    if (isOpen) {
+      setAmount(suggestedAmount || 0);
+      setIssuedSettlement(null);
+    }
+  }, [isOpen, suggestedAmount]);
 
   if (!isOpen || !trainer) return null;
 

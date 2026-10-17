@@ -1237,8 +1237,8 @@ apiRouter.get('/trainees/:id', async (req: Request, res: Response) => {
     }
     const payments = Array.from(payMap.values()).sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime());
 
-    // Combine Attendance from AttendanceRepo (Firestore) AND db.getData().attendance (memory/local)
-    const attFromFs = await AttendanceRepo.getAll().catch(() => []);
+    // 🎯 Rule 4: Conditional query for this student only instead of scanning all attendance
+    const attFromFs = await AttendanceRepo.getByTraineeId(trainee.id).catch(() => []);
     const attFromDb = db.getData().attendance || [];
     const attMap = new Map<string, AttendanceRecord>();
     for (const a of [...attFromFs, ...attFromDb]) {
@@ -1421,6 +1421,9 @@ apiRouter.post('/trainees', async (req: Request, res: Response) => {
     const netAmount = (isSuspendedOrDropped || isUnassigned || isExempt) ? 0 : Math.max(0, feeAmount - discountAmount);
     const remainingAmount = (isSuspendedOrDropped || isUnassigned || isExempt) ? 0 : Math.max(0, netAmount - paidAmount);
 
+    const subStartDate = data.subscriptionStartDate || data.registrationDate || new Date().toISOString().split('T')[0];
+    const subStartMonth = data.startBillingMonth || (subStartDate.includes('-09') ? 'سبتمبر 2026' : 'أكتوبر 2026');
+
     const created = await TraineeRepo.create(traineeId, {
       ...data,
       code,
@@ -1428,14 +1431,60 @@ apiRouter.post('/trainees', async (req: Request, res: Response) => {
       feeAmount, discountAmount, netAmount, paidAmount, remainingAmount,
       totalPoints: 0,
       attendanceRate: 100,
+      subscriptionStartDate: subStartDate,
+      startBillingMonth: subStartMonth,
+      registrationDate: data.registrationDate || subStartDate,
       createdAt: new Date().toISOString()
     });
+
+    // If an initial payment was received upon enrollment, generate an official financial payment receipt
+    if (paidAmount > 0) {
+      try {
+        const now = new Date();
+        const payId = 'pay-' + Date.now() + '-' + Math.random().toString(36).substring(2, 5);
+        const receiptNumber = `REC${String(code).replace(/[^a-zA-Z0-9]/g, '')}01`;
+        const paymentRecord: any = {
+          id: payId,
+          receiptNumber,
+          date: now.toISOString().split('T')[0],
+          time: now.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true }),
+          traineeId: created.id,
+          traineeName: created.fullName,
+          traineeCode: created.code,
+          courseId: created.courseId,
+          branchId: created.branchId,
+          groupId: created.groupId,
+          amount: paidAmount,
+          paymentMethod: data.paymentMethod || 'cash',
+          receivedByUserId: (req as any).user?.id || data.createdByUserId || 'admin',
+          receivedByUserName: (req as any).user?.fullName || data.createdByUserName || 'المدير المالي والخزينة',
+          targetMonth: subStartMonth || now.toLocaleDateString('ar-EG', { month: 'long', year: 'numeric' }),
+          parentPhone: created.parentPhone || created.phone,
+          traineePhone: created.phone,
+          previousDebt: 0,
+          discountAmount: discountAmount,
+          isExempt: isExempt,
+          notes: data.paymentNotes || 'دفعة مقدمة مسددة عند التسجيل',
+          createdAt: now.toISOString(),
+          status: 'approved',
+          gdriveSyncStatus: 'synced'
+        };
+        await PaymentRepo.create(payId, paymentRecord);
+        await TraineeRepo.update(created.id, {
+          lastPaymentDate: paymentRecord.date,
+          lastReceiptNumber: receiptNumber
+        });
+      } catch (payErr) {
+        console.warn('[Trainee Creation] Auto-payment record notice:', payErr);
+      }
+    }
+
     db.logAudit({
       userId: (req as any).user?.id || data.createdByUserId || 'user-admin',
       userName: (req as any).user?.fullName || data.createdByUserName || 'مدير عام النظام',
       action: 'إضافة متدرب جديد',
       entity: 'المتدربون',
-      details: `تم تسجيل المتدرب (${created.fullName}) بكود [${created.code}] بنجاح.`
+      details: `تم تسجيل المتدرب (${created.fullName}) بكود [${created.code}] بنجاح${paidAmount > 0 ? ` مع تسجيل سند تحصيل دفعة مقدمة بمبلغ ${paidAmount} ج.م` : ''}.`
     });
     db.saveImmediate();
     res.json({ success: true, trainee: created });
@@ -1720,6 +1769,12 @@ export async function purgeCompleteTraineeData(traineeId: string): Promise<{
 
     // 2. Delete trainee from TraineeRepo and in-memory list
     await TraineeRepo.delete(traineeId);
+    if (!Array.isArray(memData.deletedTraineeIds)) {
+      memData.deletedTraineeIds = [];
+    }
+    if (!memData.deletedTraineeIds.includes(traineeId)) {
+      memData.deletedTraineeIds.push(traineeId);
+    }
     if (Array.isArray(memData.trainees)) {
       memData.trainees = memData.trainees.filter((t: any) => t && t.id !== traineeId);
     }
@@ -3857,6 +3912,7 @@ apiRouter.put('/trainers/:id', async (req: Request, res: Response) => {
     const { id } = req.params;
     const formattedData = await resolveTrainerCodeAndPrefix(req.body, id);
     const updated = await TrainerRepo.update(id, formattedData);
+    db.recalculateTrainerFinances(id);
     res.json({ success: true, trainer: updated });
   } catch(e: any) { res.status(500).json({ success: false, error: e.message }); }
 });
@@ -4528,14 +4584,10 @@ apiRouter.post('/attendance', async (req: Request, res: Response) => {
     db.recalculateTraineeRankings();
     db.save();
 
-    // Persist changes to Firestore
-    try {
-      await saveCollectionToFirestore('attendance', db.getData().attendance);
-      await saveCollectionToFirestore('pointTransactions', db.getData().pointTransactions);
-      await saveCollectionToFirestore('trainees', db.getData().trainees);
-    } catch (fsErr) {
-      console.warn('[Attendance] Firestore sync warning:', fsErr);
-    }
+    // 🎯 Rule 2 & 5: Non-blocking background sync without synchronous heavy collection lock
+    saveCollectionToFirestore('attendance', db.getData().attendance).catch(fsErr => {
+      console.warn('[Attendance] Firestore sync notice:', fsErr);
+    });
 
     res.json({
       success: true,
@@ -4643,13 +4695,10 @@ apiRouter.post('/attendance/batch', async (req: Request, res: Response) => {
   db.recalculateTraineeRankings();
   db.save();
 
-  try {
-    await saveCollectionToFirestore('attendance', db.getData().attendance);
-    await saveCollectionToFirestore('pointTransactions', db.getData().pointTransactions);
-    await saveCollectionToFirestore('trainees', db.getData().trainees);
-  } catch (fsErr) {
-    console.warn('[Attendance Batch] Firestore sync warning:', fsErr);
-  }
+  // 🎯 Rule 2 & 5: Non-blocking background sync for attendance batch
+  saveCollectionToFirestore('attendance', db.getData().attendance).catch(fsErr => {
+    console.warn('[Attendance Batch] Firestore sync notice:', fsErr);
+  });
 
   db.logAudit({
     userId: 'user',
@@ -4773,7 +4822,7 @@ apiRouter.post('/finance/payments', async (req: Request, res: Response) => {
       calculatedNextDueDate = nextMonth.toISOString().split('T')[0];
     }
 
-    const currentTargetMonth = targetMonth || now.toLocaleDateString('ar-EG', { month: 'long', year: 'numeric' });
+    const currentTargetMonth = targetMonth || 'سبتمبر 2026';
 
     const payment: any = {
       id: 'pay-' + Date.now(),
@@ -4860,6 +4909,375 @@ apiRouter.post('/finance/payments', async (req: Request, res: Response) => {
     res.json({ success: true, payment, trainee: updatedTrainee });
   } catch(e: any) { res.status(500).json({ error: e.message }); }
 });
+
+// DELETE /api/finance/payments/:id & DELETE /api/payments/:id (حذف وإلغاء سند السداد وإعادة ضبط حساب الطالب)
+apiRouter.delete(['/finance/payments/:id', '/payments/:id'], async (req: Request, res: Response) => {
+  try {
+    const paymentId = req.params.id;
+    const payment = await PaymentRepo.getById(paymentId);
+    if (!payment) {
+      return res.status(404).json({ success: false, error: 'سند السداد غير موجود أو تم حذفه مسبقاً' });
+    }
+
+    // 1. Delete payment record from repository
+    await PaymentRepo.delete(paymentId);
+
+    // 2. Adjust linked trainee's balances and paidMonths
+    let updatedTrainee: any = null;
+    if (payment.traineeId) {
+      const trainee = await TraineeRepo.getById(payment.traineeId);
+      if (trainee) {
+        const payAmount = Number(payment.amount) || 0;
+        const newPaid = Math.max(0, (trainee.paidAmount || 0) - payAmount);
+        const fee = trainee.isExempt ? 0 : (trainee.netAmount || trainee.feeAmount || 0);
+        const newRemaining = trainee.isExempt ? 0 : Math.max(0, fee - newPaid);
+
+        // Remove month from trainee's paidMonths
+        const targetMonth = payment.targetMonth || '';
+        const targetPrefix = targetMonth.split(' ')[0] || '';
+        const paymentMonths = Array.isArray(payment.paidMonths) ? payment.paidMonths : (targetMonth ? [targetMonth] : []);
+        const existingMonths = Array.isArray(trainee.paidMonths) ? trainee.paidMonths : [];
+        const newMonths = existingMonths.filter(m => {
+          if (paymentMonths.includes(m)) return false;
+          if (targetPrefix && m.startsWith(targetPrefix)) return false;
+          return true;
+        });
+
+        // Re-determine lastPaymentDate from remaining valid payments
+        const allStudentPayments = (await PaymentRepo.getByTraineeId(trainee.id).catch(() => []))
+          .filter(p => p.id !== paymentId && p.status !== 'rejected');
+        const latestPayment = allStudentPayments.sort((a, b) => new Date(b.date || b.createdAt).getTime() - new Date(a.date || a.createdAt).getTime())[0];
+
+        const updates: any = {
+          paidAmount: newPaid,
+          remainingAmount: newRemaining,
+          paidMonths: newMonths,
+          lastPaymentDate: latestPayment ? latestPayment.date : '',
+          lastReceiptNumber: latestPayment ? latestPayment.receiptNumber : ''
+        };
+
+        updatedTrainee = await TraineeRepo.update(trainee.id, updates);
+      }
+    }
+
+    db.logAudit({
+      userId: (req as any).user?.id || 'admin',
+      userName: (req as any).user?.name || 'المدير المالي والخزينة',
+      action: 'إلغاء وحذف سند تحصيل',
+      entity: 'الخزينة',
+      entityId: paymentId,
+      branchId: payment.branchId,
+      details: `تم إلغاء وحذف سند التحصيل رقم ${payment.receiptNumber || paymentId} بمبلغ ${payment.amount} ج.م للطالب ${payment.traineeName || payment.traineeCode} وإعادة ضبط رصيد الطالب كغير مسدد.`
+    });
+
+    return res.json({
+      success: true,
+      message: 'تم حذف سند السداد بنجاح وإعادة ضبط رصيد الطالب ومستحقاته كغير مسدد',
+      deletedPaymentId: paymentId,
+      trainee: updatedTrainee
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Bulk Migration: Move all October payments to September
+apiRouter.post('/finance/payments/migrate-october-to-september', async (req: Request, res: Response) => {
+  try {
+    const allPayments = await PaymentRepo.getAll(true);
+    let migratedPaymentsCount = 0;
+    for (const p of allPayments) {
+      if ((p.targetMonth && p.targetMonth.includes('أكتوبر')) || (p.paidMonths && p.paidMonths.some((m: string) => m.includes('أكتوبر')))) {
+        await PaymentRepo.update(p.id, {
+          targetMonth: 'سبتمبر 2026',
+          paidMonths: ['سبتمبر 2026']
+        });
+        migratedPaymentsCount++;
+      }
+    }
+
+    const allTrainees = await TraineeRepo.getAll(true);
+    let migratedTraineesCount = 0;
+    for (const t of allTrainees) {
+      let tModified = false;
+      const tUpdates: any = {};
+      if (t.paidMonths && t.paidMonths.some((m: string) => m.includes('أكتوبر'))) {
+        tUpdates.paidMonths = Array.from(new Set(t.paidMonths.map((m: string) => m.includes('أكتوبر') ? 'سبتمبر 2026' : m)));
+        tModified = true;
+      }
+      if (t.startBillingMonth && t.startBillingMonth.includes('أكتوبر')) {
+        tUpdates.startBillingMonth = 'سبتمبر 2026';
+        tModified = true;
+      }
+      if (tModified) {
+        await TraineeRepo.update(t.id, tUpdates);
+        migratedTraineesCount++;
+      }
+    }
+
+    return res.json({
+      success: true,
+      migratedPaymentsCount,
+      migratedTraineesCount,
+      message: `تم تحويل ${migratedPaymentsCount} سندات تحصيل و ${migratedTraineesCount} طلاب من أكتوبر إلى سبتمبر 2026 بنجاح`
+    });
+  } catch (e: any) {
+    return res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// Alias for /api/payments POST
+apiRouter.post('/payments', async (req: Request, res: Response) => {
+  // Delegate to finance payments handler logic
+  const handleUrl = '/api/finance/payments';
+  req.url = handleUrl;
+  return (apiRouter as any).handle(req, res);
+});
+
+// ⚡ One-Click Immediate Payment for Student (سداد فوري بنقرة واحدة لشهر 9)
+const handleQuickPayEndpoint = async (req: Request, res: Response) => {
+  try {
+    const { traineeId, targetMonth = 'سبتمبر 2026', paymentMethod = 'cash', notes } = req.body;
+    if (!traineeId) {
+      return res.status(400).json({ error: 'معرف الطالب مطلوب' });
+    }
+    const trainee = await TraineeRepo.getById(traineeId);
+    if (!trainee) {
+      return res.status(404).json({ error: 'الطالب غير موجود' });
+    }
+
+    const payAmount = Number(req.body.amount) || Number(trainee.netAmount) || Number(trainee.feeAmount) || 200;
+    const now = new Date();
+    const currentDateStr = now.toISOString().split('T')[0];
+    const currentTimeStr = now.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
+
+    // Next due date = Day 25 of next cycle
+    const nextMonth = new Date(now);
+    nextMonth.setMonth(nextMonth.getMonth() + 1);
+    nextMonth.setDate(25);
+    const calculatedNextDueDate = nextMonth.toISOString().split('T')[0];
+
+    // Smart receipt number
+    let receiptNumber = `REC${Date.now().toString().slice(-7)}`;
+    let groupName = trainee.groupName;
+    let trainerId: string | undefined = req.body.trainerId;
+    let trainerName: string | undefined = req.body.trainerName;
+    let trainerCode: string | undefined = req.body.trainerCode;
+
+    try {
+      if (trainee.groupId) {
+        const group = await GroupRepo.getById(trainee.groupId);
+        if (group) {
+          groupName = group.name;
+          if (!trainerId && group.trainerId) {
+            trainerId = group.trainerId;
+            const tr = await TrainerRepo.getById(group.trainerId);
+            if (tr) {
+              trainerName = tr.name;
+              trainerCode = tr.code;
+            }
+          }
+          if (group.code && trainee.code) {
+            const cleanGroupCode = (group.code || '').replace(/-/g, '');
+            const cleanTraineeCode = (trainee.code || '').replace(/-/g, '');
+            const studentPayments = await PaymentRepo.getByTraineeId(trainee.id);
+            const nextNum = studentPayments.length + 1;
+            receiptNumber = `REC${cleanGroupCode}${cleanTraineeCode}${nextNum}`;
+          }
+        }
+      }
+      if (!trainerId && trainee.courseId) {
+        const groups = await GroupRepo.getAll();
+        const gWithTr = groups.find(g => g.courseId === trainee.courseId && g.trainerId);
+        if (gWithTr) {
+          trainerId = gWithTr.trainerId;
+          const tr = await TrainerRepo.getById(gWithTr.trainerId);
+          if (tr) {
+            trainerName = tr.name;
+            trainerCode = tr.code;
+          }
+        }
+      }
+    } catch {}
+
+    const currentTargetMonth = targetMonth || 'سبتمبر 2026';
+    const payment: any = {
+      id: 'pay-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6),
+      receiptNumber,
+      date: currentDateStr,
+      time: currentTimeStr,
+      traineeId: trainee.id,
+      traineeName: trainee.fullName,
+      traineeCode: trainee.code,
+      trainerId,
+      trainerName,
+      trainerCode,
+      courseId: trainee.courseId,
+      branchId: trainee.branchId,
+      groupName,
+      groupId: trainee.groupId,
+      amount: payAmount,
+      paymentMethod: paymentMethod || 'cash',
+      receivedByUserId: 'admin',
+      receivedByUserName: 'المدير المالي والخزينة',
+      targetMonth: currentTargetMonth,
+      parentPhone: trainee.parentPhone || trainee.phone,
+      traineePhone: trainee.phone,
+      previousDebt: 0,
+      discountAmount: trainee.discountAmount || 0,
+      isExempt: false,
+      nextDueDate: calculatedNextDueDate,
+      paidMonths: Array.from(new Set([...(trainee.paidMonths || []), currentTargetMonth])),
+      notes: notes || `سداد فوري بنقرة واحدة - ${currentTargetMonth}`,
+      createdAt: now.toISOString(),
+      status: 'approved',
+      gdriveSyncStatus: 'synced'
+    };
+
+    await PaymentRepo.create(payment.id, payment);
+
+    const newPaid = (trainee.paidAmount || 0) + payAmount;
+    const traineeUpdates: any = {
+      paidAmount: newPaid,
+      remainingAmount: 0,
+      nextPaymentDueDate: calculatedNextDueDate,
+      lastPaymentDate: currentDateStr,
+      lastReceiptNumber: receiptNumber,
+      paidMonths: Array.from(new Set([...(trainee.paidMonths || []), currentTargetMonth]))
+    };
+
+    const updatedTrainee = await TraineeRepo.update(trainee.id, traineeUpdates);
+
+    db.logAudit({
+      userId: 'admin',
+      userName: 'المدير المالي والخزينة',
+      action: 'سداد فوري بنقرة واحدة',
+      entity: 'الخزينة',
+      entityId: payment.id,
+      branchId: payment.branchId,
+      details: `تم السداد الفوري بنقرة واحدة بمبلغ ${payAmount} ج.م للطالب ${trainee.fullName} (${trainee.code}) برقم سند ${receiptNumber} لشهر ${currentTargetMonth}`
+    });
+
+    res.json({ success: true, payment, trainee: updatedTrainee });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+apiRouter.post('/finance/payments/quick-pay', handleQuickPayEndpoint);
+apiRouter.post('/payments/quick-pay', handleQuickPayEndpoint);
+
+// ⚡⚡ Batch 1-Click Payment for All Unpaid Trainees in a Group (تسديد جميع طلاب المجموعة بنقرة واحدة)
+const handleQuickBatchPayEndpoint = async (req: Request, res: Response) => {
+  try {
+    const { traineeIds, targetMonth = 'سبتمبر 2026', paymentMethod = 'cash' } = req.body;
+    if (!Array.isArray(traineeIds) || traineeIds.length === 0) {
+      return res.status(400).json({ error: 'قائمة الطلاب مطلوبة' });
+    }
+
+    const createdPayments: any[] = [];
+    const updatedTrainees: any[] = [];
+    const now = new Date();
+    const currentDateStr = now.toISOString().split('T')[0];
+    const currentTimeStr = now.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
+
+    const nextMonth = new Date(now);
+    nextMonth.setMonth(nextMonth.getMonth() + 1);
+    nextMonth.setDate(25);
+    const calculatedNextDueDate = nextMonth.toISOString().split('T')[0];
+    const currentTargetMonth = targetMonth || 'سبتمبر 2026';
+
+    for (let i = 0; i < traineeIds.length; i++) {
+      const tId = traineeIds[i];
+      const trainee = await TraineeRepo.getById(tId);
+      if (!trainee || trainee.isExempt) continue;
+
+      const payAmount = Number(trainee.netAmount) || Number(trainee.feeAmount) || 200;
+      const receiptNumber = `REC${Date.now().toString().slice(-6)}${i + 1}`;
+
+      let trainerId = (trainee as any).trainerId;
+      let trainerName = (trainee as any).trainerName;
+      let trainerCode = (trainee as any).trainerCode;
+      if (!trainerId && trainee.groupId) {
+        try {
+          const group = await GroupRepo.getById(trainee.groupId);
+          if (group && group.trainerId) {
+            trainerId = group.trainerId;
+            const tr = await TrainerRepo.getById(group.trainerId);
+            if (tr) {
+              trainerName = tr.name;
+              trainerCode = tr.code;
+            }
+          }
+        } catch {}
+      }
+
+      const payment: any = {
+        id: 'pay-' + Date.now() + '-' + i + '-' + Math.random().toString(36).substring(2, 5),
+        receiptNumber,
+        date: currentDateStr,
+        time: currentTimeStr,
+        traineeId: trainee.id,
+        traineeName: trainee.fullName,
+        traineeCode: trainee.code,
+        trainerId,
+        trainerName,
+        trainerCode,
+        courseId: trainee.courseId,
+        branchId: trainee.branchId,
+        groupName: trainee.groupName,
+        groupId: trainee.groupId,
+        amount: payAmount,
+        paymentMethod: paymentMethod || 'cash',
+        receivedByUserId: 'admin',
+        receivedByUserName: 'المدير المالي والخزينة',
+        targetMonth: currentTargetMonth,
+        parentPhone: trainee.parentPhone || trainee.phone,
+        traineePhone: trainee.phone,
+        previousDebt: 0,
+        discountAmount: trainee.discountAmount || 0,
+        isExempt: false,
+        nextDueDate: calculatedNextDueDate,
+        paidMonths: Array.from(new Set([...(trainee.paidMonths || []), currentTargetMonth])),
+        notes: `سداد جماعي فوري لشهر ${currentTargetMonth}`,
+        createdAt: now.toISOString(),
+        status: 'approved',
+        gdriveSyncStatus: 'synced'
+      };
+
+      await PaymentRepo.create(payment.id, payment);
+      createdPayments.push(payment);
+
+      const newPaid = (trainee.paidAmount || 0) + payAmount;
+      const traineeUpdates: any = {
+        paidAmount: newPaid,
+        remainingAmount: 0,
+        nextPaymentDueDate: calculatedNextDueDate,
+        lastPaymentDate: currentDateStr,
+        lastReceiptNumber: receiptNumber,
+        paidMonths: Array.from(new Set([...(trainee.paidMonths || []), currentTargetMonth]))
+      };
+
+      const upT = await TraineeRepo.update(trainee.id, traineeUpdates);
+      if (upT) updatedTrainees.push(upT);
+    }
+
+    db.logAudit({
+      userId: 'admin',
+      userName: 'المدير المالي والخزينة',
+      action: 'سداد فوري جماعي للمجموعة',
+      entity: 'الخزينة',
+      details: `تم السداد الفوري الجماعي لعدد ${createdPayments.length} طالب لشهر ${currentTargetMonth}`
+    });
+
+    res.json({ success: true, count: createdPayments.length, payments: createdPayments, trainees: updatedTrainees });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+apiRouter.post('/finance/payments/quick-batch-pay', handleQuickBatchPayEndpoint);
+apiRouter.post('/payments/quick-batch-pay', handleQuickBatchPayEndpoint);
 
 // Parent Submit Payment Proof
 apiRouter.post('/parent/submit-payment-proof', async (req: Request, res: Response) => {
@@ -5476,7 +5894,7 @@ apiRouter.get('/finance/summary', async (req: Request, res: Response) => {
     // Filter valid approved payments across entire system
     const validAllPayments = (allPaymentsRaw || []).filter(p => p.status === 'approved' || (!p.status && !(p as any).proofImageUrl && !(p as any).proofUrl));
     const allBranchesTotalRevenue = validAllPayments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
-    const activeGroupTraineesAll = (allTraineesRaw || []).filter(t => t.status === 'active' && Boolean(t.groupId) && t.groupId.trim() !== '' && t.groupId !== 'unassigned' && !t.isExempt);
+    const activeGroupTraineesAll = (allTraineesRaw || []).filter(t => t.status === 'active' && Boolean(t.groupId && t.groupId.trim() !== '' && t.groupId !== 'unassigned') && Boolean(t.courseId && t.courseId.trim() !== '' && t.courseId !== 'unassigned') && !t.isExempt);
     const allBranchesTotalRemaining = activeGroupTraineesAll.reduce((sum, t) => sum + (Number(t.remainingAmount) || 0), 0);
 
     const todayDateStr = new Date().toISOString().split('T')[0];
@@ -5491,7 +5909,7 @@ apiRouter.get('/finance/summary', async (req: Request, res: Response) => {
       const bSettlements = (allSettlementsRaw || []).filter(s => s.branchId === b.id);
       const bWithdrawals = (allOwnerWithdrawalsRaw || []).filter(w => w.branchId === b.id);
       const bTrainees = (allTraineesRaw || []).filter(t => t.branchId === b.id);
-      const bActiveTrainees = bTrainees.filter(t => t.status === 'active' && Boolean(t.groupId) && t.groupId.trim() !== '' && t.groupId !== 'unassigned' && !t.isExempt);
+      const bActiveTrainees = bTrainees.filter(t => t.status === 'active' && Boolean(t.groupId && t.groupId.trim() !== '' && t.groupId !== 'unassigned') && Boolean(t.courseId && t.courseId.trim() !== '' && t.courseId !== 'unassigned') && !t.isExempt);
       const bTotalRevenue = bPayments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
       const bGeneralExpenses = bExpenses.filter(e => e.category !== 'trainers' && !e.id?.startsWith('exp-tr-') && !bSettlements.some(s => s.receiptNumber && e.notes?.includes(s.receiptNumber)));
       const bTotalExpenses = bGeneralExpenses.reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
@@ -6000,18 +6418,14 @@ export async function awardTraineePoints(
   if (pVal === 0) return null;
 
   const dbData = db.getData();
-  const allTrainees = await TraineeRepo.getAll();
-  let student = allTrainees.find(t => 
+  // 🎯 Rule 2: Direct Document & In-Memory Lookup (Zero collection scan)
+  let student = (dbData.trainees || []).find((t: any) => 
     t.id === studentIdentifier || 
     t.code === studentIdentifier ||
     (t.code && studentIdentifier && String(t.code).trim().toLowerCase() === String(studentIdentifier).trim().toLowerCase())
   );
-  if (!student && Array.isArray(dbData.trainees)) {
-    student = dbData.trainees.find((t: any) => 
-      t.id === studentIdentifier || 
-      t.code === studentIdentifier ||
-      (t.code && studentIdentifier && String(t.code).trim().toLowerCase() === String(studentIdentifier).trim().toLowerCase())
-    );
+  if (!student) {
+    student = await TraineeRepo.getById(studentIdentifier);
   }
   // Fallback remote lookup if student was created in another serverless container
   if (!student) {
@@ -6111,6 +6525,10 @@ export async function awardTraineePoints(
       });
     });
   }
+
+  db.saveImmediate();
+  saveCollectionToFirestore('trainees', dbData.trainees, false).catch(() => {});
+  saveCollectionToFirestore('pointTransactions', dbData.pointTransactions, false).catch(() => {});
 
   return { student, newTotal, pt };
 }
@@ -7062,6 +7480,7 @@ apiRouter.post('/homeworks/batch-grade', async (req: Request, res: Response) => 
   }
 
   db.saveImmediate();
+  saveCollectionToFirestore('homeworkSubmissions', data.homeworkSubmissions, false).catch(() => {});
 
   res.json({ success: true, updatedCount, message: `تم تصحيح ${updatedCount} واجبات جماعياً وإرسال الدرجات بنجاح` });
 });
@@ -7180,6 +7599,7 @@ apiRouter.put('/homeworks/:id', async (req: Request, res: Response) => {
     }
 
     db.saveImmediate();
+    saveCollectionToFirestore('homeworkSubmissions', data.homeworkSubmissions, false).catch(() => {});
     res.json(sub);
   } catch (err: any) {
     res.status(500).json({ error: 'فشل حفظ التعديلات على التقرير: ' + err.message });
@@ -9176,7 +9596,8 @@ apiRouter.post('/student/login', async (req: Request, res: Response) => {
     return res.status(400).json({ error: 'يرجى إدخال كود المتدرب أو رقم هاتفه' });
   }
 
-  const trainees = await TraineeRepo.getAll();
+  const data = db.getData();
+  const trainees = (data.trainees && data.trainees.length > 0) ? data.trainees : await TraineeRepo.getAll();
   const trainee = findTraineeMatch(trainees, codeOrPhone);
 
   if (!trainee) {
@@ -10735,10 +11156,10 @@ apiRouter.post(['/student/submit-homework', '/student/submit-homework/'], async 
     }
 
     const data = db.getData();
-    const allTrainees = await TraineeRepo.getAll();
-    let trainee = allTrainees.find((t: any) => t.id === traineeId || t.code === traineeId);
-    if (!trainee && Array.isArray(data.trainees)) {
-      trainee = data.trainees.find((t: any) => t.id === traineeId || t.code === traineeId);
+    // 🎯 Rule 2: Direct Document & In-Memory Lookup (Zero collection scan)
+    let trainee = (data.trainees || []).find((t: any) => t.id === traineeId || t.code === traineeId);
+    if (!trainee) {
+      trainee = await TraineeRepo.getById(traineeId);
     }
 
     if (!trainee) {
@@ -10747,6 +11168,26 @@ apiRouter.post(['/student/submit-homework', '/student/submit-homework/'], async 
 
     const effectiveTaskTitle = taskTitle || lessonName || 'واجب التطبيق المباشر للدرس';
     const effectiveLessonName = lessonName || taskTitle || 'تطبيق وتلخيص الدرس';
+
+    // 🛡️ Rule 1: Spam & Duplication Prevention (Zero duplicate points, zero extra storage)
+    const existingSubmissions = Array.isArray(data.homeworkSubmissions) ? data.homeworkSubmissions : [];
+    const alreadySubmitted = existingSubmissions.find((s: any) => 
+      (s.traineeId === trainee.id || s.studentId === trainee.id || (trainee.code && s.traineeCode === trainee.code)) &&
+      (
+        (assignmentId && s.assignmentId === assignmentId) ||
+        (effectiveTaskTitle && s.taskTitle && s.taskTitle.trim() === effectiveTaskTitle.trim()) ||
+        (effectiveLessonName && s.lessonName && s.lessonName.trim() === effectiveLessonName.trim())
+      )
+    );
+
+    if (alreadySubmitted) {
+      return res.status(400).json({
+        error: 'تم تسليم هذا الواجب مسبقاً ولا يمكن تكرار إرساله أو احتساب نقاط إضافية.',
+        alreadySubmitted: true,
+        previousScore: alreadySubmitted.score || alreadySubmitted.grade
+      });
+    }
+
     const effectiveCourse = (data.courses || []).find((c: any) => c.id === (courseId || trainee.courseId));
     const courseName = effectiveCourse?.name || 'البرنامج التدريبي - مادة تكنولوجيا المعلومات والاتصالات ICT';
     
@@ -11016,6 +11457,7 @@ apiRouter.post(['/student/submit-homework', '/student/submit-homework/'], async 
       groupId: groupId || trainee.groupId || '',
       courseId: courseId || trainee.courseId || '',
       courseName: courseName,
+      branchId: trainee.branchId || 'branch-1',
       taskTitle: effectiveTaskTitle,
       lessonName: effectiveLessonName,
       submittedAt: new Date().toISOString(),
@@ -11090,6 +11532,7 @@ apiRouter.post(['/student/submit-homework', '/student/submit-homework/'], async 
     });
 
     db.saveImmediate();
+    saveCollectionToFirestore('homeworkSubmissions', data.homeworkSubmissions, false).catch(() => {});
 
     res.json({
       success: true,
@@ -11847,22 +12290,63 @@ apiRouter.post('/parent/login', async (req: Request, res: Response) => {
     const cleanInputDigits = inputVal.replace(/\D/g, '');
     const cleanInputCode = inputVal.toUpperCase();
 
-    const trainees = await TraineeRepo.getAll();
-    const matched = findAllTraineesMatch(trainees, inputVal);
+    const data = db.getData();
+    const trainees = (data.trainees && data.trainees.length > 0) ? data.trainees : await TraineeRepo.getAll();
+    let initialMatched = findAllTraineesMatch(trainees, inputVal);
 
-    if (matched.length === 0) {
+    if (initialMatched.length === 0) {
       return res.status(404).json({ success: false, error: 'لم يتم العثور على ولي أمر أو طالب بهذا الكود أو الرقم. يرجى التواصل مع إدارة المركز.' });
     }
 
-    const allCourses = await CourseRepo.getAll();
-    const allGroups = await GroupRepo.getAll();
-    const allTrainers = await TrainerRepo.getAll();
-    const allAttendance = await AttendanceRepo.getAll();
-    const allPayments = await PaymentRepo.getAll();
-    const allSchedules = await ScheduleRepo.getAll();
-    const allAssignments = await AssignmentRepo.getAll();
-    const allSubmissions = await HomeworkSubmissionRepo.getAll();
-    const data = db.getData();
+    // EXPAND TO ALL SIBLINGS / CHILDREN OF THE SAME PARENT:
+    const parentPhoneSet = new Set<string>();
+    const parentNatIdSet = new Set<string>();
+    const parentNameSet = new Set<string>();
+
+    initialMatched.forEach((t: any) => {
+      const pPhone = String(t.parentPhone || '').replace(/\D/g, '');
+      if (pPhone.length >= 8) parentPhoneSet.add(pPhone.slice(-9));
+      const sPhone = String(t.phone || '').replace(/\D/g, '');
+      if (sPhone.length >= 8) parentPhoneSet.add(sPhone.slice(-9));
+
+      const pNatId = String(t.parentNationalId || (t as any).nationalId || '').trim();
+      if (pNatId.length >= 6) parentNatIdSet.add(pNatId);
+
+      const pName = String(t.parentName || '').trim().toLowerCase();
+      if (pName.length >= 4) parentNameSet.add(pName);
+    });
+
+    if (cleanInputDigits.length >= 8) {
+      parentPhoneSet.add(cleanInputDigits.slice(-9));
+    }
+
+    // Include all trainees matching any of the family identifiers
+    const matched = trainees.filter((t: any) => {
+      if (initialMatched.some((m: any) => m.id === t.id)) return true;
+
+      const tPPhone = String(t.parentPhone || '').replace(/\D/g, '');
+      const tPhone = String(t.phone || '').replace(/\D/g, '');
+      const tPNatId = String(t.parentNationalId || '').trim();
+      const tPName = String(t.parentName || '').trim().toLowerCase();
+
+      for (const p of parentPhoneSet) {
+        if (tPPhone && (tPPhone.endsWith(p) || tPPhone.includes(p))) return true;
+        if (tPhone && (tPhone.endsWith(p) || tPhone.includes(p))) return true;
+      }
+      if (tPNatId && parentNatIdSet.has(tPNatId)) return true;
+      if (tPName && parentNameSet.has(tPName)) return true;
+
+      return false;
+    });
+
+    const allCourses = data.courses || [];
+    const allGroups = data.groups || [];
+    const allTrainers = data.trainers || [];
+    const allAttendance = data.attendance || [];
+    const allPayments = data.payments || [];
+    const allSchedules = data.schedules || [];
+    const allAssignments = data.assignments || [];
+    const allSubmissions = data.homeworkSubmissions || [];
 
     const enrichedChildren = matched.map(t => {
       const course = allCourses.find(c => c.id === t.courseId);
@@ -12024,6 +12508,110 @@ apiRouter.post('/parent/login', async (req: Request, res: Response) => {
       },
       children: enrichedChildren,
       students: enrichedChildren
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Link Additional Child by Code or Phone
+apiRouter.post('/parent/link-child', async (req: Request, res: Response) => {
+  try {
+    const { studentCodeOrPhone, parentPhone } = req.body;
+    const query = String(studentCodeOrPhone || '').trim();
+    if (!query) {
+      return res.status(400).json({ success: false, error: 'يرجى كتابة كود الطالب أو رقم هاتفه للربط' });
+    }
+
+    const trainees = await TraineeRepo.getAll();
+    const targetStudent = findTraineeMatch(trainees, query);
+
+    if (!targetStudent) {
+      return res.status(404).json({ success: false, error: `لم يتم العثور على طالب مسجل بالكود أو الهاتف (${query}). يرجى التحقق من الكود.` });
+    }
+
+    // Link parentPhone to target student if parentPhone provided
+    const cleanParentPhone = String(parentPhone || '').trim();
+    if (cleanParentPhone && !targetStudent.parentPhone) {
+      await TraineeRepo.update(targetStudent.id, { parentPhone: cleanParentPhone });
+      targetStudent.parentPhone = cleanParentPhone;
+    }
+
+    const allCourses = await CourseRepo.getAll();
+    const allGroups = await GroupRepo.getAll();
+    const allTrainers = await TrainerRepo.getAll();
+    const allAttendance = await AttendanceRepo.getAll();
+    const allPayments = await PaymentRepo.getAll();
+    const allSchedules = await ScheduleRepo.getAll();
+    const allSubmissions = await HomeworkSubmissionRepo.getAll();
+    const data = db.getData();
+
+    const course = allCourses.find(c => c.id === targetStudent.courseId);
+    const group = allGroups.find(g => g.id === targetStudent.groupId);
+    const trainer = group ? allTrainers.find(tr => tr.id === group.trainerId) : null;
+
+    const childAtt = allAttendance.filter((a: any) =>
+      a.student_id === targetStudent.id || a.studentId === targetStudent.id || a.traineeId === targetStudent.id || a.student_code === targetStudent.code
+    );
+
+    const childSched = allSchedules.filter((s: any) =>
+      s.groupId === targetStudent.groupId || s.courseId === targetStudent.courseId || s.branchId === targetStudent.branchId
+    );
+
+    const childBadges = (data.badges || []).filter((b: any) =>
+      b.traineeId === targetStudent.id || b.studentId === targetStudent.id ||
+      (b.traineeCode && targetStudent.code && String(b.traineeCode).trim().toLowerCase() === String(targetStudent.code).trim().toLowerCase())
+    );
+
+    const childCerts = (data.certificates || []).filter((c: any) =>
+      c.traineeId === targetStudent.id || c.studentId === targetStudent.id ||
+      (c.traineeCode && targetStudent.code && String(c.traineeCode).trim().toLowerCase() === String(targetStudent.code).trim().toLowerCase()) ||
+      (c.studentCode && targetStudent.code && String(c.studentCode).trim().toLowerCase() === String(targetStudent.code).trim().toLowerCase())
+    );
+
+    const childPay = allPayments.filter((p: any) =>
+      p.student_id === targetStudent.id || p.studentId === targetStudent.id || p.traineeId === targetStudent.id
+    );
+
+    const childMsgs = (data.portalMessages || []).filter((m: any) =>
+      m.traineeId === targetStudent.id || m.traineeCode === targetStudent.code
+    );
+
+    const childHWList = allSubmissions.filter((s: any) =>
+      s.studentId === targetStudent.id || s.traineeId === targetStudent.id ||
+      (s.studentCode && targetStudent.code && String(s.studentCode).trim().toLowerCase() === String(targetStudent.code).trim().toLowerCase())
+    );
+
+    const enriched = {
+      ...targetStudent,
+      courseName: course?.name || 'البرنامج التدريبي العام',
+      groupName: group?.name || 'المجموعة المعتمدة',
+      badges: childBadges,
+      certificates: childCerts,
+      evaluations: [],
+      attendance: childAtt,
+      schedules: childSched,
+      attendanceCount: childAtt.filter((a: any) => a.status === 'present').length,
+      totalAttendance: childAtt.length,
+      payments: childPay,
+      messages: childMsgs,
+      assignments: [],
+      homeworks: childHWList,
+      recaps: [],
+      groupDetails: group,
+      trainer: trainer ? {
+        id: trainer.id,
+        name: trainer.name,
+        phone: trainer.phone,
+        email: trainer.email,
+        specialty: (trainer as any).specialty || 'محاضر وتدريب عملي'
+      } : null
+    };
+
+    res.json({
+      success: true,
+      message: `تم ربط الابن (${targetStudent.fullName}) بنجاح! 🎉`,
+      child: enriched
     });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
@@ -12220,7 +12808,7 @@ apiRouter.post('/trainer-portal/attendance', async (req: Request, res: Response)
 // Review Homework Submission
 apiRouter.post('/trainer-portal/review-homework', async (req: Request, res: Response) => {
   try {
-    const { submissionId, trainerId, grade, trainerFeedback, pointsToAward, trainerNotes } = req.body;
+    const { submissionId, trainerId, grade, trainerFeedback, pointsToAward, trainerNotes, stars } = req.body;
     const data = db.getData();
     if (!Array.isArray(data.homeworkSubmissions)) data.homeworkSubmissions = [];
 
@@ -12235,6 +12823,7 @@ apiRouter.post('/trainer-portal/review-homework', async (req: Request, res: Resp
     }
     if (trainerFeedback) sub.generalFeedback = trainerFeedback;
     if (trainerNotes) sub.trainerNotes = trainerNotes;
+    if (stars !== undefined) sub.stars = Number(stars);
     sub.status = 'reviewed';
     sub.reviewedAt = new Date().toISOString();
     sub.reviewedByTrainerId = trainerId;
@@ -12279,6 +12868,7 @@ apiRouter.post('/trainer-portal/review-homework', async (req: Request, res: Resp
     });
 
     db.saveImmediate();
+    saveCollectionToFirestore('homeworkSubmissions', data.homeworkSubmissions, false).catch(() => {});
     res.json({ success: true, submission: sub, message: 'تم حفظ اعتماد الواجب ورصد النقاط والتقارير بنجاح' });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });

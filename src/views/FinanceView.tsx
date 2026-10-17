@@ -62,16 +62,20 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ initialTab }) => {
     openAiModal,
     trainees: ctxTrainees,
     courses: ctxCourses,
+    groups: ctxGroups,
     trainers: ctxTrainers,
     settings: ctxSettings
   } = useCenter();
   const { user, canAccess } = useAuth();
   const [activeTab, setActiveTab] = useState<'financialLedger' | 'groupCollection' | 'payments' | 'expenses' | 'pendingProofs' | 'settlements' | 'trainerShares' | 'gradesBreakdown' | 'exemptions' | 'courseClosing' | 'ownerWithdrawals'>(
-    initialTab || 'financialLedger'
+    initialTab || 'groupCollection'
   );
   const [isClosingReportModalOpen, setIsClosingReportModalOpen] = useState(false);
   const [selectedTrainerForPayout, setSelectedTrainerForPayout] = useState<any | null>(null);
   const [isPayoutModalOpen, setIsPayoutModalOpen] = useState(false);
+  const [isBranchRosterModalOpen, setIsBranchRosterModalOpen] = useState(false);
+  const [rosterTab, setRosterTab] = useState<'all' | 'paid' | 'unpaid'>('all');
+  const [rosterSearch, setRosterSearch] = useState('');
   const [selectedFinanceBranchId, setSelectedFinanceBranchId] = useState<string>('all');
   const [payments, setPayments] = useState<Payment[]>([]);
   const [allPayments, setAllPayments] = useState<Payment[]>([]);
@@ -465,11 +469,40 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ initialTab }) => {
     }
   };
 
+  // 🗑️ Delete Payment (حذف وإلغاء سند تحصيل المصاريف وإعادة ضبط حساب الطالب)
+  const handleDeletePaymentReceipt = async (payment: any) => {
+    if (!confirm(`هل أنت متأكد من حذف وإلغاء سند السداد رقم (${payment.receiptNumber || payment.id}) للطالب "${payment.traineeName || payment.traineeCode}" بمبلغ ${payment.amount} ج.م؟\n\n⚠️ سيتم التراجع عن الدفعة وإعادة فتح السداد للطالب كغير مسدد فوراً.`)) return;
+    try {
+      const res = await api.deletePayment(payment.id);
+      if (res?.success) {
+        showToast('تم حذف سند السداد بنجاح وإعادة ضبط رصيد الطالب كغير مسدد 🗑️', 'success');
+        try {
+          new BroadcastChannel('nagah_finance_channel').postMessage({ type: 'FINANCE_MUTATED' });
+          localStorage.setItem('nagah_last_financial_mutation', Date.now().toString());
+        } catch {}
+        await loadFinanceData(true);
+        refreshCoreData(true).catch(() => {});
+      }
+    } catch (err: any) {
+      showToast(err.message || 'فشل حذف سند السداد', 'error');
+    }
+  };
+
   const handleUpdateTrainerPercentage = async (trainerId: string, newPct: number) => {
     setIsUpdatingTrainerPct(true);
     try {
-      const res = await api.updateTrainer(trainerId, { percentage: Number(newPct) });
+      const res = await api.updateTrainer(trainerId, { 
+        percentage: Number(newPct),
+        commissionRate: Number(newPct),
+        commissionValue: Number(newPct)
+      });
       if (res) {
+        setTrainers(prev => prev.map(t => t.id === trainerId ? { 
+          ...t, 
+          percentage: Number(newPct),
+          commissionRate: Number(newPct),
+          commissionValue: Number(newPct)
+        } : t));
         showToast(`تم تحديث نسبة المدرب إلى ${newPct}% بنجاح!`, 'success');
         setEditingTrainerPctId(null);
         try {
@@ -884,18 +917,40 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ initialTab }) => {
       .reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
   }, [branchFilteredPayments, currentMonthStr]);
 
-  // 3. المستحق هذا الشهر (Due Expected Fees this month - only active & group-assigned trainees)
+  // 3. المستحق هذا الشهر (Due Expected Fees this month - only active & group-assigned & course-assigned trainees)
   const dueThisMonth = useMemo(() => {
     return branchFilteredTrainees
-      .filter(t => t.status === 'active' && Boolean(t.groupId) && t.groupId.trim() !== '' && t.groupId !== 'unassigned' && !t.isExempt)
+      .filter(t => t.status === 'active' && Boolean(t.groupId && t.groupId.trim() !== '' && t.groupId !== 'unassigned') && Boolean(t.courseId && t.courseId.trim() !== '' && t.courseId !== 'unassigned') && !t.isExempt)
       .reduce((sum, t) => sum + (Number(t.netAmount) || Number(t.feeAmount) || 0), 0);
   }, [branchFilteredTrainees]);
 
-  // 4. مديونية ومتأخرات هذا الشهر (Debt / Unpaid This Month - only active & group-assigned trainees)
+  // 4. مديونية ومتأخرات هذا الشهر (Debt / Unpaid arrears - taking Day 25 billing date into account)
   const debtThisMonth = useMemo(() => {
+    const now = new Date();
+    const currentDay = now.getDate();
     return branchFilteredTrainees
-      .filter(t => t.status === 'active' && Boolean(t.groupId) && t.groupId.trim() !== '' && t.groupId !== 'unassigned' && !t.isExempt)
-      .reduce((sum, t) => sum + (Number(t.remainingAmount) || 0), 0);
+      .filter(t => t.status === 'active' && Boolean(t.groupId && t.groupId.trim() !== '' && t.groupId !== 'unassigned') && Boolean(t.courseId && t.courseId.trim() !== '' && t.courseId !== 'unassigned') && !t.isExempt)
+      .reduce((sum, t) => {
+        const paidMonths = Array.isArray(t.paidMonths) ? t.paidMonths : [];
+        const hasPaidSept = paidMonths.some((m: string) => m && (m.includes('سبتمبر') || m.includes('شهر 9')));
+        const net = Math.max(0, (Number(t.feeAmount) || 200) - (Number(t.discountAmount) || 0));
+        
+        // If September is unpaid, September is an overdue debt!
+        if (!hasPaidSept) {
+          return sum + net;
+        }
+
+        // If September is paid, current month is only due after day 25
+        if (currentDay >= 25) {
+          const currentMonthName = now.toLocaleString('ar-EG', { month: 'long' });
+          const hasPaidCurrent = paidMonths.some((m: string) => m && m.includes(currentMonthName));
+          if (!hasPaidCurrent) {
+            return sum + net;
+          }
+        }
+
+        return sum;
+      }, 0);
   }, [branchFilteredTrainees]);
 
   // 5. المديونية السابقة والمتراكمة (Previous Debts)
@@ -1151,7 +1206,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ initialTab }) => {
           >
             <span>🏢 جميع الفروع</span>
             <span className="font-mono text-[11px] px-1.5 py-0.5 rounded bg-black/10 dark:bg-white/10 font-bold">
-              {(summary?.netTreasury && selectedFinanceBranchId === 'all' ? summary.netTreasury : 4800).toLocaleString()} ج.م
+              {actualNetTreasury.toLocaleString()} ج.م
             </span>
           </button>
           
@@ -1166,7 +1221,9 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ initialTab }) => {
           >
             <span>📍 فرع النجاح</span>
             <span className="font-mono text-[11px] px-1.5 py-0.5 rounded bg-black/10 dark:bg-white/10 font-bold">
-              {(summary?.branchBreakdowns?.find((b: any) => b.branchId === 'branch-1')?.netTreasury ?? 3700).toLocaleString()} ج.م
+              {(summary?.branchBreakdowns?.find((b: any) => b.branchId === 'branch-1')?.netTreasury ?? 
+                Math.max(0, payments.filter(p => p.branchId === 'branch-1').reduce((s, p) => s + (Number(p.amount) || 0), 0) - expensesList.filter(e => e.branchId === 'branch-1').reduce((s, e) => s + (Number(e.amount) || 0), 0) - settlements.filter(s => s.branchId === 'branch-1').reduce((s, set) => s + (Number(set.amount) || 0), 0))
+              ).toLocaleString()} ج.م
             </span>
           </button>
 
@@ -1181,7 +1238,9 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ initialTab }) => {
           >
             <span>📍 فرع بدر</span>
             <span className="font-mono text-[11px] px-1.5 py-0.5 rounded bg-black/10 dark:bg-white/10 font-bold">
-              {(summary?.branchBreakdowns?.find((b: any) => b.branchId === 'branch-2')?.netTreasury ?? 1100).toLocaleString()} ج.م
+              {(summary?.branchBreakdowns?.find((b: any) => b.branchId === 'branch-2')?.netTreasury ?? 
+                Math.max(0, payments.filter(p => p.branchId === 'branch-2').reduce((s, p) => s + (Number(p.amount) || 0), 0) - expensesList.filter(e => e.branchId === 'branch-2').reduce((s, e) => s + (Number(e.amount) || 0), 0) - settlements.filter(s => s.branchId === 'branch-2').reduce((s, set) => s + (Number(set.amount) || 0), 0))
+              ).toLocaleString()} ج.م
             </span>
           </button>
         </div>
@@ -1190,7 +1249,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ initialTab }) => {
           {selectedFinanceBranchId === 'all' ? (
             <span className="text-emerald-700 dark:text-emerald-400 flex items-center gap-1">
               <CheckCircle2 className="w-4 h-4" />
-              <span>إجمالي كافة الفروع مجتمعة (الخزينة العامة: {(summary?.netTreasury || 4800).toLocaleString()} ج.م)</span>
+              <span>إجمالي كافة الفروع مجتمعة (الخزينة العامة: {actualNetTreasury.toLocaleString()} ج.م)</span>
             </span>
           ) : (
             <button
@@ -1224,31 +1283,31 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ initialTab }) => {
         </div>
       )}
 
-      {/* Executive Financial KPI Cockpit (البطاقات والمربعات المالية) */}
+      {/* Executive Financial KPI Cockpit (البطاقات والمربعات المالية المبسطة والواضحة) */}
       <div className="space-y-3">
-        {/* Main 6-Cards Executive Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
-          {/* Card 1: رصيد الخزينة */}
-          <div className="bg-gradient-to-br from-emerald-500 to-teal-700 text-white p-4 rounded-2xl shadow-md shadow-emerald-600/20 border border-emerald-400/40 flex flex-col justify-between relative overflow-hidden group">
-            <div className="absolute top-0 left-0 w-24 h-24 bg-white/10 rounded-full blur-2xl -translate-x-6 -translate-y-6"></div>
+        {/* Streamlined Executive 4-Cards Grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+          {/* Card 1: رصيد الخزينة المتاح */}
+          <div className="bg-gradient-to-br from-emerald-600 via-teal-700 to-emerald-800 text-white p-5 rounded-3xl shadow-lg shadow-emerald-700/20 border border-emerald-400/40 flex flex-col justify-between relative overflow-hidden group">
+            <div className="absolute top-0 left-0 w-28 h-28 bg-white/10 rounded-full blur-2xl -translate-x-6 -translate-y-6"></div>
             <div>
               <div className="flex items-center justify-between gap-2">
                 <span className="text-xs font-black text-emerald-100 flex items-center gap-1.5">
                   <Landmark className="w-4 h-4 text-white" />
-                  <span>رصيد الخزينة</span>
+                  <span>صافي الخزينة الفعلي (الدرج)</span>
                 </span>
-                <span className="w-2 h-2 rounded-full bg-white animate-ping"></span>
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-300 animate-pulse"></span>
               </div>
-              <div className="text-2xl font-black font-mono tracking-tight mt-1">
-                {actualNetTreasury.toLocaleString()} <span className="text-xs font-normal">ج.م</span>
+              <div className="text-3xl font-black font-mono tracking-tight mt-2">
+                {actualNetTreasury.toLocaleString()} <span className="text-sm font-normal">ج.م</span>
               </div>
             </div>
-            <div className="mt-2 pt-2 border-t border-white/20 flex items-center justify-between gap-1 text-[10px] text-emerald-100">
-              <span>{totalCollectedAllTime.toLocaleString()} - {totalExpensesPaid.toLocaleString()}</span>
+            <div className="mt-3 pt-2.5 border-t border-white/20 flex items-center justify-between gap-1 text-[11px] text-emerald-100">
+              <span className="font-mono">المحصل: {totalCollectedAllTime.toLocaleString()} - المنصرف: {(totalExpensesPaid + totalSettlementsPaid).toLocaleString()}</span>
               <button
                 type="button"
                 onClick={() => handleOpenOwnerWithdrawalModal(selectedFinanceBranchId)}
-                className="px-2 py-0.5 rounded-lg bg-white/20 hover:bg-white text-white hover:text-emerald-800 font-bold transition-all text-[10px] flex items-center gap-1 cursor-pointer"
+                className="px-2.5 py-1 rounded-xl bg-white/20 hover:bg-white text-white hover:text-emerald-800 font-bold transition-all text-[10px] flex items-center gap-1 cursor-pointer shadow-xs"
               >
                 <Crown className="w-3 h-3" />
                 <span>صرف أرباح</span>
@@ -1257,130 +1316,74 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ initialTab }) => {
           </div>
 
           {/* Card 2: إجمالي المحصل */}
-          <div className="bg-white dark:bg-slate-900 border-2 border-teal-200 dark:border-teal-500/30 p-4 rounded-2xl shadow-xs flex flex-col justify-between hover:border-teal-400 transition-all">
+          <div className="bg-white dark:bg-slate-900 border-2 border-teal-200 dark:border-teal-500/30 p-5 rounded-3xl shadow-sm flex flex-col justify-between hover:border-teal-400 transition-all">
             <div>
-              <span className="text-xs font-black text-teal-800 dark:text-teal-300 flex items-center gap-1.5">
-                <TrendingUp className="w-4 h-4 text-teal-600 dark:text-teal-400" />
-                <span>إجمالي المحصل</span>
-              </span>
-              <div className="text-2xl font-black font-mono text-teal-700 dark:text-teal-300 tracking-tight mt-1">
-                {totalCollectedAllTime.toLocaleString()} <span className="text-xs font-normal">ج.م</span>
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-black text-teal-800 dark:text-teal-300 flex items-center gap-1.5">
+                  <TrendingUp className="w-4 h-4 text-teal-600 dark:text-teal-400" />
+                  <span>إجمالي المحصل الفعلي</span>
+                </span>
+                <span className="font-mono text-xs font-bold text-teal-600 dark:text-teal-400 bg-teal-50 dark:bg-teal-950/60 px-2 py-0.5 rounded-lg border border-teal-200 dark:border-teal-500/30">
+                  {branchFilteredPayments.length} سند
+                </span>
+              </div>
+              <div className="text-3xl font-black font-mono text-teal-700 dark:text-teal-300 tracking-tight mt-2">
+                {totalCollectedAllTime.toLocaleString()} <span className="text-sm font-normal">ج.م</span>
               </div>
             </div>
-            <div className="mt-2 pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-[10px] text-slate-500 dark:text-slate-400">
-              <span>سندات معتمدة</span>
-              <span className="font-mono font-bold text-teal-600 dark:text-teal-400">{branchFilteredPayments.length}</span>
+            <div className="mt-3 pt-2.5 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
+              <span>وارد اليوم:</span>
+              <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">{todayTotal.toLocaleString()} ج.م</span>
             </div>
           </div>
 
-          {/* Card 3: محصل الشهر */}
-          <div className="bg-white dark:bg-slate-900 border-2 border-indigo-200 dark:border-indigo-500/30 p-4 rounded-2xl shadow-xs flex flex-col justify-between hover:border-indigo-400 transition-all">
+          {/* Card 3: إجمالي المنصرف */}
+          <div className="bg-white dark:bg-slate-900 border-2 border-rose-200 dark:border-rose-500/30 p-5 rounded-3xl shadow-sm flex flex-col justify-between hover:border-rose-400 transition-all">
             <div>
-              <span className="text-xs font-black text-indigo-800 dark:text-indigo-300 flex items-center gap-1.5">
-                <Calendar className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
-                <span>محصل الشهر</span>
-              </span>
-              <div className="text-2xl font-black font-mono text-indigo-700 dark:text-indigo-300 tracking-tight mt-1">
-                {collectedThisMonth.toLocaleString()} <span className="text-xs font-normal">ج.م</span>
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-black text-rose-800 dark:text-rose-300 flex items-center gap-1.5">
+                  <Receipt className="w-4 h-4 text-rose-600 dark:text-rose-400" />
+                  <span>إجمالي المصروفات والمنصرف</span>
+                </span>
+              </div>
+              <div className="text-3xl font-black font-mono text-rose-700 dark:text-rose-300 tracking-tight mt-2">
+                {(totalExpensesPaid + totalSettlementsPaid + totalOwnerWithdrawalsPaid).toLocaleString()} <span className="text-sm font-normal">ج.م</span>
               </div>
             </div>
-            <div className="mt-2 pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-[10px] text-slate-500 dark:text-slate-400">
-              <span>{currentMonthArabicName}</span>
-              <span className="font-mono font-bold text-indigo-600 dark:text-indigo-400">
-                {branchFilteredPayments.filter(p => (p.date || '').startsWith(currentMonthStr)).length} سند
-              </span>
+            <div className="mt-3 pt-2.5 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 font-mono">
+              <span>مصاريف: {totalExpensesPaid.toLocaleString()}</span>
+              {totalSettlementsPaid > 0 && <span>| مدربين: {totalSettlementsPaid.toLocaleString()}</span>}
             </div>
           </div>
 
-          {/* Card 4: المستحق */}
-          <div className="bg-white dark:bg-slate-900 border-2 border-sky-200 dark:border-sky-500/30 p-4 rounded-2xl shadow-xs flex flex-col justify-between hover:border-sky-400 transition-all">
+          {/* Card 4: المتبقي والمتأخرات */}
+          <div className="bg-white dark:bg-slate-900 border-2 border-amber-200 dark:border-amber-500/30 p-5 rounded-3xl shadow-sm flex flex-col justify-between hover:border-amber-400 transition-all">
             <div>
-              <span className="text-xs font-black text-sky-800 dark:text-sky-300 flex items-center gap-1.5">
-                <Coins className="w-4 h-4 text-sky-600 dark:text-sky-400" />
-                <span>المستحق</span>
-              </span>
-              <div className="text-2xl font-black font-mono text-sky-700 dark:text-sky-300 tracking-tight mt-1">
-                {dueThisMonth.toLocaleString()} <span className="text-xs font-normal">ج.م</span>
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-black text-amber-800 dark:text-amber-300 flex items-center gap-1.5">
+                  <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+                  <span>متأخرات ومتبقي الطلاب</span>
+                </span>
+                <span className="font-mono text-xs font-bold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/60 px-2 py-0.5 rounded-lg border border-amber-200 dark:border-amber-500/30">
+                  {branchFilteredTrainees.filter(t => t.status === 'active' && Boolean(t.groupId && t.groupId.trim() !== '' && t.groupId !== 'unassigned') && Boolean(t.courseId && t.courseId.trim() !== '' && t.courseId !== 'unassigned') && !t.isExempt && (t.remainingAmount || 0) > 0).length} غير مسدد
+                </span>
+              </div>
+              <div className="text-3xl font-black font-mono text-amber-700 dark:text-amber-400 tracking-tight mt-2">
+                {debtThisMonth.toLocaleString()} <span className="text-sm font-normal">ج.م</span>
               </div>
             </div>
-            <div className="mt-2 pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-[10px] text-slate-500 dark:text-slate-400">
-              <span>التحصيل</span>
-              <span className="font-mono font-bold text-sky-600 dark:text-sky-400">
-                {dueThisMonth > 0 ? Math.round((collectedThisMonth / dueThisMonth) * 100) : 0}%
-              </span>
-            </div>
-          </div>
-
-          {/* Card 5: متأخرات الشهر */}
-          <div className="bg-white dark:bg-slate-900 border-2 border-amber-200 dark:border-amber-500/30 p-4 rounded-2xl shadow-xs flex flex-col justify-between hover:border-amber-400 transition-all">
-            <div>
-              <span className="text-xs font-black text-amber-800 dark:text-amber-300 flex items-center gap-1.5">
-                <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400" />
-                <span>متأخرات الشهر</span>
-              </span>
-              <div className="text-2xl font-black font-mono text-amber-700 dark:text-amber-400 tracking-tight mt-1">
-                {debtThisMonth.toLocaleString()} <span className="text-xs font-normal">ج.م</span>
-              </div>
-            </div>
-            <div className="mt-2 pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-[10px] text-slate-500 dark:text-slate-400">
-              <span>المتبقي</span>
-              <span className="font-mono font-bold text-amber-600 dark:text-amber-400">
-                {branchFilteredTrainees.filter(t => t.status === 'active' && Boolean(t.groupId) && t.groupId.trim() !== '' && t.groupId !== 'unassigned' && !t.isExempt && (t.remainingAmount || 0) > 0).length} طالب
-              </span>
-            </div>
-          </div>
-
-          {/* Card 6: متأخرات سابقة */}
-          <div className="bg-white dark:bg-slate-900 border-2 border-purple-200 dark:border-purple-500/30 p-4 rounded-2xl shadow-xs flex flex-col justify-between hover:border-purple-400 transition-all">
-            <div>
-              <span className="text-xs font-black text-purple-800 dark:text-purple-300 flex items-center gap-1.5">
-                <Clock className="w-4 h-4 text-purple-600 dark:text-purple-400" />
-                <span>متأخرات سابقة</span>
-              </span>
-              <div className="text-2xl font-black font-mono text-purple-700 dark:text-purple-300 tracking-tight mt-1">
-                {previousDebts.toLocaleString()} <span className="text-xs font-normal">ج.م</span>
-              </div>
-            </div>
-            <div className="mt-2 pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-[10px] text-slate-500 dark:text-slate-400">
-              <span>أشهر سابقة</span>
-              <span className="font-mono font-bold text-purple-600 dark:text-purple-400">مرحل</span>
+            <div className="mt-3 pt-2.5 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
+              <span>إجمالي المطلوب:</span>
+              <span className="font-mono font-bold text-sky-600 dark:text-sky-400">{dueThisMonth.toLocaleString()} ج.م</span>
             </div>
           </div>
         </div>
 
-        {/* Math Equation & Expenses Summary Strip */}
-        <div className="bg-gradient-to-r from-slate-900 via-slate-850 to-slate-900 border border-slate-800 rounded-2xl p-3 px-4 text-white shadow-xs flex flex-wrap items-center justify-between gap-3 text-xs">
-          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-            <span className="font-black text-amber-400 flex items-center gap-1.5">
-              <Banknote className="w-4 h-4" />
-              <span>حركة الخزينة:</span>
-            </span>
-            <span className="px-2.5 py-1 rounded-xl bg-emerald-950/80 border border-emerald-500/40 text-emerald-300 font-mono font-bold">
-              المحصل: {totalCollectedAllTime.toLocaleString()} ج.م
-            </span>
-            <span className="text-slate-400 font-black">-</span>
-            <span className="px-2.5 py-1 rounded-xl bg-rose-950/80 border border-rose-500/40 text-rose-300 font-mono font-bold" title="شامل 1000 ج.م إيجار مقر مركز بدر">
-              المصروفات: {totalExpensesPaid.toLocaleString()} ج.م
-            </span>
-            {totalSettlementsPaid > 0 && (
-              <>
-                <span className="text-slate-400 font-black">-</span>
-                <span className="px-2.5 py-1 rounded-xl bg-amber-950/80 border border-amber-500/40 text-amber-300 font-mono font-bold">
-                  صرف المدربين: {totalSettlementsPaid.toLocaleString()} ج.م
-                </span>
-              </>
-            )}
-            {totalOwnerWithdrawalsPaid > 0 && (
-              <>
-                <span className="text-slate-400 font-black">-</span>
-                <span className="px-2.5 py-1 rounded-xl bg-purple-950/80 border border-purple-500/40 text-purple-300 font-mono font-bold">
-                  مسحوبات المالك: {totalOwnerWithdrawalsPaid.toLocaleString()} ج.م
-                </span>
-              </>
-            )}
-            <span className="text-slate-400 font-black">=</span>
-            <span className="px-3 py-1 rounded-xl bg-emerald-500 text-slate-950 font-mono font-black shadow-xs">
-              الخزينة: {actualNetTreasury.toLocaleString()} ج.م
+        {/* Quick Movements & Today Summary */}
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-3 px-4 text-white shadow-xs flex flex-wrap items-center justify-between gap-3 text-xs">
+          <div className="flex items-center gap-2">
+            <span className="font-bold text-slate-300">
+              💰 حركة الخزينة المعتمدة: المحصل ({totalCollectedAllTime.toLocaleString()} ج.م) - المنصرف ({(totalExpensesPaid + totalSettlementsPaid).toLocaleString()} ج.م) = صافي الخزينة ({actualNetTreasury.toLocaleString()} ج.م)
             </span>
           </div>
 
@@ -1467,29 +1470,30 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ initialTab }) => {
 
       {/* Tabs Switcher */}
       <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 dark:border-slate-700 pb-3">
-        {/* Main Financial Movement Tab */}
-        <button
-          onClick={() => setActiveTab('financialLedger')}
-          className={`px-4 py-2.5 rounded-xl text-xs font-black transition-all flex items-center gap-2 shadow-sm active:scale-95 ${
-            activeTab === 'financialLedger'
-              ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-md shadow-emerald-600/30 ring-2 ring-emerald-400'
-              : 'text-emerald-800 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 bg-white dark:bg-slate-900 border border-emerald-300 dark:border-emerald-500/40'
-          }`}
-        >
-          <Wallet className="w-4 h-4 text-emerald-500 dark:text-emerald-400" />
-          <span>حركة الماليات</span>
-        </button>
-
+        {/* 1. Group Collection Tab (First & Primary) */}
         <button
           onClick={() => setActiveTab('groupCollection')}
-          className={`px-4 py-2.5 rounded-xl text-xs font-black transition-all flex items-center gap-2 shadow-sm active:scale-95 ${
+          className={`px-4 py-2.5 rounded-xl text-xs font-black transition-all flex items-center gap-2 shadow-sm active:scale-95 cursor-pointer ${
             activeTab === 'groupCollection'
               ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-md shadow-emerald-600/30 ring-2 ring-emerald-400'
               : 'text-emerald-800 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 bg-white dark:bg-slate-900 border border-emerald-300 dark:border-emerald-500/40'
           }`}
         >
-          <Zap className="w-4 h-4 text-emerald-500 dark:text-emerald-400" />
-          <span>تحصيل المجموعات</span>
+          <Zap className="w-4 h-4 text-amber-400" />
+          <span>⚡ تحصيل المجموعات والطلاب</span>
+        </button>
+
+        {/* 2. Main Financial Movement & Ledger */}
+        <button
+          onClick={() => setActiveTab('financialLedger')}
+          className={`px-4 py-2.5 rounded-xl text-xs font-black transition-all flex items-center gap-2 shadow-sm active:scale-95 cursor-pointer ${
+            activeTab === 'financialLedger'
+              ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-md shadow-emerald-600/30 ring-2 ring-emerald-400'
+              : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700'
+          }`}
+        >
+          <Wallet className="w-4 h-4 text-emerald-500 dark:text-emerald-400" />
+          <span>حركة الخزينة والوارد</span>
         </button>
 
         <button
@@ -1849,6 +1853,13 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ initialTab }) => {
                               >
                                 <Printer className="w-3.5 h-3.5" />
                               </button>
+                              <button
+                                onClick={() => handleDeletePaymentReceipt(tx.raw)}
+                                className="p-1.5 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 rounded-lg transition-all cursor-pointer"
+                                title="حذف وإلغاء سند السداد وإعادة فتح استحقاق الطالب"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
                             </div>
                           ) : tx.type === 'withdrawal' && isManagerOrAccountant ? (
                             <button
@@ -1874,7 +1885,28 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ initialTab }) => {
 
       {/* Group Cash Collection Cockpit View */}
       {activeTab === 'groupCollection' && (
-        <GroupCashCollectionCockpit />
+        <GroupCashCollectionCockpit 
+          externalPayments={allPayments.length > 0 ? allPayments : payments}
+          onPaymentSuccess={(newPayment, updatedTrainee) => {
+            // Update FinanceView local states immediately so totals NEVER revert!
+            setPayments(prev => [newPayment, ...prev.filter(p => p.id !== newPayment.id)]);
+            setAllPayments(prev => [newPayment, ...prev.filter(p => p.id !== newPayment.id)]);
+            if (updatedTrainee) {
+              setTrainees(prev => prev.map(t => t.id === updatedTrainee.id ? updatedTrainee : t));
+            }
+            setSummary((prev: any) => {
+              if (!prev) return prev;
+              const amt = Number(newPayment.amount) || 0;
+              return {
+                ...prev,
+                totalRevenue: (prev.totalRevenue || 0) + amt,
+                netTreasury: (prev.netTreasury || 0) + amt,
+                paymentsCount: (prev.paymentsCount || 0) + 1
+              };
+            });
+          }}
+          onRefreshParent={() => loadFinanceData(true)}
+        />
       )}
 
       {/* Expenses Management View */}

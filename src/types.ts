@@ -100,6 +100,8 @@ export interface Trainee {
   groupName?: string;
   trainerId?: string;
   registrationDate: string;
+  subscriptionStartDate?: string; // تاريخ بدء الاشتراك / الحضور الفعلي وحساب المصروفات
+  startBillingMonth?: string; // شهر بدء الاستحقاق المالي (مثال: "سبتمبر 2026" أو "أكتوبر 2026")
   createdAt?: string;
   status: 'active' | 'completed' | 'dropped' | 'suspended';
   feeAmount: number;

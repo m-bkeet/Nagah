@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 import os from 'os';
-import { saveFullDbToFirestore, loadFullDbFromFirestore, loadCollectionFromFirestore, getSyncMeta } from './firestoreStorage.ts';
+import { saveFullDbToFirestore, loadFullDbFromFirestore, loadCollectionFromFirestore, saveCollectionToFirestore, getSyncMeta } from './firestoreStorage';
 import {
   User,
   Branch,
@@ -3757,6 +3757,7 @@ class DatabaseManager {
   private lastHydrationTime = 0;
   private lastHydrationAttemptTime = 0;
   private lastRemoteSyncMetaTime = 0;
+  private lastLocalMutationTime = 0;
   private hydrationPromise: Promise<void> | null = null;
 
   public deduplicateTrainees(list: any[]): any[] {
@@ -3853,7 +3854,14 @@ class DatabaseManager {
 
   public async ensureHydrated(force = false): Promise<void> {
     const now = Date.now();
-    const CACHE_TTL_MS = 2000; // 2 seconds heartbeat to ensure fast multi-window / desktop shortcut sync without burning quota
+    // Protect recent local mutations against race conditions:
+    // If a local mutation happened within the last 45 seconds, the local server has newer data
+    // than Firestore which might still be processing the background write. Never overwrite!
+    if (now - this.lastLocalMutationTime < 45000) {
+      return;
+    }
+
+    const CACHE_TTL_MS = 10000; // 10 seconds heartbeat
     if (!force && this.isFirestoreHydrated && (now - this.lastHydrationTime < CACHE_TTL_MS)) {
       return;
     }
@@ -3882,23 +3890,93 @@ class DatabaseManager {
 
           for (const [key, val] of Object.entries(remoteData)) {
             if (Array.isArray(val)) {
-              if (key === 'trainees') {
-                // Remote Firestore is canonical for trainees
+              if (key === 'payments') {
+                // PAYMENTS ARE STRICTLY APPEND-ONLY AND NEVER OVERWRITTEN BY STALE REMOTE DATA
                 const remoteList = Array.isArray(val) ? val : [];
-                const localList = Array.isArray(merged[key]) ? merged[key] : [];
-                const remoteIdSet = new Set(remoteList.map((t: any) => t.id).filter(Boolean));
-                // Keep all local trainees that haven't been stored remotely yet
-                const localOnly = localList.filter((t: any) => t && t.id && !remoteIdSet.has(t.id));
-                merged[key] = this.deduplicateTrainees([...remoteList, ...localOnly]);
-              } else if (Array.isArray(merged[key]) && merged[key].length > 0) {
-                const remoteMap = new Map((val as any[]).map(item => [item.id, item]));
-                // Retain recently added local items not yet synced
-                for (const localItem of merged[key]) {
-                  if (localItem && localItem.id && !remoteMap.has(localItem.id)) {
-                    remoteMap.set(localItem.id, localItem);
+                const localList = Array.isArray(merged.payments) ? merged.payments : [];
+                const localMap = new Map(localList.map((p: any) => [p.id, p]));
+                
+                // Keep all local payments!
+                const combinedPayments = [...localList];
+                for (const remP of remoteList) {
+                  if (remP && remP.id && !localMap.has(remP.id)) {
+                    combinedPayments.push(remP);
+                  } else if (remP && remP.id && localMap.has(remP.id)) {
+                    const locP = localMap.get(remP.id);
+                    const remTime = new Date(remP.updatedAt || remP.createdAt || 0).getTime();
+                    const locTime = new Date(locP.updatedAt || locP.createdAt || 0).getTime();
+                    if (remTime > locTime) {
+                      const idx = combinedPayments.findIndex(p => p.id === remP.id);
+                      if (idx >= 0) combinedPayments[idx] = remP;
+                    }
                   }
                 }
-                merged[key] = Array.from(remoteMap.values());
+                merged.payments = combinedPayments;
+                if (combinedPayments.length > remoteList.length) {
+                  saveCollectionToFirestore('payments', combinedPayments).catch(() => {});
+                }
+              } else if (key === 'trainees') {
+                const remoteList = Array.isArray(val) ? val : [];
+                const localList = Array.isArray(merged[key]) ? merged[key] : [];
+                const localMap = new Map(localList.map((t: any) => [t.id, t]));
+
+                // Merge smartly: preserve higher paid amounts and points from local sessions
+                const mergedTrainees = remoteList.map((rem: any) => {
+                  const loc = localMap.get(rem.id);
+                  if (!loc) return rem;
+                  const remUpdated = new Date(rem.updatedAt || rem.createdAt || 0).getTime();
+                  const locUpdated = new Date(loc.updatedAt || loc.createdAt || 0).getTime();
+                  const higherPaid = Math.max(Number(loc.paidAmount) || 0, Number(rem.paidAmount) || 0);
+                  const higherPoints = Math.max(Number(loc.totalPoints) || 0, Number(rem.totalPoints) || 0);
+                  const base = locUpdated >= remUpdated ? loc : rem;
+                  const cleanLocMonths = (loc.paidMonths || []).filter((m: string) => m && !/أكتوبر|نوفمبر|ديسمبر|يناير|10|١٠/i.test(m));
+                  const cleanRemMonths = (rem.paidMonths || []).filter((m: string) => m && !/أكتوبر|نوفمبر|ديسمبر|يناير|10|١٠/i.test(m));
+                  const mergedMonths = Array.from(new Set([...cleanLocMonths, ...cleanRemMonths]));
+                  if (mergedMonths.length === 0 && (higherPaid > 0 || (loc.paidMonths && loc.paidMonths.length > 0) || (rem.paidMonths && rem.paidMonths.length > 0))) {
+                    mergedMonths.push('سبتمبر 2026');
+                  }
+                  return {
+                    ...base,
+                    paidAmount: higherPaid,
+                    totalPoints: higherPoints,
+                    points: higherPoints,
+                    paidMonths: mergedMonths,
+                    lastReceiptNumber: loc.lastReceiptNumber || rem.lastReceiptNumber,
+                    nextPaymentDueDate: loc.nextPaymentDueDate || rem.nextPaymentDueDate,
+                    lastPaymentDate: loc.lastPaymentDate || rem.lastPaymentDate
+                  };
+                });
+
+                const deletedIdsSet = new Set(Array.isArray(merged.deletedTraineeIds) ? merged.deletedTraineeIds : []);
+                const remoteIdSet = new Set(remoteList.map((t: any) => t.id).filter(Boolean));
+                const localOnly = localList.filter((t: any) => t && t.id && !remoteIdSet.has(t.id));
+                const combinedTrainees = [...mergedTrainees, ...localOnly].filter((t: any) => t && t.id && !deletedIdsSet.has(t.id));
+                merged[key] = this.deduplicateTrainees(combinedTrainees);
+              } else if (Array.isArray(merged[key]) && merged[key].length > 0) {
+                // Collections that must be strictly append-only and never lose locally submitted items:
+                // homeworkSubmissions, examResults, pointTransactions, traineeBadges
+                const isAppendOnlyCollection = ['homeworkSubmissions', 'examResults', 'pointTransactions', 'traineeBadges', 'portalMessages'].includes(key);
+                const combined = [...merged[key]];
+                const localMap = new Map(combined.map((item: any) => [item && item.id, item]));
+
+                for (const remItem of (val as any[])) {
+                  if (!remItem || !remItem.id) continue;
+                  if (!localMap.has(remItem.id)) {
+                    combined.push(remItem);
+                    localMap.set(remItem.id, remItem);
+                  } else if (!isAppendOnlyCollection) {
+                    const localIdx = combined.findIndex(l => l && l.id === remItem.id);
+                    if (localIdx >= 0) {
+                      const localItem = combined[localIdx];
+                      const remTime = new Date(remItem.updatedAt || remItem.createdAt || remItem.submittedAt || 0).getTime();
+                      const locTime = new Date(localItem.updatedAt || localItem.createdAt || localItem.submittedAt || 0).getTime();
+                      if (remTime > locTime) {
+                        combined[localIdx] = remItem;
+                      }
+                    }
+                  }
+                }
+                merged[key] = combined;
               } else {
                 merged[key] = val;
               }
@@ -3915,10 +3993,44 @@ class DatabaseManager {
           if (Array.isArray(merged.trainees)) {
             const coursesList = Array.isArray(merged.courses) ? merged.courses : [];
             const deduplicated = this.deduplicateTrainees(merged.trainees);
-            merged.trainees = deduplicated.map((t: any) => ({
-              ...t,
-              ...calculateTraineeFeeAndFinancials(t, coursesList)
-            }));
+
+            // Cross-reference with approved payments: student's paidAmount must strictly reflect actual payment vouchers!
+            const paymentsList = Array.isArray(merged.payments) ? merged.payments : [];
+            const validPayments = paymentsList.filter((p: any) => p && (p.status === 'approved' || (!p.status && !p.proofImageUrl)));
+            const paymentsByTrainee = new Map<string, number>();
+            validPayments.forEach((p: any) => {
+              const amt = Number(p.amount) || 0;
+              if (p.traineeId) paymentsByTrainee.set(p.traineeId, (paymentsByTrainee.get(p.traineeId) || 0) + amt);
+              if (p.traineeCode) paymentsByTrainee.set(String(p.traineeCode).trim().toUpperCase(), (paymentsByTrainee.get(String(p.traineeCode).trim().toUpperCase()) || 0) + amt);
+            });
+
+            merged.trainees = deduplicated.map((t: any) => {
+              const baseCalc = calculateTraineeFeeAndFinancials(t, coursesList);
+              const payById = paymentsByTrainee.get(t.id) || 0;
+              const payByCode = t.code ? (paymentsByTrainee.get(String(t.code).trim().toUpperCase()) || 0) : 0;
+              const totalVouchers = Math.max(payById, payByCode);
+              const effectivePaid = Math.max(Number(t.paidAmount) || 0, totalVouchers);
+              const currentNet = baseCalc.netAmount;
+              const remaining = t.isExempt ? 0 : Math.max(0, currentNet - effectivePaid);
+
+              const cleanMonths = (Array.isArray(t.paidMonths) ? t.paidMonths : [])
+                .filter((m: string) => m && !/أكتوبر|نوفمبر|ديسمبر|يناير|10|١٠/i.test(m));
+              if (cleanMonths.length === 0 && effectivePaid > 0) {
+                cleanMonths.push('سبتمبر 2026');
+              }
+
+              return {
+                ...t,
+                ...baseCalc,
+                paidAmount: effectivePaid,
+                remainingAmount: remaining,
+                paidMonths: cleanMonths,
+                startBillingMonth: (t.startBillingMonth && /أكتوبر/i.test(t.startBillingMonth)) ? 'سبتمبر 2026' : (t.startBillingMonth || 'سبتمبر 2026')
+              };
+            });
+
+            // Immediately persist cleaned trainees to Firestore to purge stale remote October references
+            saveCollectionToFirestore('trainees', merged.trainees).catch(() => {});
           }
 
           this.data = merged;
@@ -4122,6 +4234,7 @@ class DatabaseManager {
   }
 
   private async saveDataDirect(data: DatabaseSchema, immediate = false) {
+    this.lastLocalMutationTime = Date.now();
     if (this.saveTimeout) {
       clearTimeout(this.saveTimeout);
       this.saveTimeout = null;
@@ -4347,40 +4460,36 @@ class DatabaseManager {
 
       for (const trainer of trainersToUpdate) {
         if (!trainer || !trainer.id) continue;
-        // Find courses taught by trainer
-        const trainerCourses = coursesList.filter(c => c && (c.trainerId === trainer.id || (Array.isArray(trainer.courseIds) && trainer.courseIds.includes(c.id))));
-        const courseIds = trainerCourses.map(c => c.id);
-
-        // Trainees enrolled in these courses (checking both courseId and courseIds)
-        const enrolledTrainees = traineesList.filter(t => {
-          if (!t) return false;
-          const cIds = Array.isArray(t.courseIds) && t.courseIds.length > 0 ? t.courseIds : (t.courseId ? [t.courseId] : []);
-          return cIds.some(cid => courseIds.includes(cid));
-        });
         
-        let totalEarned = 0;
-        for (const trainee of enrolledTrainees) {
-          if (!trainee) continue;
-          const traineeCourses = Array.isArray(trainee.courseIds) && trainee.courseIds.length > 0 ? trainee.courseIds : (trainee.courseId ? [trainee.courseId] : []);
-          const relevantCourseIds = traineeCourses.filter(cid => courseIds.includes(cid));
-          
-          const traineePayments = paymentsList.filter(p => p && p.traineeId === trainee.id);
-          const totalTraineePaid = trainee.paidAmount ?? traineePayments.reduce((sum, p) => sum + (Number(p?.amount) || 0), 0);
-          
-          const totalTraineeCoursesCount = traineeCourses.length > 0 ? traineeCourses.length : 1;
-          const effectivePaid = (totalTraineePaid * relevantCourseIds.length) / totalTraineeCoursesCount;
+        // Find groups taught by trainer
+        const groupsList = Array.isArray(this.data.groups) ? this.data.groups : [];
+        const trainerGroups = groupsList.filter(g => g && g.trainerId === trainer.id);
+        const trainerGroupIds = new Set(trainerGroups.map(g => g.id));
+        const trainerGroupCourseIds = new Set(trainerGroups.map(g => g.courseId).filter(Boolean));
 
-          for (const cid of relevantCourseIds) {
-            const course = trainerCourses.find(c => c && c.id === cid) || coursesList.find(c => c && c.id === cid);
-            const rate = trainer.commissionRate ?? course?.trainerPercentage ?? 50;
-            const coursePortionPaid = effectivePaid / (relevantCourseIds.length || 1);
-            
-            if (trainer.commissionType === 'percentage') {
-              totalEarned += (coursePortionPaid * rate) / 100;
-            } else {
-              totalEarned += rate / (relevantCourseIds.length || 1);
-            }
-          }
+        // Find courses taught by trainer
+        const trainerCourses = coursesList.filter(c => c && (c.trainerId === trainer.id || (Array.isArray(trainer.courseIds) && trainer.courseIds.includes(c.id)) || trainerGroupCourseIds.has(c.id)));
+        const courseIds = new Set([...trainerCourses.map(c => c.id), ...Array.from(trainerGroupCourseIds)]);
+
+        // Find direct trainer payments or payments via trainer groups
+        const directTrainerPayments = paymentsList.filter(p => {
+          if (!p) return false;
+          if (p.trainerId === trainer.id) return true;
+          if (p.groupId && trainerGroupIds.has(p.groupId)) return true;
+          if (p.courseId && courseIds.has(p.courseId)) return true;
+          const trainee = traineesList.find(t => t && t.id === p.traineeId);
+          if (trainee && trainee.groupId && trainerGroupIds.has(trainee.groupId)) return true;
+          return false;
+        });
+
+        const totalPaymentsCollected = directTrainerPayments.reduce((sum, p) => sum + (Number(p?.amount) || 0), 0);
+        const rate = trainer.percentage !== undefined ? Number(trainer.percentage) : (trainer.commissionRate !== undefined ? Number(trainer.commissionRate) : (trainer.commissionValue !== undefined ? Number(trainer.commissionValue) : (trainerCourses[0]?.trainerPercentage || 50)));
+
+        let totalEarned = 0;
+        if (trainer.commissionType === 'fixed') {
+          totalEarned = Number(trainer.commissionValue || 0);
+        } else {
+          totalEarned = Math.round((totalPaymentsCollected * rate) / 100);
         }
 
         // Settlements paid to trainer
@@ -4388,9 +4497,10 @@ class DatabaseManager {
           .filter(s => s && s.trainerId === trainer.id)
           .reduce((sum, s) => sum + (Number(s?.amount) || 0), 0);
 
-        trainer.totalEarned = Math.round(totalEarned * 100) / 100;
-        trainer.totalPaid = Math.round(paid * 100) / 100;
-        trainer.balanceDue = Math.max(0, Math.round((totalEarned - paid) * 100) / 100);
+        trainer.totalEarned = totalEarned;
+        trainer.totalPaid = paid;
+        trainer.balanceDue = Math.max(0, totalEarned - paid);
+        trainer.remainingDues = trainer.balanceDue;
       }
       this.save();
     } catch (err) {
