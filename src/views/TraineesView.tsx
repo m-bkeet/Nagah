@@ -1,15 +1,21 @@
-import { WhatsAppShareModal } from "../components/WhatsAppShareModal";
-import { ElectronicPaymentWidget } from "../components/ElectronicPaymentWidget";
-import { DuplicatesAuditModal } from "../components/DuplicatesAuditModal";
-import { getVodafoneCashUssdCode, executeVodafoneCashPayment, executeInstaPayPayment } from "../utils/paymentUtils";
-import { LectureExcellenceCertificateModal } from "../components/LectureExcellenceCertificateModal";
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import * as XLSX from 'xlsx';
 import { useCenter, deduplicateTraineeList } from '../context/CenterContext';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../services/api';
-import { cloudDb } from '../services/cloudDatabase';
+import { DuplicatesAuditModal } from '../components/DuplicatesAuditModal';
+import { LectureExcellenceCertificateModal } from '../components/LectureExcellenceCertificateModal';
+import {
+  getVodafoneCashUssdCode,
+  executeVodafoneCashPayment,
+  executeInstaPayPayment,
+  getTraineePaymentStatusInfo,
+  isPaymentReminderWindow,
+  isTraineeUnpaid,
+  parseYearMonthKey,
+  formatYearMonthName
+} from '../utils/paymentUtils';
 
 const GRADE_OPTIONS = [
   'الصف الرابع الابتدائي',
@@ -22,13 +28,6 @@ const GRADE_OPTIONS = [
   'الصف الثاني الثانوي',
   'الصف الثالث الثانوي'
 ];
-import {
-  getTraineePaymentStatusInfo,
-  isPaymentReminderWindow,
-  isTraineeUnpaid,
-  parseYearMonthKey,
-  formatYearMonthName
-} from '../utils/paymentUtils';
 import {
   Users,
   UserPlus,
@@ -91,7 +90,7 @@ import {
  } from 'lucide-react';
 import { Trainee, Course, Group, Trainer, Branch, PaymentMethod } from '../types';
 import { StudentPhotoCropperModal } from '../components/StudentPhotoCropperModal';
-import { ShareRegistrationModal } from '../components/WhatsAppShareModal';
+import { WhatsAppShareModal, ShareRegistrationModal } from '../components/WhatsAppShareModal';
 import { AIHomeworkScannerModal } from '../components/AIHomeworkScannerModal';
 import { StudentPromotionModal } from '../components/StudentPromotionModal';
 import { TraineeDigitalCardModal } from '../components/TraineeDigitalCardModal';

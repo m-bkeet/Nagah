@@ -3,6 +3,7 @@ import { X, Search, ShieldAlert, Users, Trash2, CheckCircle2, UserCheck, Refresh
 import { Trainee } from '../types';
 import { api } from '../services/api';
 import { useCenter } from '../context/CenterContext';
+import { normalizeArabicFull, cleanPhone } from '../utils/arabicUtils';
 
 interface DuplicatesAuditModalProps {
   isOpen: boolean;
@@ -10,9 +11,6 @@ interface DuplicatesAuditModalProps {
   trainees: Trainee[];
   onRefresh: () => Promise<void>;
 }
-import { normalizeArabicFull, cleanPhone } from '../utils/arabicUtils';
-
-export { normalizeArabicFull, cleanPhone };
 
 export const DuplicatesAuditModal: React.FC<DuplicatesAuditModalProps> = ({
   isOpen,

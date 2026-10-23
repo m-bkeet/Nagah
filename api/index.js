@@ -13,7 +13,7 @@ import fs from "fs";
 import path from "path";
 import crypto from "crypto";
 import { initializeApp, getApps, getApp } from "firebase/app";
-import { getFirestore, doc, getDoc, setDoc } from "firebase/firestore";
+import { getFirestore, doc, getDoc, setDoc, disableNetwork, enableNetwork } from "firebase/firestore";
 function getDb() {
   if (firestoreInstance) return firestoreInstance;
   if (!firebaseConfig) return null;
@@ -33,7 +33,32 @@ function checkDateRollover() {
     readsCountToday = 0;
     writesCountToday = 0;
     deletesCountToday = 0;
+    if (isQuotaExceeded) {
+      isQuotaExceeded = false;
+      const db2 = getDb();
+      if (db2) {
+        enableNetwork(db2).catch(() => {
+        });
+      }
+    }
   }
+}
+function handleQuotaExceeded(err) {
+  const errMsg = err?.message || String(err);
+  if (errMsg.includes("RESOURCE_EXHAUSTED") || errMsg.includes("Quota limit exceeded") || err?.code === 8 || err?.code === "resource-exhausted") {
+    if (!isQuotaExceeded) {
+      isQuotaExceeded = true;
+      quotaExceededNoticeTime = Date.now();
+      console.warn("[FirestoreStorage] Cloud Firestore daily quota reached. Disabling network stream for remainder of day. Local disk & vault are 100% active and durable.");
+      const db2 = getDb();
+      if (db2) {
+        disableNetwork(db2).catch(() => {
+        });
+      }
+    }
+    return true;
+  }
+  return false;
 }
 function withTimeout(promise, ms = 12e3) {
   return new Promise((resolve, reject) => {
@@ -93,8 +118,15 @@ function sanitizeForFirestore(collectionName, items) {
       const sanitized = { ...sub };
       delete sanitized.imageBase64;
       delete sanitized.fileData;
-      if (sanitized.attachmentUrl && (sanitized.attachmentUrl.startsWith("data:image") || sanitized.attachmentUrl.startsWith("data:"))) {
+      delete sanitized.audioBase64;
+      if (typeof sanitized.attachmentUrl === "string" && sanitized.attachmentUrl.startsWith("data:")) {
         delete sanitized.attachmentUrl;
+      }
+      if (typeof sanitized.mediaUrl === "string" && sanitized.mediaUrl.startsWith("data:")) {
+        delete sanitized.mediaUrl;
+      }
+      if (Array.isArray(sanitized.pagesUrls)) {
+        sanitized.pagesUrls = sanitized.pagesUrls.filter((p) => typeof p === "string" && !p.startsWith("data:"));
       }
       return sanitized;
     });
@@ -120,17 +152,18 @@ async function saveCollectionToFirestore(collectionName, rawItems, updateSyncMet
   if (TRANSIENT_COLLECTIONS.has(collectionName)) {
     return true;
   }
+  checkDateRollover();
+  if (isQuotaExceeded) {
+    return false;
+  }
   const db2 = getDb();
   if (!db2) return false;
-  const now = Date.now();
-  if (isQuotaExceeded && now - quotaExceededNoticeTime < QUOTA_BACKOFF_MS) {
-    return true;
-  }
   const items = sanitizeForFirestore(collectionName, rawItems);
   const newHash = hashPayload(items);
   if (collectionHashes.get(collectionName) === newHash) {
     return true;
   }
+  const now = Date.now();
   try {
     const docRef = doc(db2, "nagah_store", collectionName);
     const serialized = JSON.stringify(items ?? []);
@@ -154,7 +187,7 @@ async function saveCollectionToFirestore(collectionName, rawItems, updateSyncMet
       await Promise.all(partPromises);
       await withTimeout(setDoc(docRef, { isSplit: true, totalParts, updatedAt: now }, { merge: true }), 1e4);
     }
-    if (updateSyncMeta) {
+    if (updateSyncMeta && !isQuotaExceeded) {
       try {
         const metaRef = doc(db2, "nagah_store", "sync_meta");
         await setDoc(metaRef, {
@@ -164,21 +197,16 @@ async function saveCollectionToFirestore(collectionName, rawItems, updateSyncMet
           version: now
         }, { merge: true });
       } catch (metaErr) {
-        console.warn("[FirestoreStorage] sync_meta write notice:", metaErr);
+        handleQuotaExceeded(metaErr);
       }
     }
     collectionHashes.set(collectionName, newHash);
-    isQuotaExceeded = false;
     return true;
   } catch (err) {
-    const errMsg = err?.message || String(err);
-    if (errMsg.includes("RESOURCE_EXHAUSTED") || errMsg.includes("Quota limit exceeded")) {
-      isQuotaExceeded = true;
-      quotaExceededNoticeTime = now;
-      console.warn(`[FirestoreStorage] Cloud Firestore Quota reached. Backing off for 30s.`);
-    } else {
-      console.warn(`[FirestoreStorage] Note for ${collectionName}:`, errMsg);
+    if (handleQuotaExceeded(err)) {
+      return false;
     }
+    console.warn(`[FirestoreStorage] Note for ${collectionName}:`, err?.message || err);
     return false;
   }
 }
@@ -186,12 +214,12 @@ async function loadCollectionFromFirestore(collectionName) {
   if (TRANSIENT_COLLECTIONS.has(collectionName)) {
     return null;
   }
-  const db2 = getDb();
-  if (!db2) return null;
-  const now = Date.now();
-  if (isQuotaExceeded && now - quotaExceededNoticeTime < QUOTA_BACKOFF_MS) {
+  checkDateRollover();
+  if (isQuotaExceeded) {
     return null;
   }
+  const db2 = getDb();
+  if (!db2) return null;
   try {
     const docRef = doc(db2, "nagah_store", collectionName);
     const snap = await withTimeout(getDoc(docRef), 1e4);
@@ -210,16 +238,13 @@ async function loadCollectionFromFirestore(collectionName) {
     }
     return null;
   } catch (err) {
-    const errMsg = err?.message || String(err);
-    if (errMsg.includes("RESOURCE_EXHAUSTED") || errMsg.includes("Quota limit exceeded")) {
-      isQuotaExceeded = true;
-      quotaExceededNoticeTime = now;
-    }
+    handleQuotaExceeded(err);
     return null;
   }
 }
 async function saveFullDbToFirestore2(dbData, immediate = false) {
-  if (!dbData) return;
+  checkDateRollover();
+  if (isQuotaExceeded || !dbData) return;
   pendingDbData = dbData;
   const executeSync = async () => {
     const current = pendingDbData;
@@ -343,6 +368,8 @@ async function allocateNextTraineeCode(prefix = "A", localTrainees = [], groupId
   return candidate;
 }
 async function getSyncMeta() {
+  checkDateRollover();
+  if (isQuotaExceeded) return null;
   const db2 = getDb();
   if (!db2) return null;
   try {
@@ -352,10 +379,13 @@ async function getSyncMeta() {
       return snap.data();
     }
   } catch (e) {
+    handleQuotaExceeded(e);
   }
   return null;
 }
 async function loadFullDbFromFirestore() {
+  checkDateRollover();
+  if (isQuotaExceeded) return null;
   const collections = [
     "users",
     "branches",
@@ -443,7 +473,7 @@ function getFirestoreQuotaMetrics() {
     health: isBackoff ? "quota_exhausted_backoff" : readsCountToday > 45e3 ? "warning_near_limit" : "optimal"
   };
 }
-var firebaseConfig, dbId, firestoreInstance, collectionHashes, isQuotaExceeded, quotaExceededNoticeTime, QUOTA_BACKOFF_MS, readsCountToday, writesCountToday, deletesCountToday, currentTrackingDate, TRANSIENT_COLLECTIONS, isServerless, debouncedSyncTimer, pendingDbData;
+var firebaseConfig, dbId, firestoreInstance, collectionHashes, isQuotaExceeded, quotaExceededNoticeTime, readsCountToday, writesCountToday, deletesCountToday, currentTrackingDate, TRANSIENT_COLLECTIONS, isServerless, debouncedSyncTimer, pendingDbData;
 var init_firestoreStorage = __esm({
   "server/firestoreStorage.ts"() {
     firebaseConfig = null;
@@ -471,7 +501,6 @@ var init_firestoreStorage = __esm({
     collectionHashes = /* @__PURE__ */ new Map();
     isQuotaExceeded = false;
     quotaExceededNoticeTime = 0;
-    QUOTA_BACKOFF_MS = 5 * 60 * 1e3;
     readsCountToday = 0;
     writesCountToday = 0;
     deletesCountToday = 0;
@@ -535,7 +564,7 @@ function calculateTraineeFeeAndFinancials(t, coursesList = []) {
     isExempt
   };
 }
-var isServerless2, ACTUAL_DATA_DIR, BACKUPS_DIR, DB_FILE, BACKUP_FILE, BUNDLED_DB_PATHS, defaultPointRules, initialData, userPasswordMap, DatabaseManager, db;
+var isServerless2, ACTUAL_DATA_DIR, BACKUPS_DIR, DB_FILE, BACKUP_FILE, VAULT_FILE, BUNDLED_DB_PATHS, defaultPointRules, initialData, userPasswordMap, DatabaseManager, db;
 var init_db = __esm({
   "server/db.ts"() {
     init_firestoreStorage();
@@ -546,6 +575,7 @@ var init_db = __esm({
     BACKUPS_DIR = path2.join(ACTUAL_DATA_DIR, "backups");
     DB_FILE = path2.join(ACTUAL_DATA_DIR, "database.json");
     BACKUP_FILE = path2.join(ACTUAL_DATA_DIR, "database.backup.json");
+    VAULT_FILE = path2.join(ACTUAL_DATA_DIR, "trainees_vault.json");
     BUNDLED_DB_PATHS = [path2.join(process.cwd(), "data", "database.json"), path2.join(process.cwd(), "database.json"), "/var/task/data/database.json", "/vercel/path0/data/database.json"];
     defaultPointRules = [
       { id: "rule-1", title: "\u062A\u0633\u062C\u064A\u0644 \u0627\u0644\u062D\u0636\u0648\u0631", pointValue: 10, ruleType: "attendance", description: "\u0646\u0642\u0627\u0637 \u0627\u0644\u062D\u0636\u0648\u0631 \u0641\u064A \u0627\u0644\u0645\u0648\u0639\u062F \u0627\u0644\u0645\u062D\u062F\u062F", isActive: true },
@@ -4158,6 +4188,7 @@ var init_db = __esm({
         this.lastHydrationTime = 0;
         this.lastHydrationAttemptTime = 0;
         this.lastRemoteSyncMetaTime = 0;
+        this.lastLocalMutationTime = 0;
         this.hydrationPromise = null;
         this.ensureDataDir();
         this.data = this.loadData();
@@ -4177,15 +4208,31 @@ var init_db = __esm({
           const id = t.id ? String(t.id).trim() : "";
           if (!id) continue;
           const tNorm = normName(t.fullName);
+          let cleanCode = t.code ? String(t.code).trim().toUpperCase() : "";
+          if (cleanCode && /^[A-Z]\d{3}-[A-Z0-9]{3,4}$/i.test(cleanCode)) {
+            cleanCode = cleanCode.split("-")[0].toUpperCase();
+          }
           let existing = null;
           if (byId.has(id)) {
             existing = byId.get(id);
-          } else if (t.nationalId && String(t.nationalId).trim().length >= 10 && tNorm) {
-            const cleanNat = String(t.nationalId).trim();
+          } else if (cleanCode && byCode.has(cleanCode)) {
+            const prevWithCode = byCode.get(cleanCode);
+            const prevNorm = normName(prevWithCode.fullName);
+            if (prevNorm === tNorm || !tNorm || prevNorm.includes(tNorm) || tNorm.includes(prevNorm)) {
+              existing = prevWithCode;
+            }
+          }
+          if (!existing && tNorm) {
+            const tTokens = tNorm.split(" ").filter(Boolean);
             for (const prev of result) {
-              if (prev.nationalId && String(prev.nationalId).trim() === cleanNat) {
-                const prevNorm = normName(prev.fullName);
-                if (prevNorm && prevNorm === tNorm) {
+              const prevNorm = normName(prev.fullName);
+              if (prevNorm === tNorm) {
+                existing = prev;
+                break;
+              }
+              if (tTokens.length >= 3) {
+                const prevTokens = prevNorm.split(" ").filter(Boolean);
+                if (prevTokens.length >= 3 && tTokens[0] === prevTokens[0] && tTokens[1] === prevTokens[1] && tTokens[2] === prevTokens[2]) {
                   existing = prev;
                   break;
                 }
@@ -4198,25 +4245,32 @@ var init_db = __esm({
               Number(t.totalPoints !== void 0 ? t.totalPoints : t.points || 0)
             );
             const mergedPaidAmount = Math.max(Number(existing.paidAmount || 0), Number(t.paidAmount || 0));
+            let bestCode = existing.code || cleanCode;
+            if (bestCode && bestCode.includes("-") && cleanCode && !cleanCode.includes("-")) {
+              bestCode = cleanCode;
+            }
             Object.assign(existing, {
               ...t,
               id: existing.id || t.id,
-              code: existing.code || t.code,
+              code: bestCode,
               fullName: existing.fullName || t.fullName,
-              phone: t.phone || existing.phone,
-              parentPhone: t.parentPhone || existing.parentPhone,
-              nationalId: t.nationalId || existing.nationalId,
+              phone: existing.phone || t.phone,
+              parentPhone: existing.parentPhone || t.parentPhone,
+              nationalId: existing.nationalId || t.nationalId,
               totalPoints: mergedTotalPoints,
               points: mergedTotalPoints,
               paidAmount: mergedPaidAmount,
               notes: existing.notes ? t.notes && !existing.notes.includes(t.notes) ? `${existing.notes} | ${t.notes}` : existing.notes : t.notes || ""
             });
           } else {
-            const record = { ...t };
-            const code = record.code ? String(record.code).trim().toUpperCase() : "";
-            if (code && byCode.has(code)) {
-              const suffix = Math.random().toString(36).substring(2, 5).toUpperCase();
-              record.code = `${code}-${suffix}`;
+            const record = { ...t, code: cleanCode };
+            if (cleanCode && byCode.has(cleanCode)) {
+              const pfx = cleanCode.match(/^([A-Za-z]+)/)?.[1]?.toUpperCase() || "A";
+              let num = 1;
+              while (byCode.has(`${pfx}${String(num).padStart(3, "0")}`)) {
+                num++;
+              }
+              record.code = `${pfx}${String(num).padStart(3, "0")}`;
             }
             result.push(record);
             byId.set(id, record);
@@ -4227,7 +4281,10 @@ var init_db = __esm({
       }
       async ensureHydrated(force = false) {
         const now = Date.now();
-        const CACHE_TTL_MS = 2e3;
+        if (now - this.lastLocalMutationTime < 45e3) {
+          return;
+        }
+        const CACHE_TTL_MS = 1e4;
         if (!force && this.isFirestoreHydrated && now - this.lastHydrationTime < CACHE_TTL_MS) {
           return;
         }
@@ -4250,20 +4307,94 @@ var init_db = __esm({
               const merged = { ...current };
               for (const [key, val] of Object.entries(remoteData)) {
                 if (Array.isArray(val)) {
-                  if (key === "trainees") {
+                  if (key === "payments") {
                     const remoteList = Array.isArray(val) ? val : [];
-                    const localList = Array.isArray(merged[key]) ? merged[key] : [];
-                    const remoteIdSet = new Set(remoteList.map((t) => t.id).filter(Boolean));
-                    const localOnly = localList.filter((t) => t && t.id && !remoteIdSet.has(t.id));
-                    merged[key] = this.deduplicateTrainees([...remoteList, ...localOnly]);
-                  } else if (Array.isArray(merged[key]) && merged[key].length > 0) {
-                    const remoteMap = new Map(val.map((item) => [item.id, item]));
-                    for (const localItem of merged[key]) {
-                      if (localItem && localItem.id && !remoteMap.has(localItem.id)) {
-                        remoteMap.set(localItem.id, localItem);
+                    const localList = Array.isArray(merged.payments) ? merged.payments : [];
+                    const localMap = new Map(localList.map((p) => [p.id, p]));
+                    const combinedPayments = [...localList];
+                    for (const remP of remoteList) {
+                      if (remP && remP.id && !localMap.has(remP.id)) {
+                        combinedPayments.push(remP);
+                      } else if (remP && remP.id && localMap.has(remP.id)) {
+                        const locP = localMap.get(remP.id);
+                        const remTime = new Date(remP.updatedAt || remP.createdAt || 0).getTime();
+                        const locTime = new Date(locP.updatedAt || locP.createdAt || 0).getTime();
+                        if (remTime > locTime) {
+                          const idx = combinedPayments.findIndex((p) => p.id === remP.id);
+                          if (idx >= 0) combinedPayments[idx] = remP;
+                        }
                       }
                     }
-                    merged[key] = Array.from(remoteMap.values());
+                    merged.payments = combinedPayments;
+                    if (combinedPayments.length > remoteList.length) {
+                      saveCollectionToFirestore("payments", combinedPayments).catch(() => {
+                      });
+                    }
+                  } else if (key === "trainees") {
+                    const remoteList = Array.isArray(val) ? val : [];
+                    const localList = Array.isArray(merged[key]) ? merged[key] : [];
+                    const localMap = new Map(localList.map((t) => [t.id, t]));
+                    const mergedTrainees = remoteList.map((rem) => {
+                      const loc = localMap.get(rem.id);
+                      if (!loc) return rem;
+                      const remUpdated = new Date(rem.updatedAt || rem.createdAt || 0).getTime();
+                      const locUpdated = new Date(loc.updatedAt || loc.createdAt || 0).getTime();
+                      const higherPaid = Math.max(Number(loc.paidAmount) || 0, Number(rem.paidAmount) || 0);
+                      const higherPoints = Math.max(Number(loc.totalPoints) || 0, Number(rem.totalPoints) || 0);
+                      const base = locUpdated >= remUpdated ? loc : rem;
+                      const cleanLocMonths = (loc.paidMonths || []).filter((m) => m && !/أكتوبر|نوفمبر|ديسمبر|يناير|10|١٠/i.test(m));
+                      const cleanRemMonths = (rem.paidMonths || []).filter((m) => m && !/أكتوبر|نوفمبر|ديسمبر|يناير|10|١٠/i.test(m));
+                      const mergedMonths = Array.from(/* @__PURE__ */ new Set([...cleanLocMonths, ...cleanRemMonths]));
+                      if (mergedMonths.length === 0 && (higherPaid > 0 || loc.paidMonths && loc.paidMonths.length > 0 || rem.paidMonths && rem.paidMonths.length > 0)) {
+                        mergedMonths.push("\u0633\u0628\u062A\u0645\u0628\u0631 2026");
+                      }
+                      return {
+                        ...base,
+                        paidAmount: higherPaid,
+                        totalPoints: higherPoints,
+                        points: higherPoints,
+                        paidMonths: mergedMonths,
+                        lastReceiptNumber: loc.lastReceiptNumber || rem.lastReceiptNumber,
+                        nextPaymentDueDate: loc.nextPaymentDueDate || rem.nextPaymentDueDate,
+                        lastPaymentDate: loc.lastPaymentDate || rem.lastPaymentDate
+                      };
+                    });
+                    const deletedIdsSet = new Set(Array.isArray(merged.deletedTraineeIds) ? merged.deletedTraineeIds : []);
+                    const remoteIdSet = new Set(remoteList.map((t) => t.id).filter(Boolean));
+                    const localOnly = localList.filter((t) => t && t.id && !remoteIdSet.has(t.id));
+                    let diskVaultList = [];
+                    try {
+                      if (fs2.existsSync(VAULT_FILE)) {
+                        const raw = JSON.parse(fs2.readFileSync(VAULT_FILE, "utf-8"));
+                        if (Array.isArray(raw)) diskVaultList = raw;
+                      }
+                    } catch {
+                    }
+                    const vaultOnly = diskVaultList.filter((t) => t && t.id && !remoteIdSet.has(t.id));
+                    const combinedTrainees = [...mergedTrainees, ...localOnly, ...vaultOnly].filter((t) => t && t.id && !deletedIdsSet.has(t.id));
+                    merged[key] = this.deduplicateTrainees(combinedTrainees);
+                  } else if (Array.isArray(merged[key]) && merged[key].length > 0) {
+                    const isAppendOnlyCollection = ["homeworkSubmissions", "examResults", "pointTransactions", "traineeBadges", "portalMessages"].includes(key);
+                    const combined = [...merged[key]];
+                    const localMap = new Map(combined.map((item) => [item && item.id, item]));
+                    for (const remItem of val) {
+                      if (!remItem || !remItem.id) continue;
+                      if (!localMap.has(remItem.id)) {
+                        combined.push(remItem);
+                        localMap.set(remItem.id, remItem);
+                      } else if (!isAppendOnlyCollection) {
+                        const localIdx = combined.findIndex((l) => l && l.id === remItem.id);
+                        if (localIdx >= 0) {
+                          const localItem = combined[localIdx];
+                          const remTime = new Date(remItem.updatedAt || remItem.createdAt || remItem.submittedAt || 0).getTime();
+                          const locTime = new Date(localItem.updatedAt || localItem.createdAt || localItem.submittedAt || 0).getTime();
+                          if (remTime > locTime) {
+                            combined[localIdx] = remItem;
+                          }
+                        }
+                      }
+                    }
+                    merged[key] = combined;
                   } else {
                     merged[key] = val;
                   }
@@ -4277,10 +4408,56 @@ var init_db = __esm({
               if (Array.isArray(merged.trainees)) {
                 const coursesList = Array.isArray(merged.courses) ? merged.courses : [];
                 const deduplicated = this.deduplicateTrainees(merged.trainees);
-                merged.trainees = deduplicated.map((t) => ({
-                  ...t,
-                  ...calculateTraineeFeeAndFinancials(t, coursesList)
-                }));
+                const paymentsList = Array.isArray(merged.payments) ? merged.payments : [];
+                const validPayments = paymentsList.filter((p) => p && (p.status === "approved" || !p.status && !p.proofImageUrl));
+                const paymentsByTrainee = /* @__PURE__ */ new Map();
+                validPayments.forEach((p) => {
+                  const amt = Number(p.amount) || 0;
+                  if (p.traineeId) paymentsByTrainee.set(p.traineeId, (paymentsByTrainee.get(p.traineeId) || 0) + amt);
+                  if (p.traineeCode) paymentsByTrainee.set(String(p.traineeCode).trim().toUpperCase(), (paymentsByTrainee.get(String(p.traineeCode).trim().toUpperCase()) || 0) + amt);
+                });
+                merged.trainees = deduplicated.map((t) => {
+                  const baseCalc = calculateTraineeFeeAndFinancials(t, coursesList);
+                  const payById = paymentsByTrainee.get(t.id) || 0;
+                  const payByCode = t.code ? paymentsByTrainee.get(String(t.code).trim().toUpperCase()) || 0 : 0;
+                  const totalVouchers = Math.max(payById, payByCode);
+                  const effectivePaid = Math.max(Number(t.paidAmount) || 0, totalVouchers);
+                  const currentNet = baseCalc.netAmount;
+                  const remaining = t.isExempt ? 0 : Math.max(0, currentNet - effectivePaid);
+                  const cleanMonths = (Array.isArray(t.paidMonths) ? t.paidMonths : []).filter((m) => m && !/أكتوبر|نوفمبر|ديسمبر|يناير|10|١٠/i.test(m));
+                  if (cleanMonths.length === 0 && effectivePaid > 0) {
+                    cleanMonths.push("\u0633\u0628\u062A\u0645\u0628\u0631 2026");
+                  }
+                  return {
+                    ...t,
+                    ...baseCalc,
+                    paidAmount: effectivePaid,
+                    remainingAmount: remaining,
+                    paidMonths: cleanMonths,
+                    startBillingMonth: t.startBillingMonth && /أكتوبر/i.test(t.startBillingMonth) ? "\u0633\u0628\u062A\u0645\u0628\u0631 2026" : t.startBillingMonth || "\u0633\u0628\u062A\u0645\u0628\u0631 2026"
+                  };
+                });
+                if (Array.isArray(current.trainees) && Array.isArray(merged.trainees)) {
+                  if (current.trainees.length > merged.trainees.length) {
+                    console.warn(`[DB SafeGuard] Preserving all local trainees: local=${current.trainees.length}, remote=${merged.trainees.length}`);
+                    const localMap = new Map(current.trainees.map((t) => [t.id, t]));
+                    for (const t of merged.trainees) {
+                      localMap.set(t.id, t);
+                    }
+                    merged.trainees = this.deduplicateTrainees(Array.from(localMap.values()));
+                  }
+                }
+                try {
+                  if (Array.isArray(merged.trainees) && merged.trainees.length > 0) {
+                    const tempVault = `${VAULT_FILE}.tmp`;
+                    fs2.writeFileSync(tempVault, JSON.stringify(merged.trainees, null, 2), "utf-8");
+                    fs2.renameSync(tempVault, VAULT_FILE);
+                  }
+                } catch (vErr) {
+                  console.warn("[DB] Non-critical vault write notice in ensureHydrated:", vErr);
+                }
+                saveCollectionToFirestore("trainees", merged.trainees).catch(() => {
+                });
               }
               this.data = merged;
               this.isFirestoreHydrated = true;
@@ -4381,8 +4558,25 @@ var init_db = __esm({
               }
             }
             const rawTrainees = Array.isArray(parsed.trainees) ? parsed.trainees : [];
+            let vaultTrainees = [];
+            try {
+              if (fs2.existsSync(VAULT_FILE)) {
+                const rawVault = JSON.parse(fs2.readFileSync(VAULT_FILE, "utf-8"));
+                if (Array.isArray(rawVault)) vaultTrainees = rawVault;
+              }
+            } catch (e) {
+              console.warn("[DB] Non-critical vault read notice:", e);
+            }
+            const combinedTraineesList = [...rawTrainees];
+            const localIdSet = new Set(rawTrainees.map((t) => t.id));
+            for (const vt of vaultTrainees) {
+              if (vt && vt.id && !localIdSet.has(vt.id)) {
+                combinedTraineesList.push(vt);
+                localIdSet.add(vt.id);
+              }
+            }
             const coursesList = Array.isArray(parsed.courses) && parsed.courses.length > 0 ? parsed.courses : initialData.courses;
-            const normalizedTrainees = rawTrainees.map((t) => {
+            const normalizedTrainees = combinedTraineesList.map((t) => {
               const fin = calculateTraineeFeeAndFinancials(t, coursesList);
               return {
                 ...t,
@@ -4447,6 +4641,7 @@ var init_db = __esm({
         return await this.saveDataDirect(this.data, true);
       }
       async saveDataDirect(data, immediate = false) {
+        this.lastLocalMutationTime = Date.now();
         if (this.saveTimeout) {
           clearTimeout(this.saveTimeout);
           this.saveTimeout = null;
@@ -4463,6 +4658,15 @@ var init_db = __esm({
             fs2.renameSync(tempBackup, BACKUP_FILE);
           } catch (err) {
             console.warn("[DB] Non-critical BACKUP_FILE write notice:", err);
+          }
+          try {
+            if (Array.isArray(data.trainees) && data.trainees.length > 0) {
+              const tempVault = `${VAULT_FILE}.tmp`;
+              fs2.writeFileSync(tempVault, JSON.stringify(data.trainees, null, 2), "utf-8");
+              fs2.renameSync(tempVault, VAULT_FILE);
+            }
+          } catch (err) {
+            console.warn("[DB] Non-critical VAULT_FILE write notice:", err);
           }
           try {
             const now = /* @__PURE__ */ new Date();
@@ -4619,37 +4823,34 @@ var init_db = __esm({
           const settlementsList = Array.isArray(this.data.trainerSettlements) ? this.data.trainerSettlements : [];
           for (const trainer of trainersToUpdate) {
             if (!trainer || !trainer.id) continue;
-            const trainerCourses = coursesList.filter((c) => c && (c.trainerId === trainer.id || Array.isArray(trainer.courseIds) && trainer.courseIds.includes(c.id)));
-            const courseIds = trainerCourses.map((c) => c.id);
-            const enrolledTrainees = traineesList.filter((t) => {
-              if (!t) return false;
-              const cIds = Array.isArray(t.courseIds) && t.courseIds.length > 0 ? t.courseIds : t.courseId ? [t.courseId] : [];
-              return cIds.some((cid) => courseIds.includes(cid));
+            const groupsList = Array.isArray(this.data.groups) ? this.data.groups : [];
+            const trainerGroups = groupsList.filter((g) => g && g.trainerId === trainer.id);
+            const trainerGroupIds = new Set(trainerGroups.map((g) => g.id));
+            const trainerGroupCourseIds = new Set(trainerGroups.map((g) => g.courseId).filter(Boolean));
+            const trainerCourses = coursesList.filter((c) => c && (c.trainerId === trainer.id || Array.isArray(trainer.courseIds) && trainer.courseIds.includes(c.id) || trainerGroupCourseIds.has(c.id)));
+            const courseIds = /* @__PURE__ */ new Set([...trainerCourses.map((c) => c.id), ...Array.from(trainerGroupCourseIds)]);
+            const directTrainerPayments = paymentsList.filter((p) => {
+              if (!p) return false;
+              if (p.trainerId === trainer.id) return true;
+              if (p.groupId && trainerGroupIds.has(p.groupId)) return true;
+              if (p.courseId && courseIds.has(p.courseId)) return true;
+              const trainee = traineesList.find((t) => t && t.id === p.traineeId);
+              if (trainee && trainee.groupId && trainerGroupIds.has(trainee.groupId)) return true;
+              return false;
             });
+            const totalPaymentsCollected = directTrainerPayments.reduce((sum, p) => sum + (Number(p?.amount) || 0), 0);
+            const rate = trainer.percentage !== void 0 ? Number(trainer.percentage) : trainer.commissionRate !== void 0 ? Number(trainer.commissionRate) : trainer.commissionValue !== void 0 ? Number(trainer.commissionValue) : trainerCourses[0]?.trainerPercentage || 50;
             let totalEarned = 0;
-            for (const trainee of enrolledTrainees) {
-              if (!trainee) continue;
-              const traineeCourses = Array.isArray(trainee.courseIds) && trainee.courseIds.length > 0 ? trainee.courseIds : trainee.courseId ? [trainee.courseId] : [];
-              const relevantCourseIds = traineeCourses.filter((cid) => courseIds.includes(cid));
-              const traineePayments = paymentsList.filter((p) => p && p.traineeId === trainee.id);
-              const totalTraineePaid = trainee.paidAmount ?? traineePayments.reduce((sum, p) => sum + (Number(p?.amount) || 0), 0);
-              const totalTraineeCoursesCount = traineeCourses.length > 0 ? traineeCourses.length : 1;
-              const effectivePaid = totalTraineePaid * relevantCourseIds.length / totalTraineeCoursesCount;
-              for (const cid of relevantCourseIds) {
-                const course = trainerCourses.find((c) => c && c.id === cid) || coursesList.find((c) => c && c.id === cid);
-                const rate = trainer.commissionRate ?? course?.trainerPercentage ?? 50;
-                const coursePortionPaid = effectivePaid / (relevantCourseIds.length || 1);
-                if (trainer.commissionType === "percentage") {
-                  totalEarned += coursePortionPaid * rate / 100;
-                } else {
-                  totalEarned += rate / (relevantCourseIds.length || 1);
-                }
-              }
+            if (trainer.commissionType === "fixed") {
+              totalEarned = Number(trainer.commissionValue || 0);
+            } else {
+              totalEarned = Math.round(totalPaymentsCollected * rate / 100);
             }
             const paid = settlementsList.filter((s) => s && s.trainerId === trainer.id).reduce((sum, s) => sum + (Number(s?.amount) || 0), 0);
-            trainer.totalEarned = Math.round(totalEarned * 100) / 100;
-            trainer.totalPaid = Math.round(paid * 100) / 100;
-            trainer.balanceDue = Math.max(0, Math.round((totalEarned - paid) * 100) / 100);
+            trainer.totalEarned = totalEarned;
+            trainer.totalPaid = paid;
+            trainer.balanceDue = Math.max(0, totalEarned - paid);
+            trainer.remainingDues = trainer.balanceDue;
           }
           this.save();
         } catch (err) {
@@ -5315,7 +5516,10 @@ init_firestoreStorage();
 function createRepo(key) {
   return {
     async getAll(forceFresh = false) {
-      await db.ensureHydrated(forceFresh);
+      if (forceFresh) {
+        db.ensureHydrated(true).catch(() => {
+        });
+      }
       const memData = db.getData();
       if (!memData || !Array.isArray(memData[key])) {
         return [];
@@ -5379,7 +5583,6 @@ function createRepo(key) {
       });
     },
     async create(id, itemData) {
-      await db.ensureHydrated();
       const docId = id || itemData.id || "doc-" + Date.now() + "-" + Math.random().toString(36).substring(2, 6);
       const fullItem = { ...itemData, id: docId };
       const memData = db.getData();
@@ -5399,7 +5602,6 @@ function createRepo(key) {
       return fullItem;
     },
     async update(id, updates) {
-      await db.ensureHydrated();
       const existing = await this.getById(id);
       const docId = existing ? existing.id : id;
       const updatedItem = { ...existing || {}, ...updates, id: docId, updatedAt: (/* @__PURE__ */ new Date()).toISOString() };
@@ -5417,7 +5619,6 @@ function createRepo(key) {
       return updatedItem;
     },
     async delete(id) {
-      await db.ensureHydrated();
       const memData = db.getData();
       if (memData && Array.isArray(memData[key])) {
         const list = memData[key];
@@ -13042,7 +13243,7 @@ apiRouter.get("/trainees/:id", async (req, res) => {
       if (p.id) payMap.set(p.id, p);
     }
     const payments = Array.from(payMap.values()).sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime());
-    const attFromFs = await AttendanceRepo.getAll().catch(() => []);
+    const attFromFs = await AttendanceRepo.getByTraineeId(trainee.id).catch(() => []);
     const attFromDb = db.getData().attendance || [];
     const attMap = /* @__PURE__ */ new Map();
     for (const a of [...attFromFs, ...attFromDb]) {
@@ -13182,6 +13383,8 @@ apiRouter.post("/trainees", async (req, res) => {
     const paidAmount = Number(data.paidAmount) || 0;
     const netAmount = isSuspendedOrDropped || isUnassigned || isExempt ? 0 : Math.max(0, feeAmount - discountAmount);
     const remainingAmount = isSuspendedOrDropped || isUnassigned || isExempt ? 0 : Math.max(0, netAmount - paidAmount);
+    const subStartDate = data.subscriptionStartDate || data.registrationDate || (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
+    const subStartMonth = data.startBillingMonth || (subStartDate.includes("-09") ? "\u0633\u0628\u062A\u0645\u0628\u0631 2026" : "\u0623\u0643\u062A\u0648\u0628\u0631 2026");
     const created = await TraineeRepo.create(traineeId, {
       ...data,
       code,
@@ -13193,14 +13396,57 @@ apiRouter.post("/trainees", async (req, res) => {
       remainingAmount,
       totalPoints: 0,
       attendanceRate: 100,
+      subscriptionStartDate: subStartDate,
+      startBillingMonth: subStartMonth,
+      registrationDate: data.registrationDate || subStartDate,
       createdAt: (/* @__PURE__ */ new Date()).toISOString()
     });
+    if (paidAmount > 0) {
+      try {
+        const now = /* @__PURE__ */ new Date();
+        const payId = "pay-" + Date.now() + "-" + Math.random().toString(36).substring(2, 5);
+        const receiptNumber = `REC${String(code).replace(/[^a-zA-Z0-9]/g, "")}01`;
+        const paymentRecord = {
+          id: payId,
+          receiptNumber,
+          date: now.toISOString().split("T")[0],
+          time: now.toLocaleTimeString("ar-EG", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: true }),
+          traineeId: created.id,
+          traineeName: created.fullName,
+          traineeCode: created.code,
+          courseId: created.courseId,
+          branchId: created.branchId,
+          groupId: created.groupId,
+          amount: paidAmount,
+          paymentMethod: data.paymentMethod || "cash",
+          receivedByUserId: req.user?.id || data.createdByUserId || "admin",
+          receivedByUserName: req.user?.fullName || data.createdByUserName || "\u0627\u0644\u0645\u062F\u064A\u0631 \u0627\u0644\u0645\u0627\u0644\u064A \u0648\u0627\u0644\u062E\u0632\u064A\u0646\u0629",
+          targetMonth: subStartMonth || now.toLocaleDateString("ar-EG", { month: "long", year: "numeric" }),
+          parentPhone: created.parentPhone || created.phone,
+          traineePhone: created.phone,
+          previousDebt: 0,
+          discountAmount,
+          isExempt,
+          notes: data.paymentNotes || "\u062F\u0641\u0639\u0629 \u0645\u0642\u062F\u0645\u0629 \u0645\u0633\u062F\u062F\u0629 \u0639\u0646\u062F \u0627\u0644\u062A\u0633\u062C\u064A\u0644",
+          createdAt: now.toISOString(),
+          status: "approved",
+          gdriveSyncStatus: "synced"
+        };
+        await PaymentRepo.create(payId, paymentRecord);
+        await TraineeRepo.update(created.id, {
+          lastPaymentDate: paymentRecord.date,
+          lastReceiptNumber: receiptNumber
+        });
+      } catch (payErr) {
+        console.warn("[Trainee Creation] Auto-payment record notice:", payErr);
+      }
+    }
     db.logAudit({
       userId: req.user?.id || data.createdByUserId || "user-admin",
       userName: req.user?.fullName || data.createdByUserName || "\u0645\u062F\u064A\u0631 \u0639\u0627\u0645 \u0627\u0644\u0646\u0638\u0627\u0645",
       action: "\u0625\u0636\u0627\u0641\u0629 \u0645\u062A\u062F\u0631\u0628 \u062C\u062F\u064A\u062F",
       entity: "\u0627\u0644\u0645\u062A\u062F\u0631\u0628\u0648\u0646",
-      details: `\u062A\u0645 \u062A\u0633\u062C\u064A\u0644 \u0627\u0644\u0645\u062A\u062F\u0631\u0628 (${created.fullName}) \u0628\u0643\u0648\u062F [${created.code}] \u0628\u0646\u062C\u0627\u062D.`
+      details: `\u062A\u0645 \u062A\u0633\u062C\u064A\u0644 \u0627\u0644\u0645\u062A\u062F\u0631\u0628 (${created.fullName}) \u0628\u0643\u0648\u062F [${created.code}] \u0628\u0646\u062C\u0627\u062D${paidAmount > 0 ? ` \u0645\u0639 \u062A\u0633\u062C\u064A\u0644 \u0633\u0646\u062F \u062A\u062D\u0635\u064A\u0644 \u062F\u0641\u0639\u0629 \u0645\u0642\u062F\u0645\u0629 \u0628\u0645\u0628\u0644\u063A ${paidAmount} \u062C.\u0645` : ""}.`
     });
     db.saveImmediate();
     res.json({ success: true, trainee: created });
@@ -13436,6 +13682,12 @@ async function purgeCompleteTraineeData(traineeId) {
       });
     }
     await TraineeRepo.delete(traineeId);
+    if (!Array.isArray(memData.deletedTraineeIds)) {
+      memData.deletedTraineeIds = [];
+    }
+    if (!memData.deletedTraineeIds.includes(traineeId)) {
+      memData.deletedTraineeIds.push(traineeId);
+    }
     if (Array.isArray(memData.trainees)) {
       memData.trainees = memData.trainees.filter((t) => t && t.id !== traineeId);
     }
@@ -15257,6 +15509,7 @@ apiRouter.put("/trainers/:id", async (req, res) => {
     const { id } = req.params;
     const formattedData = await resolveTrainerCodeAndPrefix(req.body, id);
     const updated = await TrainerRepo.update(id, formattedData);
+    db.recalculateTrainerFinances(id);
     res.json({ success: true, trainer: updated });
   } catch (e) {
     res.status(500).json({ success: false, error: e.message });
@@ -15848,13 +16101,9 @@ apiRouter.post("/attendance", async (req, res) => {
     }
     db.recalculateTraineeRankings();
     db.save();
-    try {
-      await saveCollectionToFirestore("attendance", db.getData().attendance);
-      await saveCollectionToFirestore("pointTransactions", db.getData().pointTransactions);
-      await saveCollectionToFirestore("trainees", db.getData().trainees);
-    } catch (fsErr) {
-      console.warn("[Attendance] Firestore sync warning:", fsErr);
-    }
+    saveCollectionToFirestore("attendance", db.getData().attendance).catch((fsErr) => {
+      console.warn("[Attendance] Firestore sync notice:", fsErr);
+    });
     res.json({
       success: true,
       record: newRecord,
@@ -15947,13 +16196,9 @@ apiRouter.post("/attendance/batch", async (req, res) => {
   }
   db.recalculateTraineeRankings();
   db.save();
-  try {
-    await saveCollectionToFirestore("attendance", db.getData().attendance);
-    await saveCollectionToFirestore("pointTransactions", db.getData().pointTransactions);
-    await saveCollectionToFirestore("trainees", db.getData().trainees);
-  } catch (fsErr) {
-    console.warn("[Attendance Batch] Firestore sync warning:", fsErr);
-  }
+  saveCollectionToFirestore("attendance", db.getData().attendance).catch((fsErr) => {
+    console.warn("[Attendance Batch] Firestore sync notice:", fsErr);
+  });
   db.logAudit({
     userId: "user",
     userName: "\u0627\u0644\u0645\u0634\u0631\u0641/\u0627\u0644\u0645\u062F\u0631\u0628",
@@ -16056,7 +16301,7 @@ apiRouter.post("/finance/payments", async (req, res) => {
       nextMonth.setMonth(nextMonth.getMonth() + 1);
       calculatedNextDueDate = nextMonth.toISOString().split("T")[0];
     }
-    const currentTargetMonth = targetMonth || now.toLocaleDateString("ar-EG", { month: "long", year: "numeric" });
+    const currentTargetMonth = targetMonth || "\u0633\u0628\u062A\u0645\u0628\u0631 2026";
     const payment = {
       id: "pay-" + Date.now(),
       receiptNumber,
@@ -16136,6 +16381,326 @@ apiRouter.post("/finance/payments", async (req, res) => {
     res.status(500).json({ error: e.message });
   }
 });
+apiRouter.delete(["/finance/payments/:id", "/payments/:id"], async (req, res) => {
+  try {
+    const paymentId = req.params.id;
+    const payment = await PaymentRepo.getById(paymentId);
+    if (!payment) {
+      return res.status(404).json({ success: false, error: "\u0633\u0646\u062F \u0627\u0644\u0633\u062F\u0627\u062F \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F \u0623\u0648 \u062A\u0645 \u062D\u0630\u0641\u0647 \u0645\u0633\u0628\u0642\u0627\u064B" });
+    }
+    await PaymentRepo.delete(paymentId);
+    let updatedTrainee = null;
+    if (payment.traineeId) {
+      const trainee = await TraineeRepo.getById(payment.traineeId);
+      if (trainee) {
+        const payAmount = Number(payment.amount) || 0;
+        const newPaid = Math.max(0, (trainee.paidAmount || 0) - payAmount);
+        const fee = trainee.isExempt ? 0 : trainee.netAmount || trainee.feeAmount || 0;
+        const newRemaining = trainee.isExempt ? 0 : Math.max(0, fee - newPaid);
+        const targetMonth = payment.targetMonth || "";
+        const targetPrefix = targetMonth.split(" ")[0] || "";
+        const paymentMonths = Array.isArray(payment.paidMonths) ? payment.paidMonths : targetMonth ? [targetMonth] : [];
+        const existingMonths = Array.isArray(trainee.paidMonths) ? trainee.paidMonths : [];
+        const newMonths = existingMonths.filter((m) => {
+          if (paymentMonths.includes(m)) return false;
+          if (targetPrefix && m.startsWith(targetPrefix)) return false;
+          return true;
+        });
+        const allStudentPayments = (await PaymentRepo.getByTraineeId(trainee.id).catch(() => [])).filter((p) => p.id !== paymentId && p.status !== "rejected");
+        const latestPayment = allStudentPayments.sort((a, b) => new Date(b.date || b.createdAt).getTime() - new Date(a.date || a.createdAt).getTime())[0];
+        const updates = {
+          paidAmount: newPaid,
+          remainingAmount: newRemaining,
+          paidMonths: newMonths,
+          lastPaymentDate: latestPayment ? latestPayment.date : "",
+          lastReceiptNumber: latestPayment ? latestPayment.receiptNumber : ""
+        };
+        updatedTrainee = await TraineeRepo.update(trainee.id, updates);
+      }
+    }
+    db.logAudit({
+      userId: req.user?.id || "admin",
+      userName: req.user?.name || "\u0627\u0644\u0645\u062F\u064A\u0631 \u0627\u0644\u0645\u0627\u0644\u064A \u0648\u0627\u0644\u062E\u0632\u064A\u0646\u0629",
+      action: "\u0625\u0644\u063A\u0627\u0621 \u0648\u062D\u0630\u0641 \u0633\u0646\u062F \u062A\u062D\u0635\u064A\u0644",
+      entity: "\u0627\u0644\u062E\u0632\u064A\u0646\u0629",
+      entityId: paymentId,
+      branchId: payment.branchId,
+      details: `\u062A\u0645 \u0625\u0644\u063A\u0627\u0621 \u0648\u062D\u0630\u0641 \u0633\u0646\u062F \u0627\u0644\u062A\u062D\u0635\u064A\u0644 \u0631\u0642\u0645 ${payment.receiptNumber || paymentId} \u0628\u0645\u0628\u0644\u063A ${payment.amount} \u062C.\u0645 \u0644\u0644\u0637\u0627\u0644\u0628 ${payment.traineeName || payment.traineeCode} \u0648\u0625\u0639\u0627\u062F\u0629 \u0636\u0628\u0637 \u0631\u0635\u064A\u062F \u0627\u0644\u0637\u0627\u0644\u0628 \u0643\u063A\u064A\u0631 \u0645\u0633\u062F\u062F.`
+    });
+    return res.json({
+      success: true,
+      message: "\u062A\u0645 \u062D\u0630\u0641 \u0633\u0646\u062F \u0627\u0644\u0633\u062F\u0627\u062F \u0628\u0646\u062C\u0627\u062D \u0648\u0625\u0639\u0627\u062F\u0629 \u0636\u0628\u0637 \u0631\u0635\u064A\u062F \u0627\u0644\u0637\u0627\u0644\u0628 \u0648\u0645\u0633\u062A\u062D\u0642\u0627\u062A\u0647 \u0643\u063A\u064A\u0631 \u0645\u0633\u062F\u062F",
+      deletedPaymentId: paymentId,
+      trainee: updatedTrainee
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+apiRouter.post("/finance/payments/migrate-october-to-september", async (req, res) => {
+  try {
+    const allPayments = await PaymentRepo.getAll(true);
+    let migratedPaymentsCount = 0;
+    for (const p of allPayments) {
+      if (p.targetMonth && p.targetMonth.includes("\u0623\u0643\u062A\u0648\u0628\u0631") || p.paidMonths && p.paidMonths.some((m) => m.includes("\u0623\u0643\u062A\u0648\u0628\u0631"))) {
+        await PaymentRepo.update(p.id, {
+          targetMonth: "\u0633\u0628\u062A\u0645\u0628\u0631 2026",
+          paidMonths: ["\u0633\u0628\u062A\u0645\u0628\u0631 2026"]
+        });
+        migratedPaymentsCount++;
+      }
+    }
+    const allTrainees = await TraineeRepo.getAll(true);
+    let migratedTraineesCount = 0;
+    for (const t of allTrainees) {
+      let tModified = false;
+      const tUpdates = {};
+      if (t.paidMonths && t.paidMonths.some((m) => m.includes("\u0623\u0643\u062A\u0648\u0628\u0631"))) {
+        tUpdates.paidMonths = Array.from(new Set(t.paidMonths.map((m) => m.includes("\u0623\u0643\u062A\u0648\u0628\u0631") ? "\u0633\u0628\u062A\u0645\u0628\u0631 2026" : m)));
+        tModified = true;
+      }
+      if (t.startBillingMonth && t.startBillingMonth.includes("\u0623\u0643\u062A\u0648\u0628\u0631")) {
+        tUpdates.startBillingMonth = "\u0633\u0628\u062A\u0645\u0628\u0631 2026";
+        tModified = true;
+      }
+      if (tModified) {
+        await TraineeRepo.update(t.id, tUpdates);
+        migratedTraineesCount++;
+      }
+    }
+    return res.json({
+      success: true,
+      migratedPaymentsCount,
+      migratedTraineesCount,
+      message: `\u062A\u0645 \u062A\u062D\u0648\u064A\u0644 ${migratedPaymentsCount} \u0633\u0646\u062F\u0627\u062A \u062A\u062D\u0635\u064A\u0644 \u0648 ${migratedTraineesCount} \u0637\u0644\u0627\u0628 \u0645\u0646 \u0623\u0643\u062A\u0648\u0628\u0631 \u0625\u0644\u0649 \u0633\u0628\u062A\u0645\u0628\u0631 2026 \u0628\u0646\u062C\u0627\u062D`
+    });
+  } catch (e) {
+    return res.status(500).json({ success: false, error: e.message });
+  }
+});
+apiRouter.post("/payments", async (req, res) => {
+  const handleUrl = "/api/finance/payments";
+  req.url = handleUrl;
+  return apiRouter.handle(req, res);
+});
+var handleQuickPayEndpoint = async (req, res) => {
+  try {
+    const { traineeId, targetMonth = "\u0633\u0628\u062A\u0645\u0628\u0631 2026", paymentMethod = "cash", notes } = req.body;
+    if (!traineeId) {
+      return res.status(400).json({ error: "\u0645\u0639\u0631\u0641 \u0627\u0644\u0637\u0627\u0644\u0628 \u0645\u0637\u0644\u0648\u0628" });
+    }
+    const trainee = await TraineeRepo.getById(traineeId);
+    if (!trainee) {
+      return res.status(404).json({ error: "\u0627\u0644\u0637\u0627\u0644\u0628 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F" });
+    }
+    const payAmount = Number(req.body.amount) || Number(trainee.netAmount) || Number(trainee.feeAmount) || 200;
+    const now = /* @__PURE__ */ new Date();
+    const currentDateStr = now.toISOString().split("T")[0];
+    const currentTimeStr = now.toLocaleTimeString("ar-EG", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: true });
+    const nextMonth = new Date(now);
+    nextMonth.setMonth(nextMonth.getMonth() + 1);
+    nextMonth.setDate(25);
+    const calculatedNextDueDate = nextMonth.toISOString().split("T")[0];
+    let receiptNumber = `REC${Date.now().toString().slice(-7)}`;
+    let groupName = trainee.groupName;
+    let trainerId = req.body.trainerId;
+    let trainerName = req.body.trainerName;
+    let trainerCode = req.body.trainerCode;
+    try {
+      if (trainee.groupId) {
+        const group = await GroupRepo.getById(trainee.groupId);
+        if (group) {
+          groupName = group.name;
+          if (!trainerId && group.trainerId) {
+            trainerId = group.trainerId;
+            const tr = await TrainerRepo.getById(group.trainerId);
+            if (tr) {
+              trainerName = tr.name;
+              trainerCode = tr.code;
+            }
+          }
+          if (group.code && trainee.code) {
+            const cleanGroupCode = (group.code || "").replace(/-/g, "");
+            const cleanTraineeCode = (trainee.code || "").replace(/-/g, "");
+            const studentPayments = await PaymentRepo.getByTraineeId(trainee.id);
+            const nextNum = studentPayments.length + 1;
+            receiptNumber = `REC${cleanGroupCode}${cleanTraineeCode}${nextNum}`;
+          }
+        }
+      }
+      if (!trainerId && trainee.courseId) {
+        const groups = await GroupRepo.getAll();
+        const gWithTr = groups.find((g) => g.courseId === trainee.courseId && g.trainerId);
+        if (gWithTr) {
+          trainerId = gWithTr.trainerId;
+          const tr = await TrainerRepo.getById(gWithTr.trainerId);
+          if (tr) {
+            trainerName = tr.name;
+            trainerCode = tr.code;
+          }
+        }
+      }
+    } catch {
+    }
+    const currentTargetMonth = targetMonth || "\u0633\u0628\u062A\u0645\u0628\u0631 2026";
+    const payment = {
+      id: "pay-" + Date.now() + "-" + Math.random().toString(36).substring(2, 6),
+      receiptNumber,
+      date: currentDateStr,
+      time: currentTimeStr,
+      traineeId: trainee.id,
+      traineeName: trainee.fullName,
+      traineeCode: trainee.code,
+      trainerId,
+      trainerName,
+      trainerCode,
+      courseId: trainee.courseId,
+      branchId: trainee.branchId,
+      groupName,
+      groupId: trainee.groupId,
+      amount: payAmount,
+      paymentMethod: paymentMethod || "cash",
+      receivedByUserId: "admin",
+      receivedByUserName: "\u0627\u0644\u0645\u062F\u064A\u0631 \u0627\u0644\u0645\u0627\u0644\u064A \u0648\u0627\u0644\u062E\u0632\u064A\u0646\u0629",
+      targetMonth: currentTargetMonth,
+      parentPhone: trainee.parentPhone || trainee.phone,
+      traineePhone: trainee.phone,
+      previousDebt: 0,
+      discountAmount: trainee.discountAmount || 0,
+      isExempt: false,
+      nextDueDate: calculatedNextDueDate,
+      paidMonths: Array.from(/* @__PURE__ */ new Set([...trainee.paidMonths || [], currentTargetMonth])),
+      notes: notes || `\u0633\u062F\u0627\u062F \u0641\u0648\u0631\u064A \u0628\u0646\u0642\u0631\u0629 \u0648\u0627\u062D\u062F\u0629 - ${currentTargetMonth}`,
+      createdAt: now.toISOString(),
+      status: "approved",
+      gdriveSyncStatus: "synced"
+    };
+    await PaymentRepo.create(payment.id, payment);
+    const newPaid = (trainee.paidAmount || 0) + payAmount;
+    const traineeUpdates = {
+      paidAmount: newPaid,
+      remainingAmount: 0,
+      nextPaymentDueDate: calculatedNextDueDate,
+      lastPaymentDate: currentDateStr,
+      lastReceiptNumber: receiptNumber,
+      paidMonths: Array.from(/* @__PURE__ */ new Set([...trainee.paidMonths || [], currentTargetMonth]))
+    };
+    const updatedTrainee = await TraineeRepo.update(trainee.id, traineeUpdates);
+    db.logAudit({
+      userId: "admin",
+      userName: "\u0627\u0644\u0645\u062F\u064A\u0631 \u0627\u0644\u0645\u0627\u0644\u064A \u0648\u0627\u0644\u062E\u0632\u064A\u0646\u0629",
+      action: "\u0633\u062F\u0627\u062F \u0641\u0648\u0631\u064A \u0628\u0646\u0642\u0631\u0629 \u0648\u0627\u062D\u062F\u0629",
+      entity: "\u0627\u0644\u062E\u0632\u064A\u0646\u0629",
+      entityId: payment.id,
+      branchId: payment.branchId,
+      details: `\u062A\u0645 \u0627\u0644\u0633\u062F\u0627\u062F \u0627\u0644\u0641\u0648\u0631\u064A \u0628\u0646\u0642\u0631\u0629 \u0648\u0627\u062D\u062F\u0629 \u0628\u0645\u0628\u0644\u063A ${payAmount} \u062C.\u0645 \u0644\u0644\u0637\u0627\u0644\u0628 ${trainee.fullName} (${trainee.code}) \u0628\u0631\u0642\u0645 \u0633\u0646\u062F ${receiptNumber} \u0644\u0634\u0647\u0631 ${currentTargetMonth}`
+    });
+    res.json({ success: true, payment, trainee: updatedTrainee });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+apiRouter.post("/finance/payments/quick-pay", handleQuickPayEndpoint);
+apiRouter.post("/payments/quick-pay", handleQuickPayEndpoint);
+var handleQuickBatchPayEndpoint = async (req, res) => {
+  try {
+    const { traineeIds, targetMonth = "\u0633\u0628\u062A\u0645\u0628\u0631 2026", paymentMethod = "cash" } = req.body;
+    if (!Array.isArray(traineeIds) || traineeIds.length === 0) {
+      return res.status(400).json({ error: "\u0642\u0627\u0626\u0645\u0629 \u0627\u0644\u0637\u0644\u0627\u0628 \u0645\u0637\u0644\u0648\u0628\u0629" });
+    }
+    const createdPayments = [];
+    const updatedTrainees = [];
+    const now = /* @__PURE__ */ new Date();
+    const currentDateStr = now.toISOString().split("T")[0];
+    const currentTimeStr = now.toLocaleTimeString("ar-EG", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: true });
+    const nextMonth = new Date(now);
+    nextMonth.setMonth(nextMonth.getMonth() + 1);
+    nextMonth.setDate(25);
+    const calculatedNextDueDate = nextMonth.toISOString().split("T")[0];
+    const currentTargetMonth = targetMonth || "\u0633\u0628\u062A\u0645\u0628\u0631 2026";
+    for (let i = 0; i < traineeIds.length; i++) {
+      const tId = traineeIds[i];
+      const trainee = await TraineeRepo.getById(tId);
+      if (!trainee || trainee.isExempt) continue;
+      const payAmount = Number(trainee.netAmount) || Number(trainee.feeAmount) || 200;
+      const receiptNumber = `REC${Date.now().toString().slice(-6)}${i + 1}`;
+      let trainerId = trainee.trainerId;
+      let trainerName = trainee.trainerName;
+      let trainerCode = trainee.trainerCode;
+      if (!trainerId && trainee.groupId) {
+        try {
+          const group = await GroupRepo.getById(trainee.groupId);
+          if (group && group.trainerId) {
+            trainerId = group.trainerId;
+            const tr = await TrainerRepo.getById(group.trainerId);
+            if (tr) {
+              trainerName = tr.name;
+              trainerCode = tr.code;
+            }
+          }
+        } catch {
+        }
+      }
+      const payment = {
+        id: "pay-" + Date.now() + "-" + i + "-" + Math.random().toString(36).substring(2, 5),
+        receiptNumber,
+        date: currentDateStr,
+        time: currentTimeStr,
+        traineeId: trainee.id,
+        traineeName: trainee.fullName,
+        traineeCode: trainee.code,
+        trainerId,
+        trainerName,
+        trainerCode,
+        courseId: trainee.courseId,
+        branchId: trainee.branchId,
+        groupName: trainee.groupName,
+        groupId: trainee.groupId,
+        amount: payAmount,
+        paymentMethod: paymentMethod || "cash",
+        receivedByUserId: "admin",
+        receivedByUserName: "\u0627\u0644\u0645\u062F\u064A\u0631 \u0627\u0644\u0645\u0627\u0644\u064A \u0648\u0627\u0644\u062E\u0632\u064A\u0646\u0629",
+        targetMonth: currentTargetMonth,
+        parentPhone: trainee.parentPhone || trainee.phone,
+        traineePhone: trainee.phone,
+        previousDebt: 0,
+        discountAmount: trainee.discountAmount || 0,
+        isExempt: false,
+        nextDueDate: calculatedNextDueDate,
+        paidMonths: Array.from(/* @__PURE__ */ new Set([...trainee.paidMonths || [], currentTargetMonth])),
+        notes: `\u0633\u062F\u0627\u062F \u062C\u0645\u0627\u0639\u064A \u0641\u0648\u0631\u064A \u0644\u0634\u0647\u0631 ${currentTargetMonth}`,
+        createdAt: now.toISOString(),
+        status: "approved",
+        gdriveSyncStatus: "synced"
+      };
+      await PaymentRepo.create(payment.id, payment);
+      createdPayments.push(payment);
+      const newPaid = (trainee.paidAmount || 0) + payAmount;
+      const traineeUpdates = {
+        paidAmount: newPaid,
+        remainingAmount: 0,
+        nextPaymentDueDate: calculatedNextDueDate,
+        lastPaymentDate: currentDateStr,
+        lastReceiptNumber: receiptNumber,
+        paidMonths: Array.from(/* @__PURE__ */ new Set([...trainee.paidMonths || [], currentTargetMonth]))
+      };
+      const upT = await TraineeRepo.update(trainee.id, traineeUpdates);
+      if (upT) updatedTrainees.push(upT);
+    }
+    db.logAudit({
+      userId: "admin",
+      userName: "\u0627\u0644\u0645\u062F\u064A\u0631 \u0627\u0644\u0645\u0627\u0644\u064A \u0648\u0627\u0644\u062E\u0632\u064A\u0646\u0629",
+      action: "\u0633\u062F\u0627\u062F \u0641\u0648\u0631\u064A \u062C\u0645\u0627\u0639\u064A \u0644\u0644\u0645\u062C\u0645\u0648\u0639\u0629",
+      entity: "\u0627\u0644\u062E\u0632\u064A\u0646\u0629",
+      details: `\u062A\u0645 \u0627\u0644\u0633\u062F\u0627\u062F \u0627\u0644\u0641\u0648\u0631\u064A \u0627\u0644\u062C\u0645\u0627\u0639\u064A \u0644\u0639\u062F\u062F ${createdPayments.length} \u0637\u0627\u0644\u0628 \u0644\u0634\u0647\u0631 ${currentTargetMonth}`
+    });
+    res.json({ success: true, count: createdPayments.length, payments: createdPayments, trainees: updatedTrainees });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+apiRouter.post("/finance/payments/quick-batch-pay", handleQuickBatchPayEndpoint);
+apiRouter.post("/payments/quick-batch-pay", handleQuickBatchPayEndpoint);
 apiRouter.post("/parent/submit-payment-proof", async (req, res) => {
   try {
     const { traineeId, amount, paymentMethod, targetMonth, notes, proofImageUrl, submittedByParentName } = req.body;
@@ -16660,7 +17225,7 @@ apiRouter.get("/finance/summary", async (req, res) => {
     const allOwnerWithdrawalsRaw = db.getData().ownerWithdrawals || [];
     const validAllPayments = (allPaymentsRaw || []).filter((p) => p.status === "approved" || !p.status && !p.proofImageUrl && !p.proofUrl);
     const allBranchesTotalRevenue = validAllPayments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
-    const activeGroupTraineesAll = (allTraineesRaw || []).filter((t) => t.status === "active" && Boolean(t.groupId) && t.groupId.trim() !== "" && t.groupId !== "unassigned" && !t.isExempt);
+    const activeGroupTraineesAll = (allTraineesRaw || []).filter((t) => t.status === "active" && Boolean(t.groupId && t.groupId.trim() !== "" && t.groupId !== "unassigned") && Boolean(t.courseId && t.courseId.trim() !== "" && t.courseId !== "unassigned") && !t.isExempt);
     const allBranchesTotalRemaining = activeGroupTraineesAll.reduce((sum, t) => sum + (Number(t.remainingAmount) || 0), 0);
     const todayDateStr = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
     const todayAllPayments = validAllPayments.filter((p) => p.date === todayDateStr);
@@ -16672,7 +17237,7 @@ apiRouter.get("/finance/summary", async (req, res) => {
       const bSettlements = (allSettlementsRaw || []).filter((s) => s.branchId === b.id);
       const bWithdrawals = (allOwnerWithdrawalsRaw || []).filter((w) => w.branchId === b.id);
       const bTrainees = (allTraineesRaw || []).filter((t) => t.branchId === b.id);
-      const bActiveTrainees = bTrainees.filter((t) => t.status === "active" && Boolean(t.groupId) && t.groupId.trim() !== "" && t.groupId !== "unassigned" && !t.isExempt);
+      const bActiveTrainees = bTrainees.filter((t) => t.status === "active" && Boolean(t.groupId && t.groupId.trim() !== "" && t.groupId !== "unassigned") && Boolean(t.courseId && t.courseId.trim() !== "" && t.courseId !== "unassigned") && !t.isExempt);
       const bTotalRevenue = bPayments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
       const bGeneralExpenses = bExpenses.filter((e) => e.category !== "trainers" && !e.id?.startsWith("exp-tr-") && !bSettlements.some((s) => s.receiptNumber && e.notes?.includes(s.receiptNumber)));
       const bTotalExpenses = bGeneralExpenses.reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
@@ -16781,19 +17346,31 @@ apiRouter.post("/finance/owner-withdrawal", async (req, res) => {
     if (!db.getData().ownerWithdrawals) {
       db.getData().ownerWithdrawals = [];
     }
-    const payments = (db.getData().payments || []).filter((p) => p.status === "approved" || !p.status && !p.proofImageUrl);
-    const expenses = db.getData().expenses || [];
-    const settlements = db.getData().trainerSettlements || [];
+    const allPayments = (db.getData().payments || []).filter((p) => p.status === "approved" || !p.status && !p.proofImageUrl);
+    const allExpenses = (db.getData().expenses || []).filter((e) => !String(e.id || "").startsWith("exp-reset-"));
+    const allSettlements = db.getData().trainerSettlements || [];
     const priorWithdrawals = db.getData().ownerWithdrawals || [];
+    const isSpecificBranch = branchId && branchId !== "all" && branchId !== "undefined";
+    const payments = isSpecificBranch ? allPayments.filter((p) => p.branchId === branchId) : allPayments;
+    const expenses = isSpecificBranch ? allExpenses.filter((e) => e.branchId === branchId) : allExpenses;
+    const settlements = isSpecificBranch ? allSettlements.filter((s) => s.branchId === branchId) : allSettlements;
+    const branchPriorWithdrawals = isSpecificBranch ? priorWithdrawals.filter((w) => w.branchId === branchId) : priorWithdrawals;
     const totalRev = payments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
     const totalExp = expenses.reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
     const totalSet = settlements.reduce((sum, s) => sum + (Number(s.amount) || 0), 0);
-    const totalPriorWith = priorWithdrawals.reduce((sum, w) => sum + (Number(w.amount) || 0), 0);
+    const totalPriorWith = branchPriorWithdrawals.reduce((sum, w) => sum + (Number(w.amount) || 0), 0);
     const treasuryBefore = Math.max(0, totalRev - totalExp - totalSet - totalPriorWith);
-    if (withdrawAmount > treasuryBefore) {
-      return res.status(400).json({
-        error: `\u0627\u0644\u0645\u0628\u0644\u063A \u0627\u0644\u0645\u0637\u0644\u0648\u0628 (${withdrawAmount.toLocaleString()} \u062C.\u0645) \u0623\u0643\u0628\u0631 \u0645\u0646 \u0627\u0644\u0631\u0635\u064A\u062F \u0627\u0644\u0645\u062A\u0648\u0641\u0631 \u062D\u0627\u0644\u064A\u0627\u064B \u0628\u0627\u0644\u062E\u0632\u0646\u0629 (${treasuryBefore.toLocaleString()} \u062C.\u0645)`
-      });
+    if (withdrawAmount > treasuryBefore && treasuryBefore <= 0) {
+      const globalRev = allPayments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+      const globalExp = allExpenses.reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
+      const globalSet = allSettlements.reduce((sum, s) => sum + (Number(s.amount) || 0), 0);
+      const globalPrior = priorWithdrawals.reduce((sum, w) => sum + (Number(w.amount) || 0), 0);
+      const globalTreasury = Math.max(0, globalRev - globalExp - globalSet - globalPrior);
+      if (withdrawAmount > globalTreasury && globalTreasury <= 0) {
+        return res.status(400).json({
+          error: `\u0639\u0630\u0631\u0627\u064B\u060C \u0627\u0644\u0631\u0635\u064A\u062F \u0627\u0644\u0646\u0642\u062F\u064A \u0627\u0644\u0645\u062A\u0648\u0641\u0631 \u062D\u0627\u0644\u064A\u0627\u064B \u0628\u0627\u0644\u062E\u0632\u0646\u0629 \u0647\u0648 (${treasuryBefore.toLocaleString()} \u062C.\u0645). \u064A\u0631\u062C\u0649 \u0627\u0644\u062A\u0623\u0643\u062F \u0645\u0646 \u062A\u0648\u0631\u064A\u062F \u0645\u0642\u0628\u0648\u0636\u0627\u062A \u0646\u0642\u062F\u064A\u0629 \u0623\u0648\u0644\u0627\u064B \u0642\u0628\u0644 \u0627\u0644\u0635\u0631\u0641.`
+        });
+      }
     }
     const receiptNumber = `OWNER-WITH-${Date.now().toString().slice(-6)}`;
     const newWithdrawal = {
@@ -17098,14 +17675,11 @@ async function awardTraineePoints(studentIdentifier, pointsToAdd, reason, meta) 
   const pVal = Number(pointsToAdd) || 0;
   if (pVal === 0) return null;
   const dbData = db.getData();
-  const allTrainees = await TraineeRepo.getAll();
-  let student = allTrainees.find(
+  let student = (dbData.trainees || []).find(
     (t) => t.id === studentIdentifier || t.code === studentIdentifier || t.code && studentIdentifier && String(t.code).trim().toLowerCase() === String(studentIdentifier).trim().toLowerCase()
   );
-  if (!student && Array.isArray(dbData.trainees)) {
-    student = dbData.trainees.find(
-      (t) => t.id === studentIdentifier || t.code === studentIdentifier || t.code && studentIdentifier && String(t.code).trim().toLowerCase() === String(studentIdentifier).trim().toLowerCase()
-    );
+  if (!student) {
+    student = await TraineeRepo.getById(studentIdentifier);
   }
   if (!student) {
     try {
@@ -17185,6 +17759,11 @@ async function awardTraineePoints(studentIdentifier, pointsToAdd, reason, meta) 
       });
     });
   }
+  db.saveImmediate();
+  saveCollectionToFirestore("trainees", dbData.trainees, false).catch(() => {
+  });
+  saveCollectionToFirestore("pointTransactions", dbData.pointTransactions, false).catch(() => {
+  });
   return { student, newTotal, pt };
 }
 apiRouter.post("/points/add", async (req, res) => {
@@ -18019,6 +18598,8 @@ apiRouter.post("/homeworks/batch-grade", async (req, res) => {
     }
   }
   db.saveImmediate();
+  saveCollectionToFirestore("homeworkSubmissions", data.homeworkSubmissions, false).catch(() => {
+  });
   res.json({ success: true, updatedCount, message: `\u062A\u0645 \u062A\u0635\u062D\u064A\u062D ${updatedCount} \u0648\u0627\u062C\u0628\u0627\u062A \u062C\u0645\u0627\u0639\u064A\u0627\u064B \u0648\u0625\u0631\u0633\u0627\u0644 \u0627\u0644\u062F\u0631\u062C\u0627\u062A \u0628\u0646\u062C\u0627\u062D` });
 });
 apiRouter.get(["/homeworks", "/homeworks/"], (req, res) => {
@@ -18114,6 +18695,8 @@ apiRouter.put("/homeworks/:id", async (req, res) => {
       });
     }
     db.saveImmediate();
+    saveCollectionToFirestore("homeworkSubmissions", data.homeworkSubmissions, false).catch(() => {
+    });
     res.json(sub);
   } catch (err) {
     res.status(500).json({ error: "\u0641\u0634\u0644 \u062D\u0641\u0638 \u0627\u0644\u062A\u0639\u062F\u064A\u0644\u0627\u062A \u0639\u0644\u0649 \u0627\u0644\u062A\u0642\u0631\u064A\u0631: " + err.message });
@@ -19761,7 +20344,8 @@ apiRouter.post("/student/login", async (req, res) => {
   if (!codeOrPhone) {
     return res.status(400).json({ error: "\u064A\u0631\u062C\u0649 \u0625\u062F\u062E\u0627\u0644 \u0643\u0648\u062F \u0627\u0644\u0645\u062A\u062F\u0631\u0628 \u0623\u0648 \u0631\u0642\u0645 \u0647\u0627\u062A\u0641\u0647" });
   }
-  const trainees = await TraineeRepo.getAll();
+  const data = db.getData();
+  const trainees = data.trainees && data.trainees.length > 0 ? data.trainees : await TraineeRepo.getAll();
   const trainee = findTraineeMatch(trainees, codeOrPhone);
   if (!trainee) {
     return res.status(404).json({
@@ -21023,16 +21607,26 @@ apiRouter.post(["/student/submit-homework", "/student/submit-homework/"], async 
       return res.status(400).json({ error: "\u0645\u0639\u0631\u0641 \u0627\u0644\u0637\u0627\u0644\u0628 \u0645\u0637\u0644\u0648\u0628" });
     }
     const data = db.getData();
-    const allTrainees = await TraineeRepo.getAll();
-    let trainee = allTrainees.find((t) => t.id === traineeId || t.code === traineeId);
-    if (!trainee && Array.isArray(data.trainees)) {
-      trainee = data.trainees.find((t) => t.id === traineeId || t.code === traineeId);
+    let trainee = (data.trainees || []).find((t) => t.id === traineeId || t.code === traineeId);
+    if (!trainee) {
+      trainee = await TraineeRepo.getById(traineeId);
     }
     if (!trainee) {
       return res.status(404).json({ error: "\u0627\u0644\u0637\u0627\u0644\u0628 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F \u0628\u0645\u0644\u0641\u0627\u062A \u0627\u0644\u0646\u0638\u0627\u0645" });
     }
     const effectiveTaskTitle = taskTitle || lessonName || "\u0648\u0627\u062C\u0628 \u0627\u0644\u062A\u0637\u0628\u064A\u0642 \u0627\u0644\u0645\u0628\u0627\u0634\u0631 \u0644\u0644\u062F\u0631\u0633";
     const effectiveLessonName = lessonName || taskTitle || "\u062A\u0637\u0628\u064A\u0642 \u0648\u062A\u0644\u062E\u064A\u0635 \u0627\u0644\u062F\u0631\u0633";
+    const existingSubmissions = Array.isArray(data.homeworkSubmissions) ? data.homeworkSubmissions : [];
+    const alreadySubmitted = existingSubmissions.find(
+      (s) => (s.traineeId === trainee.id || s.studentId === trainee.id || trainee.code && s.traineeCode === trainee.code) && (assignmentId && s.assignmentId === assignmentId || effectiveTaskTitle && s.taskTitle && s.taskTitle.trim() === effectiveTaskTitle.trim() || effectiveLessonName && s.lessonName && s.lessonName.trim() === effectiveLessonName.trim())
+    );
+    if (alreadySubmitted) {
+      return res.status(400).json({
+        error: "\u062A\u0645 \u062A\u0633\u0644\u064A\u0645 \u0647\u0630\u0627 \u0627\u0644\u0648\u0627\u062C\u0628 \u0645\u0633\u0628\u0642\u0627\u064B \u0648\u0644\u0627 \u064A\u0645\u0643\u0646 \u062A\u0643\u0631\u0627\u0631 \u0625\u0631\u0633\u0627\u0644\u0647 \u0623\u0648 \u0627\u062D\u062A\u0633\u0627\u0628 \u0646\u0642\u0627\u0637 \u0625\u0636\u0627\u0641\u064A\u0629.",
+        alreadySubmitted: true,
+        previousScore: alreadySubmitted.score || alreadySubmitted.grade
+      });
+    }
     const effectiveCourse = (data.courses || []).find((c) => c.id === (courseId || trainee.courseId));
     const courseName = effectiveCourse?.name || "\u0627\u0644\u0628\u0631\u0646\u0627\u0645\u062C \u0627\u0644\u062A\u062F\u0631\u064A\u0628\u064A - \u0645\u0627\u062F\u0629 \u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u0627\u0644\u0645\u0639\u0644\u0648\u0645\u0627\u062A \u0648\u0627\u0644\u0627\u062A\u0635\u0627\u0644\u0627\u062A ICT";
     const detectedCurr = detectCurriculum({
@@ -21280,6 +21874,7 @@ apiRouter.post(["/student/submit-homework", "/student/submit-homework/"], async 
       groupId: groupId || trainee.groupId || "",
       courseId: courseId || trainee.courseId || "",
       courseName,
+      branchId: trainee.branchId || "branch-1",
       taskTitle: effectiveTaskTitle,
       lessonName: effectiveLessonName,
       submittedAt: (/* @__PURE__ */ new Date()).toISOString(),
@@ -21344,6 +21939,8 @@ apiRouter.post(["/student/submit-homework", "/student/submit-homework/"], async 
       details: `\u062A\u0645 \u062A\u0633\u0644\u064A\u0645 ${isVoiceSubmission ? "\u062A\u0633\u062C\u064A\u0644 \u0635\u0648\u062A\u064A" : "\u0648\u0627\u062C\u0628 (" + pagesList.length + " \u0635\u0641\u062D\u0627\u062A)"} "${effectiveTaskTitle}" \u0644\u0644\u0637\u0627\u0644\u0628 ${trainee.fullName} \u0648\u062A\u0635\u062D\u064A\u062D\u0647 \u0628\u0646\u062C\u0627\u062D \u0628\u062F\u0631\u062C\u0629 ${finalGrade}/100 \u0648\u0645\u0646\u062D\u0647 ${totalPointsToAward} \u0646\u0642\u0637\u0629.`
     });
     db.saveImmediate();
+    saveCollectionToFirestore("homeworkSubmissions", data.homeworkSubmissions, false).catch(() => {
+    });
     res.json({
       success: true,
       submission: newSubmission,
@@ -22008,20 +22605,50 @@ apiRouter.post("/parent/login", async (req, res) => {
     }
     const cleanInputDigits = inputVal.replace(/\D/g, "");
     const cleanInputCode = inputVal.toUpperCase();
-    const trainees = await TraineeRepo.getAll();
-    const matched = findAllTraineesMatch(trainees, inputVal);
-    if (matched.length === 0) {
+    const data = db.getData();
+    const trainees = data.trainees && data.trainees.length > 0 ? data.trainees : await TraineeRepo.getAll();
+    let initialMatched = findAllTraineesMatch(trainees, inputVal);
+    if (initialMatched.length === 0) {
       return res.status(404).json({ success: false, error: "\u0644\u0645 \u064A\u062A\u0645 \u0627\u0644\u0639\u062B\u0648\u0631 \u0639\u0644\u0649 \u0648\u0644\u064A \u0623\u0645\u0631 \u0623\u0648 \u0637\u0627\u0644\u0628 \u0628\u0647\u0630\u0627 \u0627\u0644\u0643\u0648\u062F \u0623\u0648 \u0627\u0644\u0631\u0642\u0645. \u064A\u0631\u062C\u0649 \u0627\u0644\u062A\u0648\u0627\u0635\u0644 \u0645\u0639 \u0625\u062F\u0627\u0631\u0629 \u0627\u0644\u0645\u0631\u0643\u0632." });
     }
-    const allCourses = await CourseRepo.getAll();
-    const allGroups = await GroupRepo.getAll();
-    const allTrainers = await TrainerRepo.getAll();
-    const allAttendance = await AttendanceRepo.getAll();
-    const allPayments = await PaymentRepo.getAll();
-    const allSchedules = await ScheduleRepo.getAll();
-    const allAssignments = await AssignmentRepo.getAll();
-    const allSubmissions = await HomeworkSubmissionRepo.getAll();
-    const data = db.getData();
+    const parentPhoneSet = /* @__PURE__ */ new Set();
+    const parentNatIdSet = /* @__PURE__ */ new Set();
+    const parentNameSet = /* @__PURE__ */ new Set();
+    initialMatched.forEach((t) => {
+      const pPhone = String(t.parentPhone || "").replace(/\D/g, "");
+      if (pPhone.length >= 8) parentPhoneSet.add(pPhone.slice(-9));
+      const sPhone = String(t.phone || "").replace(/\D/g, "");
+      if (sPhone.length >= 8) parentPhoneSet.add(sPhone.slice(-9));
+      const pNatId = String(t.parentNationalId || t.nationalId || "").trim();
+      if (pNatId.length >= 6) parentNatIdSet.add(pNatId);
+      const pName = String(t.parentName || "").trim().toLowerCase();
+      if (pName.length >= 4) parentNameSet.add(pName);
+    });
+    if (cleanInputDigits.length >= 8) {
+      parentPhoneSet.add(cleanInputDigits.slice(-9));
+    }
+    const matched = trainees.filter((t) => {
+      if (initialMatched.some((m) => m.id === t.id)) return true;
+      const tPPhone = String(t.parentPhone || "").replace(/\D/g, "");
+      const tPhone = String(t.phone || "").replace(/\D/g, "");
+      const tPNatId = String(t.parentNationalId || "").trim();
+      const tPName = String(t.parentName || "").trim().toLowerCase();
+      for (const p of parentPhoneSet) {
+        if (tPPhone && (tPPhone.endsWith(p) || tPPhone.includes(p))) return true;
+        if (tPhone && (tPhone.endsWith(p) || tPhone.includes(p))) return true;
+      }
+      if (tPNatId && parentNatIdSet.has(tPNatId)) return true;
+      if (tPName && parentNameSet.has(tPName)) return true;
+      return false;
+    });
+    const allCourses = data.courses || [];
+    const allGroups = data.groups || [];
+    const allTrainers = data.trainers || [];
+    const allAttendance = data.attendance || [];
+    const allPayments = data.payments || [];
+    const allSchedules = data.schedules || [];
+    const allAssignments = data.assignments || [];
+    const allSubmissions = data.homeworkSubmissions || [];
     const enrichedChildren = matched.map((t) => {
       const course = allCourses.find((c) => c.id === t.courseId);
       const group = allGroups.find((g) => g.id === t.groupId);
@@ -22153,6 +22780,89 @@ apiRouter.post("/parent/login", async (req, res) => {
       },
       children: enrichedChildren,
       students: enrichedChildren
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+apiRouter.post("/parent/link-child", async (req, res) => {
+  try {
+    const { studentCodeOrPhone, parentPhone } = req.body;
+    const query = String(studentCodeOrPhone || "").trim();
+    if (!query) {
+      return res.status(400).json({ success: false, error: "\u064A\u0631\u062C\u0649 \u0643\u062A\u0627\u0628\u0629 \u0643\u0648\u062F \u0627\u0644\u0637\u0627\u0644\u0628 \u0623\u0648 \u0631\u0642\u0645 \u0647\u0627\u062A\u0641\u0647 \u0644\u0644\u0631\u0628\u0637" });
+    }
+    const trainees = await TraineeRepo.getAll();
+    const targetStudent = findTraineeMatch(trainees, query);
+    if (!targetStudent) {
+      return res.status(404).json({ success: false, error: `\u0644\u0645 \u064A\u062A\u0645 \u0627\u0644\u0639\u062B\u0648\u0631 \u0639\u0644\u0649 \u0637\u0627\u0644\u0628 \u0645\u0633\u062C\u0644 \u0628\u0627\u0644\u0643\u0648\u062F \u0623\u0648 \u0627\u0644\u0647\u0627\u062A\u0641 (${query}). \u064A\u0631\u062C\u0649 \u0627\u0644\u062A\u062D\u0642\u0642 \u0645\u0646 \u0627\u0644\u0643\u0648\u062F.` });
+    }
+    const cleanParentPhone = String(parentPhone || "").trim();
+    if (cleanParentPhone && !targetStudent.parentPhone) {
+      await TraineeRepo.update(targetStudent.id, { parentPhone: cleanParentPhone });
+      targetStudent.parentPhone = cleanParentPhone;
+    }
+    const allCourses = await CourseRepo.getAll();
+    const allGroups = await GroupRepo.getAll();
+    const allTrainers = await TrainerRepo.getAll();
+    const allAttendance = await AttendanceRepo.getAll();
+    const allPayments = await PaymentRepo.getAll();
+    const allSchedules = await ScheduleRepo.getAll();
+    const allSubmissions = await HomeworkSubmissionRepo.getAll();
+    const data = db.getData();
+    const course = allCourses.find((c) => c.id === targetStudent.courseId);
+    const group = allGroups.find((g) => g.id === targetStudent.groupId);
+    const trainer = group ? allTrainers.find((tr) => tr.id === group.trainerId) : null;
+    const childAtt = allAttendance.filter(
+      (a) => a.student_id === targetStudent.id || a.studentId === targetStudent.id || a.traineeId === targetStudent.id || a.student_code === targetStudent.code
+    );
+    const childSched = allSchedules.filter(
+      (s) => s.groupId === targetStudent.groupId || s.courseId === targetStudent.courseId || s.branchId === targetStudent.branchId
+    );
+    const childBadges = (data.badges || []).filter(
+      (b) => b.traineeId === targetStudent.id || b.studentId === targetStudent.id || b.traineeCode && targetStudent.code && String(b.traineeCode).trim().toLowerCase() === String(targetStudent.code).trim().toLowerCase()
+    );
+    const childCerts = (data.certificates || []).filter(
+      (c) => c.traineeId === targetStudent.id || c.studentId === targetStudent.id || c.traineeCode && targetStudent.code && String(c.traineeCode).trim().toLowerCase() === String(targetStudent.code).trim().toLowerCase() || c.studentCode && targetStudent.code && String(c.studentCode).trim().toLowerCase() === String(targetStudent.code).trim().toLowerCase()
+    );
+    const childPay = allPayments.filter(
+      (p) => p.student_id === targetStudent.id || p.studentId === targetStudent.id || p.traineeId === targetStudent.id
+    );
+    const childMsgs = (data.portalMessages || []).filter(
+      (m) => m.traineeId === targetStudent.id || m.traineeCode === targetStudent.code
+    );
+    const childHWList = allSubmissions.filter(
+      (s) => s.studentId === targetStudent.id || s.traineeId === targetStudent.id || s.studentCode && targetStudent.code && String(s.studentCode).trim().toLowerCase() === String(targetStudent.code).trim().toLowerCase()
+    );
+    const enriched = {
+      ...targetStudent,
+      courseName: course?.name || "\u0627\u0644\u0628\u0631\u0646\u0627\u0645\u062C \u0627\u0644\u062A\u062F\u0631\u064A\u0628\u064A \u0627\u0644\u0639\u0627\u0645",
+      groupName: group?.name || "\u0627\u0644\u0645\u062C\u0645\u0648\u0639\u0629 \u0627\u0644\u0645\u0639\u062A\u0645\u062F\u0629",
+      badges: childBadges,
+      certificates: childCerts,
+      evaluations: [],
+      attendance: childAtt,
+      schedules: childSched,
+      attendanceCount: childAtt.filter((a) => a.status === "present").length,
+      totalAttendance: childAtt.length,
+      payments: childPay,
+      messages: childMsgs,
+      assignments: [],
+      homeworks: childHWList,
+      recaps: [],
+      groupDetails: group,
+      trainer: trainer ? {
+        id: trainer.id,
+        name: trainer.name,
+        phone: trainer.phone,
+        email: trainer.email,
+        specialty: trainer.specialty || "\u0645\u062D\u0627\u0636\u0631 \u0648\u062A\u062F\u0631\u064A\u0628 \u0639\u0645\u0644\u064A"
+      } : null
+    };
+    res.json({
+      success: true,
+      message: `\u062A\u0645 \u0631\u0628\u0637 \u0627\u0644\u0627\u0628\u0646 (${targetStudent.fullName}) \u0628\u0646\u062C\u0627\u062D! \u{1F389}`,
+      child: enriched
     });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
@@ -22296,7 +23006,7 @@ apiRouter.post("/trainer-portal/attendance", async (req, res) => {
 });
 apiRouter.post("/trainer-portal/review-homework", async (req, res) => {
   try {
-    const { submissionId, trainerId, grade, trainerFeedback, pointsToAward, trainerNotes } = req.body;
+    const { submissionId, trainerId, grade, trainerFeedback, pointsToAward, trainerNotes, stars } = req.body;
     const data = db.getData();
     if (!Array.isArray(data.homeworkSubmissions)) data.homeworkSubmissions = [];
     const sub = data.homeworkSubmissions.find((s) => s.id === submissionId);
@@ -22309,6 +23019,7 @@ apiRouter.post("/trainer-portal/review-homework", async (req, res) => {
     }
     if (trainerFeedback) sub.generalFeedback = trainerFeedback;
     if (trainerNotes) sub.trainerNotes = trainerNotes;
+    if (stars !== void 0) sub.stars = Number(stars);
     sub.status = "reviewed";
     sub.reviewedAt = (/* @__PURE__ */ new Date()).toISOString();
     sub.reviewedByTrainerId = trainerId;
@@ -22344,6 +23055,8 @@ apiRouter.post("/trainer-portal/review-homework", async (req, res) => {
       metadata: { traineeId: trainee?.id || sub.traineeId, submissionId: sub.id, grade: sub.grade }
     });
     db.saveImmediate();
+    saveCollectionToFirestore("homeworkSubmissions", data.homeworkSubmissions, false).catch(() => {
+    });
     res.json({ success: true, submission: sub, message: "\u062A\u0645 \u062D\u0641\u0638 \u0627\u0639\u062A\u0645\u0627\u062F \u0627\u0644\u0648\u0627\u062C\u0628 \u0648\u0631\u0635\u062F \u0627\u0644\u0646\u0642\u0627\u0637 \u0648\u0627\u0644\u062A\u0642\u0627\u0631\u064A\u0631 \u0628\u0646\u062C\u0627\u062D" });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
