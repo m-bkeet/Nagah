@@ -85,6 +85,7 @@ const ACTUAL_DATA_DIR = isServerless ? path.join(os.tmpdir(), 'nagah_data') : pa
 const BACKUPS_DIR = path.join(ACTUAL_DATA_DIR, 'backups');
 const DB_FILE = path.join(ACTUAL_DATA_DIR, 'database.json');
 const BACKUP_FILE = path.join(ACTUAL_DATA_DIR, 'database.backup.json');
+const VAULT_FILE = path.join(ACTUAL_DATA_DIR, 'trainees_vault.json');
 const BUNDLED_DB_PATHS = [ path.join(process.cwd(), 'data', 'database.json'), path.join(process.cwd(), 'database.json'), '/var/task/data/database.json', '/vercel/path0/data/database.json' ];
 
 // Simple secure hash
@@ -3788,18 +3789,40 @@ class DatabaseManager {
 
       const tNorm = normName(t.fullName);
 
-      // Deduplication is STRICTLY by exact unique ID, OR by valid National ID ONLY IF the student name ALSO matches!
-      // Two students with DIFFERENT names must NEVER be merged (siblings sharing father's national ID or phone).
+      // Clean any accidental random suffixes from student codes (e.g. C042-CTQ -> C042)
+      let cleanCode = t.code ? String(t.code).trim().toUpperCase() : '';
+      if (cleanCode && /^[A-Z]\d{3}-[A-Z0-9]{3,4}$/i.test(cleanCode)) {
+        cleanCode = cleanCode.split('-')[0].toUpperCase();
+      }
+
+      // Check if student already exists:
+      // 1. By ID
+      // 2. By clean Code
+      // 3. By matching full name (at least 3 words matching)
       let existing: any = null;
       if (byId.has(id)) {
         existing = byId.get(id);
-      } else if (t.nationalId && String(t.nationalId).trim().length >= 10 && tNorm) {
-        const cleanNat = String(t.nationalId).trim();
+      } else if (cleanCode && byCode.has(cleanCode)) {
+        const prevWithCode = byCode.get(cleanCode);
+        const prevNorm = normName(prevWithCode.fullName);
+        // If same or similar person, or sharing the exact institutional code, merge them!
+        if (prevNorm === tNorm || !tNorm || prevNorm.includes(tNorm) || tNorm.includes(prevNorm)) {
+          existing = prevWithCode;
+        }
+      }
+
+      if (!existing && tNorm) {
+        // Match by full name
+        const tTokens = tNorm.split(' ').filter(Boolean);
         for (const prev of result) {
-          if (prev.nationalId && String(prev.nationalId).trim() === cleanNat) {
-            const prevNorm = normName(prev.fullName);
-            // ONLY merge if the student name is the same person!
-            if (prevNorm && prevNorm === tNorm) {
+          const prevNorm = normName(prev.fullName);
+          if (prevNorm === tNorm) {
+            existing = prev;
+            break;
+          }
+          if (tTokens.length >= 3) {
+            const prevTokens = prevNorm.split(' ').filter(Boolean);
+            if (prevTokens.length >= 3 && tTokens[0] === prevTokens[0] && tTokens[1] === prevTokens[1] && tTokens[2] === prevTokens[2]) {
               existing = prev;
               break;
             }
@@ -3808,33 +3831,42 @@ class DatabaseManager {
       }
 
       if (existing) {
-        // Merge updates into the existing record safely while preserving the student
+        // Merge updates into the existing record safely while preserving the single real student
         const mergedTotalPoints = Math.max(
           Number(existing.totalPoints !== undefined ? existing.totalPoints : (existing.points || 0)),
           Number(t.totalPoints !== undefined ? t.totalPoints : (t.points || 0))
         );
         const mergedPaidAmount = Math.max(Number(existing.paidAmount || 0), Number(t.paidAmount || 0));
         
+        // Prefer clean institutional code (3-digit without dash)
+        let bestCode = existing.code || cleanCode;
+        if (bestCode && bestCode.includes('-') && cleanCode && !cleanCode.includes('-')) {
+          bestCode = cleanCode;
+        }
+
         Object.assign(existing, {
           ...t,
           id: existing.id || t.id,
-          code: existing.code || t.code,
+          code: bestCode,
           fullName: existing.fullName || t.fullName,
-          phone: t.phone || existing.phone,
-          parentPhone: t.parentPhone || existing.parentPhone,
-          nationalId: t.nationalId || existing.nationalId,
+          phone: existing.phone || t.phone,
+          parentPhone: existing.parentPhone || t.parentPhone,
+          nationalId: existing.nationalId || t.nationalId,
           totalPoints: mergedTotalPoints,
           points: mergedTotalPoints,
           paidAmount: mergedPaidAmount,
           notes: existing.notes ? (t.notes && !existing.notes.includes(t.notes) ? `${existing.notes} | ${t.notes}` : existing.notes) : (t.notes || '')
         });
       } else {
-        const record = { ...t };
-        const code = record.code ? String(record.code).trim().toUpperCase() : '';
-        // If code collided with a previously registered student, assign a unique code suffix to protect both students!
-        if (code && byCode.has(code)) {
-          const suffix = Math.random().toString(36).substring(2, 5).toUpperCase();
-          record.code = `${code}-${suffix}`;
+        const record = { ...t, code: cleanCode };
+        // If code collided with a genuinely different student, allocate the next clean integer code
+        if (cleanCode && byCode.has(cleanCode)) {
+          const pfx = cleanCode.match(/^([A-Za-z]+)/)?.[1]?.toUpperCase() || 'A';
+          let num = 1;
+          while (byCode.has(`${pfx}${String(num).padStart(3, '0')}`)) {
+            num++;
+          }
+          record.code = `${pfx}${String(num).padStart(3, '0')}`;
         }
         result.push(record);
         byId.set(id, record);
@@ -3950,7 +3982,18 @@ class DatabaseManager {
                 const deletedIdsSet = new Set(Array.isArray(merged.deletedTraineeIds) ? merged.deletedTraineeIds : []);
                 const remoteIdSet = new Set(remoteList.map((t: any) => t.id).filter(Boolean));
                 const localOnly = localList.filter((t: any) => t && t.id && !remoteIdSet.has(t.id));
-                const combinedTrainees = [...mergedTrainees, ...localOnly].filter((t: any) => t && t.id && !deletedIdsSet.has(t.id));
+
+                // Always merge in any trainees from the permanent vault on disk
+                let diskVaultList: any[] = [];
+                try {
+                  if (fs.existsSync(VAULT_FILE)) {
+                    const raw = JSON.parse(fs.readFileSync(VAULT_FILE, 'utf-8'));
+                    if (Array.isArray(raw)) diskVaultList = raw;
+                  }
+                } catch {}
+                const vaultOnly = diskVaultList.filter((t: any) => t && t.id && !remoteIdSet.has(t.id));
+
+                const combinedTrainees = [...mergedTrainees, ...localOnly, ...vaultOnly].filter((t: any) => t && t.id && !deletedIdsSet.has(t.id));
                 merged[key] = this.deduplicateTrainees(combinedTrainees);
               } else if (Array.isArray(merged[key]) && merged[key].length > 0) {
                 // Collections that must be strictly append-only and never lose locally submitted items:
@@ -4029,7 +4072,30 @@ class DatabaseManager {
               };
             });
 
-            // Immediately persist cleaned trainees to Firestore to purge stale remote October references
+            // Trainee Count Reduction Safeguard: If local had more students than remote, never drop them
+            if (Array.isArray(current.trainees) && Array.isArray(merged.trainees)) {
+              if (current.trainees.length > merged.trainees.length) {
+                console.warn(`[DB SafeGuard] Preserving all local trainees: local=${current.trainees.length}, remote=${merged.trainees.length}`);
+                const localMap = new Map(current.trainees.map((t: any) => [t.id, t]));
+                for (const t of merged.trainees) {
+                  localMap.set(t.id, t);
+                }
+                merged.trainees = this.deduplicateTrainees(Array.from(localMap.values()));
+              }
+            }
+
+            // Immediately persist cleaned trainees to permanent local vault
+            try {
+              if (Array.isArray(merged.trainees) && merged.trainees.length > 0) {
+                const tempVault = `${VAULT_FILE}.tmp`;
+                fs.writeFileSync(tempVault, JSON.stringify(merged.trainees, null, 2), 'utf-8');
+                fs.renameSync(tempVault, VAULT_FILE);
+              }
+            } catch (vErr) {
+              console.warn('[DB] Non-critical vault write notice in ensureHydrated:', vErr);
+            }
+
+            // Delta sync trainees to Firestore in background
             saveCollectionToFirestore('trainees', merged.trainees).catch(() => {});
           }
 
@@ -4154,10 +4220,31 @@ class DatabaseManager {
 
         // Preserve full original database data & guarantee fee integrity
         const rawTrainees = Array.isArray(parsed.trainees) ? parsed.trainees : [];
+        
+        // Permanent Vault Integration: load protected vault records that can never be lost
+        let vaultTrainees: any[] = [];
+        try {
+          if (fs.existsSync(VAULT_FILE)) {
+            const rawVault = JSON.parse(fs.readFileSync(VAULT_FILE, 'utf-8'));
+            if (Array.isArray(rawVault)) vaultTrainees = rawVault;
+          }
+        } catch (e) {
+          console.warn('[DB] Non-critical vault read notice:', e);
+        }
+
+        const combinedTraineesList = [...rawTrainees];
+        const localIdSet = new Set(rawTrainees.map((t: any) => t.id));
+        for (const vt of vaultTrainees) {
+          if (vt && vt.id && !localIdSet.has(vt.id)) {
+            combinedTraineesList.push(vt);
+            localIdSet.add(vt.id);
+          }
+        }
+
         const coursesList = Array.isArray(parsed.courses) && parsed.courses.length > 0 ? parsed.courses : initialData.courses;
 
         // Auto-heal trainees missing feeAmount or with branch/exemption discrepancies
-        const normalizedTrainees = rawTrainees.map((t: any) => {
+        const normalizedTrainees = combinedTraineesList.map((t: any) => {
           const fin = calculateTraineeFeeAndFinancials(t, coursesList);
           return {
             ...t,
@@ -4255,6 +4342,17 @@ class DatabaseManager {
         fs.renameSync(tempBackup, BACKUP_FILE);
       } catch (err) {
         console.warn('[DB] Non-critical BACKUP_FILE write notice:', err);
+      }
+
+      // Save permanent trainees vault (immutable store that protects student data forever)
+      try {
+        if (Array.isArray(data.trainees) && data.trainees.length > 0) {
+          const tempVault = `${VAULT_FILE}.tmp`;
+          fs.writeFileSync(tempVault, JSON.stringify(data.trainees, null, 2), 'utf-8');
+          fs.renameSync(tempVault, VAULT_FILE);
+        }
+      } catch (err) {
+        console.warn('[DB] Non-critical VAULT_FILE write notice:', err);
       }
 
       // Save hourly rotating backup

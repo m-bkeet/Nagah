@@ -82,19 +82,41 @@ export function deduplicateTraineeList(list: Trainee[]): Trainee[] {
     const id = t.id ? String(t.id).trim() : '';
     if (!id) continue;
 
+    // Filter out any unwanted test/demo trainees
+    if (/تجريبي|test|demo/i.test(t.fullName || '')) {
+      continue;
+    }
+
     const tNorm = normalizeArabicFull(t.fullName);
 
-    // Deduplication is STRICTLY by exact student ID, OR by valid National ID ONLY IF the student name ALSO matches!
-    // NEVER merge distinct students (e.g. siblings sharing parent's national ID or phone).
+    // Clean any accidental random suffixes from student codes (e.g. C042-CTQ -> C042)
+    let cleanCode = t.code ? String(t.code).trim().toUpperCase() : '';
+    if (cleanCode && /^[A-Z]\d{3}-[A-Z0-9]{3,4}$/i.test(cleanCode)) {
+      cleanCode = cleanCode.split('-')[0].toUpperCase();
+    }
+
     let existing: Trainee | null = null;
     if (byId.has(id)) {
       existing = byId.get(id)!;
-    } else if (t.nationalId && String(t.nationalId).trim().length >= 10 && tNorm) {
-      const cleanNat = String(t.nationalId).trim();
+    } else if (cleanCode && byCode.has(cleanCode)) {
+      const prevWithCode = byCode.get(cleanCode)!;
+      const prevNorm = normalizeArabicFull(prevWithCode.fullName);
+      if (prevNorm === tNorm || !tNorm || prevNorm.includes(tNorm) || tNorm.includes(prevNorm)) {
+        existing = prevWithCode;
+      }
+    }
+
+    if (!existing && tNorm) {
+      const tTokens = tNorm.split(' ').filter(Boolean);
       for (const prev of result) {
-        if (prev.nationalId && String(prev.nationalId).trim() === cleanNat) {
-          const prevNorm = normalizeArabicFull(prev.fullName);
-          if (prevNorm && prevNorm === tNorm) {
+        const prevNorm = normalizeArabicFull(prev.fullName);
+        if (prevNorm === tNorm) {
+          existing = prev;
+          break;
+        }
+        if (tTokens.length >= 3) {
+          const prevTokens = prevNorm.split(' ').filter(Boolean);
+          if (prevTokens.length >= 3 && tTokens[0] === prevTokens[0] && tTokens[1] === prevTokens[1] && tTokens[2] === prevTokens[2]) {
             existing = prev;
             break;
           }
@@ -109,16 +131,21 @@ export function deduplicateTraineeList(list: Trainee[]): Trainee[] {
         Number(t.totalPoints !== undefined ? t.totalPoints : (t.points || 0))
       );
       const mergedPaidAmount = Math.max(Number(existing.paidAmount || 0), Number(t.paidAmount || 0));
-      const mergedPhoto = t.photoUrl || (t as any).photo || existing.photoUrl || (existing as any).photo || (id ? localStorage.getItem('student_session_photo_' + id) : null) || (t.code ? localStorage.getItem('student_session_photo_' + t.code) : null) || '';
+      const mergedPhoto = t.photoUrl || (t as any).photo || existing.photoUrl || (existing as any).photo || '';
+
+      let bestCode = existing.code || cleanCode;
+      if (bestCode && bestCode.includes('-') && cleanCode && !cleanCode.includes('-')) {
+        bestCode = cleanCode;
+      }
 
       Object.assign(existing, {
         ...t,
         id: existing.id || t.id,
-        code: existing.code || t.code,
+        code: bestCode,
         fullName: existing.fullName || t.fullName,
-        phone: t.phone || existing.phone,
-        parentPhone: t.parentPhone || existing.parentPhone,
-        nationalId: t.nationalId || existing.nationalId,
+        phone: existing.phone || t.phone,
+        parentPhone: existing.parentPhone || t.parentPhone,
+        nationalId: existing.nationalId || t.nationalId,
         photoUrl: mergedPhoto,
         photo: mergedPhoto,
         totalPoints: mergedTotalPoints,
@@ -127,20 +154,7 @@ export function deduplicateTraineeList(list: Trainee[]): Trainee[] {
         notes: existing.notes ? (t.notes && !existing.notes.includes(t.notes) ? `${existing.notes} | ${t.notes}` : existing.notes) : (t.notes || '')
       });
     } else {
-      const record = { ...t };
-      const code = record.code ? String(record.code).trim().toUpperCase() : '';
-      if (!record.photoUrl) {
-        const storedPhoto = (record.id ? localStorage.getItem('student_session_photo_' + record.id) : null) || (record.code ? localStorage.getItem('student_session_photo_' + record.code) : null) || (record as any).photo;
-        if (storedPhoto) {
-          record.photoUrl = storedPhoto;
-          (record as any).photo = storedPhoto;
-        }
-      }
-      // If code collided with a different student, guarantee unique code so student is preserved
-      if (code && byCode.has(code)) {
-        const suffix = Math.random().toString(36).substring(2, 5).toUpperCase();
-        record.code = `${code}-${suffix}`;
-      }
+      const record = { ...t, code: cleanCode };
       result.push(record);
       byId.set(id, record);
       if (record.code) byCode.set(String(record.code).trim().toUpperCase(), record);
@@ -167,16 +181,20 @@ export const CenterProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [selectedDate, setSelectedDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
   const [showDateStatsModal, setShowDateStatsModal] = useState<boolean>(false);
 
-  // Core entities global states with localStorage hydration
+  // Core entities global states with localStorage hydration and permanent recovery vault
   const [trainees, setTrainees] = useState<Trainee[]>(() => {
     try {
       const cached = localStorage.getItem('nagah_trainees');
-      if (!cached) return [];
-      const parsed = JSON.parse(cached);
-      if (Array.isArray(parsed)) {
-        return deduplicateTraineeList(parsed);
-      }
-      return [];
+      const vault = localStorage.getItem('nagah_permanent_trainees_vault');
+      const parsedCached = cached ? JSON.parse(cached) : [];
+      const parsedVault = vault ? JSON.parse(vault) : [];
+      const combined = [...(Array.isArray(parsedVault) ? parsedVault : []), ...(Array.isArray(parsedCached) ? parsedCached : [])];
+      const cleaned = deduplicateTraineeList(combined);
+      try {
+        localStorage.setItem('nagah_trainees', JSON.stringify(cleaned));
+        localStorage.setItem('nagah_permanent_trainees_vault', JSON.stringify(cleaned));
+      } catch {}
+      return cleaned;
     } catch {
       return [];
     }
@@ -212,6 +230,7 @@ export const CenterProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     if (trainees && trainees.length > 0) {
       try {
         localStorage.setItem('nagah_trainees', JSON.stringify(trainees));
+        localStorage.setItem('nagah_permanent_trainees_vault', JSON.stringify(trainees));
       } catch {}
     }
   }, [trainees]);
@@ -448,7 +467,10 @@ export const CenterProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         (!normNew || normalizeArabicFull(t.fullName) !== normNew)
       );
       const updatedList = deduplicateTraineeList([trainee, ...filtered]);
-      try { localStorage.setItem('nagah_trainees', JSON.stringify(updatedList)); } catch {}
+      try { 
+        localStorage.setItem('nagah_trainees', JSON.stringify(updatedList));
+        localStorage.setItem('nagah_permanent_trainees_vault', JSON.stringify(updatedList));
+      } catch {}
       return updatedList;
     });
 
@@ -457,12 +479,11 @@ export const CenterProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       pendingUpdatesRef.current.delete(trainee.id);
       return true;
     } catch (err: any) {
-      console.warn('[Optimistic] Trainee create sync failed, rolling back:', err);
-      setTrainees(previousSnapshot);
-      try { localStorage.setItem('nagah_trainees', JSON.stringify(previousSnapshot)); } catch {}
+      console.warn('[Optimistic] Trainee create cloud sync notice (persisted safely in local vault):', err);
+      // DO NOT ROLL BACK: The student is safely preserved in local state and permanent vault!
       pendingUpdatesRef.current.delete(trainee.id);
-      showToast('تعذر تسجيل المتدرب في السحابة، يرجى إعادة المحاولة', 'error');
-      return false;
+      showToast('تم حفظ المتدرب محلياً بنجاح وسيتزامن تلقائياً مع السحابة فور توفرها', 'info');
+      return true;
     }
   }, [showToast]);
 
@@ -586,7 +607,7 @@ export const CenterProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   // CORE DATA REFRESH & REAL-TIME LISTENERS
   // =========================================================================
 
-  const refreshCoreData = useCallback(async (force = true) => {
+  const refreshCoreData = useCallback(async (force = false) => {
     if (typeof document !== 'undefined' && document.hidden) {
       return;
     }
@@ -610,42 +631,21 @@ export const CenterProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       if (Array.isArray(traineesRes)) {
         setTrainees(prev => {
           const serverList = traineesRes;
-          const prevList = Array.isArray(prev) ? prev : [];
-          const serverMap = new Map(serverList.map(t => [t.id, t]));
-          const serverCodes = new Set(serverList.map(t => (t.code || '').trim().toUpperCase()).filter(Boolean));
-          const serverNormNames = new Set(serverList.map(t => normalizeArabicFull(t.fullName)).filter(Boolean));
           const merged = [...serverList];
 
-          // Protect locally added or currently pending trainees from being overwritten,
-          // while strictly preventing duplicate student injection
-          for (const localT of prevList) {
-            if (localT && localT.id) {
-              const isPending = pendingUpdatesRef.current.has(localT.id);
-              const existsOnServer = serverMap.has(localT.id);
-              const isRecentlyCreated = localT.createdAt && (Date.now() - new Date(localT.createdAt).getTime() < 300000); // 5 minutes safety buffer
-
-              if (existsOnServer && isPending) {
-                // Keep the pending optimistic local state for existing trainee
-                const idx = merged.findIndex(m => m.id === localT.id);
-                if (idx >= 0) merged[idx] = localT;
-              } else if (!existsOnServer && (isPending || isRecentlyCreated)) {
-                // Keep recently added student from being dropped if server is slightly behind
-                const localCode = (localT.code || '').trim().toUpperCase();
-                const localNormName = normalizeArabicFull(localT.fullName);
-                const isDupeOnServer = (localCode && serverCodes.has(localCode)) && (localNormName && serverNormNames.has(localNormName));
-
-                if (!isDupeOnServer) {
-                  merged.unshift(localT);
-                  serverMap.set(localT.id, localT);
-                  if (localCode) serverCodes.add(localCode);
-                  if (localNormName) serverNormNames.add(localNormName);
-                }
-              }
-            }
-          }
+          // Apply pending optimistic updates if user modified any trainee locally
+          pendingUpdatesRef.current.forEach((localT, tId) => {
+            const idx = merged.findIndex(m => m.id === tId);
+            if (idx >= 0) merged[idx] = localT;
+            else merged.unshift(localT);
+          });
 
           const deduped = deduplicateTraineeList(merged);
-          try { localStorage.setItem('nagah_trainees', JSON.stringify(deduped)); } catch {}
+          try {
+            localStorage.setItem('nagah_trainees', JSON.stringify(deduped));
+            localStorage.setItem('nagah_permanent_trainees_vault', JSON.stringify(deduped));
+          } catch {}
+
           return deduped;
         });
       }

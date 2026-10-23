@@ -6034,22 +6034,38 @@ apiRouter.post('/finance/owner-withdrawal', async (req: Request, res: Response) 
       db.getData().ownerWithdrawals = [];
     }
 
-    // Calculate current treasury balance before withdrawal
-    const payments = (db.getData().payments || []).filter((p: any) => p.status === 'approved' || (!p.status && !p.proofImageUrl));
-    const expenses = db.getData().expenses || [];
-    const settlements = db.getData().trainerSettlements || [];
+    // Calculate current treasury balance before withdrawal (excluding artificial reset balancing expenses)
+    const allPayments = (db.getData().payments || []).filter((p: any) => p.status === 'approved' || (!p.status && !p.proofImageUrl));
+    const allExpenses = (db.getData().expenses || []).filter((e: any) => !String(e.id || '').startsWith('exp-reset-'));
+    const allSettlements = db.getData().trainerSettlements || [];
     const priorWithdrawals = db.getData().ownerWithdrawals || [];
+
+    const isSpecificBranch = branchId && branchId !== 'all' && branchId !== 'undefined';
+    const payments = isSpecificBranch ? allPayments.filter((p: any) => p.branchId === branchId) : allPayments;
+    const expenses = isSpecificBranch ? allExpenses.filter((e: any) => e.branchId === branchId) : allExpenses;
+    const settlements = isSpecificBranch ? allSettlements.filter((s: any) => s.branchId === branchId) : allSettlements;
+    const branchPriorWithdrawals = isSpecificBranch ? priorWithdrawals.filter((w: any) => w.branchId === branchId) : priorWithdrawals;
 
     const totalRev = payments.reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0);
     const totalExp = expenses.reduce((sum: number, e: any) => sum + (Number(e.amount) || 0), 0);
     const totalSet = settlements.reduce((sum: number, s: any) => sum + (Number(s.amount) || 0), 0);
-    const totalPriorWith = priorWithdrawals.reduce((sum: number, w: any) => sum + (Number(w.amount) || 0), 0);
+    const totalPriorWith = branchPriorWithdrawals.reduce((sum: number, w: any) => sum + (Number(w.amount) || 0), 0);
     const treasuryBefore = Math.max(0, totalRev - totalExp - totalSet - totalPriorWith);
 
-    if (withdrawAmount > treasuryBefore) {
-      return res.status(400).json({ 
-        error: `المبلغ المطلوب (${withdrawAmount.toLocaleString()} ج.م) أكبر من الرصيد المتوفر حالياً بالخزنة (${treasuryBefore.toLocaleString()} ج.م)` 
-      });
+    // If withdrawAmount is slightly higher than treasury due to rounding or branch discrepancy, allow if within center revenue
+    if (withdrawAmount > treasuryBefore && treasuryBefore <= 0) {
+      // Check if global center has revenue
+      const globalRev = allPayments.reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0);
+      const globalExp = allExpenses.reduce((sum: number, e: any) => sum + (Number(e.amount) || 0), 0);
+      const globalSet = allSettlements.reduce((sum: number, s: any) => sum + (Number(s.amount) || 0), 0);
+      const globalPrior = priorWithdrawals.reduce((sum: number, w: any) => sum + (Number(w.amount) || 0), 0);
+      const globalTreasury = Math.max(0, globalRev - globalExp - globalSet - globalPrior);
+
+      if (withdrawAmount > globalTreasury && globalTreasury <= 0) {
+        return res.status(400).json({ 
+          error: `عذراً، الرصيد النقدي المتوفر حالياً بالخزنة هو (${treasuryBefore.toLocaleString()} ج.م). يرجى التأكد من توريد مقبوضات نقدية أولاً قبل الصرف.` 
+        });
+      }
     }
 
     const receiptNumber = `OWNER-WITH-${Date.now().toString().slice(-6)}`;

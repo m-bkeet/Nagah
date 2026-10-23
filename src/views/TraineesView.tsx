@@ -379,6 +379,8 @@ export const TraineesView: React.FC = () => {
   const [isGeneratingCode, setIsGeneratingCode] = useState(false);
   const [codeRegenNotice, setCodeRegenNotice] = useState<string | null>(null);
 
+
+
   // Student Code Audit & Alignment State
   const [isDuplicatesModalOpen, setIsDuplicatesModalOpen] = useState(false);
   const [isCodeAuditModalOpen, setIsCodeAuditModalOpen] = useState(false);
@@ -640,17 +642,23 @@ export const TraineesView: React.FC = () => {
 
   const handleGradeChangeInAdd = async (selGrade: string) => {
     const matchedCourse = findCourseForGrade(courses, selGrade);
-    const matchingGroups = (groups || []).filter(g => 
+    const availableGroups = (groups || []).filter(g => 
       g && 
       (!matchedCourse || g.courseId === matchedCourse.id) && 
-      (!formData.branchId || g.branchId === formData.branchId) && 
       (!selGrade || !g.grade || g.grade === selGrade)
     );
+    let targetBranchId = formData.branchId;
+    let matchingGroups = availableGroups.filter(g => !targetBranchId || g.branchId === targetBranchId);
+    if (matchingGroups.length === 0 && availableGroups.length > 0) {
+      targetBranchId = availableGroups[0].branchId || targetBranchId;
+      matchingGroups = availableGroups;
+    }
     const defaultGroup = matchingGroups.length > 0 ? matchingGroups[0].id : '';
 
     setFormData((prev: any) => ({
       ...prev,
       grade: selGrade,
+      branchId: targetBranchId || prev.branchId,
       courseId: matchedCourse ? matchedCourse.id : '',
       groupId: defaultGroup,
       feeAmount: matchedCourse ? matchedCourse.feeAmount : prev.feeAmount
@@ -663,12 +671,17 @@ export const TraineesView: React.FC = () => {
 
   const handleGradeChangeInEdit = async (selGrade: string) => {
     const matchedCourse = findCourseForGrade(courses, selGrade);
-    const matchingGroups = (groups || []).filter(g => 
+    const availableGroups = (groups || []).filter(g => 
       g && 
       (!matchedCourse || g.courseId === matchedCourse.id) && 
-      (!formData.branchId || g.branchId === formData.branchId) && 
       (!selGrade || !g.grade || g.grade === selGrade)
     );
+    let targetBranchId = formData.branchId;
+    let matchingGroups = availableGroups.filter(g => !targetBranchId || g.branchId === targetBranchId);
+    if (matchingGroups.length === 0 && availableGroups.length > 0) {
+      targetBranchId = availableGroups[0].branchId || targetBranchId;
+      matchingGroups = availableGroups;
+    }
     const defaultGroup = matchingGroups.some(g => g.id === formData.groupId) ? formData.groupId : (matchingGroups.length > 0 ? matchingGroups[0].id : '');
 
     const isGradeReallyChanged = activeTrainee && activeTrainee.grade !== selGrade;
@@ -676,6 +689,7 @@ export const TraineesView: React.FC = () => {
     setFormData((prev: any) => ({
       ...prev,
       grade: selGrade,
+      branchId: targetBranchId || prev.branchId,
       courseId: matchedCourse ? matchedCourse.id : prev.courseId,
       groupId: defaultGroup,
       feeAmount: matchedCourse ? matchedCourse.feeAmount : prev.feeAmount
@@ -844,7 +858,10 @@ export const TraineesView: React.FC = () => {
           setTrainees(prev => {
             const list = Array.isArray(prev) ? prev : [];
             const newList = deduplicateTraineeList([newTrainee, ...list]);
-            try { localStorage.setItem('nagah_trainees', JSON.stringify(newList)); } catch {}
+            try { 
+              localStorage.setItem('nagah_trainees', JSON.stringify(newList)); 
+              localStorage.setItem('nagah_permanent_trainees_vault', JSON.stringify(newList));
+            } catch {}
             return newList;
           });
           // Ensure filters don't hide the new student from the user's view
@@ -883,6 +900,8 @@ export const TraineesView: React.FC = () => {
       setIsAddingTrainee(false);
     }
   };
+
+
 
   const handleOpenCodeAuditModal = async () => {
     setIsCodeAuditModalOpen(true);
@@ -966,7 +985,10 @@ export const TraineesView: React.FC = () => {
         setTrainees(prev => {
           const list = Array.isArray(prev) ? prev : [];
           const next = list.map(t => t.id === activeTrainee.id ? { ...t, ...updatedTraineeObj } : t);
-          try { localStorage.setItem('nagah_trainees', JSON.stringify(next)); } catch {}
+          try { 
+            localStorage.setItem('nagah_trainees', JSON.stringify(next)); 
+            localStorage.setItem('nagah_permanent_trainees_vault', JSON.stringify(next));
+          } catch {}
           return next;
         });
         loadData();
@@ -989,7 +1011,10 @@ export const TraineesView: React.FC = () => {
       await api.bulkDeleteTrainees(idsToDelete);
       setTrainees(prev => {
         const next = prev.filter(t => !idsToDelete.includes(t.id));
-        try { localStorage.setItem('nagah_trainees', JSON.stringify(next)); } catch {}
+        try { 
+          localStorage.setItem('nagah_trainees', JSON.stringify(next)); 
+          localStorage.setItem('nagah_permanent_trainees_vault', JSON.stringify(next));
+        } catch {}
         return next;
       });
       showToast(`تم حذف ${idsToDelete.length} متدربين بنجاح`, 'success');
@@ -1040,7 +1065,10 @@ export const TraineesView: React.FC = () => {
       const res = await api.deleteTrainee(targetId);
       setTrainees(prev => {
         const next = prev.filter(t => t.id !== targetId);
-        try { localStorage.setItem('nagah_trainees', JSON.stringify(next)); } catch {}
+        try { 
+          localStorage.setItem('nagah_trainees', JSON.stringify(next)); 
+          localStorage.setItem('nagah_permanent_trainees_vault', JSON.stringify(next));
+        } catch {}
         return next;
       });
       if (res && res.recycledCode) {
@@ -2026,6 +2054,8 @@ export const TraineesView: React.FC = () => {
               <span>أدوات ⋯</span>
             </button>
 
+
+
             {/* Primary Action Button: Add Trainee */}
             <button
               onClick={handleOpenAddModal}
@@ -2376,6 +2406,29 @@ export const TraineesView: React.FC = () => {
               إلغاء التحديد
             </button>
           </div>
+        </div>
+      )}
+
+      {/* Active Branch Notice Banner */}
+      {selectedBranch !== 'all' && (
+        <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-3 px-4 flex flex-wrap items-center justify-between gap-3 text-xs shadow-xs">
+          <div className="flex items-center gap-2">
+            <Building className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+            <span className="text-slate-800 dark:text-slate-200">
+              يتم حالياً تصفية القائمة لعرض طلاب <strong className="text-amber-700 dark:text-amber-300">({branches.find(b => b.id === selectedBranch)?.name || selectedBranch})</strong> فقط.
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setSelectedBranch('all');
+              setSelectedCourse('all');
+              setSelectedGroup('all');
+            }}
+            className="px-3.5 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-xl font-bold transition-all shadow-xs shrink-0 cursor-pointer text-xs"
+          >
+            عرض جميع الفروع (إظهار طلاب بدر والنجاح معاً)
+          </button>
         </div>
       )}
 
@@ -6455,6 +6508,8 @@ export const TraineesView: React.FC = () => {
           onRefresh={loadData}
         />
       )}
+
+
 
     </div>
   );

@@ -5,7 +5,7 @@
   "functions": {
     "api/index.js": {
       "includeFiles": "{data/database.json,firebase-applet-config.json}",
-      "maxDuration": 30,
+      "maxDuration": 10,
       "memory": 1024
     }
   },

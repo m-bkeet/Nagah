@@ -148,11 +148,22 @@ export const GroupCashCollectionCockpit: React.FC<GroupCashCollectionCockpitProp
     const list = trainees || [];
     return list.filter(t => {
       // 1. Exclude stopped (متوقف), withdrawn (منسحب), and inactive trainees completely from finances & collection
-      if (t.status === 'suspended' || t.status === 'dropped' || t.status === 'inactive') return false;
+      const isStoppedOrWithdrawn = 
+        t.status === 'suspended' || 
+        t.status === 'dropped' || 
+        t.status === 'inactive' || 
+        t.status === 'withdrawn' || 
+        t.status === 'stopped' ||
+        t.status === 'متوقف' ||
+        t.status === 'منسحب' ||
+        Boolean((t as any).isSuspended) ||
+        Boolean((t as any).isWithdrawn) ||
+        Boolean((t as any).isStopped);
+      if (isStoppedOrWithdrawn) return false;
 
       // 2. Exclude trainees not assigned to a group or not assigned to a course
-      const hasGroup = Boolean(t.groupId && t.groupId.trim() !== '' && t.groupId !== 'unassigned');
-      const hasCourse = Boolean(t.courseId && t.courseId.trim() !== '' && t.courseId !== 'unassigned');
+      const hasGroup = Boolean(t.groupId && t.groupId.trim() !== '' && t.groupId !== 'unassigned' && t.groupId !== 'none');
+      const hasCourse = Boolean(t.courseId && t.courseId.trim() !== '' && t.courseId !== 'unassigned' && t.courseId !== 'none');
       if (!hasGroup || !hasCourse) return false;
 
       if (selectedBranchId !== 'all') {

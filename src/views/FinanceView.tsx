@@ -39,7 +39,8 @@ import {
   Download,
   Share2,
   Coins,
-  TrendingDown
+  TrendingDown,
+  Plus
 } from 'lucide-react';
 import { Payment, TrainerSettlement, Trainee, Course, Trainer, OwnerWithdrawal, Expense } from '../types';
 import { OfficialReceiptModal } from '../components/OfficialReceiptModal';
@@ -142,6 +143,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ initialTab }) => {
   const [selectedOfficialReceipt, setSelectedOfficialReceipt] = useState<Payment | null>(null);
   const [selectedAuditPayment, setSelectedAuditPayment] = useState<Payment | null>(null);
 
+  const [treasuryViewMode, setTreasuryViewMode] = useState<'monthly' | 'all_time'>('monthly');
   const [isResetModalOpen, setIsResetModalOpen] = useState(false);
   const [isSecretArchivesModalOpen, setIsSecretArchivesModalOpen] = useState(false);
   const [resetPin, setResetPin] = useState('');
@@ -902,7 +904,31 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ initialTab }) => {
 
   const branchFilteredTrainees = useMemo(() => {
     const list = ctxTrainees || trainees || [];
-    return selectedFinanceBranchId === 'all' ? list : list.filter(t => t.branchId === selectedFinanceBranchId);
+    return list.filter(t => {
+      // 1. Strictly exclude stopped (متوقف), withdrawn (منسحب), and inactive trainees completely
+      const isStoppedOrWithdrawn = 
+        t.status === 'suspended' || 
+        t.status === 'dropped' || 
+        t.status === 'inactive' || 
+        t.status === 'withdrawn' || 
+        t.status === 'stopped' ||
+        t.status === 'متوقف' ||
+        t.status === 'منسحب' ||
+        Boolean((t as any).isSuspended) ||
+        Boolean((t as any).isWithdrawn) ||
+        Boolean((t as any).isStopped);
+      if (isStoppedOrWithdrawn) return false;
+
+      // 2. Exclude trainees not assigned to a group or not assigned to a course
+      const hasGroup = Boolean(t.groupId && t.groupId.trim() !== '' && t.groupId !== 'unassigned' && t.groupId !== 'none');
+      const hasCourse = Boolean(t.courseId && t.courseId.trim() !== '' && t.courseId !== 'unassigned' && t.courseId !== 'none');
+      if (!hasGroup || !hasCourse) return false;
+
+      if (selectedFinanceBranchId !== 'all') {
+        return t.branchId === selectedFinanceBranchId;
+      }
+      return true;
+    });
   }, [ctxTrainees, trainees, selectedFinanceBranchId]);
 
   // 1. إجمالي ما تم تحصيله من بداية ما اشتغلت المنصة (All-Time Total Collected)
@@ -920,7 +946,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ initialTab }) => {
   // 3. المستحق هذا الشهر (Due Expected Fees this month - only active & group-assigned & course-assigned trainees)
   const dueThisMonth = useMemo(() => {
     return branchFilteredTrainees
-      .filter(t => t.status === 'active' && Boolean(t.groupId && t.groupId.trim() !== '' && t.groupId !== 'unassigned') && Boolean(t.courseId && t.courseId.trim() !== '' && t.courseId !== 'unassigned') && !t.isExempt)
+      .filter(t => !t.isExempt)
       .reduce((sum, t) => sum + (Number(t.netAmount) || Number(t.feeAmount) || 0), 0);
   }, [branchFilteredTrainees]);
 
@@ -929,7 +955,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ initialTab }) => {
     const now = new Date();
     const currentDay = now.getDate();
     return branchFilteredTrainees
-      .filter(t => t.status === 'active' && Boolean(t.groupId && t.groupId.trim() !== '' && t.groupId !== 'unassigned') && Boolean(t.courseId && t.courseId.trim() !== '' && t.courseId !== 'unassigned') && !t.isExempt)
+      .filter(t => !t.isExempt)
       .reduce((sum, t) => {
         const paidMonths = Array.isArray(t.paidMonths) ? t.paidMonths : [];
         const hasPaidSept = paidMonths.some((m: string) => m && (m.includes('سبتمبر') || m.includes('شهر 9')));
@@ -960,17 +986,45 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ initialTab }) => {
 
   // 6. إجمالي المصروفات المنصرفة (Total Expenses Paid - including 1000 EGP Badr rent)
   const totalExpensesPaid = useMemo(() => {
-    return branchFilteredExpenses.reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
+    return branchFilteredExpenses
+      .filter(e => !String(e.id || '').startsWith('exp-reset-'))
+      .reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
   }, [branchFilteredExpenses]);
+
+  // المصروفات للشهر الحالي فقط
+  const expensesThisMonth = useMemo(() => {
+    return branchFilteredExpenses
+      .filter(e => (e.date || '').startsWith(currentMonthStr) && !String(e.id || '').startsWith('exp-reset-'))
+      .reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
+  }, [branchFilteredExpenses, currentMonthStr]);
 
   // 7. إجمالي المسحوبات وصرف المدربين
   const totalSettlementsPaid = useMemo(() => {
     return branchFilteredSettlements.reduce((sum, s) => sum + (Number(s.amount) || 0), 0);
   }, [branchFilteredSettlements]);
 
+  // مسحوبات المدربين للشهر الحالي فقط
+  const settlementsThisMonth = useMemo(() => {
+    return branchFilteredSettlements
+      .filter(s => (s.date || '').startsWith(currentMonthStr))
+      .reduce((sum, s) => sum + (Number(s.amount) || 0), 0);
+  }, [branchFilteredSettlements, currentMonthStr]);
+
   const totalOwnerWithdrawalsPaid = useMemo(() => {
     return branchFilteredWithdrawals.reduce((sum, w) => sum + (Number(w.amount) || 0), 0);
   }, [branchFilteredWithdrawals]);
+
+  // مسحوبات المالك للشهر الحالي فقط
+  const ownerWithdrawalsThisMonth = useMemo(() => {
+    return branchFilteredWithdrawals
+      .filter(w => (w.date || '').startsWith(currentMonthStr))
+      .reduce((sum, w) => sum + (Number(w.amount) || 0), 0);
+  }, [branchFilteredWithdrawals, currentMonthStr]);
+
+  // صافي الخزينة التشغيلية للشهر الحالي (شهر بشهر)
+  const currentMonthNetTreasury = useMemo(() => {
+    return Math.max(0, collectedThisMonth - expensesThisMonth - settlementsThisMonth - ownerWithdrawalsThisMonth);
+  }, [collectedThisMonth, expensesThisMonth, settlementsThisMonth, ownerWithdrawalsThisMonth]);
 
   // 8. صافي الخزينة الفعلي المتبقي في الدرج
   const actualNetTreasury = useMemo(() => {
@@ -1283,6 +1337,89 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ initialTab }) => {
         </div>
       )}
 
+      {/* Treasury View Switcher: Monthly Mode (كل شهر بشهر) vs All-Time Mode (تراكمي) */}
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3 rounded-2xl shadow-xs">
+        <div className="flex items-center gap-2">
+          <div className="flex rounded-xl p-1 bg-slate-100 dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700/80 text-xs">
+            <button
+              type="button"
+              onClick={() => setTreasuryViewMode('monthly')}
+              className={`px-3.5 py-1.5 rounded-lg font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                treasuryViewMode === 'monthly'
+                  ? 'bg-emerald-600 text-white shadow-xs font-black'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              <Calendar className="w-3.5 h-3.5" />
+              <span>خزينة الشهر الحالي ({currentMonthArabicName}) 📅</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setTreasuryViewMode('all_time')}
+              className={`px-3.5 py-1.5 rounded-lg font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                treasuryViewMode === 'all_time'
+                  ? 'bg-indigo-600 text-white shadow-xs font-black'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              <Landmark className="w-3.5 h-3.5" />
+              <span>السجل التراكمي الشامل (من أول الشغل) 🌐</span>
+            </button>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              setArchiveTitle(`أرشيف أرباح وخزينة شهر ${currentMonthArabicName}`);
+              setIsResetModalOpen(true);
+            }}
+            className="px-3.5 py-1.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white font-bold text-xs rounded-xl shadow-xs transition-all active:scale-95 flex items-center gap-1.5 cursor-pointer"
+          >
+            <Lock className="w-3.5 h-3.5" />
+            <span>تصفير وترحيل للخزنة السرية 🔐</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setIsSecretArchivesModalOpen(true)}
+            className="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-amber-400 border border-slate-700 font-bold text-xs rounded-xl shadow-xs transition-all active:scale-95 flex items-center gap-1.5 cursor-pointer"
+          >
+            <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />
+            <span>الخزنة السرية للمدير 👑</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Day-25 Smart Notice for Auto-Suggestion */}
+      {new Date().getDate() >= 25 && (
+        <div className="bg-gradient-to-r from-amber-500/15 via-indigo-500/15 to-emerald-500/15 border border-amber-400/40 rounded-2xl p-3.5 px-4 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+              <Calendar className="w-4 h-4" />
+            </div>
+            <div>
+              <span className="font-bold text-slate-800 dark:text-slate-100 block">
+                تنبيه محاسبي: اليوم {new Date().getDate()} من الشهر - موعد تصفير وترحيل الحسابات 🎯
+              </span>
+              <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                يمكنك الآن تصفير الخزينة الخارجية وترحيل الرصيد ({currentMonthNetTreasury.toLocaleString()} ج.م) للخزنة السرية للمدير، مع الإبقاء على المتأخرات فقط ({debtThisMonth.toLocaleString()} ج.م) لتضاف على الشهر الجديد.
+              </span>
+            </div>
+          </div>
+          <button
+            onClick={() => {
+              setArchiveTitle(`أرشيف أرباح وخزينة شهر ${currentMonthArabicName}`);
+              setIsResetModalOpen(true);
+            }}
+            className="px-3.5 py-1.5 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl shadow-xs transition-all flex items-center gap-1.5 shrink-0 cursor-pointer"
+          >
+            <Lock className="w-3.5 h-3.5" />
+            <span>تصفير وترحيل الآن</span>
+          </button>
+        </div>
+      )}
+
       {/* Executive Financial KPI Cockpit (البطاقات والمربعات المالية المبسطة والواضحة) */}
       <div className="space-y-3">
         {/* Streamlined Executive 4-Cards Grid */}
@@ -1294,16 +1431,23 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ initialTab }) => {
               <div className="flex items-center justify-between gap-2">
                 <span className="text-xs font-black text-emerald-100 flex items-center gap-1.5">
                   <Landmark className="w-4 h-4 text-white" />
-                  <span>صافي الخزينة الفعلي (الدرج)</span>
+                  <span>
+                    {treasuryViewMode === 'monthly' ? `صافي خزينة ${currentMonthArabicName}` : 'صافي الخزينة الفعلي (الدرج التراكمي)'}
+                  </span>
                 </span>
                 <span className="w-2.5 h-2.5 rounded-full bg-emerald-300 animate-pulse"></span>
               </div>
               <div className="text-3xl font-black font-mono tracking-tight mt-2">
-                {actualNetTreasury.toLocaleString()} <span className="text-sm font-normal">ج.م</span>
+                {(treasuryViewMode === 'monthly' ? currentMonthNetTreasury : actualNetTreasury).toLocaleString()} <span className="text-sm font-normal">ج.م</span>
               </div>
             </div>
             <div className="mt-3 pt-2.5 border-t border-white/20 flex items-center justify-between gap-1 text-[11px] text-emerald-100">
-              <span className="font-mono">المحصل: {totalCollectedAllTime.toLocaleString()} - المنصرف: {(totalExpensesPaid + totalSettlementsPaid).toLocaleString()}</span>
+              <span className="font-mono">
+                {treasuryViewMode === 'monthly' 
+                  ? `وارد الشهر: ${collectedThisMonth.toLocaleString()} - منصرف: ${(expensesThisMonth + settlementsThisMonth).toLocaleString()}`
+                  : `المحصل: ${totalCollectedAllTime.toLocaleString()} - المنصرف: ${(totalExpensesPaid + totalSettlementsPaid).toLocaleString()}`
+                }
+              </span>
               <button
                 type="button"
                 onClick={() => handleOpenOwnerWithdrawalModal(selectedFinanceBranchId)}
@@ -1321,14 +1465,19 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ initialTab }) => {
               <div className="flex items-center justify-between">
                 <span className="text-xs font-black text-teal-800 dark:text-teal-300 flex items-center gap-1.5">
                   <TrendingUp className="w-4 h-4 text-teal-600 dark:text-teal-400" />
-                  <span>إجمالي المحصل الفعلي</span>
+                  <span>
+                    {treasuryViewMode === 'monthly' ? `المحصل لشهر ${currentMonthArabicName}` : 'إجمالي المحصل الفعلي (من أول الشغل)'}
+                  </span>
                 </span>
                 <span className="font-mono text-xs font-bold text-teal-600 dark:text-teal-400 bg-teal-50 dark:bg-teal-950/60 px-2 py-0.5 rounded-lg border border-teal-200 dark:border-teal-500/30">
-                  {branchFilteredPayments.length} سند
+                  {treasuryViewMode === 'monthly' 
+                    ? `${branchFilteredPayments.filter(p => (p.date || '').startsWith(currentMonthStr)).length} سند هذا الشهر`
+                    : `${branchFilteredPayments.length} سند إجمالي`
+                  }
                 </span>
               </div>
               <div className="text-3xl font-black font-mono text-teal-700 dark:text-teal-300 tracking-tight mt-2">
-                {totalCollectedAllTime.toLocaleString()} <span className="text-sm font-normal">ج.م</span>
+                {(treasuryViewMode === 'monthly' ? collectedThisMonth : totalCollectedAllTime).toLocaleString()} <span className="text-sm font-normal">ج.م</span>
               </div>
             </div>
             <div className="mt-3 pt-2.5 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
@@ -1343,16 +1492,21 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ initialTab }) => {
               <div className="flex items-center justify-between">
                 <span className="text-xs font-black text-rose-800 dark:text-rose-300 flex items-center gap-1.5">
                   <Receipt className="w-4 h-4 text-rose-600 dark:text-rose-400" />
-                  <span>إجمالي المصروفات والمنصرف</span>
+                  <span>
+                    {treasuryViewMode === 'monthly' ? `منصرف شهر ${currentMonthArabicName}` : 'إجمالي المصروفات والمنصرف التراكمي'}
+                  </span>
                 </span>
               </div>
               <div className="text-3xl font-black font-mono text-rose-700 dark:text-rose-300 tracking-tight mt-2">
-                {(totalExpensesPaid + totalSettlementsPaid + totalOwnerWithdrawalsPaid).toLocaleString()} <span className="text-sm font-normal">ج.م</span>
+                {(treasuryViewMode === 'monthly'
+                  ? (expensesThisMonth + settlementsThisMonth + ownerWithdrawalsThisMonth)
+                  : (totalExpensesPaid + totalSettlementsPaid + totalOwnerWithdrawalsPaid)
+                ).toLocaleString()} <span className="text-sm font-normal">ج.م</span>
               </div>
             </div>
             <div className="mt-3 pt-2.5 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 font-mono">
-              <span>مصاريف: {totalExpensesPaid.toLocaleString()}</span>
-              {totalSettlementsPaid > 0 && <span>| مدربين: {totalSettlementsPaid.toLocaleString()}</span>}
+              <span>مصاريف: {(treasuryViewMode === 'monthly' ? expensesThisMonth : totalExpensesPaid).toLocaleString()}</span>
+              {<span>| مدربين: {(treasuryViewMode === 'monthly' ? settlementsThisMonth : totalSettlementsPaid).toLocaleString()}</span>}
             </div>
           </div>
 
@@ -1365,7 +1519,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ initialTab }) => {
                   <span>متأخرات ومتبقي الطلاب</span>
                 </span>
                 <span className="font-mono text-xs font-bold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/60 px-2 py-0.5 rounded-lg border border-amber-200 dark:border-amber-500/30">
-                  {branchFilteredTrainees.filter(t => t.status === 'active' && Boolean(t.groupId && t.groupId.trim() !== '' && t.groupId !== 'unassigned') && Boolean(t.courseId && t.courseId.trim() !== '' && t.courseId !== 'unassigned') && !t.isExempt && (t.remainingAmount || 0) > 0).length} غير مسدد
+                  {branchFilteredTrainees.filter(t => !t.isExempt && (t.remainingAmount || 0) > 0).length} غير مسدد
                 </span>
               </div>
               <div className="text-3xl font-black font-mono text-amber-700 dark:text-amber-400 tracking-tight mt-2">
@@ -1373,7 +1527,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ initialTab }) => {
               </div>
             </div>
             <div className="mt-3 pt-2.5 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
-              <span>إجمالي المطلوب:</span>
+              <span>إجمالي المطلوب هذا الشهر:</span>
               <span className="font-mono font-bold text-sky-600 dark:text-sky-400">{dueThisMonth.toLocaleString()} ج.م</span>
             </div>
           </div>

@@ -30,7 +30,9 @@ import {
 function createRepo<T extends { id: string }>(key: string) {
   return {
     async getAll(forceFresh = false): Promise<T[]> {
-      await db.ensureHydrated(forceFresh);
+      if (forceFresh) {
+        db.ensureHydrated(true).catch(() => {});
+      }
       const memData = db.getData() as any;
       if (!memData || !Array.isArray(memData[key])) {
         return [];
@@ -106,7 +108,6 @@ function createRepo<T extends { id: string }>(key: string) {
     },
 
     async create(id: string, itemData: any): Promise<T> {
-      await db.ensureHydrated();
       const docId = id || itemData.id || ('doc-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6));
       const fullItem = { ...itemData, id: docId };
 
@@ -120,9 +121,9 @@ function createRepo<T extends { id: string }>(key: string) {
         if (key === 'trainees' && Array.isArray(memData.trainees)) {
           memData.trainees = db.deduplicateTrainees(memData.trainees);
         }
-        // Immediate local persistence
+        // Immediate local persistence to disk and permanent trainees vault
         db.saveImmediate();
-        // Background non-blocking sync to Firestore
+        // Background non-blocking delta sync of ONLY this collection to Firestore
         saveCollectionToFirestore(key, memData[key]).catch(() => {});
       }
 
@@ -130,7 +131,6 @@ function createRepo<T extends { id: string }>(key: string) {
     },
 
     async update(id: string, updates: any): Promise<T | null> {
-      await db.ensureHydrated();
       const existing = await this.getById(id);
       const docId = existing ? existing.id : id;
       const updatedItem = { ...(existing || {}), ...updates, id: docId, updatedAt: new Date().toISOString() };
@@ -144,7 +144,7 @@ function createRepo<T extends { id: string }>(key: string) {
         else list.push(updatedItem);
         // Immediate local persistence
         db.saveImmediate();
-        // Background non-blocking sync to Firestore
+        // Background non-blocking delta sync to Firestore
         saveCollectionToFirestore(key, memData[key]).catch(() => {});
       }
 
@@ -152,7 +152,6 @@ function createRepo<T extends { id: string }>(key: string) {
     },
 
     async delete(id: string): Promise<boolean> {
-      await db.ensureHydrated();
       const memData = db.getData() as any;
       if (memData && Array.isArray(memData[key])) {
         const list = memData[key] as any[];
@@ -160,7 +159,7 @@ function createRepo<T extends { id: string }>(key: string) {
         if (idx >= 0) list.splice(idx, 1);
         // Immediate local persistence
         db.saveImmediate();
-        // Background non-blocking sync to Firestore
+        // Background non-blocking delta sync to Firestore
         saveCollectionToFirestore(key, memData[key]).catch(() => {});
       }
 

@@ -34,6 +34,15 @@ const { Pool } = pg;
 const app = express();
 const PORT = 3000;
 
+// Gracefully absorb background cloud quota stream notices (local disk handles 100% of state)
+process.on('unhandledRejection', (reason: any) => {
+  const msg = reason?.message || String(reason);
+  if (msg.includes('RESOURCE_EXHAUSTED') || msg.includes('Quota limit exceeded') || (reason && reason.code === 8)) {
+    return;
+  }
+  console.warn('[Server] Unhandled rejection notice:', msg);
+});
+
 app.use((req, res, next) => {
   res.header("Access-Control-Allow-Origin", "*");
   res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
@@ -133,14 +142,8 @@ if (fs.existsSync(path.join(process.cwd(), "dist"))) {
 app.use(express.json({ limit: "100mb" }));
 app.use(express.urlencoded({ extended: true, limit: "100mb" }));
 
-// Ensure database state is hydrated from cloud Firestore on request
-app.use(async (req, res, next) => {
-  try {
-    const isFresh = req.query?.fresh === "true" || req.headers?.["x-fresh"] === "true";
-    await db.ensureHydrated(isFresh);
-  } catch (e) {
-    console.warn("[Hydration Middleware Notice]", e);
-  }
+// Fast in-memory state: hydration runs asynchronously on server boot, never blocking or burning quota per HTTP request
+app.use((req, res, next) => {
   next();
 });
 

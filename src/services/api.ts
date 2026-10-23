@@ -54,9 +54,8 @@ const getApiBaseUrl = () => {
 };
 
 const BASE_URL = getApiBaseUrl();
-const BACKUP_CLOUD_MIRROR = 'https://ais-pre-7wkppak7c63am6ebvulppu-481160813332.europe-west2.run.app/api';
 
-export async function request<T>(endpoint: string, options: RequestInit = {}, retryCount = 0, usedBackup = false): Promise<T> {
+export async function request<T>(endpoint: string, options: RequestInit = {}, retryCount = 0): Promise<T> {
   let token: string | null = null;
   let userRole = 'super_admin';
   let branchId = 'all';
@@ -81,7 +80,7 @@ export async function request<T>(endpoint: string, options: RequestInit = {}, re
     ...((options.headers as Record<string, string>) || {})
   };
 
-  const targetBase = usedBackup ? BACKUP_CLOUD_MIRROR : BASE_URL;
+  const targetBase = BASE_URL;
 
   try {
     const response = await fetch(`${targetBase}${endpoint}`, {
@@ -94,24 +93,13 @@ export async function request<T>(endpoint: string, options: RequestInit = {}, re
       const retryAfterHeader = response.headers.get('Retry-After');
       const waitMs = retryAfterHeader ? parseInt(retryAfterHeader, 10) * 1000 : (1000 * Math.pow(2, retryCount)) + Math.random() * 500;
       await new Promise((resolve) => setTimeout(resolve, waitMs));
-      return request<T>(endpoint, options, retryCount + 1, usedBackup);
-    }
-
-    // Smart Quota Failover: if Vercel serverless function hits quota (402 Payment Required) or is down (502/503/504), automatically fallback to Cloud Run mirror
-    if ((response.status === 402 || response.status === 502 || response.status === 503 || response.status === 504) && !usedBackup && !endpoint.includes('quota-config')) {
-      console.warn(`[ApiFailover] Vercel returned status ${response.status} on ${endpoint}. Seamlessly failing over to live Cloud Run mirror...`);
-      return request<T>(endpoint, options, 0, true);
+      return request<T>(endpoint, options, retryCount + 1);
     }
 
     const contentType = response.headers.get('content-type');
     const isJson = contentType && contentType.includes('application/json');
 
     if (!response.ok) {
-      // If we haven't tried the backup mirror yet, try it before throwing
-      if (!usedBackup && !endpoint.includes('quota-config') && (response.status >= 500 || response.status === 404)) {
-        console.warn(`[ApiFailover] Retrying ${endpoint} via backup Cloud Run mirror...`);
-        return request<T>(endpoint, options, 0, true);
-      }
 
       let errMsg = 'حدث خطأ في الاتصال بالخادم';
       if (isJson) {
@@ -141,10 +129,6 @@ export async function request<T>(endpoint: string, options: RequestInit = {}, re
       const trimmed = text.trim();
       const lower = trimmed.toLowerCase();
       if (lower.startsWith('<!doctype') || lower.startsWith('<html') || lower.includes('<head>') || lower.includes('<body')) {
-        if (!usedBackup && !endpoint.includes('quota-config')) {
-          console.warn(`[ApiFailover] HTML received for API endpoint ${endpoint}. Retrying via Cloud Run mirror...`);
-          return request<T>(endpoint, options, 0, true);
-        }
         throw new Error(`انتهت الجلسة أو تعذر الاتصال بالخادم (${endpoint}). يرجى إعادة تحميل الصفحة.`);
       }
       try {
@@ -157,13 +141,9 @@ export async function request<T>(endpoint: string, options: RequestInit = {}, re
       }
     }
   } catch (err: any) {
-    if (!usedBackup && !endpoint.includes('quota-config') && (err?.name === 'TypeError' || err?.message?.includes('fetch') || err?.message?.includes('Failed to fetch'))) {
-      console.warn(`[ApiFailover] Network error on ${endpoint}. Retrying via live Cloud Run mirror...`);
-      return request<T>(endpoint, options, 0, true);
-    }
     if (retryCount < 2 && (err?.message?.includes('429') || err?.message?.includes('Rate exceeded') || err?.message?.includes('RESOURCE_EXHAUSTED') || err?.name === 'TypeError')) {
       await new Promise((resolve) => setTimeout(resolve, 1000 * (retryCount + 1)));
-      return request<T>(endpoint, options, retryCount + 1, usedBackup);
+      return request<T>(endpoint, options, retryCount + 1);
     }
     throw err;
   }

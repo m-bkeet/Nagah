@@ -11,14 +11,10 @@ export const cloudDb = {
   async syncTrainee(trainee: Trainee): Promise<void> {
     try {
       if (!trainee.id) return;
-      // Debounce and sync trainee efficiently
-      quotaOptimizer.debouncedUpdateDoc('trainees', trainee.id, trainee);
       await request('/trainees', {
         method: 'POST',
         body: JSON.stringify(trainee)
       });
-      // Update aggregated stats counter (+1 if new)
-      quotaOptimizer.updateAggregatedStat('totalTrainees', 1);
     } catch (err) {
       console.warn('[CloudDb] syncTrainee error:', err);
     }
@@ -28,7 +24,6 @@ export const cloudDb = {
     try {
       if (!traineeId) return;
       await request(`/trainees/${traineeId}`, { method: 'DELETE' });
-      quotaOptimizer.updateAggregatedStat('totalTrainees', -1);
     } catch (err) {
       console.warn('[CloudDb] deleteTrainee error:', err);
     }
@@ -54,7 +49,6 @@ export const cloudDb = {
   async syncTrainer(trainer: Trainer): Promise<void> {
     try {
       if (!trainer.id) return;
-      quotaOptimizer.debouncedUpdateDoc('trainers', trainer.id, trainer);
       await request('/trainers', {
         method: 'POST',
         body: JSON.stringify(trainer)
@@ -230,19 +224,7 @@ export const cloudDb = {
         createdAt: new Date().toISOString()
       };
 
-      // 1. Direct targeted update to Firestore student document path using arrayUnion (Zero full collection read)
-      try {
-        const studentRef = doc(db, 'trainees', traineeId);
-        await updateDoc(studentRef, {
-          attendance: arrayUnion(record),
-          lastAttendanceDate: today,
-          lastAttendanceStatus: attendanceData.status
-        });
-      } catch (fErr) {
-        console.warn('[CloudDb] Direct Firestore updateDoc notice:', fErr);
-      }
-
-      // 2. Synchronize via backend API
+      // Synchronize via backend API (which safely manages local persistence and background cloud sync)
       const apiRes = await request<any>('/attendance', {
         method: 'POST',
         body: JSON.stringify({

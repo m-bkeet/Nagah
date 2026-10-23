@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getFirestore, doc, getDoc, setDoc, Firestore } from 'firebase/firestore';
+import { getFirestore, doc, getDoc, setDoc, disableNetwork, enableNetwork, Firestore } from 'firebase/firestore';
 
 let firebaseConfig: any = null;
 try {
@@ -46,7 +46,6 @@ function getDb(): Firestore | null {
 const collectionHashes = new Map<string, string>();
 let isQuotaExceeded = false;
 let quotaExceededNoticeTime = 0;
-const QUOTA_BACKOFF_MS = 24 * 60 * 60 * 1000; // 24 Hours circuit breaker backoff when Google Cloud daily write quota is reached
 
 // In-memory Firestore Quota Tracking metrics
 let readsCountToday = 0;
@@ -61,7 +60,36 @@ function checkDateRollover() {
     readsCountToday = 0;
     writesCountToday = 0;
     deletesCountToday = 0;
+    if (isQuotaExceeded) {
+      isQuotaExceeded = false;
+      const db = getDb();
+      if (db) {
+        enableNetwork(db).catch(() => {});
+      }
+    }
   }
+}
+
+export function handleQuotaExceeded(err: any): boolean {
+  const errMsg = err?.message || String(err);
+  if (
+    errMsg.includes('RESOURCE_EXHAUSTED') || 
+    errMsg.includes('Quota limit exceeded') || 
+    err?.code === 8 || 
+    err?.code === 'resource-exhausted'
+  ) {
+    if (!isQuotaExceeded) {
+      isQuotaExceeded = true;
+      quotaExceededNoticeTime = Date.now();
+      console.warn('[FirestoreStorage] Cloud Firestore daily quota reached. Disabling network stream for remainder of day. Local disk & vault are 100% active and durable.');
+      const db = getDb();
+      if (db) {
+        disableNetwork(db).catch(() => {});
+      }
+    }
+    return true;
+  }
+  return false;
 }
 
 export function recordFirestoreRead(count = 1) {
@@ -193,14 +221,14 @@ export async function saveCollectionToFirestore(collectionName: string, rawItems
     return true;
   }
 
+  // 2. Circuit Breaker: If quota exceeded, skip all remote writes cleanly; local disk handles storage with 100% durability
+  checkDateRollover();
+  if (isQuotaExceeded) {
+    return false;
+  }
+
   const db = getDb();
   if (!db) return false;
-
-  // 2. Circuit Breaker: If genuine quota exceeded recently, skip remote network calls briefly
-  const now = Date.now();
-  if (isQuotaExceeded && (now - quotaExceededNoticeTime < QUOTA_BACKOFF_MS)) {
-    return true; // Local storage is active and durable
-  }
 
   const items = sanitizeForFirestore(collectionName, rawItems);
   const newHash = hashPayload(items);
@@ -208,6 +236,7 @@ export async function saveCollectionToFirestore(collectionName: string, rawItems
     return true; // No changes, skip write!
   }
 
+  const now = Date.now();
   try {
     const docRef = doc(db, 'nagah_store', collectionName);
     const serialized = JSON.stringify(items ?? []);
@@ -234,7 +263,7 @@ export async function saveCollectionToFirestore(collectionName: string, rawItems
     }
 
     // Update global sync heartbeat in Firestore for real-time client notice if requested
-    if (updateSyncMeta) {
+    if (updateSyncMeta && !isQuotaExceeded) {
       try {
         const metaRef = doc(db, 'nagah_store', 'sync_meta');
         await setDoc(metaRef, { 
@@ -244,23 +273,17 @@ export async function saveCollectionToFirestore(collectionName: string, rawItems
           version: now
         }, { merge: true });
       } catch (metaErr) {
-        console.warn('[FirestoreStorage] sync_meta write notice:', metaErr);
+        handleQuotaExceeded(metaErr);
       }
     }
 
     collectionHashes.set(collectionName, newHash);
-    isQuotaExceeded = false;
     return true;
   } catch (err: any) {
-    const errMsg = err?.message || String(err);
-    if (errMsg.includes('RESOURCE_EXHAUSTED') || errMsg.includes('Quota limit exceeded')) {
-      isQuotaExceeded = true;
-      quotaExceededNoticeTime = now;
-      console.warn(`[FirestoreStorage] Cloud Firestore daily write quota reached. Backing off for 24h. Local JSON storage active & durable.`);
-      return true; // Transparent fallback to local database
-    } else {
-      console.warn(`[FirestoreStorage] Note for ${collectionName}:`, errMsg);
+    if (handleQuotaExceeded(err)) {
+      return false;
     }
+    console.warn(`[FirestoreStorage] Note for ${collectionName}:`, err?.message || err);
     return false;
   }
 }
@@ -270,14 +293,13 @@ export async function loadCollectionFromFirestore(collectionName: string): Promi
     return null;
   }
 
-  const db = getDb();
-  if (!db) return null;
-
-  // Fail fast if quota is currently exceeded
-  const now = Date.now();
-  if (isQuotaExceeded && (now - quotaExceededNoticeTime < QUOTA_BACKOFF_MS)) {
+  checkDateRollover();
+  if (isQuotaExceeded) {
     return null;
   }
+
+  const db = getDb();
+  if (!db) return null;
 
   try {
     const docRef = doc(db, 'nagah_store', collectionName);
@@ -299,11 +321,7 @@ export async function loadCollectionFromFirestore(collectionName: string): Promi
     }
     return null;
   } catch (err: any) {
-    const errMsg = err?.message || String(err);
-    if (errMsg.includes('RESOURCE_EXHAUSTED') || errMsg.includes('Quota limit exceeded')) {
-      isQuotaExceeded = true;
-      quotaExceededNoticeTime = now;
-    }
+    handleQuotaExceeded(err);
     return null;
   }
 }
@@ -312,7 +330,8 @@ let debouncedSyncTimer: NodeJS.Timeout | null = null;
 let pendingDbData: any = null;
 
 export async function saveFullDbToFirestore(dbData: any, immediate = false): Promise<void> {
-  if (!dbData) return;
+  checkDateRollover();
+  if (isQuotaExceeded || !dbData) return;
   pendingDbData = dbData;
 
   const executeSync = async () => {
@@ -454,6 +473,8 @@ export async function allocateNextTraineeCode(
 }
 
 export async function getSyncMeta(): Promise<{ lastCollection?: string; updatedAt?: number; version?: number } | null> {
+  checkDateRollover();
+  if (isQuotaExceeded) return null;
   const db = getDb();
   if (!db) return null;
   try {
@@ -463,12 +484,14 @@ export async function getSyncMeta(): Promise<{ lastCollection?: string; updatedA
       return snap.data() as any;
     }
   } catch (e) {
-    // Non-critical
+    handleQuotaExceeded(e);
   }
   return null;
 }
 
 export async function loadFullDbFromFirestore(): Promise<any> {
+  checkDateRollover();
+  if (isQuotaExceeded) return null;
   const collections = [
     'users', 'branches', 'trainees', 'trainers', 'courses', 'programs', 'groups',
     'attendance', 'payments', 'expenses', 'trainerSettlements', 'pointRules',
