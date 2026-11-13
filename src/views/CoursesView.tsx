@@ -32,6 +32,7 @@ import { GoogleClassroomImportModal } from '../components/GoogleClassroomImportM
 import { CourseGroupMaterialsModal } from '../components/CourseGroupMaterialsModal';
 import { GoogleDriveService } from '../services/googleDrive';
 import { getGoogleDriveViewUrl, getGoogleDrivePreviewUrl } from '../utils/googleDriveHelper';
+import { CurriculumPlanModal } from '../components/curriculum/CurriculumPlanModal';
 
 export const GRADE_OPTIONS = [
   'الصف الرابع الابتدائي',
@@ -59,6 +60,7 @@ export const CoursesView: React.FC = () => {
   const [courseToDelete, setCourseToDelete] = useState<Course | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isClassroomModalOpen, setIsClassroomModalOpen] = useState(false);
+  const [isCurriculumPlanOpen, setIsCurriculumPlanOpen] = useState(false);
 
   // Course Scientific Materials State
   const [selectedCourseForMaterials, setSelectedCourseForMaterials] = useState<Course | null>(null);
@@ -534,25 +536,33 @@ export const CoursesView: React.FC = () => {
 
           <div className="flex flex-wrap items-center gap-2">
             <button
+              type="button"
+              onClick={() => setIsCurriculumPlanOpen(true)}
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-black text-xs shadow-md shadow-purple-600/20 transition-all active:scale-95 cursor-pointer"
+              title="خريطة المنهج وتوزيع المحاضرات 8 شهرياً نظري وعملي مع مراجعة الامتحانات وخطة تعويض الغياب"
+            >
+              <span>🗺️ خريطة المنهج الذكية</span>
+            </button>
+            <button
               onClick={() => {
                 if (courses && courses.length > 0 && !selectedCourseForFb) {
                   setSelectedCourseForFb(courses?.[0]?.id || '');
                 }
                 setIsFbModalOpen(true);
               }}
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-black text-xs shadow-md shadow-blue-600/20 transition-all active:scale-95"
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-black text-xs shadow-md shadow-blue-600/20 transition-all active:scale-95 cursor-pointer"
             >
               <span>📘 النشر والرد الآلي على فيسبوك</span>
             </button>
             <button
               onClick={() => setIsClassroomModalOpen(true)}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs shadow-md shadow-emerald-500/20 transition-all active:scale-95"
+              className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs shadow-md shadow-emerald-500/20 transition-all active:scale-95 cursor-pointer"
             >
               <span>📥 استيراد من Classroom</span>
             </button>
             <button
               onClick={handleOpenAdd}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 hover:to-yellow-400 text-slate-950 font-black text-xs shadow-md shadow-amber-500/20 transition-all border border-amber-300 active:scale-95"
+              className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 hover:to-yellow-400 text-slate-950 font-black text-xs shadow-md shadow-amber-500/20 transition-all border border-amber-300 active:scale-95 cursor-pointer"
             >
               <Plus className="w-4 h-4" />
               <span>إضافة دورة جديدة</span>
@@ -1750,6 +1760,13 @@ export const CoursesView: React.FC = () => {
           </div>
         </div>
       )}
+      {/* Curriculum Plan & Syllabus Distribution Modal */}
+      <CurriculumPlanModal
+        isOpen={isCurriculumPlanOpen}
+        onClose={() => setIsCurriculumPlanOpen(false)}
+        courses={courses}
+        groups={groups}
+      />
     </div>
   );
 };

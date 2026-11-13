@@ -24,7 +24,8 @@ import {
   FileText,
   Sparkles,
   Trash2,
-  RefreshCw
+  RefreshCw,
+  Settings
 } from 'lucide-react';
 import { useCenter } from '../context/CenterContext';
 import { useAuth } from '../context/AuthContext';
@@ -117,11 +118,23 @@ export const GroupCashCollectionCockpit: React.FC<GroupCashCollectionCockpitProp
   const [isSubmittingPayment, setIsSubmittingPayment] = useState(false);
   const [successToast, setSuccessToast] = useState<string | null>(null);
 
-  // ⚡ One-Click Immediate Payment for Student for selected month (الافتراضي سبتمبر 2026 بداية العام المالي)
-  const [targetQuickMonth, setTargetQuickMonth] = useState<string>('سبتمبر 2026');
+  // ⚡ One-Click Immediate Payment for Student for selected month (يبدأ استحقاق الشهر الجديد من يوم 25)
+  const [targetQuickMonth, setTargetQuickMonth] = useState<string>(() => {
+    const now = new Date();
+    const day = now.getDate();
+    const month = now.getMonth(); // 9 = October, 10 = November
+    const year = now.getFullYear();
+    if (year === 2026 && (month === 9 || (month === 10 && day < 25))) return 'أكتوبر 2026';
+    if (year === 2026 && month === 8) return day >= 25 ? 'أكتوبر 2026' : 'سبتمبر 2026';
+    if (year === 2026 && month === 10 && day >= 25) return 'ديسمبر 2026';
+    const monthNames = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
+    return `${monthNames[month]} ${year}`;
+  });
+  const [subscriptionPlan, setSubscriptionPlan] = useState<'full' | 'half' | 'custom'>('full');
   const [quickPayingStudentId, setQuickPayingStudentId] = useState<string | null>(null);
   const [isQuickBatchPaying, setIsQuickBatchPaying] = useState<boolean>(false);
   const [deletingPaymentId, setDeletingPaymentId] = useState<string | null>(null);
+  const [paymentPendingDelete, setPaymentPendingDelete] = useState<{ trainee: Trainee; payment: any } | null>(null);
 
   // Filtered Groups
   const filteredGroups = useMemo(() => {
@@ -251,9 +264,9 @@ export const GroupCashCollectionCockpit: React.FC<GroupCashCollectionCockpitProp
         (Array.isArray(p.paidMonths) && p.paidMonths.some((m: string) => m && (m.includes('سبتمبر') || m.includes('شهر 9'))))
       )
     );
-    const cleanPaidMonths = (Array.isArray(t.paidMonths) ? t.paidMonths : [])
-      .filter(m => m && !/أكتوبر|نوفمبر|ديسمبر|يناير|10|١٠/i.test(m));
-    const hasPaidSept = cleanPaidMonths.some(m => m.includes('سبتمبر') || m.includes('شهر 9')) || septPayments.length > 0;
+    const hasPaidSept = (Array.isArray(t.paidMonths) ? t.paidMonths : []).some(
+      (m: string) => m && (m.includes('سبتمبر') || m.includes('شهر 9'))
+    ) || septPayments.length > 0;
 
     // Check payment records targeting this specific selected month
     const paymentsForThisMonth = traineePayments.filter(p => 
@@ -301,30 +314,63 @@ export const GroupCashCollectionCockpit: React.FC<GroupCashCollectionCockpitProp
       }
     } else {
       // For October and subsequent months (أكتوبر, نوفمبر, etc.)
-      if (paymentsForThisMonth.length > 0 && totalPaidForThisMonth >= net && net > 0) {
-        // Actual payment voucher for October!
+      const hasStudentPaidThisMonth = (paymentsForThisMonth.length > 0 && totalPaidForThisMonth > 0) ||
+        (Array.isArray(t.paidMonths) && t.paidMonths.some((m: string) => m && m.includes(targetMonthPrefix)));
+
+      if (hasStudentPaidThisMonth) {
+        // Actual payment received for this target month!
         isPaidForTargetMonth = true;
         isNotDueYet = false;
         isDueOverdue = false;
-        monthPaidAmount = totalPaidForThisMonth;
-        monthRemainingAmount = 0;
+        monthPaidAmount = totalPaidForThisMonth > 0 ? totalPaidForThisMonth : net;
+        monthRemainingAmount = Math.max(0, net - monthPaidAmount);
         finalReasonLabel = `تم سداد شهر ${targetMonthPrefix} بالكامل ✅`;
-      } else if (hasPaidSept) {
-        // Paid September -> October is NOT DUE YET (not paid October yet!)
-        isPaidForTargetMonth = false; // <-- CRITICAL: Nobody has paid October!
-        isNotDueYet = true; // <-- NOT DUE YET until Oct 25
-        isDueOverdue = false;
-        monthPaidAmount = 0;
-        monthRemainingAmount = 0;
-        finalReasonLabel = `غير مستحق السداد حتى الآن (استحقاق 25 ${targetMonthPrefix}) ℹ️`;
       } else {
-        // Did NOT pay September -> September arrears are overdue!
-        isPaidForTargetMonth = false;
-        isNotDueYet = false;
-        isDueOverdue = true;
-        monthPaidAmount = 0;
-        monthRemainingAmount = net;
-        finalReasonLabel = 'مستحق سداد متأخرات سبتمبر (غير مسدد) ⏳';
+        // Not paid for this target month!
+        // Rule: Due date for each month begins on Day 25
+        const now = new Date();
+        const currentYear = now.getFullYear();
+        const currentMonthIdx = now.getMonth(); // 9 = October
+        const currentDay = now.getDate(); // 27
+
+        const targetKey = targetMonthKey || '2026-10';
+        const [tYearStr, tMonthStr] = targetKey.split('-');
+        const tYear = parseInt(tYearStr, 10) || 2026;
+        const tMonthIdx = (parseInt(tMonthStr, 10) || 10) - 1;
+
+        // Is this target month due right now?
+        // Due if target month is in the past, OR target month is current month and day >= 25 (e.g. Oct 25+)
+        const isTargetMonthDue = (tYear < currentYear) || 
+          (tYear === currentYear && tMonthIdx < currentMonthIdx) || 
+          (tYear === currentYear && tMonthIdx === currentMonthIdx && currentDay >= 25);
+
+        if (isTargetMonthDue) {
+          // Officially DUE and UNPAID!
+          isPaidForTargetMonth = false;
+          isNotDueYet = false;
+          isDueOverdue = true;
+          monthPaidAmount = 0;
+          
+          if (traineeStartKey === '2026-10') {
+            // Enrolled in October - strictly NO September obligation!
+            monthRemainingAmount = net;
+            finalReasonLabel = `مستحق سداد شهر ${targetMonthPrefix} (${net} ج.م) ⏳`;
+          } else {
+            // Enrolled in September or earlier
+            monthRemainingAmount = hasPaidSept ? net : (net * 2);
+            finalReasonLabel = hasPaidSept
+              ? `مستحق سداد شهر ${targetMonthPrefix} (${net} ج.م) ⏳`
+              : `مستحق سداد متأخرات سبتمبر وشهر ${targetMonthPrefix} (${net * 2} ج.م) ⏳`;
+          }
+        } else {
+          // Future month before Day 25
+          isPaidForTargetMonth = false;
+          isNotDueYet = true;
+          isDueOverdue = false;
+          monthPaidAmount = 0;
+          monthRemainingAmount = 0;
+          finalReasonLabel = `غير مستحق السداد حتى الآن (استحقاق 25 ${targetMonthPrefix}) ℹ️`;
+        }
       }
     }
 
@@ -332,6 +378,7 @@ export const GroupCashCollectionCockpit: React.FC<GroupCashCollectionCockpitProp
       baseFee,
       discount,
       net,
+      hasPaidSept,
       paid: monthPaidAmount,
       remaining: monthRemainingAmount,
       isExempt,
@@ -421,9 +468,12 @@ export const GroupCashCollectionCockpit: React.FC<GroupCashCollectionCockpitProp
   }, [groupTrainees, searchTerm, statusFilter, paymentsList, targetQuickMonth]);
 
   // Open Payment / Collection Modal for a Student
+  // Open Payment / Collection Modal for a Student
   const handleOpenCollection = (trainee: Trainee) => {
+    const now = new Date();
     const info = getTraineeFinancialInfo(trainee);
     setSelectedTraineeForPayment(trainee);
+    setSubscriptionPlan('full');
     
     // Default payment amount = monthly fee or remaining balance, or 0 if exempt
     if (info.isExempt) {
@@ -436,19 +486,19 @@ export const GroupCashCollectionCockpit: React.FC<GroupCashCollectionCockpitProp
       const defaultAmount = info.net > 0 ? (info.remaining > 0 ? info.remaining : info.net) : (info.baseFee || 200);
       setPaymentAmount(defaultAmount);
       setIsExemptToggle(false);
-      setApplyDiscount(trainee.discountAmount || 0);
+      setApplyDiscount(0);
       setExemptReasonSelect(trainee.exemptReason || 'scholarship');
-      setPaymentNotes('تحصيل نقدي بالخزينة');
+      setPaymentNotes(`سداد اشتراك شهر كامل - ${targetQuickMonth}`);
     }
     setPaymentMethod('cash');
 
-    // Default target month = currently selected targetQuickMonth or active month (افتراضياً سبتمبر)
-    setPaymentTargetMonth(targetQuickMonth || 'سبتمبر 2026');
+    // Default target month = currently selected targetQuickMonth
+    setPaymentTargetMonth(targetQuickMonth || 'أكتوبر 2026');
 
-    // Default next due date = Day 25 of next cycle (e.g. 25/10/2026)
+    // Default next due date = Day 25 of next cycle
     const dueYear = now.getFullYear();
-    const dueMonth = now.getMonth(); // Current month index (e.g. 9 for October)
-    const calcNextDueDate = new Date(dueYear, dueMonth, 25);
+    const dueMonth = now.getMonth();
+    const calcNextDueDate = new Date(dueYear, dueMonth + 1, 25);
     setNextDueDateInput(calcNextDueDate.toISOString().split('T')[0]);
 
     setIsCollectionModalOpen(true);
@@ -496,8 +546,8 @@ export const GroupCashCollectionCockpit: React.FC<GroupCashCollectionCockpitProp
 
     setIsSubmittingPayment(true);
     try {
-      const finalDiscount = Number(applyDiscount) || 0;
-      const calculatedNetAmount = Math.max(0, (selectedTraineeForPayment.feeAmount || paymentAmount) - finalDiscount);
+      const isHalfOrCustom = subscriptionPlan === 'half' || subscriptionPlan === 'custom';
+      const finalDiscount = isHalfOrCustom ? 0 : (Number(applyDiscount) || 0);
 
       const traineeGroup = (groups || []).find(g => g.id === selectedTraineeForPayment.groupId);
       // Create Payment via API
@@ -506,7 +556,9 @@ export const GroupCashCollectionCockpit: React.FC<GroupCashCollectionCockpitProp
         amount: isExemptToggle ? 0 : Number(paymentAmount),
         paymentMethod,
         targetMonth: paymentTargetMonth,
-        notes: paymentNotes,
+        notes: paymentNotes || (subscriptionPlan === 'half'
+          ? `سداد اشتراك نصف شهر (التحاق من منتصف الشهر) - ${paymentTargetMonth}`
+          : `سداد اشتراك شهر كامل - ${paymentTargetMonth}`),
         receivedByUserId: user?.id || 'admin',
         receivedByUserName: user?.fullName || 'المدير المالي والخزينة',
         branchId: selectedTraineeForPayment.branchId || traineeGroup?.branchId,
@@ -515,6 +567,8 @@ export const GroupCashCollectionCockpit: React.FC<GroupCashCollectionCockpitProp
         parentPhone: selectedTraineeForPayment.parentPhone || selectedTraineeForPayment.phone,
         traineePhone: selectedTraineeForPayment.phone,
         discountAmount: finalDiscount,
+        isProrated: isHalfOrCustom,
+        subscriptionPlan,
         isExempt: isExemptToggle,
         exemptReason: isExemptToggle ? exemptReasonSelect : undefined,
         nextDueDate: nextDueDateInput,
@@ -650,9 +704,9 @@ export const GroupCashCollectionCockpit: React.FC<GroupCashCollectionCockpitProp
     }
   };
 
-  // 🗑️ Delete Payment Action (حذف السداد وإلغاء الدفعة وإعادة فتح حساب الطالب)
-  const handleDeletePayment = async (trainee: Trainee, payment?: Payment) => {
-    let p = payment;
+  // 🗑️ Delete Payment Action (طلب حذف السداد والتراجع عن التحصيل)
+  const handleRequestDeletePayment = (trainee: Trainee, paymentOrInfo?: any) => {
+    let p = paymentOrInfo?.receiptNumber ? paymentOrInfo : (paymentOrInfo?.latestPayment || (paymentOrInfo?.id ? paymentOrInfo : null));
     if (!p) {
       p = (paymentsList || []).find(pay => 
         (pay.traineeId === trainee.id || (pay.traineeCode && trainee.code && pay.traineeCode === trainee.code)) &&
@@ -665,17 +719,22 @@ export const GroupCashCollectionCockpit: React.FC<GroupCashCollectionCockpitProp
       return;
     }
 
-    const confirmMsg = `هل أنت متأكد من حذف وإلغاء سند السداد رقم (${p.receiptNumber || p.id}) للطالب:\n"${trainee.fullName}" (${trainee.code})\nبمبلغ ${p.amount} ج.م؟\n\n⚠️ سيتم التراجع عن الدفعة وإعادة فتح استحقاق الطالب كغير مسدد فوراً.`;
-    if (!window.confirm(confirmMsg)) return;
+    setPaymentPendingDelete({ trainee, payment: p });
+  };
+
+  const executeDeletePayment = async () => {
+    if (!paymentPendingDelete) return;
+    const { trainee, payment: p } = paymentPendingDelete;
 
     try {
       setDeletingPaymentId(p.id);
       const res = await api.deletePayment(p.id);
       if (res?.success) {
-        setPaymentsList(prev => prev.filter(pay => pay.id !== p!.id));
+        setPaymentsList(prev => prev.filter(pay => pay.id !== p.id));
         showToast(`تم بنجاح حذف سند السداد للطالب ${trainee.fullName} وإعادة حسابه كغير مسدد 🗑️`, 'success');
         setSuccessToast(`تم حذف السند وإعادة فتح الاستحقاق للطالب ${trainee.fullName}`);
         setTimeout(() => setSuccessToast(null), 4000);
+        setPaymentPendingDelete(null);
 
         onRefreshParent?.();
         try {
@@ -898,9 +957,9 @@ export const GroupCashCollectionCockpit: React.FC<GroupCashCollectionCockpitProp
               onChange={(e) => setTargetQuickMonth(e.target.value)}
               className="bg-white dark:bg-slate-900 border-2 border-emerald-500 rounded-xl px-3 py-1.5 text-xs text-emerald-950 dark:text-emerald-200 font-black focus:outline-none shadow-xs cursor-pointer"
             >
-              <option value="سبتمبر 2026">📅 سبتمبر 2026 (شهر 9)</option>
-              <option value="أكتوبر 2026">📅 أكتوبر 2026 (شهر 10)</option>
-              <option value="نوفمبر 2026">📅 نوفمبر 2026 (شهر 11)</option>
+              <option value="أكتوبر 2026">📅 أكتوبر 2026 (الشهر الحالي المستحق)</option>
+              <option value="سبتمبر 2026">📅 سبتمبر 2026 (شهر 9 المنصرم)</option>
+              <option value="نوفمبر 2026">📅 نوفمبر 2026 (شهر 11 القادم)</option>
               <option value="ديسمبر 2026">📅 ديسمبر 2026 (شهر 12)</option>
               <option value="يناير 2027">📅 يناير 2027 (شهر 1)</option>
             </select>
@@ -1180,10 +1239,14 @@ export const GroupCashCollectionCockpit: React.FC<GroupCashCollectionCockpitProp
                           <div>
                             <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-50 dark:bg-amber-950/60 border border-amber-200 dark:border-amber-500/40 text-amber-800 dark:text-amber-300 text-[11px] font-bold shadow-xs">
                               <AlertTriangle className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
-                              <span>مستحق السداد {targetQuickMonth.split(' ')[0]} ({info.remaining || info.net} ج.م) ⏳</span>
+                              <span>{info.hasPaidSept ? `مستحق ${targetQuickMonth.split(' ')[0]} (${info.remaining || info.net} ج.م) ⏳` : `مستحق سبتمبر و${targetQuickMonth.split(' ')[0]} (${info.remaining} ج.م) ⏳`}</span>
                             </div>
-                            <span className="block text-[10px] text-amber-700 dark:text-amber-400/80 mt-1 font-bold">
-                              {targetQuickMonth.includes('أكتوبر') ? 'متأخرات غير مسددة' : `لم يسدد ${targetQuickMonth.split(' ')[0]} حتى الآن`}
+                            <span className="block text-[10px] mt-1 font-bold">
+                              {info.hasPaidSept ? (
+                                <span className="text-emerald-700 dark:text-emerald-400">مسدد سبتمبر ✅</span>
+                              ) : (
+                                <span className="text-rose-700 dark:text-rose-400">متأخرات شهر 9 وشهر 10 ⚠️</span>
+                              )}
                             </span>
                           </div>
                         )}
@@ -1241,56 +1304,65 @@ export const GroupCashCollectionCockpit: React.FC<GroupCashCollectionCockpitProp
                             </>
                           ) : info.isPaidForTargetMonth ? (
                             <>
-                              <div className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 dark:bg-emerald-950/70 border border-emerald-300 dark:border-emerald-500/40 text-emerald-800 dark:text-emerald-300 rounded-xl text-xs font-black shadow-xs">
+                              <div className="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-50 dark:bg-emerald-950/70 border border-emerald-300 dark:border-emerald-500/40 text-emerald-800 dark:text-emerald-300 rounded-xl text-xs font-black shadow-xs">
                                 <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-                                <span>تم السداد لـ {targetQuickMonth.split(' ')[0]} 🟢</span>
+                                <span>تم السداد 🟢</span>
                               </div>
                               {info.latestPayment && (
                                 <button
                                   onClick={() => handlePrintReceiptForTrainee(trainee, info)}
-                                  className="px-2.5 py-1.5 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-200 border border-amber-300 dark:border-amber-500/40 rounded-xl text-xs font-bold transition-all flex items-center gap-1 cursor-pointer"
-                                  title={`عرض وطباعة سند ${targetQuickMonth.split(' ')[0]}`}
+                                  className="p-1.5 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-200 border border-amber-300 dark:border-amber-500/40 rounded-xl text-xs font-bold transition-all flex items-center cursor-pointer"
+                                  title={`عرض وصل ${targetQuickMonth.split(' ')[0]}`}
                                 >
                                   <Printer className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
-                                  <span>وصل {targetQuickMonth.split(' ')[0]}</span>
+                                </button>
+                              )}
+                              {info.latestPayment && (
+                                <button
+                                  onClick={() => handleRequestDeletePayment(trainee, info.latestPayment)}
+                                  disabled={deletingPaymentId === info.latestPayment?.id}
+                                  className="p-1.5 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/50 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-800/40 rounded-xl text-xs font-bold transition-all flex items-center cursor-pointer"
+                                  title="إلغاء هذا السداد وإعادة الطالب كغير مسدد (في حال السداد بالخطأ)"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5 text-rose-500" />
                                 </button>
                               )}
                             </>
                           ) : (
                             <>
-                              {/* ⚡ ONE-CLICK IMMEDIATE PAYMENT BUTTON */}
+                              {/* ⚡ ONE-CLICK FULL PAYMENT BUTTON */}
                               <button
                                 onClick={() => handleQuickPaySingle(trainee)}
                                 disabled={quickPayingStudentId === trainee.id}
-                                className="px-3.5 py-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-xs rounded-xl shadow-md shadow-emerald-600/30 flex items-center gap-1.5 transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
-                                title={`تسجيل سداد ${targetQuickMonth} فوراً بنقرة واحدة`}
+                                className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold text-xs rounded-xl shadow-xs flex items-center gap-1.5 transition-all disabled:opacity-50 cursor-pointer"
+                                title={`تسجيل سداد ${targetQuickMonth} فوراً`}
                               >
                                 <Check className="w-3.5 h-3.5" />
                                 <span>
                                   {quickPayingStudentId === trainee.id
                                     ? 'جاري السداد...'
-                                    : `⚡ سداد ${targetQuickMonth.split(' ')[0]} (${info.remaining || info.net || info.baseFee || 200} ج.م)`}
+                                    : `سداد (${info.remaining || info.net || 200} ج.م)`}
                                 </span>
+                              </button>
+
+                              {/* ⚙️ GEAR ICON FOR CUSTOMIZATION (HALF MONTH / CUSTOM AMOUNT / NOTES) */}
+                              <button
+                                onClick={() => handleOpenCollection(trainee)}
+                                className="p-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 hover:dark:bg-slate-700 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded-xl text-xs transition-all cursor-pointer"
+                                title="تخصيص السداد / نصف شهر / قسط جزئي"
+                              >
+                                ⚙️
                               </button>
 
                               {(info.latestPayment || trainee.paidAmount > 0 || trainee.lastReceiptNumber) && (
                                 <button
                                   onClick={() => handlePrintReceiptForTrainee(trainee, info)}
-                                  className="px-2 py-1.5 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-200 border border-amber-300 dark:border-amber-500/40 rounded-xl text-xs font-bold transition-all flex items-center gap-1 cursor-pointer"
-                                  title={`طباعة سند القبض السابق (${info.latestPayment?.targetMonth || 'سند سابق'})`}
+                                  className="p-1.5 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-200 border border-amber-300 dark:border-amber-500/40 rounded-xl text-xs font-bold transition-all flex items-center cursor-pointer"
+                                  title={`طباعة وصل سابق (${info.latestPayment?.targetMonth || 'سند سابق'})`}
                                 >
                                   <Printer className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
-                                  <span>🖨️ وصل {info.latestPayment?.targetMonth ? info.latestPayment.targetMonth.split(' ')[0] : 'سابق'}</span>
                                 </button>
                               )}
-
-                              <button
-                                onClick={() => handleOpenCollection(trainee)}
-                                className="p-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-xl text-xs transition-all cursor-pointer"
-                                title="تخصيص السداد / تقسيط / خصم"
-                              >
-                                ⚙️
-                              </button>
                             </>
                           )}
                         </div>
@@ -1349,6 +1421,89 @@ export const GroupCashCollectionCockpit: React.FC<GroupCashCollectionCockpitProp
                   <span className="font-mono text-emerald-400 font-bold dir-ltr">{selectedTraineeForPayment.parentPhone || selectedTraineeForPayment.phone || 'غير مسجل'}</span>
                 </div>
               </div>
+
+              {/* Subscription Duration Selector: Full Month / Half Month / Custom */}
+              {!isExemptToggle && (
+                <div className="p-3.5 bg-slate-950/80 border border-slate-700/80 rounded-2xl space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-black text-amber-400 flex items-center gap-1.5">
+                      <span>فترة الاشتراك ونوع السداد:</span>
+                    </label>
+                    <span className="text-[10px] text-slate-400 font-bold">
+                      {subscriptionPlan === 'full' ? 'شهر كامل منتظم' : subscriptionPlan === 'half' ? 'اشتراك منتصف الشهر (لا يؤثر كخصم دائم)' : 'مبلغ جزئي مخصص'}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSubscriptionPlan('full');
+                        const fullNet = selectedTraineeForPayment.netAmount || selectedTraineeForPayment.feeAmount || 200;
+                        setPaymentAmount(fullNet);
+                        setApplyDiscount(0);
+                        setPaymentNotes(`سداد اشتراك شهر كامل - ${paymentTargetMonth}`);
+                      }}
+                      className={`py-2 px-2.5 rounded-xl text-xs font-black border transition-all text-center cursor-pointer ${
+                        subscriptionPlan === 'full'
+                          ? 'bg-emerald-600 text-white border-emerald-400 shadow-md ring-2 ring-emerald-400/50'
+                          : 'bg-slate-900 text-slate-300 border-slate-700 hover:bg-slate-850'
+                      }`}
+                    >
+                      <div className="flex items-center justify-center gap-1">
+                        <span>🟢 شهر كامل</span>
+                      </div>
+                      <div className="text-[10px] font-mono text-emerald-200 mt-0.5">
+                        ({selectedTraineeForPayment.netAmount || selectedTraineeForPayment.feeAmount || 200} ج.م - الافتراضي)
+                      </div>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSubscriptionPlan('half');
+                        const fullNet = selectedTraineeForPayment.netAmount || selectedTraineeForPayment.feeAmount || 200;
+                        const halfAmt = Math.round(fullNet / 2);
+                        setPaymentAmount(halfAmt);
+                        setApplyDiscount(0);
+                        setPaymentNotes(`سداد اشتراك نصف شهر (التحاق من منتصف الشهر) - ${paymentTargetMonth}`);
+                      }}
+                      className={`py-2 px-2.5 rounded-xl text-xs font-black border transition-all text-center cursor-pointer ${
+                        subscriptionPlan === 'half'
+                          ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-md ring-2 ring-amber-400/50'
+                          : 'bg-slate-900 text-slate-300 border-slate-700 hover:bg-slate-850'
+                      }`}
+                    >
+                      <div className="flex items-center justify-center gap-1">
+                        <span>🟡 نصف شهر</span>
+                      </div>
+                      <div className="text-[10px] font-mono text-amber-900 dark:text-amber-200 mt-0.5">
+                        ({Math.round((selectedTraineeForPayment.netAmount || selectedTraineeForPayment.feeAmount || 200) / 2)} ج.م - اشتراك جزئي)
+                      </div>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSubscriptionPlan('custom');
+                        setPaymentNotes(`سداد مبلغ جزئي مخصص - ${paymentTargetMonth}`);
+                      }}
+                      className={`py-2 px-2.5 rounded-xl text-xs font-black border transition-all text-center cursor-pointer ${
+                        subscriptionPlan === 'custom'
+                          ? 'bg-sky-600 text-white border-sky-400 shadow-md ring-2 ring-sky-400/50'
+                          : 'bg-slate-900 text-slate-300 border-slate-700 hover:bg-slate-850'
+                      }`}
+                    >
+                      <div className="flex items-center justify-center gap-1">
+                        <span>🔵 مبلغ مخصص</span>
+                      </div>
+                      <div className="text-[10px] font-mono text-sky-200 mt-0.5">
+                        (تحديد يدوي حر)
+                      </div>
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {/* Amount & Method Controls */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -1540,6 +1695,49 @@ export const GroupCashCollectionCockpit: React.FC<GroupCashCollectionCockpitProp
                     <span>تأكيد استلام المبلغ وإصدار الإيصال الرسمي 🧾</span>
                   </>
                 )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* IN-APP DELETE PAYMENT CONFIRMATION MODAL */}
+      {paymentPendingDelete && (
+        <div className="fixed inset-0 z-[99999] bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 max-w-md w-full border border-rose-200 dark:border-rose-900/60 shadow-2xl text-right space-y-4">
+            <div className="flex items-center gap-3 text-rose-600">
+              <div className="w-12 h-12 rounded-2xl bg-rose-100 dark:bg-rose-950/60 flex items-center justify-center shrink-0">
+                <Trash2 className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="font-black text-base text-slate-900 dark:text-white">تأكيد حذف وإلغاء سند السداد</h3>
+                <p className="text-xs text-slate-500">التراجع عن عملية التحصيل وإعادة فتح الحساب</p>
+              </div>
+            </div>
+            <div className="bg-rose-50/60 dark:bg-rose-950/30 p-3.5 rounded-2xl border border-rose-200/80 dark:border-rose-900/50 text-xs space-y-1.5">
+              <div>الطالب: <strong className="text-slate-900 dark:text-white">{paymentPendingDelete.trainee.fullName} ({paymentPendingDelete.trainee.code})</strong></div>
+              <div>رقم السند: <strong className="font-mono text-amber-600">{paymentPendingDelete.payment.receiptNumber || paymentPendingDelete.payment.id}</strong></div>
+              <div>المبلغ: <strong className="font-bold text-rose-600 font-mono">{paymentPendingDelete.payment.amount} ج.م</strong></div>
+              <div className="text-[11px] text-rose-700 dark:text-rose-300 font-semibold pt-1">
+                ⚠️ سيتم حذف السند وإلغاء القيد، وإعادة فتح استحقاق الطالب كغير مسدد فوراً.
+              </div>
+            </div>
+            <div className="flex items-center gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setPaymentPendingDelete(null)}
+                className="flex-1 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+              >
+                إلغاء وتراجع
+              </button>
+              <button
+                type="button"
+                onClick={executeDeletePayment}
+                disabled={Boolean(deletingPaymentId)}
+                className="flex-1 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-black shadow-md shadow-rose-600/30 transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>{deletingPaymentId ? 'جاري الحذف...' : 'تأكيد الحذف 🗑️'}</span>
               </button>
             </div>
           </div>

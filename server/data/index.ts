@@ -1,5 +1,9 @@
 import { db } from '../db';
-import { saveCollectionToFirestore } from '../firestoreStorage';
+import {
+  syncTraineeDeltaToFirestore,
+  syncPaymentDeltaToFirestore,
+  syncPointsDeltaToFirestore
+} from '../firestoreStorage';
 import {
   Trainee,
   Branch,
@@ -31,7 +35,9 @@ function createRepo<T extends { id: string }>(key: string) {
   return {
     async getAll(forceFresh = false): Promise<T[]> {
       if (forceFresh) {
-        db.ensureHydrated(true).catch(() => {});
+        await db.ensureHydrated(true).catch(() => {});
+      } else if (!db.isHydrated()) {
+        await db.ensureHydrated(false).catch(() => {});
       }
       const memData = db.getData() as any;
       if (!memData || !Array.isArray(memData[key])) {
@@ -121,10 +127,21 @@ function createRepo<T extends { id: string }>(key: string) {
         if (key === 'trainees' && Array.isArray(memData.trainees)) {
           memData.trainees = db.deduplicateTrainees(memData.trainees);
         }
-        // Immediate local persistence to disk and permanent trainees vault
-        db.saveImmediate();
-        // Background non-blocking delta sync of ONLY this collection to Firestore
-        saveCollectionToFirestore(key, memData[key]).catch(() => {});
+        // Immediate local persistence only
+        await db.saveLocalOnly();
+
+        // Sync compact deltas ONLY for the 3 cloud-enabled actions (new trainee, payment, points)
+        try {
+          if (key === 'trainees') {
+            await syncTraineeDeltaToFirestore(fullItem);
+          } else if (key === 'payments') {
+            await syncPaymentDeltaToFirestore(fullItem);
+          } else if (key === 'pointTransactions') {
+            await syncPointsDeltaToFirestore([], [fullItem]);
+          }
+        } catch (fsErr) {
+          console.warn(`[Repo ${key}] Firestore delta create sync notice:`, fsErr);
+        }
       }
 
       return fullItem as T;
@@ -142,10 +159,24 @@ function createRepo<T extends { id: string }>(key: string) {
         const idx = list.findIndex(i => i.id === docId);
         if (idx >= 0) list[idx] = updatedItem;
         else list.push(updatedItem);
-        // Immediate local persistence
-        db.saveImmediate();
-        // Background non-blocking delta sync to Firestore
-        saveCollectionToFirestore(key, memData[key]).catch(() => {});
+
+        await db.saveLocalOnly();
+
+        try {
+          if (key === 'trainees') {
+            // Only push point or key trainee updates via tiny delta
+            const onlyPointsKeys = Object.keys(updates || {}).every(k => ['totalPoints', 'points', 'updatedAt'].includes(k));
+            if (onlyPointsKeys) {
+              await syncPointsDeltaToFirestore([updatedItem], []);
+            } else {
+              await syncTraineeDeltaToFirestore(updatedItem);
+            }
+          } else if (key === 'payments') {
+            await syncPaymentDeltaToFirestore(updatedItem);
+          }
+        } catch (fsErr) {
+          console.warn(`[Repo ${key}] Firestore delta update sync notice:`, fsErr);
+        }
       }
 
       return updatedItem as T;
@@ -157,10 +188,16 @@ function createRepo<T extends { id: string }>(key: string) {
         const list = memData[key] as any[];
         const idx = list.findIndex(i => i.id === id);
         if (idx >= 0) list.splice(idx, 1);
-        // Immediate local persistence
-        db.saveImmediate();
-        // Background non-blocking delta sync to Firestore
-        saveCollectionToFirestore(key, memData[key]).catch(() => {});
+
+        await db.saveLocalOnly();
+
+        try {
+          if (key === 'payments') {
+            await syncPaymentDeltaToFirestore(undefined, id);
+          }
+        } catch (fsErr) {
+          console.warn(`[Repo ${key}] Firestore delta delete sync notice:`, fsErr);
+        }
       }
 
       return true;
@@ -207,8 +244,14 @@ export const ComputerLabRepo = createRepo<ComputerLab>('computerLabs');
 export const InteractiveSessionRepo = createRepo<InteractiveSession>('interactiveSessions');
 export const TraineeScreenshotRepo = createRepo<TraineeScreenshot>('traineeScreenshots');
 
+export const TraineeEvaluationRepo = createRepo<any>('traineeEvaluations');
+export const OwnerWithdrawalRepo = createRepo<any>('ownerWithdrawals');
+
 export const SettingRepo = {
   async get(): Promise<CenterSettings> {
+    if (!db.isHydrated()) {
+      await db.ensureHydrated(false).catch(() => {});
+    }
     return db.getData().settings || {} as CenterSettings;
   },
   async update(updates: Partial<CenterSettings>): Promise<CenterSettings> {
@@ -216,7 +259,7 @@ export const SettingRepo = {
     const finalSettings = { ...current, ...updates };
     const data = db.getData();
     data.settings = finalSettings;
-    db.save();
+    await db.saveLocalOnly();
     return finalSettings;
   }
 };

@@ -1,5 +1,6 @@
 import { getFirestoreQuotaMetrics } from './firestoreStorage.ts';
 import { db } from './db.ts';
+import { getAiQuotaMetrics } from './gemini.ts';
 
 let totalInvocations = 0;
 let lastResetDate = new Date().toISOString().split('T')[0];
@@ -64,6 +65,7 @@ export interface QuotaStatusResponse {
     resetCountdownMinutes: number;
     storageUsageNote: string;
   };
+  geminiAi: ReturnType<typeof getAiQuotaMetrics>;
   vercel: VercelApiUsageData;
   vercelTelemetry: {
     monthlyInvocationLimit: number;
@@ -311,6 +313,7 @@ export async function getSystemQuotaStatus(forceRefresh = false): Promise<QuotaS
       heapUsedMB: Math.round(mem.heapUsed / (1024 * 1024))
     },
     firestore: firestoreMetrics,
+    geminiAi: getAiQuotaMetrics(),
     vercel: vercelUsage,
     vercelTelemetry: {
       monthlyInvocationLimit: 100000,

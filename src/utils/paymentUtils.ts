@@ -418,11 +418,45 @@ export function formatYearMonthName(key?: string | null): string {
 }
 
 /**
+ * Formats a date string (ISO or YYYY-MM-DD) into an Arabic date with the full day name of the week.
+ * Example: "السبت، 3 أكتوبر 2026 (03/10/2026)"
+ */
+export function formatArabicDateWithDay(val?: string | null): string {
+  if (!val) return 'غير محدد';
+  try {
+    const cleanStr = String(val).trim().split('T')[0];
+    const match = cleanStr.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+    let dateObj = match
+      ? new Date(parseInt(match[1], 10), parseInt(match[2], 10) - 1, parseInt(match[3], 10))
+      : new Date(val);
+
+    if (isNaN(dateObj.getTime())) return String(val);
+
+    const dayNames = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
+    const monthNames = [
+      'يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو',
+      'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'
+    ];
+
+    const dayName = dayNames[dateObj.getDay()];
+    const day = dateObj.getDate();
+    const month = monthNames[dateObj.getMonth()];
+    const year = dateObj.getFullYear();
+    const dd = String(day).padStart(2, '0');
+    const mm = String(dateObj.getMonth() + 1).padStart(2, '0');
+
+    return `${dayName}، ${day} ${month} ${year} (${dd}/${mm}/${year})`;
+  } catch {
+    return String(val);
+  }
+}
+
+/**
  * Returns the effective start month key (e.g. "2026-09" or "2026-10") when a trainee started their subscription.
  */
 export function getTraineeStartMonthKey(trainee: any): string {
   if (!trainee) return '2026-09';
-  const raw = trainee.subscriptionStartDate || trainee.startBillingMonth || trainee.registrationDate || trainee.createdAt;
+  const raw = trainee.registrationDate || trainee.enrollmentDate || trainee.joinDate || trainee.subscriptionStartDate || trainee.startBillingMonth || trainee.createdAt;
   const parsed = parseYearMonthKey(raw);
   return parsed || '2026-09';
 }
@@ -437,5 +471,132 @@ export function isTraineeEnrolledInMonth(trainee: any, targetMonth: string): boo
   if (!targetKey) return true;
   const startKey = getTraineeStartMonthKey(trainee);
   return startKey <= targetKey;
+}
+
+/**
+ * Calculates exact debt, dues, and payment status for a trainee as of a given target month and reference date.
+ * Takes the trainee's enrollment date strictly into account:
+ * - If enrolled in 2026-10: they owe 0 for September. Their dues start in October.
+ * - If enrolled in 2026-09 (or earlier): their dues started in September. If unpaid, they owe September,
+ *   and during the October cycle (day >= 25 or in Oct), they also owe October.
+ */
+export function getTraineeAccurateDues(
+  trainee: any,
+  targetMonth: string = 'أكتوبر 2026',
+  referenceDate: Date = new Date()
+) {
+  if (!trainee || trainee.isExempt) {
+    return {
+      isExempt: Boolean(trainee?.isExempt),
+      isJoinedLater: false,
+      startMonthKey: '2026-09',
+      dueThisTargetMonth: 0,
+      totalDebt: 0,
+      unpaidMonths: [] as string[],
+      reasonLabel: trainee?.isExempt ? 'معفى رسمياً من الرسوم' : ''
+    };
+  }
+
+  // Suspended, dropped, or unassigned trainees have 0 dues and 0 expected revenue
+  const isSuspendedOrDropped = trainee.status === 'suspended' || trainee.status === 'dropped';
+  const isUnassigned = !trainee.groupId || trainee.groupId.trim() === '' || trainee.groupId === 'unassigned' || !trainee.courseId || trainee.courseId.trim() === '';
+  if (isSuspendedOrDropped || isUnassigned) {
+    return {
+      isExempt: false,
+      isJoinedLater: false,
+      startMonthKey: '2026-09',
+      dueThisTargetMonth: 0,
+      totalDebt: 0,
+      unpaidMonths: [] as string[],
+      reasonLabel: isSuspendedOrDropped ? 'متوقف أو منسحب (بدون مستحقات)' : 'غير مسكن بمجموعة (بدون مستحقات)'
+    };
+  }
+
+  const startMonthKey = getTraineeStartMonthKey(trainee);
+  const targetMonthKey = parseYearMonthKey(targetMonth) || '2026-10';
+  const net = Math.max(0, (Number(trainee.feeAmount) || 200) - (Number(trainee.discountAmount) || 0));
+  const paidMonths = Array.isArray(trainee.paidMonths) ? trainee.paidMonths : [];
+  const hasPaidSept = paidMonths.some((m: string) => m && (m.includes('سبتمبر') || m.includes('شهر 9')));
+  const hasPaidOct = paidMonths.some((m: string) => m && (m.includes('أكتوبر') || m.includes('شهر 10')));
+
+  // If viewing September:
+  if (targetMonthKey === '2026-09') {
+    if (startMonthKey > '2026-09') {
+      return {
+        isExempt: false,
+        isJoinedLater: true,
+        startMonthKey,
+        dueThisTargetMonth: 0,
+        totalDebt: 0,
+        unpaidMonths: [] as string[],
+        reasonLabel: `التحق لاحقاً في (${formatYearMonthName(startMonthKey)}) - غير ملزم بسبتمبر`
+      };
+    }
+    const unpaid = !hasPaidSept;
+    return {
+      isExempt: false,
+      isJoinedLater: false,
+      startMonthKey,
+      dueThisTargetMonth: net,
+      totalDebt: unpaid ? net : 0,
+      unpaidMonths: unpaid ? ['سبتمبر 2026'] : [],
+      reasonLabel: unpaid ? `مستحق سداد سبتمبر (${net} ج.م) ⏳` : 'تم سداد سبتمبر بالكامل ✅'
+    };
+  }
+
+  // If viewing October:
+  if (startMonthKey > targetMonthKey) {
+    return {
+      isExempt: false,
+      isJoinedLater: true,
+      startMonthKey,
+      dueThisTargetMonth: 0,
+      totalDebt: 0,
+      unpaidMonths: [] as string[],
+      reasonLabel: `التحق لاحقاً في (${formatYearMonthName(startMonthKey)}) - غير ملزم بـ ${targetMonth}`
+    };
+  }
+
+  // Trainee enrolled in October (startMonthKey === '2026-10'):
+  // THEY NEVER OWE SEPTEMBER!
+  if (startMonthKey === '2026-10') {
+    const unpaid = !hasPaidOct;
+    return {
+      isExempt: false,
+      isJoinedLater: false,
+      startMonthKey,
+      dueThisTargetMonth: net,
+      totalDebt: unpaid ? net : 0,
+      unpaidMonths: unpaid ? ['أكتوبر 2026'] : [],
+      reasonLabel: unpaid ? `مستحق سداد شهر أكتوبر (${net} ج.م) ⏳` : 'تم سداد شهر أكتوبر بالكامل ✅'
+    };
+  }
+
+  // Trainee enrolled in September or earlier (startMonthKey <= '2026-09'):
+  const unpaidMonths: string[] = [];
+  if (!hasPaidSept) unpaidMonths.push('سبتمبر 2026');
+  if (!hasPaidOct) unpaidMonths.push('أكتوبر 2026');
+
+  const totalDebt = unpaidMonths.length * net;
+  let reasonLabel = '';
+  if (unpaidMonths.length === 0) {
+    reasonLabel = 'تم سداد سبتمبر وأكتوبر بالكامل ✅';
+  } else if (unpaidMonths.length === 1 && unpaidMonths[0] === 'أكتوبر 2026') {
+    reasonLabel = `مستحق سداد شهر أكتوبر (${net} ج.م) ⏳`;
+  } else if (unpaidMonths.length === 1 && unpaidMonths[0] === 'سبتمبر 2026') {
+    reasonLabel = `مستحق سداد متأخرات سبتمبر (${net} ج.م) ⏳`;
+  } else {
+    reasonLabel = `مستحق سداد متأخرات سبتمبر وأكتوبر (${totalDebt} ج.م) ⏳`;
+  }
+
+  return {
+    isExempt: false,
+    isJoinedLater: false,
+    startMonthKey,
+    dueThisTargetMonth: net,
+    totalDebt,
+    unpaidMonths,
+    reasonLabel
+  };
 }
 

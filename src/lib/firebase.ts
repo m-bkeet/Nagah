@@ -4,10 +4,16 @@ import {
   initializeFirestore, 
   persistentLocalCache, 
   persistentMultipleTabManager,
+  setLogLevel,
   Firestore
 } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 import firebaseConfig from '../../firebase-applet-config.json';
+
+// Silence verbose internal gRPC stream warning logs
+try {
+  setLogLevel('silent');
+} catch {}
 
 const rawConfig = (firebaseConfig as any) || {};
 
@@ -31,6 +37,8 @@ const config = {
   firestoreDatabaseId: import.meta.env.VITE_FIREBASE_FIRESTORE_DATABASE_ID || rawConfig.firestoreDatabaseId || DEFAULT_FIREBASE_CONFIG.firestoreDatabaseId
 };
 
+const databaseId = config.firestoreDatabaseId || 'ai-studio-nagahms-44b6deb5-5b09-4e62-a58f-790b1ca94573';
+
 // Initialize App with fallback
 let app: any;
 try {
@@ -43,27 +51,17 @@ try {
   }
 }
 
-const dbId = config.firestoreDatabaseId;
-
-// Initialize Firestore with Multi-Tab Offline Cache and safe fallback
+// Initialize Firestore with Multi-Tab Offline Cache and exact database ID
 let db: Firestore;
 try {
-  if (dbId) {
-    db = initializeFirestore(app, {
-      localCache: persistentLocalCache({
-        tabManager: persistentMultipleTabManager()
-      })
-    }, dbId);
-  } else {
-    db = initializeFirestore(app, {
-      localCache: persistentLocalCache({
-        tabManager: persistentMultipleTabManager()
-      })
-    });
-  }
+  db = initializeFirestore(app, {
+    localCache: persistentLocalCache({
+      tabManager: persistentMultipleTabManager()
+    })
+  }, databaseId);
 } catch (e) {
   try {
-    db = dbId ? getFirestore(app, dbId) : getFirestore(app);
+    db = getFirestore(app, databaseId);
   } catch (err2) {
     db = getFirestore(app);
   }

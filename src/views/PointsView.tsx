@@ -38,7 +38,8 @@ export const PointsView: React.FC = () => {
     showToast, 
     refreshKey,
     trainees: ctxTrainees,
-    groups: ctxGroups
+    groups: ctxGroups,
+    addPointsOptimistic
   } = useCenter();
   const [trainees, setTrainees] = useState<Trainee[]>(() => {
     const list = ctxTrainees || [];
@@ -104,13 +105,8 @@ export const PointsView: React.FC = () => {
 
   const handleAddPoints = async (traineeId: string, points: number, reason: string) => {
     try {
-      const res = await api.addPoints({
-        traineeId,
-        points,
-        reason
-      });
-      if (res.success) {
-        showToast(`تم تحديث النقاط بنجاح (${points > 0 ? '+' : ''}${points} نقطة)`, 'success');
+      const ok = await addPointsOptimistic([traineeId], points, reason);
+      if (ok) {
         loadData();
       }
     } catch (err: any) {

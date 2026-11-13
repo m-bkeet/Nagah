@@ -585,6 +585,10 @@ var import_path = __toESM(require("path"), 1);
 var import_crypto = __toESM(require("crypto"), 1);
 var import_app = require("firebase/app");
 var import_firestore = require("firebase/firestore");
+try {
+  (0, import_firestore.setLogLevel)("silent");
+} catch {
+}
 var firebaseConfig = null;
 try {
   const cfgPath = import_path.default.join(process.cwd(), "firebase-applet-config.json");
@@ -600,19 +604,19 @@ if (!firebaseConfig) {
     appId: "1:303545128372:web:78e42daefeec4d43df0ee1",
     apiKey: "AIzaSyBHYfOMGYzfI0YVOgjWc9O-qdgxENy0oD4",
     authDomain: "booming-list-379600.firebaseapp.com",
-    firestoreDatabaseId: "ai-studio-nagahms-44b6deb5-5b09-4e62-a58f-790b1ca94573",
     storageBucket: "booming-list-379600.firebasestorage.app",
-    messagingSenderId: "303545128372"
+    messagingSenderId: "303545128372",
+    firestoreDatabaseId: "ai-studio-nagahms-44b6deb5-5b09-4e62-a58f-790b1ca94573"
   };
 }
-var dbId = firebaseConfig?.firestoreDatabaseId || "ai-studio-nagahms-44b6deb5-5b09-4e62-a58f-790b1ca94573";
+var FIRESTORE_DATABASE_ID = process.env.VITE_FIREBASE_FIRESTORE_DATABASE_ID || firebaseConfig?.firestoreDatabaseId || "ai-studio-nagahms-44b6deb5-5b09-4e62-a58f-790b1ca94573";
 var firestoreInstance = null;
 function getDb() {
   if (firestoreInstance) return firestoreInstance;
   if (!firebaseConfig) return null;
   try {
     const app2 = (0, import_app.getApps)().length === 0 ? (0, import_app.initializeApp)(firebaseConfig) : (0, import_app.getApp)();
-    firestoreInstance = (0, import_firestore.getFirestore)(app2, dbId);
+    firestoreInstance = (0, import_firestore.getFirestore)(app2, FIRESTORE_DATABASE_ID);
     return firestoreInstance;
   } catch (err) {
     console.warn("[FirestoreStorage] Failed to initialize Firestore client:", err);
@@ -622,6 +626,7 @@ function getDb() {
 var collectionHashes = /* @__PURE__ */ new Map();
 var isQuotaExceeded = false;
 var quotaExceededNoticeTime = 0;
+var QUOTA_BACKOFF_MS = 60 * 60 * 1e3;
 var readsCountToday = 0;
 var writesCountToday = 0;
 var deletesCountToday = 0;
@@ -644,12 +649,20 @@ function checkDateRollover() {
   }
 }
 function handleQuotaExceeded(err) {
+  if (!err) return false;
   const errMsg = err?.message || String(err);
-  if (errMsg.includes("RESOURCE_EXHAUSTED") || errMsg.includes("Quota limit exceeded") || err?.code === 8 || err?.code === "resource-exhausted") {
+  const code = err?.code;
+  const isExhausted = errMsg.includes("RESOURCE_EXHAUSTED") || errMsg.includes("Quota limit exceeded") || code === 8 || code === "resource-exhausted";
+  const isNetworkOrNotFound = code === 5 || code === "not-found" || errMsg.includes("NOT_FOUND") || errMsg.includes("Could not reach Cloud Firestore backend") || errMsg.includes("client is offline") || errMsg.includes("unavailable") || errMsg.includes("FIRESTORE_TIMEOUT");
+  if (isExhausted || isNetworkOrNotFound) {
     if (!isQuotaExceeded) {
       isQuotaExceeded = true;
       quotaExceededNoticeTime = Date.now();
-      console.warn("[FirestoreStorage] Cloud Firestore daily quota reached. Disabling network stream for remainder of day. Local disk & vault are 100% active and durable.");
+      if (isExhausted) {
+        console.warn("[FirestoreStorage] Cloud Firestore daily quota reached. Disabling network stream for remainder of day. Local disk & vault are 100% active and durable.");
+      } else {
+        console.warn("[FirestoreStorage] Cloud Firestore network unavailable or offline. Disabling network stream to avoid retries. Local disk & vault are 100% active.");
+      }
       const db2 = getDb();
       if (db2) {
         (0, import_firestore.disableNetwork)(db2).catch(() => {
@@ -5853,8 +5866,17 @@ function createRepo(key) {
           memData.trainees = db.deduplicateTrainees(memData.trainees);
         }
         db.saveImmediate();
-        saveCollectionToFirestore(key, memData[key]).catch(() => {
-        });
+        const isServerless4 = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.VERCEL_ENV);
+        if (isServerless4) {
+          try {
+            await saveCollectionToFirestore(key, memData[key], true);
+          } catch (fsErr) {
+            console.warn(`[Repo ${key}] Serverless Firestore sync error:`, fsErr);
+          }
+        } else {
+          saveCollectionToFirestore(key, memData[key], true).catch(() => {
+          });
+        }
       }
       return fullItem;
     },
@@ -5870,8 +5892,17 @@ function createRepo(key) {
         if (idx >= 0) list[idx] = updatedItem;
         else list.push(updatedItem);
         db.saveImmediate();
-        saveCollectionToFirestore(key, memData[key]).catch(() => {
-        });
+        const isServerless4 = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.VERCEL_ENV);
+        if (isServerless4) {
+          try {
+            await saveCollectionToFirestore(key, memData[key], true);
+          } catch (fsErr) {
+            console.warn(`[Repo ${key}] Serverless Firestore sync error:`, fsErr);
+          }
+        } else {
+          saveCollectionToFirestore(key, memData[key], true).catch(() => {
+          });
+        }
       }
       return updatedItem;
     },
@@ -5882,8 +5913,17 @@ function createRepo(key) {
         const idx = list.findIndex((i) => i.id === id);
         if (idx >= 0) list.splice(idx, 1);
         db.saveImmediate();
-        saveCollectionToFirestore(key, memData[key]).catch(() => {
-        });
+        const isServerless4 = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.VERCEL_ENV);
+        if (isServerless4) {
+          try {
+            await saveCollectionToFirestore(key, memData[key], true);
+          } catch (fsErr) {
+            console.warn(`[Repo ${key}] Serverless Firestore sync error:`, fsErr);
+          }
+        } else {
+          saveCollectionToFirestore(key, memData[key], true).catch(() => {
+          });
+        }
       }
       return true;
     },
@@ -6526,12 +6566,12 @@ function classifyStudents(sourceStudents, existingDbTrainees) {
     if (idKey) seenSourceIds.add(idKey);
     const matchedDbRecord = existingDbTrainees.find((dbItem) => {
       const dbCode = String(dbItem.code || dbItem.studentCode || "").trim().toUpperCase();
-      const dbId2 = String(dbItem.id || dbItem.legacy_student_id || "").trim();
+      const dbId = String(dbItem.id || dbItem.legacy_student_id || "").trim();
       const dbNationalId = String(dbItem.nationalId || "").trim();
       const dbName = String(dbItem.fullName || dbItem.name || "").trim();
       const dbPhone = String(dbItem.phone || "").trim();
       if (codeKey && dbCode && codeKey === dbCode) return true;
-      if (idKey && dbId2 && idKey === dbId2) return true;
+      if (idKey && dbId && idKey === dbId) return true;
       if (rawNationalId && dbNationalId && rawNationalId === dbNationalId) return true;
       if (rawName && dbName && rawName.toLowerCase() === dbName.toLowerCase() && (rawPhone === dbPhone || rawPhone === dbItem.parentPhone)) return true;
       return false;
@@ -8933,6 +8973,79 @@ var MOE_CURRICULA = {
         ]
       }
     }
+  },
+  // -------------------------------------------------------------
+  // SECONDARY 2 (GRADE 11) - الصف الثاني الثانوي (رمز الكود H أو S2)
+  // تكنولوجيا المعلومات والاتصالات، قواعد البيانات العلائقية، وتطوير تطبيقات الويب الكاملة
+  // -------------------------------------------------------------
+  sec2: {
+    gradeKey: "sec2",
+    gradeCodePrefix: "H",
+    gradeNameAr: "\u0627\u0644\u0635\u0641 \u0627\u0644\u062B\u0627\u0646\u064A \u0627\u0644\u062B\u0627\u0646\u0648\u064A",
+    gradeNameEn: "2nd Secondary (Grade 11)",
+    stageAr: "\u0627\u0644\u0645\u0631\u062D\u0644\u0629 \u0627\u0644\u062B\u0627\u0646\u0648\u064A\u0629",
+    subjectNameAr: "\u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 \u0627\u0644\u0645\u0639\u0644\u0648\u0645\u0627\u062A \u0648\u0627\u0644\u0627\u062A\u0635\u0627\u0644\u0627\u062A \u0648\u062A\u0637\u0628\u064A\u0642\u0627\u062A \u0627\u0644\u0648\u064A\u0628 \u0648\u0642\u0648\u0627\u0639\u062F \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A",
+    subjectNameEn: "Advanced Web Development, Database Systems & Networking (Sec 2)",
+    terms: {
+      term1: {
+        units: [
+          {
+            unitNumber: 1,
+            unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u0623\u0648\u0644\u0649: \u062A\u0635\u0645\u064A\u0645 \u0648\u0625\u062F\u0627\u0631\u0629 \u0642\u0648\u0627\u0639\u062F \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0644\u0639\u0644\u0627\u0626\u0642\u064A\u0629 (Relational Databases & SQL)",
+            unitTitleEn: "Unit 1: Relational Databases & SQL Fundamentals",
+            term: 1,
+            lessons: [
+              { id: "s2_t1_u1_l1", lessonNumber: 1, unitNumber: 1, term: 1, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u0623\u0648\u0644\u0649", unitTitleEn: "Unit 1", titleAr: "\u0627\u0644\u062F\u0631\u0633 1: \u0645\u0642\u062F\u0645\u0629 \u0625\u0644\u0649 \u0642\u0648\u0627\u0639\u062F \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0644\u0639\u0644\u0627\u0626\u0642\u064A\u0629 \u0648\u0645\u0641\u0627\u0647\u064A\u0645 \u0627\u0644\u062C\u062F\u0627\u0648\u0644 \u0648\u0627\u0644\u0639\u0644\u0627\u0642\u0627\u062A (RDBMS)", titleEn: "Lesson 1: Relational Database Architecture & ER Diagrams" },
+              { id: "s2_t1_u1_l2", lessonNumber: 2, unitNumber: 1, term: 1, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u0623\u0648\u0644\u0649", unitTitleEn: "Unit 1", titleAr: "\u0627\u0644\u062F\u0631\u0633 2: \u062A\u0635\u0645\u064A\u0645 \u0627\u0644\u062C\u062F\u0627\u0648\u0644 \u0648\u062A\u062D\u062F\u064A\u062F \u0627\u0644\u0645\u0641\u0627\u062A\u064A\u062D \u0627\u0644\u0623\u0633\u0627\u0633\u064A\u0629 \u0648\u0627\u0644\u0623\u062C\u0646\u0628\u064A\u0629 (Primary & Foreign Keys)", titleEn: "Lesson 2: Table Structures & Key Constraints" },
+              { id: "s2_t1_u1_l3", lessonNumber: 3, unitNumber: 1, term: 1, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u0623\u0648\u0644\u0649", unitTitleEn: "Unit 1", titleAr: "\u0627\u0644\u062F\u0631\u0633 3: \u0644\u063A\u0629 \u0627\u0644\u0627\u0633\u062A\u0639\u0644\u0627\u0645\u0627\u062A \u0627\u0644\u0628\u0646\u064A\u0648\u064A\u0629 \u0648\u062A\u0637\u0628\u064A\u0642 \u0623\u0648\u0627\u0645\u0631 \u0627\u0644\u0627\u0633\u062A\u0639\u0644\u0627\u0645 (SQL SELECT, WHERE, ORDER BY)", titleEn: "Lesson 3: SQL Queries & Data Retrieval" },
+              { id: "s2_t1_u1_l4", lessonNumber: 4, unitNumber: 1, term: 1, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u0623\u0648\u0644\u0649", unitTitleEn: "Unit 1", titleAr: "\u0627\u0644\u062F\u0631\u0633 4: \u0623\u0648\u0627\u0645\u0631 \u0645\u0639\u0627\u0644\u062C\u0629 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A \u0648\u062A\u062D\u062F\u064A\u062B \u0648\u062D\u0630\u0641 \u0627\u0644\u0633\u062C\u0644\u0627\u062A (INSERT, UPDATE, DELETE)", titleEn: "Lesson 4: Data Manipulation Statements (DML)" },
+              { id: "s2_t1_u1_l5", lessonNumber: 5, unitNumber: 1, term: 1, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u0623\u0648\u0644\u0649", unitTitleEn: "Unit 1", titleAr: "\u0627\u0644\u062F\u0631\u0633 5: \u0631\u0628\u0637 \u0627\u0644\u062C\u062F\u0627\u0648\u0644 \u0648\u0627\u0644\u0627\u0633\u062A\u0639\u0644\u0627\u0645\u0627\u062A \u0627\u0644\u0645\u062C\u0645\u0639\u0629 \u0648\u0627\u0644\u0648\u0638\u0627\u0626\u0641 \u0627\u0644\u0625\u062D\u0635\u0627\u0626\u064A\u0629 (JOIN, GROUP BY, COUNT)", titleEn: "Lesson 5: Table Joins & Aggregations" },
+              { id: "s2_t1_u1_l6", lessonNumber: 6, unitNumber: 1, term: 1, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u0623\u0648\u0644\u0649", unitTitleEn: "Unit 1", titleAr: "\u0627\u0644\u062F\u0631\u0633 6: \u0648\u0631\u0634\u0629 \u0639\u0645\u0644 \u0645\u0639\u0645\u0644\u064A\u0629: \u0625\u0646\u0634\u0627\u0621 \u0642\u0627\u0639\u062F\u0629 \u0628\u064A\u0627\u0646\u0627\u062A \u0645\u062A\u0643\u0627\u0645\u0644\u0629 \u0644\u0645\u0631\u0643\u0632 \u062A\u062F\u0631\u064A\u0628 \u0648\u0627\u062E\u062A\u0628\u0627\u0631 \u0627\u0644\u0623\u062F\u0627\u0621", titleEn: "Lesson 6: Hands-on Database Design Lab Project" }
+            ]
+          },
+          {
+            unitNumber: 2,
+            unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u062B\u0627\u0646\u064A\u0629: \u062A\u0637\u0648\u064A\u0631 \u062A\u0637\u0628\u064A\u0642\u0627\u062A \u0627\u0644\u0648\u064A\u0628 \u0627\u0644\u062F\u064A\u0646\u0627\u0645\u064A\u0643\u064A\u0629 (Full-Stack Web Development)",
+            unitTitleEn: "Unit 2: Dynamic Web Application Engineering",
+            term: 1,
+            lessons: [
+              { id: "s2_t1_u2_l1", lessonNumber: 1, unitNumber: 2, term: 1, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u062B\u0627\u0646\u064A\u0629", unitTitleEn: "Unit 2", titleAr: "\u0627\u0644\u062F\u0631\u0633 1: \u0645\u0639\u0645\u0627\u0631\u064A\u0629 \u0627\u0644\u0639\u0645\u064A\u0644 \u0648\u0627\u0644\u062E\u0627\u062F\u0645 \u0648\u0628\u0631\u0648\u062A\u0648\u0643\u0648\u0644 HTTP / HTTPS (Client-Server Architecture)", titleEn: "Lesson 1: Client-Server Architecture & HTTP Methods" },
+              { id: "s2_t1_u2_l2", lessonNumber: 2, unitNumber: 2, term: 1, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u062B\u0627\u0646\u064A\u0629", unitTitleEn: "Unit 2", titleAr: "\u0627\u0644\u062F\u0631\u0633 2: \u062A\u0635\u0645\u064A\u0645 \u0627\u0644\u0646\u0645\u0627\u0630\u062C \u0627\u0644\u062A\u0641\u0627\u0639\u0644\u064A\u0629 \u0648\u0627\u0644\u062A\u062D\u0642\u0642 \u0645\u0646 \u0635\u062D\u0629 \u0627\u0644\u0645\u062F\u062E\u0644\u0627\u062A (Form Validation)", titleEn: "Lesson 2: Interactive Forms & Client-Side Validation" },
+              { id: "s2_t1_u2_l3", lessonNumber: 3, unitNumber: 2, term: 1, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u062B\u0627\u0646\u064A\u0629", unitTitleEn: "Unit 2", titleAr: "\u0627\u0644\u062F\u0631\u0633 3: \u0628\u0631\u0645\u062C\u0629 \u0627\u0644\u062E\u0627\u062F\u0645 \u0648\u0631\u0628\u0637 \u0627\u0644\u0646\u0645\u0627\u0630\u062C \u0628\u0642\u0648\u0627\u0639\u062F \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A (Backend API Integration)", titleEn: "Lesson 3: Server Scripting & Database Binding" },
+              { id: "s2_t1_u2_l4", lessonNumber: 4, unitNumber: 2, term: 1, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u062B\u0627\u0646\u064A\u0629", unitTitleEn: "Unit 2", titleAr: "\u0627\u0644\u062F\u0631\u0633 4: \u0645\u0635\u0627\u062F\u0642\u0629 \u0627\u0644\u0645\u0633\u062A\u062E\u062F\u0645\u064A\u0646 \u0648\u0627\u0644\u062C\u0644\u0633\u0627\u062A \u0648\u0625\u062F\u0627\u0631\u0629 \u0627\u0644\u0623\u0645\u0627\u0646 (User Sessions & Authentication)", titleEn: "Lesson 4: User Authentication & Session Security" },
+              { id: "s2_t1_u2_l5", lessonNumber: 5, unitNumber: 2, term: 1, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u062B\u0627\u0646\u064A\u0629", unitTitleEn: "Unit 2", titleAr: "\u0627\u0644\u062F\u0631\u0633 5: \u0627\u062E\u062A\u0628\u0627\u0631 \u0648\u0645\u0631\u0627\u062C\u0639\u0629 \u0623\u0645\u0627\u0646 \u062A\u0637\u0628\u064A\u0642\u0627\u062A \u0627\u0644\u0648\u064A\u0628 \u0636\u062F \u062B\u063A\u0631\u0627\u062A \u0627\u0644\u062D\u0642\u0646 (SQL Injection & XSS)", titleEn: "Lesson 5: Web Application Security & Hardening" },
+              { id: "s2_t1_u2_l6", lessonNumber: 6, unitNumber: 2, term: 1, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u062B\u0627\u0646\u064A\u0629", unitTitleEn: "Unit 2", titleAr: "\u0627\u0644\u062F\u0631\u0633 6: \u0627\u0644\u0645\u0634\u0631\u0648\u0639 \u0627\u0644\u0639\u0645\u0644\u064A \u0644\u0634\u0647\u0631 \u0623\u0643\u062A\u0648\u0628\u0631: \u0646\u0638\u0627\u0645 \u062A\u0633\u062C\u064A\u0644 \u0648\u0627\u062E\u062A\u0628\u0627\u0631 \u0625\u0644\u0643\u062A\u0631\u0648\u0646\u064A \u0622\u0645\u0646", titleEn: "Lesson 6: Secure Online Exam Portal Project" }
+            ]
+          }
+        ]
+      },
+      term2: {
+        units: [
+          {
+            unitNumber: 3,
+            unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u062B\u0627\u0644\u062B\u0629: \u0634\u0628\u0643\u0627\u062A \u0627\u0644\u0645\u0624\u0633\u0633\u0627\u062A \u0648\u0647\u0646\u062F\u0633\u0629 \u0627\u0644\u0623\u0646\u0638\u0645\u0629 \u0627\u0644\u0633\u062D\u0627\u0628\u064A\u0629 (Enterprise Networks & Cloud)",
+            unitTitleEn: "Unit 3: Enterprise Networking & Cloud Infrastructure",
+            term: 2,
+            lessons: [
+              { id: "s2_t2_u3_l1", lessonNumber: 1, unitNumber: 3, term: 2, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u062B\u0627\u0644\u062B\u0629", unitTitleEn: "Unit 3", titleAr: "\u0627\u0644\u062F\u0631\u0633 1: \u0646\u0645\u0627\u0630\u062C \u0627\u0644\u0634\u0628\u0643\u0627\u062A \u0648\u062A\u0648\u062C\u064A\u0647 \u062D\u0632\u0645 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A \u0648\u0639\u0646\u0627\u0648\u064A\u0646 IP \u0627\u0644\u0641\u0631\u0639\u064A\u0629 (Subnetting)", titleEn: "Lesson 1: IP Addressing, Subnetting & Network Topologies" },
+              { id: "s2_t2_u3_l2", lessonNumber: 2, unitNumber: 3, term: 2, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u062B\u0627\u0644\u062B\u0629", unitTitleEn: "Unit 3", titleAr: "\u0627\u0644\u062F\u0631\u0633 2: \u062C\u062F\u0631\u0627\u0646 \u0627\u0644\u062D\u0645\u0627\u064A\u0629 \u0648\u0628\u0631\u0648\u062A\u0648\u0643\u0648\u0644\u0627\u062A \u0627\u0644\u0623\u0645\u0627\u0646 \u0648\u0627\u0644\u0634\u0628\u0643\u0627\u062A \u0627\u0644\u0627\u0641\u062A\u0631\u0627\u0636\u064A\u0629 (Firewalls & VPNs)", titleEn: "Lesson 2: Enterprise Firewalls, IDS & VPN Tech" },
+              { id: "s2_t2_u3_l3", lessonNumber: 3, unitNumber: 3, term: 2, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u062B\u0627\u0644\u062B\u0629", unitTitleEn: "Unit 3", titleAr: "\u0627\u0644\u062F\u0631\u0633 3: \u062E\u062F\u0645\u0627\u062A \u0627\u0644\u062A\u062E\u0632\u064A\u0646 \u0648\u0627\u0644\u0645\u0632\u0627\u0645\u0646\u0629 \u0627\u0644\u0633\u062D\u0627\u0628\u064A\u0629 \u0627\u0644\u0645\u0624\u062A\u0645\u062A\u0629 (Cloud DevOps & CI/CD)", titleEn: "Lesson 3: Cloud DevOps Pipelines & Automation" }
+            ]
+          },
+          {
+            unitNumber: 4,
+            unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u0631\u0627\u0628\u0639\u0629: \u0627\u0644\u0630\u0643\u0627\u0621 \u0627\u0644\u0627\u0635\u0637\u0646\u0627\u0639\u064A \u0648\u0625\u0646\u062A\u0631\u0646\u062A \u0627\u0644\u0623\u0634\u064A\u0627\u0621 \u0648\u0627\u0644\u0645\u0634\u0631\u0648\u0639 \u0627\u0644\u0646\u0647\u0627\u0626\u064A",
+            unitTitleEn: "Unit 4: AI, IoT & Graduation Capstone",
+            term: 2,
+            lessons: [
+              { id: "s2_t2_u4_l1", lessonNumber: 1, unitNumber: 4, term: 2, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u0631\u0627\u0628\u0639\u0629", unitTitleEn: "Unit 4", titleAr: "\u0627\u0644\u062F\u0631\u0633 1: \u0625\u0646\u062A\u0631\u0646\u062A \u0627\u0644\u0623\u0634\u064A\u0627\u0621 \u0648\u0627\u0644\u0623\u0646\u0638\u0645\u0629 \u0627\u0644\u0630\u0643\u064A\u0629 \u0648\u0627\u0644\u0645\u0633\u062A\u0634\u0639\u0631\u0627\u062A (IoT Architecture)", titleEn: "Lesson 1: IoT Sensors, Actuators & Smart Systems" },
+              { id: "s2_t2_u4_l2", lessonNumber: 2, unitNumber: 4, term: 2, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u0631\u0627\u0628\u0639\u0629", unitTitleEn: "Unit 4", titleAr: "\u0627\u0644\u062F\u0631\u0633 2: \u0646\u0645\u0627\u0630\u062C \u0627\u0644\u0630\u0643\u0627\u0621 \u0627\u0644\u0627\u0635\u0637\u0646\u0627\u0639\u064A \u0627\u0644\u0645\u062F\u0645\u062C\u0629 \u0648\u062A\u062D\u0644\u064A\u0644 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0644\u0636\u062E\u0645\u0629 (Big Data & AI)", titleEn: "Lesson 2: Big Data Analytics & Edge AI" },
+              { id: "s2_t2_u4_l3", lessonNumber: 3, unitNumber: 4, term: 2, unitTitleAr: "\u0627\u0644\u0648\u062D\u062F\u0629 \u0627\u0644\u0631\u0627\u0628\u0639\u0629", unitTitleEn: "Unit 4", titleAr: "\u0627\u0644\u062F\u0631\u0633 3: \u0627\u0644\u0645\u0634\u0631\u0648\u0639 \u0627\u0644\u062A\u0643\u0627\u0645\u0644\u064A \u0627\u0644\u0646\u0647\u0627\u0626\u064A: \u0645\u0646\u0635\u0629 \u0631\u0642\u0645\u064A\u0629 \u0633\u062D\u0627\u0628\u064A\u0629 \u0630\u0643\u064A\u0629 \u0645\u062A\u0635\u0644\u0629 \u0628\u0642\u0627\u0639\u062F\u0629 \u0628\u064A\u0627\u0646\u0627\u062A", titleEn: "Lesson 3: Comprehensive Enterprise Capstone Project" }
+            ]
+          }
+        ]
+      }
+    }
   }
 };
 function detectCurriculum(student) {
@@ -8950,6 +9063,9 @@ function detectCurriculum(student) {
   }
   if (code.startsWith("F")) {
     return MOE_CURRICULA.prep3;
+  }
+  if (code.startsWith("H") || code.startsWith("S2") || code.startsWith("S-2")) {
+    return MOE_CURRICULA.sec2;
   }
   if (code.startsWith("G") || code.startsWith("S1") || code.startsWith("S-1")) {
     return MOE_CURRICULA.sec1;
@@ -8974,6 +9090,9 @@ function detectCurriculum(student) {
   }
   if (gradeText.includes("\u0627\u0648\u0644 \u062B\u0627\u0646\u0648\u064A") || gradeText.includes("\u0627\u0648\u0644\u064A \u062B\u0627\u0646\u0648\u064A") || gradeText.includes("\u0627\u0644\u0627\u0648\u0644 \u0627\u0644\u062B\u0627\u0646\u0648\u064A") || gradeText.includes("1 \u062B\u0627\u0646\u0648\u064A") || gradeText.includes("sec 1") || gradeText.includes("sec1") || gradeText.includes("grade 10") || gradeText.includes("g10")) {
     return MOE_CURRICULA.sec1;
+  }
+  if (gradeText.includes("\u062B\u0627\u0646\u064A \u062B\u0627\u0646\u0648\u064A") || gradeText.includes("\u062A\u0627\u0646\u064A\u0647 \u062B\u0627\u0646\u0648\u064A") || gradeText.includes("\u062A\u0627\u0646\u064A \u062B\u0627\u0646\u0648\u064A") || gradeText.includes("\u0627\u0644\u062B\u0627\u0646\u064A \u0627\u0644\u062B\u0627\u0646\u0648\u064A") || gradeText.includes("2 \u062B\u0627\u0646\u0648\u064A") || gradeText.includes("sec 2") || gradeText.includes("sec2") || gradeText.includes("ict-s2") || gradeText.includes("ict - s2") || gradeText.includes("grade 11") || gradeText.includes("g11")) {
+    return MOE_CURRICULA.sec2;
   }
   if (gradeText.includes("\u0631\u0627\u0628\u0639") || gradeText.includes("\u0627\u0644\u0631\u0627\u0628\u0639") || gradeText.includes("grade 4") || gradeText.includes("primary 4") || gradeText.includes("p4")) {
     return MOE_CURRICULA.grade4;
@@ -18156,8 +18275,21 @@ apiRouter.post("/points/rules", async (req, res) => {
 });
 apiRouter.get("/points/transactions", async (req, res) => {
   try {
-    const list = await PointTransactionRepo.getAll();
-    res.json(list.slice(0, 200));
+    const { limit, timeframe } = req.query;
+    let list = await PointTransactionRepo.getAll();
+    const tf = String(timeframe || "all").toLowerCase();
+    if (tf === "today") {
+      const today = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
+      list = list.filter((pt) => pt.createdAt && pt.createdAt.startsWith(today) || pt.date && pt.date.startsWith(today));
+    } else if (tf === "week") {
+      const weekStart = new Date(Date.now() - 7 * 24 * 60 * 60 * 1e3).getTime();
+      list = list.filter((pt) => new Date(pt.createdAt || pt.date || 0).getTime() >= weekStart);
+    } else if (tf === "month") {
+      const monthPrefix = (/* @__PURE__ */ new Date()).toISOString().slice(0, 7);
+      list = list.filter((pt) => pt.createdAt && pt.createdAt.startsWith(monthPrefix) || pt.date && pt.date.startsWith(monthPrefix));
+    }
+    const max = Number(limit) || 1e3;
+    res.json(list.slice(0, max));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -18314,12 +18446,89 @@ apiRouter.post("/points/add", async (req, res) => {
 });
 apiRouter.get("/points/leaderboard", async (req, res) => {
   try {
-    const { branchId, courseId, groupId, limit } = req.query;
+    const { branchId, courseId, groupId, limit, timeframe } = req.query;
     let list = await TraineeRepo.getAll();
     if (branchId && branchId !== "all") list = list.filter((t) => t.branchId === String(branchId));
     if (courseId && courseId !== "all") list = list.filter((t) => t.courseId === courseId);
     if (groupId && groupId !== "all") list = list.filter((t) => t.groupId === groupId);
-    const sorted = [...list].sort((a, b) => (b.totalPoints || 0) - (a.totalPoints || 0));
+    const tf = String(timeframe || "all_time").toLowerCase();
+    const allTransactions = db.getData().pointTransactions || [];
+    if (tf === "today") {
+      const todayStr = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
+      const todayMap = /* @__PURE__ */ new Map();
+      for (const pt of allTransactions) {
+        if (!pt || !pt.traineeId) continue;
+        const ptDate = (pt.createdAt || pt.date || "").split("T")[0];
+        if (ptDate === todayStr) {
+          const tid = String(pt.traineeId);
+          todayMap.set(tid, (todayMap.get(tid) || 0) + (Number(pt.points) || 0));
+        }
+      }
+      const mapped2 = list.map((t) => {
+        const periodPts = todayMap.get(t.id) || (t.code ? todayMap.get(t.code) : 0) || 0;
+        return {
+          ...t,
+          periodPoints: periodPts,
+          timeframe: "today"
+        };
+      });
+      const sorted2 = mapped2.sort((a, b) => (b.periodPoints || 0) - (a.periodPoints || 0));
+      const max2 = Number(limit) || 50;
+      return res.json(sorted2.slice(0, max2));
+    }
+    if (tf === "week") {
+      const now = /* @__PURE__ */ new Date();
+      const weekStart = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1e3);
+      const weekMap = /* @__PURE__ */ new Map();
+      for (const pt of allTransactions) {
+        if (!pt || !pt.traineeId) continue;
+        const ptTime = new Date(pt.createdAt || pt.date || 0).getTime();
+        if (ptTime >= weekStart.getTime()) {
+          const tid = String(pt.traineeId);
+          weekMap.set(tid, (weekMap.get(tid) || 0) + (Number(pt.points) || 0));
+        }
+      }
+      const mapped2 = list.map((t) => {
+        const periodPts = weekMap.get(t.id) || (t.code ? weekMap.get(t.code) : 0) || 0;
+        return {
+          ...t,
+          periodPoints: periodPts,
+          timeframe: "week"
+        };
+      });
+      const sorted2 = mapped2.sort((a, b) => (b.periodPoints || 0) - (a.periodPoints || 0));
+      const max2 = Number(limit) || 50;
+      return res.json(sorted2.slice(0, max2));
+    }
+    if (tf === "month") {
+      const monthPrefix = (/* @__PURE__ */ new Date()).toISOString().slice(0, 7);
+      const monthMap = /* @__PURE__ */ new Map();
+      for (const pt of allTransactions) {
+        if (!pt || !pt.traineeId) continue;
+        const ptStr = String(pt.createdAt || pt.date || "");
+        if (ptStr.startsWith(monthPrefix)) {
+          const tid = String(pt.traineeId);
+          monthMap.set(tid, (monthMap.get(tid) || 0) + (Number(pt.points) || 0));
+        }
+      }
+      const mapped2 = list.map((t) => {
+        const periodPts = monthMap.get(t.id) || (t.code ? monthMap.get(t.code) : 0) || 0;
+        return {
+          ...t,
+          periodPoints: periodPts,
+          timeframe: "month"
+        };
+      });
+      const sorted2 = mapped2.sort((a, b) => (b.periodPoints || 0) - (a.periodPoints || 0));
+      const max2 = Number(limit) || 50;
+      return res.json(sorted2.slice(0, max2));
+    }
+    const mapped = list.map((t) => ({
+      ...t,
+      periodPoints: t.totalPoints || t.points || 0,
+      timeframe: "all_time"
+    }));
+    const sorted = [...mapped].sort((a, b) => (b.periodPoints || 0) - (a.periodPoints || 0));
     const max = Number(limit) || 50;
     res.json(sorted.slice(0, max));
   } catch (err) {

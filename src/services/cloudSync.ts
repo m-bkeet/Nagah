@@ -15,12 +15,10 @@ export class CloudSyncService {
   async syncTraineeToCloud(trainee: Trainee): Promise<void> {
     try {
       if (!trainee?.id) return;
-      quotaOptimizer.debouncedUpdateDoc('trainees', trainee.id, trainee);
       await request('/trainees', {
         method: 'POST',
         body: JSON.stringify(trainee)
       });
-      quotaOptimizer.updateAggregatedStat('totalTrainees', 1);
     } catch (error) {
       console.warn('[CloudSync] Trainee sync error:', error);
     }
@@ -30,7 +28,6 @@ export class CloudSyncService {
     try {
       if (!traineeId) return;
       await request(`/trainees/${traineeId}`, { method: 'DELETE' });
-      quotaOptimizer.updateAggregatedStat('totalTrainees', -1);
     } catch (error) {
       console.warn('[CloudSync] Failed to delete trainee:', error);
     }
@@ -92,7 +89,6 @@ export class CloudSyncService {
 
   async syncSettingsToCloud(settings: CenterSettings): Promise<void> {
     try {
-      quotaOptimizer.debouncedUpdateDoc('settings', 'center_settings', settings);
       await request('/settings', {
         method: 'POST',
         body: JSON.stringify(settings)

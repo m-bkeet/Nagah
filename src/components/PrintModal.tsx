@@ -11,6 +11,7 @@ import { audioService } from '../services/audioService';
 import confetti from 'canvas-confetti';
 import { getEffectiveCenterLogo, handleLogoError } from '../utils/centerLogo';
 import { getPublicBaseUrl } from '../utils/urlHelper';
+import { formatArabicDateWithDay } from '../utils/paymentUtils';
 
 const QRCodeImage: React.FC<{ value: string; size?: number; className?: string }> = ({ value, size = 64, className = '' }) => {
   const [dataUrl, setDataUrl] = useState<string>('');
@@ -232,8 +233,16 @@ export const PrintModal: React.FC = () => {
                   </div>
                 )}
                 <div className="flex justify-between items-center">
-                  <span className="text-slate-500 text-[10px] font-bold">تاريخ التسجيل:</span>
-                  <span className="font-mono text-[10px] text-slate-600">{trainee.registrationDate || '2026/2027'}</span>
+                  <span className="text-slate-500 text-[10px] font-bold">تاريخ الالتحاق والتسجيل باليوم:</span>
+                  <span className="text-[10px] font-black text-sky-800">
+                    {formatArabicDateWithDay(
+                      trainee.registrationDate ||
+                      trainee.enrollmentDate ||
+                      trainee.subscriptionStartDate ||
+                      (trainee.createdAt ? trainee.createdAt.split('T')[0] : '') ||
+                      '2026-09-01'
+                    )}
+                  </span>
                 </div>
               </div>
 

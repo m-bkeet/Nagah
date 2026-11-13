@@ -25,8 +25,8 @@ export interface UnitItem {
 }
 
 export interface GradeCurriculum {
-  gradeKey: 'grade4' | 'grade5' | 'grade6' | 'prep1' | 'prep2' | 'prep3' | 'sec1';
-  gradeCodePrefix: string; // 'A', 'B', 'C', 'D', 'E', 'F', 'G'
+  gradeKey: 'grade4' | 'grade5' | 'grade6' | 'prep1' | 'prep2' | 'prep3' | 'sec1' | 'sec2';
+  gradeCodePrefix: string; // 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'
   gradeNameAr: string;
   gradeNameEn: string;
   stageAr: string;
@@ -603,13 +603,87 @@ export const MOE_CURRICULA: Record<string, GradeCurriculum> = {
         ]
       }
     }
+  },
+
+  // -------------------------------------------------------------
+  // SECONDARY 2 (GRADE 11) - الصف الثاني الثانوي (رمز الكود H أو S2)
+  // تكنولوجيا المعلومات والاتصالات، قواعد البيانات العلائقية، وتطوير تطبيقات الويب الكاملة
+  // -------------------------------------------------------------
+  sec2: {
+    gradeKey: 'sec2',
+    gradeCodePrefix: 'H',
+    gradeNameAr: 'الصف الثاني الثانوي',
+    gradeNameEn: '2nd Secondary (Grade 11)',
+    stageAr: 'المرحلة الثانوية',
+    subjectNameAr: 'تكنولوجيا المعلومات والاتصالات وتطبيقات الويب وقواعد البيانات',
+    subjectNameEn: 'Advanced Web Development, Database Systems & Networking (Sec 2)',
+    terms: {
+      term1: {
+        units: [
+          {
+            unitNumber: 1,
+            unitTitleAr: 'الوحدة الأولى: تصميم وإدارة قواعد البيانات العلائقية (Relational Databases & SQL)',
+            unitTitleEn: 'Unit 1: Relational Databases & SQL Fundamentals',
+            term: 1,
+            lessons: [
+              { id: 's2_t1_u1_l1', lessonNumber: 1, unitNumber: 1, term: 1, unitTitleAr: 'الوحدة الأولى', unitTitleEn: 'Unit 1', titleAr: 'الدرس 1: مقدمة إلى قواعد البيانات العلائقية ومفاهيم الجداول والعلاقات (RDBMS)', titleEn: 'Lesson 1: Relational Database Architecture & ER Diagrams' },
+              { id: 's2_t1_u1_l2', lessonNumber: 2, unitNumber: 1, term: 1, unitTitleAr: 'الوحدة الأولى', unitTitleEn: 'Unit 1', titleAr: 'الدرس 2: تصميم الجداول وتحديد المفاتيح الأساسية والأجنبية (Primary & Foreign Keys)', titleEn: 'Lesson 2: Table Structures & Key Constraints' },
+              { id: 's2_t1_u1_l3', lessonNumber: 3, unitNumber: 1, term: 1, unitTitleAr: 'الوحدة الأولى', unitTitleEn: 'Unit 1', titleAr: 'الدرس 3: لغة الاستعلامات البنيوية وتطبيق أوامر الاستعلام (SQL SELECT, WHERE, ORDER BY)', titleEn: 'Lesson 3: SQL Queries & Data Retrieval' },
+              { id: 's2_t1_u1_l4', lessonNumber: 4, unitNumber: 1, term: 1, unitTitleAr: 'الوحدة الأولى', unitTitleEn: 'Unit 1', titleAr: 'الدرس 4: أوامر معالجة البيانات وتحديث وحذف السجلات (INSERT, UPDATE, DELETE)', titleEn: 'Lesson 4: Data Manipulation Statements (DML)' },
+              { id: 's2_t1_u1_l5', lessonNumber: 5, unitNumber: 1, term: 1, unitTitleAr: 'الوحدة الأولى', unitTitleEn: 'Unit 1', titleAr: 'الدرس 5: ربط الجداول والاستعلامات المجمعة والوظائف الإحصائية (JOIN, GROUP BY, COUNT)', titleEn: 'Lesson 5: Table Joins & Aggregations' },
+              { id: 's2_t1_u1_l6', lessonNumber: 6, unitNumber: 1, term: 1, unitTitleAr: 'الوحدة الأولى', unitTitleEn: 'Unit 1', titleAr: 'الدرس 6: ورشة عمل معملية: إنشاء قاعدة بيانات متكاملة لمركز تدريب واختبار الأداء', titleEn: 'Lesson 6: Hands-on Database Design Lab Project' }
+            ]
+          },
+          {
+            unitNumber: 2,
+            unitTitleAr: 'الوحدة الثانية: تطوير تطبيقات الويب الديناميكية (Full-Stack Web Development)',
+            unitTitleEn: 'Unit 2: Dynamic Web Application Engineering',
+            term: 1,
+            lessons: [
+              { id: 's2_t1_u2_l1', lessonNumber: 1, unitNumber: 2, term: 1, unitTitleAr: 'الوحدة الثانية', unitTitleEn: 'Unit 2', titleAr: 'الدرس 1: معمارية العميل والخادم وبروتوكول HTTP / HTTPS (Client-Server Architecture)', titleEn: 'Lesson 1: Client-Server Architecture & HTTP Methods' },
+              { id: 's2_t1_u2_l2', lessonNumber: 2, unitNumber: 2, term: 1, unitTitleAr: 'الوحدة الثانية', unitTitleEn: 'Unit 2', titleAr: 'الدرس 2: تصميم النماذج التفاعلية والتحقق من صحة المدخلات (Form Validation)', titleEn: 'Lesson 2: Interactive Forms & Client-Side Validation' },
+              { id: 's2_t1_u2_l3', lessonNumber: 3, unitNumber: 2, term: 1, unitTitleAr: 'الوحدة الثانية', unitTitleEn: 'Unit 2', titleAr: 'الدرس 3: برمجة الخادم وربط النماذج بقواعد البيانات (Backend API Integration)', titleEn: 'Lesson 3: Server Scripting & Database Binding' },
+              { id: 's2_t1_u2_l4', lessonNumber: 4, unitNumber: 2, term: 1, unitTitleAr: 'الوحدة الثانية', unitTitleEn: 'Unit 2', titleAr: 'الدرس 4: مصادقة المستخدمين والجلسات وإدارة الأمان (User Sessions & Authentication)', titleEn: 'Lesson 4: User Authentication & Session Security' },
+              { id: 's2_t1_u2_l5', lessonNumber: 5, unitNumber: 2, term: 1, unitTitleAr: 'الوحدة الثانية', unitTitleEn: 'Unit 2', titleAr: 'الدرس 5: اختبار ومراجعة أمان تطبيقات الويب ضد ثغرات الحقن (SQL Injection & XSS)', titleEn: 'Lesson 5: Web Application Security & Hardening' },
+              { id: 's2_t1_u2_l6', lessonNumber: 6, unitNumber: 2, term: 1, unitTitleAr: 'الوحدة الثانية', unitTitleEn: 'Unit 2', titleAr: 'الدرس 6: المشروع العملي لشهر أكتوبر: نظام تسجيل واختبار إلكتروني آمن', titleEn: 'Lesson 6: Secure Online Exam Portal Project' }
+            ]
+          }
+        ]
+      },
+      term2: {
+        units: [
+          {
+            unitNumber: 3,
+            unitTitleAr: 'الوحدة الثالثة: شبكات المؤسسات وهندسة الأنظمة السحابية (Enterprise Networks & Cloud)',
+            unitTitleEn: 'Unit 3: Enterprise Networking & Cloud Infrastructure',
+            term: 2,
+            lessons: [
+              { id: 's2_t2_u3_l1', lessonNumber: 1, unitNumber: 3, term: 2, unitTitleAr: 'الوحدة الثالثة', unitTitleEn: 'Unit 3', titleAr: 'الدرس 1: نماذج الشبكات وتوجيه حزم البيانات وعناوين IP الفرعية (Subnetting)', titleEn: 'Lesson 1: IP Addressing, Subnetting & Network Topologies' },
+              { id: 's2_t2_u3_l2', lessonNumber: 2, unitNumber: 3, term: 2, unitTitleAr: 'الوحدة الثالثة', unitTitleEn: 'Unit 3', titleAr: 'الدرس 2: جدران الحماية وبروتوكولات الأمان والشبكات الافتراضية (Firewalls & VPNs)', titleEn: 'Lesson 2: Enterprise Firewalls, IDS & VPN Tech' },
+              { id: 's2_t2_u3_l3', lessonNumber: 3, unitNumber: 3, term: 2, unitTitleAr: 'الوحدة الثالثة', unitTitleEn: 'Unit 3', titleAr: 'الدرس 3: خدمات التخزين والمزامنة السحابية المؤتمتة (Cloud DevOps & CI/CD)', titleEn: 'Lesson 3: Cloud DevOps Pipelines & Automation' }
+            ]
+          },
+          {
+            unitNumber: 4,
+            unitTitleAr: 'الوحدة الرابعة: الذكاء الاصطناعي وإنترنت الأشياء والمشروع النهائي',
+            unitTitleEn: 'Unit 4: AI, IoT & Graduation Capstone',
+            term: 2,
+            lessons: [
+              { id: 's2_t2_u4_l1', lessonNumber: 1, unitNumber: 4, term: 2, unitTitleAr: 'الوحدة الرابعة', unitTitleEn: 'Unit 4', titleAr: 'الدرس 1: إنترنت الأشياء والأنظمة الذكية والمستشعرات (IoT Architecture)', titleEn: 'Lesson 1: IoT Sensors, Actuators & Smart Systems' },
+              { id: 's2_t2_u4_l2', lessonNumber: 2, unitNumber: 4, term: 2, unitTitleAr: 'الوحدة الرابعة', unitTitleEn: 'Unit 4', titleAr: 'الدرس 2: نماذج الذكاء الاصطناعي المدمجة وتحليل البيانات الضخمة (Big Data & AI)', titleEn: 'Lesson 2: Big Data Analytics & Edge AI' },
+              { id: 's2_t2_u4_l3', lessonNumber: 3, unitNumber: 4, term: 2, unitTitleAr: 'الوحدة الرابعة', unitTitleEn: 'Unit 4', titleAr: 'الدرس 3: المشروع التكاملي النهائي: منصة رقمية سحابية ذكية متصلة بقاعدة بيانات', titleEn: 'Lesson 3: Comprehensive Enterprise Capstone Project' }
+            ]
+          }
+        ]
+      }
+    }
   }
 };
 
 /**
  * Intelligent Grade Detection Engine
  * Accurately determines student's grade and corresponding curriculum based on:
- * 1. Student Code prefix (A -> Grade 4, B -> Grade 5, C -> Grade 6, D -> Prep 1, E -> Prep 2, F -> Prep 3, G/S1 -> Sec 1)
+ * 1. Student Code prefix (A -> Grade 4, B -> Grade 5, C -> Grade 6, D -> Prep 1, E -> Prep 2, F -> Prep 3, G/S1 -> Sec 1, H/S2 -> Sec 2)
  * 2. Explicit grade or stage text (e.g. "الأول الإعدادي", "أولى إعدادي", "رابع", "خامس", "سادس", "ثانوي")
  * 3. Course name or group name
  */
@@ -643,6 +717,9 @@ export function detectCurriculum(student?: {
   }
   if (code.startsWith('F')) {
     return MOE_CURRICULA.prep3; // Prep 3 (الصف الثالث الإعدادي)
+  }
+  if (code.startsWith('H') || code.startsWith('S2') || code.startsWith('S-2')) {
+    return MOE_CURRICULA.sec2;  // Sec 2 (الصف الثاني الثانوي)
   }
   if (code.startsWith('G') || code.startsWith('S1') || code.startsWith('S-1')) {
     return MOE_CURRICULA.sec1;  // Sec 1 (الصف الأول الثانوي)
@@ -717,6 +794,22 @@ export function detectCurriculum(student?: {
     gradeText.includes('g10')
   ) {
     return MOE_CURRICULA.sec1;
+  }
+
+  if (
+    gradeText.includes('ثاني ثانوي') ||
+    gradeText.includes('تانيه ثانوي') ||
+    gradeText.includes('تاني ثانوي') ||
+    gradeText.includes('الثاني الثانوي') ||
+    gradeText.includes('2 ثانوي') ||
+    gradeText.includes('sec 2') ||
+    gradeText.includes('sec2') ||
+    gradeText.includes('ict-s2') ||
+    gradeText.includes('ict - s2') ||
+    gradeText.includes('grade 11') ||
+    gradeText.includes('g11')
+  ) {
+    return MOE_CURRICULA.sec2;
   }
 
   if (

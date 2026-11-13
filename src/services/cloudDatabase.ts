@@ -1,8 +1,6 @@
 import { Trainee, Trainer, Course, Group, Branch } from '../types';
 import { request } from './api';
 import { quotaOptimizer } from './firestoreQuotaOptimizer';
-import { doc, updateDoc, arrayUnion, collection, query, where, getDocs, limit } from 'firebase/firestore';
-import { db } from '../lib/firebase';
 
 export type Unsubscribe = () => void;
 
@@ -162,30 +160,22 @@ export const cloudDb = {
     });
   },
 
-  async syncFullCenterToCloud(data: {
+  async syncFullCenterToCloud(_data?: {
     trainees?: Trainee[];
     trainers?: Trainer[];
     courses?: Course[];
     groups?: Group[];
     branches?: Branch[];
   }): Promise<{ success: boolean; syncedCount: number }> {
-    // Perform batched sync for all collections
-    const ops: any[] = [];
-    if (data.trainees) {
-      data.trainees.forEach(t => ops.push({ type: 'set', collectionName: 'trainees', docId: t.id, data: t }));
+    try {
+      const res = await request<{ success: boolean; syncedCount?: number }>('/system/cloud-sync', {
+        method: 'POST'
+      });
+      return { success: !!res?.success, syncedCount: Number(res?.syncedCount || 0) };
+    } catch (err) {
+      console.warn('[CloudDb] syncFullCenterToCloud error:', err);
+      return { success: false, syncedCount: 0 };
     }
-    if (data.courses) {
-      data.courses.forEach(c => ops.push({ type: 'set', collectionName: 'courses', docId: c.id, data: c }));
-    }
-    if (data.groups) {
-      data.groups.forEach(g => ops.push({ type: 'set', collectionName: 'groups', docId: g.id, data: g }));
-    }
-    if (data.branches) {
-      data.branches.forEach(b => ops.push({ type: 'set', collectionName: 'branches', docId: b.id, data: b }));
-    }
-
-    const res = await quotaOptimizer.executeBatchOperations(ops);
-    return { success: res.success, syncedCount: res.count };
   },
 
   listenToCollection<T>(collectionName: string, callback: (items: T[]) => void): Unsubscribe {
@@ -252,7 +242,7 @@ export const cloudDb = {
     certificates: any[];
   }> {
     try {
-      // Rule 3: Single one-time fetch from API / backend
+      // Single one-time fetch from backend local store (0 Firestore reads)
       const details = await request<any>(`/trainees/${traineeId}`);
       if (details && details.trainee) {
         return {
@@ -264,30 +254,10 @@ export const cloudDb = {
         };
       }
 
-      // Fallback: Direct Firestore One-Time Queries with `where` & `getDocs` (NO onSnapshot)
-      const attendanceQuery = query(
-        collection(db, 'attendance'),
-        where('traineeId', '==', traineeId),
-        limit(100)
-      );
-      const examsQuery = query(
-        collection(db, 'examResults'),
-        where('traineeId', '==', traineeId),
-        limit(50)
-      );
-
-      const [attSnap, examSnap] = await Promise.all([
-        getDocs(attendanceQuery).catch(() => ({ docs: [] } as any)),
-        getDocs(examsQuery).catch(() => ({ docs: [] } as any))
-      ]);
-
-      const attendance = attSnap.docs.map((d: any) => ({ id: d.id, ...d.data() }));
-      const exams = examSnap.docs.map((d: any) => ({ id: d.id, ...d.data() }));
-
       return {
         trainee: null,
-        attendance,
-        exams,
+        attendance: [],
+        exams: [],
         homeworks: [],
         certificates: []
       };

@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 import os from 'os';
-import { saveFullDbToFirestore, loadFullDbFromFirestore, loadCollectionFromFirestore, saveCollectionToFirestore, getSyncMeta } from './firestoreStorage';
+import { saveFullDbToFirestore, loadFullDbFromFirestore, loadCollectionFromFirestore, saveCollectionToFirestore, loadLiveDeltasFromFirestore, getSyncMeta } from './firestoreStorage';
 import {
   User,
   Branch,
@@ -72,6 +72,17 @@ export interface DatabaseSchema {
   studentPosts?: any[];
   socialComments?: any[];
   portalMessages?: any[];
+  sessionGrades?: Array<{
+    id: string;
+    traineeId: string;
+    groupId: string;
+    date: string;
+    score: number;
+    maxScore: number;
+    note?: string;
+    updatedAt: string;
+    updatedBy?: string;
+  }>;
 }
 
 const isServerless = Boolean(
@@ -3754,6 +3765,7 @@ export function calculateTraineeFeeAndFinancials(t: any, coursesList: any[] = []
 class DatabaseManager {
   private data: DatabaseSchema;
   private saveTimeout: NodeJS.Timeout | null = null;
+  private hasLocalDbFile = false;
   private isFirestoreHydrated = false;
   private lastHydrationTime = 0;
   private lastHydrationAttemptTime = 0;
@@ -3880,20 +3892,31 @@ class DatabaseManager {
   constructor() {
     this.ensureDataDir();
     this.data = this.loadData();
-    // Trigger background hydration on initialization
-    this.hydrationPromise = this.ensureHydrated();
+    const savedSyncMeta = Number((this.data?.settings as any)?._lastRemoteSyncMetaTime || 0);
+    if (savedSyncMeta > 0) {
+      this.lastRemoteSyncMetaTime = savedSyncMeta;
+    }
+    if (this.hasLocalDbFile) {
+      // Local JSON on disk is immediately authoritative; only check tiny sync_meta / deltas lazily on demand
+      this.isFirestoreHydrated = true;
+    } else {
+      // Truly blank ephemeral container: hydrate once from Firestore
+      this.hydrationPromise = this.ensureHydrated();
+    }
+  }
+
+  public isHydrated(): boolean {
+    return this.isFirestoreHydrated;
   }
 
   public async ensureHydrated(force = false): Promise<void> {
     const now = Date.now();
-    // Protect recent local mutations against race conditions:
-    // If a local mutation happened within the last 45 seconds, the local server has newer data
-    // than Firestore which might still be processing the background write. Never overwrite!
-    if (now - this.lastLocalMutationTime < 45000) {
+    // Protect recent local mutations against immediate stale reads from background replication
+    if (!force && now - this.lastLocalMutationTime < 15000) {
       return;
     }
 
-    const CACHE_TTL_MS = 10000; // 10 seconds heartbeat
+    const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes heartbeat to protect read quota
     if (!force && this.isFirestoreHydrated && (now - this.lastHydrationTime < CACHE_TTL_MS)) {
       return;
     }
@@ -3905,11 +3928,77 @@ class DatabaseManager {
     this.hydrationPromise = (async () => {
       this.lastHydrationTime = Date.now();
       try {
-        // Fast sync: check sync_meta heartbeat first
+        // Fast sync: check 1-doc sync_meta heartbeat first
         const meta = await getSyncMeta();
         const remoteTime = meta?.updatedAt || 0;
 
+        if (this.hasLocalDbFile && (!remoteTime || remoteTime <= this.lastRemoteSyncMetaTime)) {
+          return;
+        }
+
         if (this.isFirestoreHydrated && remoteTime > 0 && remoteTime <= this.lastRemoteSyncMetaTime && !force) {
+          return;
+        }
+
+        // Fast delta-only hydration when local disk already has the DB or remote changed via compact sync_deltas
+        if (this.hasLocalDbFile || (this.isFirestoreHydrated && !force && meta?.lastCollection === 'sync_deltas')) {
+          const deltas = await loadLiveDeltasFromFirestore();
+          let deltaApplied = false;
+          if (Array.isArray(deltas.traineesDelta) && deltas.traineesDelta.length > 0 && Array.isArray(this.data.trainees)) {
+            const tMap = new Map(this.data.trainees.map((t: any) => [t.id, t]));
+            for (const dt of deltas.traineesDelta) {
+              if (dt && dt.id) {
+                const prev = tMap.get(dt.id);
+                const prevTime = new Date(prev?.updatedAt || prev?.createdAt || 0).getTime();
+                const dtTime = new Date(dt.updatedAt || dt.createdAt || 0).getTime();
+                if (!prev || dtTime >= prevTime) {
+                  tMap.set(dt.id, prev ? { ...prev, ...dt } : dt);
+                  deltaApplied = true;
+                }
+              }
+            }
+            this.data.trainees = this.deduplicateTrainees(Array.from(tMap.values()));
+          }
+          if (deltas.traineePointsOverrides && Object.keys(deltas.traineePointsOverrides).length > 0 && Array.isArray(this.data.trainees)) {
+            this.data.trainees = this.data.trainees.map((t: any) => {
+              const pDelta = deltas.traineePointsOverrides?.[t.id];
+              if (!pDelta) return t;
+              const remTime = new Date(pDelta.updatedAt || 0).getTime();
+              const locTime = new Date(t.updatedAt || 0).getTime();
+              if (remTime >= locTime) {
+                deltaApplied = true;
+                return { ...t, totalPoints: pDelta.totalPoints, points: pDelta.points, updatedAt: pDelta.updatedAt };
+              }
+              return t;
+            });
+          }
+          if (Array.isArray(deltas.ptDelta) && deltas.ptDelta.length > 0) {
+            const existingIds = new Set((this.data.pointTransactions || []).map((p: any) => p.id));
+            const freshPts = deltas.ptDelta.filter((p: any) => p && p.id && !existingIds.has(p.id));
+            if (freshPts.length > 0) {
+              this.data.pointTransactions = [...freshPts, ...(this.data.pointTransactions || [])];
+              deltaApplied = true;
+            }
+          }
+          if (deltas.paymentsDelta && (deltas.paymentsDelta.items.length > 0 || deltas.paymentsDelta.deletedIds.length > 0)) {
+            const deletedSet = new Set(deltas.paymentsDelta.deletedIds || []);
+            const nextPayments = (this.data.payments || []).filter((p: any) => !deletedSet.has(p.id));
+            const pMap = new Map(nextPayments.map((p: any) => [p.id, p]));
+            for (const dp of deltas.paymentsDelta.items) {
+              if (dp && dp.id && !deletedSet.has(dp.id)) {
+                pMap.set(dp.id, dp);
+              }
+            }
+            this.data.payments = Array.from(pMap.values());
+            deltaApplied = true;
+          }
+          this.lastRemoteSyncMetaTime = remoteTime || Date.now();
+          if (this.data.settings) {
+            (this.data.settings as any)._lastRemoteSyncMetaTime = this.lastRemoteSyncMetaTime;
+          }
+          if (deltaApplied) {
+            await this.saveLocalOnly().catch(() => {});
+          }
           return;
         }
 
@@ -3944,9 +4033,6 @@ class DatabaseManager {
                   }
                 }
                 merged.payments = combinedPayments;
-                if (combinedPayments.length > remoteList.length) {
-                  saveCollectionToFirestore('payments', combinedPayments).catch(() => {});
-                }
               } else if (key === 'trainees') {
                 const remoteList = Array.isArray(val) ? val : [];
                 const localList = Array.isArray(merged[key]) ? merged[key] : [];
@@ -3961,12 +4047,9 @@ class DatabaseManager {
                   const higherPaid = Math.max(Number(loc.paidAmount) || 0, Number(rem.paidAmount) || 0);
                   const higherPoints = Math.max(Number(loc.totalPoints) || 0, Number(rem.totalPoints) || 0);
                   const base = locUpdated >= remUpdated ? loc : rem;
-                  const cleanLocMonths = (loc.paidMonths || []).filter((m: string) => m && !/أكتوبر|نوفمبر|ديسمبر|يناير|10|١٠/i.test(m));
-                  const cleanRemMonths = (rem.paidMonths || []).filter((m: string) => m && !/أكتوبر|نوفمبر|ديسمبر|يناير|10|١٠/i.test(m));
-                  const mergedMonths = Array.from(new Set([...cleanLocMonths, ...cleanRemMonths]));
-                  if (mergedMonths.length === 0 && (higherPaid > 0 || (loc.paidMonths && loc.paidMonths.length > 0) || (rem.paidMonths && rem.paidMonths.length > 0))) {
-                    mergedMonths.push('سبتمبر 2026');
-                  }
+                  const locMonths = Array.isArray(loc.paidMonths) ? loc.paidMonths.filter(Boolean) : [];
+                  const remMonths = Array.isArray(rem.paidMonths) ? rem.paidMonths.filter(Boolean) : [];
+                  const mergedMonths = Array.from(new Set([...locMonths, ...remMonths]));
                   return {
                     ...base,
                     paidAmount: higherPaid,
@@ -3996,9 +4079,11 @@ class DatabaseManager {
                 const combinedTrainees = [...mergedTrainees, ...localOnly, ...vaultOnly].filter((t: any) => t && t.id && !deletedIdsSet.has(t.id));
                 merged[key] = this.deduplicateTrainees(combinedTrainees);
               } else if (Array.isArray(merged[key]) && merged[key].length > 0) {
-                // Collections that must be strictly append-only and never lose locally submitted items:
-                // homeworkSubmissions, examResults, pointTransactions, traineeBadges
-                const isAppendOnlyCollection = ['homeworkSubmissions', 'examResults', 'pointTransactions', 'traineeBadges', 'portalMessages'].includes(key);
+                // Collections that must preserve locally submitted items while still picking up newer remote updates:
+                const isAppendOnlyCollection = [
+                  'homeworkSubmissions', 'examResults', 'pointTransactions', 'traineeBadges',
+                  'badges', 'traineeEvaluations', 'portalMessages', 'ownerWithdrawals', 'secretFinancialArchives'
+                ].includes(key);
                 const combined = [...merged[key]];
                 const localMap = new Map(combined.map((item: any) => [item && item.id, item]));
 
@@ -4056,10 +4141,11 @@ class DatabaseManager {
               const currentNet = baseCalc.netAmount;
               const remaining = t.isExempt ? 0 : Math.max(0, currentNet - effectivePaid);
 
-              const cleanMonths = (Array.isArray(t.paidMonths) ? t.paidMonths : [])
-                .filter((m: string) => m && !/أكتوبر|نوفمبر|ديسمبر|يناير|10|١٠/i.test(m));
-              if (cleanMonths.length === 0 && effectivePaid > 0) {
-                cleanMonths.push('سبتمبر 2026');
+              const preservedMonths = Array.from(new Set(
+                (Array.isArray(t.paidMonths) ? t.paidMonths : []).filter((m: any) => typeof m === 'string' && m.trim().length > 0)
+              ));
+              if (preservedMonths.length === 0 && effectivePaid > 0) {
+                preservedMonths.push('سبتمبر 2026');
               }
 
               return {
@@ -4067,8 +4153,8 @@ class DatabaseManager {
                 ...baseCalc,
                 paidAmount: effectivePaid,
                 remainingAmount: remaining,
-                paidMonths: cleanMonths,
-                startBillingMonth: (t.startBillingMonth && /أكتوبر/i.test(t.startBillingMonth)) ? 'سبتمبر 2026' : (t.startBillingMonth || 'سبتمبر 2026')
+                paidMonths: preservedMonths,
+                startBillingMonth: t.startBillingMonth || (t.registrationDate && String(t.registrationDate).slice(0, 7) >= '2026-10' ? 'أكتوبر 2026' : 'سبتمبر 2026')
               };
             });
 
@@ -4084,19 +4170,16 @@ class DatabaseManager {
               }
             }
 
-            // Immediately persist cleaned trainees to permanent local vault
+            // Immediately persist merged trainees to permanent local vault
             try {
               if (Array.isArray(merged.trainees) && merged.trainees.length > 0) {
-                const tempVault = `${VAULT_FILE}.tmp`;
+                const tempVault = `${VAULT_FILE}.${process.pid}.${Date.now()}.tmp`;
                 fs.writeFileSync(tempVault, JSON.stringify(merged.trainees, null, 2), 'utf-8');
                 fs.renameSync(tempVault, VAULT_FILE);
               }
             } catch (vErr) {
               console.warn('[DB] Non-critical vault write notice in ensureHydrated:', vErr);
             }
-
-            // Delta sync trainees to Firestore in background
-            saveCollectionToFirestore('trainees', merged.trainees).catch(() => {});
           }
 
           this.data = merged;
@@ -4107,7 +4190,7 @@ class DatabaseManager {
           try {
             this.ensureDataDir();
             const jsonStr = JSON.stringify(this.data, null, 2);
-            const tempFile = `${DB_FILE}.tmp`;
+            const tempFile = `${DB_FILE}.${process.pid}.${Date.now()}.tmp`;
             fs.writeFileSync(tempFile, jsonStr, 'utf-8');
             fs.renameSync(tempFile, DB_FILE);
           } catch (diskErr) {
@@ -4203,6 +4286,7 @@ class DatabaseManager {
       }
 
       if (rawData) {
+        this.hasLocalDbFile = true;
         const parsed = JSON.parse(rawData);
         
         // Merge users to ensure all default roles exist and have correct emails
@@ -4274,6 +4358,7 @@ class DatabaseManager {
           badges: Array.isArray(parsed.badges) ? parsed.badges : [],
           schedules: Array.isArray(parsed.schedules) ? parsed.schedules : [],
           session_attendance_records: Array.isArray(parsed.session_attendance_records) ? parsed.session_attendance_records : [],
+          sessionGrades: Array.isArray(parsed.sessionGrades) ? parsed.sessionGrades : [],
           users: existingUsers,
           settings: {
             ...initialData.settings,
@@ -4313,15 +4398,29 @@ class DatabaseManager {
   }
 
   public async save() {
-    return await this.saveDataDirect(this.data, false);
+    // Default save stays 100% local on disk/laptop to prevent background Firestore quota burn
+    return await this.saveDataDirect(this.data, false, true);
   }
 
   public async saveImmediate() {
-    return await this.saveDataDirect(this.data, true);
+    // Immediate local disk/laptop save without triggering full-DB Firestore overwrite
+    return await this.saveDataDirect(this.data, true, true);
   }
 
-  private async saveDataDirect(data: DatabaseSchema, immediate = false) {
+  public async saveLocalOnly() {
+    return await this.saveDataDirect(this.data, true, true);
+  }
+
+  public async saveWithCloudSync() {
+    return await this.saveDataDirect(this.data, true, false);
+  }
+
+  private async saveDataDirect(data: DatabaseSchema, immediate = false, skipCloudSync = false) {
     this.lastLocalMutationTime = Date.now();
+    this.lastRemoteSyncMetaTime = Math.max(this.lastRemoteSyncMetaTime, this.lastLocalMutationTime);
+    if (data?.settings) {
+      (data.settings as any)._lastRemoteSyncMetaTime = this.lastRemoteSyncMetaTime;
+    }
     if (this.saveTimeout) {
       clearTimeout(this.saveTimeout);
       this.saveTimeout = null;
@@ -4329,7 +4428,8 @@ class DatabaseManager {
     try {
       this.ensureDataDir();
       const jsonStr = JSON.stringify(data, null, 2);
-      const tempFile = `${DB_FILE}.tmp`;
+      const uniqueSuffix = `${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2, 6)}.tmp`;
+      const tempFile = `${DB_FILE}.${uniqueSuffix}`;
       
       // Write atomic temp file then replace main
       fs.writeFileSync(tempFile, jsonStr, 'utf-8');
@@ -4337,7 +4437,7 @@ class DatabaseManager {
 
       // Save immediate secondary backup
       try {
-        const tempBackup = `${BACKUP_FILE}.tmp`;
+        const tempBackup = `${BACKUP_FILE}.${uniqueSuffix}`;
         fs.writeFileSync(tempBackup, jsonStr, 'utf-8');
         fs.renameSync(tempBackup, BACKUP_FILE);
       } catch (err) {
@@ -4347,7 +4447,7 @@ class DatabaseManager {
       // Save permanent trainees vault (immutable store that protects student data forever)
       try {
         if (Array.isArray(data.trainees) && data.trainees.length > 0) {
-          const tempVault = `${VAULT_FILE}.tmp`;
+          const tempVault = `${VAULT_FILE}.${uniqueSuffix}`;
           fs.writeFileSync(tempVault, JSON.stringify(data.trainees, null, 2), 'utf-8');
           fs.renameSync(tempVault, VAULT_FILE);
         }
@@ -4368,9 +4468,13 @@ class DatabaseManager {
       console.warn('[DB] Note: saveDataDirect could not persist to local disk (stateless/read-only environment):', err);
     }
 
-    // Sync state changes to cloud Firestore in background (graceful on quota exhaust)
+    if (skipCloudSync) {
+      return;
+    }
+
+    // Manual full sync to Cloud Firestore when explicitly requested via saveWithCloudSync
     try {
-      await saveFullDbToFirestore(data, immediate);
+      await saveFullDbToFirestore(data, immediate, true);
     } catch (err) {
       console.warn('[DB] Firestore sync non-fatal warning:', err);
     }
@@ -4386,7 +4490,7 @@ class DatabaseManager {
     if (this.data.auditLogs.length > 2000) {
       this.data.auditLogs = this.data.auditLogs.slice(0, 2000);
     }
-    this.save();
+    this.saveLocalOnly().catch(() => {});
   }
 
   public addNotification(notification: Omit<SystemNotification, 'id' | 'createdAt' | 'read'>) {
@@ -4400,7 +4504,7 @@ class DatabaseManager {
     if (this.data.notifications.length > 100) {
       this.data.notifications = this.data.notifications.slice(0, 100);
     }
-    this.save();
+    this.saveLocalOnly().catch(() => {});
   }
 
   public getPrefixForGradeOrCourse(gradeOrCourse?: string): string {
@@ -4538,7 +4642,7 @@ class DatabaseManager {
           found.ranking = index + 1;
         }
       });
-      this.save();
+      this.saveLocalOnly().catch(() => {});
     } catch (err) {
       console.warn('[DB] recalculateTraineeRankings notice:', err);
     }
@@ -4600,7 +4704,7 @@ class DatabaseManager {
         trainer.balanceDue = Math.max(0, totalEarned - paid);
         trainer.remainingDues = trainer.balanceDue;
       }
-      this.save();
+      this.saveLocalOnly().catch(() => {});
     } catch (err) {
       console.warn('[DB] recalculateTrainerFinances notice:', err);
     }

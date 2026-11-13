@@ -35,6 +35,7 @@ import { getPublicStudentPortalUrl } from '../utils/urlHelper';
 import { api } from '../services/api';
 import { GoogleDriveService } from '../services/googleDrive';
 import { resolveTraineePhotoUrl } from '../utils/googleDriveHelper';
+import { formatArabicDateWithDay } from '../utils/paymentUtils';
 
 interface TraineeDigitalCardModalProps {
   isOpen: boolean;
@@ -92,7 +93,9 @@ export const TraineeDigitalCardModal: React.FC<TraineeDigitalCardModalProps> = (
   const groupName = group?.name || customData?.groupName || 'المجموعة الأساسية';
   const branchName = branch?.name || customData?.branchName || 'الفرع الرئيسي';
   const phone = trainee?.phone || customData?.phone || '';
-  const registrationDate = trainee?.registrationDate || new Date().toISOString().split('T')[0];
+  const rawEnrollmentDate = trainee?.registrationDate || trainee?.enrollmentDate || trainee?.subscriptionStartDate || (trainee?.createdAt ? trainee.createdAt.split('T')[0] : '') || (trainee as any)?.joinDate || customData?.registrationDate || customData?.enrollmentDate || '';
+  const formattedEnrollmentDate = rawEnrollmentDate ? formatArabicDateWithDay(rawEnrollmentDate) : formatArabicDateWithDay(new Date().toISOString().split('T')[0]);
+  const registrationDate = formattedEnrollmentDate;
   const points = trainee?.totalPoints || trainee?.points || 150;
   const managerName = settings?.managerName || 'د. محمد رمضان بخيت';
 
@@ -239,7 +242,7 @@ export const TraineeDigitalCardModal: React.FC<TraineeDigitalCardModalProps> = (
     }
   };
 
-  const shareText = `🌟 *مرحبا بكم في النجاح للتدريب والاستشارات* 🌟\n\nيسعدنا انضمامكم إلى أسرة المركز ونتمنى لكم رحلة تعليمية وتدريبية متميزة! 🎉\n\n🪪 *بطاقة العضوية والكارنيه الرقمي:*\n👤 *اسم المتدرب:* ${name}\n🔑 *كود المتدرب المعتمد:* ${code}\n📚 *الدورة / الصف التدريبي:* ${courseName}\n👥 *المجموعة والموعد:* ${groupName}\n🏢 *الفرع:* ${branchName}\n\n📲 *رابط الملف الرقمي وتسجيل الحضور المباشر:*\n${portalUrl}\n\n✍️ *الاعتماد:* مدير عام المركز: ${managerName}\n📍 *النجاح للتدريب والاستشارات - نحو مستقبل واعد*`;
+  const shareText = `🌟 *مرحبا بكم في النجاح للتدريب والاستشارات* 🌟\n\nيسعدنا انضمامكم إلى أسرة المركز ونتمنى لكم رحلة تعليمية وتدريبية متميزة! 🎉\n\n🪪 *بطاقة العضوية والكارنيه الرقمي:*\n👤 *اسم المتدرب:* ${name}\n🔑 *كود المتدرب المعتمد:* ${code}\n📚 *الدورة / الصف التدريبي:* ${courseName}\n👥 *المجموعة والموعد:* ${groupName}\n🏢 *الفرع:* ${branchName}\n📅 *تاريخ الالتحاق والتسجيل:* ${formattedEnrollmentDate}\n\n📲 *رابط الملف الرقمي وتسجيل الحضور المباشر:*\n${portalUrl}\n\n✍️ *الاعتماد:* مدير عام المركز: ${managerName}\n📍 *النجاح للتدريب والاستشارات - نحو مستقبل واعد*`;
 
   const handleCopyText = () => {
     navigator.clipboard.writeText(shareText);
@@ -498,6 +501,10 @@ export const TraineeDigitalCardModal: React.FC<TraineeDigitalCardModalProps> = (
               <div class="info-row">
                 <span class="info-label">الفرع:</span>
                 <span class="info-val">${branchName}</span>
+              </div>
+              <div class="info-row">
+                <span class="info-label">تاريخ الالتحاق والتسجيل:</span>
+                <span class="info-val" style="color: ${isDark ? '#38bdf8' : '#0284c7'}; font-weight: 800;">${formattedEnrollmentDate}</span>
               </div>
               ${
                 phone
@@ -846,16 +853,16 @@ export const TraineeDigitalCardModal: React.FC<TraineeDigitalCardModalProps> = (
                   </div>
                 )}
 
-                <div>
+                <div className="col-span-2 sm:col-span-2">
                   <span
                     className={`block text-[10.5px] font-bold ${
-                      isDark ? 'text-slate-400' : 'text-slate-600'
+                      isDark ? 'text-amber-300' : 'text-slate-600'
                     }`}
                   >
-                    تاريخ التسجيل:
+                    تاريخ الالتحاق والتسجيل باليوم:
                   </span>
-                  <span className="font-mono text-xs text-slate-600 dark:text-slate-400 font-bold block mt-0.5">
-                    {registrationDate}
+                  <span className={`text-xs font-black block mt-0.5 ${isDark ? 'text-sky-300' : 'text-sky-800'}`}>
+                    📅 {formattedEnrollmentDate}
                   </span>
                 </div>
               </div>

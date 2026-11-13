@@ -14,7 +14,8 @@ import {
   isPaymentReminderWindow,
   isTraineeUnpaid,
   parseYearMonthKey,
-  formatYearMonthName
+  formatYearMonthName,
+  formatArabicDateWithDay
 } from '../utils/paymentUtils';
 
 const GRADE_OPTIONS = [
@@ -2538,9 +2539,9 @@ export const TraineesView: React.FC = () => {
                         <p className="text-[11px] text-slate-600 dark:text-slate-400 font-medium truncate mt-0.5">
                           {course?.name || 'دورة تدريبية'} {group?.name ? `• ${group.name}` : ''}
                         </p>
-                        <div className="flex items-center gap-1 text-[10px] text-indigo-700 dark:text-indigo-400 font-bold mt-0.5">
+                        <div className="flex items-center gap-1 text-[10px] text-indigo-700 dark:text-indigo-400 font-bold mt-0.5" title="تاريخ التحاق وتسجيل المتدرب">
                           <Calendar className="w-3 h-3 shrink-0 text-indigo-500" />
-                          <span>بدء الاشتراك: {t.startBillingMonth || (t.subscriptionStartDate ? formatYearMonthName(parseYearMonthKey(t.subscriptionStartDate)) : 'سبتمبر 2026')}</span>
+                          <span>الالتحاق: {formatArabicDateWithDay(t.registrationDate || t.enrollmentDate || t.subscriptionStartDate || t.createdAt)}</span>
                         </div>
                         <p className="text-[10px] text-slate-500 dark:text-slate-500 font-mono mt-0.5">
                           {t.phone} {t.parentPhone ? `| و.أ: ${t.parentPhone}` : ''}
@@ -4690,6 +4691,11 @@ export const TraineesView: React.FC = () => {
                       <div className="flex items-center gap-1.5">
                         <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                         <span className="text-slate-700 dark:text-slate-300">{branches.find(b => b.id === activeTrainee.branchId)?.name || 'الفرع الرئيسي'}</span>
+                      </div>
+                      <span className="text-slate-300 dark:text-slate-700 hidden sm:inline">•</span>
+                      <div className="flex items-center gap-1.5 text-sky-700 dark:text-sky-300 font-bold">
+                        <Calendar className="w-3.5 h-3.5 text-sky-500 shrink-0" />
+                        <span>تاريخ الالتحاق والتسجيل: {formatArabicDateWithDay(activeTrainee.registrationDate || activeTrainee.enrollmentDate || activeTrainee.subscriptionStartDate || activeTrainee.createdAt)}</span>
                       </div>
                     </div>
                   </div>

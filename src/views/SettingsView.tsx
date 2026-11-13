@@ -14,6 +14,14 @@ import { cloudDb } from '../services/cloudDatabase';
 import { BackupAndMigrationCenter } from '../components/BackupAndMigrationCenter';
 import { useTheme, AVAILABLE_THEMES } from '../context/ThemeContext';
 import {
+  pickLaptopDirectory,
+  saveFullBackupToLaptop,
+  readBackupFromLaptopFolder,
+  renewLaptopStorage,
+  getLaptopStorageStatus,
+  LaptopStorageStatus
+} from '../services/laptopLocalStorage';
+import {
   Settings,
   Building,
   Save,
@@ -31,6 +39,7 @@ import {
   Unlink,
   Check,
   FolderGit2,
+  FolderOpen,
   HardDrive,
   Key,
   Plus,
@@ -175,59 +184,102 @@ export const SettingsView: React.FC = () => {
     showToast('تمت استعادة الشعار المعتمد الافتراضي بنجاح 🔄', 'info');
   };
 
-  const [localFolderName, setLocalFolderName] = useState<string>(localStorage.getItem('local_backup_folder_name') || '📁 اختيار مجلد مخصص للنسخ الاحتياطي الدوري');
-  const [isAutoLocalBackupActive, setIsAutoLocalBackupActive] = useState<boolean>(
-    localStorage.getItem('auto_local_backup_enabled') === 'true'
-  );
-  const [localDirHandle, setLocalDirHandle] = useState<any>(null);
+  const [laptopStatus, setLaptopStatus] = useState<LaptopStorageStatus | null>(null);
+  const [isLaptopBusy, setIsLaptopBusy] = useState(false);
+  const [confirmRestoreLaptop, setConfirmRestoreLaptop] = useState(false);
 
-  const handleSelectLocalFolder = async () => {
-    if (!('showDirectoryPicker' in window)) {
-      showToast('خاصية اختيار المجلدات المحلية تتطلب فتح التطبيق في نافذة مستقلة (New Tab) وليست داخل نافذة المعاينة المصغرة.', 'warning');
-      return;
-    }
+  const refreshLaptopStatus = async () => {
     try {
-      const handle = await (window as any).showDirectoryPicker();
-      setLocalDirHandle(handle);
-      setLocalFolderName(handle.name);
-      localStorage.setItem('local_backup_folder_name', handle.name);
-      setIsAutoLocalBackupActive(true);
-      localStorage.setItem('auto_local_backup_enabled', 'true');
-      showToast(`تم اختيار المجلد (${handle.name}) بنجاح! سيتم تحديث ملف Nagah_MS_Fixed_Backup.json فيه كل 5 دقائق.`, 'success');
-
-      // Immediate write
-      const backupData = await api.getBackupData();
-      const fileHandle = await handle.getFileHandle('Nagah_MS_Fixed_Backup.json', { create: true });
-      const writable = await fileHandle.createWritable();
-      await writable.write(JSON.stringify(backupData, null, 2));
-      await writable.close();
-    } catch (err: any) {
-      if (err.name === 'SecurityError' || err.message?.includes('Not allowed')) {
-        showToast('متصفحك يحظر اختيار المجلدات داخل إطار المعاينة. يرجى فتح التطبيق في "علامة تبويب جديدة" (New Tab) لاستخدام هذه الميزة.', 'error');
-      } else if (err.name !== 'AbortError') {
-        showToast('فشل اختيار المجلد المحلي: ' + (err.message || 'خطأ غير معروف'), 'error');
-      }
-    }
+      const status = await getLaptopStorageStatus();
+      setLaptopStatus(status);
+    } catch {}
   };
 
   useEffect(() => {
-    if (!isAutoLocalBackupActive || !localDirHandle) return;
-    const interval = setInterval(async () => {
-      if (typeof document !== 'undefined' && document.hidden) return;
-      try {
-        if (localDirHandle) {
-          const backupData = await api.getBackupData();
-          const fileHandle = await localDirHandle.getFileHandle('Nagah_MS_Fixed_Backup.json', { create: true });
-          const writable = await fileHandle.createWritable();
-          await writable.write(JSON.stringify(backupData, null, 2));
-          await writable.close();
-        }
-      } catch (e) {
-        // Silent or permission check
+    refreshLaptopStatus();
+  }, []);
+
+  const handleSelectLocalFolder = async () => {
+    setIsLaptopBusy(true);
+    try {
+      const res = await pickLaptopDirectory();
+      if (res.cancelled) return;
+      if (!res.success) {
+        showToast(res.error || 'تعذر اختيار مجلد اللاب', res.needsNewTab ? 'warning' : 'error');
+        return;
       }
-    }, 300000); // Only when active tab is open
-    return () => clearInterval(interval);
-  }, [isAutoLocalBackupActive, localDirHandle]);
+      const backupData = await api.getBackupData();
+      await saveFullBackupToLaptop(backupData, true);
+      await refreshLaptopStatus();
+      showToast(`تم ربط مجلد (${res.folderName}) وحفظ نسخة كاملة فيه بنجاح.`, 'success');
+    } catch (err: any) {
+      showToast(err.message || 'فشل ربط المجلد المحلي', 'error');
+    } finally {
+      setIsLaptopBusy(false);
+    }
+  };
+
+  const handleSaveNowToLaptop = async () => {
+    setIsLaptopBusy(true);
+    try {
+      const backupData = await api.getBackupData();
+      const res = await saveFullBackupToLaptop(backupData, true);
+      await refreshLaptopStatus();
+      if (res.savedToFolder && res.folderName) {
+        showToast(`تم حفظ النسخة الكاملة داخل مجلد (${res.folderName}) على اللاب وقاعدة المتصفح.`, 'success');
+      } else {
+        showToast('تم حفظ النسخة الكاملة في تخزين المتصفح المحلي (IndexedDB) على جهازك.', 'success');
+      }
+    } catch (err: any) {
+      showToast(err.message || 'تعذر حفظ النسخة محلياً', 'error');
+    } finally {
+      setIsLaptopBusy(false);
+    }
+  };
+
+  const handleRestoreFromLaptop = async () => {
+    if (!confirmRestoreLaptop) {
+      setConfirmRestoreLaptop(true);
+      setTimeout(() => setConfirmRestoreLaptop(false), 6000);
+      return;
+    }
+    setConfirmRestoreLaptop(false);
+    setIsLaptopBusy(true);
+    try {
+      const data = await readBackupFromLaptopFolder();
+      if (!data) {
+        showToast('لا توجد نسخة محلية محفوظة في المجلد أو المتصفح بعد.', 'warning');
+        return;
+      }
+      await api.restoreBackupData(data);
+      showToast('تمت استعادة البيانات من التخزين المحلي بنجاح!', 'success');
+      refreshAll();
+    } catch (err: any) {
+      showToast(err.message || 'فشل الاستعادة من التخزين المحلي', 'error');
+    } finally {
+      setIsLaptopBusy(false);
+    }
+  };
+
+  const handleRenewLaptopStorage = async () => {
+    setIsLaptopBusy(true);
+    try {
+      const latestBackup = await api.getBackupData().catch(() => null);
+      const res = await renewLaptopStorage(latestBackup);
+      await refreshLaptopStatus();
+      if (res.archivedToFolder) {
+        showToast(`تم أرشفة البيانات القديمة في (${res.archiveFilename}) داخل مجلد اللاب وتجديد المساحة بنجاح.`, 'success');
+      } else if (res.downloadedFallback) {
+        showToast(`تم تنزيل أرشيف (${res.archiveFilename}) على جهازك وتجديد التخزين المحلي بنجاح.`, 'success');
+      } else {
+        showToast(`تم تجديد وتنظيف التخزين المحلي (${res.clearedItemsCount} عنصر مؤقت).`, 'success');
+      }
+    } catch (err: any) {
+      showToast(err.message || 'فشل تجديد التخزين المحلي', 'error');
+    } finally {
+      setIsLaptopBusy(false);
+    }
+  };
 
   const [isLoading, setIsLoading] = useState(true);
   const [activeMainTab, setActiveMainTab] = useState<'backup_migration' | 'general' | 'themes' | 'roles_permissions' | 'users' | 'reset'>('backup_migration');
@@ -834,13 +886,102 @@ export const SettingsView: React.FC = () => {
               </div>
             </div>
 
+            {/* SECTION 3: Persistent Laptop Storage & Renewal */}
+            <div className="mt-6 bg-slate-50/70 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-200/60 dark:border-slate-700/60">
+                <div className="flex items-center gap-2 text-slate-800 dark:text-slate-200 font-bold text-sm">
+                  <HardDrive className="w-4 h-4 text-sky-600 dark:text-sky-400" />
+                  <span>التخزين المحلي على اللاب وتجديده</span>
+                </div>
+                <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400 tabular-nums">
+                  <span>
+                    {laptopStatus?.folderName
+                      ? `المجلد المربوط: ${laptopStatus.folderName}`
+                      : 'تخزين المتصفح المحلي (IndexedDB)'}
+                  </span>
+                  <span aria-hidden="true">·</span>
+                  <span>
+                    {laptopStatus?.hasHandle
+                      ? laptopStatus.hasPermission
+                        ? 'الإذن نشط'
+                        : 'يحتاج إعادة تفعيل الإذن عند الحفظ'
+                      : 'لم يتم تحديد مجلد بعد'}
+                  </span>
+                  {laptopStatus?.lastSavedAt && (
+                    <>
+                      <span aria-hidden="true">·</span>
+                      <span>آخر حفظ: {new Date(laptopStatus.lastSavedAt).toLocaleString('ar-EG')}</span>
+                    </>
+                  )}
+                  {typeof laptopStatus?.estimatedBytes === 'number' && laptopStatus.estimatedBytes > 0 && (
+                    <>
+                      <span aria-hidden="true">·</span>
+                      <span>
+                        المساحة المستخدمة: {(laptopStatus.estimatedBytes / (1024 * 1024)).toFixed(2)} MB
+                      </span>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                يتم حفظ الجلسات والدرجات والحضور محلياً على جهازك دون استهلاك كوتا السحابة. اختر مجلداً على اللاب لحفظ النسخ مباشرة، وعند امتلاء المساحة اضغط «أرشفة وتجديد التخزين» لحفظ أرشيف مؤرخ وتنظيف الكاش القديم.
+              </p>
+
+              <div className="flex flex-wrap items-center gap-2.5 pt-1">
+                <button
+                  type="button"
+                  disabled={isLaptopBusy}
+                  onClick={handleSelectLocalFolder}
+                  className="flex items-center justify-center gap-2 px-4 py-2.5 bg-sky-600 hover:bg-sky-500 disabled:opacity-60 text-white font-bold text-xs rounded-xl shadow-sm transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+                >
+                  <FolderOpen className="w-4 h-4" />
+                  <span>{laptopStatus?.folderName ? `تغيير مجلد اللاب (${laptopStatus.folderName})` : 'تحديد مجلد على اللاب'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  disabled={isLaptopBusy}
+                  onClick={handleSaveNowToLaptop}
+                  className="flex items-center justify-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 text-white font-bold text-xs rounded-xl shadow-sm transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+                >
+                  <Save className="w-4 h-4" />
+                  <span>حفظ نسخة على اللاب الآن</span>
+                </button>
+
+                <button
+                  type="button"
+                  disabled={isLaptopBusy}
+                  onClick={handleRestoreFromLaptop}
+                  className={`flex items-center justify-center gap-2 px-4 py-2.5 font-bold text-xs rounded-xl shadow-sm transition-colors whitespace-nowrap shrink-0 cursor-pointer disabled:opacity-60 ${
+                    confirmRestoreLaptop
+                      ? 'bg-amber-600 hover:bg-amber-500 text-white'
+                      : 'bg-slate-800 hover:bg-slate-700 dark:bg-slate-700 dark:hover:bg-slate-600 text-white'
+                  }`}
+                >
+                  <Upload className="w-4 h-4" />
+                  <span>{confirmRestoreLaptop ? 'اضغط مجدداً لتأكيد الاستعادة' : 'استعادة من التخزين المحلي'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  disabled={isLaptopBusy}
+                  onClick={handleRenewLaptopStorage}
+                  className="flex items-center justify-center gap-2 px-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-60 text-slate-800 dark:text-slate-100 font-bold text-xs rounded-xl shadow-sm transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+                >
+                  <RefreshCw className={`w-4 h-4 ${isLaptopBusy ? 'animate-spin' : ''}`} />
+                  <span>أرشفة وتجديد التخزين</span>
+                </button>
+              </div>
+            </div>
+
             {/* Quick Note */}
             <div className="mt-6 pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-[11px] text-slate-500">
               <span className="flex items-center gap-1.5">
                 <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
-                البيانات مشفرة ومحفوظة بأمان محلياً وسحابياً
+                البيانات محفوظة محلياً بأمان، والمزامنة السحابية مقتصرة على النقاط والطلاب الجدد والمدفوعات فقط
               </span>
-              <span className="font-mono text-purple-600 dark:text-purple-400 font-bold">
+              <span className="font-mono tabular-nums text-purple-600 dark:text-purple-400 font-bold">
                 إجمالي الطلاب المسجلين: {traineesCount} طالب
               </span>
             </div>

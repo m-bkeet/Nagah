@@ -12,7 +12,7 @@
     "status": "dropped",
     "address": "",
     "groupId": "",
-    "ranking": 122,
+    "ranking": 132,
     "branchId": "branch-1",
     "courseId": "course-1787347508908",
     "fullName": "محمد عادل احمد محمد",
@@ -103,14 +103,14 @@
     "dataValidationStatus": "verified",
     "initialPaymentMethod": "cash",
     "parentPortalPassword": "",
-    "ranking": 135,
+    "ranking": 144,
     "photo": "",
     "paidMonths": [
       "سبتمبر 2026"
     ],
     "lastReceiptNumber": "REC9738820",
     "nextPaymentDueDate": "2026-10-01",
-    "lastPaymentDate": "2026-10-09",
+    "lastPaymentDate": "2026-09-30",
     "subscriptionStartDate": "2026-09-11",
     "startBillingMonth": "سبتمبر 2026"
   },
@@ -127,7 +127,7 @@
     "status": "suspended",
     "address": "",
     "groupId": "grp-1787433234491",
-    "ranking": 123,
+    "ranking": 133,
     "branchId": "branch-1",
     "courseId": "crs-1787427970903",
     "fullName": "آيه محسن محمد فرحات",
@@ -219,7 +219,7 @@
     "updatedByUserName": "مدير عام النظام",
     "dataValidationStatus": "needs_review",
     "parentPortalPassword": "",
-    "ranking": 124,
+    "ranking": 134,
     "initialPayment": 0,
     "initialPaymentMethod": "cash",
     "photo": "",
@@ -235,12 +235,12 @@
     "phone": "01281016041",
     "track": "",
     "gender": "male",
-    "points": 135,
+    "points": 175,
     "prefix": "A",
     "status": "active",
     "address": "",
     "groupId": "grp-1787350487970",
-    "ranking": 61,
+    "ranking": 75,
     "branchId": "branch-1",
     "courseId": "course-1787347401956",
     "fullName": "مريم رمسيس صبري مرسال",
@@ -255,14 +255,14 @@
     "groupName": "ICT4 - 1",
     "netAmount": 200,
     "trainerId": "trainer-1787349806643",
-    "updatedAt": "2026-09-28T13:19:22.783Z",
+    "updatedAt": "2026-11-09T13:17:06.624Z",
     "nationalId": "",
     "paidAmount": 200,
     "parentName": "رمسيس صبري مرسال",
     "siblingIds": [],
     "parentPhone": "01281016041",
     "studentCode": "A006",
-    "totalPoints": 135,
+    "totalPoints": 175,
     "traineeCode": "A006",
     "exemptReason": "",
     "isTestRecord": false,
@@ -293,7 +293,7 @@
     "phone": "01156745251",
     "track": "",
     "gender": "male",
-    "points": 123,
+    "points": 133,
     "prefix": "D",
     "status": "active",
     "address": "",
@@ -312,13 +312,13 @@
     "groupName": "ICT - p1 - 3",
     "netAmount": 200,
     "trainerId": "trainer-1787349806643",
-    "updatedAt": "2026-10-19T10:41:56.219Z",
+    "updatedAt": "2026-10-28T12:51:27.361Z",
     "nationalId": "",
     "paidAmount": 200,
     "parentName": "تامر محمود محمد",
     "parentPhone": "01156745251",
     "studentCode": "D023",
-    "totalPoints": 123,
+    "totalPoints": 133,
     "traineeCode": "D023",
     "exemptReason": "",
     "isTestRecord": false,
@@ -333,7 +333,7 @@
     "dataValidationStatus": "verified",
     "initialPaymentMethod": "cash",
     "parentPortalPassword": "",
-    "ranking": 66,
+    "ranking": 92,
     "photo": "",
     "paidMonths": [
       "سبتمبر 2026"
@@ -350,7 +350,7 @@
     "startBillingMonth": "سبتمبر 2026",
     "lastReceiptNumber": "REC6516133",
     "nextPaymentDueDate": "2026-11-25",
-    "lastPaymentDate": "2026-10-19"
+    "lastPaymentDate": "2026-09-30"
   },
   {
     "id": "trainee-1787541849210-og2bf",
@@ -365,7 +365,7 @@
     "status": "active",
     "address": "",
     "groupId": "grp-1787358828709",
-    "ranking": 11,
+    "ranking": 60,
     "branchId": "branch-1",
     "courseId": "course-1787347569318",
     "fullName": "مكاريوس بيشوي نبيل كرم",
@@ -411,7 +411,7 @@
     "updatedByUserId": "user-admin",
     "updatedByUserName": "مدير عام النظام",
     "nextPaymentDueDate": "2026-10-01",
-    "lastPaymentDate": "2026-10-01",
+    "lastPaymentDate": "2026-09-28",
     "lastReceiptNumber": "REC0225019",
     "paidMonths": [
       "سبتمبر 2026"
@@ -421,13 +421,13 @@
   },
   {
     "id": "trainee-1787863726447",
-    "code": "C013",
+    "code": "A041",
     "grade": "الصف الرابع الابتدائي",
     "notes": "",
     "phone": "01155953899",
     "track": "",
     "gender": "male",
-    "points": 61,
+    "points": 131,
     "prefix": "A",
     "status": "active",
     "address": "",
@@ -446,24 +446,24 @@
     "groupName": "ICT6 - 2",
     "netAmount": 200,
     "trainerId": "trainer-1787349806643",
-    "updatedAt": "2026-10-05T12:33:39.075Z",
+    "updatedAt": "2026-11-13T08:29:55.068Z",
     "nationalId": "",
-    "paidAmount": 200,
+    "paidAmount": 0,
     "parentName": "ابراهيم احمد راجح",
     "parentPhone": "01155953899",
     "studentCode": "C013",
-    "totalPoints": 61,
+    "totalPoints": 131,
     "traineeCode": "C013",
     "exemptReason": "",
     "isTestRecord": false,
     "creditBalance": 0,
     "discountAmount": 0,
     "portalPassword": "",
-    "remainingAmount": 0,
+    "remainingAmount": 200,
     "registrationDate": "2026-09-11",
     "dataValidationStatus": "verified",
     "parentPortalPassword": "",
-    "ranking": 98,
+    "ranking": 93,
     "initialPayment": 0,
     "initialPaymentMethod": "cash",
     "updatedByUserId": "user-admin",
@@ -476,7 +476,7 @@
     "startBillingMonth": "سبتمبر 2026",
     "lastReceiptNumber": "REC3618947",
     "nextPaymentDueDate": "2026-10-01",
-    "lastPaymentDate": "2026-10-05",
+    "lastPaymentDate": "2026-09-30",
     "_lastAutoParent": "ابراهيم احمد راجح",
     "createdByUserId": "user-admin",
     "createdByUserName": "مدير عام النظام"
@@ -489,12 +489,12 @@
     "phone": "01066747764",
     "track": "",
     "gender": "male",
-    "points": 196,
+    "points": 206,
     "prefix": "A",
     "status": "active",
     "address": "",
     "groupId": "grp-1787432103884",
-    "ranking": 22,
+    "ranking": 62,
     "branchId": "branch-2",
     "courseId": "course-1787347401956",
     "fullName": "مارينا عماد ثروت سليم",
@@ -516,7 +516,7 @@
     "siblingIds": [],
     "parentPhone": "01066747764",
     "studentCode": "A010",
-    "totalPoints": 196,
+    "totalPoints": 206,
     "traineeCode": "A010",
     "exemptReason": "",
     "isTestRecord": false,
@@ -546,12 +546,12 @@
     "phone": "01500073617",
     "track": "",
     "gender": "male",
-    "points": 273,
+    "points": 323,
     "prefix": "A",
     "status": "active",
     "address": "",
     "groupId": "",
-    "ranking": 5,
+    "ranking": 19,
     "branchId": "branch-1",
     "courseId": "course-1787347401956",
     "fullName": "لين محمد رمضان بخيت",
@@ -565,7 +565,7 @@
     "groupName": "",
     "netAmount": 0,
     "trainerId": "trainer-1787349806643",
-    "updatedAt": "2026-09-30T06:39:44.073Z",
+    "updatedAt": "2026-11-09T16:48:59.408Z",
     "nationalId": "",
     "paidAmount": 0,
     "parentName": "محمد رمضان بخيت",
@@ -575,7 +575,7 @@
     ],
     "parentPhone": "01001500686",
     "studentCode": "A001",
-    "totalPoints": 273,
+    "totalPoints": 323,
     "traineeCode": "A001",
     "exemptReason": "management_children",
     "isTestRecord": false,
@@ -594,9 +594,7 @@
     "dataValidationStatus": "verified",
     "initialPaymentMethod": "cash",
     "parentPortalPassword": "",
-    "photoUrl": "",
     "currentPoints": 303,
-    "photo": "",
     "paidMonths": [],
     "subscriptionStartDate": "2026-09-11",
     "startBillingMonth": "سبتمبر 2026"
@@ -614,7 +612,7 @@
     "status": "dropped",
     "address": "",
     "groupId": "",
-    "ranking": 126,
+    "ranking": 135,
     "branchId": "branch-1",
     "courseId": "course-1787347508908",
     "fullName": "محمد محمود عبدالعزيز محمد",
@@ -671,7 +669,7 @@
     "address": "",
     "groupId": "",
     "branchId": "branch-1",
-    "courseId": "",
+    "courseId": "crs-1787428009076",
     "fullName": "معاذ السيد سلامه",
     "isExempt": false,
     "photoUrl": "",
@@ -701,7 +699,7 @@
     "registrationDate": "2026-09-11",
     "dataValidationStatus": "verified",
     "parentPortalPassword": "",
-    "ranking": 127,
+    "ranking": 136,
     "initialPayment": 0,
     "initialPaymentMethod": "cash",
     "updatedByUserId": "user-admin",
@@ -719,7 +717,7 @@
     "phone": "01062982266",
     "track": "",
     "gender": "male",
-    "points": 170,
+    "points": 200,
     "prefix": "D",
     "status": "active",
     "address": "",
@@ -738,13 +736,13 @@
     "groupName": "ICT6 - 2",
     "netAmount": 200,
     "trainerId": "trainer-1787349806643",
-    "updatedAt": "2026-09-30T13:51:40.704Z",
+    "updatedAt": "2026-11-01T14:20:31.104Z",
     "nationalId": "",
     "paidAmount": 200,
     "parentName": "حسام الدين محمد",
     "parentPhone": "01278393803",
     "studentCode": "C016",
-    "totalPoints": 170,
+    "totalPoints": 200,
     "traineeCode": "C016",
     "exemptReason": "",
     "isTestRecord": false,
@@ -755,7 +753,7 @@
     "registrationDate": "2026-09-11",
     "dataValidationStatus": "verified",
     "parentPortalPassword": "",
-    "ranking": 24,
+    "ranking": 67,
     "initialPayment": 0,
     "initialPaymentMethod": "cash",
     "updatedByUserId": "user-admin",
@@ -811,7 +809,7 @@
     "registrationDate": "2026-09-11",
     "dataValidationStatus": "verified",
     "parentPortalPassword": "",
-    "ranking": 3,
+    "ranking": 7,
     "initialPayment": 0,
     "initialPaymentMethod": "cash",
     "updatedByUserId": "user-admin",
@@ -822,7 +820,7 @@
     ],
     "lastReceiptNumber": "REC9074007",
     "nextPaymentDueDate": "2026-10-01",
-    "lastPaymentDate": "2026-10-09",
+    "lastPaymentDate": "2026-09-30",
     "subscriptionStartDate": "2026-09-11",
     "startBillingMonth": "سبتمبر 2026"
   },
@@ -834,12 +832,12 @@
     "phone": "01031505848",
     "track": "",
     "gender": "male",
-    "points": 220,
+    "points": 240,
     "prefix": "A",
     "status": "active",
     "address": "",
     "groupId": "grp-1787351870532",
-    "ranking": 15,
+    "ranking": 44,
     "branchId": "branch-1",
     "courseId": "course-1787347401956",
     "fullName": "عبدالله عبدالملك رمضان بخيت",
@@ -861,7 +859,7 @@
     "siblingIds": [],
     "parentPhone": "01007153868",
     "studentCode": "A016",
-    "totalPoints": 220,
+    "totalPoints": 240,
     "traineeCode": "A016",
     "exemptReason": "management_children",
     "isTestRecord": false,
@@ -895,7 +893,7 @@
     "status": "dropped",
     "address": "",
     "groupId": "",
-    "ranking": 128,
+    "ranking": 137,
     "branchId": "branch-1",
     "courseId": "crs-1787427719238",
     "fullName": "محمود السيد مصطفى فايد",
@@ -946,7 +944,7 @@
     "phone": "01096932831",
     "track": "",
     "gender": "male",
-    "points": 115,
+    "points": 161,
     "prefix": "A",
     "status": "active",
     "address": "",
@@ -971,7 +969,7 @@
     "parentName": "محمد صلاح عرابى",
     "parentPhone": "01013732004",
     "studentCode": "A028",
-    "totalPoints": 115,
+    "totalPoints": 161,
     "traineeCode": "A028",
     "exemptReason": "",
     "isTestRecord": false,
@@ -986,7 +984,7 @@
     "dataValidationStatus": "verified",
     "initialPaymentMethod": "cash",
     "parentPortalPassword": "",
-    "ranking": 69,
+    "ranking": 81,
     "photo": "",
     "paidMonths": [
       "سبتمبر 2026"
@@ -995,7 +993,7 @@
     "startBillingMonth": "سبتمبر 2026",
     "lastReceiptNumber": "REC6489587",
     "nextPaymentDueDate": "2026-11-25",
-    "lastPaymentDate": "2026-10-19"
+    "lastPaymentDate": "2026-09-30"
   },
   {
     "id": "trainee-1787541849210-brq6q",
@@ -1005,12 +1003,12 @@
     "phone": "01154531351",
     "track": "",
     "gender": "male",
-    "points": 410,
+    "points": 472,
     "prefix": "C",
     "status": "active",
     "address": "",
     "groupId": "grp-1787431802246",
-    "ranking": 4,
+    "ranking": 6,
     "branchId": "branch-1",
     "courseId": "course-1787347508908",
     "fullName": "اميرة محمد عبدالبصير ربيع",
@@ -1024,7 +1022,7 @@
     "groupName": "ICT6 - 1",
     "netAmount": 200,
     "trainerId": "trainer-1787349806643",
-    "updatedAt": "2026-10-11T11:33:57.760Z",
+    "updatedAt": "2026-10-28T11:26:37.978Z",
     "nationalId": "",
     "paidAmount": 200,
     "parentName": "محمد عبدالبصير ربيع",
@@ -1033,7 +1031,7 @@
     ],
     "parentPhone": "01156569121",
     "studentCode": "C022",
-    "totalPoints": 410,
+    "totalPoints": 472,
     "traineeCode": "C022",
     "exemptReason": "",
     "isTestRecord": false,
@@ -1068,7 +1066,7 @@
     "status": "dropped",
     "address": "",
     "groupId": "",
-    "ranking": 129,
+    "ranking": 138,
     "branchId": "branch-1",
     "courseId": "course-1787347508908",
     "fullName": "أحمد حمدى محمد ابراهيم",
@@ -1124,7 +1122,7 @@
     "status": "active",
     "address": "",
     "groupId": "grp-1787351870532",
-    "ranking": 88,
+    "ranking": 111,
     "branchId": "branch-1",
     "courseId": "course-1787347401956",
     "fullName": "ادم ربيع احمد احمد",
@@ -1166,7 +1164,7 @@
     "startBillingMonth": "سبتمبر 2026",
     "lastReceiptNumber": "REC6536772",
     "nextPaymentDueDate": "2026-11-25",
-    "lastPaymentDate": "2026-10-19"
+    "lastPaymentDate": "2026-09-30"
   },
   {
     "id": "trainee-1787762702428",
@@ -1212,7 +1210,7 @@
     "registrationDate": "2026-09-11",
     "dataValidationStatus": "verified",
     "parentPortalPassword": "",
-    "ranking": 130,
+    "ranking": 139,
     "initialPayment": 0,
     "initialPaymentMethod": "cash",
     "updatedByUserId": "user-admin",
@@ -1235,7 +1233,7 @@
     "status": "dropped",
     "address": "",
     "groupId": "",
-    "ranking": 104,
+    "ranking": 124,
     "branchId": "branch-2",
     "courseId": "course-1787347508908",
     "fullName": "رافائيل عبد المسيح درويش سليمان",
@@ -1322,7 +1320,7 @@
     "registrationDate": "2026-09-11",
     "dataValidationStatus": "verified",
     "parentPortalPassword": "",
-    "ranking": 131,
+    "ranking": 140,
     "initialPayment": 0,
     "initialPaymentMethod": "cash",
     "updatedByUserId": "user-admin",
@@ -1340,12 +1338,12 @@
     "phone": "01013358527",
     "track": "",
     "gender": "male",
-    "points": 402,
+    "points": 484,
     "prefix": "C",
     "status": "active",
     "address": "",
     "groupId": "grp-1787431802246",
-    "ranking": 11,
+    "ranking": 4,
     "branchId": "branch-1",
     "courseId": "course-1787347508908",
     "fullName": "شيرين مبروك محمد الحداد",
@@ -1359,14 +1357,14 @@
     "groupName": "ICT6 - 1",
     "netAmount": 200,
     "trainerId": "trainer-1787349806643",
-    "updatedAt": "2026-10-11T11:32:33.980Z",
+    "updatedAt": "2026-11-08T12:36:01.730Z",
     "nationalId": "",
     "paidAmount": 200,
     "parentName": "مبروك محمد الحداد",
     "siblingIds": [],
     "parentPhone": "01012680192",
     "studentCode": "C011",
-    "totalPoints": 402,
+    "totalPoints": 484,
     "traineeCode": "C011",
     "exemptReason": "",
     "isTestRecord": false,
@@ -1381,7 +1379,7 @@
     "photoUrl": "",
     "photo": "",
     "nextPaymentDueDate": "2026-10-01",
-    "lastPaymentDate": "2026-10-05",
+    "lastPaymentDate": "2026-09-30",
     "lastReceiptNumber": "REC0205484",
     "paidMonths": [
       "سبتمبر 2026"
@@ -1433,7 +1431,7 @@
     "registrationDate": "2026-09-11",
     "dataValidationStatus": "verified",
     "parentPortalPassword": "",
-    "ranking": 132,
+    "ranking": 141,
     "initialPayment": 0,
     "initialPaymentMethod": "cash",
     "updatedByUserId": "user-admin",
@@ -1492,7 +1490,7 @@
     "updatedByUserName": "مدير عام النظام",
     "dataValidationStatus": "needs_review",
     "parentPortalPassword": "",
-    "ranking": 117,
+    "ranking": 129,
     "initialPayment": 0,
     "initialPaymentMethod": "cash",
     "photo": "",
@@ -1543,7 +1541,7 @@
     "registrationDate": "2026-09-11",
     "dataValidationStatus": "verified",
     "parentPortalPassword": "",
-    "ranking": 50,
+    "ranking": 96,
     "photoUrl": "",
     "photo": "",
     "paidMonths": [
@@ -1551,7 +1549,7 @@
     ],
     "lastReceiptNumber": "REC9118736",
     "nextPaymentDueDate": "2026-10-01",
-    "lastPaymentDate": "2026-10-09",
+    "lastPaymentDate": "2026-09-30",
     "subscriptionStartDate": "2026-09-11",
     "startBillingMonth": "سبتمبر 2026"
   },
@@ -1568,7 +1566,7 @@
     "status": "active",
     "address": "",
     "groupId": "",
-    "ranking": 133,
+    "ranking": 142,
     "branchId": "branch-2",
     "courseId": "course-1787347569318",
     "fullName": "مصطفي عبد الله هاشم",
@@ -1619,7 +1617,7 @@
     "phone": "01061526825",
     "track": "",
     "gender": "male",
-    "points": 178,
+    "points": 283,
     "status": "active",
     "address": "",
     "groupId": "grp-1787433082510",
@@ -1634,14 +1632,14 @@
     "groupName": "ICT6 - B1",
     "netAmount": 250,
     "trainerId": "trainer-1787349806643",
-    "updatedAt": "2026-10-13T17:50:07.815Z",
+    "updatedAt": "2026-11-03T14:26:15.620Z",
     "nationalId": "",
     "paidAmount": 250,
     "parentName": "صفوت شحاته جرجس",
     "siblingIds": [],
     "parentPhone": "0122855504",
     "studentCode": "C024",
-    "totalPoints": 178,
+    "totalPoints": 283,
     "traineeCode": "C024",
     "exemptReason": "",
     "siblingNames": [],
@@ -1655,16 +1653,19 @@
     "createdByUserName": "مدير عام النظام",
     "initialPaymentMethod": "cash",
     "parentPortalPassword": "",
-    "ranking": 29,
+    "ranking": 30,
     "photo": "",
     "nextPaymentDueDate": "2026-10-01",
-    "lastPaymentDate": "2026-10-03",
+    "lastPaymentDate": "2026-09-30",
     "lastReceiptNumber": "REC0295311",
     "paidMonths": [
       "سبتمبر 2026"
     ],
     "subscriptionStartDate": "2026-09-11",
-    "startBillingMonth": "سبتمبر 2026"
+    "startBillingMonth": "سبتمبر 2026",
+    "courseIds": [
+      "course-1787347508908"
+    ]
   },
   {
     "id": "trainee-1788267739227-aqg2",
@@ -1674,7 +1675,7 @@
     "phone": "01009193365",
     "track": "",
     "gender": "male",
-    "points": 200,
+    "points": 230,
     "status": "active",
     "address": "",
     "groupId": "grp-1787432635686",
@@ -1689,7 +1690,7 @@
     "groupName": "ICT5 - B1",
     "netAmount": 200,
     "trainerId": "trainer-1787349806643",
-    "updatedAt": "2026-10-13T16:19:46.137Z",
+    "updatedAt": "2026-10-24T16:07:27.025Z",
     "nationalId": "",
     "paidAmount": 200,
     "parentName": "علي عبدالظاهر حسين",
@@ -1698,7 +1699,7 @@
     ],
     "parentPhone": "01022773941",
     "studentCode": "B008",
-    "totalPoints": 200,
+    "totalPoints": 230,
     "traineeCode": "B008",
     "exemptReason": "",
     "siblingNames": [
@@ -1714,7 +1715,7 @@
     "createdByUserName": "مدير عام النظام",
     "initialPaymentMethod": "cash",
     "parentPortalPassword": "",
-    "ranking": 21,
+    "ranking": 49,
     "updatedByUserId": "user-admin",
     "updatedByUserName": "مدير عام النظام",
     "prefix": "B",
@@ -1726,7 +1727,10 @@
       "سبتمبر ٢٠٢٦"
     ],
     "subscriptionStartDate": "2026-09-11",
-    "startBillingMonth": "سبتمبر 2026"
+    "startBillingMonth": "سبتمبر 2026",
+    "courseIds": [
+      "course-1787347462419"
+    ]
   },
   {
     "id": "trainee-1787541849210-13pem",
@@ -1736,12 +1740,12 @@
     "phone": "01143598843",
     "track": "",
     "gender": "male",
-    "points": 154,
+    "points": 204,
     "prefix": "C",
     "status": "active",
     "address": "",
     "groupId": "grp-1787431802246",
-    "ranking": 40,
+    "ranking": 65,
     "branchId": "branch-1",
     "courseId": "course-1787347508908",
     "fullName": "انس محمد فتحي مبروك",
@@ -1755,14 +1759,14 @@
     "groupName": "ICT6 - 2",
     "netAmount": 200,
     "trainerId": "trainer-1787349806643",
-    "updatedAt": "2026-10-14T11:29:11.067Z",
+    "updatedAt": "2026-11-08T12:35:09.743Z",
     "nationalId": "",
     "paidAmount": 200,
     "parentName": "محمد فتحي مبروك",
     "siblingIds": [],
     "parentPhone": "01102289446",
     "studentCode": "C006",
-    "totalPoints": 154,
+    "totalPoints": 204,
     "traineeCode": "C006",
     "exemptReason": "",
     "isTestRecord": false,
@@ -1787,7 +1791,7 @@
     "startBillingMonth": "سبتمبر 2026",
     "lastReceiptNumber": "REC9118486",
     "nextPaymentDueDate": "2026-10-01",
-    "lastPaymentDate": "2026-10-11"
+    "lastPaymentDate": "2026-09-30"
   },
   {
     "id": "trainee-1788355399095-qyqd",
@@ -1797,7 +1801,7 @@
     "phone": "01222615943",
     "track": "",
     "gender": "male",
-    "points": 130,
+    "points": 140,
     "status": "active",
     "address": "",
     "groupId": "grp-1787358559234",
@@ -1812,14 +1816,14 @@
     "groupName": "ICT - p1 - 2",
     "netAmount": 200,
     "trainerId": "trainer-1787349806643",
-    "updatedAt": "2026-10-11T12:58:58.473Z",
+    "updatedAt": "2026-11-01T14:20:27.007Z",
     "nationalId": "",
     "paidAmount": 200,
     "parentName": "حلمي محمد حلمي",
     "siblingIds": [],
     "parentPhone": "01284969643",
     "studentCode": "D016",
-    "totalPoints": 130,
+    "totalPoints": 140,
     "traineeCode": "D016",
     "exemptReason": "",
     "siblingNames": [],
@@ -1833,7 +1837,7 @@
     "createdByUserName": "مدير عام النظام",
     "initialPaymentMethod": "cash",
     "parentPortalPassword": "",
-    "ranking": 52,
+    "ranking": 87,
     "updatedByUserId": "user-admin",
     "updatedByUserName": "مدير عام النظام",
     "prefix": "D",
@@ -1842,7 +1846,10 @@
       "سبتمبر 2026"
     ],
     "subscriptionStartDate": "2026-09-11",
-    "startBillingMonth": "سبتمبر 2026"
+    "startBillingMonth": "سبتمبر 2026",
+    "courseIds": [
+      "course-1787347569318"
+    ]
   },
   {
     "id": "trainee-1788359122667-30dx",
@@ -1888,14 +1895,17 @@
     "createdByUserName": "مدير عام النظام",
     "initialPaymentMethod": "cash",
     "parentPortalPassword": "",
-    "ranking": 105,
+    "ranking": 119,
     "photo": "",
     "updatedByUserId": "user-admin",
     "updatedByUserName": "مدير عام النظام",
     "prefix": "C",
     "paidMonths": [],
     "subscriptionStartDate": "2026-09-11",
-    "startBillingMonth": "سبتمبر 2026"
+    "startBillingMonth": "سبتمبر 2026",
+    "courseIds": [
+      "course-1787347508908"
+    ]
   },
   {
     "id": "trainee-1788359237418-8bum",
@@ -1940,12 +1950,15 @@
     "createdByUserName": "مدير عام النظام",
     "initialPaymentMethod": "cash",
     "parentPortalPassword": "",
-    "ranking": 77,
+    "ranking": 117,
     "photoUrl": "",
     "photo": "",
     "paidMonths": [],
     "subscriptionStartDate": "2026-09-11",
-    "startBillingMonth": "سبتمبر 2026"
+    "startBillingMonth": "سبتمبر 2026",
+    "courseIds": [
+      "course-1787347508908"
+    ]
   },
   {
     "id": "trainee-1788359371618-3rgv",
@@ -1990,12 +2003,15 @@
     "createdByUserName": "مدير عام النظام",
     "initialPaymentMethod": "cash",
     "parentPortalPassword": "",
-    "ranking": 13,
+    "ranking": 39,
     "paidMonths": [
       "سبتمبر 2026"
     ],
     "subscriptionStartDate": "2026-09-11",
-    "startBillingMonth": "سبتمبر 2026"
+    "startBillingMonth": "سبتمبر 2026",
+    "courseIds": [
+      "course-1787347508908"
+    ]
   },
   {
     "id": "trainee-1788348931160-wd6r",
@@ -2005,7 +2021,7 @@
     "phone": "01140941220",
     "track": "",
     "gender": "male",
-    "points": 359,
+    "points": 419,
     "prefix": "C",
     "status": "active",
     "address": "",
@@ -2021,14 +2037,14 @@
     "groupName": "ICT6 - 1",
     "netAmount": 200,
     "trainerId": "trainer-1787349806643",
-    "updatedAt": "2026-10-19T10:48:41.308Z",
+    "updatedAt": "2026-11-08T12:36:00.408Z",
     "nationalId": "",
     "paidAmount": 200,
     "parentName": "هيثم عبدالرحمن علي",
     "siblingIds": [],
     "parentPhone": "01140941220",
     "studentCode": "C026",
-    "totalPoints": 359,
+    "totalPoints": 419,
     "traineeCode": "C026",
     "exemptReason": "",
     "siblingNames": [],
@@ -2044,7 +2060,7 @@
     "updatedByUserName": "مدير عام النظام",
     "initialPaymentMethod": "cash",
     "parentPortalPassword": "",
-    "ranking": 7,
+    "ranking": 10,
     "photo": "",
     "paidMonths": [
       "سبتمبر 2026"
@@ -2053,7 +2069,10 @@
     "startBillingMonth": "سبتمبر 2026",
     "lastReceiptNumber": "REC6921185",
     "nextPaymentDueDate": "2026-11-25",
-    "lastPaymentDate": "2026-10-19"
+    "lastPaymentDate": "2026-09-30",
+    "courseIds": [
+      "course-1787347508908"
+    ]
   },
   {
     "id": "trainee-1788351553588-e82d",
@@ -2063,7 +2082,7 @@
     "phone": "01144577491",
     "track": "",
     "gender": "male",
-    "points": 114,
+    "points": 244,
     "prefix": "D",
     "status": "active",
     "address": "",
@@ -2079,14 +2098,14 @@
     "groupName": "ICT - p1 - 1",
     "netAmount": 200,
     "trainerId": "trainer-1787349806643",
-    "updatedAt": "2026-10-14T12:23:57.914Z",
+    "updatedAt": "2026-10-28T12:28:57.030Z",
     "nationalId": "",
     "paidAmount": 200,
     "parentName": "محمد فتحي السيد",
     "siblingIds": [],
     "parentPhone": "01144577491",
     "studentCode": "D011",
-    "totalPoints": 114,
+    "totalPoints": 244,
     "traineeCode": "D011",
     "exemptReason": "",
     "siblingNames": [],
@@ -2102,13 +2121,16 @@
     "updatedByUserName": "مدير عام النظام",
     "initialPaymentMethod": "cash",
     "parentPortalPassword": "",
-    "ranking": 73,
+    "ranking": 41,
     "photo": "",
     "paidMonths": [
       "سبتمبر 2026"
     ],
     "subscriptionStartDate": "2026-09-11",
-    "startBillingMonth": "سبتمبر 2026"
+    "startBillingMonth": "سبتمبر 2026",
+    "courseIds": [
+      "course-1787347569318"
+    ]
   },
   {
     "id": "trainee-1788354298403-4rxe",
@@ -2118,7 +2140,7 @@
     "phone": "01282065482",
     "track": "",
     "gender": "male",
-    "points": 64,
+    "points": 274,
     "status": "active",
     "address": "",
     "groupId": "grp-1787358595611",
@@ -2133,14 +2155,14 @@
     "groupName": "ICT - p1 - 2",
     "netAmount": 200,
     "trainerId": "trainer-1787349806643",
-    "updatedAt": "2026-09-30T13:48:22.543Z",
+    "updatedAt": "2026-10-28T13:36:52.168Z",
     "nationalId": "",
     "paidAmount": 200,
     "parentName": "بيشوي جرجس ماريالس",
     "siblingIds": [],
     "parentPhone": "01229066491",
     "studentCode": "D014",
-    "totalPoints": 64,
+    "totalPoints": 274,
     "traineeCode": "D014",
     "exemptReason": "",
     "siblingNames": [],
@@ -2154,13 +2176,16 @@
     "createdByUserName": "مدير عام النظام",
     "initialPaymentMethod": "cash",
     "parentPortalPassword": "",
-    "ranking": 94,
+    "ranking": 32,
     "photo": "",
     "paidMonths": [
       "سبتمبر 2026"
     ],
     "subscriptionStartDate": "2026-09-11",
-    "startBillingMonth": "سبتمبر 2026"
+    "startBillingMonth": "سبتمبر 2026",
+    "courseIds": [
+      "course-1787347569318"
+    ]
   },
   {
     "id": "trainee-1788355869605-o1e8",
@@ -2170,7 +2195,7 @@
     "phone": "01128893698",
     "track": "",
     "gender": "male",
-    "points": 64,
+    "points": 184,
     "prefix": "D",
     "status": "active",
     "address": "",
@@ -2186,14 +2211,14 @@
     "groupName": "ICT - p1 - 2",
     "netAmount": 200,
     "trainerId": "trainer-1787349806643",
-    "updatedAt": "2026-09-30T13:47:51.487Z",
+    "updatedAt": "2026-11-01T14:19:43.776Z",
     "nationalId": "",
     "paidAmount": 200,
     "parentName": "سراج الدين محمد لطفي",
     "siblingIds": [],
     "parentPhone": "01019291820",
     "studentCode": "D019",
-    "totalPoints": 64,
+    "totalPoints": 184,
     "traineeCode": "D019",
     "exemptReason": "",
     "siblingNames": [],
@@ -2209,13 +2234,16 @@
     "updatedByUserName": "مدير عام النظام",
     "initialPaymentMethod": "cash",
     "parentPortalPassword": "",
-    "ranking": 95,
+    "ranking": 72,
     "photo": "",
     "paidMonths": [
       "سبتمبر 2026"
     ],
     "subscriptionStartDate": "2026-09-11",
-    "startBillingMonth": "سبتمبر 2026"
+    "startBillingMonth": "سبتمبر 2026",
+    "courseIds": [
+      "course-1787347569318"
+    ]
   },
   {
     "id": "trainee-1787746135198",
@@ -2225,7 +2253,7 @@
     "phone": "01022773941",
     "track": "",
     "gender": "male",
-    "points": 280,
+    "points": 300,
     "prefix": "B",
     "status": "active",
     "address": "",
@@ -2253,7 +2281,7 @@
     ],
     "parentPhone": "01022773941",
     "studentCode": "B003",
-    "totalPoints": 280,
+    "totalPoints": 300,
     "traineeCode": "B003",
     "exemptReason": "",
     "isTestRecord": false,
@@ -2272,7 +2300,7 @@
     "dataValidationStatus": "needs_review",
     "initialPaymentMethod": "cash",
     "parentPortalPassword": "",
-    "ranking": 11,
+    "ranking": 25,
     "photo": "",
     "nextPaymentDueDate": "2026-10-01",
     "lastPaymentDate": "2026-09-29",
@@ -2291,7 +2319,7 @@
     "phone": "01550235370",
     "track": "",
     "gender": "male",
-    "points": 201,
+    "points": 401,
     "prefix": "B",
     "status": "active",
     "address": "",
@@ -2307,13 +2335,13 @@
     "groupName": "ICT5 - 1",
     "netAmount": 200,
     "trainerId": "trainer-1787349806643",
-    "updatedAt": "2026-10-19T11:20:16.005Z",
+    "updatedAt": "2026-11-09T12:38:11.102Z",
     "nationalId": "",
     "paidAmount": 200,
     "parentName": "نشات حميده قاسم",
     "parentPhone": "01141301010",
     "studentCode": "B010",
-    "totalPoints": 201,
+    "totalPoints": 401,
     "traineeCode": "B010",
     "exemptReason": "",
     "discountAmount": 0,
@@ -2326,16 +2354,19 @@
     "createdByUserName": "مدير عام النظام",
     "initialPaymentMethod": "cash",
     "parentPortalPassword": "",
-    "ranking": 20,
+    "ranking": 11,
     "photo": "",
     "nextPaymentDueDate": "2026-10-01",
-    "lastPaymentDate": "2026-10-01",
+    "lastPaymentDate": "2026-09-28",
     "lastReceiptNumber": "REC9587441",
     "paidMonths": [
       "سبتمبر 2026"
     ],
     "subscriptionStartDate": "2026-09-11",
-    "startBillingMonth": "سبتمبر 2026"
+    "startBillingMonth": "سبتمبر 2026",
+    "courseIds": [
+      "course-1787347462419"
+    ]
   },
   {
     "id": "trainee-1788434285377-q7xd",
@@ -2345,9 +2376,9 @@
     "phone": "01227688584",
     "track": "",
     "gender": "male",
-    "points": 164,
+    "points": 312,
     "prefix": "B",
-    "status": "dropped",
+    "status": "completed",
     "address": "",
     "groupId": "grp-1787431608023",
     "branchId": "branch-1",
@@ -2359,34 +2390,42 @@
     "createdAt": "2026-09-11T18:58:21.537Z",
     "feeAmount": 200,
     "groupName": "ICT5 - 1",
-    "netAmount": 200,
+    "netAmount": 100,
     "trainerId": "trainer-1787349806643",
-    "updatedAt": "2026-10-08T11:24:06.231Z",
+    "updatedAt": "2026-11-12T12:18:22.185Z",
     "nationalId": "",
-    "paidAmount": 0,
+    "paidAmount": 100,
     "parentName": "محمد حسن علي",
     "parentPhone": "01005845650",
     "studentCode": "B013",
-    "totalPoints": 164,
+    "totalPoints": 312,
     "traineeCode": "B013",
     "exemptReason": "",
-    "discountAmount": 0,
+    "discountAmount": 100,
     "initialPayment": 0,
     "portalPassword": "",
     "_lastAutoParent": "محمد حسن علي",
     "createdByUserId": "user-admin",
-    "remainingAmount": 200,
-    "registrationDate": "2026-09-11",
+    "remainingAmount": 0,
+    "registrationDate": "2026-09-16",
     "createdByUserName": "مدير عام النظام",
     "initialPaymentMethod": "cash",
     "parentPortalPassword": "",
-    "ranking": 29,
+    "ranking": 21,
     "photo": "",
     "updatedByUserId": "user-admin",
     "updatedByUserName": "مدير عام النظام",
-    "paidMonths": [],
-    "subscriptionStartDate": "2026-09-11",
-    "startBillingMonth": "سبتمبر 2026"
+    "paidMonths": [
+      "سبتمبر 2026"
+    ],
+    "subscriptionStartDate": "2026-09-16",
+    "startBillingMonth": "سبتمبر 2026",
+    "lastReceiptNumber": "REC4940431",
+    "nextPaymentDueDate": "2026-10-24",
+    "lastPaymentDate": "2026-09-30",
+    "courseIds": [
+      "course-1787347462419"
+    ]
   },
   {
     "id": "trainee-1788434203404-zhp6",
@@ -2396,7 +2435,7 @@
     "phone": "01271683966",
     "track": "",
     "gender": "male",
-    "points": 195,
+    "points": 270,
     "prefix": "B",
     "status": "active",
     "address": "",
@@ -2418,7 +2457,7 @@
     "parentName": "جرجس بدير جرجس",
     "parentPhone": "",
     "studentCode": "B012",
-    "totalPoints": 195,
+    "totalPoints": 270,
     "traineeCode": "B012",
     "exemptReason": "",
     "discountAmount": 0,
@@ -2431,11 +2470,14 @@
     "createdByUserName": "مدير عام النظام",
     "initialPaymentMethod": "cash",
     "parentPortalPassword": "",
-    "ranking": 23,
+    "ranking": 33,
     "photo": "",
     "paidMonths": [],
     "subscriptionStartDate": "2026-09-11",
-    "startBillingMonth": "سبتمبر 2026"
+    "startBillingMonth": "سبتمبر 2026",
+    "courseIds": [
+      "course-1787347462419"
+    ]
   },
   {
     "id": "trainee-1787541849209-sfgme",
@@ -2445,12 +2487,12 @@
     "phone": "01103791786",
     "track": "",
     "gender": "male",
-    "points": 190,
+    "points": 240,
     "prefix": "A",
     "status": "active",
     "address": "",
     "groupId": "grp-1787351870532",
-    "ranking": 15,
+    "ranking": 45,
     "branchId": "branch-1",
     "courseId": "course-1787347401956",
     "fullName": "هلا محمد فتحي يحيي",
@@ -2472,7 +2514,7 @@
     "siblingIds": [],
     "parentPhone": "01149322292",
     "studentCode": "A008",
-    "totalPoints": 190,
+    "totalPoints": 240,
     "traineeCode": "A008",
     "exemptReason": "",
     "isTestRecord": false,
@@ -2486,7 +2528,7 @@
     "parentPortalPassword": "",
     "photo": "",
     "nextPaymentDueDate": "2026-10-01",
-    "lastPaymentDate": "2026-10-01",
+    "lastPaymentDate": "2026-09-28",
     "lastReceiptNumber": "REC0124465",
     "paidMonths": [
       "سبتمبر 2026"
@@ -2502,12 +2544,12 @@
     "phone": "01005400325",
     "track": "",
     "gender": "male",
-    "points": 430,
+    "points": 585,
     "prefix": "B",
     "status": "active",
     "address": "",
     "groupId": "grp-1787431608023",
-    "ranking": 4,
+    "ranking": 1,
     "branchId": "branch-1",
     "courseId": "course-1787347462419",
     "fullName": "رفيف محمد رمضان بخيت",
@@ -2522,7 +2564,7 @@
     "groupName": "ICT5 - 1",
     "netAmount": 0,
     "trainerId": "trainer-1787349806643",
-    "updatedAt": "2026-10-19T11:21:28.421Z",
+    "updatedAt": "2026-11-02T12:45:47.623Z",
     "nationalId": "",
     "paidAmount": 0,
     "parentName": "محمد رمضان بخيت",
@@ -2532,7 +2574,7 @@
     ],
     "parentPhone": "01001500686",
     "studentCode": "B001",
-    "totalPoints": 430,
+    "totalPoints": 585,
     "traineeCode": "B001",
     "exemptReason": "management_children",
     "isTestRecord": false,
@@ -2564,7 +2606,7 @@
     "phone": "01275749843",
     "track": "",
     "gender": "male",
-    "points": 460,
+    "points": 550,
     "prefix": "B",
     "status": "active",
     "address": "",
@@ -2579,13 +2621,13 @@
     "groupName": "ICT5 - 1",
     "netAmount": 200,
     "trainerId": "trainer-1787349806643",
-    "updatedAt": "2026-10-19T11:21:43.645Z",
+    "updatedAt": "2026-11-09T12:50:27.705Z",
     "nationalId": "",
     "paidAmount": 200,
     "parentName": "علاء سلامة عبدالسلام",
     "parentPhone": "01145987032",
     "studentCode": "B009",
-    "totalPoints": 460,
+    "totalPoints": 550,
     "traineeCode": "B009",
     "exemptReason": "",
     "discountAmount": 0,
@@ -2598,7 +2640,7 @@
     "createdByUserName": "مدير عام النظام",
     "initialPaymentMethod": "cash",
     "parentPortalPassword": "",
-    "ranking": 1,
+    "ranking": 2,
     "photoUrl": "",
     "photo": "",
     "updatedByUserId": "user-admin",
@@ -2610,7 +2652,10 @@
     "startBillingMonth": "سبتمبر 2026",
     "lastReceiptNumber": "REC9069606",
     "nextPaymentDueDate": "2026-10-01",
-    "lastPaymentDate": "2026-10-11"
+    "lastPaymentDate": "2026-09-30",
+    "courseIds": [
+      "course-1787347462419"
+    ]
   },
   {
     "id": "trainee-1787541849209-ga4bt",
@@ -2620,12 +2665,12 @@
     "phone": "01555724745",
     "track": "",
     "gender": "male",
-    "points": 154,
+    "points": 264,
     "prefix": "C",
     "status": "active",
     "address": "",
     "groupId": "grp-1787431802246",
-    "ranking": 41,
+    "ranking": 34,
     "branchId": "branch-1",
     "courseId": "course-1787347508908",
     "fullName": "أحمد حامد احمد السيد",
@@ -2639,7 +2684,7 @@
     "groupName": "ICT6 - 1",
     "netAmount": 200,
     "trainerId": "trainer-1787349806643",
-    "updatedAt": "2026-10-14T11:29:25.834Z",
+    "updatedAt": "2026-11-08T12:36:05.920Z",
     "nationalId": "",
     "paidAmount": 200,
     "parentName": "حامد احمد السيد",
@@ -2648,7 +2693,7 @@
     ],
     "parentPhone": "01144363810",
     "studentCode": "C023",
-    "totalPoints": 154,
+    "totalPoints": 264,
     "traineeCode": "C023",
     "exemptReason": "",
     "isTestRecord": false,
@@ -2668,7 +2713,7 @@
     "subscriptionStartDate": "2026-09-11",
     "startBillingMonth": "سبتمبر 2026",
     "nextPaymentDueDate": "2026-10-01",
-    "lastPaymentDate": "2026-10-11",
+    "lastPaymentDate": "2026-09-30",
     "lastReceiptNumber": "REC9131499"
   },
   {
@@ -2684,7 +2729,7 @@
     "status": "dropped",
     "address": "",
     "groupId": "",
-    "ranking": 134,
+    "ranking": 143,
     "branchId": "branch-1",
     "courseId": "course-1787347401956",
     "fullName": "احمد الشحات صلاح الشحات",
@@ -2736,7 +2781,7 @@
     "phone": "01099737669",
     "track": "",
     "gender": "male",
-    "points": 294,
+    "points": 344,
     "status": "active",
     "address": "",
     "groupId": "grp-1787431825818",
@@ -2758,7 +2803,7 @@
     "siblingIds": [],
     "parentPhone": "01007282622",
     "studentCode": "C030",
-    "totalPoints": 294,
+    "totalPoints": 344,
     "traineeCode": "C030",
     "exemptReason": "",
     "siblingNames": [],
@@ -2772,7 +2817,7 @@
     "createdByUserName": "مدير عام النظام",
     "initialPaymentMethod": "cash",
     "parentPortalPassword": "",
-    "ranking": 9,
+    "ranking": 13,
     "photo": "",
     "nextPaymentDueDate": "2026-10-01",
     "lastPaymentDate": "2026-09-30",
@@ -2781,7 +2826,10 @@
       "سبتمبر ٢٠٢٦"
     ],
     "subscriptionStartDate": "2026-09-11",
-    "startBillingMonth": "سبتمبر 2026"
+    "startBillingMonth": "سبتمبر 2026",
+    "courseIds": [
+      "course-1787347508908"
+    ]
   },
   {
     "id": "trainee-1788272413231-25ts",
@@ -2829,12 +2877,15 @@
     "updatedByUserName": "مدير عام النظام",
     "initialPaymentMethod": "cash",
     "parentPortalPassword": "",
-    "ranking": 118,
+    "ranking": 131,
     "photo": "",
     "prefix": "D",
     "paidMonths": [],
     "subscriptionStartDate": "2026-09-11",
-    "startBillingMonth": "سبتمبر 2026"
+    "startBillingMonth": "سبتمبر 2026",
+    "courseIds": [
+      "course-1787347569318"
+    ]
   },
   {
     "id": "trainee-1787541849209-nt607",
@@ -2844,12 +2895,12 @@
     "phone": "01119309697",
     "track": "",
     "gender": "male",
-    "points": 95,
+    "points": 251,
     "prefix": "A",
     "status": "active",
     "address": "",
     "groupId": "grp-1787350487970",
-    "ranking": 70,
+    "ranking": 38,
     "branchId": "branch-1",
     "courseId": "course-1787347401956",
     "fullName": "انس محمد عبدالبصير ربيع",
@@ -2863,7 +2914,7 @@
     "groupName": "ICT4 - 1",
     "netAmount": 200,
     "trainerId": "trainer-1787349806643",
-    "updatedAt": "2026-10-11T16:00:09.981Z",
+    "updatedAt": "2026-11-09T13:12:42.142Z",
     "nationalId": "",
     "paidAmount": 200,
     "parentName": "محمد عبدالبصير ربيع",
@@ -2872,7 +2923,7 @@
     ],
     "parentPhone": "01156569121",
     "studentCode": "A017",
-    "totalPoints": 95,
+    "totalPoints": 251,
     "traineeCode": "A017",
     "exemptReason": "",
     "isTestRecord": false,
@@ -2900,7 +2951,7 @@
     "phone": "01145173650",
     "track": "",
     "gender": "female",
-    "points": 84,
+    "points": 214,
     "status": "active",
     "address": "",
     "groupId": "grp-1787358595611",
@@ -2915,14 +2966,14 @@
     "groupName": "ICT - p1 - 2",
     "netAmount": 200,
     "trainerId": "trainer-1787349806643",
-    "updatedAt": "2026-09-30T13:52:43.912Z",
+    "updatedAt": "2026-11-01T14:20:01.628Z",
     "nationalId": "",
     "paidAmount": 200,
     "parentName": "رضا عبد المغيث مهدي",
     "siblingIds": [],
     "parentPhone": "",
     "studentCode": "D017",
-    "totalPoints": 84,
+    "totalPoints": 214,
     "traineeCode": "D017",
     "exemptReason": "",
     "siblingNames": [],
@@ -2936,7 +2987,7 @@
     "createdByUserName": "مدير عام النظام",
     "initialPaymentMethod": "cash",
     "parentPortalPassword": "",
-    "ranking": 86,
+    "ranking": 57,
     "updatedByUserId": "user-admin",
     "updatedByUserName": "مدير عام النظام",
     "prefix": "D",
@@ -2945,7 +2996,10 @@
       "سبتمبر 2026"
     ],
     "subscriptionStartDate": "2026-09-11",
-    "startBillingMonth": "سبتمبر 2026"
+    "startBillingMonth": "سبتمبر 2026",
+    "courseIds": [
+      "course-1787347569318"
+    ]
   },
   {
     "id": "trainee-1787541849209-vmr8g",
@@ -2955,12 +3009,12 @@
     "phone": "01558118998",
     "track": "",
     "gender": "male",
-    "points": 206,
+    "points": 436,
     "prefix": "B",
     "status": "active",
     "address": "",
     "groupId": "grp-1787431608023",
-    "ranking": 17,
+    "ranking": 8,
     "branchId": "branch-1",
     "courseId": "course-1787347462419",
     "fullName": "مصطفى محمود احمد خلف",
@@ -2975,14 +3029,14 @@
     "groupName": "ICT5 - 1",
     "netAmount": 200,
     "trainerId": "trainer-1787349806643",
-    "updatedAt": "2026-10-19T11:21:52.258Z",
+    "updatedAt": "2026-11-02T12:18:47.487Z",
     "nationalId": "",
     "paidAmount": 200,
     "parentName": "محمود احمد خلف",
     "siblingIds": [],
     "parentPhone": "01154387509",
     "studentCode": "B002",
-    "totalPoints": 206,
+    "totalPoints": 436,
     "traineeCode": "B002",
     "exemptReason": "",
     "isTestRecord": false,
@@ -3000,7 +3054,7 @@
     "parentPortalPassword": "",
     "photo": "",
     "nextPaymentDueDate": "2026-10-01",
-    "lastPaymentDate": "2026-10-01",
+    "lastPaymentDate": "2026-09-28",
     "lastReceiptNumber": "REC9524893",
     "paidMonths": [
       "سبتمبر 2026"
@@ -3016,7 +3070,7 @@
     "phone": "01113321804",
     "track": "",
     "gender": "male",
-    "points": 65,
+    "points": 175,
     "prefix": "A",
     "status": "active",
     "address": "",
@@ -3025,20 +3079,19 @@
     "courseId": "course-1787347401956",
     "fullName": "ياسين جلال جلال ابراهيم",
     "isExempt": false,
-    "photoUrl": "",
     "birthDate": "",
     "createdAt": "2026-09-11T18:58:21.808Z",
     "feeAmount": 200,
     "groupName": "ICT4 - 1",
     "netAmount": 200,
     "trainerId": "trainer-1787349806643",
-    "updatedAt": "2026-10-11T12:59:35.195Z",
+    "updatedAt": "2026-11-09T13:49:29.789Z",
     "nationalId": "",
     "paidAmount": 200,
     "parentName": "جلال جلال ابراهيم",
     "parentPhone": "01113320394",
     "studentCode": "A025",
-    "totalPoints": 65,
+    "totalPoints": 175,
     "traineeCode": "A025",
     "exemptReason": "",
     "discountAmount": 0,
@@ -3051,8 +3104,7 @@
     "createdByUserName": "مدير عام النظام",
     "initialPaymentMethod": "cash",
     "parentPortalPassword": "",
-    "ranking": 96,
-    "photo": "",
+    "ranking": 76,
     "paidMonths": [
       "سبتمبر 2026"
     ],
@@ -3060,7 +3112,10 @@
     "startBillingMonth": "سبتمبر 2026",
     "lastReceiptNumber": "REC3575113",
     "nextPaymentDueDate": "2026-10-01",
-    "lastPaymentDate": "2026-10-11"
+    "lastPaymentDate": "2026-09-30",
+    "courseIds": [
+      "course-1787347401956"
+    ]
   },
   {
     "id": "trainee-1788438485051-rm83",
@@ -3070,7 +3125,7 @@
     "phone": "01154901042",
     "track": "",
     "gender": "male",
-    "points": 85,
+    "points": 195,
     "prefix": "A",
     "status": "active",
     "address": "",
@@ -3086,13 +3141,13 @@
     "groupName": "ICT4 - 1",
     "netAmount": 200,
     "trainerId": "trainer-1787349806643",
-    "updatedAt": "2026-10-11T21:19:43.913Z",
+    "updatedAt": "2026-11-09T13:18:01.338Z",
     "nationalId": "",
     "paidAmount": 200,
     "parentName": "سامي ناجي سعد سلامة",
     "parentPhone": "",
     "studentCode": "A027",
-    "totalPoints": 85,
+    "totalPoints": 195,
     "traineeCode": "A027",
     "exemptReason": "",
     "discountAmount": 0,
@@ -3105,16 +3160,19 @@
     "createdByUserName": "مدير عام النظام",
     "initialPaymentMethod": "cash",
     "parentPortalPassword": "",
-    "ranking": 84,
+    "ranking": 69,
     "photo": "",
     "nextPaymentDueDate": "2026-10-01",
-    "lastPaymentDate": "2026-10-01",
+    "lastPaymentDate": "2026-09-28",
     "lastReceiptNumber": "REC9734265",
     "paidMonths": [
       "سبتمبر 2026"
     ],
     "subscriptionStartDate": "2026-09-11",
-    "startBillingMonth": "سبتمبر 2026"
+    "startBillingMonth": "سبتمبر 2026",
+    "courseIds": [
+      "course-1787347401956"
+    ]
   },
   {
     "id": "trainee-1787541849209-v7dn1",
@@ -3124,17 +3182,16 @@
     "phone": "01120530166",
     "track": "",
     "gender": "male",
-    "points": 125,
+    "points": 235,
     "prefix": "A",
     "status": "active",
     "address": "",
     "groupId": "grp-1787350487970",
-    "ranking": 47,
+    "ranking": 46,
     "branchId": "branch-1",
     "courseId": "course-1787347401956",
     "fullName": "كاراس بيشوي نبيل كرم",
     "isExempt": false,
-    "photoUrl": "",
     "birthDate": "",
     "courseIds": [
       "course-1787347401956"
@@ -3144,7 +3201,7 @@
     "groupName": "ICT4 - 1",
     "netAmount": 200,
     "trainerId": "trainer-1787349806643",
-    "updatedAt": "2026-10-11T21:19:43.989Z",
+    "updatedAt": "2026-11-09T13:49:01.566Z",
     "nationalId": "",
     "paidAmount": 200,
     "parentName": "بيشوي نبيل كرم",
@@ -3154,7 +3211,7 @@
     ],
     "parentPhone": "01120530166",
     "studentCode": "A011",
-    "totalPoints": 125,
+    "totalPoints": 235,
     "traineeCode": "A011",
     "exemptReason": "",
     "isTestRecord": false,
@@ -3169,9 +3226,8 @@
     "registrationDate": "2026-09-11",
     "dataValidationStatus": "verified",
     "parentPortalPassword": "",
-    "photo": "",
     "nextPaymentDueDate": "2026-10-01",
-    "lastPaymentDate": "2026-10-01",
+    "lastPaymentDate": "2026-09-28",
     "lastReceiptNumber": "REC9818284",
     "paidMonths": [
       "سبتمبر 2026"
@@ -3191,7 +3247,7 @@
     "phone": "01113164194",
     "track": "",
     "gender": "male",
-    "points": 232,
+    "points": 282,
     "prefix": "A",
     "status": "active",
     "address": "",
@@ -3213,7 +3269,7 @@
     "parentName": "علاءالدين احمد مبارك",
     "parentPhone": "01123335549",
     "studentCode": "A029",
-    "totalPoints": 232,
+    "totalPoints": 282,
     "traineeCode": "A029",
     "exemptReason": "",
     "discountAmount": 0,
@@ -3226,16 +3282,19 @@
     "createdByUserName": "مدير عام النظام",
     "initialPaymentMethod": "cash",
     "parentPortalPassword": "",
-    "ranking": 8,
+    "ranking": 31,
     "photo": "",
     "nextPaymentDueDate": "2026-10-01",
-    "lastPaymentDate": "2026-10-05",
+    "lastPaymentDate": "2026-09-30",
     "lastReceiptNumber": "REC3656035",
     "paidMonths": [
       "سبتمبر 2026"
     ],
     "subscriptionStartDate": "2026-09-11",
-    "startBillingMonth": "سبتمبر 2026"
+    "startBillingMonth": "سبتمبر 2026",
+    "courseIds": [
+      "course-1787347401956"
+    ]
   },
   {
     "id": "trainee-1788441737087-oclb",
@@ -3249,7 +3308,7 @@
     "prefix": "A",
     "status": "active",
     "address": "",
-    "groupId": "grp-1787350488774",
+    "groupId": "",
     "branchId": "branch-1",
     "courseId": "course-1787347401956",
     "fullName": "حمزة خالد مبروك فاروق",
@@ -3260,7 +3319,7 @@
     "groupName": "ICT4 - 2",
     "netAmount": 200,
     "trainerId": "trainer-1787349806643",
-    "updatedAt": "2026-10-15T13:31:47.368Z",
+    "updatedAt": "2026-11-13T08:25:37.250Z",
     "nationalId": "",
     "paidAmount": 0,
     "parentName": "خالد مبروك فاروق",
@@ -3279,10 +3338,16 @@
     "createdByUserName": "مدير عام النظام",
     "initialPaymentMethod": "cash",
     "parentPortalPassword": "",
-    "ranking": 70,
+    "ranking": 101,
     "paidMonths": [],
     "subscriptionStartDate": "2026-09-11",
-    "startBillingMonth": "سبتمبر 2026"
+    "startBillingMonth": "سبتمبر 2026",
+    "photoUrl": "",
+    "updatedByUserId": "user-admin",
+    "updatedByUserName": "مدير عام النظام",
+    "courseIds": [
+      "course-1787347401956"
+    ]
   },
   {
     "id": "trainee-1788441590683-ngqn",
@@ -3292,7 +3357,7 @@
     "phone": "012219114664",
     "track": "",
     "gender": "male",
-    "points": 206,
+    "points": 306,
     "prefix": "A",
     "status": "active",
     "address": "",
@@ -3316,7 +3381,7 @@
     ],
     "parentPhone": "01069659090",
     "studentCode": "A030",
-    "totalPoints": 206,
+    "totalPoints": 306,
     "traineeCode": "A030",
     "exemptReason": "",
     "siblingNames": [
@@ -3332,17 +3397,20 @@
     "createdByUserName": "مدير عام النظام",
     "initialPaymentMethod": "cash",
     "parentPortalPassword": "",
-    "ranking": 12,
+    "ranking": 22,
     "updatedByUserId": "user-admin",
     "updatedByUserName": "مدير عام النظام",
     "nextPaymentDueDate": "2026-10-01",
-    "lastPaymentDate": "2026-10-05",
+    "lastPaymentDate": "2026-09-30",
     "lastReceiptNumber": "REC5894633",
     "paidMonths": [
       "سبتمبر 2026"
     ],
     "subscriptionStartDate": "2026-09-11",
-    "startBillingMonth": "سبتمبر 2026"
+    "startBillingMonth": "سبتمبر 2026",
+    "courseIds": [
+      "course-1787347401956"
+    ]
   },
   {
     "id": "trainee-1788446613950-0nmo",
@@ -3352,7 +3420,7 @@
     "phone": "01119144734",
     "track": "",
     "gender": "male",
-    "points": 90,
+    "points": 140,
     "prefix": "D",
     "status": "active",
     "address": "",
@@ -3373,7 +3441,7 @@
     "parentName": "محمد احمد ابراهيم",
     "parentPhone": "01103344671",
     "studentCode": "D031",
-    "totalPoints": 90,
+    "totalPoints": 140,
     "traineeCode": "D031",
     "exemptReason": "",
     "discountAmount": 0,
@@ -3386,11 +3454,14 @@
     "createdByUserName": "مدير عام النظام",
     "initialPaymentMethod": "cash",
     "parentPortalPassword": "",
-    "ranking": 69,
+    "ranking": 88,
     "photo": "",
     "paidMonths": [],
     "subscriptionStartDate": "2026-09-11",
-    "startBillingMonth": "سبتمبر 2026"
+    "startBillingMonth": "سبتمبر 2026",
+    "courseIds": [
+      "course-1787347569318"
+    ]
   },
   {
     "id": "trainee-1788446099678-14gq",
@@ -3400,7 +3471,7 @@
     "phone": "01207497402",
     "track": "",
     "gender": "male",
-    "points": 40,
+    "points": 90,
     "prefix": "D",
     "status": "active",
     "address": "",
@@ -3422,7 +3493,7 @@
     "parentName": "عماد صابر عبدالسلام",
     "parentPhone": "01124648819",
     "studentCode": "D026",
-    "totalPoints": 40,
+    "totalPoints": 90,
     "traineeCode": "D026",
     "exemptReason": "",
     "discountAmount": 0,
@@ -3435,13 +3506,16 @@
     "createdByUserName": "مدير عام النظام",
     "initialPaymentMethod": "cash",
     "parentPortalPassword": "",
-    "ranking": 106,
+    "ranking": 112,
     "photo": "",
     "paidMonths": [
       "سبتمبر 2026"
     ],
     "subscriptionStartDate": "2026-09-11",
-    "startBillingMonth": "سبتمبر 2026"
+    "startBillingMonth": "سبتمبر 2026",
+    "courseIds": [
+      "course-1787347569318"
+    ]
   },
   {
     "id": "trainee-1788446260388-hnyt",
@@ -3451,7 +3525,7 @@
     "phone": "01001000000",
     "track": "",
     "gender": "male",
-    "points": 18,
+    "points": 118,
     "prefix": "D",
     "status": "active",
     "address": "",
@@ -3473,7 +3547,7 @@
     "parentName": "حنا بدير جرجس",
     "parentPhone": "",
     "studentCode": "D028",
-    "totalPoints": 18,
+    "totalPoints": 118,
     "traineeCode": "D028",
     "exemptReason": "",
     "discountAmount": 0,
@@ -3486,7 +3560,7 @@
     "createdByUserName": "مدير عام النظام",
     "initialPaymentMethod": "cash",
     "parentPortalPassword": "",
-    "ranking": 122,
+    "ranking": 99,
     "photo": "",
     "paidMonths": [
       "سبتمبر 2026"
@@ -3495,7 +3569,10 @@
     "startBillingMonth": "سبتمبر 2026",
     "lastReceiptNumber": "REC6556251",
     "nextPaymentDueDate": "2026-11-25",
-    "lastPaymentDate": "2026-10-19"
+    "lastPaymentDate": "2026-09-30",
+    "courseIds": [
+      "course-1787347569318"
+    ]
   },
   {
     "id": "trainee-1788446486450-581z",
@@ -3505,7 +3582,7 @@
     "phone": "01145383689",
     "track": "",
     "gender": "male",
-    "points": 50,
+    "points": 100,
     "prefix": "D",
     "status": "active",
     "address": "",
@@ -3521,13 +3598,13 @@
     "groupName": "ICT - p1 - 3",
     "netAmount": 200,
     "trainerId": "trainer-1787349806643",
-    "updatedAt": "2026-09-03T19:47:24.679Z",
+    "updatedAt": "2026-10-30T18:39:32.312Z",
     "nationalId": "",
-    "paidAmount": 0,
+    "paidAmount": 200,
     "parentName": "احمد ابراهيم عبدالوهاب",
     "parentPhone": "01146000479",
     "studentCode": "D030",
-    "totalPoints": 50,
+    "totalPoints": 100,
     "traineeCode": "D030",
     "exemptReason": "",
     "discountAmount": 0,
@@ -3535,16 +3612,24 @@
     "portalPassword": "",
     "_lastAutoParent": "احمد ابراهيم عبدالوهاب",
     "createdByUserId": "user-admin",
-    "remainingAmount": 200,
+    "remainingAmount": 0,
     "registrationDate": "2026-09-11",
     "createdByUserName": "مدير عام النظام",
     "initialPaymentMethod": "cash",
     "parentPortalPassword": "",
-    "ranking": 99,
+    "ranking": 108,
     "photo": "",
-    "paidMonths": [],
+    "paidMonths": [
+      "سبتمبر 2026"
+    ],
     "subscriptionStartDate": "2026-09-11",
-    "startBillingMonth": "سبتمبر 2026"
+    "startBillingMonth": "سبتمبر 2026",
+    "lastReceiptNumber": "REC5572201",
+    "nextPaymentDueDate": "2026-11-25",
+    "lastPaymentDate": "2026-10-30",
+    "courseIds": [
+      "course-1787347569318"
+    ]
   },
   {
     "id": "trainee-1788449898119-750m",
@@ -3554,7 +3639,7 @@
     "phone": "011107015737",
     "track": "",
     "gender": "male",
-    "points": 80,
+    "points": 180,
     "prefix": "A",
     "status": "active",
     "address": "",
@@ -3576,7 +3661,7 @@
     "parentName": "محمد عبدالقادر علي",
     "parentPhone": "",
     "studentCode": "A034",
-    "totalPoints": 80,
+    "totalPoints": 180,
     "traineeCode": "A034",
     "exemptReason": "",
     "discountAmount": 0,
@@ -3589,15 +3674,18 @@
     "createdByUserName": "مدير عام النظام",
     "initialPaymentMethod": "cash",
     "parentPortalPassword": "",
-    "ranking": 80,
+    "ranking": 74,
     "photo": "",
     "paidMonths": [
       "سبتمبر 2026"
     ],
     "lastReceiptNumber": "REC4793528",
     "nextPaymentDueDate": "2026-10-01",
-    "lastPaymentDate": "2026-10-10",
-    "startBillingMonth": "سبتمبر 2026"
+    "lastPaymentDate": "2026-09-30",
+    "startBillingMonth": "سبتمبر 2026",
+    "courseIds": [
+      "course-1787347401956"
+    ]
   },
   {
     "id": "trainee-1788450172521-h0zs",
@@ -3607,7 +3695,7 @@
     "phone": "01101426617",
     "track": "",
     "gender": "male",
-    "points": 120,
+    "points": 320,
     "prefix": "A",
     "status": "active",
     "address": "",
@@ -3623,16 +3711,16 @@
     "groupName": "ICT4 - 3",
     "netAmount": 150,
     "trainerId": "trainer-1787349806643",
-    "updatedAt": "2026-10-02T21:02:54.335Z",
+    "updatedAt": "2026-10-30T18:39:36.274Z",
     "nationalId": "",
-    "paidAmount": 0,
+    "paidAmount": 150,
     "parentName": "احمد ابراهيم عبدالوهاب",
     "siblingIds": [
       "trainee-1788446486450-581z"
     ],
     "parentPhone": "01146000479",
     "studentCode": "A036",
-    "totalPoints": 120,
+    "totalPoints": 320,
     "traineeCode": "A036",
     "exemptReason": "",
     "siblingNames": [
@@ -3643,18 +3731,26 @@
     "portalPassword": "",
     "_lastAutoParent": "احمد ابراهيم عبدالوهاب",
     "createdByUserId": "user-admin",
-    "remainingAmount": 150,
+    "remainingAmount": 0,
     "registrationDate": "2026-09-11",
     "createdByUserName": "مدير عام النظام",
     "initialPaymentMethod": "cash",
     "parentPortalPassword": "",
-    "ranking": 41,
+    "ranking": 20,
     "updatedByUserId": "user-admin",
     "updatedByUserName": "مدير عام النظام",
     "photo": "",
-    "paidMonths": [],
+    "paidMonths": [
+      "سبتمبر 2026"
+    ],
     "subscriptionStartDate": "2026-09-11",
-    "startBillingMonth": "سبتمبر 2026"
+    "startBillingMonth": "سبتمبر 2026",
+    "lastReceiptNumber": "REC5576179",
+    "nextPaymentDueDate": "2026-11-25",
+    "lastPaymentDate": "2026-10-30",
+    "courseIds": [
+      "course-1787347401956"
+    ]
   },
   {
     "id": "trainee-1788450041999-a84z",
@@ -3664,7 +3760,7 @@
     "phone": "01032241142",
     "track": "",
     "gender": "male",
-    "points": 45,
+    "points": 245,
     "prefix": "A",
     "status": "active",
     "address": "",
@@ -3689,7 +3785,7 @@
     ],
     "parentPhone": "01129695966",
     "studentCode": "A035",
-    "totalPoints": 45,
+    "totalPoints": 245,
     "traineeCode": "A035",
     "exemptReason": "friend_children",
     "siblingNames": [
@@ -3707,11 +3803,14 @@
     "updatedByUserName": "مدير عام النظام",
     "initialPaymentMethod": "cash",
     "parentPortalPassword": "",
-    "ranking": 103,
+    "ranking": 40,
     "photo": "",
     "paidMonths": [],
     "subscriptionStartDate": "2026-09-11",
-    "startBillingMonth": "سبتمبر 2026"
+    "startBillingMonth": "سبتمبر 2026",
+    "courseIds": [
+      "course-1787347401956"
+    ]
   },
   {
     "id": "trainee-1787541849209-4xin8",
@@ -3721,12 +3820,12 @@
     "phone": "01100660031",
     "track": "",
     "gender": "male",
-    "points": 144,
+    "points": 344,
     "prefix": "A",
     "status": "active",
     "address": "",
     "groupId": "grp-1787351870532",
-    "ranking": 31,
+    "ranking": 14,
     "branchId": "branch-1",
     "courseId": "course-1787347401956",
     "fullName": "اسر محمد عصام ابو الخير",
@@ -3748,7 +3847,7 @@
     "siblingIds": [],
     "parentPhone": "01100270005",
     "studentCode": "A012",
-    "totalPoints": 144,
+    "totalPoints": 344,
     "traineeCode": "A012",
     "exemptReason": "",
     "isTestRecord": false,
@@ -3766,7 +3865,7 @@
     "parentPortalPassword": "",
     "photo": "",
     "nextPaymentDueDate": "2026-10-01",
-    "lastPaymentDate": "2026-10-01",
+    "lastPaymentDate": "2026-09-28",
     "lastReceiptNumber": "REC0162000",
     "paidMonths": [
       "سبتمبر 2026"
@@ -3790,7 +3889,7 @@
     "phone": "01274953588",
     "track": "",
     "gender": "male",
-    "points": 289,
+    "points": 539,
     "prefix": "C",
     "status": "active",
     "address": "",
@@ -3812,7 +3911,7 @@
     "siblingIds": [],
     "parentPhone": "01069659090",
     "studentCode": "C034",
-    "totalPoints": 289,
+    "totalPoints": 539,
     "traineeCode": "C034",
     "exemptReason": "",
     "siblingNames": [],
@@ -3828,7 +3927,7 @@
     "updatedByUserName": "مدير عام النظام",
     "initialPaymentMethod": "cash",
     "parentPortalPassword": "",
-    "ranking": 6,
+    "ranking": 3,
     "photoUrl": "",
     "photo": "",
     "nextPaymentDueDate": "2026-10-01",
@@ -3838,7 +3937,10 @@
       "سبتمبر ٢٠٢٦"
     ],
     "subscriptionStartDate": "2026-09-11",
-    "startBillingMonth": "سبتمبر 2026"
+    "startBillingMonth": "سبتمبر 2026",
+    "courseIds": [
+      "course-1787347508908"
+    ]
   },
   {
     "id": "trainee-1789160240943-wwfv",
@@ -3848,7 +3950,7 @@
     "phone": "0100",
     "track": "",
     "gender": "male",
-    "points": 165,
+    "points": 295,
     "prefix": "A",
     "status": "active",
     "address": "",
@@ -3870,7 +3972,7 @@
     "parentName": "محمد حسين",
     "parentPhone": "",
     "studentCode": "A037",
-    "totalPoints": 165,
+    "totalPoints": 295,
     "traineeCode": "A037",
     "exemptReason": "",
     "discountAmount": 0,
@@ -3882,7 +3984,7 @@
     "updatedByUserName": "مدير عام النظام",
     "initialPaymentMethod": "cash",
     "parentPortalPassword": "",
-    "ranking": 35,
+    "ranking": 27,
     "photo": "",
     "paidMonths": [
       "سبتمبر 2026"
@@ -3891,7 +3993,10 @@
     "startBillingMonth": "سبتمبر 2026",
     "lastReceiptNumber": "REC6576923",
     "nextPaymentDueDate": "2026-11-25",
-    "lastPaymentDate": "2026-10-19"
+    "lastPaymentDate": "2026-09-30",
+    "courseIds": [
+      "course-1787347401956"
+    ]
   },
   {
     "id": "trainee-1788449704942-pqx8",
@@ -3938,11 +4043,14 @@
     "updatedByUserName": "مدير عام النظام",
     "initialPaymentMethod": "cash",
     "parentPortalPassword": "",
-    "ranking": 100,
+    "ranking": 120,
     "photo": "",
     "paidMonths": [],
     "subscriptionStartDate": "2026-09-11",
-    "startBillingMonth": "سبتمبر 2026"
+    "startBillingMonth": "سبتمبر 2026",
+    "courseIds": [
+      "course-1787347401956"
+    ]
   },
   {
     "id": "trainee-1787541849210-xqtko",
@@ -3957,7 +4065,7 @@
     "status": "active",
     "address": "",
     "groupId": "grp-1787431825818",
-    "ranking": 53,
+    "ranking": 105,
     "branchId": "branch-1",
     "courseId": "course-1787347508908",
     "fullName": "رمضان وائل مهدي الخضراوي",
@@ -4050,10 +4158,10 @@
     "dataValidationStatus": "verified",
     "initialPaymentMethod": "cash",
     "parentPortalPassword": "",
-    "ranking": 48,
+    "ranking": 102,
     "photo": "",
     "nextPaymentDueDate": "2026-10-01",
-    "lastPaymentDate": "2026-10-01",
+    "lastPaymentDate": "2026-09-28",
     "lastReceiptNumber": "REC9681540",
     "paidMonths": [
       "سبتمبر 2026"
@@ -4074,7 +4182,7 @@
     "status": "active",
     "address": "",
     "groupId": "grp-1787432103884",
-    "ranking": 26,
+    "ranking": 70,
     "branchId": "branch-2",
     "courseId": "course-1787347401956",
     "fullName": "أغابي بيمن عزت",
@@ -4114,7 +4222,7 @@
     "parentPortalPassword": "",
     "photo": "",
     "nextPaymentDueDate": "2026-10-01",
-    "lastPaymentDate": "2026-10-06",
+    "lastPaymentDate": "2026-09-30",
     "lastReceiptNumber": "REC8472453",
     "paidMonths": [
       "سبتمبر 2026"
@@ -4130,12 +4238,12 @@
     "phone": "01555724745",
     "track": "",
     "gender": "male",
-    "points": 165,
+    "points": 175,
     "prefix": "A",
     "status": "active",
     "address": "",
     "groupId": "grp-1787350487970",
-    "ranking": 23,
+    "ranking": 77,
     "branchId": "branch-1",
     "courseId": "course-1787347401956",
     "fullName": "شيم حامد احمد السيد",
@@ -4150,7 +4258,7 @@
     "groupName": "ICT4 - 1",
     "netAmount": 200,
     "trainerId": "trainer-1787349806643",
-    "updatedAt": "2026-09-03T12:43:22.744Z",
+    "updatedAt": "2026-11-09T13:15:46.885Z",
     "nationalId": "",
     "paidAmount": 200,
     "parentName": "حامد احمد السيد",
@@ -4159,7 +4267,7 @@
     ],
     "parentPhone": "01144363810",
     "studentCode": "A007",
-    "totalPoints": 165,
+    "totalPoints": 175,
     "traineeCode": "A007",
     "exemptReason": "",
     "isTestRecord": false,
@@ -4188,12 +4296,12 @@
     "phone": "01001500686",
     "track": "",
     "gender": "male",
-    "points": 437,
+    "points": 477,
     "prefix": "D",
     "status": "active",
     "address": "",
     "groupId": "grp-1787358595611",
-    "ranking": 1,
+    "ranking": 5,
     "branchId": "branch-1",
     "courseId": "course-1787347569318",
     "fullName": "مرام محمد رمضان بخيت",
@@ -4207,7 +4315,7 @@
     "groupName": "ICT - p1 - 2",
     "netAmount": 0,
     "trainerId": "trainer-1787349806643",
-    "updatedAt": "2026-09-30T13:47:42.708Z",
+    "updatedAt": "2026-11-01T14:19:47.186Z",
     "nationalId": "",
     "paidAmount": 0,
     "parentName": "محمد رمضان بخيت",
@@ -4217,7 +4325,7 @@
     ],
     "parentPhone": "01001500686",
     "studentCode": "D001",
-    "totalPoints": 437,
+    "totalPoints": 477,
     "traineeCode": "D001",
     "exemptReason": "management_children",
     "isTestRecord": false,
@@ -4255,7 +4363,7 @@
     "status": "dropped",
     "address": "",
     "groupId": "",
-    "ranking": 112,
+    "ranking": 128,
     "branchId": "branch-1",
     "courseId": "course-1787347401956",
     "fullName": "سما سراج الدين محمد لطفي علي",
@@ -4306,7 +4414,7 @@
     "phone": "01121541421",
     "track": "",
     "gender": "male",
-    "points": 125,
+    "points": 145,
     "prefix": "A",
     "status": "active",
     "address": "",
@@ -4325,14 +4433,14 @@
     "groupName": "ICT4 - 1",
     "netAmount": 200,
     "trainerId": "trainer-1787349806643",
-    "updatedAt": "2026-10-05T13:27:24.228Z",
+    "updatedAt": "2026-11-09T13:17:59.289Z",
     "nationalId": "",
     "paidAmount": 200,
     "parentName": "محمد سعد النجار",
     "siblingIds": [],
     "parentPhone": "01121541421",
     "studentCode": "A013",
-    "totalPoints": 125,
+    "totalPoints": 145,
     "traineeCode": "A013",
     "exemptReason": "",
     "isTestRecord": false,
@@ -4347,12 +4455,12 @@
     "updatedByUserName": "مدير عام النظام",
     "dataValidationStatus": "needs_review",
     "parentPortalPassword": "",
-    "ranking": 34,
+    "ranking": 86,
     "initialPayment": 0,
     "initialPaymentMethod": "cash",
     "photo": "",
     "nextPaymentDueDate": "2026-10-01",
-    "lastPaymentDate": "2026-10-05",
+    "lastPaymentDate": "2026-09-30",
     "lastReceiptNumber": "REC5591181",
     "paidMonths": [
       "سبتمبر 2026"
@@ -4368,17 +4476,16 @@
     "phone": "01114692028",
     "track": "",
     "gender": "male",
-    "points": 318,
+    "points": 338,
     "prefix": "A",
     "status": "active",
     "address": "",
     "groupId": "grp-1787350488774",
-    "ranking": 4,
+    "ranking": 16,
     "branchId": "branch-1",
     "courseId": "course-1787347401956",
     "fullName": "مارسلينو مايكل رشدي فواد",
     "isExempt": false,
-    "photoUrl": "",
     "birthDate": "",
     "courseIds": [
       "course-1787347401956"
@@ -4388,14 +4495,14 @@
     "groupName": "ICT4 - 2",
     "netAmount": 200,
     "trainerId": "trainer-1787349806643",
-    "updatedAt": "2026-10-11T21:19:44.226Z",
+    "updatedAt": "2026-11-11T14:05:46.256Z",
     "nationalId": "",
     "paidAmount": 200,
     "parentName": "مايكل رشدي فواد",
     "siblingIds": [],
     "parentPhone": "01151870626",
     "studentCode": "A014",
-    "totalPoints": 318,
+    "totalPoints": 338,
     "traineeCode": "A014",
     "exemptReason": "",
     "isTestRecord": false,
@@ -4411,9 +4518,8 @@
     "dataValidationStatus": "verified",
     "initialPaymentMethod": "cash",
     "parentPortalPassword": "",
-    "photo": "",
     "nextPaymentDueDate": "2026-10-01",
-    "lastPaymentDate": "2026-10-02",
+    "lastPaymentDate": "2026-09-30",
     "lastReceiptNumber": "REC3584916",
     "paidMonths": [
       "سبتمبر 2026"
@@ -4450,7 +4556,7 @@
     "trainerId": "trainer-1787349806643",
     "updatedAt": "2026-10-19T15:01:15.108Z",
     "nationalId": "",
-    "paidAmount": 200,
+    "paidAmount": 0,
     "parentName": "احمد عصام ابو الخير",
     "siblingIds": [],
     "parentPhone": "01113415134",
@@ -4464,14 +4570,14 @@
     "discountAmount": 0,
     "initialPayment": 0,
     "portalPassword": "",
-    "remainingAmount": 0,
+    "remainingAmount": 200,
     "updatedByUserId": "user-admin",
     "registrationDate": "2026-08-25",
     "updatedByUserName": "مدير عام النظام",
     "dataValidationStatus": "verified",
     "initialPaymentMethod": "cash",
     "parentPortalPassword": "",
-    "ranking": 4,
+    "ranking": 84,
     "photo": "",
     "paidMonths": [
       "سبتمبر 2026"
@@ -4487,12 +4593,12 @@
     "phone": "01067504968",
     "track": "",
     "gender": "male",
-    "points": 95,
+    "points": 105,
     "prefix": "A",
     "status": "active",
     "address": "",
     "groupId": "grp-1787350487970",
-    "ranking": 71,
+    "ranking": 106,
     "branchId": "branch-1",
     "courseId": "course-1787347401956",
     "fullName": "ارسانيوس بيشوى يوسف بشرى",
@@ -4506,14 +4612,14 @@
     "groupName": "ICT4 - 1",
     "netAmount": 200,
     "trainerId": "trainer-1787349806643",
-    "updatedAt": "2026-10-11T21:19:44.330Z",
+    "updatedAt": "2026-11-09T13:15:52.539Z",
     "nationalId": "",
     "paidAmount": 200,
     "parentName": "بيشوى يوسف بشرى",
     "siblingIds": [],
     "parentPhone": "01016563881",
     "studentCode": "A004",
-    "totalPoints": 95,
+    "totalPoints": 105,
     "traineeCode": "A004",
     "exemptReason": "",
     "isTestRecord": false,
@@ -4528,7 +4634,7 @@
     "photoUrl": "",
     "photo": "",
     "nextPaymentDueDate": "2026-10-01",
-    "lastPaymentDate": "2026-10-01",
+    "lastPaymentDate": "2026-09-28",
     "lastReceiptNumber": "REC9717136",
     "paidMonths": [
       "سبتمبر 2026"
@@ -4586,11 +4692,14 @@
     "dataValidationStatus": "verified",
     "initialPaymentMethod": "cash",
     "parentPortalPassword": "",
-    "ranking": 113,
+    "ranking": 130,
     "photo": "",
     "paidMonths": [],
     "subscriptionStartDate": "2026-09-11",
-    "startBillingMonth": "سبتمبر 2026"
+    "startBillingMonth": "سبتمبر 2026",
+    "courseIds": [
+      "course-1787347401956"
+    ]
   },
   {
     "id": "trainee-1787541849210-aqkav",
@@ -4600,12 +4709,12 @@
     "phone": "01024444706",
     "track": "",
     "gender": "male",
-    "points": 154,
+    "points": 204,
     "prefix": "C",
     "status": "active",
     "address": "",
     "groupId": "grp-1787431802246",
-    "ranking": 42,
+    "ranking": 66,
     "branchId": "branch-1",
     "courseId": "course-1787347508908",
     "fullName": "رودينا محمد جمال عبد السلام",
@@ -4620,14 +4729,14 @@
     "groupName": "ICT6 - 1",
     "netAmount": 200,
     "trainerId": "trainer-1787349806643",
-    "updatedAt": "2026-10-14T11:29:43.121Z",
+    "updatedAt": "2026-11-08T12:35:10.613Z",
     "nationalId": "",
     "paidAmount": 200,
     "parentName": "محمد جمال عبد السلام",
     "siblingIds": [],
     "parentPhone": "01146779857",
     "studentCode": "C019",
-    "totalPoints": 154,
+    "totalPoints": 204,
     "traineeCode": "C019",
     "exemptReason": "",
     "isTestRecord": false,
@@ -4657,12 +4766,12 @@
     "phone": "01093188503",
     "track": "",
     "gender": "male",
-    "points": 148,
+    "points": 186,
     "prefix": "C",
     "status": "active",
     "address": "",
     "groupId": "grp-1787433082510",
-    "ranking": 44,
+    "ranking": 71,
     "branchId": "branch-2",
     "courseId": "course-1787347508908",
     "fullName": "اسيل محمد شوقي عبدالحافظ",
@@ -4677,14 +4786,14 @@
     "groupName": "ICT6 - B1",
     "netAmount": 250,
     "trainerId": "trainer-1787349806643",
-    "updatedAt": "2026-10-13T17:50:18.670Z",
+    "updatedAt": "2026-11-03T14:27:44.356Z",
     "nationalId": "",
     "paidAmount": 250,
     "parentName": "محمد شوقي عبدالحافظ",
     "siblingIds": [],
     "parentPhone": "01093188503",
     "studentCode": "C021",
-    "totalPoints": 148,
+    "totalPoints": 186,
     "traineeCode": "C021",
     "exemptReason": "",
     "isTestRecord": false,
@@ -4698,7 +4807,7 @@
     "parentPortalPassword": "",
     "photo": "",
     "nextPaymentDueDate": "2026-10-01",
-    "lastPaymentDate": "2026-10-03",
+    "lastPaymentDate": "2026-09-30",
     "lastReceiptNumber": "REC0470608",
     "paidMonths": [
       "سبتمبر 2026"
@@ -4714,7 +4823,7 @@
     "phone": "01098185743",
     "track": "",
     "gender": "male",
-    "points": 180,
+    "points": 200,
     "status": "active",
     "address": "",
     "groupId": "grp-1787432635686",
@@ -4736,7 +4845,7 @@
     "siblingIds": [],
     "parentPhone": "01005443972",
     "studentCode": "B007",
-    "totalPoints": 180,
+    "totalPoints": 200,
     "traineeCode": "B007",
     "exemptReason": "",
     "siblingNames": [],
@@ -4750,16 +4859,19 @@
     "createdByUserName": "مدير عام النظام",
     "initialPaymentMethod": "cash",
     "parentPortalPassword": "",
-    "ranking": 28,
+    "ranking": 68,
     "photo": "",
     "nextPaymentDueDate": "2026-10-01",
-    "lastPaymentDate": "2026-10-06",
+    "lastPaymentDate": "2026-09-30",
     "lastReceiptNumber": "REC2065057",
     "paidMonths": [
       "سبتمبر 2026"
     ],
     "subscriptionStartDate": "2026-09-11",
-    "startBillingMonth": "سبتمبر 2026"
+    "startBillingMonth": "سبتمبر 2026",
+    "courseIds": [
+      "course-1787347462419"
+    ]
   },
   {
     "id": "trainee-1787541849209-nk3i7",
@@ -4774,7 +4886,7 @@
     "status": "active",
     "address": "",
     "groupId": "grp-1787432635686",
-    "ranking": 30,
+    "ranking": 78,
     "branchId": "branch-2",
     "courseId": "course-1787347462419",
     "fullName": "ياسر عمار ياسر راشد",
@@ -4821,7 +4933,7 @@
     "phone": "01107925233",
     "track": "",
     "gender": "male",
-    "points": 144,
+    "points": 244,
     "status": "active",
     "address": "",
     "groupId": "grp-1787431802246",
@@ -4836,14 +4948,14 @@
     "groupName": "ICT6 - 1",
     "netAmount": 200,
     "trainerId": "trainer-1787349806643",
-    "updatedAt": "2026-10-18T11:23:31.572Z",
+    "updatedAt": "2026-11-08T12:35:12.837Z",
     "nationalId": "",
     "paidAmount": 0,
     "parentName": "محمد السيد محمد السيد",
     "siblingIds": [],
     "parentPhone": "01111567071",
     "studentCode": "C027",
-    "totalPoints": 144,
+    "totalPoints": 244,
     "traineeCode": "C027",
     "exemptReason": "",
     "siblingNames": [],
@@ -4857,11 +4969,14 @@
     "createdByUserName": "مدير عام النظام",
     "initialPaymentMethod": "cash",
     "parentPortalPassword": "",
-    "ranking": 49,
+    "ranking": 42,
     "photo": "",
     "paidMonths": [],
     "subscriptionStartDate": "2026-09-11",
-    "startBillingMonth": "سبتمبر 2026"
+    "startBillingMonth": "سبتمبر 2026",
+    "courseIds": [
+      "course-1787347508908"
+    ]
   },
   {
     "id": "trainee-1788355755634-ofcm",
@@ -4871,7 +4986,7 @@
     "phone": "01116782878",
     "track": "",
     "gender": "male",
-    "points": 64,
+    "points": 84,
     "status": "active",
     "address": "",
     "groupId": "grp-1787358595611",
@@ -4886,14 +5001,14 @@
     "groupName": "ICT - p1 - 2",
     "netAmount": 200,
     "trainerId": "trainer-1787349806643",
-    "updatedAt": "2026-10-02T20:56:26.681Z",
+    "updatedAt": "2026-10-28T13:30:44.703Z",
     "nationalId": "",
     "paidAmount": 200,
     "parentName": "محمد عباس خلف",
     "siblingIds": [],
     "parentPhone": "",
     "studentCode": "D018",
-    "totalPoints": 64,
+    "totalPoints": 84,
     "traineeCode": "D018",
     "exemptReason": "",
     "siblingNames": [],
@@ -4907,7 +5022,7 @@
     "createdByUserName": "مدير عام النظام",
     "initialPaymentMethod": "cash",
     "parentPortalPassword": "",
-    "ranking": 96,
+    "ranking": 116,
     "photo": "",
     "updatedByUserId": "user-admin",
     "updatedByUserName": "مدير عام النظام",
@@ -4916,7 +5031,10 @@
       "سبتمبر 2026"
     ],
     "subscriptionStartDate": "2026-09-11",
-    "startBillingMonth": "سبتمبر 2026"
+    "startBillingMonth": "سبتمبر 2026",
+    "courseIds": [
+      "course-1787347569318"
+    ]
   },
   {
     "id": "trainee-1788349582919-h9x9",
@@ -4926,7 +5044,7 @@
     "phone": "01221609977",
     "track": "",
     "gender": "male",
-    "points": 144,
+    "points": 235,
     "status": "active",
     "address": "",
     "groupId": "grp-1787431802246",
@@ -4941,14 +5059,14 @@
     "groupName": "ICT6 - 1",
     "netAmount": 200,
     "trainerId": "trainer-1787349806643",
-    "updatedAt": "2026-10-18T11:22:40.395Z",
+    "updatedAt": "2026-11-08T12:34:58.155Z",
     "nationalId": "",
     "paidAmount": 200,
     "parentName": "سعد حامد هجرس",
     "siblingIds": [],
     "parentPhone": "",
     "studentCode": "C028",
-    "totalPoints": 144,
+    "totalPoints": 235,
     "traineeCode": "C028",
     "exemptReason": "",
     "siblingNames": [],
@@ -4962,7 +5080,7 @@
     "createdByUserName": "مدير عام النظام",
     "initialPaymentMethod": "cash",
     "parentPortalPassword": "",
-    "ranking": 50,
+    "ranking": 47,
     "photo": "",
     "nextPaymentDueDate": "2026-10-01",
     "lastPaymentDate": "2026-09-30",
@@ -4971,7 +5089,10 @@
       "سبتمبر ٢٠٢٦"
     ],
     "subscriptionStartDate": "2026-09-11",
-    "startBillingMonth": "سبتمبر 2026"
+    "startBillingMonth": "سبتمبر 2026",
+    "courseIds": [
+      "course-1787347508908"
+    ]
   },
   {
     "id": "trainee-1788351682285-1vs0",
@@ -4981,7 +5102,7 @@
     "phone": "01146827995",
     "track": "",
     "gender": "male",
-    "points": 124,
+    "points": 154,
     "prefix": "D",
     "status": "active",
     "address": "",
@@ -4997,14 +5118,14 @@
     "groupName": "ICT - p1 - 1",
     "netAmount": 200,
     "trainerId": "trainer-1787349806643",
-    "updatedAt": "2026-10-11T12:58:52.933Z",
+    "updatedAt": "2026-10-28T12:28:38.380Z",
     "nationalId": "",
     "paidAmount": 200,
     "parentName": "جمعة فتوح ابراهيم",
     "siblingIds": [],
     "parentPhone": "01128359485",
     "studentCode": "D021",
-    "totalPoints": 124,
+    "totalPoints": 154,
     "traineeCode": "D021",
     "exemptReason": "",
     "siblingNames": [],
@@ -5020,7 +5141,7 @@
     "updatedByUserName": "مدير عام النظام",
     "initialPaymentMethod": "cash",
     "parentPortalPassword": "",
-    "ranking": 65,
+    "ranking": 83,
     "photo": "",
     "nextPaymentDueDate": "2026-10-01",
     "lastPaymentDate": "2026-09-30",
@@ -5029,7 +5150,10 @@
       "سبتمبر ٢٠٢٦"
     ],
     "subscriptionStartDate": "2026-09-11",
-    "startBillingMonth": "سبتمبر 2026"
+    "startBillingMonth": "سبتمبر 2026",
+    "courseIds": [
+      "course-1787347569318"
+    ]
   },
   {
     "id": "trainee-1788349656427-9f1p",
@@ -5039,7 +5163,7 @@
     "phone": "01120533494",
     "track": "",
     "gender": "male",
-    "points": 144,
+    "points": 214,
     "status": "active",
     "address": "",
     "groupId": "grp-1787431802246",
@@ -5054,14 +5178,14 @@
     "groupName": "ICT6 - 1",
     "netAmount": 200,
     "trainerId": "trainer-1787349806643",
-    "updatedAt": "2026-10-18T11:23:34.671Z",
+    "updatedAt": "2026-10-28T11:28:41.688Z",
     "nationalId": "",
     "paidAmount": 200,
     "parentName": "واصف محمد صالح",
     "siblingIds": [],
     "parentPhone": "01143600471",
     "studentCode": "C029",
-    "totalPoints": 144,
+    "totalPoints": 214,
     "traineeCode": "C029",
     "exemptReason": "",
     "siblingNames": [],
@@ -5075,7 +5199,7 @@
     "createdByUserName": "مدير عام النظام",
     "initialPaymentMethod": "cash",
     "parentPortalPassword": "",
-    "ranking": 51,
+    "ranking": 58,
     "photo": "",
     "nextPaymentDueDate": "2026-10-01",
     "lastPaymentDate": "2026-09-30",
@@ -5084,7 +5208,10 @@
       "سبتمبر ٢٠٢٦"
     ],
     "subscriptionStartDate": "2026-09-11",
-    "startBillingMonth": "سبتمبر 2026"
+    "startBillingMonth": "سبتمبر 2026",
+    "courseIds": [
+      "course-1787347508908"
+    ]
   },
   {
     "id": "trainee-1788348803502-lln1",
@@ -5094,7 +5221,7 @@
     "phone": "01117835661",
     "track": "",
     "gender": "male",
-    "points": 184,
+    "points": 324,
     "status": "active",
     "address": "",
     "groupId": "grp-1787431802246",
@@ -5109,14 +5236,14 @@
     "groupName": "ICT6 - 1",
     "netAmount": 200,
     "trainerId": "trainer-1787349806643",
-    "updatedAt": "2026-10-18T11:23:26.586Z",
+    "updatedAt": "2026-10-28T11:28:17.441Z",
     "nationalId": "",
     "paidAmount": 200,
     "parentName": "محمد احمد حلمي",
     "siblingIds": [],
     "parentPhone": "01159165395",
     "studentCode": "C025",
-    "totalPoints": 184,
+    "totalPoints": 324,
     "traineeCode": "C025",
     "exemptReason": "",
     "siblingNames": [],
@@ -5132,13 +5259,16 @@
     "updatedByUserName": "مدير عام النظام",
     "initialPaymentMethod": "cash",
     "parentPortalPassword": "",
-    "ranking": 27,
+    "ranking": 18,
     "photo": "",
     "paidMonths": [
       "سبتمبر 2026"
     ],
     "subscriptionStartDate": "2026-09-11",
-    "startBillingMonth": "سبتمبر 2026"
+    "startBillingMonth": "سبتمبر 2026",
+    "courseIds": [
+      "course-1787347508908"
+    ]
   },
   {
     "id": "trainee-1788351434704-xse0",
@@ -5148,7 +5278,7 @@
     "phone": "01157607060",
     "track": "",
     "gender": "male",
-    "points": 104,
+    "points": 234,
     "prefix": "D",
     "status": "active",
     "address": "",
@@ -5164,14 +5294,14 @@
     "groupName": "ICT - p1 - 1",
     "netAmount": 200,
     "trainerId": "trainer-1787349806643",
-    "updatedAt": "2026-10-14T12:22:49.189Z",
+    "updatedAt": "2026-10-28T12:25:28.863Z",
     "nationalId": "",
     "paidAmount": 200,
     "parentName": "جلال جلال ابراهيم بدوي",
     "siblingIds": [],
     "parentPhone": "01113321804",
     "studentCode": "D010",
-    "totalPoints": 104,
+    "totalPoints": 234,
     "traineeCode": "D010",
     "exemptReason": "",
     "siblingNames": [],
@@ -5187,7 +5317,7 @@
     "updatedByUserName": "مدير عام النظام",
     "initialPaymentMethod": "cash",
     "parentPortalPassword": "",
-    "ranking": 77,
+    "ranking": 48,
     "photo": "",
     "paidMonths": [
       "سبتمبر 2026"
@@ -5196,7 +5326,10 @@
     "startBillingMonth": "سبتمبر 2026",
     "lastReceiptNumber": "REC2817221",
     "nextPaymentDueDate": "2026-10-01",
-    "lastPaymentDate": "2026-10-11"
+    "lastPaymentDate": "2026-09-30",
+    "courseIds": [
+      "course-1787347569318"
+    ]
   },
   {
     "id": "trainee-1788434693014-74k1",
@@ -5206,7 +5339,7 @@
     "phone": "01211522032",
     "track": "",
     "gender": "male",
-    "points": 204,
+    "points": 214,
     "prefix": "B",
     "status": "active",
     "address": "",
@@ -5222,13 +5355,13 @@
     "groupName": "ICT5 - 1",
     "netAmount": 200,
     "trainerId": "trainer-1787349806643",
-    "updatedAt": "2026-10-19T11:22:39.390Z",
+    "updatedAt": "2026-11-09T12:39:58.946Z",
     "nationalId": "",
     "paidAmount": 200,
     "parentName": "حنا بدير جرجس",
     "parentPhone": "01211522032",
     "studentCode": "B015",
-    "totalPoints": 204,
+    "totalPoints": 214,
     "traineeCode": "B015",
     "exemptReason": "",
     "discountAmount": 0,
@@ -5241,7 +5374,7 @@
     "createdByUserName": "مدير عام النظام",
     "initialPaymentMethod": "cash",
     "parentPortalPassword": "",
-    "ranking": 19,
+    "ranking": 59,
     "photo": "",
     "paidMonths": [
       "سبتمبر 2026"
@@ -5250,7 +5383,10 @@
     "startBillingMonth": "سبتمبر 2026",
     "lastReceiptNumber": "REC6596037",
     "nextPaymentDueDate": "2026-11-25",
-    "lastPaymentDate": "2026-10-19"
+    "lastPaymentDate": "2026-09-30",
+    "courseIds": [
+      "course-1787347462419"
+    ]
   },
   {
     "id": "trainee-1788434372373-9lbi",
@@ -5260,7 +5396,7 @@
     "phone": "01275857083",
     "track": "",
     "gender": "male",
-    "points": 148,
+    "points": 228,
     "prefix": "B",
     "status": "active",
     "address": "",
@@ -5276,13 +5412,13 @@
     "groupName": "ICT5 - 1",
     "netAmount": 200,
     "trainerId": "trainer-1787349806643",
-    "updatedAt": "2026-10-19T11:26:03.191Z",
+    "updatedAt": "2026-11-09T12:41:53.105Z",
     "nationalId": "",
     "paidAmount": 200,
     "parentName": "ثروت اسكاروس بولس",
     "parentPhone": "",
     "studentCode": "B014",
-    "totalPoints": 148,
+    "totalPoints": 228,
     "traineeCode": "B014",
     "exemptReason": "",
     "discountAmount": 0,
@@ -5295,7 +5431,7 @@
     "createdByUserName": "مدير عام النظام",
     "initialPaymentMethod": "cash",
     "parentPortalPassword": "",
-    "ranking": 45,
+    "ranking": 52,
     "photo": "",
     "paidMonths": [
       "سبتمبر 2026"
@@ -5304,7 +5440,10 @@
     "startBillingMonth": "سبتمبر 2026",
     "lastReceiptNumber": "REC6602984",
     "nextPaymentDueDate": "2026-11-25",
-    "lastPaymentDate": "2026-10-19"
+    "lastPaymentDate": "2026-09-30",
+    "courseIds": [
+      "course-1787347462419"
+    ]
   },
   {
     "id": "trainee-1788433811697-19bi",
@@ -5314,7 +5453,7 @@
     "phone": "01111449872",
     "track": "",
     "gender": "male",
-    "points": 144,
+    "points": 424,
     "prefix": "B",
     "status": "active",
     "address": "",
@@ -5330,13 +5469,13 @@
     "groupName": "ICT5 - 1",
     "netAmount": 200,
     "trainerId": "trainer-1787349806643",
-    "updatedAt": "2026-10-19T11:21:56.267Z",
+    "updatedAt": "2026-11-09T12:36:47.101Z",
     "nationalId": "",
     "paidAmount": 200,
     "parentName": "عبدالحميد السعيد ابو سكينه",
     "parentPhone": "01111449872",
     "studentCode": "B011",
-    "totalPoints": 144,
+    "totalPoints": 424,
     "traineeCode": "B011",
     "exemptReason": "",
     "discountAmount": 0,
@@ -5349,7 +5488,7 @@
     "createdByUserName": "مدير عام النظام",
     "initialPaymentMethod": "cash",
     "parentPortalPassword": "",
-    "ranking": 52,
+    "ranking": 9,
     "photo": "",
     "paidMonths": [
       "سبتمبر 2026"
@@ -5358,7 +5497,10 @@
     "startBillingMonth": "سبتمبر 2026",
     "lastReceiptNumber": "REC6608941",
     "nextPaymentDueDate": "2026-11-25",
-    "lastPaymentDate": "2026-10-19"
+    "lastPaymentDate": "2026-09-30",
+    "courseIds": [
+      "course-1787347462419"
+    ]
   },
   {
     "id": "trainee-1787541849210-hstjh",
@@ -5368,12 +5510,12 @@
     "phone": "01120530166",
     "track": "",
     "gender": "male",
-    "points": 40,
+    "points": 90,
     "prefix": "D",
     "status": "active",
     "address": "",
     "groupId": "grp-1787358828709",
-    "ranking": 107,
+    "ranking": 113,
     "branchId": "branch-1",
     "courseId": "course-1787347569318",
     "fullName": "شنوده بيشوي نبيل كرم",
@@ -5398,7 +5540,7 @@
     ],
     "parentPhone": "01120530166",
     "studentCode": "D005",
-    "totalPoints": 40,
+    "totalPoints": 90,
     "traineeCode": "D005",
     "exemptReason": "",
     "isTestRecord": false,
@@ -5419,7 +5561,7 @@
     "updatedByUserId": "user-admin",
     "updatedByUserName": "مدير عام النظام",
     "nextPaymentDueDate": "2026-10-01",
-    "lastPaymentDate": "2026-10-01",
+    "lastPaymentDate": "2026-09-28",
     "lastReceiptNumber": "REC0214912",
     "paidMonths": [
       "سبتمبر 2026"
@@ -5435,11 +5577,11 @@
     "phone": "01112430762",
     "track": "",
     "gender": "male",
-    "points": 104,
+    "points": 264,
     "prefix": "D",
     "status": "active",
     "address": "",
-    "groupId": "grp-1787358559234",
+    "groupId": "grp-1787358595611",
     "branchId": "branch-1",
     "courseId": "course-1787347569318",
     "fullName": "رؤي ابراهيم محمد احمد",
@@ -5451,14 +5593,14 @@
     "groupName": "ICT - p1 - 1",
     "netAmount": 200,
     "trainerId": "trainer-1787349806643",
-    "updatedAt": "2026-10-14T12:23:14.036Z",
+    "updatedAt": "2026-11-01T14:20:30.150Z",
     "nationalId": "",
     "paidAmount": 200,
     "parentName": "ابراهيم محمد احمد",
     "siblingIds": [],
     "parentPhone": "01128840679",
     "studentCode": "D013",
-    "totalPoints": 104,
+    "totalPoints": 264,
     "traineeCode": "D013",
     "exemptReason": "",
     "siblingNames": [],
@@ -5474,7 +5616,7 @@
     "updatedByUserName": "مدير عام النظام",
     "initialPaymentMethod": "cash",
     "parentPortalPassword": "",
-    "ranking": 78,
+    "ranking": 35,
     "photo": "",
     "paidMonths": [
       "سبتمبر 2026"
@@ -5483,7 +5625,10 @@
     "startBillingMonth": "سبتمبر 2026",
     "lastReceiptNumber": "REC3542673",
     "nextPaymentDueDate": "2026-10-01",
-    "lastPaymentDate": "2026-10-11"
+    "lastPaymentDate": "2026-09-30",
+    "courseIds": [
+      "course-1787347569318"
+    ]
   },
   {
     "id": "trainee-1788276627580-qls2",
@@ -5493,7 +5638,7 @@
     "phone": "01091359082",
     "track": "",
     "gender": "male",
-    "points": 114,
+    "points": 224,
     "status": "active",
     "address": "",
     "groupId": "grp-1787432103884",
@@ -5517,7 +5662,7 @@
     ],
     "parentPhone": "01093188503",
     "studentCode": "A021",
-    "totalPoints": 114,
+    "totalPoints": 224,
     "traineeCode": "A021",
     "exemptReason": "",
     "siblingNames": [
@@ -5535,16 +5680,19 @@
     "updatedByUserName": "مدير عام النظام",
     "initialPaymentMethod": "cash",
     "parentPortalPassword": "",
-    "ranking": 97,
+    "ranking": 53,
     "photo": "",
     "nextPaymentDueDate": "2026-10-01",
-    "lastPaymentDate": "2026-10-03",
+    "lastPaymentDate": "2026-09-30",
     "lastReceiptNumber": "REC0521195",
     "paidMonths": [
       "سبتمبر 2026"
     ],
     "subscriptionStartDate": "2026-09-11",
-    "startBillingMonth": "سبتمبر 2026"
+    "startBillingMonth": "سبتمبر 2026",
+    "courseIds": [
+      "course-1787347401956"
+    ]
   },
   {
     "id": "trainee-1788438411955-rotz",
@@ -5554,7 +5702,7 @@
     "phone": "01123626592",
     "track": "",
     "gender": "male",
-    "points": 95,
+    "points": 205,
     "prefix": "A",
     "status": "active",
     "address": "",
@@ -5563,20 +5711,19 @@
     "courseId": "course-1787347401956",
     "fullName": "مكاري كيرلس جرجس كامل",
     "isExempt": false,
-    "photoUrl": "",
     "birthDate": "",
     "createdAt": "2026-09-11T18:58:21.871Z",
     "feeAmount": 200,
     "groupName": "ICT4 - 1",
     "netAmount": 200,
     "trainerId": "trainer-1787349806643",
-    "updatedAt": "2026-10-08T12:24:20.286Z",
+    "updatedAt": "2026-11-09T13:49:36.622Z",
     "nationalId": "",
     "paidAmount": 200,
     "parentName": "كيرلس جرجس كامل",
     "parentPhone": "",
     "studentCode": "A026",
-    "totalPoints": 95,
+    "totalPoints": 205,
     "traineeCode": "A026",
     "exemptReason": "",
     "discountAmount": 0,
@@ -5589,16 +5736,18 @@
     "createdByUserName": "مدير عام النظام",
     "initialPaymentMethod": "cash",
     "parentPortalPassword": "",
-    "ranking": 72,
-    "photo": "",
+    "ranking": 63,
     "nextPaymentDueDate": "2026-10-01",
-    "lastPaymentDate": "2026-10-05",
+    "lastPaymentDate": "2026-09-30",
     "lastReceiptNumber": "REC3626502",
     "paidMonths": [
       "سبتمبر 2026"
     ],
     "subscriptionStartDate": "2026-09-11",
-    "startBillingMonth": "سبتمبر 2026"
+    "startBillingMonth": "سبتمبر 2026",
+    "courseIds": [
+      "course-1787347401956"
+    ]
   },
   {
     "id": "trainee-1788438199947-7k16",
@@ -5608,7 +5757,7 @@
     "phone": "01156148747",
     "track": "",
     "gender": "male",
-    "points": 102,
+    "points": 162,
     "prefix": "A",
     "status": "active",
     "address": "",
@@ -5624,13 +5773,13 @@
     "groupName": "ICT4 - 1",
     "netAmount": 200,
     "trainerId": "trainer-1787349806643",
-    "updatedAt": "2026-10-05T12:33:29.074Z",
+    "updatedAt": "2026-11-09T13:17:15.086Z",
     "nationalId": "",
     "paidAmount": 200,
     "parentName": "مينا جرجس كامل",
     "parentPhone": "",
     "studentCode": "A024",
-    "totalPoints": 102,
+    "totalPoints": 162,
     "traineeCode": "A024",
     "exemptReason": "",
     "discountAmount": 0,
@@ -5645,16 +5794,19 @@
     "updatedByUserName": "مدير عام النظام",
     "initialPaymentMethod": "cash",
     "parentPortalPassword": "",
-    "ranking": 90,
+    "ranking": 80,
     "photo": "",
     "nextPaymentDueDate": "2026-10-01",
-    "lastPaymentDate": "2026-10-05",
+    "lastPaymentDate": "2026-09-30",
     "lastReceiptNumber": "REC3608883",
     "paidMonths": [
       "سبتمبر 2026"
     ],
     "subscriptionStartDate": "2026-09-11",
-    "startBillingMonth": "سبتمبر 2026"
+    "startBillingMonth": "سبتمبر 2026",
+    "courseIds": [
+      "course-1787347401956"
+    ]
   },
   {
     "id": "trainee-1788445552384-3sxs",
@@ -5664,7 +5816,7 @@
     "phone": "01144875336",
     "track": "",
     "gender": "male",
-    "points": 48,
+    "points": 118,
     "prefix": "D",
     "status": "active",
     "address": "",
@@ -5686,7 +5838,7 @@
     "parentName": "محمد ابراهيم عبدالوهاب",
     "parentPhone": "01011180221",
     "studentCode": "D024",
-    "totalPoints": 48,
+    "totalPoints": 118,
     "traineeCode": "D024",
     "exemptReason": "",
     "discountAmount": 0,
@@ -5699,7 +5851,7 @@
     "createdByUserName": "مدير عام النظام",
     "initialPaymentMethod": "cash",
     "parentPortalPassword": "",
-    "ranking": 106,
+    "ranking": 100,
     "photo": "",
     "updatedByUserId": "user-admin",
     "updatedByUserName": "مدير عام النظام",
@@ -5710,7 +5862,10 @@
     "startBillingMonth": "سبتمبر 2026",
     "lastReceiptNumber": "REC6784822",
     "nextPaymentDueDate": "2026-11-25",
-    "lastPaymentDate": "2026-10-19"
+    "lastPaymentDate": "2026-09-30",
+    "courseIds": [
+      "course-1787347569318"
+    ]
   },
   {
     "id": "trainee-1788445962647-bskx",
@@ -5720,7 +5875,7 @@
     "phone": "01152806377",
     "track": "",
     "gender": "male",
-    "points": 68,
+    "points": 208,
     "prefix": "D",
     "status": "active",
     "address": "",
@@ -5736,13 +5891,13 @@
     "groupName": "ICT - p1 - 3",
     "netAmount": 200,
     "trainerId": "trainer-1787349806643",
-    "updatedAt": "2026-10-11T12:58:48.881Z",
+    "updatedAt": "2026-10-28T12:27:45.806Z",
     "nationalId": "",
     "paidAmount": 200,
     "parentName": "محمد عبدالله عبدالمنعم",
     "parentPhone": "01140990902",
     "studentCode": "D025",
-    "totalPoints": 68,
+    "totalPoints": 208,
     "traineeCode": "D025",
     "exemptReason": "",
     "discountAmount": 0,
@@ -5755,7 +5910,7 @@
     "createdByUserName": "مدير عام النظام",
     "initialPaymentMethod": "cash",
     "parentPortalPassword": "",
-    "ranking": 94,
+    "ranking": 61,
     "photo": "",
     "updatedByUserId": "user-admin",
     "updatedByUserName": "مدير عام النظام",
@@ -5763,7 +5918,10 @@
       "سبتمبر 2026"
     ],
     "subscriptionStartDate": "2026-09-11",
-    "startBillingMonth": "سبتمبر 2026"
+    "startBillingMonth": "سبتمبر 2026",
+    "courseIds": [
+      "course-1787347569318"
+    ]
   },
   {
     "id": "trainee-1788446345093-kr2y",
@@ -5773,7 +5931,7 @@
     "phone": "01112430796",
     "track": "",
     "gender": "male",
-    "points": 38,
+    "points": 88,
     "prefix": "D",
     "status": "active",
     "address": "",
@@ -5795,7 +5953,7 @@
     "parentName": "عمرو محمود فرج",
     "parentPhone": "01151026880",
     "studentCode": "D029",
-    "totalPoints": 38,
+    "totalPoints": 88,
     "traineeCode": "D029",
     "exemptReason": "",
     "discountAmount": 0,
@@ -5808,7 +5966,7 @@
     "createdByUserName": "مدير عام النظام",
     "initialPaymentMethod": "cash",
     "parentPortalPassword": "",
-    "ranking": 114,
+    "ranking": 115,
     "photo": "",
     "paidMonths": [
       "سبتمبر 2026"
@@ -5817,7 +5975,10 @@
     "startBillingMonth": "سبتمبر 2026",
     "lastReceiptNumber": "REC6770214",
     "nextPaymentDueDate": "2026-11-25",
-    "lastPaymentDate": "2026-10-19"
+    "lastPaymentDate": "2026-09-30",
+    "courseIds": [
+      "course-1787347569318"
+    ]
   },
   {
     "id": "trainee-1788449807037-ogbg",
@@ -5827,7 +5988,7 @@
     "phone": "01011180221",
     "track": "",
     "gender": "male",
-    "points": 80,
+    "points": 230,
     "prefix": "A",
     "status": "active",
     "address": "",
@@ -5852,7 +6013,7 @@
     ],
     "parentPhone": "01011180221",
     "studentCode": "A033",
-    "totalPoints": 80,
+    "totalPoints": 230,
     "traineeCode": "A033",
     "exemptReason": "",
     "siblingNames": [
@@ -5870,25 +6031,28 @@
     "updatedByUserName": "مدير عام النظام",
     "initialPaymentMethod": "cash",
     "parentPortalPassword": "",
-    "ranking": 81,
+    "ranking": 50,
     "photo": "",
     "paidMonths": [
       "سبتمبر 2026"
     ],
     "lastReceiptNumber": "REC4807483",
     "nextPaymentDueDate": "2026-10-01",
-    "lastPaymentDate": "2026-10-10",
-    "startBillingMonth": "سبتمبر 2026"
+    "lastPaymentDate": "2026-09-30",
+    "startBillingMonth": "سبتمبر 2026",
+    "courseIds": [
+      "course-1787347401956"
+    ]
   },
   {
     "id": "trainee-1788355309014-jfeq",
-    "code": "D015",
+    "code": "D003",
     "grade": "الصف الأول الإعدادي",
     "notes": "",
     "phone": "01029904008",
     "track": "",
     "gender": "male",
-    "points": 134,
+    "points": 304,
     "prefix": "D",
     "status": "active",
     "address": "",
@@ -5904,14 +6068,14 @@
     "groupName": "ICT - p1 - 2",
     "netAmount": 0,
     "trainerId": "trainer-1787349806643",
-    "updatedAt": "2026-10-14T12:23:26.723Z",
+    "updatedAt": "2026-11-13T08:34:49.947Z",
     "nationalId": "",
     "paidAmount": 0,
     "parentName": "عماد همام سليمان",
     "siblingIds": [],
     "parentPhone": "01146262565",
     "studentCode": "D015",
-    "totalPoints": 134,
+    "totalPoints": 304,
     "traineeCode": "D015",
     "exemptReason": "friend_children",
     "siblingNames": [],
@@ -5927,11 +6091,14 @@
     "updatedByUserName": "مدير عام النظام",
     "initialPaymentMethod": "cash",
     "parentPortalPassword": "",
-    "ranking": 56,
+    "ranking": 23,
     "photo": "",
     "paidMonths": [],
     "subscriptionStartDate": "2026-09-11",
-    "startBillingMonth": "سبتمبر 2026"
+    "startBillingMonth": "سبتمبر 2026",
+    "courseIds": [
+      "course-1787347569318"
+    ]
   },
   {
     "id": "trainee-1788446195929-h3ag",
@@ -5982,7 +6149,7 @@
     "createdByUserName": "مدير عام النظام",
     "initialPaymentMethod": "cash",
     "parentPortalPassword": "",
-    "ranking": 68,
+    "ranking": 97,
     "photo": "",
     "updatedByUserId": "user-admin",
     "updatedByUserName": "مدير عام النظام",
@@ -5993,7 +6160,10 @@
     "startBillingMonth": "سبتمبر 2026",
     "lastReceiptNumber": "REC6623122",
     "nextPaymentDueDate": "2026-11-25",
-    "lastPaymentDate": "2026-10-19"
+    "lastPaymentDate": "2026-09-30",
+    "courseIds": [
+      "course-1787347569318"
+    ]
   },
   {
     "fullName": "خالد السيد جلال حسين",
@@ -6026,10 +6196,10 @@
     "prefix": "A",
     "createdAt": "2026-09-15T15:16:08.926Z",
     "id": "trainee-1789485368926-zu73",
-    "totalPoints": 174,
-    "points": 174,
+    "totalPoints": 224,
+    "points": 224,
     "updatedAt": "2026-10-06T15:09:06.280Z",
-    "ranking": 40,
+    "ranking": 54,
     "isExempt": false,
     "nextPaymentDueDate": "2026-10-01",
     "lastPaymentDate": "2026-09-29",
@@ -6039,7 +6209,10 @@
     ],
     "photo": "",
     "subscriptionStartDate": "2026-09-15",
-    "startBillingMonth": "سبتمبر 2026"
+    "startBillingMonth": "سبتمبر 2026",
+    "courseIds": [
+      "course-1787347401956"
+    ]
   },
   {
     "fullName": "علي محمود عبد العزيز رشاد",
@@ -6072,17 +6245,20 @@
     "prefix": "A",
     "createdAt": "2026-09-15T15:20:34.147Z",
     "id": "trainee-1789485634147-kddv",
-    "totalPoints": 144,
-    "points": 144,
+    "totalPoints": 244,
+    "points": 244,
     "updatedAt": "2026-10-13T15:22:43.551Z",
-    "ranking": 53,
+    "ranking": 43,
     "isExempt": false,
     "photo": "",
     "paidMonths": [
       "سبتمبر 2026"
     ],
     "subscriptionStartDate": "2026-09-15",
-    "startBillingMonth": "سبتمبر 2026"
+    "startBillingMonth": "سبتمبر 2026",
+    "courseIds": [
+      "course-1787347401956"
+    ]
   },
   {
     "fullName": "ندا محمد بسيوني محمد",
@@ -6123,7 +6299,7 @@
     "updatedAt": "2026-10-19T10:43:53.087Z",
     "totalPoints": 115,
     "points": 115,
-    "ranking": 72,
+    "ranking": 103,
     "photo": "",
     "paidMonths": [
       "سبتمبر 2026"
@@ -6132,7 +6308,10 @@
     "startBillingMonth": "سبتمبر 2026",
     "lastReceiptNumber": "REC6633003",
     "nextPaymentDueDate": "2026-11-25",
-    "lastPaymentDate": "2026-10-19"
+    "lastPaymentDate": "2026-09-30",
+    "courseIds": [
+      "course-1787347401956"
+    ]
   },
   {
     "fullName": "ادم ابراهيم بسيوني محمد بسيوني",
@@ -6173,7 +6352,7 @@
     "updatedAt": "2026-10-19T10:44:01.140Z",
     "totalPoints": 125,
     "points": 125,
-    "ranking": 62,
+    "ranking": 95,
     "photo": "",
     "paidMonths": [
       "سبتمبر 2026"
@@ -6182,7 +6361,10 @@
     "startBillingMonth": "سبتمبر 2026",
     "lastReceiptNumber": "REC6641061",
     "nextPaymentDueDate": "2026-11-25",
-    "lastPaymentDate": "2026-10-19"
+    "lastPaymentDate": "2026-09-30",
+    "courseIds": [
+      "course-1787347401956"
+    ]
   },
   {
     "fullName": "مراون حمدي مراد حسين",
@@ -6196,7 +6378,7 @@
     "address": "",
     "branchId": "branch-2",
     "courseId": "course-1787347508908",
-    "groupId": "grp-1787433082510",
+    "groupId": "",
     "trainerId": "trainer-1787349806643",
     "feeAmount": 250,
     "discountAmount": 0,
@@ -6216,14 +6398,22 @@
     "createdAt": "2026-09-19T10:21:16.460Z",
     "id": "trainee-1789813276460-7jat",
     "isExempt": false,
-    "totalPoints": 56,
-    "points": 56,
-    "ranking": 92,
+    "totalPoints": 66,
+    "points": 66,
+    "ranking": 118,
     "photo": "",
-    "updatedAt": "2026-10-06T17:30:01.123Z",
+    "updatedAt": "2026-11-13T08:30:30.812Z",
     "paidMonths": [],
     "subscriptionStartDate": "2026-09-19",
-    "startBillingMonth": "سبتمبر 2026"
+    "startBillingMonth": "سبتمبر 2026",
+    "registrationDate": "2026-09-19",
+    "portalPassword": "",
+    "parentPortalPassword": "",
+    "updatedByUserId": "user-admin",
+    "updatedByUserName": "مدير عام النظام",
+    "courseIds": [
+      "course-1787347508908"
+    ]
   },
   {
     "fullName": "مالك هيثم حمدي شبل",
@@ -6257,10 +6447,10 @@
     "createdAt": "2026-09-19T16:09:07.681Z",
     "id": "trainee-1789834147680-4ay5",
     "isExempt": false,
-    "totalPoints": 178,
-    "points": 178,
+    "totalPoints": 288,
+    "points": 288,
     "updatedAt": "2026-10-20T16:18:19.639Z",
-    "ranking": 34,
+    "ranking": 29,
     "photo": "",
     "nextPaymentDueDate": "2026-10-01",
     "lastPaymentDate": "2026-09-30",
@@ -6269,7 +6459,10 @@
       "سبتمبر ٢٠٢٦"
     ],
     "subscriptionStartDate": "2026-09-19",
-    "startBillingMonth": "سبتمبر 2026"
+    "startBillingMonth": "سبتمبر 2026",
+    "courseIds": [
+      "course-1787347462419"
+    ]
   },
   {
     "fullName": "رغد اسلام حلمي شاهين",
@@ -6303,14 +6496,17 @@
     "createdAt": "2026-09-19T16:10:46.748Z",
     "id": "trainee-1789834246748-4uel",
     "isExempt": false,
-    "totalPoints": 170,
-    "points": 170,
+    "totalPoints": 260,
+    "points": 260,
     "updatedAt": "2026-10-20T16:14:35.692Z",
-    "ranking": 58,
+    "ranking": 37,
     "photo": "",
     "paidMonths": [],
     "subscriptionStartDate": "2026-09-19",
-    "startBillingMonth": "سبتمبر 2026"
+    "startBillingMonth": "سبتمبر 2026",
+    "courseIds": [
+      "course-1787347462419"
+    ]
   },
   {
     "fullName": "مريم السيد جلال حسين",
@@ -6344,10 +6540,10 @@
     "createdAt": "2026-09-19T16:12:12.449Z",
     "id": "trainee-1789834332449-d4a8",
     "isExempt": false,
-    "totalPoints": 150,
-    "points": 150,
+    "totalPoints": 300,
+    "points": 300,
     "updatedAt": "2026-10-20T16:15:09.146Z",
-    "ranking": 54,
+    "ranking": 26,
     "photo": "",
     "nextPaymentDueDate": "2026-10-01",
     "lastPaymentDate": "2026-09-29",
@@ -6356,7 +6552,10 @@
       "سبتمبر ٢٠٢٦"
     ],
     "subscriptionStartDate": "2026-09-19",
-    "startBillingMonth": "سبتمبر 2026"
+    "startBillingMonth": "سبتمبر 2026",
+    "courseIds": [
+      "course-1787347462419"
+    ]
   },
   {
     "fullName": "ادم ايمن فتحي عبدالهادي",
@@ -6390,14 +6589,17 @@
     "createdAt": "2026-09-19T16:13:39.983Z",
     "id": "trainee-1789834419983-6v0k",
     "isExempt": false,
-    "totalPoints": 133,
-    "points": 133,
+    "totalPoints": 183,
+    "points": 183,
     "updatedAt": "2026-09-29T15:19:01.778Z",
-    "ranking": 88,
+    "ranking": 73,
     "photo": "",
     "paidMonths": [],
     "subscriptionStartDate": "2026-09-19",
-    "startBillingMonth": "سبتمبر 2026"
+    "startBillingMonth": "سبتمبر 2026",
+    "courseIds": [
+      "course-1787347462419"
+    ]
   },
   {
     "fullName": "حبيبة حمادة عبداللطيف احمد",
@@ -6436,9 +6638,9 @@
     "updatedByUserId": "user-admin",
     "updatedByUserName": "مدير عام النظام",
     "updatedAt": "2026-10-20T16:16:17.511Z",
-    "ranking": 62,
-    "totalPoints": 155,
-    "points": 155,
+    "ranking": 56,
+    "totalPoints": 215,
+    "points": 215,
     "photo": "",
     "nextPaymentDueDate": "2026-10-01",
     "lastPaymentDate": "2026-09-29",
@@ -6447,7 +6649,10 @@
       "سبتمبر ٢٠٢٦"
     ],
     "subscriptionStartDate": "2026-09-19",
-    "startBillingMonth": "سبتمبر 2026"
+    "startBillingMonth": "سبتمبر 2026",
+    "courseIds": [
+      "course-1787347462419"
+    ]
   },
   {
     "fullName": "مصطفي محمود عبدالحي سيداحمد",
@@ -6481,9 +6686,9 @@
     "createdAt": "2026-09-19T16:16:38.041Z",
     "id": "trainee-1789834598041-bvbs",
     "isExempt": false,
-    "ranking": 59,
-    "totalPoints": 170,
-    "points": 170,
+    "ranking": 12,
+    "totalPoints": 390,
+    "points": 390,
     "updatedAt": "2026-10-20T16:17:44.911Z",
     "photo": "",
     "nextPaymentDueDate": "2026-10-01",
@@ -6493,7 +6698,10 @@
       "سبتمبر ٢٠٢٦"
     ],
     "subscriptionStartDate": "2026-09-19",
-    "startBillingMonth": "سبتمبر 2026"
+    "startBillingMonth": "سبتمبر 2026",
+    "courseIds": [
+      "course-1787347462419"
+    ]
   },
   {
     "fullName": "محمد رامي محمد ابراهيم",
@@ -6507,7 +6715,7 @@
     "address": "",
     "branchId": "branch-1",
     "courseId": "course-1787347508908",
-    "groupId": "grp-1787431802246",
+    "groupId": "",
     "trainerId": "trainer-1787349806643",
     "feeAmount": 200,
     "discountAmount": 0,
@@ -6527,18 +6735,22 @@
     "createdAt": "2026-09-20T11:34:58.262Z",
     "id": "trainee-1789904098262-sukn",
     "isExempt": false,
-    "ranking": 116,
-    "totalPoints": 36,
-    "points": 36,
+    "ranking": 122,
+    "totalPoints": 46,
+    "points": 46,
     "photo": "",
     "portalPassword": "",
     "parentPortalPassword": "",
     "updatedByUserId": "user-admin",
     "updatedByUserName": "مدير عام النظام",
-    "updatedAt": "2026-10-02T21:00:41.619Z",
+    "updatedAt": "2026-11-13T08:24:36.626Z",
     "paidMonths": [],
     "subscriptionStartDate": "2026-09-20",
-    "startBillingMonth": "سبتمبر 2026"
+    "startBillingMonth": "سبتمبر 2026",
+    "registrationDate": "2026-09-20",
+    "courseIds": [
+      "course-1787347508908"
+    ]
   },
   {
     "fullName": "انس ضياءالدين محمد السيد",
@@ -6575,12 +6787,15 @@
     "id": "trainee-1789904165077-ndcd",
     "totalPoints": 100,
     "points": 100,
-    "ranking": 81,
+    "ranking": 109,
     "photo": "",
     "paidMonths": [],
     "subscriptionStartDate": "2026-09-20",
     "startBillingMonth": "سبتمبر 2026",
-    "updatedAt": "2026-10-14T11:30:01.299Z"
+    "updatedAt": "2026-10-14T11:30:01.299Z",
+    "courseIds": [
+      "course-1787347508908"
+    ]
   },
   {
     "fullName": "محمد وليد اسماعيل عبداللطيف",
@@ -6614,9 +6829,9 @@
     "createdAt": "2026-09-20T12:26:45.244Z",
     "id": "trainee-1789907205244-ni91",
     "isExempt": false,
-    "totalPoints": 36,
-    "points": 36,
-    "ranking": 116,
+    "totalPoints": 156,
+    "points": 156,
+    "ranking": 82,
     "photo": "",
     "updatedAt": "2026-10-19T10:45:45.767Z",
     "paidMonths": [
@@ -6626,7 +6841,10 @@
     "startBillingMonth": "سبتمبر 2026",
     "lastReceiptNumber": "REC6745690",
     "nextPaymentDueDate": "2026-11-25",
-    "lastPaymentDate": "2026-10-19"
+    "lastPaymentDate": "2026-09-30",
+    "courseIds": [
+      "course-1787347569318"
+    ]
   },
   {
     "fullName": "عمر شريف احمد موسي",
@@ -6660,9 +6878,9 @@
     "createdAt": "2026-09-20T14:24:44.210Z",
     "id": "trainee-1789914284210-gwdh",
     "isExempt": false,
-    "ranking": 47,
-    "totalPoints": 145,
-    "points": 145,
+    "ranking": 28,
+    "totalPoints": 295,
+    "points": 295,
     "photo": "",
     "updatedAt": "2026-10-19T10:45:22.001Z",
     "paidMonths": [
@@ -6672,7 +6890,10 @@
     "startBillingMonth": "سبتمبر 2026",
     "lastReceiptNumber": "REC6721911",
     "nextPaymentDueDate": "2026-11-25",
-    "lastPaymentDate": "2026-10-19"
+    "lastPaymentDate": "2026-09-30",
+    "courseIds": [
+      "course-1787347508908"
+    ]
   },
   {
     "fullName": "معتز محمد فؤاد الحاروني",
@@ -6686,7 +6907,7 @@
     "address": "",
     "branchId": "branch-1",
     "courseId": "course-1787347508908",
-    "groupId": "grp-1787431825818",
+    "groupId": "",
     "trainerId": "trainer-1787349806643",
     "feeAmount": 200,
     "discountAmount": 0,
@@ -6698,22 +6919,35 @@
     "_lastAutoParent": "محمد فؤاد الحاروني",
     "grade": "الصف السادس الابتدائي",
     "netAmount": 200,
-    "paidAmount": 0,
-    "remainingAmount": 200,
+    "paidAmount": 100,
+    "remainingAmount": 100,
     "createdByUserId": "user-admin",
     "createdByUserName": "مدير عام النظام",
     "prefix": "C",
     "createdAt": "2026-09-20T14:26:12.994Z",
     "id": "trainee-1789914372994-nefk",
     "isExempt": false,
-    "ranking": 37,
-    "totalPoints": 125,
-    "points": 125,
+    "ranking": 79,
+    "totalPoints": 175,
+    "points": 175,
     "photo": "",
-    "updatedAt": "2026-09-30T14:27:55.250Z",
-    "paidMonths": [],
+    "updatedAt": "2026-11-13T08:23:57.072Z",
+    "paidMonths": [
+      "سبتمبر 2026"
+    ],
     "subscriptionStartDate": "2026-09-20",
-    "startBillingMonth": "سبتمبر 2026"
+    "startBillingMonth": "سبتمبر 2026",
+    "lastReceiptNumber": "REC5592631",
+    "nextPaymentDueDate": "2026-11-24",
+    "lastPaymentDate": "2026-10-30",
+    "registrationDate": "2026-09-20",
+    "portalPassword": "",
+    "parentPortalPassword": "",
+    "updatedByUserId": "user-admin",
+    "updatedByUserName": "مدير عام النظام",
+    "courseIds": [
+      "course-1787347508908"
+    ]
   },
   {
     "fullName": "اسر احمد رمزي محمد",
@@ -6747,19 +6981,22 @@
     "createdAt": "2026-09-21T11:18:18.003Z",
     "id": "trainee-1789989498003-bdu9",
     "isExempt": false,
-    "ranking": 81,
-    "totalPoints": 98,
-    "points": 98,
+    "ranking": 17,
+    "totalPoints": 328,
+    "points": 328,
     "photo": "",
     "nextPaymentDueDate": "2026-10-01",
-    "lastPaymentDate": "2026-10-01",
+    "lastPaymentDate": "2026-09-28",
     "lastReceiptNumber": "REC9606862",
     "paidMonths": [
       "سبتمبر 2026"
     ],
     "updatedAt": "2026-10-11T21:19:44.504Z",
     "subscriptionStartDate": "2026-09-21",
-    "startBillingMonth": "سبتمبر 2026"
+    "startBillingMonth": "سبتمبر 2026",
+    "courseIds": [
+      "course-1787347462419"
+    ]
   },
   {
     "fullName": "مريم امير ميخائيل ماضي",
@@ -6793,19 +7030,22 @@
     "createdAt": "2026-09-21T11:19:37.819Z",
     "id": "trainee-1789989577819-h2ek",
     "isExempt": false,
-    "ranking": 24,
-    "totalPoints": 194,
-    "points": 194,
+    "ranking": 36,
+    "totalPoints": 264,
+    "points": 264,
     "photo": "",
     "nextPaymentDueDate": "2026-10-01",
-    "lastPaymentDate": "2026-10-01",
+    "lastPaymentDate": "2026-09-28",
     "lastReceiptNumber": "REC9618591",
     "paidMonths": [
       "سبتمبر 2026"
     ],
-    "updatedAt": "2026-10-19T11:20:23.404Z",
+    "updatedAt": "2026-11-09T12:50:26.008Z",
     "subscriptionStartDate": "2026-09-21",
-    "startBillingMonth": "سبتمبر 2026"
+    "startBillingMonth": "سبتمبر 2026",
+    "courseIds": [
+      "course-1787347462419"
+    ]
   },
   {
     "fullName": "محمد علاء عاشور عابدين",
@@ -6839,14 +7079,17 @@
     "createdAt": "2026-09-21T14:33:24.274Z",
     "id": "trainee-1790001204274-4i0i",
     "isExempt": false,
-    "ranking": 108,
+    "ranking": 125,
     "totalPoints": 40,
     "points": 40,
     "photo": "",
     "updatedAt": "2026-09-30T13:52:07.556Z",
     "paidMonths": [],
     "subscriptionStartDate": "2026-09-21",
-    "startBillingMonth": "سبتمبر 2026"
+    "startBillingMonth": "سبتمبر 2026",
+    "courseIds": [
+      "course-1787347569318"
+    ]
   },
   {
     "fullName": "عمر اسلام محمد علي الغول ",
@@ -6880,14 +7123,17 @@
     "createdAt": "2026-09-22T16:13:30.339Z",
     "id": "trainee-1790093610339-quc6",
     "isExempt": false,
-    "ranking": 75,
+    "ranking": 104,
     "totalPoints": 110,
     "points": 110,
     "photo": "",
     "paidMonths": [],
     "subscriptionStartDate": "2026-09-22",
     "startBillingMonth": "سبتمبر 2026",
-    "updatedAt": "2026-10-13T16:20:48.718Z"
+    "updatedAt": "2026-10-13T16:20:48.718Z",
+    "courseIds": [
+      "course-1787347462419"
+    ]
   },
   {
     "fullName": "احمد وليد احمد سعد الجيشي",
@@ -6901,7 +7147,7 @@
     "address": "",
     "branchId": "branch-2",
     "courseId": "course-1787347462419",
-    "groupId": "grp-1787432635686",
+    "groupId": "",
     "trainerId": "trainer-1787349806643",
     "feeAmount": 250,
     "discountAmount": 0,
@@ -6924,11 +7170,19 @@
     "isExempt": false,
     "totalPoints": 44,
     "points": 44,
-    "ranking": 121,
+    "ranking": 123,
     "photo": "",
     "paidMonths": [],
     "subscriptionStartDate": "2026-09-22",
-    "startBillingMonth": "سبتمبر 2026"
+    "startBillingMonth": "سبتمبر 2026",
+    "registrationDate": "2026-09-22",
+    "parentPortalPassword": "",
+    "updatedByUserId": "user-admin",
+    "updatedByUserName": "مدير عام النظام",
+    "updatedAt": "2026-11-13T08:23:04.956Z",
+    "courseIds": [
+      "course-1787347462419"
+    ]
   },
   {
     "fullName": "معاذ عبدالملك رمضان بخيت",
@@ -6972,7 +7226,7 @@
     "createdAt": "2026-09-25T21:36:16.533Z",
     "id": "trainee-1790372176533-sxae",
     "points": 40,
-    "ranking": 109,
+    "ranking": 126,
     "portalPassword": "",
     "parentPortalPassword": "",
     "updatedByUserId": "user-admin",
@@ -6981,7 +7235,10 @@
     "photo": "",
     "paidMonths": [],
     "subscriptionStartDate": "2026-09-25",
-    "startBillingMonth": "سبتمبر 2026"
+    "startBillingMonth": "سبتمبر 2026",
+    "courseIds": [
+      "course-1787347401956"
+    ]
   },
   {
     "fullName": "اية يوسف شعبان بخيت",
@@ -7014,17 +7271,20 @@
     "createdByUserId": "user-admin",
     "createdByUserName": "مدير عام النظام",
     "prefix": "B",
-    "totalPoints": 140,
+    "totalPoints": 220,
     "attendanceRate": 100,
     "createdAt": "2026-09-28T11:21:11.816Z",
     "id": "trainee-1790594471816-9ypl",
     "ranking": 55,
-    "points": 140,
+    "points": 220,
     "photo": "",
-    "updatedAt": "2026-10-19T11:21:35.567Z",
+    "updatedAt": "2026-11-02T12:32:08.447Z",
     "paidMonths": [],
     "subscriptionStartDate": "2026-09-28",
-    "startBillingMonth": "سبتمبر 2026"
+    "startBillingMonth": "سبتمبر 2026",
+    "courseIds": [
+      "course-1787347462419"
+    ]
   },
   {
     "fullName": "عبدالرحمن اسلام جابر",
@@ -7055,7 +7315,7 @@
     "createdByUserId": "user-admin",
     "createdByUserName": "مدير عام النظام",
     "prefix": "C",
-    "totalPoints": 103,
+    "totalPoints": 303,
     "attendanceRate": 100,
     "createdAt": "2026-09-29T18:19:31.381Z",
     "id": "trainee-1790705971381-tpol",
@@ -7067,15 +7327,18 @@
     "paidMonths": [
       "سبتمبر ٢٠٢٦"
     ],
-    "updatedAt": "2026-10-06T17:29:57.089Z",
+    "updatedAt": "2026-10-24T11:46:25.186Z",
     "portalPassword": "",
     "parentPortalPassword": "",
     "updatedByUserId": "user-admin",
     "updatedByUserName": "مدير عام النظام",
-    "points": 103,
-    "ranking": 76,
+    "points": 303,
+    "ranking": 24,
     "subscriptionStartDate": "2026-09-29",
-    "startBillingMonth": "سبتمبر 2026"
+    "startBillingMonth": "سبتمبر 2026",
+    "courseIds": [
+      "course-1787347508908"
+    ]
   },
   {
     "fullName": "مصطفي محمد مصطفي سعد",
@@ -7105,23 +7368,26 @@
     "createdByUserId": "user-admin",
     "createdByUserName": "مدير عام النظام",
     "prefix": "C",
-    "totalPoints": 98,
+    "totalPoints": 343,
     "attendanceRate": 100,
     "createdAt": "2026-10-03T10:31:10.001Z",
     "id": "trainee-1791023470001-dsb4",
     "isExempt": false,
-    "points": 98,
-    "ranking": 82,
-    "updatedAt": "2026-10-07T04:44:49.953Z",
+    "points": 343,
+    "ranking": 15,
+    "updatedAt": "2026-11-07T11:17:49.969Z",
     "nextPaymentDueDate": "2026-10-01",
-    "lastPaymentDate": "2026-10-07",
+    "lastPaymentDate": "2026-09-30",
     "lastReceiptNumber": "REC8289848",
     "paidMonths": [
       "سبتمبر 2026"
     ],
     "subscriptionStartDate": "2026-10-01",
     "startBillingMonth": "سبتمبر 2026",
-    "registrationDate": "2026-10-03"
+    "registrationDate": "2026-10-03",
+    "courseIds": [
+      "course-1787347508908"
+    ]
   },
   {
     "fullName": "محمد احمد السيد رمضان",
@@ -7152,23 +7418,26 @@
     "createdByUserId": "user-admin",
     "createdByUserName": "مدير عام النظام",
     "prefix": "B",
-    "totalPoints": 180,
+    "totalPoints": 230,
     "attendanceRate": 100,
     "createdAt": "2026-10-03T16:17:36.704Z",
     "id": "trainee-1791044256704-f05x",
     "isExempt": false,
     "nextPaymentDueDate": "2026-10-01",
-    "lastPaymentDate": "2026-10-03",
+    "lastPaymentDate": "2026-09-30",
     "lastReceiptNumber": "REC4305739",
     "paidMonths": [
       "سبتمبر 2026"
     ],
     "updatedAt": "2026-10-20T16:17:10.089Z",
-    "ranking": 33,
-    "points": 180,
+    "ranking": 51,
+    "points": 230,
     "subscriptionStartDate": "2026-10-01",
     "startBillingMonth": "سبتمبر 2026",
-    "registrationDate": "2026-10-03"
+    "registrationDate": "2026-10-03",
+    "courseIds": [
+      "course-1787347462419"
+    ]
   },
   {
     "id": "trainee-1791237814878-fmah",
@@ -7188,8 +7457,8 @@
     "paidAmount": 0,
     "remainingAmount": 0,
     "isExempt": true,
-    "totalPoints": 0,
-    "points": 0,
+    "totalPoints": 150,
+    "points": 150,
     "attendanceRate": 100,
     "createdAt": "2026-10-05T22:03:34.878Z",
     "phone": "01123509824",
@@ -7208,11 +7477,14 @@
     "updatedByUserName": "مدير عام النظام",
     "prefix": "A",
     "updatedAt": "2026-10-05T22:15:56.926Z",
-    "ranking": 136,
+    "ranking": 85,
     "paidMonths": [],
     "subscriptionStartDate": "2026-10-01",
     "startBillingMonth": "سبتمبر 2026",
-    "registrationDate": "2026-10-05"
+    "registrationDate": "2026-10-05",
+    "courseIds": [
+      "course-1787347401956"
+    ]
   },
   {
     "fullName": "ارساني يوسف سمير حبيب",
@@ -7243,21 +7515,24 @@
     "createdByUserId": "user-admin",
     "createdByUserName": "مدير عام النظام",
     "prefix": "A",
-    "totalPoints": 80,
+    "totalPoints": 140,
     "attendanceRate": 100,
     "createdAt": "2026-10-06T15:07:54.189Z",
     "id": "trainee-1791299274188-l681",
     "isExempt": false,
-    "ranking": 114,
-    "points": 80,
-    "updatedAt": "2026-10-06T15:19:09.920Z",
+    "ranking": 89,
+    "points": 140,
+    "updatedAt": "2026-10-24T15:38:02.186Z",
     "paidMonths": [],
     "subscriptionStartDate": "2026-10-01",
     "startBillingMonth": "سبتمبر 2026",
-    "registrationDate": "2026-10-06"
+    "registrationDate": "2026-10-06",
+    "courseIds": [
+      "course-1787347401956"
+    ]
   },
   {
-    "fullName": "لمار احمد محمد",
+    "fullName": "لمار محمد سمير الليثي",
     "code": "C009",
     "phone": "01022459001",
     "parentPhone": "",
@@ -7285,22 +7560,30 @@
     "createdByUserId": "user-admin",
     "createdByUserName": "مدير عام النظام",
     "prefix": "C",
-    "totalPoints": 20,
+    "totalPoints": 205,
     "attendanceRate": 100,
     "createdAt": "2026-10-10T20:32:21.386Z",
     "id": "trainee-1791664341386-cpyq",
-    "points": 20,
+    "points": 205,
     "paidMonths": [
       "سبتمبر 2026"
     ],
     "lastReceiptNumber": "REC4388887",
     "nextPaymentDueDate": "2026-10-01",
-    "lastPaymentDate": "2026-10-10",
+    "lastPaymentDate": "2026-09-30",
     "isExempt": false,
-    "updatedAt": "2026-10-10T20:33:08.957Z",
+    "updatedAt": "2026-10-24T12:27:13.199Z",
     "subscriptionStartDate": "2026-09-01",
     "startBillingMonth": "سبتمبر 2026",
-    "registrationDate": "2026-09-01"
+    "registrationDate": "2026-09-01",
+    "ranking": 64,
+    "portalPassword": "",
+    "parentPortalPassword": "",
+    "updatedByUserId": "user-admin",
+    "updatedByUserName": "مدير عام النظام",
+    "courseIds": [
+      "course-1787347508908"
+    ]
   },
   {
     "fullName": "كيرمينا يوسف سمير حبيب",
@@ -7334,14 +7617,17 @@
     "createdByUserId": "user-admin",
     "createdByUserName": "مدير عام النظام",
     "prefix": "C",
-    "totalPoints": 0,
+    "totalPoints": 130,
     "attendanceRate": 100,
     "createdAt": "2026-10-13T17:24:13.127Z",
     "id": "trainee-1791912253127-klyx",
     "isExempt": false,
     "paidMonths": [],
-    "points": 0,
-    "ranking": 138
+    "points": 130,
+    "ranking": 94,
+    "courseIds": [
+      "course-1787347508908"
+    ]
   },
   {
     "fullName": "لي لي محمد دندراوي علم الدين",
@@ -7375,16 +7661,19 @@
     "createdByUserId": "user-admin",
     "createdByUserName": "مدير عام النظام",
     "prefix": "C",
-    "totalPoints": 0,
+    "totalPoints": 120,
     "attendanceRate": 100,
     "createdAt": "2026-10-22T15:05:38.638Z",
     "id": "trainee-1792681538638-18cr",
-    "points": 0,
-    "updatedAt": "2026-10-18T11:30:21.819Z",
+    "points": 120,
+    "updatedAt": "2026-11-08T12:35:53.478Z",
     "paidMonths": [],
     "isExempt": false,
     "photo": "",
-    "ranking": 144
+    "ranking": 98,
+    "courseIds": [
+      "course-1787347508908"
+    ]
   },
   {
     "fullName": "معاذ عماد منصور عيد",
@@ -7418,13 +7707,18 @@
     "createdByUserId": "user-admin",
     "createdByUserName": "مدير عام النظام",
     "prefix": "H",
-    "totalPoints": 0,
+    "totalPoints": 100,
     "attendanceRate": 100,
     "createdAt": "2026-10-23T22:23:18.319Z",
     "id": "trainee-1792794198319-5yur",
     "isExempt": false,
-    "points": 0,
-    "paidMonths": []
+    "points": 100,
+    "paidMonths": [],
+    "updatedAt": "2026-11-10T11:17:02.070Z",
+    "ranking": 110,
+    "courseIds": [
+      "crs-1787428009076"
+    ]
   },
   {
     "fullName": "زياد مصطفي عبدالفتاح الاشموني",
@@ -7458,13 +7752,18 @@
     "createdByUserId": "user-admin",
     "createdByUserName": "مدير عام النظام",
     "prefix": "H",
-    "totalPoints": 0,
+    "totalPoints": 90,
     "attendanceRate": 100,
     "createdAt": "2026-10-23T22:24:18.101Z",
     "id": "trainee-1792794258101-aba8",
     "isExempt": false,
-    "points": 0,
-    "paidMonths": []
+    "points": 90,
+    "paidMonths": [],
+    "updatedAt": "2026-11-10T11:17:27.297Z",
+    "ranking": 114,
+    "courseIds": [
+      "crs-1787428009076"
+    ]
   },
   {
     "fullName": "عمر احمد مروان محمد احمد",
@@ -7498,13 +7797,18 @@
     "createdByUserId": "user-admin",
     "createdByUserName": "مدير عام النظام",
     "prefix": "H",
-    "totalPoints": 0,
+    "totalPoints": 105,
     "attendanceRate": 100,
     "createdAt": "2026-10-23T22:25:38.035Z",
     "id": "trainee-1792794338034-6w16",
     "isExempt": false,
-    "points": 0,
-    "paidMonths": []
+    "points": 105,
+    "paidMonths": [],
+    "updatedAt": "2026-11-10T11:17:39.167Z",
+    "ranking": 107,
+    "courseIds": [
+      "crs-1787428009076"
+    ]
   },
   {
     "fullName": "اياد عبدالرحمن محمد الصباغ",
@@ -7538,12 +7842,180 @@
     "createdByUserId": "user-admin",
     "createdByUserName": "مدير عام النظام",
     "prefix": "H",
-    "totalPoints": 0,
+    "totalPoints": 140,
     "attendanceRate": 100,
     "createdAt": "2026-10-23T22:27:01.092Z",
     "id": "trainee-1792794421091-gj48",
     "isExempt": false,
+    "points": 140,
+    "paidMonths": [],
+    "updatedAt": "2026-11-10T11:20:43.252Z",
+    "ranking": 90,
+    "courseIds": [
+      "crs-1787428009076"
+    ]
+  },
+  {
+    "fullName": "رشاد هاني السيد محمد",
+    "code": "H006",
+    "phone": "01061869631",
+    "parentPhone": "",
+    "parentName": "هاني السيد محمد",
+    "nationalId": "",
+    "birthDate": "",
+    "gender": "male",
+    "address": "",
+    "branchId": "branch-2",
+    "courseId": "crs-1787428009076",
+    "groupId": "grp-1787433327552",
+    "trainerId": "trainer-1787349806643",
+    "subscriptionStartDate": "2026-10-01",
+    "startBillingMonth": "سبتمبر 2026",
+    "registrationDate": "2026-10-01",
+    "feeAmount": 400,
+    "discountAmount": 0,
+    "initialPayment": 0,
+    "initialPaymentMethod": "cash",
+    "photoUrl": "",
+    "status": "active",
+    "notes": "",
+    "_lastAutoParent": "هاني السيد محمد",
+    "grade": "الصف الثاني الثانوي",
+    "netAmount": 400,
+    "paidAmount": 0,
+    "remainingAmount": 400,
+    "createdByUserId": "user-admin",
+    "createdByUserName": "مدير عام النظام",
+    "prefix": "H",
+    "totalPoints": 138,
+    "attendanceRate": 100,
+    "createdAt": "2026-10-23T22:28:20.172Z",
+    "id": "trainee-1792794500171-zx3y",
+    "isExempt": false,
+    "points": 138,
+    "paidMonths": [],
+    "ranking": 91,
+    "updatedAt": "2026-11-10T11:16:33.578Z",
+    "courseIds": [
+      "crs-1787428009076"
+    ]
+  },
+  {
+    "fullName": "عبدالرحمن اشرف فتحي طاحون",
+    "code": "H007",
+    "phone": "01113326201",
+    "parentPhone": "",
+    "parentName": "اشرف فتحي طاحون",
+    "nationalId": "",
+    "birthDate": "",
+    "gender": "male",
+    "address": "",
+    "branchId": "branch-2",
+    "courseId": "crs-1787428009076",
+    "groupId": "grp-1787433327552",
+    "trainerId": "trainer-1787349806643",
+    "subscriptionStartDate": "2026-10-01",
+    "startBillingMonth": "سبتمبر 2026",
+    "registrationDate": "2026-10-01",
+    "feeAmount": 400,
+    "discountAmount": 0,
+    "initialPayment": 0,
+    "initialPaymentMethod": "cash",
+    "photoUrl": "",
+    "status": "active",
+    "notes": "",
+    "_lastAutoParent": "اشرف فتحي طاحون",
+    "grade": "الصف الثاني الثانوي",
+    "netAmount": 400,
+    "paidAmount": 0,
+    "remainingAmount": 400,
+    "createdByUserId": "user-admin",
+    "createdByUserName": "مدير عام النظام",
+    "prefix": "H",
+    "totalPoints": 40,
+    "attendanceRate": 100,
+    "createdAt": "2026-10-23T22:32:15.517Z",
+    "id": "trainee-1792794735517-byt1",
+    "isExempt": false,
+    "paidMonths": [],
+    "points": 40,
+    "ranking": 127,
+    "updatedAt": "2026-11-10T11:20:07.981Z",
+    "courseIds": [
+      "crs-1787428009076"
+    ]
+  },
+  {
+    "fullName": "عائشة محمود عوض المحمدي",
+    "code": "B022",
+    "phone": "01023412114",
+    "parentPhone": "01005128832",
+    "parentName": "محمود عوض المحمدي",
+    "nationalId": "",
+    "birthDate": "",
+    "gender": "male",
+    "address": "",
+    "branchId": "branch-2",
+    "courseId": "course-1787347462419",
+    "groupId": "grp-1787432635686",
+    "trainerId": "trainer-1787349806643",
+    "subscriptionStartDate": "2026-10-01",
+    "startBillingMonth": "سبتمبر 2026",
+    "registrationDate": "2026-10-01",
+    "feeAmount": 250,
+    "discountAmount": 0,
+    "initialPayment": 0,
+    "initialPaymentMethod": "cash",
+    "photoUrl": "",
+    "status": "active",
+    "notes": "",
+    "_lastAutoParent": "محمود عوض المحمدي",
+    "grade": "الصف الخامس الابتدائي",
+    "netAmount": 250,
+    "paidAmount": 0,
+    "remainingAmount": 250,
+    "createdByUserId": "user-admin",
+    "createdByUserName": "مدير عام النظام",
+    "prefix": "B",
+    "totalPoints": 50,
+    "attendanceRate": 100,
+    "createdAt": "2026-11-10T13:21:48.474Z",
+    "id": "trainee-1794316908474-zjcz",
+    "isExempt": false,
+    "paidMonths": [],
+    "points": 50,
+    "ranking": 121,
+    "courseIds": [
+      "course-1787347462419"
+    ]
+  },
+  {
+    "fullName": "__VERIFY_TEST_1794559100881__",
+    "code": "Z881",
+    "phone": "01000000000",
+    "branchId": "branch-1",
+    "courseId": "course-1",
+    "groupId": "group-1",
+    "feeAmount": 250,
+    "netAmount": 250,
+    "remainingAmount": 250,
+    "paidAmount": 0,
+    "status": "active",
+    "registrationDate": "2026-10-05",
+    "prefix": "Z",
+    "discountAmount": 0,
+    "totalPoints": 0,
+    "attendanceRate": 100,
+    "subscriptionStartDate": "2026-10-05",
+    "startBillingMonth": "أكتوبر 2026",
+    "createdAt": "2026-11-13T08:38:20.940Z",
+    "id": "trainee-1794559100940-qxqi",
+    "isExempt": false,
+    "paidMonths": [],
     "points": 0,
-    "paidMonths": []
+    "courseIds": [
+      "course-1"
+    ],
+    "ranking": 145
   }
 ]

@@ -49,8 +49,8 @@ export const SessionCeremonyModal: React.FC<SessionCeremonyModalProps> = ({
   onClose,
   onAwardBonus,
 }) => {
-  // Celebration scope: 'last_lecture' | 'week_stars' | 'group' | 'center'
-  const [celebrationScope, setCelebrationScope] = useState<'last_lecture' | 'week_stars' | 'group' | 'center'>('last_lecture');
+  // Celebration timeframe: 'today' | 'week' | 'month' | 'all_time'
+  const [celebrationTimeframe, setCelebrationTimeframe] = useState<'today' | 'week' | 'month' | 'all_time'>('today');
 
   const safeGroups = Array.isArray(groups) ? groups : [];
   const safeTrainees = Array.isArray(trainees) ? trainees : [];
@@ -74,12 +74,13 @@ export const SessionCeremonyModal: React.FC<SessionCeremonyModalProps> = ({
   });
 
   const [filterMode, setFilterMode] = useState<'present_only' | 'group_all'>('group_all');
-  const [sessionName, setSessionName] = useState<string>('حفل تتويج نجوم آخر محاضرة تدريبية 🌟');
+  const [sessionName, setSessionName] = useState<string>('حفل تتويج نجوم اليوم 🌟');
 
   const [ceremonyStep, setCeremonyStep] = useState<number>(0);
   const [isMuted, setIsMuted] = useState<boolean>(false);
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
   const [activeDeviceTraineeIds, setActiveDeviceTraineeIds] = useState<string[]>([]);
+  const [pointTransactions, setPointTransactions] = useState<any[]>([]);
   const [isLoadingAttendance, setIsLoadingAttendance] = useState<boolean>(false);
   const [bonusAwardedMap, setBonusAwardedMap] = useState<Record<string, boolean>>({});
 
@@ -88,19 +89,21 @@ export const SessionCeremonyModal: React.FC<SessionCeremonyModalProps> = ({
   const [isCapturing, setIsCapturing] = useState<boolean>(false);
   const [actionNotice, setActionNotice] = useState<string | null>(null);
 
-  // Fetch attendance records (recent and today) and active lab devices
+  // Fetch attendance records, active lab devices, and point transactions
   useEffect(() => {
     let isMounted = true;
     const fetchSessionData = async () => {
       try {
         setIsLoadingAttendance(true);
-        const [attList, devList] = await Promise.all([
+        const [attList, devList, ptsList] = await Promise.all([
           api.getAttendance({}).catch(() => [] as AttendanceRecord[]),
-          api.getDevices().catch(() => [])
+          api.getDevices().catch(() => []),
+          api.getPointTransactions().catch(() => [])
         ]);
 
         if (!isMounted) return;
         setAttendanceRecords(attList || []);
+        setPointTransactions(ptsList || []);
 
         const activeIds: string[] = [];
         (devList || []).forEach((d: any) => {
@@ -122,62 +125,113 @@ export const SessionCeremonyModal: React.FC<SessionCeremonyModalProps> = ({
     };
   }, []);
 
-  // Update session name when scope or group changes
+  // Update session name when timeframe or group changes
   useEffect(() => {
-    if (celebrationScope === 'last_lecture') {
-      const activeGrp = safeGroups.find(g => g?.id === selectedGroup);
-      setSessionName(activeGrp ? `حفل نجوم آخر محاضرة (${activeGrp.name})` : 'حفل نجوم آخر محاضرة تدريبية بالمعمل 🌟');
-    } else if (celebrationScope === 'week_stars') {
-      setSessionName('🏆 حفل تتويج أبطال ونجوم الأسبوع الحالي');
-    } else if (celebrationScope === 'center') {
-      setSessionName('👑 حفل لوحة شرف المركز العام للتدريب');
-    } else {
-      const grp = safeGroups.find(g => g?.id === selectedGroup);
-      setSessionName(grp ? `حفل ختام جلسة ${grp.name}` : 'حفل ختام المحاضرة التدريبية');
-    }
-  }, [celebrationScope, selectedGroup, safeGroups]);
+    const activeGrp = safeGroups.find(g => g?.id === selectedGroup);
+    const grpLabel = activeGrp ? ` (${activeGrp.name})` : '';
 
-  // Compute eligible trainees based on celebrationScope
+    if (celebrationTimeframe === 'today') {
+      setSessionName(`🌟 حفل تتويج نجوم اليوم${grpLabel}`);
+    } else if (celebrationTimeframe === 'week') {
+      setSessionName(`🏆 حفل تتويج أبطال الأسبوع${grpLabel}`);
+    } else if (celebrationTimeframe === 'month') {
+      setSessionName(`🎖️ حفل فرسان وشرف الشهر${grpLabel}`);
+    } else {
+      setSessionName(`👑 حفل لوحة الشرف العامة للمركز${grpLabel}`);
+    }
+  }, [celebrationTimeframe, selectedGroup, safeGroups]);
+
+  // Compute eligible trainees strictly based on celebrationTimeframe
   const eligibleTrainees = React.useMemo(() => {
     let list: Trainee[] = [...safeTrainees];
 
-    if (celebrationScope === 'center' || celebrationScope === 'week_stars') {
-      return list.sort((a, b) => ((b?.points ?? b?.totalPoints ?? 0) - (a?.points ?? a?.totalPoints ?? 0)));
+    // Filter by group if specified
+    if (selectedGroup !== 'all') {
+      const groupMembers = list.filter(t => t?.groupId === selectedGroup || (t as any)?.group_id === selectedGroup);
+      if (groupMembers.length > 0) {
+        list = groupMembers;
+      }
     }
 
-    if (celebrationScope === 'last_lecture' || celebrationScope === 'group') {
-      const targetGroupId = selectedGroup !== 'all' ? selectedGroup : safeGroups[0]?.id;
-      
-      // Filter by group if specified
-      if (targetGroupId) {
-        const groupMembers = list.filter(t => t?.groupId === targetGroupId || (t as any)?.group_id === targetGroupId);
-        if (groupMembers.length > 0) {
-          list = groupMembers;
-        }
-      }
+    // If present only mode, check attendance or lab devices
+    if (filterMode === 'present_only') {
+      const presentList = list.filter(t => {
+        if (!t) return false;
+        const hasAtt = (attendanceRecords || []).some(a => 
+          a && (a.traineeId === t.id || a.traineeId === t.code) && 
+          (a.status === 'present' || a.status === 'late')
+        );
+        const isAtDevice = (activeDeviceTraineeIds || []).includes(t.id) || (t.code && (activeDeviceTraineeIds || []).includes(t.code));
+        return hasAtt || isAtDevice;
+      });
 
-      // If present only mode, check attendance or lab devices
-      if (filterMode === 'present_only') {
-        const presentList = list.filter(t => {
-          if (!t) return false;
-          const hasAtt = (attendanceRecords || []).some(a => 
-            a && (a.traineeId === t.id || a.traineeId === t.code) && 
-            (a.status === 'present' || a.status === 'late')
-          );
-          const isAtDevice = (activeDeviceTraineeIds || []).includes(t.id) || (t.code && (activeDeviceTraineeIds || []).includes(t.code));
-          return hasAtt || isAtDevice;
+      if (presentList.length > 0) {
+        list = presentList;
+      }
+    }
+
+    const todayStr = new Date().toISOString().split('T')[0];
+    const weekStart = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).getTime();
+    const monthPrefix = new Date().toISOString().slice(0, 7);
+
+    // Map each student with their specific period score
+    const mapped = list.map(t => {
+      const tid = t.id;
+      const tcode = t.code ? String(t.code).toUpperCase() : '';
+
+      let periodPoints = 0;
+      let periodLabel = 'نجمة اليوم ⭐';
+
+      if (celebrationTimeframe === 'today') {
+        const studentTx = (pointTransactions || []).filter((pt: any) => {
+          if (!pt) return false;
+          const matchId = pt.traineeId === tid || (tcode && pt.traineeId === tcode);
+          if (!matchId) return false;
+          const d = (pt.createdAt || pt.date || '').split('T')[0];
+          return d === todayStr;
         });
-
-        if (presentList.length > 0) {
-          list = presentList;
-        }
+        periodPoints = studentTx.reduce((acc: number, curr: any) => acc + (Number(curr.points) || 0), 0);
+        periodLabel = 'نجمة اليوم ⭐';
+      } else if (celebrationTimeframe === 'week') {
+        const studentTx = (pointTransactions || []).filter((pt: any) => {
+          if (!pt) return false;
+          const matchId = pt.traineeId === tid || (tcode && pt.traineeId === tcode);
+          if (!matchId) return false;
+          const time = new Date(pt.createdAt || pt.date || 0).getTime();
+          return time >= weekStart;
+        });
+        periodPoints = studentTx.reduce((acc: number, curr: any) => acc + (Number(curr.points) || 0), 0);
+        periodLabel = 'نجمة الأسبوع 🏆';
+      } else if (celebrationTimeframe === 'month') {
+        const studentTx = (pointTransactions || []).filter((pt: any) => {
+          if (!pt) return false;
+          const matchId = pt.traineeId === tid || (tcode && pt.traineeId === tcode);
+          if (!matchId) return false;
+          const str = String(pt.createdAt || pt.date || '');
+          return str.startsWith(monthPrefix);
+        });
+        periodPoints = studentTx.reduce((acc: number, curr: any) => acc + (Number(curr.points) || 0), 0);
+        periodLabel = 'نجمة الشهر 🎖️';
+      } else {
+        periodPoints = Number(t.totalPoints !== undefined ? t.totalPoints : (t.points || 0));
+        periodLabel = 'نجمة تراكمي 👑';
       }
 
-      return list.sort((a, b) => ((b?.points ?? b?.totalPoints ?? 0) - (a?.points ?? a?.totalPoints ?? 0)));
-    }
+      return {
+        ...t,
+        periodPoints,
+        periodLabel
+      };
+    });
 
-    return list.sort((a, b) => ((b?.points ?? b?.totalPoints ?? 0) - (a?.points ?? a?.totalPoints ?? 0)));
-  }, [safeTrainees, celebrationScope, selectedGroup, filterMode, attendanceRecords, activeDeviceTraineeIds, safeGroups]);
+    // Sort strictly by period points, tie-breaker by totalPoints
+    return mapped.sort((a, b) => {
+      if (b.periodPoints !== a.periodPoints) {
+        return b.periodPoints - a.periodPoints;
+      }
+      return ((b.totalPoints ?? b.points ?? 0) - (a.totalPoints ?? a.points ?? 0));
+    });
+  }, [safeTrainees, selectedGroup, filterMode, attendanceRecords, activeDeviceTraineeIds, pointTransactions, celebrationTimeframe]);
 
   const top3 = eligibleTrainees.slice(0, 3);
   const activeGroupObj = safeGroups.find(g => g?.id === selectedGroup);
@@ -215,6 +269,11 @@ export const SessionCeremonyModal: React.FC<SessionCeremonyModalProps> = ({
     fireConfetti(0.7);
 
     try {
+      const pLabel = celebrationTimeframe === 'today' ? 'اليوم' : celebrationTimeframe === 'week' ? 'الأسبوع' : celebrationTimeframe === 'month' ? 'الشهر' : 'المركز';
+      await speakText(`المركز الثالث، المتألق ${top3[2]?.fullName || ''} بإجمالي ${(top3[2] as any)?.periodPoints || 0} نجمة!`);
+    } catch {}
+
+    try {
       await api.broadcastCeremony({
         step: 1,
         top3,
@@ -232,6 +291,9 @@ export const SessionCeremonyModal: React.FC<SessionCeremonyModalProps> = ({
       setCeremonyStep(2); // Reveal 2nd (Silver)
       playChime([523.25, 659.25, 783.99]);
       fireConfetti(0.6);
+      try {
+        await speakText(`المركز الثاني، الفارس المتميز ${top3[1]?.fullName || ''} برصيد ${(top3[1] as any)?.periodPoints || 0} نجمة!`);
+      } catch {}
       try { await api.broadcastCeremony({ step: 2, top3, sessionName }); } catch (e) {}
     } else if (ceremonyStep === 2) {
       setCeremonyStep(3); // Reveal 1st (Gold Champion)
@@ -241,6 +303,10 @@ export const SessionCeremonyModal: React.FC<SessionCeremonyModalProps> = ({
       }
       playChime([523.25, 659.25, 783.99, 1046.5]);
       fireConfetti(0.5);
+      try {
+        const periodTitle = celebrationTimeframe === 'today' ? 'اليوم' : celebrationTimeframe === 'week' ? 'الأسبوع' : celebrationTimeframe === 'month' ? 'الشهر' : 'المركز';
+        await speakText(`والآن نحتفل ببطل ونجم ${periodTitle}، صاحب التاج الذهبي، البطل ${top3[0]?.fullName || ''} برصيد استثنائي بلغ ${(top3[0] as any)?.periodPoints || 0} نجمة! ألف مبروك لجميع أبطالنا!`);
+      } catch {}
       try { await api.broadcastCeremony({ step: 3, top3, sessionName }); } catch (e) {}
     } else if (ceremonyStep === 3) {
       setCeremonyStep(4); // Finished ceremony
@@ -274,17 +340,22 @@ export const SessionCeremonyModal: React.FC<SessionCeremonyModalProps> = ({
   // Build Arabic Congratulatory Text for WhatsApp & Sharing
   const buildCongratsMessage = () => {
     const groupName = activeGroupObj?.name || (selectedGroup === 'all' ? 'طلاب المركز العام' : 'المجموعة التدريبية');
+    const periodName = 
+      celebrationTimeframe === 'today' ? 'نجوم اليوم' :
+      celebrationTimeframe === 'week' ? 'أبطال الأسبوع' :
+      celebrationTimeframe === 'month' ? 'فرسان وشرف الشهر' : 'لوحة الشرف العامة للمركز';
+
     const firstPlace = top3[0] 
-      ? `🥇 *المركز الأول (بطل الجلسة والتاج):* ${top3[0].fullName} (كود: ${top3[0].code || '---'}) - *${top3[0].points || 0} نقطة تميز* 👑` 
+      ? `🥇 *المركز الأول (بطل ${periodName} والتاج):* ${top3[0].fullName} (كود: ${top3[0].code || '---'}) - *+${(top3[0] as any)?.periodPoints || 0} ${(top3[0] as any)?.periodLabel || 'نجمة'}* 👑` 
       : '';
     const secondPlace = top3[1] 
-      ? `🥈 *المركز الثاني (فارس التميز):* ${top3[1].fullName} (كود: ${top3[1].code || '---'}) - *${top3[1].points || 0} نقطة تميز* ⭐` 
+      ? `🥈 *المركز الثاني (فارس التميز):* ${top3[1].fullName} (كود: ${top3[1].code || '---'}) - *+${(top3[1] as any)?.periodPoints || 0} ${(top3[1] as any)?.periodLabel || 'نجمة'}* ⭐` 
       : '';
     const thirdPlace = top3[2] 
-      ? `🥉 *المركز الثالث (نجم الإصرار):* ${top3[2].fullName} (كود: ${top3[2].code || '---'}) - *${top3[2].points || 0} نقطة تميز* ⭐` 
+      ? `🥉 *المركز الثالث (نجم الإصرار):* ${top3[2].fullName} (كود: ${top3[2].code || '---'}) - *+${(top3[2] as any)?.periodPoints || 0} ${(top3[2] as any)?.periodLabel || 'نجمة'}* ⭐` 
       : '';
 
-    return `🏆✨ *حفل تتويج نجوم وأبطال الجلسة التدريبية* ✨🏆\n🏢 *مركز النجاح للتدريب والاستشارات*\n👥 *المجموعة:* ${groupName}\n📅 *التاريخ:* ${new Date().toLocaleDateString('ar-EG')}\n\n🌟 *لوحة شرف وفرسان الحصة اليوم:*\n${firstPlace}\n${secondPlace}\n${thirdPlace}\n\n🎉 ألف مبروك لجميع أبطالنا المتميزين على تفاعلهم الاستثنائي! تم توثيق منصة التتويج بنجاح 🚀👏`;
+    return `🏆✨ *حفل تتويج ${periodName}* ✨🏆\n🏢 *مركز النجاح للتدريب والاستشارات*\n👥 *المجموعة:* ${groupName}\n📅 *التاريخ:* ${new Date().toLocaleDateString('ar-EG')}\n\n🌟 *لوحة شرف وفرسان المنصة:*\n${firstPlace}\n${secondPlace}\n${thirdPlace}\n\n🎉 ألف مبروك لجميع أبطالنا المتميزين على تفاعلهم الاستثنائي! تم توثيق منصة التتويج بنجاح 🚀👏`;
   };
 
   // Generate high-resolution image capture of the podium (Guaranteed 100% visible & oklab safe)
@@ -449,83 +520,81 @@ export const SessionCeremonyModal: React.FC<SessionCeremonyModalProps> = ({
           {ceremonyStep === 0 && (
             <div className="space-y-5 max-w-2xl mx-auto">
               
-              {/* Scope Selector Tabs */}
+              {/* Scope Selector Tabs - Strict Day / Week / Month / All-time */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 <button
                   type="button"
-                  onClick={() => setCelebrationScope('last_lecture')}
+                  onClick={() => setCelebrationTimeframe('today')}
                   className={`p-2.5 rounded-2xl border text-center transition-all flex flex-col items-center gap-1 cursor-pointer ${
-                    celebrationScope === 'last_lecture'
+                    celebrationTimeframe === 'today'
                       ? 'bg-amber-100 dark:bg-amber-500/20 border-amber-400 dark:border-amber-400 text-amber-900 dark:text-amber-300 ring-2 ring-amber-400/40 font-black shadow-md'
                       : 'bg-slate-50 dark:bg-slate-800/80 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
                   }`}
                 >
                   <Sparkles className="w-4 h-4 text-amber-600 dark:text-amber-400" />
-                  <span className="text-xs">🌟 نجوم آخر محاضرة</span>
+                  <span className="text-xs font-bold">🌟 نجوم اليوم (اليوم فقط)</span>
                 </button>
 
                 <button
                   type="button"
-                  onClick={() => setCelebrationScope('week_stars')}
+                  onClick={() => setCelebrationTimeframe('week')}
                   className={`p-2.5 rounded-2xl border text-center transition-all flex flex-col items-center gap-1 cursor-pointer ${
-                    celebrationScope === 'week_stars'
+                    celebrationTimeframe === 'week'
                       ? 'bg-indigo-100 dark:bg-indigo-500/20 border-indigo-400 dark:border-indigo-400 text-indigo-900 dark:text-indigo-300 ring-2 ring-indigo-400/40 font-black shadow-md'
                       : 'bg-slate-50 dark:bg-slate-800/80 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
                   }`}
                 >
                   <Trophy className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
-                  <span className="text-xs">🏆 أبطال الأسبوع</span>
+                  <span className="text-xs font-bold">🏆 نجوم الأسبوع</span>
                 </button>
 
                 <button
                   type="button"
-                  onClick={() => setCelebrationScope('group')}
+                  onClick={() => setCelebrationTimeframe('month')}
                   className={`p-2.5 rounded-2xl border text-center transition-all flex flex-col items-center gap-1 cursor-pointer ${
-                    celebrationScope === 'group'
+                    celebrationTimeframe === 'month'
                       ? 'bg-emerald-100 dark:bg-emerald-500/20 border-emerald-400 dark:border-emerald-400 text-emerald-900 dark:text-emerald-300 ring-2 ring-emerald-400/40 font-black shadow-md'
                       : 'bg-slate-50 dark:bg-slate-800/80 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
                   }`}
                 >
                   <Users className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-                  <span className="text-xs">👥 مجموعة مخصصة</span>
+                  <span className="text-xs font-bold">🎖️ نجوم الشهر</span>
                 </button>
 
                 <button
                   type="button"
-                  onClick={() => setCelebrationScope('center')}
+                  onClick={() => setCelebrationTimeframe('all_time')}
                   className={`p-2.5 rounded-2xl border text-center transition-all flex flex-col items-center gap-1 cursor-pointer ${
-                    celebrationScope === 'center'
+                    celebrationTimeframe === 'all_time'
                       ? 'bg-purple-100 dark:bg-purple-500/20 border-purple-400 dark:border-purple-400 text-purple-900 dark:text-purple-300 ring-2 ring-purple-400/40 font-black shadow-md'
                       : 'bg-slate-50 dark:bg-slate-800/80 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
                   }`}
                 >
                   <Crown className="w-4 h-4 text-purple-600 dark:text-purple-400" />
-                  <span className="text-xs">👑 أوائل المركز</span>
+                  <span className="text-xs font-bold">👑 النجم العام (التراكمي)</span>
                 </button>
               </div>
 
               {/* Filter & Group Selector Card */}
               <div className="bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 rounded-2xl p-4 space-y-4 shadow-sm">
-                {(celebrationScope === 'group' || celebrationScope === 'last_lecture') && (
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                    <div>
-                      <label className="block text-xs font-black text-amber-800 dark:text-amber-300 mb-1">المجموعة التدريبية:</label>
-                      <p className="text-[11px] text-slate-500 dark:text-slate-400">اختر المجموعة المراد استعراض نجومها وتكريمهم</p>
-                    </div>
-                    <select
-                      value={selectedGroup}
-                      onChange={(e) => setSelectedGroup(e.target.value)}
-                      className="bg-white dark:bg-slate-900 border border-amber-300 dark:border-amber-500/40 text-slate-900 dark:text-white font-bold rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-amber-500 outline-none shadow-xs"
-                    >
-                      {groups.map(g => (
-                        <option key={g.id} value={g.id}>
-                          {g.name} {g.scheduleTime ? `(${g.scheduleTime})` : ''}
-                        </option>
-                      ))}
-                      <option value="all">🌐 كل طلاب المركز</option>
-                    </select>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <label className="block text-xs font-black text-amber-800 dark:text-amber-300 mb-1">المجموعة التدريبية:</label>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400">اختر المجموعة المراد استعراض نجومها وتكريمهم</p>
                   </div>
-                )}
+                  <select
+                    value={selectedGroup}
+                    onChange={(e) => setSelectedGroup(e.target.value)}
+                    className="bg-white dark:bg-slate-900 border border-amber-300 dark:border-amber-500/40 text-slate-900 dark:text-white font-bold rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-amber-500 outline-none shadow-xs"
+                  >
+                    {groups.map(g => (
+                      <option key={g.id} value={g.id}>
+                        {g.name} {g.scheduleTime ? `(${g.scheduleTime})` : ''}
+                      </option>
+                    ))}
+                    <option value="all">🌐 كل طلاب المركز</option>
+                  </select>
+                </div>
 
                 {/* Filter Mode Selector */}
                 {selectedGroup !== 'all' && (
@@ -623,8 +692,13 @@ export const SessionCeremonyModal: React.FC<SessionCeremonyModalProps> = ({
                               {rank.label}
                             </span>
                             <div className="font-bold text-xs text-slate-900 dark:text-white truncate">{displayName}</div>
-                            <div className="text-[10px] text-amber-700 dark:text-amber-300 font-mono font-bold mt-0.5">
-                              ⭐ {st.points || 0} نقطة
+                            <div className="text-[10px] text-amber-700 dark:text-amber-300 font-bold mt-0.5 flex items-center gap-1.5 flex-wrap">
+                              <span className="bg-amber-100 dark:bg-amber-950/60 text-amber-900 dark:text-amber-300 px-1.5 py-0.5 rounded font-black font-mono">
+                                +{(st as any)?.periodPoints ?? 0} {(st as any)?.periodLabel || 'نجمة'}
+                              </span>
+                              <span className="text-slate-400 dark:text-slate-500 text-[9px] font-mono">
+                                (الكلي: {st.totalPoints ?? st.points ?? 0})
+                              </span>
                             </div>
                           </div>
                         </div>
@@ -762,8 +836,9 @@ export const SessionCeremonyModal: React.FC<SessionCeremonyModalProps> = ({
 
                         {/* Points Pill */}
                         <div className="bg-white dark:bg-slate-950 text-slate-900 dark:text-cyan-300 py-1.5 px-3 rounded-xl border border-slate-300 dark:border-cyan-400/40 shadow-sm">
-                          <span className="font-black text-lg font-mono text-sky-700 dark:text-cyan-300">{top3[1]?.points || 0}</span>
-                          <span className="text-[10px] text-slate-600 dark:text-slate-400 block font-bold">نقطة تميز</span>
+                          <span className="font-black text-lg font-mono text-sky-700 dark:text-cyan-300">+{(top3[1] as any)?.periodPoints ?? top3[1]?.points ?? 0}</span>
+                          <span className="text-[10px] text-slate-600 dark:text-slate-400 block font-bold">{(top3[1] as any)?.periodLabel || 'نجمة التميز ⭐'}</span>
+                          <span className="text-[9px] text-slate-400 dark:text-slate-500 block font-mono">الكلي: {top3[1]?.totalPoints ?? top3[1]?.points ?? 0}</span>
                         </div>
 
                         {/* Hide buttons when capturing screenshot */}
@@ -822,8 +897,9 @@ export const SessionCeremonyModal: React.FC<SessionCeremonyModalProps> = ({
 
                         {/* Points Pill */}
                         <div className="bg-white dark:bg-slate-950 text-amber-950 dark:text-amber-400 py-2 px-4 rounded-2xl border border-amber-300 dark:border-amber-400/50 shadow-md">
-                          <span className="text-2xl font-black font-mono text-amber-700 dark:text-amber-400">{top3[0]?.points || 0}</span>
-                          <span className="text-[11px] text-amber-800 dark:text-amber-300 block font-bold">نقطة تميز أسطورية</span>
+                          <span className="text-2xl font-black font-mono text-amber-700 dark:text-amber-400">+{(top3[0] as any)?.periodPoints ?? top3[0]?.points ?? 0}</span>
+                          <span className="text-[11px] text-amber-800 dark:text-amber-300 block font-bold">{(top3[0] as any)?.periodLabel || 'نجمة بطل الجلسة 👑'}</span>
+                          <span className="text-[10px] text-amber-700/70 dark:text-amber-400/70 block font-mono">الكلي: {top3[0]?.totalPoints ?? top3[0]?.points ?? 0}</span>
                         </div>
 
                         {/* Hide buttons when capturing screenshot */}
@@ -882,8 +958,9 @@ export const SessionCeremonyModal: React.FC<SessionCeremonyModalProps> = ({
 
                         {/* Points Pill */}
                         <div className="bg-white dark:bg-slate-950 text-orange-950 dark:text-amber-300 py-1.5 px-3 rounded-xl border border-orange-300 dark:border-amber-500/40 shadow-sm">
-                          <span className="font-black text-lg font-mono text-orange-700 dark:text-amber-300">{top3[2]?.points || 0}</span>
-                          <span className="text-[10px] text-orange-800 dark:text-slate-400 block font-bold">نقطة تميز</span>
+                          <span className="font-black text-lg font-mono text-orange-700 dark:text-amber-300">+{(top3[2] as any)?.periodPoints ?? top3[2]?.points ?? 0}</span>
+                          <span className="text-[10px] text-orange-800 dark:text-slate-400 block font-bold">{(top3[2] as any)?.periodLabel || 'نجمة التميز ⭐'}</span>
+                          <span className="text-[9px] text-slate-400 dark:text-slate-500 block font-mono">الكلي: {top3[2]?.totalPoints ?? top3[2]?.points ?? 0}</span>
                         </div>
 
                         {/* Hide buttons when capturing screenshot */}

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   X,
   Printer,
@@ -23,6 +23,7 @@ import { useCenter } from '../context/CenterContext';
 import { useTheme } from '../context/ThemeContext';
 import { getEffectiveCenterLogo, handleLogoError } from '../utils/centerLogo';
 import { resolveTraineePhotoUrl } from '../utils/googleDriveHelper';
+import { formatArabicDateWithDay } from '../utils/paymentUtils';
 
 interface StudentCardsBroadcastModalProps {
   isOpen: boolean;
@@ -172,6 +173,8 @@ export const StudentCardsBroadcastModal: React.FC<StudentCardsBroadcastModalProp
           const branchName = branchObj ? branchObj.name : 'الفرع الرئيسي';
           const courseName = courseObj ? courseObj.name : 'الدورة التدريبية';
           const groupName = groupObj ? groupObj.name : 'المجموعة الأساسية';
+          const rawEnrollDate = t.registrationDate || t.enrollmentDate || t.subscriptionStartDate || (t.createdAt ? t.createdAt.split('T')[0] : '') || (t as any).joinDate || '';
+          const formattedEnrollDate = rawEnrollDate ? formatArabicDateWithDay(rawEnrollDate) : '';
 
           return `
           <div class="trainee-carnet-card">
@@ -234,6 +237,14 @@ export const StudentCardsBroadcastModal: React.FC<StudentCardsBroadcastModalProp
                   <span class="info-lbl">الفرع:</span>
                   <span class="info-val">${branchName}</span>
                 </div>
+                ${
+                  formattedEnrollDate
+                    ? `<div class="info-row">
+                        <span class="info-lbl">تاريخ الالتحاق والتسجيل:</span>
+                        <span class="info-val" style="color: ${isDark ? '#38bdf8' : '#0284c7'}; font-size: 8px; font-weight: 800;">${formattedEnrollDate}</span>
+                      </div>`
+                    : ''
+                }
                 ${
                   t.phone
                     ? `<div class="info-row">

@@ -40,6 +40,7 @@ import { Group, Course, Trainer, Branch, Trainee } from '../types';
 import { CourseGroupMaterialsModal } from '../components/CourseGroupMaterialsModal';
 import { SessionCeremonyModal } from '../components/SessionCeremonyModal';
 import { LabScheduleView } from './LabScheduleView';
+import { CurriculumPlanModal } from '../components/curriculum/CurriculumPlanModal';
 
 interface GroupsViewProps {
   onNavigate?: (view: string) => void;
@@ -107,6 +108,7 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ onNavigate }) => {
   const [isDuplicateModalOpen, setIsDuplicateModalOpen] = useState(false);
   const [isTraineesModalOpen, setIsTraineesModalOpen] = useState(false);
   const [isPrintRosterModalOpen, setIsPrintRosterModalOpen] = useState(false);
+  const [isCurriculumPlanOpen, setIsCurriculumPlanOpen] = useState(false);
 
   const [activeGroup, setActiveGroup] = useState<Group | null>(null);
   const [groupToDelete, setGroupToDelete] = useState<Group | null>(null);
@@ -669,6 +671,15 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ onNavigate }) => {
               <span className="hidden sm:inline">الجدول الزمني</span>
             </button>
           </div>
+
+          <button
+            type="button"
+            onClick={() => setIsCurriculumPlanOpen(true)}
+            className="flex-1 lg:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-black text-xs shadow-lg shadow-indigo-600/25 transition-all active:scale-95 cursor-pointer"
+            title="خريطة المنهج وتوزيع المحاضرات والمهام المعملية 8 شهرياً"
+          >
+            <span>🗺️ خريطة المنهج</span>
+          </button>
 
           <button
             onClick={handleOpenBatch}
@@ -2875,6 +2886,14 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ onNavigate }) => {
           }}
         />
       )}
+
+      {/* Curriculum Plan & Syllabus Distribution Modal */}
+      <CurriculumPlanModal
+        isOpen={isCurriculumPlanOpen}
+        onClose={() => setIsCurriculumPlanOpen(false)}
+        courses={courses}
+        groups={groups}
+      />
     </div>
   );
 };

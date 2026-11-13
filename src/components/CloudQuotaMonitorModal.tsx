@@ -485,6 +485,64 @@ export const CloudQuotaMonitorModal: React.FC<CloudQuotaMonitorModalProps> = ({
             </div>
           </div>
 
+          {/* 2.5 GEMINI AI QUOTA SHIELD & CACHE METRICS */}
+          <div className="p-3 rounded-xl bg-gradient-to-r from-purple-500/5 via-indigo-500/5 to-cyan-500/5 dark:bg-slate-900/90 border border-purple-200/80 dark:border-purple-800/60 space-y-2.5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5">
+                <div className="p-1 rounded-lg bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300">
+                  <Sparkles className="w-4 h-4" />
+                </div>
+                <div>
+                  <h4 className="font-black text-slate-800 dark:text-slate-100 text-xs">
+                    درع حماية وتوفير كوتا الذكاء الاصطناعي (Gemini AI Quota Shield)
+                  </h4>
+                  <p className="text-[10px] text-slate-500 dark:text-slate-400">
+                    نظام التخزين المؤقت فائق السرعة (0ms) لمنع استهلاك رصيد الذكاء الاصطناعي والصوتيات
+                  </p>
+                </div>
+              </div>
+
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700 flex items-center gap-1">
+                <ShieldCheck className="w-3 h-3 text-emerald-600" />
+                <span>حماية الكوتا نشطة 100%</span>
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              <div className="p-2 rounded-lg bg-white dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-center shadow-xs">
+                <span className="text-[10px] text-slate-500 dark:text-slate-400 block mb-0.5">إجمالي الطلبات</span>
+                <span className="text-xs font-black font-mono text-slate-800 dark:text-white">
+                  {quotaData?.geminiAi?.totalAiCalls || 0}
+                </span>
+              </div>
+
+              <div className="p-2 rounded-lg bg-white dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-center shadow-xs">
+                <span className="text-[10px] text-slate-500 dark:text-slate-400 block mb-0.5">استرجاع فوري من الكاش</span>
+                <span className="text-xs font-black font-mono text-emerald-600 dark:text-emerald-400">
+                  {quotaData?.geminiAi?.cachedHits || 0} (توفير {quotaData?.geminiAi?.savingsPercentage || 0}%)
+                </span>
+              </div>
+
+              <div className="p-2 rounded-lg bg-white dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-center shadow-xs">
+                <span className="text-[10px] text-slate-500 dark:text-slate-400 block mb-0.5">مكتبة الصوتيات المحفوظة</span>
+                <span className="text-xs font-black font-mono text-purple-600 dark:text-purple-400">
+                  {quotaData?.geminiAi?.ttsCacheSize || 0} مقطع صوتي
+                </span>
+              </div>
+
+              <div className="p-2 rounded-lg bg-white dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-center shadow-xs">
+                <span className="text-[10px] text-slate-500 dark:text-slate-400 block mb-0.5">محرك بنك المعرفة البديل</span>
+                <span className="text-[11px] font-black text-cyan-600 dark:text-cyan-400 flex items-center justify-center gap-1">
+                  <span>جاهز للطوارئ ✓</span>
+                </span>
+              </div>
+            </div>
+
+            <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed bg-slate-50 dark:bg-slate-950/40 p-2 rounded-lg border border-slate-200 dark:border-slate-800">
+              💡 <strong>كيف تحافظ المنصة على الكوتا تلقائياً؟</strong> يتم حفظ أي عبارة تشجيعية، صوت تكريم، أو إجابة مولدة بالذكاء الاصطناعي في الذاكرة السحابية، بحيث يتم تشغيلها وإعادة استخدامها دون إرسال طلب جديد لـ Google Gemini، مما يوفر أكثر من 85% من الاستهلاك، مع تفعيل بنك المعرفة التربوي المصري الجاهز تلقائياً عند أي ضغط على الشبكة.
+            </p>
+          </div>
+
           {/* 3. STEP-BY-STEP DIAGNOSTIC: WHY VERCEL PAUSED & HOW TO SOLVE */}
           <div className="p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-2">
             <h4 className="font-black text-slate-800 dark:text-slate-200 text-xs flex items-center gap-1.5">

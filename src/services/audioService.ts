@@ -6,22 +6,36 @@
  * 3. AudioController - Central state manager tracking all active audio, timers, speech, and network calls
  */
 
+// Client-side memory cache to guarantee 0ms instant playback and 100% zero network quota usage for repeated audio
+const clientAudioCache = new Map<string, string>();
+
 export class GeminiTTSProvider {
   /**
-   * Request TTS audio from server-side Gemini route
+   * Request TTS audio from server-side Gemini route with instant client-side caching
    */
   public async speak(
     text: string,
     options?: { promptStyle?: string; voiceName?: string; signal?: AbortSignal }
   ): Promise<HTMLAudioElement | null> {
+    const cleanText = (text || '').trim();
+    const voice = options?.voiceName || 'Puck';
+    const cacheKey = `${voice}:::${cleanText}:::${options?.promptStyle || ''}`;
+
+    // 1. Instant client-side cache hit
+    if (clientAudioCache.has(cacheKey)) {
+      const base64 = clientAudioCache.get(cacheKey)!;
+      const cachedAudio = new Audio(`data:audio/wav;base64,${base64}`);
+      return cachedAudio;
+    }
+
     try {
       const res = await fetch('/api/gemini/tts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          text,
+          text: cleanText,
           promptStyle: options?.promptStyle,
-          voiceName: options?.voiceName || 'Puck'
+          voiceName: voice
         }),
         signal: options?.signal
       });
@@ -31,6 +45,13 @@ export class GeminiTTSProvider {
 
       if (data.success && (data.audio || data.audioBase64)) {
         const base64 = data.audio || data.audioBase64;
+        // Cache locally for the session
+        if (clientAudioCache.size >= 150) {
+          const oldest = clientAudioCache.keys().next().value;
+          if (oldest) clientAudioCache.delete(oldest);
+        }
+        clientAudioCache.set(cacheKey, base64);
+
         const audio = new Audio(`data:audio/wav;base64,${base64}`);
         return audio;
       }

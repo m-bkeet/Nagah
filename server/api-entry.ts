@@ -151,27 +151,19 @@ app.use((req: any, res: any, next: any) => {
 
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
-// Quota Protection: Short re-validation cache for GET endpoints to prevent redundant requests
+// Ensure clients and edge proxies always receive up-to-date financial and academic state
 app.use((req, res, next) => {
   if (req.method === 'GET' && !req.url.includes('/export') && !req.url.includes('/backup')) {
-    res.setHeader('Cache-Control', 'public, max-age=15, stale-while-revalidate=30');
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
   }
   next();
 });
 
-// Ensure database state is hydrated from cloud Firestore on request (cached in-memory to prevent quota exhaustion)
-let hasHydratedOnce = false;
-let lastHydrationTime = 0;
+// Ensure database state is hydrated from cloud Firestore (uses fast 10s sync_meta check inside db.ensureHydrated)
 app.use(async (req, res, next) => {
   try {
     const isFresh = req.query?.fresh === 'true' || req.headers?.['x-fresh'] === 'true';
-    const now = Date.now();
-    // Only hydrate on cold start once, on explicit fresh request, or after 5 minutes of cache
-    if (!hasHydratedOnce || isFresh || (now - lastHydrationTime > 300000)) {
-      await db.ensureHydrated(isFresh);
-      hasHydratedOnce = true;
-      lastHydrationTime = now;
-    }
+    await db.ensureHydrated(isFresh);
   } catch (e) {
     console.warn('[Hydration Middleware Notice]', e);
   }

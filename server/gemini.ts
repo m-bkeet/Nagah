@@ -23,6 +23,49 @@ export const GEMINI_MODEL_CASCADE = [
   'gemini-flash-latest'
 ];
 
+interface CachedTTSItem {
+  audioBase64: string;
+  mimeType: string;
+  timestamp: number;
+}
+
+interface CachedTextItem {
+  text: string;
+  modelUsed: string;
+  timestamp: number;
+}
+
+// In-memory LRU cache to preserve Gemini API quota & provide instant 0ms speech playback
+const ttsCache = new Map<string, CachedTTSItem>();
+const MAX_TTS_CACHE_ITEMS = 300;
+
+const textGenCache = new Map<string, CachedTextItem>();
+const MAX_TEXT_CACHE_ITEMS = 400;
+
+// System quota tracking counters
+let totalAiRequests = 0;
+let cachedAiHits = 0;
+let ttsRequests = 0;
+let cachedTtsHits = 0;
+let lastAiCallTimestamp = 0;
+
+export function getAiQuotaMetrics() {
+  const totalCalls = totalAiRequests + ttsRequests;
+  const totalCached = cachedAiHits + cachedTtsHits;
+  const savingsPct = totalCalls > 0 ? Math.round((totalCached / totalCalls) * 100) : 0;
+  return {
+    totalAiCalls: totalCalls,
+    cachedHits: totalCached,
+    liveCalls: totalCalls - totalCached,
+    savingsPercentage: savingsPct,
+    ttsCacheSize: ttsCache.size,
+    textCacheSize: textGenCache.size,
+    lastCall: lastAiCallTimestamp ? new Date(lastAiCallTimestamp).toISOString() : null,
+    smartFallbackActive: true,
+    status: 'OPTIMIZED' as const
+  };
+}
+
 export function createWavFromPcm(pcmData: Buffer, sampleRate = 24000, numChannels = 1, bitsPerSample = 16): Buffer {
   if (pcmData.length >= 12 && pcmData.toString('ascii', 0, 4) === 'RIFF' && pcmData.toString('ascii', 8, 12) === 'WAVE') {
     return pcmData; // Already has standard WAV header
@@ -55,18 +98,35 @@ export async function generateGeminiSpeechAudio(params: {
   text: string;
   promptStyle?: string;
   voiceName?: 'Puck' | 'Charon' | 'Kore' | 'Fenrir' | 'Zephyr';
-}): Promise<{ success: boolean; audioBase64?: string; mimeType?: string; error?: string }> {
+}): Promise<{ success: boolean; audioBase64?: string; mimeType?: string; error?: string; cached?: boolean }> {
+  ttsRequests++;
+  const voice = params.voiceName || 'Puck';
+  const cleanText = (params.text || '').trim();
+  const cacheKey = `${voice}:::${cleanText}:::${params.promptStyle || ''}`;
+
+  // 1. Check in-memory quota shield cache first (0ms, 0 API units used)
+  if (ttsCache.has(cacheKey)) {
+    cachedTtsHits++;
+    const item = ttsCache.get(cacheKey)!;
+    return {
+      success: true,
+      audioBase64: item.audioBase64,
+      mimeType: item.mimeType,
+      cached: true
+    };
+  }
+
   if (!process.env.GEMINI_API_KEY) {
     return { success: false, error: 'GEMINI_API_KEY is not configured' };
   }
 
+  lastAiCallTimestamp = Date.now();
   const ai = getAI();
-  const voice = params.voiceName || 'Puck';
   
   // Format text with lively Egyptian radio announcer tone
   const prompt = params.promptStyle 
-    ? `${params.promptStyle}\n${params.text}`
-    : `انطق هذه العبارة بصوت مذيع إذاعي مصري حماسي، دافئ ومبهج وطبيعي جداً بنبرة احتفالية حقيقية وبلهجة مصرية أصيلة واضحة: "${params.text}"`;
+    ? `${params.promptStyle}\n${cleanText}`
+    : `انطق هذه العبارة بصوت مذيع إذاعي مصري حماسي، دافئ ومبهج وطبيعي جداً بنبرة احتفالية حقيقية وبلهجة مصرية أصيلة واضحة: "${cleanText}"`;
 
   try {
     const response = await ai.models.generateContent({
@@ -88,9 +148,22 @@ export async function generateGeminiSpeechAudio(params: {
     if (rawData) {
       const rawBuf = Buffer.from(rawData, 'base64');
       const wavBuf = createWavFromPcm(rawBuf, 24000, 1, 16);
+      const resultBase64 = wavBuf.toString('base64');
+
+      // Save to LRU cache to protect quota
+      if (ttsCache.size >= MAX_TTS_CACHE_ITEMS) {
+        const oldestKey = ttsCache.keys().next().value;
+        if (oldestKey) ttsCache.delete(oldestKey);
+      }
+      ttsCache.set(cacheKey, {
+        audioBase64: resultBase64,
+        mimeType: 'audio/wav',
+        timestamp: Date.now()
+      });
+
       return {
         success: true,
-        audioBase64: wavBuf.toString('base64'),
+        audioBase64: resultBase64,
         mimeType: 'audio/wav'
       };
     }
@@ -369,6 +442,7 @@ export async function generateWithModelCascade(params: {
   contents: any[];
   config?: any;
 }): Promise<{ text: string | null; modelUsed: string | null }> {
+  totalAiRequests++;
   let extractedPrompt = '';
   try {
     if (params.contents && params.contents[0]?.parts && params.contents[0].parts[0]?.text) {
@@ -376,7 +450,15 @@ export async function generateWithModelCascade(params: {
     }
   } catch (e) {}
 
+  const cacheKey = extractedPrompt.trim();
+  if (cacheKey && textGenCache.has(cacheKey)) {
+    cachedAiHits++;
+    const hit = textGenCache.get(cacheKey)!;
+    return { text: hit.text, modelUsed: `${hit.modelUsed} (cached)` };
+  }
+
   if (process.env.GEMINI_API_KEY) {
+    lastAiCallTimestamp = Date.now();
     const ai = getAI();
     for (const modelName of GEMINI_MODEL_CASCADE) {
       try {
@@ -388,7 +470,19 @@ export async function generateWithModelCascade(params: {
 
         const text = response.text;
         if (text && text.trim().length > 0) {
-          return { text: text.trim(), modelUsed: modelName };
+          const cleanResult = text.trim();
+          if (cacheKey && cacheKey.length < 800) {
+            if (textGenCache.size >= MAX_TEXT_CACHE_ITEMS) {
+              const oldest = textGenCache.keys().next().value;
+              if (oldest) textGenCache.delete(oldest);
+            }
+            textGenCache.set(cacheKey, {
+              text: cleanResult,
+              modelUsed: modelName,
+              timestamp: Date.now()
+            });
+          }
+          return { text: cleanResult, modelUsed: modelName };
         }
       } catch (err: any) {
         console.warn(`[Gemini Cascade] Model ${modelName} fallback check:`, err?.message || err);

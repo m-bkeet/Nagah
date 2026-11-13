@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { api } from '../services/api';
 import { isTrainerSessionActive } from '../utils/labSecurity';
 import { ThemeQuickSwitcher } from '../components/ThemeQuickSwitcher';
@@ -85,12 +85,12 @@ export const StudentKioskView: React.FC = () => {
     };
   }, []);
 
-  const handleRefreshStats = async () => {
-    if (!currentTrainee) return;
-    const code = currentTrainee.studentCode || currentTrainee.code || currentTrainee.id;
-    if (!code) return;
+  const activeStudentCode = currentTrainee?.studentCode || currentTrainee?.code || currentTrainee?.id || '';
+
+  const handleRefreshStats = useCallback(async () => {
+    if (!activeStudentCode) return;
     try {
-      const refRes = await fetch(`/api/agent/student-refresh?code=${encodeURIComponent(code)}`);
+      const refRes = await fetch(`/api/agent/student-refresh?code=${encodeURIComponent(activeStudentCode)}`);
       const refJson = await refRes.json();
       if (refJson.success && refJson.trainee) {
         setCurrentTrainee(refJson.trainee);
@@ -99,16 +99,16 @@ export const StudentKioskView: React.FC = () => {
       const json = await res.json();
       if (json && json.data) {
         setActiveQuestion(json.data);
-        if (json.data.answers && json.data.answers[code]) {
-          setSubmittedAnswer(json.data.answers[code].answer);
+        if (json.data.answers && json.data.answers[activeStudentCode]) {
+          setSubmittedAnswer(json.data.answers[activeStudentCode].answer);
         }
       } else {
         setActiveQuestion(null);
       }
     } catch {}
-  };
+  }, [activeStudentCode]);
 
-  // Real-time Instant Points & Stars Synchronization
+  // Real-time Instant Points & Stars Synchronization (LocalStorage + Focus Server Refresh)
   useEffect(() => {
     if (!currentTrainee) return;
     const syncPoints = () => {
@@ -116,7 +116,7 @@ export const StudentKioskView: React.FC = () => {
         const stored = localStorage.getItem('nagah_trainees');
         if (stored) {
           const list = JSON.parse(stored);
-          const myCode = (currentTrainee.studentCode || currentTrainee.code || currentTrainee.id || '').trim().toUpperCase();
+          const myCode = String(activeStudentCode).trim().toUpperCase();
           const found = list.find((t: any) =>
             (t.id && t.id === currentTrainee.id) ||
             (t.code && String(t.code).trim().toUpperCase() === myCode)
@@ -128,23 +128,28 @@ export const StudentKioskView: React.FC = () => {
       } catch {}
     };
 
-    const handlePointEvent = (e: any) => {
+    const handleFocusRefresh = () => {
+      syncPoints();
+      handleRefreshStats();
+    };
+
+    const handlePointEvent = () => {
       syncPoints();
       handleRefreshStats();
     };
 
     window.addEventListener('storage', syncPoints);
-    window.addEventListener('focus', syncPoints);
+    window.addEventListener('focus', handleFocusRefresh);
     window.addEventListener('nagah_points_mutated', handlePointEvent);
     window.addEventListener('nagah_trainee_mutated', handlePointEvent);
 
     return () => {
       window.removeEventListener('storage', syncPoints);
-      window.removeEventListener('focus', syncPoints);
+      window.removeEventListener('focus', handleFocusRefresh);
       window.removeEventListener('nagah_points_mutated', handlePointEvent);
       window.removeEventListener('nagah_trainee_mutated', handlePointEvent);
     };
-  }, [currentTrainee?.id, currentTrainee?.code]);
+  }, [currentTrainee?.id, activeStudentCode, handleRefreshStats]);
 
   // Check on mount (Zero background polling)
   useEffect(() => {
@@ -260,7 +265,7 @@ export const StudentKioskView: React.FC = () => {
     return (
       <div className="min-h-screen bg-slate-950 text-white flex flex-col justify-center items-center p-6 text-center select-none font-sans" dir="rtl">
         <div className="max-w-md w-full bg-slate-900/95 border-2 border-rose-500/50 rounded-3xl p-8 shadow-2xl backdrop-blur-xl space-y-6 animate-in fade-in zoom-in-95 duration-200">
-          <div className="w-20 h-20 rounded-3xl bg-rose-500/20 border border-rose-500/40 text-rose-400 flex items-center justify-center text-4xl mx-auto shadow-inner animate-pulse">
+          <div className="w-20 h-20 rounded-3xl bg-rose-500/20 border border-rose-500/40 text-rose-400 flex items-center justify-center text-4xl mx-auto shadow-inner">
             🔒
           </div>
           <div className="space-y-2">
@@ -275,7 +280,7 @@ export const StudentKioskView: React.FC = () => {
             </p>
           </div>
           <div className="pt-4 border-t border-slate-800 flex items-center justify-center gap-2 text-xs text-slate-400">
-            <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-ping" />
+            <span className="w-2.5 h-2.5 rounded-full bg-rose-500" />
             <span>في انتظار فتح المعمل من قبل المحاضر...</span>
           </div>
         </div>
@@ -301,7 +306,7 @@ export const StudentKioskView: React.FC = () => {
           <div className="flex items-center gap-2">
             <ThemeQuickSwitcher />
             <div className="hidden sm:flex items-center gap-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 px-3.5 py-1.5 rounded-2xl text-xs text-slate-700 dark:text-slate-300 shadow-xs">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
               <span>المعمل متصل بالسيرفر</span>
             </div>
           </div>
@@ -312,7 +317,7 @@ export const StudentKioskView: React.FC = () => {
           <div className="bg-white dark:bg-slate-900/90 backdrop-blur-xl border border-slate-200 dark:border-slate-800 rounded-3xl p-8 shadow-xl dark:shadow-2xl space-y-6 text-center">
             
             <div className="relative mx-auto w-20 h-20">
-              <div className="absolute inset-0 bg-amber-500/20 rounded-full blur-xl animate-pulse"></div>
+              <div className="absolute inset-0 bg-amber-500/20 rounded-full blur-xl"></div>
               <div className="relative w-20 h-20 bg-gradient-to-tr from-amber-500 to-amber-300 text-slate-950 rounded-3xl flex items-center justify-center font-black text-3xl shadow-xl shadow-amber-500/25">
                 🎓
               </div>
@@ -435,7 +440,7 @@ export const StudentKioskView: React.FC = () => {
 
             {/* Stars Counter */}
             <div className="bg-slate-50 dark:bg-slate-950 border border-amber-200 dark:border-blue-500/30 px-4 py-2 rounded-2xl flex items-center gap-2 shadow-xs">
-              <Star className="w-5 h-5 text-amber-500 dark:text-blue-400 fill-amber-500 dark:fill-blue-400 animate-bounce" />
+              <Star className="w-5 h-5 text-amber-500 dark:text-blue-400 fill-amber-500 dark:fill-blue-400" />
               <div className="text-right">
                 <div className="text-lg font-black text-amber-600 dark:text-blue-400 leading-none">{currentPoints}</div>
                 <div className="text-[10px] text-slate-500 dark:text-slate-400 font-bold">نجمة تميز ⭐</div>
@@ -486,7 +491,7 @@ export const StudentKioskView: React.FC = () => {
           <div className="bg-gradient-to-r from-purple-950 via-indigo-900 to-purple-900 border-2 border-purple-400 rounded-3xl p-6 shadow-2xl relative overflow-hidden animate-fadeIn space-y-4 text-white">
             <div className="flex items-center justify-between flex-wrap gap-4">
               <div className="flex items-center gap-3">
-                <span className="w-4 h-4 rounded-full bg-emerald-400 animate-ping shrink-0" />
+                <span className="w-3.5 h-3.5 rounded-full bg-emerald-400 shrink-0" />
                 <div>
                   <div className="flex items-center gap-2">
                     <span className="text-xs bg-purple-500 text-white font-black px-2.5 py-0.5 rounded-full uppercase shadow-sm">
@@ -608,7 +613,7 @@ export const StudentKioskView: React.FC = () => {
           <div className="bg-white dark:bg-gradient-to-b dark:from-purple-900/40 dark:to-slate-900 border-2 border-indigo-200 dark:border-purple-500/50 rounded-3xl p-6 shadow-md dark:shadow-2xl space-y-6 relative overflow-hidden animate-fadeIn">
             <div className="flex items-center justify-between flex-wrap gap-2">
               <div className="flex items-center gap-2">
-                <span className="w-3 h-3 rounded-full bg-rose-500 animate-ping"></span>
+                <span className="w-3 h-3 rounded-full bg-rose-500"></span>
                 <h2 className="text-lg sm:text-xl font-black text-slate-900 dark:text-purple-200 flex items-center gap-2">
                   <Zap className="w-6 h-6 text-amber-500 fill-amber-500" />
                   تحدي المعمل اللحظي (التصويت والسؤال المباشر)!
@@ -647,7 +652,7 @@ export const StudentKioskView: React.FC = () => {
                 let extraClasses = opt.color;
                 if (isRevealed) {
                   if (isCorrectOption) {
-                    extraClasses = 'bg-emerald-600 ring-4 ring-emerald-300 animate-pulse text-white';
+                    extraClasses = 'bg-emerald-600 ring-4 ring-emerald-300 text-white';
                   } else if (isSelected) {
                     extraClasses = 'bg-rose-700 opacity-60 text-white';
                   } else {
@@ -666,7 +671,7 @@ export const StudentKioskView: React.FC = () => {
                       isSelected ? 'border-indigo-600 dark:border-white scale-[1.02]' : 'border-transparent'
                     } ${extraClasses} text-white`}
                   >
-                    {isSelected && <Check className="w-7 h-7 animate-bounce" />}
+                    {isSelected && <Check className="w-7 h-7" />}
                     <span>{opt.label}</span>
                     {isRevealed && isCorrectOption && <span className="text-sm bg-black/40 px-2.5 py-1 rounded-full">✅ الإجابة الصحيحة</span>}
                   </button>

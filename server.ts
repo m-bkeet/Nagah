@@ -142,8 +142,28 @@ if (fs.existsSync(path.join(process.cwd(), "dist"))) {
 app.use(express.json({ limit: "100mb" }));
 app.use(express.urlencoded({ extended: true, limit: "100mb" }));
 
-// Fast in-memory state: hydration runs asynchronously on server boot, never blocking or burning quota per HTTP request
-app.use((req, res, next) => {
+// Ensure /api responses are never stale-cached and avoid wasteful hydration on local-only endpoints
+app.use("/api", async (req, res, next) => {
+  if (req.method === 'GET' && !req.url.includes('/export') && !req.url.includes('/backup')) {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+  }
+  const urlPath = req.url || '';
+  const isLocalOnlyRoute =
+    urlPath.startsWith('/health') ||
+    urlPath.startsWith('/sessions/grades') ||
+    urlPath.startsWith('/lab/') ||
+    urlPath.startsWith('/classroom/') ||
+    urlPath.startsWith('/rtc/') ||
+    urlPath.startsWith('/system/quota') ||
+    urlPath.startsWith('/audit-logs') ||
+    urlPath.startsWith('/attendance') ||
+    urlPath.startsWith('/homeworks') ||
+    urlPath.startsWith('/exams');
+
+  if (!db.isHydrated() || (req.method === 'GET' && !isLocalOnlyRoute)) {
+    const isFresh = req.query?.fresh === 'true' || req.headers?.['x-fresh'] === 'true';
+    await db.ensureHydrated(isFresh).catch(() => {});
+  }
   next();
 });
 
@@ -472,7 +492,7 @@ app.post("/api/student/login", async (req, res) => {
   }
 });
 
-// Student Photo Update Endpoint
+// Student Photo Update Endpoint (local disk persistence, zero Firestore waste)
 app.post("/api/student/update-photo", async (req, res) => {
   try {
     const { traineeId, photoUrl } = req.body;
@@ -480,21 +500,15 @@ app.post("/api/student/update-photo", async (req, res) => {
       return sendResponse(res, false, null, "traineeId and photoUrl are required", 400);
     }
 
-    if (cloudDb) {
-      try {
-        const traineesRef = cloudDb.collection("trainees");
-        const snapshot = await traineesRef.where("id", "==", traineeId).get();
-        if (!snapshot.empty) {
-          await snapshot.docs[0].ref.update({ photoUrl, photo: photoUrl, updatedAt: new Date().toISOString() });
-        } else {
-          const codeSnap = await traineesRef.where("code", "==", traineeId).get();
-          if (!codeSnap.empty) {
-            await codeSnap.docs[0].ref.update({ photoUrl, photo: photoUrl, updatedAt: new Date().toISOString() });
-          }
-        }
-      } catch (e) {
-        console.warn("Firestore photo update notice:", e);
-      }
+    const data = db.getData();
+    const target = (data.trainees || []).find(
+      (t: any) => t.id === traineeId || t.code === traineeId
+    );
+    if (target) {
+      target.photoUrl = photoUrl;
+      (target as any).photo = photoUrl;
+      (target as any).updatedAt = new Date().toISOString();
+      await db.saveLocalOnly();
     }
 
     sendResponse(res, true, { message: "Photo updated successfully", photoUrl });

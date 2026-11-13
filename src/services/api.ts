@@ -1856,6 +1856,27 @@ export const api = {
     request<{ success: boolean; classPointCode: string; message: string }>('/classpoint-code', {
       method: 'POST',
       body: JSON.stringify({ code })
+    }),
+
+  getSessionGrades: (params?: { groupId?: string; date?: string; traineeId?: string }) => {
+    const query = new URLSearchParams();
+    if (params?.groupId) query.set('groupId', params.groupId);
+    if (params?.date) query.set('date', params.date);
+    if (params?.traineeId) query.set('traineeId', params.traineeId);
+    const qs = query.toString();
+    return request<any[]>(`/sessions/grades${qs ? `?${qs}` : ''}`);
+  },
+
+  saveSessionGradesBatch: (data: {
+    groupId: string;
+    date: string;
+    maxScore?: number;
+    records: Array<{ traineeId: string; score: number | string; maxScore?: number; note?: string }>;
+    updatedBy?: string;
+  }) =>
+    request<{ success: boolean; count: number; grades: any[] }>('/sessions/grades/batch', {
+      method: 'POST',
+      body: JSON.stringify(data)
     })
 };
 

@@ -3,8 +3,6 @@ import { Branch, CenterSettings, SystemNotification, Trainee, Trainer, Course, G
 import { api } from '../services/api';
 import { isTrainerSessionActive, setTrainerLabSessionState } from '../utils/labSecurity';
 import { normalizeArabicFull } from '../utils/arabicUtils';
-import { db } from '../lib/firebase';
-import { doc, onSnapshot } from 'firebase/firestore';
 
 export interface ToastMessage {
   id: string;
@@ -278,7 +276,7 @@ export const CenterProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     };
 
     const handleAttendanceUpdated = () => {
-      loadData();
+      setRefreshKey(k => k + 1);
     };
 
     const handleStorageEvent = (e: StorageEvent) => {
@@ -475,15 +473,30 @@ export const CenterProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     });
 
     try {
-      await api.createTrainee(trainee);
+      const res: any = await api.createTrainee(trainee);
+      const savedTrainee = res?.trainee || res;
+      if (savedTrainee && savedTrainee.id) {
+        setTrainees(prev => {
+          const updatedList = deduplicateTraineeList(prev.map(t => (t.id === trainee.id ? { ...t, ...savedTrainee } : t)));
+          try {
+            localStorage.setItem('nagah_trainees', JSON.stringify(updatedList));
+            localStorage.setItem('nagah_permanent_trainees_vault', JSON.stringify(updatedList));
+          } catch {}
+          return updatedList;
+        });
+      }
       pendingUpdatesRef.current.delete(trainee.id);
       return true;
     } catch (err: any) {
-      console.warn('[Optimistic] Trainee create cloud sync notice (persisted safely in local vault):', err);
-      // DO NOT ROLL BACK: The student is safely preserved in local state and permanent vault!
+      console.error('[Optimistic] Trainee create cloud sync failed:', err);
+      setTrainees(previousSnapshot);
+      try {
+        localStorage.setItem('nagah_trainees', JSON.stringify(previousSnapshot));
+        localStorage.setItem('nagah_permanent_trainees_vault', JSON.stringify(previousSnapshot));
+      } catch {}
       pendingUpdatesRef.current.delete(trainee.id);
-      showToast('تم حفظ المتدرب محلياً بنجاح وسيتزامن تلقائياً مع السحابة فور توفرها', 'info');
-      return true;
+      showToast(err?.message || 'فشل حفظ المتدرب في الخادم والسحابة! يرجى إعادة المحاولة.', 'error');
+      return false;
     }
   }, [showToast]);
 
@@ -634,8 +647,10 @@ export const CenterProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           const merged = [...serverList];
 
           // Apply pending optimistic updates if user modified any trainee locally
-          pendingUpdatesRef.current.forEach((localT, tId) => {
-            const idx = merged.findIndex(m => m.id === tId);
+          pendingUpdatesRef.current.forEach((tId) => {
+            const localT = prev.find(p => p.id === tId || p.code === tId);
+            if (!localT) return;
+            const idx = merged.findIndex(m => m.id === tId || m.code === tId);
             if (idx >= 0) merged[idx] = localT;
             else merged.unshift(localT);
           });
@@ -675,12 +690,11 @@ export const CenterProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         try { return await p; } catch (e) { console.warn('[CenterContext] API fetch warning:', e); return null; }
       };
 
-      const [branchesRes, settingsRes, notifsRes, sysRes, attRes, devRes] = await Promise.all([
+      const [branchesRes, settingsRes, notifsRes, sysRes, devRes] = await Promise.all([
         safeCall(api.getBranches()),
         safeCall(api.getSettings()),
         safeCall(api.getNotifications()),
         safeCall(api.getSystemInfo()),
-        safeCall(api.getAttendance({ date: new Date().toISOString().split('T')[0] })),
         safeCall(api.getDevices())
       ]);
 
@@ -721,8 +735,8 @@ export const CenterProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       setLabAttendanceCount(onlineDevCount);
       setRefreshKey(k => k + 1);
 
-      // Centralized core data refresh triggered synchronously during full refresh
-      await refreshCoreData(true);
+      // Centralized core data refresh (served from server RAM/local disk with 0 forced Firestore scans)
+      await refreshCoreData(false);
     } catch (err) {
       console.error('Error refreshing center data:', err);
     }
@@ -764,8 +778,8 @@ export const CenterProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       if (document.hidden || document.visibilityState !== 'visible') return;
       const now = Date.now();
       const lastFetch = (window as any).lastCoreDataFetchTime || 0;
-      // Only refresh if more than 3 minutes have passed since last fetch
-      if (now - lastFetch > 180000) {
+      // Only refresh if more than 10 minutes have passed since last fetch
+      if (now - lastFetch > 600000) {
         refreshCoreData(false);
       }
     };

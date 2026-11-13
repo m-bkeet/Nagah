@@ -40,7 +40,8 @@ import {
   Share2,
   Coins,
   TrendingDown,
-  Plus
+  Plus,
+  Trash2
 } from 'lucide-react';
 import { Payment, TrainerSettlement, Trainee, Course, Trainer, OwnerWithdrawal, Expense } from '../types';
 import { OfficialReceiptModal } from '../components/OfficialReceiptModal';
@@ -48,6 +49,7 @@ import { ExpensesView } from './ExpensesView';
 import { GroupCashCollectionCockpit } from '../components/GroupCashCollectionCockpit';
 import { ClosingAccountReportModal } from '../components/ClosingAccountReportModal';
 import { TrainerPayoutModal } from '../components/TrainerPayoutModal';
+import { getTraineeStartMonthKey } from '../utils/paymentUtils';
 
 interface FinanceViewProps {
   initialTab?: 'financialLedger' | 'groupCollection' | 'payments' | 'expenses' | 'pendingProofs' | 'settlements' | 'trainerShares' | 'gradesBreakdown' | 'exemptions' | 'courseClosing' | 'ownerWithdrawals';
@@ -142,6 +144,8 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ initialTab }) => {
   const [isProcessingProof, setIsProcessingProof] = useState(false);
   const [selectedOfficialReceipt, setSelectedOfficialReceipt] = useState<Payment | null>(null);
   const [selectedAuditPayment, setSelectedAuditPayment] = useState<Payment | null>(null);
+  const [paymentToDelete, setPaymentToDelete] = useState<any | null>(null);
+  const [isDeletingReceipt, setIsDeletingReceipt] = useState(false);
 
   const [treasuryViewMode, setTreasuryViewMode] = useState<'monthly' | 'all_time'>('monthly');
   const [isResetModalOpen, setIsResetModalOpen] = useState(false);
@@ -337,26 +341,18 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ initialTab }) => {
 
     const b1Data = summary?.branchBreakdowns?.find((b: any) => b.branchId === 'branch-1');
     const b2Data = summary?.branchBreakdowns?.find((b: any) => b.branchId === 'branch-2');
-    const b1Treasury = b1Data ? Number(b1Data.netTreasury) : 3700;
-    const b2Treasury = b2Data ? Number(b2Data.netTreasury) : 1100;
-    const allTreasury = Number(summary?.netTreasury || (b1Treasury + b2Treasury));
+    const b1Treasury = b1Data ? Number(b1Data.netTreasury) : 0;
+    const b2Treasury = b2Data ? Number(b2Data.netTreasury) : 0;
+    const allTreasury = Number(summary?.cumulativeNetTreasury ?? actualNetTreasury);
 
     let curTreasury = allTreasury;
-    let curCenterShare = Number(summary?.totalCenterShare || allTreasury);
-    let curWithdrawals = ownerWithdrawals.reduce((s: number, w: any) => s + (Number(w.amount) || 0), 0);
-
     if (targetBranch === 'branch-1') {
       curTreasury = b1Treasury;
-      curCenterShare = b1Treasury;
-      curWithdrawals = ownerWithdrawals.filter((w: any) => w.branchId === 'branch-1').reduce((s: number, w: any) => s + (Number(w.amount) || 0), 0);
     } else if (targetBranch === 'branch-2') {
       curTreasury = b2Treasury;
-      curCenterShare = b2Treasury;
-      curWithdrawals = ownerWithdrawals.filter((w: any) => w.branchId === 'branch-2').reduce((s: number, w: any) => s + (Number(w.amount) || 0), 0);
     }
 
-    const available = Math.max(0, curCenterShare - curWithdrawals);
-    const maxAllowed = Math.min(curTreasury, available);
+    const maxAllowed = Math.max(0, curTreasury);
     const defaultAmt = maxAllowed > 0 ? maxAllowed : 0;
 
     setOwnerWithdrawForm({
@@ -375,26 +371,18 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ initialTab }) => {
     setModalBranchId(branchId);
     const b1Data = summary?.branchBreakdowns?.find((b: any) => b.branchId === 'branch-1');
     const b2Data = summary?.branchBreakdowns?.find((b: any) => b.branchId === 'branch-2');
-    const b1Treasury = b1Data ? Number(b1Data.netTreasury) : 3700;
-    const b2Treasury = b2Data ? Number(b2Data.netTreasury) : 1100;
-    const allTreasury = Number(summary?.netTreasury || (b1Treasury + b2Treasury));
+    const b1Treasury = b1Data ? Number(b1Data.netTreasury) : 0;
+    const b2Treasury = b2Data ? Number(b2Data.netTreasury) : 0;
+    const allTreasury = Number(summary?.cumulativeNetTreasury ?? actualNetTreasury);
 
     let curTreasury = allTreasury;
-    let curCenterShare = Number(summary?.totalCenterShare || allTreasury);
-    let curWithdrawals = ownerWithdrawals.reduce((s: number, w: any) => s + (Number(w.amount) || 0), 0);
-
     if (branchId === 'branch-1') {
       curTreasury = b1Treasury;
-      curCenterShare = b1Treasury;
-      curWithdrawals = ownerWithdrawals.filter((w: any) => w.branchId === 'branch-1').reduce((s: number, w: any) => s + (Number(w.amount) || 0), 0);
     } else if (branchId === 'branch-2') {
       curTreasury = b2Treasury;
-      curCenterShare = b2Treasury;
-      curWithdrawals = ownerWithdrawals.filter((w: any) => w.branchId === 'branch-2').reduce((s: number, w: any) => s + (Number(w.amount) || 0), 0);
     }
 
-    const available = Math.max(0, curCenterShare - curWithdrawals);
-    const maxAllowed = Math.min(curTreasury, available);
+    const maxAllowed = Math.max(0, curTreasury);
     const defaultAmt = maxAllowed > 0 ? maxAllowed : 0;
 
     setOwnerWithdrawForm(prev => ({
@@ -414,16 +402,16 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ initialTab }) => {
       return;
     }
     const targetBranch = modalBranchId !== 'all' ? modalBranchId : (selectedFinanceBranchId !== 'all' ? selectedFinanceBranchId : 'branch-1');
-    let maxTreasury = Number(summary?.netTreasury || 0);
+    let maxTreasury = Number(summary?.netTreasury ?? actualNetTreasury);
     if (modalBranchId === 'branch-1') {
       const b1 = summary?.branchBreakdowns?.find((b: any) => b.branchId === 'branch-1');
-      maxTreasury = b1 ? Number(b1.netTreasury) : 3700;
+      maxTreasury = b1 ? Number(b1.netTreasury) : actualNetTreasury;
     } else if (modalBranchId === 'branch-2') {
       const b2 = summary?.branchBreakdowns?.find((b: any) => b.branchId === 'branch-2');
-      maxTreasury = b2 ? Number(b2.netTreasury) : 1100;
+      maxTreasury = b2 ? Number(b2.netTreasury) : actualNetTreasury;
     }
 
-    if (withdrawAmount > maxTreasury) {
+    if (withdrawAmount > maxTreasury && maxTreasury > 0) {
       showToast(`المبلغ المطلوب (${withdrawAmount.toLocaleString()} ج.م) أكبر من الرصيد المتوفر بالخزنة (${maxTreasury.toLocaleString()} ج.م)`, 'error');
       return;
     }
@@ -472,12 +460,18 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ initialTab }) => {
   };
 
   // 🗑️ Delete Payment (حذف وإلغاء سند تحصيل المصاريف وإعادة ضبط حساب الطالب)
-  const handleDeletePaymentReceipt = async (payment: any) => {
-    if (!confirm(`هل أنت متأكد من حذف وإلغاء سند السداد رقم (${payment.receiptNumber || payment.id}) للطالب "${payment.traineeName || payment.traineeCode}" بمبلغ ${payment.amount} ج.م؟\n\n⚠️ سيتم التراجع عن الدفعة وإعادة فتح السداد للطالب كغير مسدد فوراً.`)) return;
+  const handleDeletePaymentReceipt = (payment: any) => {
+    setPaymentToDelete(payment);
+  };
+
+  const executeConfirmDeletePayment = async () => {
+    if (!paymentToDelete) return;
+    setIsDeletingReceipt(true);
     try {
-      const res = await api.deletePayment(payment.id);
+      const res = await api.deletePayment(paymentToDelete.id);
       if (res?.success) {
         showToast('تم حذف سند السداد بنجاح وإعادة ضبط رصيد الطالب كغير مسدد 🗑️', 'success');
+        setPaymentToDelete(null);
         try {
           new BroadcastChannel('nagah_finance_channel').postMessage({ type: 'FINANCE_MUTATED' });
           localStorage.setItem('nagah_last_financial_mutation', Date.now().toString());
@@ -487,6 +481,8 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ initialTab }) => {
       }
     } catch (err: any) {
       showToast(err.message || 'فشل حذف سند السداد', 'error');
+    } finally {
+      setIsDeletingReceipt(false);
     }
   };
 
@@ -874,15 +870,27 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ initialTab }) => {
   }, [courses, trainees, payments]);
 
   // Comprehensive Monthly, Historical & Ledger Metrics Calculations
-  const currentMonthStr = useMemo(() => new Date().toISOString().slice(0, 7), []);
-
   const currentMonthArabicName = useMemo(() => {
+    if (summary?.currentMonthName) return summary.currentMonthName;
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = now.getMonth();
+    const d = now.getDate();
+    if (y === 2026 && (m === 9 || (m === 10 && d < 25))) return 'أكتوبر 2026';
     try {
-      return new Intl.DateTimeFormat('ar-EG', { month: 'long', year: 'numeric' }).format(new Date());
+      return new Intl.DateTimeFormat('ar-EG', { month: 'long', year: 'numeric' }).format(now);
     } catch {
-      return 'الشهر الحالي';
+      return 'أكتوبر 2026';
     }
-  }, []);
+  }, [summary?.currentMonthName]);
+
+  const currentMonthStr = useMemo(() => {
+    if (currentMonthArabicName.includes('أكتوبر')) return '2026-10';
+    if (currentMonthArabicName.includes('سبتمبر')) return '2026-09';
+    return new Date().toISOString().slice(0, 7);
+  }, [currentMonthArabicName]);
+
+  const activeCyclePrefix = useMemo(() => (currentMonthArabicName || 'أكتوبر').split(' ')[0], [currentMonthArabicName]);
 
   // Filtered dataset according to selectedFinanceBranchId
   const branchFilteredPayments = useMemo(() => {
@@ -936,46 +944,62 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ initialTab }) => {
     return branchFilteredPayments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
   }, [branchFilteredPayments]);
 
-  // 2. ما تم تحصيله خلال الشهر ده (Collected Current Month)
+  // 2. ما تم تحصيله خلال الشهر ده (Collected Current Month - matches active billing cycle e.g. أكتوبر 2026)
   const collectedThisMonth = useMemo(() => {
     return branchFilteredPayments
-      .filter(p => (p.date || '').startsWith(currentMonthStr))
+      .filter(p => {
+        const tm = p.targetMonth || '';
+        const pm = Array.isArray((p as any).paidMonths) ? (p as any).paidMonths : [];
+        if (tm) return tm.includes(activeCyclePrefix) || (activeCyclePrefix === 'أكتوبر' && tm.includes('شهر 10'));
+        if (pm.some((m: string) => m && m.includes(activeCyclePrefix))) return true;
+        return (p.date || '').startsWith(currentMonthStr);
+      })
       .reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
-  }, [branchFilteredPayments, currentMonthStr]);
+  }, [branchFilteredPayments, activeCyclePrefix, currentMonthStr]);
 
-  // 3. المستحق هذا الشهر (Due Expected Fees this month - only active & group-assigned & course-assigned trainees)
+  // 3. المستحق هذا الشهر (Due Expected Fees this month - only active & group-assigned & course-assigned trainees whose enrollment started on or before this month)
   const dueThisMonth = useMemo(() => {
     return branchFilteredTrainees
       .filter(t => !t.isExempt)
-      .reduce((sum, t) => sum + (Number(t.netAmount) || Number(t.feeAmount) || 0), 0);
+      .reduce((sum, t) => {
+        const startKey = getTraineeStartMonthKey(t);
+        if (startKey > '2026-10') return sum;
+        return sum + (Number(t.netAmount) || Number(t.feeAmount) || 0);
+      }, 0);
   }, [branchFilteredTrainees]);
 
-  // 4. مديونية ومتأخرات هذا الشهر (Debt / Unpaid arrears - taking Day 25 billing date into account)
+  // 4. مديونية ومتأخرات هذا الشهر (Debt / Unpaid arrears - taking trainee enrollment date strictly into account)
   const debtThisMonth = useMemo(() => {
     const now = new Date();
     const currentDay = now.getDate();
+
     return branchFilteredTrainees
       .filter(t => !t.isExempt)
       .reduce((sum, t) => {
+        const startKey = getTraineeStartMonthKey(t);
         const paidMonths = Array.isArray(t.paidMonths) ? t.paidMonths : [];
         const hasPaidSept = paidMonths.some((m: string) => m && (m.includes('سبتمبر') || m.includes('شهر 9')));
+        const hasPaidOct = paidMonths.some((m: string) => m && (m.includes('أكتوبر') || m.includes('شهر 10')));
         const net = Math.max(0, (Number(t.feeAmount) || 200) - (Number(t.discountAmount) || 0));
         
-        // If September is unpaid, September is an overdue debt!
-        if (!hasPaidSept) {
-          return sum + net;
-        }
-
-        // If September is paid, current month is only due after day 25
-        if (currentDay >= 25) {
-          const currentMonthName = now.toLocaleString('ar-EG', { month: 'long' });
-          const hasPaidCurrent = paidMonths.some((m: string) => m && m.includes(currentMonthName));
-          if (!hasPaidCurrent) {
-            return sum + net;
+        let studentDebt = 0;
+        // 1. September Dues: ONLY IF student enrolled in or before September!
+        if (startKey <= '2026-09') {
+          if (!hasPaidSept) {
+            studentDebt += net;
           }
         }
 
-        return sum;
+        // 2. October Dues: ONLY IF student enrolled in or before October!
+        if (startKey <= '2026-10') {
+          if (currentDay >= 25 || now.getMonth() >= 9) {
+            if (!hasPaidOct) {
+              studentDebt += net;
+            }
+          }
+        }
+
+        return sum + studentDebt;
       }, 0);
   }, [branchFilteredTrainees]);
 
@@ -984,19 +1008,32 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ initialTab }) => {
     return Math.max(0, (summary?.totalTraineeRemaining || debtThisMonth) - (dueThisMonth - collectedThisMonth > 0 ? (dueThisMonth - collectedThisMonth) : 0));
   }, [summary, debtThisMonth, dueThisMonth, collectedThisMonth]);
 
-  // 6. إجمالي المصروفات المنصرفة (Total Expenses Paid - including 1000 EGP Badr rent)
+  // 6. إجمالي المصروفات المنصرفة (General operating expenses - strictly excluding duplicate trainer settlement expenses)
   const totalExpensesPaid = useMemo(() => {
     return branchFilteredExpenses
-      .filter(e => !String(e.id || '').startsWith('exp-reset-'))
+      .filter(e => 
+        !String(e.id || '').startsWith('exp-reset-') && 
+        e.category !== 'trainers' && 
+        !String(e.id || '').startsWith('exp-tr-')
+      )
       .reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
   }, [branchFilteredExpenses]);
 
   // المصروفات للشهر الحالي فقط
   const expensesThisMonth = useMemo(() => {
     return branchFilteredExpenses
-      .filter(e => (e.date || '').startsWith(currentMonthStr) && !String(e.id || '').startsWith('exp-reset-'))
+      .filter(e => {
+        const notResetOrTrainer = !String(e.id || '').startsWith('exp-reset-') && e.category !== 'trainers' && !String(e.id || '').startsWith('exp-tr-');
+        if (!notResetOrTrainer) return false;
+        const em = (e as any).targetMonth || '';
+        const notes = e.notes || '';
+        if (em.includes(activeCyclePrefix) || notes.includes(activeCyclePrefix) || (activeCyclePrefix === 'أكتوبر' && (em.includes('شهر 10') || notes.includes('شهر 10')))) {
+          return true;
+        }
+        return (e.date || '').startsWith(currentMonthStr);
+      })
       .reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
-  }, [branchFilteredExpenses, currentMonthStr]);
+  }, [branchFilteredExpenses, activeCyclePrefix, currentMonthStr]);
 
   // 7. إجمالي المسحوبات وصرف المدربين
   const totalSettlementsPaid = useMemo(() => {
@@ -1006,9 +1043,16 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ initialTab }) => {
   // مسحوبات المدربين للشهر الحالي فقط
   const settlementsThisMonth = useMemo(() => {
     return branchFilteredSettlements
-      .filter(s => (s.date || '').startsWith(currentMonthStr))
+      .filter(s => {
+        const sm = (s as any).targetMonth || '';
+        const notes = s.notes || '';
+        if (sm.includes(activeCyclePrefix) || notes.includes(activeCyclePrefix) || (activeCyclePrefix === 'أكتوبر' && (sm.includes('شهر 10') || notes.includes('شهر 10')))) {
+          return true;
+        }
+        return (s.date || '').startsWith(currentMonthStr);
+      })
       .reduce((sum, s) => sum + (Number(s.amount) || 0), 0);
-  }, [branchFilteredSettlements, currentMonthStr]);
+  }, [branchFilteredSettlements, activeCyclePrefix, currentMonthStr]);
 
   const totalOwnerWithdrawalsPaid = useMemo(() => {
     return branchFilteredWithdrawals.reduce((sum, w) => sum + (Number(w.amount) || 0), 0);
@@ -1017,19 +1061,29 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ initialTab }) => {
   // مسحوبات المالك للشهر الحالي فقط
   const ownerWithdrawalsThisMonth = useMemo(() => {
     return branchFilteredWithdrawals
-      .filter(w => (w.date || '').startsWith(currentMonthStr))
+      .filter(w => {
+        const wm = (w as any).targetMonth || '';
+        const notes = w.notes || '';
+        if (wm.includes(activeCyclePrefix) || notes.includes(activeCyclePrefix) || (activeCyclePrefix === 'أكتوبر' && (wm.includes('شهر 10') || notes.includes('شهر 10')))) {
+          return true;
+        }
+        return (w.date || '').startsWith(currentMonthStr);
+      })
       .reduce((sum, w) => sum + (Number(w.amount) || 0), 0);
-  }, [branchFilteredWithdrawals, currentMonthStr]);
+  }, [branchFilteredWithdrawals, activeCyclePrefix, currentMonthStr]);
 
   // صافي الخزينة التشغيلية للشهر الحالي (شهر بشهر)
   const currentMonthNetTreasury = useMemo(() => {
+    if (selectedFinanceBranchId === 'all' && summary?.currentMonthNetTreasury !== undefined && branchFilteredPayments.length === 0) {
+      return summary.currentMonthNetTreasury;
+    }
     return Math.max(0, collectedThisMonth - expensesThisMonth - settlementsThisMonth - ownerWithdrawalsThisMonth);
-  }, [collectedThisMonth, expensesThisMonth, settlementsThisMonth, ownerWithdrawalsThisMonth]);
+  }, [selectedFinanceBranchId, summary, branchFilteredPayments.length, collectedThisMonth, expensesThisMonth, settlementsThisMonth, ownerWithdrawalsThisMonth]);
 
-  // 8. صافي الخزينة الفعلي المتبقي في الدرج
+  // 8. صافي الخزينة الفعلي المتبقي في الدرج (التراكمي)
   const actualNetTreasury = useMemo(() => {
-    if (selectedFinanceBranchId === 'all' && summary?.netTreasury !== undefined) {
-      return summary.netTreasury;
+    if (selectedFinanceBranchId === 'all' && summary?.cumulativeNetTreasury !== undefined) {
+      return summary.cumulativeNetTreasury;
     }
     const bBreakdown = summary?.branchBreakdowns?.find((b: any) => b.branchId === selectedFinanceBranchId);
     if (bBreakdown && bBreakdown.netTreasury !== undefined) {
@@ -1079,7 +1133,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ initialTab }) => {
         time: p.time || '',
         timestamp: new Date(`${p.date || todayStr}T${p.time || '12:00:00'}`).getTime() || 0,
         refNumber: p.receiptNumber || p.id,
-        title: `تحصيل رسوم: ${p.traineeName || 'طالب'} (${p.groupName || p.courseName || 'دورة تدريبية'})`,
+        title: `تحصيل رسوم: ${p.traineeName || 'طالب'} (${p.groupName || p.courseName || 'دورة تدريبية'})${p.targetMonth ? ` - عن ${p.targetMonth}` : ''}`,
         category: p.courseName || 'رسوم دورات',
         branchId: p.branchId,
         branchName: bName,
@@ -1242,312 +1296,196 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ initialTab }) => {
         </div>
       </div>
 
-      {/* Branch Selector Toolbar & Cross-Branch Clarity (فصل مركز بدر وفرع النجاح بالكامل) */}
-      <div className="flex flex-wrap items-center justify-between gap-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3 sm:p-4 rounded-2xl shadow-xs">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs font-black text-slate-800 dark:text-slate-200 flex items-center gap-1.5 ml-1">
-            <Building2 className="w-4 h-4 text-amber-500" />
-            <span>عرض حسابات الخزينة:</span>
-          </span>
-          <button
-            type="button"
-            onClick={() => setSelectedFinanceBranchId('all')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-              selectedFinanceBranchId === 'all'
-                ? 'bg-amber-500 text-white font-black shadow-xs ring-2 ring-amber-400'
-                : 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
-            }`}
-          >
-            <span>🏢 جميع الفروع</span>
-            <span className="font-mono text-[11px] px-1.5 py-0.5 rounded bg-black/10 dark:bg-white/10 font-bold">
-              {actualNetTreasury.toLocaleString()} ج.م
-            </span>
-          </button>
-          
-          <button
-            type="button"
-            onClick={() => setSelectedFinanceBranchId('branch-1')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-              selectedFinanceBranchId === 'branch-1'
-                ? 'bg-emerald-600 text-white font-black shadow-xs ring-2 ring-emerald-400'
-                : 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
-            }`}
-          >
-            <span>📍 فرع النجاح</span>
-            <span className="font-mono text-[11px] px-1.5 py-0.5 rounded bg-black/10 dark:bg-white/10 font-bold">
-              {(summary?.branchBreakdowns?.find((b: any) => b.branchId === 'branch-1')?.netTreasury ?? 
-                Math.max(0, payments.filter(p => p.branchId === 'branch-1').reduce((s, p) => s + (Number(p.amount) || 0), 0) - expensesList.filter(e => e.branchId === 'branch-1').reduce((s, e) => s + (Number(e.amount) || 0), 0) - settlements.filter(s => s.branchId === 'branch-1').reduce((s, set) => s + (Number(set.amount) || 0), 0))
-              ).toLocaleString()} ج.م
-            </span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setSelectedFinanceBranchId('branch-2')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-              selectedFinanceBranchId === 'branch-2'
-                ? 'bg-emerald-600 text-white font-black shadow-xs ring-2 ring-emerald-400'
-                : 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
-            }`}
-          >
-            <span>📍 فرع بدر</span>
-            <span className="font-mono text-[11px] px-1.5 py-0.5 rounded bg-black/10 dark:bg-white/10 font-bold">
-              {(summary?.branchBreakdowns?.find((b: any) => b.branchId === 'branch-2')?.netTreasury ?? 
-                Math.max(0, payments.filter(p => p.branchId === 'branch-2').reduce((s, p) => s + (Number(p.amount) || 0), 0) - expensesList.filter(e => e.branchId === 'branch-2').reduce((s, e) => s + (Number(e.amount) || 0), 0) - settlements.filter(s => s.branchId === 'branch-2').reduce((s, set) => s + (Number(set.amount) || 0), 0))
-              ).toLocaleString()} ج.م
-            </span>
-          </button>
-        </div>
-
-        <div className="text-xs font-bold">
-          {selectedFinanceBranchId === 'all' ? (
-            <span className="text-emerald-700 dark:text-emerald-400 flex items-center gap-1">
-              <CheckCircle2 className="w-4 h-4" />
-              <span>إجمالي كافة الفروع مجتمعة (الخزينة العامة: {actualNetTreasury.toLocaleString()} ج.م)</span>
-            </span>
-          ) : (
-            <button
-              type="button"
-              onClick={() => setSelectedFinanceBranchId('all')}
-              className="text-amber-700 hover:text-amber-800 dark:text-amber-400 underline flex items-center gap-1 cursor-pointer"
-            >
-              <AlertTriangle className="w-4 h-4" />
-              <span>معروض {selectedFinanceBranchId === 'branch-1' ? 'فرع النجاح فقط' : 'فرع بدر فقط'} — انقر لعرض إجمالي كل الفروع 🏢</span>
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* Warning Notice if viewing a specific branch */}
-      {selectedFinanceBranchId !== 'all' && (
-        <div className="p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-600/50 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 text-xs font-bold text-amber-950 dark:text-amber-200 animate-fadeIn">
-          <div className="flex items-center gap-2">
-            <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
-            <span>
-              تشاهد الآن حسابات ({selectedFinanceBranchId === 'branch-1' ? 'فرع النجاح' : 'فرع بدر'}) فقط: سيولة الخزينة {(summary?.netTreasury || 0).toLocaleString()} ج.م | الإيرادات {(summary?.totalRevenue || 0).toLocaleString()} ج.م.
-            </span>
-          </div>
-          <button
-            type="button"
-            onClick={() => setSelectedFinanceBranchId('all')}
-            className="px-3 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold shadow-xs shrink-0 cursor-pointer"
-          >
-            عرض إجمالي كافة الفروع (المركز العام) 🏢
-          </button>
-        </div>
-      )}
-
-      {/* Treasury View Switcher: Monthly Mode (كل شهر بشهر) vs All-Time Mode (تراكمي) */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3 rounded-2xl shadow-xs">
-        <div className="flex items-center gap-2">
-          <div className="flex rounded-xl p-1 bg-slate-100 dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700/80 text-xs">
-            <button
-              type="button"
-              onClick={() => setTreasuryViewMode('monthly')}
-              className={`px-3.5 py-1.5 rounded-lg font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                treasuryViewMode === 'monthly'
-                  ? 'bg-emerald-600 text-white shadow-xs font-black'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-              }`}
-            >
-              <Calendar className="w-3.5 h-3.5" />
-              <span>خزينة الشهر الحالي ({currentMonthArabicName}) 📅</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setTreasuryViewMode('all_time')}
-              className={`px-3.5 py-1.5 rounded-lg font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                treasuryViewMode === 'all_time'
-                  ? 'bg-indigo-600 text-white shadow-xs font-black'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-              }`}
-            >
-              <Landmark className="w-3.5 h-3.5" />
-              <span>السجل التراكمي الشامل (من أول الشغل) 🌐</span>
-            </button>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => {
-              setArchiveTitle(`أرشيف أرباح وخزينة شهر ${currentMonthArabicName}`);
-              setIsResetModalOpen(true);
-            }}
-            className="px-3.5 py-1.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white font-bold text-xs rounded-xl shadow-xs transition-all active:scale-95 flex items-center gap-1.5 cursor-pointer"
-          >
-            <Lock className="w-3.5 h-3.5" />
-            <span>تصفير وترحيل للخزنة السرية 🔐</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setIsSecretArchivesModalOpen(true)}
-            className="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-amber-400 border border-slate-700 font-bold text-xs rounded-xl shadow-xs transition-all active:scale-95 flex items-center gap-1.5 cursor-pointer"
-          >
-            <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />
-            <span>الخزنة السرية للمدير 👑</span>
-          </button>
-        </div>
-      </div>
-
-      {/* Day-25 Smart Notice for Auto-Suggestion */}
-      {new Date().getDate() >= 25 && (
-        <div className="bg-gradient-to-r from-amber-500/15 via-indigo-500/15 to-emerald-500/15 border border-amber-400/40 rounded-2xl p-3.5 px-4 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
-              <Calendar className="w-4 h-4" />
-            </div>
-            <div>
-              <span className="font-bold text-slate-800 dark:text-slate-100 block">
-                تنبيه محاسبي: اليوم {new Date().getDate()} من الشهر - موعد تصفير وترحيل الحسابات 🎯
-              </span>
-              <span className="text-[11px] text-slate-500 dark:text-slate-400">
-                يمكنك الآن تصفير الخزينة الخارجية وترحيل الرصيد ({currentMonthNetTreasury.toLocaleString()} ج.م) للخزنة السرية للمدير، مع الإبقاء على المتأخرات فقط ({debtThisMonth.toLocaleString()} ج.م) لتضاف على الشهر الجديد.
-              </span>
-            </div>
-          </div>
-          <button
-            onClick={() => {
-              setArchiveTitle(`أرشيف أرباح وخزينة شهر ${currentMonthArabicName}`);
-              setIsResetModalOpen(true);
-            }}
-            className="px-3.5 py-1.5 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl shadow-xs transition-all flex items-center gap-1.5 shrink-0 cursor-pointer"
-          >
-            <Lock className="w-3.5 h-3.5" />
-            <span>تصفير وترحيل الآن</span>
-          </button>
-        </div>
-      )}
-
-      {/* Executive Financial KPI Cockpit (البطاقات والمربعات المالية المبسطة والواضحة) */}
-      <div className="space-y-3">
-        {/* Streamlined Executive 4-Cards Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
-          {/* Card 1: رصيد الخزينة المتاح */}
-          <div className="bg-gradient-to-br from-emerald-600 via-teal-700 to-emerald-800 text-white p-5 rounded-3xl shadow-lg shadow-emerald-700/20 border border-emerald-400/40 flex flex-col justify-between relative overflow-hidden group">
-            <div className="absolute top-0 left-0 w-28 h-28 bg-white/10 rounded-full blur-2xl -translate-x-6 -translate-y-6"></div>
-            <div>
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-xs font-black text-emerald-100 flex items-center gap-1.5">
-                  <Landmark className="w-4 h-4 text-white" />
-                  <span>
-                    {treasuryViewMode === 'monthly' ? `صافي خزينة ${currentMonthArabicName}` : 'صافي الخزينة الفعلي (الدرج التراكمي)'}
-                  </span>
-                </span>
-                <span className="w-2.5 h-2.5 rounded-full bg-emerald-300 animate-pulse"></span>
-              </div>
-              <div className="text-3xl font-black font-mono tracking-tight mt-2">
-                {(treasuryViewMode === 'monthly' ? currentMonthNetTreasury : actualNetTreasury).toLocaleString()} <span className="text-sm font-normal">ج.م</span>
-              </div>
-            </div>
-            <div className="mt-3 pt-2.5 border-t border-white/20 flex items-center justify-between gap-1 text-[11px] text-emerald-100">
-              <span className="font-mono">
-                {treasuryViewMode === 'monthly' 
-                  ? `وارد الشهر: ${collectedThisMonth.toLocaleString()} - منصرف: ${(expensesThisMonth + settlementsThisMonth).toLocaleString()}`
-                  : `المحصل: ${totalCollectedAllTime.toLocaleString()} - المنصرف: ${(totalExpensesPaid + totalSettlementsPaid).toLocaleString()}`
-                }
-              </span>
+      {/* Unified Executive Controls Bar */}
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3.5 sm:p-4 rounded-3xl shadow-sm space-y-3">
+        <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
+          {/* Branch & Mode Selectors */}
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Period Selector */}
+            <div className="flex rounded-xl p-1 bg-slate-100 dark:bg-slate-800 text-xs font-bold">
               <button
                 type="button"
-                onClick={() => handleOpenOwnerWithdrawalModal(selectedFinanceBranchId)}
-                className="px-2.5 py-1 rounded-xl bg-white/20 hover:bg-white text-white hover:text-emerald-800 font-bold transition-all text-[10px] flex items-center gap-1 cursor-pointer shadow-xs"
+                onClick={() => setTreasuryViewMode('monthly')}
+                className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
+                  treasuryViewMode === 'monthly'
+                    ? 'bg-emerald-600 text-white font-black shadow-xs'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                }`}
               >
-                <Crown className="w-3 h-3" />
-                <span>صرف أرباح</span>
+                <Calendar className="w-3.5 h-3.5" />
+                <span>خزينة شهر {currentMonthArabicName}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setTreasuryViewMode('all_time')}
+                className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
+                  treasuryViewMode === 'all_time'
+                    ? 'bg-indigo-600 text-white font-black shadow-xs'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                <Landmark className="w-3.5 h-3.5" />
+                <span>الخزينة التراكمية الشاملة</span>
+              </button>
+            </div>
+
+            {/* Branch Selector */}
+            <div className="flex rounded-xl p-1 bg-slate-100 dark:bg-slate-800 text-xs font-bold">
+              <button
+                type="button"
+                onClick={() => setSelectedFinanceBranchId('all')}
+                className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
+                  selectedFinanceBranchId === 'all'
+                    ? 'bg-amber-500 text-white font-black shadow-xs'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                <span>🏢 كل الفروع ({actualNetTreasury.toLocaleString()} ج.م)</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedFinanceBranchId('branch-1')}
+                className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
+                  selectedFinanceBranchId === 'branch-1'
+                    ? 'bg-emerald-600 text-white font-black shadow-xs'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                <span>🏛️ فرع النجاح</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedFinanceBranchId('branch-2')}
+                className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
+                  selectedFinanceBranchId === 'branch-2'
+                    ? 'bg-emerald-600 text-white font-black shadow-xs'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                <span>🏫 فرع بدر</span>
               </button>
             </div>
           </div>
 
-          {/* Card 2: إجمالي المحصل */}
-          <div className="bg-white dark:bg-slate-900 border-2 border-teal-200 dark:border-teal-500/30 p-5 rounded-3xl shadow-sm flex flex-col justify-between hover:border-teal-400 transition-all">
-            <div>
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-black text-teal-800 dark:text-teal-300 flex items-center gap-1.5">
-                  <TrendingUp className="w-4 h-4 text-teal-600 dark:text-teal-400" />
-                  <span>
-                    {treasuryViewMode === 'monthly' ? `المحصل لشهر ${currentMonthArabicName}` : 'إجمالي المحصل الفعلي (من أول الشغل)'}
-                  </span>
-                </span>
-                <span className="font-mono text-xs font-bold text-teal-600 dark:text-teal-400 bg-teal-50 dark:bg-teal-950/60 px-2 py-0.5 rounded-lg border border-teal-200 dark:border-teal-500/30">
-                  {treasuryViewMode === 'monthly' 
-                    ? `${branchFilteredPayments.filter(p => (p.date || '').startsWith(currentMonthStr)).length} سند هذا الشهر`
-                    : `${branchFilteredPayments.length} سند إجمالي`
-                  }
-                </span>
-              </div>
-              <div className="text-3xl font-black font-mono text-teal-700 dark:text-teal-300 tracking-tight mt-2">
-                {(treasuryViewMode === 'monthly' ? collectedThisMonth : totalCollectedAllTime).toLocaleString()} <span className="text-sm font-normal">ج.م</span>
-              </div>
-            </div>
-            <div className="mt-3 pt-2.5 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
-              <span>وارد اليوم:</span>
-              <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">{todayTotal.toLocaleString()} ج.م</span>
-            </div>
-          </div>
+          {/* Primary Management Actions (صرف أرباح المالك + إقفال الشهر) */}
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => handleOpenOwnerWithdrawalModal(selectedFinanceBranchId)}
+              className="px-4 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white font-black text-xs rounded-xl shadow-md shadow-amber-500/20 transition-all active:scale-95 flex items-center gap-1.5 cursor-pointer"
+            >
+              <Crown className="w-4 h-4 text-white" />
+              <span>صرف أرباح المالك ({actualNetTreasury.toLocaleString()} ج.م) 👑</span>
+            </button>
 
-          {/* Card 3: إجمالي المنصرف */}
-          <div className="bg-white dark:bg-slate-900 border-2 border-rose-200 dark:border-rose-500/30 p-5 rounded-3xl shadow-sm flex flex-col justify-between hover:border-rose-400 transition-all">
-            <div>
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-black text-rose-800 dark:text-rose-300 flex items-center gap-1.5">
-                  <Receipt className="w-4 h-4 text-rose-600 dark:text-rose-400" />
-                  <span>
-                    {treasuryViewMode === 'monthly' ? `منصرف شهر ${currentMonthArabicName}` : 'إجمالي المصروفات والمنصرف التراكمي'}
-                  </span>
-                </span>
-              </div>
-              <div className="text-3xl font-black font-mono text-rose-700 dark:text-rose-300 tracking-tight mt-2">
-                {(treasuryViewMode === 'monthly'
-                  ? (expensesThisMonth + settlementsThisMonth + ownerWithdrawalsThisMonth)
-                  : (totalExpensesPaid + totalSettlementsPaid + totalOwnerWithdrawalsPaid)
-                ).toLocaleString()} <span className="text-sm font-normal">ج.م</span>
-              </div>
-            </div>
-            <div className="mt-3 pt-2.5 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 font-mono">
-              <span>مصاريف: {(treasuryViewMode === 'monthly' ? expensesThisMonth : totalExpensesPaid).toLocaleString()}</span>
-              {<span>| مدربين: {(treasuryViewMode === 'monthly' ? settlementsThisMonth : totalSettlementsPaid).toLocaleString()}</span>}
-            </div>
-          </div>
-
-          {/* Card 4: المتبقي والمتأخرات */}
-          <div className="bg-white dark:bg-slate-900 border-2 border-amber-200 dark:border-amber-500/30 p-5 rounded-3xl shadow-sm flex flex-col justify-between hover:border-amber-400 transition-all">
-            <div>
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-black text-amber-800 dark:text-amber-300 flex items-center gap-1.5">
-                  <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400" />
-                  <span>متأخرات ومتبقي الطلاب</span>
-                </span>
-                <span className="font-mono text-xs font-bold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/60 px-2 py-0.5 rounded-lg border border-amber-200 dark:border-amber-500/30">
-                  {branchFilteredTrainees.filter(t => !t.isExempt && (t.remainingAmount || 0) > 0).length} غير مسدد
-                </span>
-              </div>
-              <div className="text-3xl font-black font-mono text-amber-700 dark:text-amber-400 tracking-tight mt-2">
-                {debtThisMonth.toLocaleString()} <span className="text-sm font-normal">ج.م</span>
-              </div>
-            </div>
-            <div className="mt-3 pt-2.5 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
-              <span>إجمالي المطلوب هذا الشهر:</span>
-              <span className="font-mono font-bold text-sky-600 dark:text-sky-400">{dueThisMonth.toLocaleString()} ج.م</span>
-            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setArchiveTitle(`أرشيف أرباح وخزينة شهر ${currentMonthArabicName}`);
+                setIsResetModalOpen(true);
+              }}
+              className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-black text-xs rounded-xl shadow-xs transition-all active:scale-95 flex items-center gap-1.5 cursor-pointer"
+            >
+              <Lock className="w-3.5 h-3.5 text-amber-400" />
+              <span>إقفال وترحيل الشهر 🔒</span>
+            </button>
           </div>
         </div>
 
-        {/* Quick Movements & Today Summary */}
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-3 px-4 text-white shadow-xs flex flex-wrap items-center justify-between gap-3 text-xs">
-          <div className="flex items-center gap-2">
-            <span className="font-bold text-slate-300">
-              💰 حركة الخزينة المعتمدة: المحصل ({totalCollectedAllTime.toLocaleString()} ج.م) - المنصرف ({(totalExpensesPaid + totalSettlementsPaid).toLocaleString()} ج.م) = صافي الخزينة ({actualNetTreasury.toLocaleString()} ج.م)
+        {/* Day-25 Minimal Notice */}
+        {new Date().getDate() >= 25 && (
+          <div className="p-2.5 px-3.5 bg-amber-50/80 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-700/50 rounded-2xl flex items-center justify-between text-xs text-amber-900 dark:text-amber-200">
+            <span className="font-bold flex items-center gap-2">
+              <Calendar className="w-4 h-4 text-amber-600 shrink-0" />
+              <span>اليوم {new Date().getDate()} من الشهر: موعد دورة استحقاق الشهر الجديد وترحيل أرباح الخزينة للمالك.</span>
+            </span>
+            <span className="text-[11px] text-amber-700 dark:text-amber-300 font-medium">
+              المتأخرات ({debtThisMonth.toLocaleString()} ج.م) مرحلة تلقائياً دون فقدان أي بيانات.
             </span>
           </div>
+        )}
+      </div>
 
-          <div className="flex items-center gap-2">
+      {/* 3 Truthful KPI Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
+        {/* Card 1: صافي الخزينة الفعلي المتاح */}
+        <div className="bg-gradient-to-br from-emerald-600 via-teal-700 to-emerald-800 text-white p-5 rounded-3xl shadow-lg shadow-emerald-700/20 border border-emerald-400/40 flex flex-col justify-between relative overflow-hidden">
+          <div className="absolute top-0 left-0 w-28 h-28 bg-white/10 rounded-full blur-2xl -translate-x-6 -translate-y-6"></div>
+          <div>
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs font-black text-emerald-100 flex items-center gap-1.5">
+                <Landmark className="w-4 h-4 text-white" />
+                <span>{treasuryViewMode === 'monthly' ? `صافي خزينة شهر ${currentMonthArabicName}` : 'السيولة النقدية المتاحة بالخزنة'}</span>
+              </span>
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-300 animate-pulse"></span>
+            </div>
+            <div className="text-3xl sm:text-4xl font-black font-mono tracking-tight mt-2.5">
+              {(treasuryViewMode === 'monthly' ? currentMonthNetTreasury : actualNetTreasury).toLocaleString()} <span className="text-sm font-normal">ج.م</span>
+            </div>
+          </div>
+          <div className="mt-3 pt-2.5 border-t border-white/20 flex items-center justify-between text-[11px] text-emerald-100">
+            <span className="font-mono">
+              {treasuryViewMode === 'monthly'
+                ? `محصل ${currentMonthArabicName}: ${collectedThisMonth.toLocaleString()} | منصرف الشهر: ${(expensesThisMonth + settlementsThisMonth + ownerWithdrawalsThisMonth).toLocaleString()}`
+                : `المحصل: ${totalCollectedAllTime.toLocaleString()} | المنصرف: ${(totalExpensesPaid + totalSettlementsPaid + totalOwnerWithdrawalsPaid).toLocaleString()}`}
+            </span>
             <button
-              onClick={() => setShowTodayTable(!showTodayTable)}
-              className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
+              type="button"
+              onClick={() => handleOpenOwnerWithdrawalModal(selectedFinanceBranchId)}
+              className="px-2.5 py-1 rounded-xl bg-white/20 hover:bg-white text-white hover:text-emerald-800 font-bold transition-all text-[11px] flex items-center gap-1 cursor-pointer"
             >
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-              <span>وارد اليوم ({todayTotal.toLocaleString()} ج.م)</span>
+              <Crown className="w-3.5 h-3.5" />
+              <span>صرف أرباح</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Card 2: متأخرات ومستحقات الطلاب */}
+        <div className="bg-white dark:bg-slate-900 border-2 border-amber-200 dark:border-amber-500/30 p-5 rounded-3xl shadow-sm flex flex-col justify-between hover:border-amber-400 transition-all">
+          <div>
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-black text-amber-800 dark:text-amber-300 flex items-center gap-1.5">
+                <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+                <span>متأخرات ومستحقات الطلاب</span>
+              </span>
+              <span className="font-mono text-xs font-bold text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/60 px-2.5 py-0.5 rounded-lg border border-amber-200 dark:border-amber-500/30">
+                {branchFilteredTrainees.filter(t => !t.isExempt && (t.remainingAmount || 0) > 0).length} طالب مطلوب سدادهم
+              </span>
+            </div>
+            <div className="text-3xl sm:text-4xl font-black font-mono text-amber-600 dark:text-amber-400 tracking-tight mt-2.5">
+              {debtThisMonth.toLocaleString()} <span className="text-sm font-normal">ج.م</span>
+            </div>
+          </div>
+          <div className="mt-3 pt-2.5 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
+            <span>إجمالي المطلوب للدورة:</span>
+            <span className="font-mono font-bold text-sky-600 dark:text-sky-400">{dueThisMonth.toLocaleString()} ج.م</span>
+          </div>
+        </div>
+
+        {/* Card 3: مقبوضات ووارد اليوم */}
+        <div className="bg-white dark:bg-slate-900 border-2 border-teal-200 dark:border-teal-500/30 p-5 rounded-3xl shadow-sm flex flex-col justify-between hover:border-teal-400 transition-all">
+          <div>
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-black text-teal-800 dark:text-teal-300 flex items-center gap-1.5">
+                <TrendingUp className="w-4 h-4 text-teal-600 dark:text-teal-400" />
+                <span>مقبوضات ووارد اليوم</span>
+              </span>
+              <span className="font-mono text-xs font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-2.5 py-0.5 rounded-lg border border-emerald-200 dark:border-emerald-500/30">
+                {todayPayments.length} سند اليوم
+              </span>
+            </div>
+            <div className="text-3xl sm:text-4xl font-black font-mono text-teal-700 dark:text-teal-300 tracking-tight mt-2.5">
+              {todayTotal.toLocaleString()} <span className="text-sm font-normal">ج.م</span>
+            </div>
+          </div>
+          <div className="mt-3 pt-2.5 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs">
+            <span className="text-slate-500 dark:text-slate-400">إجمالي السندات: {payments.length}</span>
+            <button
+              type="button"
+              onClick={() => setShowTodayTable(!showTodayTable)}
+              className="text-teal-700 dark:text-teal-400 font-bold hover:underline cursor-pointer flex items-center gap-1"
+            >
+              <span>{showTodayTable ? 'إخفاء كشف اليوم ✕' : 'عرض كشف اليوم 📋'}</span>
             </button>
           </div>
         </div>
@@ -1622,141 +1560,128 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ initialTab }) => {
         </div>
       )}
 
-      {/* Tabs Switcher */}
-      <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 dark:border-slate-700 pb-3">
-        {/* 1. Group Collection Tab (First & Primary) */}
-        <button
-          onClick={() => setActiveTab('groupCollection')}
-          className={`px-4 py-2.5 rounded-xl text-xs font-black transition-all flex items-center gap-2 shadow-sm active:scale-95 cursor-pointer ${
-            activeTab === 'groupCollection'
-              ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-md shadow-emerald-600/30 ring-2 ring-emerald-400'
-              : 'text-emerald-800 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 bg-white dark:bg-slate-900 border border-emerald-300 dark:border-emerald-500/40'
-          }`}
-        >
-          <Zap className="w-4 h-4 text-amber-400" />
-          <span>⚡ تحصيل المجموعات والطلاب</span>
-        </button>
+      {/* Consolidated Primary Tabs */}
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 dark:border-slate-800 pb-3">
+        <div className="flex flex-wrap items-center gap-2">
+          {/* 1. Group Collection Tab */}
+          <button
+            onClick={() => setActiveTab('groupCollection')}
+            className={`px-4 py-2.5 rounded-xl text-xs font-black transition-all flex items-center gap-2 shadow-xs cursor-pointer ${
+              activeTab === 'groupCollection'
+                ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-md shadow-emerald-600/30 ring-2 ring-emerald-400'
+                : 'text-emerald-800 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 bg-white dark:bg-slate-900 border border-emerald-300 dark:border-emerald-500/40'
+            }`}
+          >
+            <Zap className="w-4 h-4 text-amber-400" />
+            <span>⚡ تحصيل المجموعات والطلاب</span>
+          </button>
 
-        {/* 2. Main Financial Movement & Ledger */}
-        <button
-          onClick={() => setActiveTab('financialLedger')}
-          className={`px-4 py-2.5 rounded-xl text-xs font-black transition-all flex items-center gap-2 shadow-sm active:scale-95 cursor-pointer ${
-            activeTab === 'financialLedger'
-              ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-md shadow-emerald-600/30 ring-2 ring-emerald-400'
-              : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700'
-          }`}
-        >
-          <Wallet className="w-4 h-4 text-emerald-500 dark:text-emerald-400" />
-          <span>حركة الخزينة والوارد</span>
-        </button>
+          {/* 2. Unified Ledger */}
+          <button
+            onClick={() => setActiveTab('financialLedger')}
+            className={`px-4 py-2.5 rounded-xl text-xs font-black transition-all flex items-center gap-2 shadow-xs cursor-pointer ${
+              activeTab === 'financialLedger' || activeTab === 'payments'
+                ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-md shadow-emerald-600/30 ring-2 ring-emerald-400'
+                : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700'
+            }`}
+          >
+            <Wallet className="w-4 h-4 text-emerald-500 dark:text-emerald-400" />
+            <span>📊 دفتر الخزينة والوارد ({payments.length})</span>
+          </button>
 
-        <button
-          onClick={() => setActiveTab('payments')}
-          className={`px-4 py-2.5 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 shadow-sm active:scale-95 ${
-            activeTab === 'payments'
-              ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 shadow-md shadow-amber-500/30 ring-2 ring-amber-400'
-              : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/80 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700'
-          }`}
-        >
-          <span>سندات القبض ({payments.length})</span>
-        </button>
+          {/* 3. Expenses */}
+          <button
+            onClick={() => setActiveTab('expenses')}
+            className={`px-4 py-2.5 rounded-xl text-xs font-black transition-all flex items-center gap-2 shadow-xs cursor-pointer ${
+              activeTab === 'expenses'
+                ? 'bg-gradient-to-r from-rose-600 to-rose-700 text-white shadow-md shadow-rose-600/30 ring-2 ring-rose-400'
+                : 'text-rose-800 dark:text-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/40 bg-white dark:bg-slate-900 border border-rose-300 dark:border-rose-500/40'
+            }`}
+          >
+            <Receipt className="w-4 h-4 text-rose-500 dark:text-rose-400" />
+            <span>💸 المصروفات التشغيلية</span>
+          </button>
 
-        <button
-          onClick={() => setActiveTab('expenses')}
-          className={`px-4 py-2.5 rounded-xl text-xs font-black transition-all flex items-center gap-2 shadow-sm active:scale-95 ${
-            activeTab === 'expenses'
-              ? 'bg-gradient-to-r from-rose-600 to-rose-700 text-white shadow-md shadow-rose-600/30 ring-2 ring-rose-400'
-              : 'text-rose-800 dark:text-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/40 bg-white dark:bg-slate-900 border border-rose-300 dark:border-rose-500/40'
-          }`}
-        >
-          <Receipt className="w-4 h-4 text-rose-500 dark:text-rose-400" />
-          <span>المصروفات</span>
-        </button>
+          {/* 4. Trainer Shares & Settlements */}
+          <button
+            onClick={() => setActiveTab('trainerShares')}
+            className={`px-4 py-2.5 rounded-xl text-xs font-black transition-all flex items-center gap-2 shadow-xs cursor-pointer ${
+              activeTab === 'trainerShares' || activeTab === 'settlements'
+                ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-md shadow-emerald-600/30 ring-2 ring-emerald-400'
+                : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/80 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700'
+            }`}
+          >
+            <Award className="w-4 h-4 text-emerald-500" />
+            <span>👨‍🏫 مستحقات المدربين</span>
+            {trainerSharesBreakdown.some(t => t.netDue > 0) && (
+              <span className="py-0.5 px-2 rounded-full bg-emerald-500 text-white font-mono text-[10px] font-black">
+                {trainerSharesBreakdown.reduce((sum, t) => sum + t.netDue, 0).toLocaleString()} ج.م
+              </span>
+            )}
+          </button>
 
-        <button
-          onClick={() => setActiveTab('pendingProofs')}
-          className={`px-4 py-2.5 rounded-xl text-xs font-black transition-all flex items-center gap-2 shadow-sm active:scale-95 ${
-            activeTab === 'pendingProofs'
-              ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 shadow-md shadow-amber-500/30 ring-2 ring-amber-400'
-              : 'text-amber-800 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-950/40 bg-white dark:bg-slate-900 border border-amber-300 dark:border-amber-500/40'
-          }`}
-        >
-          <Camera className="w-4 h-4 text-amber-600 dark:text-amber-400" />
-          <span>طلبات السداد</span>
+          {/* 5. Owner Withdrawals & Archives */}
+          {isManagerOrAccountant && (
+            <button
+              onClick={() => setActiveTab('ownerWithdrawals')}
+              className={`px-4 py-2.5 rounded-xl text-xs font-black transition-all flex items-center gap-2 shadow-xs cursor-pointer ${
+                activeTab === 'ownerWithdrawals'
+                  ? 'bg-amber-500 text-slate-950 font-black shadow-md shadow-amber-500/30 ring-2 ring-amber-400'
+                  : 'text-amber-800 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-950/40 bg-white dark:bg-slate-900 border border-amber-300 dark:border-amber-500/40'
+              }`}
+            >
+              <Crown className="w-4 h-4 text-amber-500" />
+              <span>👑 مسحوبات المالك ({ownerWithdrawals.length})</span>
+            </button>
+          )}
+
+          {/* Electronic Payment Proofs Badge Tab (only if pending) */}
           {pendingProofs.length > 0 && (
-            <span className="py-0.5 px-2 rounded-full bg-rose-500 text-white font-mono text-[10px] font-black animate-pulse">
-              {pendingProofs.length}
-            </span>
+            <button
+              onClick={() => setActiveTab('pendingProofs')}
+              className={`px-4 py-2.5 rounded-xl text-xs font-black transition-all flex items-center gap-2 shadow-xs cursor-pointer ${
+                activeTab === 'pendingProofs'
+                  ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 ring-2 ring-amber-400'
+                  : 'text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/50 border border-amber-300'
+              }`}
+            >
+              <Camera className="w-4 h-4 text-amber-600" />
+              <span>طلبات السداد الإلكتروني</span>
+              <span className="py-0.5 px-2 rounded-full bg-rose-500 text-white font-mono text-[10px] font-black animate-pulse">
+                {pendingProofs.length}
+              </span>
+            </button>
           )}
-        </button>
+        </div>
 
-        <button
-          onClick={() => setActiveTab('trainerShares')}
-          className={`px-4 py-2.5 rounded-xl text-xs font-black transition-all flex items-center gap-2 shadow-sm active:scale-95 ${
-            activeTab === 'trainerShares'
-              ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-md shadow-emerald-600/30 ring-2 ring-emerald-400'
-              : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/80 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700'
-          }`}
-        >
-          <Award className="w-4 h-4 text-emerald-500" />
-          <span>مستحقات المدربين</span>
-          {trainerSharesBreakdown.some(t => t.netDue > 0) && (
-            <span className="py-0.5 px-2 rounded-full bg-emerald-500 text-white font-mono text-[10px] font-black">
-              {trainerSharesBreakdown.reduce((sum, t) => sum + t.netDue, 0).toLocaleString()} ج.م
-            </span>
-          )}
-        </button>
-
-        <button
-          onClick={() => setActiveTab('gradesBreakdown')}
-          className={`px-4 py-2.5 rounded-xl text-xs font-black transition-all flex items-center gap-2 shadow-sm active:scale-95 ${
-            activeTab === 'gradesBreakdown'
-              ? 'bg-gradient-to-r from-indigo-600 to-indigo-700 text-white shadow-md shadow-indigo-600/30 ring-2 ring-indigo-400'
-              : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/80 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700'
-          }`}
-        >
-          <GraduationCap className="w-4 h-4 text-indigo-500" />
-          <span>كشوف المراحل</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('settlements')}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-xs active:scale-95 ${
-            activeTab === 'settlements'
-              ? 'bg-amber-500 text-white font-black shadow-xs ring-2 ring-amber-300'
-              : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700'
-          }`}
-        >
-          <span>صرف المدربين ({settlements.length})</span>
-        </button>
-
-        {isManagerOrAccountant && (
+        {/* Secondary Reports / Actions */}
+        <div className="flex items-center gap-2">
           <button
-            onClick={() => setActiveTab('ownerWithdrawals')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 shadow-xs active:scale-95 ${
-              activeTab === 'ownerWithdrawals'
-                ? 'bg-amber-500 text-white font-black shadow-xs ring-2 ring-amber-300'
-                : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700'
+            onClick={() => setActiveTab('gradesBreakdown')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+              activeTab === 'gradesBreakdown'
+                ? 'bg-indigo-600 text-white font-black'
+                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
             }`}
           >
-            <Crown className="w-4 h-4 text-amber-500" />
-            <span>مسحوبات المالك ({ownerWithdrawals.length})</span>
+            <GraduationCap className="w-3.5 h-3.5 text-indigo-500" />
+            <span>كشوف المراحل</span>
           </button>
-        )}
 
-        {isManagerOrAccountant && (
-          <button
-            onClick={() => setActiveTab('exemptions')}
-            className={`px-4 py-2.5 rounded-xl text-xs font-black transition-all flex items-center gap-2 shadow-sm active:scale-95 ${
-              activeTab === 'exemptions'
-                ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-md shadow-purple-600/30 ring-2 ring-purple-400'
-                : 'text-purple-800 dark:text-purple-300 hover:bg-purple-50 dark:hover:bg-purple-950/40 bg-white dark:bg-slate-900 border border-purple-300 dark:border-purple-500/40'
-            }`}
-          >
-            <Lock className="w-4 h-4 text-purple-600 dark:text-purple-400" />
-            <span>الخصومات والإعفاءات ({exemptTrainees.length})</span>
-          </button>
-        )}
+          {isManagerOrAccountant && (
+            <button
+              onClick={() => setActiveTab('exemptions')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                activeTab === 'exemptions'
+                  ? 'bg-purple-600 text-white font-black'
+                  : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+              }`}
+            >
+              <Lock className="w-3.5 h-3.5 text-purple-500" />
+              <span>الخصومات ({exemptTrainees.length})</span>
+            </button>
+          )}
+        </div>
       </div>
 
       {/* View: Financial Movement Cockpit */}
@@ -3899,6 +3824,49 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ initialTab }) => {
           </div>
         );
       })()}
+
+      {/* IN-APP DELETE PAYMENT CONFIRMATION MODAL */}
+      {paymentToDelete && (
+        <div className="fixed inset-0 z-[99999] bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 max-w-md w-full border border-rose-200 dark:border-rose-900/60 shadow-2xl text-right space-y-4">
+            <div className="flex items-center gap-3 text-rose-600">
+              <div className="w-12 h-12 rounded-2xl bg-rose-100 dark:bg-rose-950/60 flex items-center justify-center shrink-0">
+                <Trash2 className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="font-black text-base text-slate-900 dark:text-white">تأكيد حذف وإلغاء سند السداد</h3>
+                <p className="text-xs text-slate-500">التراجع عن عملية التحصيل وإعادة فتح الحساب</p>
+              </div>
+            </div>
+            <div className="bg-rose-50/60 dark:bg-rose-950/30 p-3.5 rounded-2xl border border-rose-200/80 dark:border-rose-900/50 text-xs space-y-1.5">
+              <div>الطالب: <strong className="text-slate-900 dark:text-white">{paymentToDelete.traineeName || paymentToDelete.traineeCode}</strong></div>
+              <div>رقم السند: <strong className="font-mono text-amber-600">{paymentToDelete.receiptNumber || paymentToDelete.id}</strong></div>
+              <div>المبلغ: <strong className="font-bold text-rose-600 font-mono">{paymentToDelete.amount} ج.م</strong></div>
+              <div className="text-[11px] text-rose-700 dark:text-rose-300 font-semibold pt-1">
+                ⚠️ سيتم حذف السند نهائياً من سجلات الخزينة وإعادة فتح السداد للطالب كغير مسدد.
+              </div>
+            </div>
+            <div className="flex items-center gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setPaymentToDelete(null)}
+                className="flex-1 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+              >
+                إلغاء وتراجع
+              </button>
+              <button
+                type="button"
+                onClick={executeConfirmDeletePayment}
+                disabled={isDeletingReceipt}
+                className="flex-1 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-black shadow-md shadow-rose-600/30 transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>{isDeletingReceipt ? 'جاري الحذف...' : 'تأكيد الحذف 🗑️'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

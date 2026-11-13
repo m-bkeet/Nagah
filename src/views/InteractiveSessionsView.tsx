@@ -46,7 +46,9 @@ import {
   X,
   FileSpreadsheet,
   Crown,
-  PartyPopper
+  PartyPopper,
+  FolderOpen,
+  HardDrive
 } from 'lucide-react';
 import { Trainer, Group, Course, Trainee, AttendanceStatus } from '../types';
 import { formatArabicDate, formatArabicTime } from '../utils/timeFormat';
@@ -56,12 +58,22 @@ import { AllInOneLessonPlanModal } from '../components/trainer/AllInOneLessonPla
 import { LectureRecapManager } from '../components/homeworks/LectureRecapManager';
 import { SessionCeremonyModal } from '../components/SessionCeremonyModal';
 import { audioService } from '../services/audioService';
+import { AcademicCalendarAndExamsWidget } from '../components/dashboard/AcademicCalendarAndExamsWidget';
+import { CurriculumPlanModal } from '../components/curriculum/CurriculumPlanModal';
+import { findScheduledGroupForNow } from '../utils/scheduleMatcher';
+import {
+  pickLaptopDirectory,
+  saveLocalSessionData,
+  renewLaptopStorage,
+  getLaptopStorageStatus,
+  LaptopStorageStatus
+} from '../services/laptopLocalStorage';
 
 interface InteractiveSessionsViewProps {
-  initialTab?: 'activities' | 'roster' | 'recap';
+  initialTab?: 'activities' | 'roster' | 'recap' | 'calendar';
 }
 
-export const InteractiveSessionsView: React.FC<InteractiveSessionsViewProps> = ({ initialTab = 'activities' }) => {
+export const InteractiveSessionsView: React.FC<InteractiveSessionsViewProps> = ({ initialTab = 'roster' }) => {
   const { 
     activeBranchId, 
     branches, 
@@ -79,9 +91,10 @@ export const InteractiveSessionsView: React.FC<InteractiveSessionsViewProps> = (
   const [isWhiteboardOpen, setIsWhiteboardOpen] = useState(false);
   const [isAllInOneModalOpen, setIsAllInOneModalOpen] = useState(false);
   const [isCeremonyModalOpen, setIsCeremonyModalOpen] = useState(false);
+  const [showCurriculumPlanModal, setShowCurriculumPlanModal] = useState(false);
 
   // Main Active Tab
-  const [activeTab, setActiveTab] = useState<'activities' | 'roster' | 'recap'>(initialTab);
+  const [activeTab, setActiveTab] = useState<'activities' | 'roster' | 'recap' | 'calendar'>(initialTab);
 
   // Center Data - Initialized from unified context for 0ms instant display
   const [trainers, setTrainers] = useState<Trainer[]>(() => ctxTrainers || []);
@@ -152,6 +165,10 @@ export const InteractiveSessionsView: React.FC<InteractiveSessionsViewProps> = (
   const [selectedCorrectOption, setSelectedCorrectOption] = useState<string>('A');
   const [pointsReward, setPointsReward] = useState<number>(5);
   const [devices, setDevices] = useState<any[]>([]);
+  const [labSchedules, setLabSchedules] = useState<any[]>([]);
+  const [sessionGradesMap, setSessionGradesMap] = useState<Record<string, string>>({});
+  const [sessionMaxScore, setSessionMaxScore] = useState<number>(10);
+  const [laptopStatus, setLaptopStatus] = useState<LaptopStorageStatus | null>(null);
 
   // Load Lab Devices
   const loadDevices = useCallback(async () => {
@@ -163,7 +180,12 @@ export const InteractiveSessionsView: React.FC<InteractiveSessionsViewProps> = (
     }
   }, []);
 
-  // Load Initial Data (Only fetches if context is not yet populated; always loads devices in background)
+  const refreshLaptopStatus = useCallback(async () => {
+    const st = await getLaptopStorageStatus().catch(() => null);
+    if (st) setLaptopStatus(st);
+  }, []);
+
+  // Load Initial Data (Only fetches if context is not yet populated; always loads devices & lab schedules)
   const loadData = useCallback(async () => {
     try {
       if (!ctxGroups || ctxGroups.length === 0) {
@@ -179,13 +201,18 @@ export const InteractiveSessionsView: React.FC<InteractiveSessionsViewProps> = (
         if (Array.isArray(coursesData) && coursesData.length > 0) setCourses(coursesData);
         if (Array.isArray(traineesData) && traineesData.length > 0) setTrainees(traineesData);
       }
-      loadDevices();
+      const [schedRes] = await Promise.all([
+        api.getLabSchedules().catch(() => []),
+        loadDevices(),
+        refreshLaptopStatus()
+      ]);
+      if (Array.isArray(schedRes)) setLabSchedules(schedRes);
     } catch (e) {
       console.error('Error loading lab data:', e);
     } finally {
       setIsLoading(false);
     }
-  }, [ctxGroups, loadDevices]);
+  }, [ctxGroups, loadDevices, refreshLaptopStatus]);
 
   // Poll current active Question & External Activity from Server
   const fetchActiveLabState = useCallback(async () => {
@@ -232,14 +259,44 @@ export const InteractiveSessionsView: React.FC<InteractiveSessionsViewProps> = (
     return groups.filter(g => g.branchId === activeBranchId);
   }, [groups, activeBranchId]);
 
+  // Smart schedule match for current day & time
+  const scheduleMatch = useMemo(
+    () => findScheduledGroupForNow(groups, labSchedules, activeBranchId),
+    [groups, labSchedules, activeBranchId]
+  );
+
   // Current active group
   const effectiveGroup = useMemo(() => {
     if (selectedGroupId === 'all_branch') return null;
     if (selectedGroupId !== 'auto') {
       return groups.find(g => g.id === selectedGroupId) || null;
     }
-    return branchGroups?.[0] || groups?.[0] || null;
-  }, [groups, branchGroups, selectedGroupId]);
+    return scheduleMatch.group || branchGroups?.[0] || groups?.[0] || null;
+  }, [groups, branchGroups, selectedGroupId, scheduleMatch]);
+
+  // Fast map of currently online lab devices matched to trainee id/code/name
+  const onlineDeviceByTraineeId = useMemo(() => {
+    const map = new Map<string, any>();
+    (devices || []).forEach((d: any) => {
+      if (!d || !d.isOnline) return;
+      if (d.currentTraineeId) map.set(String(d.currentTraineeId), d);
+      if (d.currentTraineeCode) map.set(`code:${String(d.currentTraineeCode).trim().toUpperCase()}`, d);
+      if (d.currentTraineeName) map.set(`name:${String(d.currentTraineeName).trim()}`, d);
+    });
+    return map;
+  }, [devices]);
+
+  const getOnlineDeviceForTrainee = useCallback(
+    (t: Trainee) => {
+      return (
+        onlineDeviceByTraineeId.get(String(t.id)) ||
+        (t.code ? onlineDeviceByTraineeId.get(`code:${String(t.code).trim().toUpperCase()}`) : undefined) ||
+        (t.fullName ? onlineDeviceByTraineeId.get(`name:${String(t.fullName).trim()}`) : undefined) ||
+        null
+      );
+    },
+    [onlineDeviceByTraineeId]
+  );
 
   // Trainees of active group strictly filtered by actual registered enrollment
   const currentGroupTrainees = useMemo(() => {
@@ -255,11 +312,14 @@ export const InteractiveSessionsView: React.FC<InteractiveSessionsViewProps> = (
     });
   }, [trainees, effectiveGroup, selectedGroupId, activeBranchId]);
 
-  // Attendance map and database records initialization
+  // Attendance map and database records initialization (plus local session grades)
   const loadGroupAttendanceRecords = useCallback(async (groupId: string, dateStr: string) => {
     if (!groupId || groupId === 'auto' || groupId === 'all_branch') return;
     try {
-      const existing = await api.getAttendance({ groupId, date: dateStr }).catch(() => []);
+      const [existing, existingGrades] = await Promise.all([
+        api.getAttendance({ groupId, date: dateStr }).catch(() => []),
+        api.getSessionGrades({ groupId, date: dateStr }).catch(() => [])
+      ]);
       const safeExisting = Array.isArray(existing) ? existing : [];
 
       const newDetailed: Record<string, { status: AttendanceStatus; notes: string; time?: string; createdAt?: string }> = {};
@@ -286,10 +346,23 @@ export const InteractiveSessionsView: React.FC<InteractiveSessionsViewProps> = (
         } catch {}
       }
 
+      const gradesObj: Record<string, string> = {};
+      if (Array.isArray(existingGrades) && existingGrades.length > 0) {
+        existingGrades.forEach((g: any) => {
+          if (g && g.traineeId && g.score !== undefined && g.score !== null) {
+            gradesObj[g.traineeId] = String(g.score);
+          }
+        });
+        if (existingGrades[0]?.maxScore) {
+          setSessionMaxScore(Number(existingGrades[0].maxScore) || 10);
+        }
+      }
+
       setAttendanceDetails(newDetailed);
       setAttendanceMap(newSimple);
+      setSessionGradesMap(gradesObj);
     } catch (e) {
-      console.warn('Error loading attendance records:', e);
+      console.warn('Error loading attendance & session grades:', e);
     }
   }, []);
 
@@ -355,9 +428,45 @@ export const InteractiveSessionsView: React.FC<InteractiveSessionsViewProps> = (
     showToast('تم تحديد جميع المتدربين كـ "حاضر" بنجاح ✅', 'info');
   };
 
+  const handleSessionGradeChange = (traineeId: string, value: string) => {
+    setSessionGradesMap(prev => ({
+      ...prev,
+      [traineeId]: value
+    }));
+  };
+
+  const handleSelectLaptopFolderInline = async () => {
+    const res = await pickLaptopDirectory();
+    if (res.cancelled) return;
+    if (res.success) {
+      await refreshLaptopStatus();
+      showToast(`تم ربط مجلد التخزين المحلي على اللاب (${res.folderName}) بنجاح`, 'success');
+    } else if (res.needsNewTab) {
+      showToast(res.error || 'افتح الرابط في تبويب مستقل لاختيار مجلد على اللاب.', 'warning');
+    } else {
+      showToast(res.error || 'تعذر اختيار مجلد اللاب', 'error');
+    }
+  };
+
+  const handleRenewLaptopStorageInline = async () => {
+    try {
+      const backupData = await api.getBackupData().catch(() => null);
+      const res = await renewLaptopStorage(backupData);
+      await refreshLaptopStatus();
+      showToast(
+        res.archivedToFolder
+          ? `تم أرشفة القديم (${res.archiveFilename}) في مجلد اللاب وتجديد التخزين المحلي بنجاح`
+          : `تم تصدير أرشيف (${res.archiveFilename}) وتجديد التخزين المحلي بنجاح`,
+        'success'
+      );
+    } catch (err: any) {
+      showToast(err?.message || 'تعذر تجديد التخزين المحلي', 'error');
+    }
+  };
+
   const handleSaveAttendance = async () => {
     if (!effectiveGroup?.id || currentGroupTrainees.length === 0) {
-      showToast('يرجى تحديد مجموعة لحفظ الحضور', 'warning');
+      showToast('يرجى تحديد مجموعة لحفظ الحضور والدرجات', 'warning');
       return;
     }
     setIsSavingAttendance(true);
@@ -368,14 +477,29 @@ export const InteractiveSessionsView: React.FC<InteractiveSessionsViewProps> = (
         notes: attendanceDetails[t.id]?.notes || ''
       }));
 
-      const res = await api.saveAttendanceBatch({
-        groupId: effectiveGroup.id,
-        date: selectedDate,
-        branchId: effectiveGroup.branchId || activeBranchId,
-        courseId: effectiveGroup.courseId,
-        trainerId: effectiveGroup.trainerId,
-        records
-      });
+      const gradeRecords = currentGroupTrainees.map(t => ({
+        traineeId: t.id,
+        score: sessionGradesMap[t.id] ?? '',
+        maxScore: sessionMaxScore,
+        note: attendanceDetails[t.id]?.notes || ''
+      }));
+
+      const [res] = await Promise.all([
+        api.saveAttendanceBatch({
+          groupId: effectiveGroup.id,
+          date: selectedDate,
+          branchId: effectiveGroup.branchId || activeBranchId,
+          courseId: effectiveGroup.courseId,
+          trainerId: effectiveGroup.trainerId,
+          records
+        }),
+        api.saveSessionGradesBatch({
+          groupId: effectiveGroup.id,
+          date: selectedDate,
+          maxScore: sessionMaxScore,
+          records: gradeRecords
+        })
+      ]);
 
       if (res && res.updatedTrainees && Array.isArray(res.updatedTrainees)) {
         const updateMap = new Map(res.updatedTrainees.map((u: any) => [u.id, u]));
@@ -388,15 +512,30 @@ export const InteractiveSessionsView: React.FC<InteractiveSessionsViewProps> = (
         if (setCtxTrainees) setCtxTrainees(updateTraineeArray);
       }
 
+      // Persist snapshot locally on laptop (IndexedDB + user folder if authorized)
+      const localSaveRes = await saveLocalSessionData({
+        groupId: effectiveGroup.id,
+        groupName: effectiveGroup.name,
+        date: selectedDate,
+        attendance: records,
+        grades: gradeRecords.filter(g => g.score !== '')
+      }).catch(() => ({ savedToIndexedDb: false, savedToFolder: false }));
+      await refreshLaptopStatus();
+
       window.dispatchEvent(new CustomEvent('nagah_attendance_updated'));
       if (refreshCoreData) {
         refreshCoreData();
       }
 
       audioService.playStarSuccess();
-      showToast(`تم حفظ كشف الحضور بنجاح للمجموعة (${effectiveGroup.name}) وتوثيق البيانات ومزامنة النقاط! 🎉`, 'success');
+      showToast(
+        localSaveRes.savedToFolder
+          ? `تم حفظ الحضور والدرجات محلياً على اللاب وفي مجلد (${localSaveRes.folderName || 'النسخ'}) للمجموعة (${effectiveGroup.name}) دون استهلاك كوتا السحابة`
+          : `تم حفظ كشف الحضور ودرجات الحصة محلياً للمجموعة (${effectiveGroup.name}) بنجاح`,
+        'success'
+      );
     } catch (err: any) {
-      showToast(err.message || 'فشل حفظ كشف الحضور', 'error');
+      showToast(err.message || 'فشل حفظ كشف الحضور والدرجات', 'error');
     } finally {
       setIsSavingAttendance(false);
     }
@@ -897,20 +1036,18 @@ export const InteractiveSessionsView: React.FC<InteractiveSessionsViewProps> = (
             💻
           </div>
           <div>
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="px-3 py-1 bg-emerald-50 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 text-xs font-black rounded-full border border-emerald-200 dark:border-emerald-500/30 flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            <div className="flex items-center gap-2 flex-wrap text-xs font-bold text-slate-500 dark:text-slate-400">
+              <span className="text-emerald-700 dark:text-emerald-300 font-black">
                 المعمل التفاعلي جاهز
               </span>
-              <span className="px-3 py-1 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-bold rounded-full border border-slate-200 dark:border-slate-700">
-                {branchName} 📍
-              </span>
+              <span>·</span>
+              <span>{branchName}</span>
             </div>
-            <h1 className="text-2xl font-black text-slate-900 dark:text-white mt-1">
+            <h1 className="text-2xl font-black text-slate-900 dark:text-white mt-0.5">
               غرفة إدارة الحصة والمعمل التفاعلي
             </h1>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 font-medium">
-              عرض البروجكتور التفاعلي، بث كلاس بوينت وكاهوت، كشف الإجابات الذكي، ورصد حضور ونقاط الطلاب
+              الحضور والدرجات والتخزين المحلي على اللاب (صفر استهلاك سحابة) · النقاط المضافة تصل للطلاب بالمعمل فوراً
             </p>
           </div>
         </div>
@@ -1015,50 +1152,84 @@ export const InteractiveSessionsView: React.FC<InteractiveSessionsViewProps> = (
             <BookOpen className={`w-4 h-4 ${activeTab === 'recap' ? 'text-slate-950 font-bold' : 'text-amber-500'}`} />
             <span className={activeTab === 'recap' ? 'text-slate-950 font-black' : ''}>📚 ملخص المحاضرة وتكليفات الواجب</span>
           </button>
+
+          <button
+            onClick={() => setActiveTab('calendar')}
+            className={`flex-1 sm:flex-initial px-4 sm:px-5 py-2.5 rounded-xl font-black text-xs sm:text-sm flex items-center justify-center gap-2 transition-all cursor-pointer ${
+              activeTab === 'calendar'
+                ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-lg shadow-emerald-500/25 border border-emerald-500'
+                : 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700'
+            }`}
+          >
+            <Calendar className={`w-4 h-4 ${activeTab === 'calendar' ? 'text-white' : 'text-emerald-600 dark:text-emerald-400'}`} />
+            <span className={activeTab === 'calendar' ? 'text-white font-black' : ''}>📅 التقويم الدراسي ومواعيد الاختبارات</span>
+          </button>
         </div>
 
         {/* Group Selector & Quick Mass Points */}
-        <div className="flex items-center gap-3 w-full xl:w-auto justify-end flex-wrap">
-          <div className="flex items-center gap-2">
-            <label className="text-xs font-bold text-slate-700 dark:text-slate-300 shrink-0">
-              المجموعة:
-            </label>
-            <select
-              value={selectedGroupId}
-              onChange={(e) => setSelectedGroupId(e.target.value)}
-              className="bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white text-xs font-black rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm"
+        <div className="flex flex-col items-end gap-1.5 w-full xl:w-auto">
+          <div className="flex items-center gap-3 w-full xl:w-auto justify-end flex-wrap">
+            <div className="flex items-center gap-2">
+              <label className="text-xs font-bold text-slate-700 dark:text-slate-300 shrink-0">
+                المجموعة:
+              </label>
+              <select
+                value={selectedGroupId}
+                onChange={(e) => setSelectedGroupId(e.target.value)}
+                className="bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white text-xs font-black rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm"
+              >
+                <option value="auto">
+                  تلقائي ذكي (حسب اليوم والساعة الآن{scheduleMatch.group ? `: ${scheduleMatch.group.name}` : ''})
+                </option>
+                <option value="all_branch">جميع طلاب الفرع ({trainees.filter(t => !activeBranchId || activeBranchId === 'all' || t.branchId === activeBranchId).length} طالب مسجل)</option>
+                {branchGroups.map(g => {
+                  const count = trainees.filter(t => t.groupId === g.id || (t as any).currentGroupId === g.id || (Array.isArray(g.traineeIds) && g.traineeIds.includes(t.id))).length;
+                  const crsName = courses.find(c => c.id === g.courseId)?.title || courses.find(c => c.id === g.courseId)?.name || '';
+                  return (
+                    <option key={g.id} value={g.id}>
+                      {g.name} {crsName ? `(${crsName})` : ''} - [{count} طلاب]
+                    </option>
+                  );
+                })}
+              </select>
+            </div>
+
+            <button
+              onClick={() => handleMassAwardPresent(5)}
+              className="px-3.5 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-black text-xs rounded-xl flex items-center gap-1.5 shadow-md shadow-emerald-600/20 active:scale-95 transition-all cursor-pointer border border-emerald-400"
+              title="منح 5 نجوم لجميع الطلاب الحاضرين حالياً بالقاعة بنقرة واحدة"
             >
-              <option value="auto">تلقائي (أول مجموعة بالفرع)</option>
-              <option value="all_branch">جميع طلاب الفرع ({trainees.filter(t => !activeBranchId || activeBranchId === 'all' || t.branchId === activeBranchId).length} طالب مسجل)</option>
-              {branchGroups.map(g => {
-                const count = trainees.filter(t => t.groupId === g.id || (t as any).currentGroupId === g.id || (Array.isArray(g.traineeIds) && g.traineeIds.includes(t.id))).length;
-                const crsName = courses.find(c => c.id === g.courseId)?.title || courses.find(c => c.id === g.courseId)?.name || '';
-                return (
-                  <option key={g.id} value={g.id}>
-                    {g.name} {crsName ? `(${crsName})` : ''} - [{count} طلاب]
-                  </option>
-                );
-              })}
-            </select>
+              <Star className="w-3.5 h-3.5 fill-white text-white" />
+              <span className="text-white font-black">+5 نجوم للحاضرين ⭐</span>
+            </button>
+
+            <button
+              onClick={() => setIsCeremonyModalOpen(true)}
+              className="px-3.5 py-2 bg-gradient-to-r from-amber-100 to-amber-200 hover:from-amber-200 hover:to-amber-300 dark:from-amber-500/20 dark:to-amber-500/30 text-amber-950 dark:text-amber-200 font-black text-xs rounded-xl flex items-center gap-1.5 shadow-xs transition-all active:scale-95 cursor-pointer border border-amber-300 dark:border-amber-500/40"
+              title="فتح منصة التتويج وتكريم نجوم المجموعة المحددة حالياً"
+            >
+              <Crown className="w-3.5 h-3.5 text-amber-700 dark:text-amber-400" />
+              <span>منصة التتويج 👑</span>
+            </button>
           </div>
 
-          <button
-            onClick={() => handleMassAwardPresent(5)}
-            className="px-3.5 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-black text-xs rounded-xl flex items-center gap-1.5 shadow-md shadow-emerald-600/20 active:scale-95 transition-all cursor-pointer border border-emerald-400"
-            title="منح 5 نجوم لجميع الطلاب الحاضرين حالياً بالقاعة بنقرة واحدة"
-          >
-            <Star className="w-3.5 h-3.5 fill-white text-white" />
-            <span className="text-white font-black">+5 نجوم للحاضرين ⭐</span>
-          </button>
-
-          <button
-            onClick={() => setIsCeremonyModalOpen(true)}
-            className="px-3.5 py-2 bg-gradient-to-r from-amber-100 to-amber-200 hover:from-amber-200 hover:to-amber-300 dark:from-amber-500/20 dark:to-amber-500/30 text-amber-950 dark:text-amber-200 font-black text-xs rounded-xl flex items-center gap-1.5 shadow-xs transition-all active:scale-95 cursor-pointer border border-amber-300 dark:border-amber-500/40"
-            title="فتح منصة التتويج وتكريم نجوم المجموعة المحددة حالياً"
-          >
-            <Crown className="w-3.5 h-3.5 text-amber-700 dark:text-amber-400" />
-            <span>منصة التتويج 👑</span>
-          </button>
+          {selectedGroupId === 'auto' && scheduleMatch.group && (
+            <div className="text-[11px] font-bold text-indigo-700 dark:text-indigo-300 flex items-center gap-1.5">
+              <Clock className="w-3.5 h-3.5" />
+              <span>
+                {scheduleMatch.reason === 'live_now'
+                  ? 'الحصة الجارية الآن'
+                  : scheduleMatch.reason === 'upcoming_today'
+                  ? 'الحصة القادمة اليوم'
+                  : scheduleMatch.reason === 'recent_today'
+                  ? 'آخر حصة مجدولة اليوم'
+                  : 'المجموعة المختارة'}
+                : {scheduleMatch.group.name}
+                {scheduleMatch.matchedDay ? ` · ${scheduleMatch.matchedDay}` : ''}
+                {scheduleMatch.matchedTimeRange ? ` (${scheduleMatch.matchedTimeRange})` : ''}
+              </span>
+            </div>
+          )}
         </div>
       </div>
 
@@ -1085,8 +1256,7 @@ export const InteractiveSessionsView: React.FC<InteractiveSessionsViewProps> = (
 
               {activeBroadcast?.gamePin && (
                 <div className="flex items-center gap-2">
-                  <span className="px-3 py-1 bg-emerald-50 dark:bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-500/30 rounded-full text-xs font-black flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
+                  <span className="px-3 py-1 bg-emerald-50 dark:bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-500/30 rounded-full text-xs font-black">
                     البث نشط للطلاب ({activeBroadcast.platform}: {activeBroadcast.gamePin})
                   </span>
                   <button
@@ -1202,8 +1372,7 @@ export const InteractiveSessionsView: React.FC<InteractiveSessionsViewProps> = (
                       شاشة العرض المباشرة (البروجكتور) 📽️
                     </span>
                     {activeQuickQuestion && (
-                      <span className="px-2.5 py-0.5 bg-emerald-50 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 text-[11px] font-black rounded-lg border border-emerald-200 dark:border-emerald-500/30 flex items-center gap-1">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
+                      <span className="px-2.5 py-0.5 bg-emerald-50 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 text-[11px] font-black rounded-lg border border-emerald-200 dark:border-emerald-500/30">
                         {activeQuickQuestion.closed ? '🔒 التصويت مغلق' : '🟢 التصويت مفتوح'}
                       </span>
                     )}
@@ -1470,12 +1639,20 @@ export const InteractiveSessionsView: React.FC<InteractiveSessionsViewProps> = (
             <div className="flex items-center gap-2 flex-wrap">
               <button
                 type="button"
-                onClick={() => setRosterSubTab('group_session')}
+                onClick={() => {
+                  setRosterSubTab('group_session');
+                  handlePrintAttendanceSheet();
+                  showToast('📋 تم فتح كشف حضور وانضباط الجلسة والمجموعة بنجاح', 'success');
+                  try {
+                    audioService.playChime([523, 659, 783, 1046]);
+                  } catch {}
+                }}
                 className={`px-4 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-2 cursor-pointer ${
                   rosterSubTab === 'group_session'
-                    ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20 border border-indigo-500'
+                    ? 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-md shadow-indigo-600/20 border border-indigo-500'
                     : 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 border border-slate-300 dark:border-slate-700'
                 }`}
+                title="عرض وطباعة كشف حضور وانضباط الجلسة الرسمي"
               >
                 <CalendarDays className="w-4 h-4" />
                 <span>كشف حضور الجلسة والمجموعة</span>
@@ -1612,7 +1789,44 @@ export const InteractiveSessionsView: React.FC<InteractiveSessionsViewProps> = (
                     <span>طباعة الكشف 🖨️</span>
                   </button>
 
-                  {/* Save Batch */}
+                  {/* Session Max Grade */}
+                  <div className="flex items-center gap-1.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl px-2.5 py-1 text-xs">
+                    <span className="font-bold text-slate-600 dark:text-slate-400">نهاية الدرجة:</span>
+                    <select
+                      value={sessionMaxScore}
+                      onChange={(e) => setSessionMaxScore(Number(e.target.value) || 10)}
+                      className="bg-transparent font-black text-indigo-700 dark:text-indigo-300 focus:outline-none cursor-pointer"
+                    >
+                      <option value={5}>5</option>
+                      <option value={10}>10</option>
+                      <option value={20}>20</option>
+                      <option value={50}>50</option>
+                      <option value={100}>100</option>
+                    </select>
+                  </div>
+
+                  {/* Laptop Local Folder Picker & Storage Renewal */}
+                  <button
+                    type="button"
+                    onClick={handleSelectLaptopFolderInline}
+                    className="px-3 py-1.5 bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-300 dark:border-slate-700 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer"
+                    title="تحديد مجلد على جهازك اللاب لحفظ السجلات والنسخ الاحتياطي محلياً"
+                  >
+                    <FolderOpen className="w-4 h-4 text-amber-600" />
+                    <span>{laptopStatus?.folderName ? `مجلد: ${laptopStatus.folderName}` : 'تحديد مجلد اللاب'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleRenewLaptopStorageInline}
+                    className="px-3 py-1.5 bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-300 dark:border-slate-700 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer"
+                    title="أرشفة القديم وتجديد مساحة التخزين المحلية على اللاب"
+                  >
+                    <HardDrive className="w-4 h-4 text-emerald-600" />
+                    <span>تجديد التخزين</span>
+                  </button>
+
+                  {/* Save Batch (Attendance + Grades Locally) */}
                   <button
                     type="button"
                     onClick={handleSaveAttendance}
@@ -1624,7 +1838,7 @@ export const InteractiveSessionsView: React.FC<InteractiveSessionsViewProps> = (
                     ) : (
                       <Save className="w-4 h-4 text-white" />
                     )}
-                    <span>{isSavingAttendance ? 'جاري الحفظ...' : 'حفظ الكشف 💾'}</span>
+                    <span>{isSavingAttendance ? 'جاري الحفظ...' : 'حفظ الحضور والدرجات محلياً 💾'}</span>
                   </button>
 
                   {/* Open Ceremony Modal */}
@@ -1706,9 +1920,10 @@ export const InteractiveSessionsView: React.FC<InteractiveSessionsViewProps> = (
                     <thead>
                       <tr className="bg-slate-100/80 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 font-black">
                         <th className="p-3">#</th>
-                        <th className="p-3">المتدرب</th>
+                        <th className="p-3">المتدرب / المعمل</th>
                         <th className="p-3">الكود والهاتف</th>
                         <th className="p-3">حالة الحضور</th>
+                        <th className="p-3">الدرجة (/{sessionMaxScore})</th>
                         <th className="p-3">ملاحظات / المعمل</th>
                         <th className="p-3">التميز والنجوم</th>
                         <th className="p-3 text-center">إجراءات</th>
@@ -1717,7 +1932,7 @@ export const InteractiveSessionsView: React.FC<InteractiveSessionsViewProps> = (
                     <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                       {displayedTrainees.length === 0 ? (
                         <tr>
-                          <td colSpan={7} className="text-center py-12 text-slate-500 text-xs">
+                          <td colSpan={8} className="text-center py-12 text-slate-500 text-xs">
                             لا يوجد طلاب مطابقين للبحث
                           </td>
                         </tr>
@@ -1726,10 +1941,12 @@ export const InteractiveSessionsView: React.FC<InteractiveSessionsViewProps> = (
                           const currentStatus = attendanceMap[trainee.id] || 'present';
                           const currentPts = trainee.totalPoints !== undefined ? trainee.totalPoints : (trainee.points || 0);
                           const currentNotes = attendanceDetails[trainee.id]?.notes || '';
+                          const onlineDev = getOnlineDeviceForTrainee(trainee);
+                          const currentGrade = sessionGradesMap[trainee.id] ?? '';
 
                           return (
                             <tr key={trainee.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-900/50 transition-colors">
-                              <td className="p-3 font-mono text-slate-400 font-bold">{index + 1}</td>
+                              <td className="p-3 font-mono text-slate-400 font-bold tabular-nums">{index + 1}</td>
                               <td className="p-3">
                                 <div className="flex items-center gap-2.5">
                                   <div className="w-8 h-8 rounded-lg bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 flex items-center justify-center font-bold text-xs overflow-hidden border border-indigo-200 dark:border-indigo-800 shrink-0">
@@ -1739,9 +1956,16 @@ export const InteractiveSessionsView: React.FC<InteractiveSessionsViewProps> = (
                                       (trainee.fullName || 'ط').charAt(0)
                                     )}
                                   </div>
-                                  <span className="font-black text-slate-900 dark:text-white">
-                                    {trainee.fullName || trainee.name}
-                                  </span>
+                                  <div>
+                                    <span className="font-black text-slate-900 dark:text-white block">
+                                      {trainee.fullName || trainee.name}
+                                    </span>
+                                    {onlineDev && (
+                                      <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400">
+                                        متصل الآن · {onlineDev.name || onlineDev.deviceId}
+                                      </span>
+                                    )}
+                                  </div>
                                 </div>
                               </td>
                               <td className="p-3">
@@ -1800,6 +2024,18 @@ export const InteractiveSessionsView: React.FC<InteractiveSessionsViewProps> = (
                               </td>
                               <td className="p-3">
                                 <input
+                                  type="number"
+                                  min={0}
+                                  max={sessionMaxScore}
+                                  step={0.5}
+                                  placeholder={`0 - ${sessionMaxScore}`}
+                                  value={currentGrade}
+                                  onChange={(e) => handleSessionGradeChange(trainee.id, e.target.value)}
+                                  className="w-20 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-2 py-1 text-xs font-black text-center tabular-nums focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                />
+                              </td>
+                              <td className="p-3">
+                                <input
                                   type="text"
                                   placeholder="ملاحظات..."
                                   value={currentNotes}
@@ -1809,7 +2045,7 @@ export const InteractiveSessionsView: React.FC<InteractiveSessionsViewProps> = (
                               </td>
                               <td className="p-3">
                                 <div className="flex items-center gap-1.5">
-                                  <span className="px-2 py-0.5 bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-500/30 rounded-lg text-xs font-black">
+                                  <span className="px-2 py-0.5 bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-500/30 rounded-lg text-xs font-black tabular-nums">
                                     ⭐ {currentPts}
                                   </span>
                                   <button
@@ -1857,6 +2093,8 @@ export const InteractiveSessionsView: React.FC<InteractiveSessionsViewProps> = (
                       const currentStatus = attendanceMap[trainee.id] || 'present';
                       const currentPts = trainee.totalPoints !== undefined ? trainee.totalPoints : (trainee.points || 0);
                       const currentNotes = attendanceDetails[trainee.id]?.notes || '';
+                      const onlineDev = getOnlineDeviceForTrainee(trainee);
+                      const currentGrade = sessionGradesMap[trainee.id] ?? '';
 
                       return (
                         <div
@@ -1881,11 +2119,17 @@ export const InteractiveSessionsView: React.FC<InteractiveSessionsViewProps> = (
                                 <h4 className="text-xs font-black text-slate-900 dark:text-white truncate">
                                   {trainee.fullName || trainee.name}
                                 </h4>
-                                <div className="flex items-center gap-1.5 mt-0.5">
+                                <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
                                   <span className="text-[10px] font-mono text-slate-500 dark:text-slate-400 font-bold">
                                     {trainee.code || trainee.studentCode || 'بدون كود'}
                                   </span>
-                                  {trainee.parentPhone && (
+                                  {onlineDev && (
+                                    <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400 flex items-center gap-0.5">
+                                      <Laptop className="w-3 h-3" />
+                                      <span>متصل · {onlineDev.name || onlineDev.deviceId}</span>
+                                    </span>
+                                  )}
+                                  {!onlineDev && trainee.parentPhone && (
                                     <span className="text-[10px] text-slate-400 dark:text-slate-500 dir-ltr font-mono">
                                       📞 {trainee.parentPhone}
                                     </span>
@@ -1896,7 +2140,7 @@ export const InteractiveSessionsView: React.FC<InteractiveSessionsViewProps> = (
 
                             {/* Points & History button */}
                             <div className="flex items-center gap-1 shrink-0">
-                              <span className="px-2 py-1 bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-500/30 rounded-xl text-xs font-black flex items-center gap-1">
+                              <span className="px-2 py-1 bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-500/30 rounded-xl text-xs font-black flex items-center gap-1 tabular-nums">
                                 <Star className="w-3 h-3 fill-amber-500 text-amber-500" />
                                 {currentPts}
                               </span>
@@ -1967,11 +2211,25 @@ export const InteractiveSessionsView: React.FC<InteractiveSessionsViewProps> = (
                             </div>
                           </div>
 
-                          {/* Notes */}
-                          <div>
+                          {/* Inline Session Grade + Notes (Local Only) */}
+                          <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-1 shrink-0 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-2 py-1">
+                              <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400">درجة:</span>
+                              <input
+                                type="number"
+                                min={0}
+                                max={sessionMaxScore}
+                                step={0.5}
+                                placeholder="—"
+                                value={currentGrade}
+                                onChange={(e) => handleSessionGradeChange(trainee.id, e.target.value)}
+                                className="w-12 bg-transparent text-slate-900 dark:text-white text-xs font-black text-center tabular-nums focus:outline-none"
+                              />
+                              <span className="text-[10px] font-mono text-slate-400">/{sessionMaxScore}</span>
+                            </div>
                             <input
                               type="text"
-                              placeholder="ملاحظات الحضور / رقم جهاز المعمل..."
+                              placeholder="ملاحظات الحصة / رقم الجهاز..."
                               value={currentNotes}
                               onChange={(e) => handleNotesChange(trainee.id, e.target.value)}
                               className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white rounded-xl px-2.5 py-1 text-[11px] focus:outline-none focus:ring-1 focus:ring-indigo-500 placeholder:text-slate-400"
@@ -2231,6 +2489,17 @@ export const InteractiveSessionsView: React.FC<InteractiveSessionsViewProps> = (
         </div>
       )}
 
+      {/* 6. TAB 4: ACADEMIC CALENDAR & UPCOMING EXAMS (التقويم الدراسي ومواعيد الاختبارات) */}
+      {activeTab === 'calendar' && (
+        <div className="animate-fadeIn">
+          <AcademicCalendarAndExamsWidget
+            courses={courses}
+            groups={groups}
+            onOpenCurriculumPlan={() => setShowCurriculumPlanModal(true)}
+          />
+        </div>
+      )}
+
       {/* MODALS */}
       {/* 1. Smart Whiteboard */}
       {isWhiteboardOpen && (
@@ -2430,6 +2699,14 @@ export const InteractiveSessionsView: React.FC<InteractiveSessionsViewProps> = (
           }}
         />
       )}
+
+      {/* Curriculum Plan & Syllabus Distribution Modal */}
+      <CurriculumPlanModal
+        isOpen={showCurriculumPlanModal}
+        onClose={() => setShowCurriculumPlanModal(false)}
+        courses={courses}
+        groups={groups}
+      />
     </div>
   );
 };

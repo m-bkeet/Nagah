@@ -6,7 +6,7 @@ import {
   Users, BookOpen, Monitor, Shield, Globe, Wifi, 
   Sparkles, DollarSign, Activity, AlertTriangle, RefreshCw,
   TrendingUp, Calendar, Layers, MapPin, Building, CalendarCheck, Flame, 
-  Receipt, PiggyBank, Download, Plus, Trophy, Award, Star, Medal, ArrowUpRight, CheckCircle2, Crown, X, Sparkle, Upload, Zap, Gamepad2
+  Receipt, PiggyBank, Download, Plus, Trophy, Award, Star, Medal, ArrowUpRight, CheckCircle2, Crown, X, Sparkle, Upload, Zap, Gamepad2, Landmark
 } from 'lucide-react';
 import { Trainee, Course, Group } from '../types';
 import { SessionCelebrationOverlay } from '../components/SessionCelebrationOverlay';
@@ -51,9 +51,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
   const [todayAttendanceCount, setTodayAttendanceCount] = useState<number>(0);
   const [isLoading, setIsLoading] = useState<boolean>(() => !ctxTrainees || ctxTrainees.length === 0);
   const [showHonorModal, setShowHonorModal] = useState(false);
-  const [selectedTrainee, setSelectedTrainee] = useState<any>(null);
   const [showCelebration, setShowCelebration] = useState(false);
+  const [selectedTrainee, setSelectedTrainee] = useState<any>(null);
   const [persistentCelebration, setPersistentCelebration] = useState<any>(null);
+
+  const displayRevenue = financeSummary?.totalRevenue ?? financeSummary?.currentMonthRevenue ?? 0;
+  const displayExpenses = financeSummary?.totalExpenses ?? financeSummary?.currentMonthExpenses ?? 0;
+  const displayTreasury = financeSummary?.netTreasury ?? financeSummary?.currentMonthNetTreasury ?? 0;
 
   const activeBranch = branches.find(b => b.id === activeBranchId);
 
@@ -281,7 +285,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
         
         {/* LEFT COLUMN: 5 FINANCIAL & SYSTEM CARDS */}
         <div className="lg:col-span-3 space-y-2.5 order-2 lg:order-1">
-          
+
           {/* Revenue Card (Green Bar Graph) */}
           <div
             className="w-full text-right bg-white/95 dark:bg-slate-900/90 p-3 rounded-2xl border border-emerald-300/80 dark:border-emerald-500/40 hover:border-emerald-500 flex flex-col justify-between h-[78px] relative overflow-hidden group transition-all shadow-xs dark:shadow-md backdrop-blur-md cursor-pointer"
@@ -290,7 +294,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-1.5">
                 <span className="text-sm font-black text-emerald-700 dark:text-emerald-300 font-mono">
-                  {showRev ? (financeSummary?.totalRevenue || 0).toLocaleString() : '*******'} <span className="text-[10px] text-slate-500 dark:text-slate-400">ج.م</span>
+                  {showRev ? displayRevenue.toLocaleString() : '*******'} <span className="text-[10px] text-slate-500 dark:text-slate-400">ج.م</span>
                 </span>
                 <button
                   type="button"
@@ -305,7 +309,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
                 </button>
               </div>
               <div className="flex items-center gap-1.5">
-                <span className="text-xs font-bold text-slate-800 dark:text-slate-100">الإيرادات</span>
+                <span className="text-xs font-bold text-slate-800 dark:text-slate-100">
+                  الإيرادات
+                </span>
                 <div className="p-1 bg-emerald-100 dark:bg-emerald-500/25 rounded-lg text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-500/40">
                   <Building className="w-3.5 h-3.5" />
                 </div>
@@ -332,7 +338,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-1.5">
                 <span className="text-sm font-black text-rose-700 dark:text-rose-300 font-mono">
-                  {showExp ? (financeSummary?.totalExpenses || 0).toLocaleString() : '*******'} <span className="text-[10px] text-slate-500 dark:text-slate-400">ج.م</span>
+                  {showExp ? displayExpenses.toLocaleString() : '*******'} <span className="text-[10px] text-slate-500 dark:text-slate-400">ج.م</span>
                 </span>
                 <button
                   type="button"
@@ -347,7 +353,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
                 </button>
               </div>
               <div className="flex items-center gap-1.5">
-                <span className="text-xs font-bold text-slate-800 dark:text-slate-100">المصروفات</span>
+                <span className="text-xs font-bold text-slate-800 dark:text-slate-100">
+                  المصروفات
+                </span>
                 <div className="p-1 bg-rose-100 dark:bg-rose-500/25 rounded-lg text-rose-700 dark:text-rose-300 border border-rose-300 dark:border-rose-500/40">
                   <Receipt className="w-3.5 h-3.5" />
                 </div>
@@ -372,7 +380,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-1.5">
                 <span className="text-sm font-black text-amber-700 dark:text-amber-300 font-mono">
-                  {showTres ? (financeSummary?.netTreasury || 0).toLocaleString() : '*******'} <span className="text-[10px] text-slate-500 dark:text-slate-400">ج.م</span>
+                  {showTres ? displayTreasury.toLocaleString() : '*******'} <span className="text-[10px] text-slate-500 dark:text-slate-400">ج.م</span>
                 </span>
                 <button
                   type="button"
@@ -387,7 +395,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
                 </button>
               </div>
               <div className="flex items-center gap-1.5">
-                <span className="text-xs font-bold text-slate-800 dark:text-slate-100">الخزينة</span>
+                <span className="text-xs font-bold text-slate-800 dark:text-slate-100">
+                  الخزينة
+                </span>
                 <div className="p-1 bg-amber-100 dark:bg-amber-500/25 rounded-lg text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-500/40">
                   <PiggyBank className="w-3.5 h-3.5" />
                 </div>

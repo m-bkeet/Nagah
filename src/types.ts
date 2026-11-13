@@ -316,6 +316,7 @@ export interface Group {
   languagesMaterial?: CourseMaterial;
   googleDriveFileId?: string;
   assessments?: CourseAssessment[];
+  monthlyScheduleOverrides?: Record<string, Record<string, any>>;
 }
 
 export type AttendanceStatus = 'present' | 'absent' | 'late' | 'excused';
