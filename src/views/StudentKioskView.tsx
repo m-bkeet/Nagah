@@ -58,19 +58,40 @@ export const StudentKioskView: React.FC = () => {
   // Master Lab Lock & Access Control State (Defaults to open and available)
   const [isLabLocked, setIsLabLocked] = useState<boolean>(false);
 
-  useEffect(() => {
-    let isMounted = true;
-    const fetchStatus = async () => {
-      try {
-        const res = await api.getLabStatus();
-        if (isMounted && res && typeof res.isOpen === 'boolean') {
-          setIsLabLocked(!res.isOpen);
-        }
-      } catch {
-        if (isMounted) setIsLabLocked(false);
+  const fetchKioskPulse = useCallback(async (studentCodeForSync?: string) => {
+    try {
+      const res = await fetch('/api/kiosk/pulse');
+      const json = await res.json();
+      if (!json || !json.success) return;
+
+      if (json.labStatus && typeof json.labStatus.isOpen === 'boolean') {
+        setIsLabLocked(!json.labStatus.isOpen);
       }
-    };
-    fetchStatus();
+
+      if (json.quickQuestion) {
+        setActiveQuestion(json.quickQuestion);
+        const codeKey = studentCodeForSync || currentTrainee?.studentCode || currentTrainee?.code || currentTrainee?.id;
+        if (codeKey && json.quickQuestion.answers && json.quickQuestion.answers[codeKey]) {
+          setSubmittedAnswer(json.quickQuestion.answers[codeKey].answer);
+        }
+      } else {
+        setActiveQuestion(null);
+        setSubmittedAnswer(null);
+      }
+
+      if (json.externalActivity && json.externalActivity.gamePin) {
+        setActiveExternalActivity(json.externalActivity);
+        setKahootPin(json.externalActivity.gamePin);
+      } else {
+        setActiveExternalActivity(null);
+      }
+    } catch {
+      // silent
+    }
+  }, [currentTrainee?.studentCode, currentTrainee?.code, currentTrainee?.id]);
+
+  useEffect(() => {
+    fetchKioskPulse();
 
     const handleLabEvent = (e: any) => {
       if (e.detail?.isActive !== undefined) {
@@ -80,10 +101,9 @@ export const StudentKioskView: React.FC = () => {
     window.addEventListener('nagah_lab_session_changed', handleLabEvent);
 
     return () => {
-      isMounted = false;
       window.removeEventListener('nagah_lab_session_changed', handleLabEvent);
     };
-  }, []);
+  }, [fetchKioskPulse]);
 
   const activeStudentCode = currentTrainee?.studentCode || currentTrainee?.code || currentTrainee?.id || '';
 
@@ -95,18 +115,9 @@ export const StudentKioskView: React.FC = () => {
       if (refJson.success && refJson.trainee) {
         setCurrentTrainee(refJson.trainee);
       }
-      const res = await fetch('/api/lab/quick-question');
-      const json = await res.json();
-      if (json && json.data) {
-        setActiveQuestion(json.data);
-        if (json.data.answers && json.data.answers[activeStudentCode]) {
-          setSubmittedAnswer(json.data.answers[activeStudentCode].answer);
-        }
-      } else {
-        setActiveQuestion(null);
-      }
+      await fetchKioskPulse(activeStudentCode);
     } catch {}
-  }, [activeStudentCode]);
+  }, [activeStudentCode, fetchKioskPulse]);
 
   // Real-time Instant Points & Stars Synchronization (LocalStorage + Focus Server Refresh)
   useEffect(() => {
@@ -150,41 +161,6 @@ export const StudentKioskView: React.FC = () => {
       window.removeEventListener('nagah_trainee_mutated', handlePointEvent);
     };
   }, [currentTrainee?.id, activeStudentCode, handleRefreshStats]);
-
-  // Check on mount (Zero background polling)
-  useEffect(() => {
-    let isMounted = true;
-    const checkQuickQuestion = async () => {
-      try {
-        const res = await fetch('/api/lab/quick-question');
-        const json = await res.json();
-        if (isMounted) {
-          if (json && json.data) {
-            setActiveQuestion(json.data);
-            if (currentTrainee && json.data.answers && json.data.answers[currentTrainee.studentCode || currentTrainee.code]) {
-              setSubmittedAnswer(json.data.answers[currentTrainee.studentCode || currentTrainee.code].answer);
-            }
-          } else {
-            setActiveQuestion(null);
-            setSubmittedAnswer(null);
-          }
-
-          if (json && json.externalActivity && json.externalActivity.gamePin) {
-            setActiveExternalActivity(json.externalActivity);
-            setKahootPin(json.externalActivity.gamePin);
-          } else {
-            setActiveExternalActivity(null);
-          }
-        }
-      } catch (err) {}
-    };
-
-    checkQuickQuestion();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [currentTrainee]);
 
   const [attendanceFeedback, setAttendanceFeedback] = useState<any>(null);
 

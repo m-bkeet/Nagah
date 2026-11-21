@@ -2,117 +2,213 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Helper functions
+    // Global Safety Net: Default-Deny Catch-All
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Core Security Primitives
     function isSignedIn() {
       return request.auth != null;
     }
 
+    function isVerifiedUser() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
     function isValidId(id) {
-      return id is string && id.size() > 0 && id.size() <= 128;
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
     }
 
-    // Default catch-all rule
-    match /{document=**} {
-      allow read, write: if true;
+    function isAdmin() {
+      return isVerifiedUser() && (
+        request.auth.token.email == 'm_bkeet@yahoo.com' ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
     }
 
-    // Core Domain Matches
+    function isValidNagahStoreDocId(docId) {
+      return docId is string &&
+        docId.size() > 0 &&
+        docId.size() <= 80 &&
+        docId.matches('^(trainees|payments|expenses|pointTransactions|sync_meta|branches|groups|courses|trainers|programs|settings|exams|questions|examResults|certificates|certificateTemplates|assignments|homeworkSubmissions|attendance|users|badges|pointRules|trainerSettlements|labSchedules|lectureRecaps|portalMessages|interactiveSessions|devices|ownerWithdrawals|secretFinancialArchives|live_deltas)(_p[1-9][0-9]?)?$');
+    }
+
+    function isValidNagahStorePayload(data) {
+      return data.keys().hasOnly([
+          'payload',
+          'itemCount',
+          'isSplit',
+          'totalParts',
+          'part',
+          'updatedAt',
+          'lastUpdatedCollection',
+          'lastCollection',
+          'version'
+        ]) &&
+        (!('payload' in data) || (data.payload is string && data.payload.size() <= 900000)) &&
+        (!('itemCount' in data) || data.itemCount is int) &&
+        (!('isSplit' in data) || data.isSplit is bool) &&
+        (!('totalParts' in data) || (data.totalParts is int && data.totalParts >= 1 && data.totalParts <= 50)) &&
+        (!('part' in data) || (data.part is int && data.part >= 1 && data.part <= 50)) &&
+        (!('updatedAt' in data) || data.updatedAt is int) &&
+        (!('version' in data) || data.version is int) &&
+        (!('lastUpdatedCollection' in data) || (data.lastUpdatedCollection is string && data.lastUpdatedCollection.size() <= 80)) &&
+        (!('lastCollection' in data) || (data.lastCollection is string && data.lastCollection.size() <= 80));
+    }
+
+    function isValidAdminRecord(data) {
+      return data.keys().size() <= 80;
+    }
+
+    // Admin Registry (Protected)
+    match /admins/{adminUid} {
+      allow get: if isValidId(adminUid) && isAdmin();
+      allow list: if isAdmin();
+      allow create, update: if isValidId(adminUid) && isAdmin() && isValidAdminRecord(request.resource.data);
+      allow delete: if isValidId(adminUid) && isAdmin();
+    }
+
+    // Core Domain Collections — Strictly Admin-Gated (zero public read/write exposure)
     match /branches/{branchId} {
-      allow read: if true;
-      allow write: if true;
+      allow get: if isValidId(branchId) && isAdmin();
+      allow list: if isAdmin();
+      allow create, update: if isValidId(branchId) && isAdmin() && isValidAdminRecord(request.resource.data);
+      allow delete: if isValidId(branchId) && isAdmin();
     }
 
     match /users/{userId} {
-      allow read, write: if true;
+      allow get: if isValidId(userId) && isAdmin();
+      allow list: if isAdmin();
+      allow create, update: if isValidId(userId) && isAdmin() && isValidAdminRecord(request.resource.data);
+      allow delete: if isValidId(userId) && isAdmin();
     }
 
     match /trainers/{trainerId} {
-      allow read: if true;
-      allow write: if true;
+      allow get: if isValidId(trainerId) && isAdmin();
+      allow list: if isAdmin();
+      allow create, update: if isValidId(trainerId) && isAdmin() && isValidAdminRecord(request.resource.data);
+      allow delete: if isValidId(trainerId) && isAdmin();
     }
 
     match /courses/{courseId} {
-      allow read: if true;
-      allow write: if true;
+      allow get: if isValidId(courseId) && isAdmin();
+      allow list: if isAdmin();
+      allow create, update: if isValidId(courseId) && isAdmin() && isValidAdminRecord(request.resource.data);
+      allow delete: if isValidId(courseId) && isAdmin();
     }
 
     match /programs/{programId} {
-      allow read: if true;
-      allow write: if true;
+      allow get: if isValidId(programId) && isAdmin();
+      allow list: if isAdmin();
+      allow create, update: if isValidId(programId) && isAdmin() && isValidAdminRecord(request.resource.data);
+      allow delete: if isValidId(programId) && isAdmin();
     }
 
     match /groups/{groupId} {
-      allow read: if true;
-      allow write: if true;
+      allow get: if isValidId(groupId) && isAdmin();
+      allow list: if isAdmin();
+      allow create, update: if isValidId(groupId) && isAdmin() && isValidAdminRecord(request.resource.data);
+      allow delete: if isValidId(groupId) && isAdmin();
     }
 
     match /trainees/{traineeId} {
-      allow read: if true;
-      allow write: if true;
+      allow get: if isValidId(traineeId) && isAdmin();
+      allow list: if isAdmin();
+      allow create, update: if isValidId(traineeId) && isAdmin() && isValidAdminRecord(request.resource.data);
+      allow delete: if isValidId(traineeId) && isAdmin();
     }
 
     match /attendance/{attendanceId} {
-      allow read: if true;
-      allow write: if true;
+      allow get: if isValidId(attendanceId) && isAdmin();
+      allow list: if isAdmin();
+      allow create, update: if isValidId(attendanceId) && isAdmin() && isValidAdminRecord(request.resource.data);
+      allow delete: if isValidId(attendanceId) && isAdmin();
     }
 
     match /payments/{paymentId} {
-      allow read: if true;
-      allow write: if true;
+      allow get: if isValidId(paymentId) && isAdmin();
+      allow list: if isAdmin();
+      allow create, update: if isValidId(paymentId) && isAdmin() && isValidAdminRecord(request.resource.data);
+      allow delete: if isValidId(paymentId) && isAdmin();
     }
 
     match /expenses/{expenseId} {
-      allow read: if true;
-      allow write: if true;
+      allow get: if isValidId(expenseId) && isAdmin();
+      allow list: if isAdmin();
+      allow create, update: if isValidId(expenseId) && isAdmin() && isValidAdminRecord(request.resource.data);
+      allow delete: if isValidId(expenseId) && isAdmin();
     }
 
     match /trainerSettlements/{settlementId} {
-      allow read: if true;
-      allow write: if true;
+      allow get: if isValidId(settlementId) && isAdmin();
+      allow list: if isAdmin();
+      allow create, update: if isValidId(settlementId) && isAdmin() && isValidAdminRecord(request.resource.data);
+      allow delete: if isValidId(settlementId) && isAdmin();
     }
 
     match /pointTransactions/{transactionId} {
-      allow read: if true;
-      allow write: if true;
+      allow get: if isValidId(transactionId) && isAdmin();
+      allow list: if isAdmin();
+      allow create, update: if isValidId(transactionId) && isAdmin() && isValidAdminRecord(request.resource.data);
+      allow delete: if isValidId(transactionId) && isAdmin();
     }
 
     match /exams/{examId} {
-      allow read: if true;
-      allow write: if true;
+      allow get: if isValidId(examId) && isAdmin();
+      allow list: if isAdmin();
+      allow create, update: if isValidId(examId) && isAdmin() && isValidAdminRecord(request.resource.data);
+      allow delete: if isValidId(examId) && isAdmin();
     }
 
     match /questions/{questionId} {
-      allow read: if true;
-      allow write: if true;
+      allow get: if isValidId(questionId) && isAdmin();
+      allow list: if isAdmin();
+      allow create, update: if isValidId(questionId) && isAdmin() && isValidAdminRecord(request.resource.data);
+      allow delete: if isValidId(questionId) && isAdmin();
     }
 
     match /examResults/{resultId} {
-      allow read: if true;
-      allow write: if true;
+      allow get: if isValidId(resultId) && isAdmin();
+      allow list: if isAdmin();
+      allow create, update: if isValidId(resultId) && isAdmin() && isValidAdminRecord(request.resource.data);
+      allow delete: if isValidId(resultId) && isAdmin();
     }
 
     match /interactiveSessions/{sessionId} {
-      allow read: if true;
-      allow write: if true;
+      allow get: if isValidId(sessionId) && isAdmin();
+      allow list: if isAdmin();
+      allow create, update: if isValidId(sessionId) && isAdmin() && isValidAdminRecord(request.resource.data);
+      allow delete: if isValidId(sessionId) && isAdmin();
     }
 
     match /certificates/{certificateId} {
-      allow read: if true;
-      allow write: if true;
+      allow get: if isValidId(certificateId) && isAdmin();
+      allow list: if isAdmin();
+      allow create, update: if isValidId(certificateId) && isAdmin() && isValidAdminRecord(request.resource.data);
+      allow delete: if isValidId(certificateId) && isAdmin();
     }
 
     match /assignments/{assignmentId} {
-      allow read: if true;
-      allow write: if true;
+      allow get: if isValidId(assignmentId) && isAdmin();
+      allow list: if isAdmin();
+      allow create, update: if isValidId(assignmentId) && isAdmin() && isValidAdminRecord(request.resource.data);
+      allow delete: if isValidId(assignmentId) && isAdmin();
     }
 
     match /settings/{settingsId} {
-      allow read: if true;
-      allow write: if true;
+      allow get: if isValidId(settingsId) && isAdmin();
+      allow list: if isAdmin();
+      allow create, update: if isValidId(settingsId) && isAdmin() && isValidAdminRecord(request.resource.data);
+      allow delete: if isValidId(settingsId) && isAdmin();
     }
 
+    // Backend compact sync store: allowlisted collection IDs & strict schema bounds only, no list enumeration or delete
     match /nagah_store/{collectionName} {
-      allow read, write: if true;
+      allow get: if isValidNagahStoreDocId(collectionName);
+      allow list: if isAdmin();
+      allow create, update: if isValidNagahStoreDocId(collectionName) && isValidNagahStorePayload(request.resource.data);
+      allow delete: if isAdmin() && isValidNagahStoreDocId(collectionName);
     }
   }
 }

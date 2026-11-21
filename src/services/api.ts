@@ -57,7 +57,6 @@ const BASE_URL = getApiBaseUrl();
 
 export async function request<T>(endpoint: string, options: RequestInit = {}, retryCount = 0): Promise<T> {
   let token: string | null = null;
-  let userRole = 'super_admin';
   let branchId = 'all';
 
   if (typeof window !== 'undefined') {
@@ -66,7 +65,6 @@ export async function request<T>(endpoint: string, options: RequestInit = {}, re
     if (userStr) {
       try {
         const u = JSON.parse(userStr);
-        if (u.role) userRole = u.role;
         if (u.branchId) branchId = u.branchId;
       } catch {}
     }
@@ -74,8 +72,7 @@ export async function request<T>(endpoint: string, options: RequestInit = {}, re
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
-    ...(token ? { 'Authorization': `Bearer ${token}` } : { 'Authorization': 'Bearer fallback_admin' }),
-    'x-user-role': userRole,
+    ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
     'x-branch-id': branchId,
     ...((options.headers as Record<string, string>) || {})
   };
@@ -1635,11 +1632,20 @@ export const api = {
     notes?: string;
     proofImageUrl?: string;
     submittedByParentName?: string;
-  }) =>
-    request<{ success: boolean; payment: Payment }>('/parent/submit-payment-proof', {
+  }) => {
+    const parentToken =
+      typeof window !== 'undefined'
+        ? sessionStorage.getItem('nagah_parent_portal_token') ||
+          localStorage.getItem('nagah_parent_portal_token') ||
+          sessionStorage.getItem('success_v7_token') ||
+          localStorage.getItem('success_v7_token')
+        : null;
+    return request<{ success: boolean; payment: Payment }>('/parent/submit-payment-proof', {
       method: 'POST',
+      headers: parentToken ? { Authorization: `Bearer ${parentToken}` } : undefined,
       body: JSON.stringify(payload)
-    }),
+    });
+  },
 
   getPendingPaymentProofs: () =>
     request<Payment[]>('/finance/pending-proofs'),

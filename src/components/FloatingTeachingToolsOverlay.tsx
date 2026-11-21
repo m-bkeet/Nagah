@@ -42,6 +42,7 @@ import { audioService } from '../services/audioService';
 import { SmartWhiteboardModal } from './SmartWhiteboardModal';
 import { SmartSpeakerModal } from './SmartSpeakerModal';
 import { FloatingPointsModal } from './FloatingPointsModal';
+import { SmartFortuneWheelModal } from './SmartFortuneWheelModal';
 import { PopoutPortal } from './PopoutPortal';
 import { CelebrationBalloonsOverlay } from './CelebrationBalloonsOverlay';
 import { ExternalLink } from 'lucide-react';
@@ -159,15 +160,6 @@ export const FloatingTeachingToolsOverlay: React.FC<FloatingTeachingToolsOverlay
   const [timerInitialSeconds, setTimerInitialSeconds] = useState<number>(300);
   const [isTimerRunning, setIsTimerRunning] = useState<boolean>(false);
 
-  // Random Wheel of Fortune State & Custom Items
-  const [wheelType, setWheelType] = useState<'attendees' | 'questions' | 'codes' | 'teams'>('attendees');
-  const [wheelItems, setWheelItems] = useState<string[]>([]);
-  const [customWheelItems, setCustomWheelItems] = useState<string[]>([]);
-  const [newWheelItemInput, setNewWheelItemInput] = useState<string>('');
-  const [wheelIsSpinning, setWheelIsSpinning] = useState(false);
-  const [wheelRotation, setWheelRotation] = useState(0);
-  const [wheelWinner, setWheelWinner] = useState<string | null>(null);
-
   // Random Student Picker State
   const [pickingStudent, setPickingStudent] = useState<boolean>(false);
   const [selectedStudentResult, setSelectedStudentResult] = useState<string | null>(null);
@@ -186,12 +178,8 @@ export const FloatingTeachingToolsOverlay: React.FC<FloatingTeachingToolsOverlay
   const [selectedPointStudentIds, setSelectedPointStudentIds] = useState<string[]>([]);
   const [celebrationOverlay, setCelebrationOverlay] = useState<{ active: boolean; title?: string; pointsBadge?: string; subtitle?: string }>({ active: false });
 
-  // AI Session Copilot Alerts State
-  const [copilotAlerts, setCopilotAlerts] = useState<Array<{ id: string; type: 'warning' | 'info' | 'success'; text: string; actionText?: string }>>([
-    { id: '1', type: 'warning', text: '7 طلاب في المجموعة أظهروا أخطاء في تكرار Loops', actionText: 'إعادة شرح مبسطة' },
-    { id: '2', type: 'info', text: 'الطالب A014 لم يبدأ نشاط البرمجة بعد', actionText: 'تنبيه شاشة الطالب' },
-    { id: '3', type: 'success', text: 'الطالب A009 أنهى المهمة في دقيقة واحدة!', actionText: 'منح 15 نقطة تفوق' }
-  ]);
+  // Live Session Insights Alerts State (computed from real attendance & lab devices)
+  const [copilotAlerts, setCopilotAlerts] = useState<Array<{ id: string; type: 'warning' | 'info' | 'success'; text: string; actionText?: string }>>([]);
 
   // Dynamic Per-Branch Students & Groups Sync Engine with Smart Group Filtering
   const [liveStudents, setLiveStudents] = useState<string[]>([]);
@@ -313,6 +301,46 @@ export const FloatingTeachingToolsOverlay: React.FC<FloatingTeachingToolsOverlay
       if (formattedList.length > 0) {
         setSelectedTraineeForPoints(formattedList[0]);
       }
+
+      // Compute real live alerts from actual group trainees, attendance, and online devices
+      const liveAlerts: Array<{ id: string; type: 'warning' | 'info' | 'success'; text: string; actionText?: string }> = [];
+      const onlineCount = enrichedTrainees.filter(t => t.isDeviceOnline).length;
+      const absentTrainees = enrichedTrainees.filter(t => t.attendanceStatus === 'absent' && !t.isDeviceOnline);
+      const topStudent = [...displayTrainees].sort((a, b) => (Number(b.totalPoints) || 0) - (Number(a.totalPoints) || 0))[0];
+
+      if (onlineCount > 0) {
+        liveAlerts.push({
+          id: 'live-online',
+          type: 'success',
+          text: `${onlineCount} طالب متصلون حالياً على أجهزة المعمل وجاهزون للتفاعل.`,
+          actionText: 'إطلاق سؤال سريع'
+        });
+      }
+      if (absentTrainees.length > 0 && effectiveGroupId !== 'all') {
+        liveAlerts.push({
+          id: 'live-absent',
+          type: 'warning',
+          text: `${absentTrainees.length} طالب من المجموعة لم يسجلوا حضورهم بعد اليوم.`,
+          actionText: 'مراجعة الغياب'
+        });
+      }
+      if (topStudent && (Number(topStudent.totalPoints) || 0) > 0) {
+        liveAlerts.push({
+          id: 'live-top',
+          type: 'info',
+          text: `المتصدر حالياً: ${topStudent.fullName} برصيد ${topStudent.totalPoints} نقطة.`,
+          actionText: 'منح نقاط تشجيع'
+        });
+      }
+      if (liveAlerts.length === 0) {
+        liveAlerts.push({
+          id: 'live-ready',
+          type: 'info',
+          text: `القاعة جاهزة (${displayTrainees.length} متدرب). اختر أداة من الشريط للبدء.`,
+          actionText: 'تحديث الحضور'
+        });
+      }
+      setCopilotAlerts(liveAlerts);
 
       // Silent sync by default - no annoying toast popups on tab switch
     } catch (err) {
@@ -471,36 +499,6 @@ export const FloatingTeachingToolsOverlay: React.FC<FloatingTeachingToolsOverlay
     }
   }, [activeTool]);
 
-  // Populate Random Wheel Items
-  useEffect(() => {
-    if (wheelType === 'attendees') {
-      const defaultAttendees = liveStudents.length > 0
-        ? liveStudents.map(s => {
-            const parts = s.split(' - ');
-            const code = parts[0] || '';
-            const name = parts[1] || s;
-            return `${code} ${name.split(' ')[0]}`;
-          })
-        : ['لا يوجد طلاب حاضرين حالياً'];
-      setWheelItems([...defaultAttendees, ...customWheelItems]);
-    } else if (wheelType === 'questions') {
-      const defaultQuestions = ['سؤال البرمجة 1', 'تحدي الإكسيل 2', 'سؤال القواعد 3', 'تحدي المنطق 4', 'سؤال خوارزميات 5'];
-      setWheelItems([...defaultQuestions, ...customWheelItems]);
-    } else if (wheelType === 'codes') {
-      // Codes auto-loaded automatically without manual typing as requested
-      setWheelItems([
-        'تحدي دالة Factorial (A001)',
-        'تحدي ترتيب Array (A002)',
-        'تحدي فلترة القوائم (A003)',
-        'تحدي حساب المتوسط (A004)',
-        'تحدي البحث الثنائي (A005)'
-      ]);
-    } else if (wheelType === 'teams') {
-      const defaultTeams = ['الفريق الأحادي', 'الفريق الماسي', 'فريق الأبطال', 'فريق المبتكرين'];
-      setWheelItems([...defaultTeams, ...customWheelItems]);
-    }
-  }, [wheelType, customWheelItems, liveStudents]);
-
   // Canvas Drawing Handlers
   const startDrawing = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
@@ -547,29 +545,6 @@ export const FloatingTeachingToolsOverlay: React.FC<FloatingTeachingToolsOverlay
         showToast('تم مسح الرسومات والتمييز عن الشاشة 🧹', 'info');
       }
     }
-  };
-
-  // Wheel Spin Trigger
-  const handleSpinWheel = () => {
-    if (wheelIsSpinning || wheelItems.length === 0) return;
-
-    setWheelIsSpinning(true);
-    setWheelWinner(null);
-
-    const randomRotations = 5 + Math.floor(Math.random() * 5);
-    const randomDegree = Math.floor(Math.random() * 360);
-    const totalDegree = wheelRotation + randomRotations * 360 + randomDegree;
-
-    setWheelRotation(totalDegree);
-
-    setTimeout(() => {
-      setWheelIsSpinning(false);
-      const selectedIndex = Math.floor(Math.random() * wheelItems.length);
-      const winner = wheelItems[selectedIndex] || wheelItems[0];
-      setWheelWinner(winner);
-      audioService.playSessionEndFanfare();
-      showToast(`الفائز في السحب العشوائي: ${winner} 🎉`, 'success');
-    }, 3500);
   };
 
   // Random Student Picker Trigger
@@ -674,19 +649,6 @@ export const FloatingTeachingToolsOverlay: React.FC<FloatingTeachingToolsOverlay
     } catch (e) {
       showToast('خطأ أثناء إسناد النقاط', 'error');
     }
-  };
-
-  // Add & Delete Custom Items for Random Wheel
-  const handleAddCustomWheelItem = () => {
-    if (!newWheelItemInput.trim()) return;
-    setCustomWheelItems(prev => [...prev, newWheelItemInput.trim()]);
-    setNewWheelItemInput('');
-    showToast('تمت إضافة العنصر لعجلة الحظ 🎯', 'success');
-  };
-
-  const handleDeleteCustomWheelItem = (itemText: string) => {
-    setCustomWheelItems(prev => prev.filter(item => item !== itemText));
-    showToast('تم حذف العنصر من العجلة', 'info');
   };
 
   // Dragging Handlers for Floating Button (Mouse & Touch Mobile Friendly)
@@ -1641,119 +1603,6 @@ export const FloatingTeachingToolsOverlay: React.FC<FloatingTeachingToolsOverlay
       )}
 
       {/* ---------------------------------------------------- */}
-      {/* POPUP MODAL: RANDOM WHEEL OF FORTUNE */}
-      {/* ---------------------------------------------------- */}
-      {activeTool === 'wheel' && (
-        <div className="fixed inset-0 z-[9996] bg-black/30 dark:bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 dir-rtl animate-in fade-in zoom-in-95 duration-150">
-          <div className="bg-white dark:bg-slate-900 border-2 border-amber-300 dark:border-slate-700 p-4 rounded-3xl shadow-2xl text-slate-900 dark:text-white max-w-sm w-full space-y-3 relative">
-            <button
-              onClick={() => setActiveTool('none')}
-              className="absolute top-3 left-3 text-slate-400 hover:text-slate-700 dark:hover:text-white p-1 rounded-lg transition-colors"
-            >
-              <X className="w-4 h-4" />
-            </button>
-
-            <div className="text-center">
-              <div className="inline-flex p-2 bg-amber-100 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 rounded-2xl mb-1 shadow-xs">
-                <RotateCw className="w-5 h-5 animate-spin-slow" />
-              </div>
-              <h2 className="text-base font-extrabold text-slate-900 dark:text-white">عجلة الحظ التفاعلية 🎡</h2>
-              <p className="text-[10px] text-slate-600 dark:text-slate-400">سحب عشوائي لطلاب المعمل الحاضرين في اللحظة الحالية فقط</p>
-            </div>
-
-            {/* Per-Branch Student Sync Status Bar */}
-            <div className="flex items-center justify-between bg-amber-50/70 dark:bg-slate-800/80 px-2.5 py-1.5 rounded-xl border border-amber-200/80 dark:border-slate-700/70 text-[11px]">
-              <div className="flex items-center gap-1.5 text-slate-800 dark:text-slate-300 font-bold">
-                <Users className="w-3.5 h-3.5 text-amber-500" />
-                <span>الحاضرون بالمعمل: <strong className="text-emerald-600 dark:text-emerald-400">{liveStudents.length}</strong></span>
-              </div>
-              <button
-                onClick={() => syncBranchStudents(activeBranchId)}
-                disabled={isSyncingStudents}
-                className="px-2 py-1 bg-amber-200/80 dark:bg-amber-500/20 hover:bg-amber-300 dark:hover:bg-amber-500/30 text-amber-900 dark:text-amber-300 border border-amber-300 dark:border-amber-500/40 rounded-lg font-bold flex items-center gap-1 transition-all text-[10px] shadow-xs"
-              >
-                <RotateCcw className={`w-3 h-3 ${isSyncingStudents ? 'animate-spin' : ''}`} />
-                <span>مزامنة 🔄</span>
-              </button>
-            </div>
-
-            {/* Selector */}
-            <div className="grid grid-cols-4 gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl text-[11px] font-semibold border border-slate-200/60 dark:border-slate-700/60">
-              <button
-                onClick={() => setWheelType('attendees')}
-                className={`py-1 rounded-lg transition-all ${wheelType === 'attendees' ? 'bg-amber-500 text-slate-950 font-bold shadow-xs' : 'text-slate-700 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'}`}
-              >
-                الطلاب
-              </button>
-              <button
-                onClick={() => setWheelType('questions')}
-                className={`py-1 rounded-lg transition-all ${wheelType === 'questions' ? 'bg-amber-500 text-slate-950 font-bold shadow-xs' : 'text-slate-700 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'}`}
-              >
-                الأسئلة
-              </button>
-              <button
-                onClick={() => setWheelType('codes')}
-                className={`py-1 rounded-lg transition-all ${wheelType === 'codes' ? 'bg-amber-500 text-slate-950 font-bold shadow-xs' : 'text-slate-700 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'}`}
-              >
-                الأكواد ⚡
-              </button>
-              <button
-                onClick={() => setWheelType('teams')}
-                className={`py-1 rounded-lg transition-all ${wheelType === 'teams' ? 'bg-amber-500 text-slate-950 font-bold shadow-xs' : 'text-slate-700 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'}`}
-              >
-                الفرق
-              </button>
-            </div>
-
-            {/* Custom Input */}
-            {wheelType !== 'codes' && (
-              <div className="flex items-center gap-1.5">
-                <input
-                  type="text"
-                  value={newWheelItemInput}
-                  onChange={e => setNewWheelItemInput(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && handleAddCustomWheelItem()}
-                  placeholder="إضافة عنصر إضافي للعجلة..."
-                  className="flex-1 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-2.5 py-1.5 text-[11px] text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-amber-500"
-                />
-                <button
-                  onClick={handleAddCustomWheelItem}
-                  className="px-2.5 py-1.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-[11px] rounded-xl transition-all shadow-xs"
-                >
-                  إضافة ➕
-                </button>
-              </div>
-            )}
-
-            {/* Wheel Canvas Representation */}
-            <div className="relative w-40 h-40 mx-auto flex items-center justify-center">
-              <div
-                className="w-full h-full rounded-full border-4 border-amber-500 shadow-xl flex items-center justify-center transition-all duration-[3000ms] ease-out bg-gradient-to-br from-amber-100 via-yellow-50 to-amber-200 dark:from-indigo-950 dark:via-purple-950 dark:to-slate-900"
-                style={{ transform: `rotate(${wheelRotation}deg)` }}
-              >
-                <div className="text-center p-2">
-                  <Sparkles className="w-6 h-6 text-amber-600 dark:text-amber-400 mx-auto animate-bounce" />
-                  <p className="text-[11px] font-black text-slate-950 dark:text-amber-200 mt-1 line-clamp-2 drop-shadow-xs">
-                    {wheelWinner ? `🎉 ${wheelWinner}` : 'اضغط تدوير'}
-                  </p>
-                </div>
-              </div>
-              <div className="absolute -top-2.5 w-4 h-4 bg-rose-600 clip-triangle shadow z-10 transform rotate-180" />
-            </div>
-
-            {/* Spin Button */}
-            <button
-              onClick={handleSpinWheel}
-              disabled={wheelIsSpinning}
-              className="w-full py-2.5 bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black rounded-xl shadow-md shadow-amber-500/20 transition-all text-xs disabled:opacity-50 active:scale-98"
-            >
-              {wheelIsSpinning ? 'جاري الدوران... 🎡' : 'تدوير العجلة الآن 🚀'}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* ---------------------------------------------------- */}
       {/* POPUP MODAL: RANDOM STUDENT PICKER */}
       {/* ---------------------------------------------------- */}
       {activeTool === 'picker' && (
@@ -1813,6 +1662,11 @@ export const FloatingTeachingToolsOverlay: React.FC<FloatingTeachingToolsOverlay
         </div>
       )}
 
+      <SmartFortuneWheelModal
+        isOpen={activeTool === 'wheel'}
+        onClose={() => setActiveTool('none')}
+        activeBranchId={activeBranchId}
+      />
       <FloatingPointsModal isOpen={isFloatingPointsOpen} onClose={() => setIsFloatingPointsOpen(false)} />
       <SmartSpeakerModal
         isOpen={isSmartSpeakerOpen}

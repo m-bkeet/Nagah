@@ -47,19 +47,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       const targetUser = sessionUser || storedUser;
       const targetToken = sessionToken || storedToken;
-      
-      if (targetUser && targetToken) {
+
+      // Reject & purge legacy unsigned/mock tokens so users receive a real HMAC-SHA256 signed token
+      const isValidSignedToken = (tok: string | null) =>
+        Boolean(tok && tok.startsWith('nagah_v1.') && tok.split('.').length === 3);
+
+      if (targetUser && targetToken && isValidSignedToken(targetToken)) {
         let parsed = JSON.parse(targetUser);
         if (parsed.role === 'admin') parsed.role = 'super_admin';
         setUser(parsed);
         setToken(targetToken);
-        // Sync to sessionStorage for this tab
         if (!sessionUser) {
           try {
             sessionStorage.setItem(STORAGE_KEY_USER, targetUser);
             sessionStorage.setItem(STORAGE_KEY_TOKEN, targetToken);
           } catch {}
         }
+      } else if (targetToken && !isValidSignedToken(targetToken)) {
+        localStorage.removeItem(STORAGE_KEY_USER);
+        localStorage.removeItem(STORAGE_KEY_TOKEN);
+        sessionStorage.removeItem(STORAGE_KEY_USER);
+        sessionStorage.removeItem(STORAGE_KEY_TOKEN);
       }
     } catch {
       // Fallback
@@ -126,84 +134,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const cleanU = username.trim().toLowerCase();
     const cleanP = password.trim();
 
-    const standardUsers: Record<string, { user: User; pass: string }> = {
-      admin: {
-        pass: '1234',
-        user: {
-          id: 'u-admin',
-          username: 'admin',
-          fullName: 'المدير العام (Super Admin)',
-          role: 'super_admin',
-          status: 'active',
-          branchId: 'all',
-          createdAt: '2026-01-01'
-        }
-      },
-      manager_ngah: {
-        pass: '1234',
-        user: {
-          id: 'u-manager-1',
-          username: 'manager_ngah',
-          fullName: 'مدير فرع النجاح',
-          role: 'branch_manager',
-          status: 'active',
-          branchId: 'branch-1',
-          createdAt: '2026-01-01'
-        }
-      },
-      manager_badr: {
-        pass: '1234',
-        user: {
-          id: 'u-manager-2',
-          username: 'manager_badr',
-          fullName: 'مدير فرع بدر',
-          role: 'branch_manager',
-          status: 'active',
-          branchId: 'branch-2',
-          createdAt: '2026-01-01'
-        }
-      },
-      accountant: {
-        pass: '1234',
-        user: {
-          id: 'u-accountant',
-          username: 'accountant',
-          fullName: 'المدير المالي والمحاسب',
-          role: 'accountant',
-          status: 'active',
-          branchId: 'all',
-          createdAt: '2026-01-01'
-        }
-      },
-      reception: {
-        pass: '1234',
-        user: {
-          id: 'u-reception',
-          username: 'reception',
-          fullName: 'مسؤول الاستقبال وشؤون الطلاب',
-          role: 'receptionist',
-          status: 'active',
-          branchId: 'branch-1',
-          createdAt: '2026-01-01'
-        }
-      },
-      trainer: {
-        pass: '1234',
-        user: {
-          id: 'u-trainer',
-          username: 'trainer',
-          fullName: 'مدرب ومحاضر',
-          role: 'trainer',
-          status: 'active',
-          branchId: 'branch-1',
-          createdAt: '2026-01-01'
-        }
-      }
-    };
+    if (!cleanU || !cleanP) {
+      return { success: false, message: 'يرجى إدخال اسم المستخدم وكلمة المرور' };
+    }
 
     try {
       const res = await api.login({ username: cleanU, password: cleanP });
-      if (res.success && res.user) {
+      if (res.success && res.user && res.token) {
         setUser(res.user);
         setToken(res.token);
 
@@ -225,26 +162,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
       return { success: false, message: (res as any)?.error || 'اسم المستخدم أو كلمة المرور غير صحيحة' };
     } catch (err: any) {
-      // Offline / Serverless cold start fallback for standard roles
-      if (standardUsers[cleanU] && (cleanP === standardUsers[cleanU].pass || cleanP === '1234')) {
-        const fallbackUser = standardUsers[cleanU].user;
-        setUser(fallbackUser);
-        setToken('token_fallback_' + cleanU);
-        if (rememberMe && !alwaysRequireLogin) {
-          localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(fallbackUser));
-          localStorage.setItem(STORAGE_KEY_TOKEN, 'token_fallback_' + cleanU);
-          localStorage.setItem(STORAGE_KEY_SAVED_USERNAME, username);
-        } else {
-          sessionStorage.setItem(STORAGE_KEY_USER, JSON.stringify(fallbackUser));
-          sessionStorage.setItem(STORAGE_KEY_TOKEN, 'token_fallback_' + cleanU);
-        }
-        return { success: true };
-      }
-
       const rawMsg = err?.message || '';
-      const errMsg = rawMsg.includes('405') 
-        ? 'بيانات الدخول غير صحيحة أو الخادم غير متاح حالياً. يرجى استخدام اسم المستخدم وكلمة المرور الافتراضية (admin / 1234)'
-        : (rawMsg || 'فشل الاتصال بالنظام، يرجى المحاولة مرة أخرى');
+      const errMsg = rawMsg.includes('405')
+        ? 'الخادم غير متاح حالياً للتحقق من الدخول. يرجى المحاولة بعد قليل.'
+        : (rawMsg || 'اسم المستخدم أو كلمة المرور غير صحيحة');
       return { success: false, message: errMsg };
     }
   };
@@ -269,7 +190,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const currentRole = user?.role || 'trainee';
       const checkRes = await api.secureSwitchRole(currentRole, role);
       if (!checkRes.allowed) {
-        alert(checkRes.error || 'عذراً! لا تملك صلاحية كافية للتحويل إلى هذا الحساب.');
+        console.warn('[AuthContext] Role switch denied:', checkRes.error);
         return;
       }
 
@@ -277,26 +198,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const match = users.find(u => u.role === role && u.status === 'active');
       if (match) {
         setUser(match);
-        setToken('token_demo_' + match.id);
-        localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(match));
-        localStorage.setItem(STORAGE_KEY_TOKEN, 'token_demo_' + match.id);
-      } else {
-        // Create custom representation
-        const demoUser: User = {
-          id: 'demo-' + role,
-          username: role,
-          fullName: role === 'branch_manager' ? 'مدير فرع النجاح' : role === 'trainer' ? 'كابتن / مدرب' : 'موظف الإدارة',
-          role,
-          branchId: 'branch-1',
-          status: 'active',
-          createdAt: new Date().toISOString()
-        };
-        setUser(demoUser);
-        localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(demoUser));
+        sessionStorage.setItem(STORAGE_KEY_USER, JSON.stringify(match));
+        if (localStorage.getItem(STORAGE_KEY_USER)) {
+          localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(match));
+        }
       }
     } catch (err: any) {
-      console.error(err);
-      alert(err.message || 'فشلت عملية التحقق الأمني من صلاحيات تبديل الحساب');
+      console.error('[AuthContext] Role switch verification failed:', err);
     }
   };
 

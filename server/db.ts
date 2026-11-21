@@ -3,6 +3,7 @@ import path from 'path';
 import crypto from 'crypto';
 import os from 'os';
 import { saveFullDbToFirestore, loadFullDbFromFirestore, loadCollectionFromFirestore, saveCollectionToFirestore, loadLiveDeltasFromFirestore, getSyncMeta } from './firestoreStorage';
+import { optimizeEmbeddedMediaInObject } from './mediaStorage';
 import {
   User,
   Branch,
@@ -4427,6 +4428,12 @@ class DatabaseManager {
     }
     try {
       this.ensureDataDir();
+      // Automatically extract heavy embedded Base64 blobs (>4KB) to data/media/ so database.json stays lean & fast
+      try {
+        optimizeEmbeddedMediaInObject(data, 4096);
+      } catch (mediaErr) {
+        console.warn('[DB] Media extraction notice:', mediaErr);
+      }
       const jsonStr = JSON.stringify(data, null, 2);
       const uniqueSuffix = `${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2, 6)}.tmp`;
       const tempFile = `${DB_FILE}.${uniqueSuffix}`;
@@ -4455,12 +4462,19 @@ class DatabaseManager {
         console.warn('[DB] Non-critical VAULT_FILE write notice:', err);
       }
 
-      // Save hourly rotating backup
+      // Save hourly rotating backup and prune old snapshots (keep latest 3 to save disk space)
       try {
         const now = new Date();
         const dateStr = now.toISOString().slice(0, 13).replace('T', '_');
         const rotateFile = path.join(BACKUPS_DIR, `backup_${dateStr}.json`);
         fs.writeFileSync(rotateFile, jsonStr, 'utf-8');
+        const oldSnapshots = fs.readdirSync(BACKUPS_DIR)
+          .filter(f => /^backup_.*\.json$/.test(f))
+          .sort()
+          .reverse();
+        for (const stale of oldSnapshots.slice(3)) {
+          try { fs.unlinkSync(path.join(BACKUPS_DIR, stale)); } catch {}
+        }
       } catch (err) {
         console.warn('[DB] Non-critical rotating backup write notice:', err);
       }

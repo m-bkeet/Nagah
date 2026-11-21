@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { Lock, KeyRound, X } from 'lucide-react';
+import { Lock, KeyRound, X, Loader2 } from 'lucide-react';
 import { useCenter } from '../context/CenterContext';
+import { request } from '../services/api';
 
 interface AdminPasscodeModalProps {
   isOpen: boolean;
@@ -13,22 +14,39 @@ export const AdminPasscodeModal: React.FC<AdminPasscodeModalProps> = ({
   onClose,
   onSuccess
 }) => {
-  const { settings, showToast } = useCenter();
+  const { showToast } = useCenter();
   const [passcode, setPasscode] = useState('');
   const [error, setError] = useState('');
+  const [isVerifying, setIsVerifying] = useState(false);
 
   if (!isOpen) return null;
 
-  const handleVerify = (e: React.FormEvent) => {
+  const handleVerify = async (e: React.FormEvent) => {
     e.preventDefault();
-    const correctPin = settings?.adminPasscode || localStorage.getItem('nagah_admin_passcode') || '2026';
-    if (passcode.trim() === correctPin) {
-      sessionStorage.setItem('nagah_admin_passcode_unlocked', 'true');
-      showToast('تم التحقق بنجاح! مرحباً بك 🔓', 'success');
-      onSuccess();
-    } else {
-      setError('الرقم السري غير صحيح! يرجى المحاولة مرة أخرى.');
+    if (!passcode.trim() || isVerifying) return;
+    setIsVerifying(true);
+    setError('');
+
+    try {
+      const res = await request<{ verified: boolean }>('/auth/verify-passcode', {
+        method: 'POST',
+        body: JSON.stringify({ passcode: passcode.trim() })
+      });
+
+      if (res?.verified) {
+        sessionStorage.setItem('nagah_admin_passcode_unlocked', 'true');
+        showToast('تم التحقق بنجاح! مرحباً بك 🔓', 'success');
+        setPasscode('');
+        onSuccess();
+      } else {
+        setError('الرقم السري غير صحيح! يرجى المحاولة مرة أخرى.');
+        setPasscode('');
+      }
+    } catch (err: any) {
+      setError(err?.message || 'الرقم السري غير صحيح! يرجى المحاولة مرة أخرى.');
       setPasscode('');
+    } finally {
+      setIsVerifying(false);
     }
   };
 
@@ -50,7 +68,7 @@ export const AdminPasscodeModal: React.FC<AdminPasscodeModalProps> = ({
             حماية بوابات الإدارة والمدربين 🔐
           </h3>
           <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed font-medium">
-            هذه المنطقة مخصصة لإدارة المركز والمدربين ومسؤولي النظام فقط. يرجى إدخال الرقم السري المعتمد للمتابعة.
+            هذه المنطقة مخصصة لإدارة المركز والمدربين ومسؤولي النظام فقط. يتم التحقق من الرقم السري بأمان عبر الخادم.
           </p>
         </div>
 
@@ -71,10 +89,11 @@ export const AdminPasscodeModal: React.FC<AdminPasscodeModalProps> = ({
                 type="password"
                 required
                 autoFocus
+                disabled={isVerifying}
                 value={passcode}
                 onChange={(e) => { setPasscode(e.target.value); setError(''); }}
                 placeholder="أدخل الرقم السري..."
-                className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-2xl pr-11 pl-4 py-3 text-slate-900 dark:text-slate-100 text-base font-mono focus:outline-none focus:border-amber-500 text-center tracking-widest"
+                className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-2xl pr-11 pl-4 py-3 text-slate-900 dark:text-slate-100 text-base font-mono focus:outline-none focus:border-amber-500 text-center tracking-widest disabled:opacity-60"
               />
             </div>
           </div>
@@ -89,9 +108,11 @@ export const AdminPasscodeModal: React.FC<AdminPasscodeModalProps> = ({
             </button>
             <button
               type="submit"
-              className="flex-[2] py-3 rounded-2xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs shadow-lg shadow-amber-500/20 transition-all flex items-center justify-center gap-2 cursor-pointer"
+              disabled={isVerifying}
+              className="flex-[2] py-3 rounded-2xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs shadow-lg shadow-amber-500/20 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60"
             >
-              <span>تحقق ودخول 🔓</span>
+              {isVerifying ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+              <span>{isVerifying ? 'جاري التحقق...' : 'تحقق ودخول 🔓'}</span>
             </button>
           </div>
         </form>

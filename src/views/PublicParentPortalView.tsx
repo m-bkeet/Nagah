@@ -20,6 +20,7 @@ import { SessionCelebrationOverlay } from '../components/SessionCelebrationOverl
 import { AudioAutoplayUnlockBanner } from '../components/AudioAutoplayUnlockBanner';
 import { LectureRecapManager } from '../components/homeworks/LectureRecapManager';
 import { audioService } from '../services/audioService';
+import { LatestSessionSummaryCard, TraineeSessionSummary } from '../components/LatestSessionSummaryCard';
 
 interface ChildRecord extends Trainee {
   courseName: string;
@@ -259,13 +260,19 @@ export const PublicParentPortalView: React.FC<PublicParentPortalViewProps> = ({ 
         });
         const data = await res.json();
         if (res.ok && data.success) {
+          if (data.token) {
+            sessionStorage.setItem('nagah_parent_portal_token', data.token);
+            localStorage.setItem('nagah_parent_portal_token', data.token);
+          }
           populateParentData(data);
           resilientOfflineService.saveToCache('parent', data);
           setIsOfflineFallback(false);
         } else {
-          if (res.status === 404 || (data.error && data.error.includes('لم يتم العثور'))) {
+          if (res.status === 404 || res.status === 401 || (data.error && data.error.includes('لم يتم العثور'))) {
             localStorage.removeItem('parent_session_code');
             localStorage.removeItem('parent_session_password');
+            localStorage.removeItem('nagah_parent_portal_token');
+            sessionStorage.removeItem('nagah_parent_portal_token');
             setChildren([]);
           }
         }
@@ -303,6 +310,20 @@ export const PublicParentPortalView: React.FC<PublicParentPortalViewProps> = ({ 
     }
   };
 
+  const getParentAuthHeaders = (withJson = true): Record<string, string> => {
+    const token =
+      typeof window !== 'undefined'
+        ? sessionStorage.getItem('nagah_parent_portal_token') ||
+          localStorage.getItem('nagah_parent_portal_token') ||
+          sessionStorage.getItem('success_v7_token') ||
+          localStorage.getItem('success_v7_token')
+        : null;
+    return {
+      ...(withJson ? { 'Content-Type': 'application/json' } : {}),
+      ...(token ? { Authorization: `Bearer ${token}` } : {})
+    };
+  };
+
   const handleLinkChildSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!linkChildInput.trim()) return;
@@ -311,7 +332,7 @@ export const PublicParentPortalView: React.FC<PublicParentPortalViewProps> = ({ 
     try {
       const res = await fetch('/api/parent/link-child', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getParentAuthHeaders(true),
         body: JSON.stringify({
           studentCodeOrPhone: linkChildInput.trim(),
           parentPhone: parentPhone || codeOrPhone
@@ -319,6 +340,10 @@ export const PublicParentPortalView: React.FC<PublicParentPortalViewProps> = ({ 
       });
       const data = await res.json();
       if (res.ok && data.success && data.child) {
+        if (data.token) {
+          sessionStorage.setItem('nagah_parent_portal_token', data.token);
+          localStorage.setItem('nagah_parent_portal_token', data.token);
+        }
         setChildren(prev => {
           if (prev.some(c => c.id === data.child.id)) return prev;
           const updated = [...prev, data.child];
@@ -344,13 +369,18 @@ export const PublicParentPortalView: React.FC<PublicParentPortalViewProps> = ({ 
   const refreshParentData = async () => {
     if (!codeOrPhone) return;
     try {
+      const savedPassword = localStorage.getItem('parent_session_password') || parentPasswordInput || '';
       const res = await fetch('/api/parent/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ codeOrPhone })
+        body: JSON.stringify({ codeOrPhone, password: savedPassword })
       });
       const data = await res.json();
       if (res.ok && data.success) {
+        if (data.token) {
+          sessionStorage.setItem('nagah_parent_portal_token', data.token);
+          localStorage.setItem('nagah_parent_portal_token', data.token);
+        }
         populateParentData(data);
         resilientOfflineService.saveToCache('parent', data);
         setIsOfflineFallback(false);
@@ -399,10 +429,10 @@ export const PublicParentPortalView: React.FC<PublicParentPortalViewProps> = ({ 
     const inputDigits = cleanPhoneDigits(rawInput);
     const isPhone = inputDigits.length >= 8;
 
-    // --- Layer 1: Express Server API ---
+    // --- Layer 1: Authenticated Express Server API ---
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 4000);
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
 
       const res = await fetch('/api/parent/login', {
         method: 'POST',
@@ -412,120 +442,42 @@ export const PublicParentPortalView: React.FC<PublicParentPortalViewProps> = ({ 
       });
       clearTimeout(timeoutId);
 
-      if (res.ok) {
-        const data = await res.json();
-        if (data.success) {
-          localStorage.setItem('parent_session_code', rawInput);
-          if (parentPasswordInput) {
-            localStorage.setItem('parent_session_password', parentPasswordInput);
-          } else {
-            localStorage.removeItem('parent_session_password');
-          }
-          populateParentData(data);
-          resilientOfflineService.saveToCache('parent', data);
-          setIsOfflineFallback(false);
-          setIsLoading(false);
-          return;
-        }
-      } else {
-        const data = await res.json().catch(() => null);
-        if (data?.needsPassword) {
-          setRequiresPassword(true);
-          setError(data.error || 'هذا الحساب محمي بكلمة مرور. يرجى إدخال كلمة المرور.');
-          setIsLoading(false);
-          return;
-        }
-      }
-    } catch (apiErr) {
-      console.warn('[Parent Portal] API unreachable, querying Cloud Firestore...', apiErr);
-    }
-
-    // --- Layer 2: Cloud Firestore (cloudDb) Fallback ---
-    try {
-      const [cloudTrainees, cloudCourses, cloudGroups, cloudTrainers] = await Promise.all([
-        api.getTrainees().catch(() => []),
-        api.getCourses().catch(() => []),
-        api.getGroups().catch(() => []),
-        api.getTrainers().catch(() => [])
-      ]);
-
-      let matchedChildren = cloudTrainees.filter(t => {
-        if (!t) return false;
-        const tCode = normalizeDigits(t.code || '').toLowerCase();
-        const tNatId = normalizeDigits(t.nationalId || '').trim();
-        const tId = (t.id || '').toLowerCase();
-
-        // Code Match
-        if (tCode && (tCode === normalizedInput || tCode === `م${normalizedInput}` || `م${tCode}` === normalizedInput || tCode === `tr-${normalizedInput}`)) return true;
-        if (tNatId && tNatId === normalizedInput) return true;
-        if (tId && tId === normalizedInput) return true;
-
-        // Phone / Parent Phone match
-        if (isPhone) {
-          const tPhoneDigits = cleanPhoneDigits(t.phone || '');
-          const pPhoneDigits = cleanPhoneDigits(t.parentPhone || '');
-          if (tPhoneDigits && (tPhoneDigits === inputDigits || tPhoneDigits.includes(inputDigits) || inputDigits.includes(tPhoneDigits))) return true;
-          if (pPhoneDigits && (pPhoneDigits === inputDigits || pPhoneDigits.includes(inputDigits) || inputDigits.includes(pPhoneDigits))) return true;
-        }
-
-        const tPhoneRaw = normalizeDigits(t.phone || '').trim();
-        const pPhoneRaw = normalizeDigits(t.parentPhone || '').trim();
-        return tPhoneRaw === normalizedInput || pPhoneRaw === normalizedInput;
-      });
-
-      if (matchedChildren.length > 0) {
-        // Find siblings sharing the same parent phone
-        const pPhone = cleanPhoneDigits(matchedChildren[0].parentPhone || '');
-        if (pPhone && pPhone.length >= 8) {
-          const siblings = cloudTrainees.filter(t => 
-            !matchedChildren.some(m => m.id === t.id) && 
-            cleanPhoneDigits(t.parentPhone || '') === pPhone
-          );
-          matchedChildren.push(...siblings);
-        }
-
-        const formattedChildren = matchedChildren.map(t => {
-          const course = cloudCourses.find(c => c.id === t.courseId);
-          const group = cloudGroups.find(g => g.id === t.groupId);
-          const trainer = group ? cloudTrainers.find(tr => tr.id === group.trainerId) : null;
-          return {
-            ...t,
-            courseName: course?.name || 'الدورة التدريبية',
-            groupName: group?.name || 'المجموعة التدريبية',
-            badges: [],
-            evaluations: [],
-            attendance: [],
-            attendanceCount: 0,
-            totalAttendance: 0,
-            schedules: [],
-            payments: [],
-            messages: [],
-            groupDetails: group,
-            trainer: trainer ? { id: trainer.id, name: trainer.name, phone: trainer.phone, email: trainer.email } : undefined
-          };
-        });
-
-        const parentNameFound = matchedChildren[0].parentName || 'السيد ولي الأمر المحترم';
-        const parentPayload = {
-          success: true,
-          parentName: parentNameFound.startsWith('السيد') ? parentNameFound : `السيد ولي الأمر / ${parentNameFound}`,
-          parentPhotoUrl: (matchedChildren[0] as any).parentPhotoUrl || '',
-          children: formattedChildren,
-          paymentAccounts: { vodafoneCash: '01001500686', instapay: 'm_bkeet@instapay' }
-        };
-
+      const data = await res.json().catch(() => null);
+      if (res.ok && data?.success) {
         localStorage.setItem('parent_session_code', rawInput);
-        populateParentData(parentPayload);
-        resilientOfflineService.saveToCache('parent', parentPayload);
-        setIsOfflineFallback(true);
+        if (data.token) {
+          sessionStorage.setItem('nagah_parent_portal_token', data.token);
+          localStorage.setItem('nagah_parent_portal_token', data.token);
+        }
+        if (parentPasswordInput) {
+          localStorage.setItem('parent_session_password', parentPasswordInput);
+        } else {
+          localStorage.removeItem('parent_session_password');
+        }
+        populateParentData(data);
+        resilientOfflineService.saveToCache('parent', data);
+        setIsOfflineFallback(false);
         setIsLoading(false);
         return;
       }
-    } catch (cloudErr) {
-      console.warn('[Parent Portal] Firestore fallback failed:', cloudErr);
+
+      if (data?.requiresPassword || data?.needsPassword) {
+        setRequiresPassword(true);
+        setError(data.error || 'هذا الحساب محمي بكلمة مرور. يرجى إدخال كلمة المرور.');
+        setIsLoading(false);
+        return;
+      }
+
+      if (res.status === 404 || res.status === 401 || res.status === 429) {
+        setError(data?.error || `لم يتم العثور على حساب مسجل برقم الهاتف أو الكود (${rawInput}).`);
+        setIsLoading(false);
+        return;
+      }
+    } catch (apiErr) {
+      console.warn('[Parent Portal] Server unreachable, checking device-local offline cache...', apiErr);
     }
 
-    // --- Layer 3: Local Offline Cache ---
+    // --- Layer 2: Local Offline Cache (device-local only, zero full DB download) ---
     const cached = resilientOfflineService.getFromCache('parent');
     if (cached && Array.isArray(cached.children) && cached.children.length > 0) {
       const matches = cached.children.some((c: any) => {
@@ -551,6 +503,9 @@ export const PublicParentPortalView: React.FC<PublicParentPortalViewProps> = ({ 
     localStorage.removeItem('parent_session_code');
     localStorage.removeItem('parent_session_password');
     localStorage.removeItem('nagah_parent_cache');
+    localStorage.removeItem('nagah_parent_portal_token');
+    sessionStorage.removeItem('nagah_parent_portal_token');
+    sessionStorage.removeItem('nagah_parent_tab_session');
     try {
       resilientOfflineService.saveToCache('parent', null);
     } catch (e) {}
@@ -673,7 +628,7 @@ export const PublicParentPortalView: React.FC<PublicParentPortalViewProps> = ({ 
     try {
       const res = await fetch('/api/parent/update-full-profile', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getParentAuthHeaders(true),
         body: JSON.stringify({
           traineeId: selectedChild?.id,
           parentPhone: editParentPhone,
@@ -694,6 +649,9 @@ export const PublicParentPortalView: React.FC<PublicParentPortalViewProps> = ({ 
         setParentEmail(editParentEmail);
         setParentAddress(editParentAddress);
         setParentPhotoUrl(editParentPhoto);
+        if (editParentPassword) {
+          localStorage.setItem('parent_session_password', editParentPassword);
+        }
 
         setTimeout(() => {
           setIsProfileSettingsOpen(false);
@@ -727,7 +685,7 @@ export const PublicParentPortalView: React.FC<PublicParentPortalViewProps> = ({ 
     try {
       const res = await fetch('/api/parent/update-student', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getParentAuthHeaders(true),
         body: JSON.stringify({
           traineeId: selectedChild.id,
           nationalId: editStudentNationalId,
@@ -1295,6 +1253,14 @@ export const PublicParentPortalView: React.FC<PublicParentPortalViewProps> = ({ 
                   {!isSuspended && selectedChild.groupDetails && (
                     <NextLectureWidget groupDetails={selectedChild.groupDetails} variant="parent" />
                   )}
+
+                  {/* Live Interconnectivity Card: Latest Session Attendance, Grade & Encouraging Point Awards */}
+                  <LatestSessionSummaryCard
+                    traineeId={selectedChild.id}
+                    initialSummary={(selectedChild as any).latestSessionSummary as TraineeSessionSummary | undefined}
+                    portalRole="parent"
+                    studentName={selectedChild.fullName}
+                  />
 
                   {/* Direct Lecture Recap & Homework Alert for Parent */}
                   {isSuspended ? (

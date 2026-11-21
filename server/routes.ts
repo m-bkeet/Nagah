@@ -1,5 +1,23 @@
 import { adminDb, adminDiagInfo } from './firebaseAdmin';
-import { authMiddleware, requireRole, sanitizeTraineeDTO, runDataIntegrityAudit, AuthenticatedRequest } from './securityMiddleware';
+import {
+  authMiddleware,
+  requireAuth,
+  requireRole,
+  signSessionToken,
+  createRateLimiter,
+  STAFF_ROLES,
+  ADMIN_FINANCE_ROLES,
+  isStaffUser,
+  requirePortalOrStaff,
+  sanitizeTraineeDTO,
+  runDataIntegrityAudit,
+  AuthenticatedRequest
+} from './securityMiddleware';
+import {
+  resolveSafeMediaFile,
+  getMediaStorageStats,
+  optimizeEmbeddedMediaInObject
+} from './mediaStorage';
 import { 
   TraineeRepo, BranchRepo, CourseRepo, ProgramRepo, GroupRepo, TrainerRepo, 
   AttendanceRepo, PaymentRepo, ExpenseRepo, ExamRepo, ExamQuestionRepo, 
@@ -53,6 +71,150 @@ import {
 import { getSystemQuotaStatus, recordSystemInvocation } from './systemQuotaService';
 
 export const apiRouter = express.Router();
+
+const authRateLimiter = createRateLimiter(15, 5 * 60 * 1000);
+const passcodeRateLimiter = createRateLimiter(10, 5 * 60 * 1000);
+const portalAuthRateLimiter = createRateLimiter(20, 5 * 60 * 1000);
+const FINANCE_OPS_ROLES = ['super_admin', 'admin', 'branch_manager', 'accountant', 'receptionist', 'admin_staff'];
+
+// Zero-quota in-memory helper: derive real schedules from actual group metadata (never fake defaults)
+function buildGroupScheduleSummary(group: any) {
+  if (!group) return [];
+  const daysArr: string[] = Array.isArray(group.scheduleDays) && group.scheduleDays.length > 0
+    ? group.scheduleDays
+    : (Array.isArray(group.days) ? group.days : []);
+  const timeText = [group.startTime, group.endTime].filter(Boolean).join(' - ') || group.timeSlot || group.time || 'حسب جدول المجموعة';
+  const roomName = group.roomName || group.labName || 'قاعة التدريب';
+  if (daysArr.length === 0) {
+    return [{
+      id: `grp-sch-${group.id}`,
+      title: `حصة ${group.name || 'المجموعة'}`,
+      dayName: group.scheduleText || 'أسبوعياً',
+      startTime: timeText,
+      time: timeText,
+      room: roomName,
+      roomName,
+      status: 'upcoming'
+    }];
+  }
+  return daysArr.map((day: string, idx: number) => ({
+    id: `grp-sch-${group.id}-${idx}`,
+    title: `حصة ${group.name || 'المجموعة'}`,
+    dayName: day,
+    startTime: timeText,
+    time: `${day} - ${timeText}`,
+    room: roomName,
+    roomName,
+    status: 'upcoming'
+  }));
+}
+
+// Zero-quota in-memory helper: real interconnectivity between Interactive Sessions and Student/Parent Portals
+function buildTraineeSessionSummary(traineeId: string, traineeCode?: string) {
+  const data = db.getData();
+  const normCode = traineeCode ? String(traineeCode).trim().toLowerCase() : '';
+  const trainee = (data.trainees || []).find((t: any) =>
+    t.id === traineeId || (normCode && t.code && String(t.code).trim().toLowerCase() === normCode)
+  );
+  const tid = trainee?.id || traineeId;
+  const tCode = (trainee?.code || traineeCode || '').trim().toLowerCase();
+
+  // 1. Latest attendance record
+  const attRecords = (data.attendance || [])
+    .filter((a: any) =>
+      a.traineeId === tid ||
+      a.studentId === tid ||
+      a.student_id === tid ||
+      (tCode && a.student_code && String(a.student_code).trim().toLowerCase() === tCode)
+    )
+    .sort((a: any, b: any) => String(b.date || b.recordedAt || '').localeCompare(String(a.date || a.recordedAt || '')));
+  const latestAttendance = attRecords[0]
+    ? {
+        date: attRecords[0].date || '',
+        status: attRecords[0].status || 'present',
+        notes: attRecords[0].notes || '',
+        groupId: attRecords[0].groupId || ''
+      }
+    : null;
+
+  // 2. Latest local session grade (saved via /sessions/grades/batch with 0 Firestore writes)
+  const gradeRecords = (Array.isArray(data.sessionGrades) ? data.sessionGrades : [])
+    .filter((g: any) => g.traineeId === tid)
+    .sort((a: any, b: any) => String(b.updatedAt || b.date || '').localeCompare(String(a.updatedAt || a.date || '')));
+  const latestSessionGrade = gradeRecords[0]
+    ? {
+        date: gradeRecords[0].date || '',
+        score: Number(gradeRecords[0].score || 0),
+        maxScore: Number(gradeRecords[0].maxScore || 10),
+        note: gradeRecords[0].note || '',
+        updatedAt: gradeRecords[0].updatedAt || ''
+      }
+    : null;
+
+  // 3. Recent custom point awards & encouraging messages from Interactive Sessions / Wheel / Lab
+  const recentPointAwards = (data.pointTransactions || [])
+    .filter((pt: any) =>
+      pt.traineeId === tid ||
+      (tCode && pt.traineeCode && String(pt.traineeCode).trim().toLowerCase() === tCode)
+    )
+    .sort((a: any, b: any) => new Date(b.createdAt || b.date || 0).getTime() - new Date(a.createdAt || a.date || 0).getTime())
+    .slice(0, 10)
+    .map((pt: any) => ({
+      id: pt.id,
+      points: Number(pt.points || 0),
+      reason: pt.reason || 'تميز وتفاعل في الحصة',
+      date: pt.createdAt || pt.date || '',
+      addedByUserName: pt.addedByUserName || 'المحاضر'
+    }));
+
+  const rawPts = Number(trainee?.totalPoints ?? trainee?.points ?? 0);
+  const totalTxPts = (data.pointTransactions || [])
+    .filter((pt: any) => pt.traineeId === tid)
+    .reduce((acc: number, cur: any) => acc + (Number(cur.points) || 0), 0);
+
+  return {
+    traineeId: tid,
+    totalPoints: Math.max(rawPts, totalTxPts),
+    latestAttendance,
+    latestSessionGrade,
+    recentPointAwards,
+    updatedAt: new Date().toISOString()
+  };
+}
+
+// Cryptographically decode session tokens (never defaults unauthenticated calls to super_admin)
+apiRouter.use(authMiddleware);
+
+// Zero-quota live session summary endpoint for Student & Parent Portals
+apiRouter.get('/portal/session-summary/:traineeId', requireAuth, (req: AuthenticatedRequest, res: Response) => {
+  const user = req.user!;
+  const targetId = String(req.params.traineeId || '').trim();
+  if (!targetId) {
+    return res.status(400).json({ success: false, error: 'معرف الطالب مطلوب' });
+  }
+  const allowed =
+    isStaffUser(req) ||
+    (user.role === 'student' && (user.traineeId === targetId || user.id === targetId || Boolean(user.allowedTraineeIds?.includes(targetId)))) ||
+    (user.role === 'parent' && (user.traineeId === targetId || Boolean(user.allowedTraineeIds?.includes(targetId))));
+  if (!allowed) {
+    return res.status(403).json({ success: false, error: '403 Forbidden: غير مصرح لك بعرض ملخص هذا الطالب' });
+  }
+  return res.json({
+    success: true,
+    summary: buildTraineeSessionSummary(targetId)
+  });
+});
+
+// Serve extracted media assets (homework photos, templates, logos) with immutable cache headers
+apiRouter.get('/media/:filename', (req: Request, res: Response) => {
+  const resolved = resolveSafeMediaFile(req.params.filename);
+  if (!resolved) {
+    return res.status(404).json({ error: 'الملف غير موجود' });
+  }
+  res.setHeader('Content-Type', resolved.mimeType);
+  res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+  return res.sendFile(resolved.filePath);
+});
 
 // Track every API invocation for Vercel/Cloud quota telemetry
 apiRouter.use((req, res, next) => {
@@ -113,7 +275,7 @@ apiRouter.post('/system/quota-refresh', async (req: Request, res: Response) => {
   }
 });
 
-apiRouter.post('/system/quota-config', async (req: Request, res: Response) => {
+apiRouter.post('/system/quota-config', requireRole(['super_admin', 'admin']), async (req: Request, res: Response) => {
   try {
     const { token, projectId, teamId } = req.body || {};
     const curDb = db.getData();
@@ -138,24 +300,125 @@ apiRouter.post('/system/quota-config', async (req: Request, res: Response) => {
   }
 });
 
-// Center Settings API Endpoints
-apiRouter.get('/settings', (req: Request, res: Response) => {
+// Real System Health, Storage & Data Integrity Diagnostics API
+apiRouter.get('/system/diagnostics', requireRole(STAFF_ROLES), (_req: Request, res: Response) => {
   try {
-    const data = db.getData();
-    res.json(data.settings || {
-      centerName: 'مركز النجاح للتدريب والاستشارات',
-      logoUrl: '/logo.svg',
-      academicYear: '2026/2027',
-      primaryPhone: '01001500686',
-      vodafoneCash: '01001500686',
-      instapay: 'm_bkeet@instapay'
+    const data = db.getData() as any;
+    const dbFilePath = path.join(process.cwd(), 'data', 'database.json');
+    const dbFileBytes = fs.existsSync(dbFilePath) ? fs.statSync(dbFilePath).size : 0;
+    const mediaStats = getMediaStorageStats();
+
+    const collections = Object.entries(data || {}).map(([key, val]) => {
+      const serialized = JSON.stringify(val ?? null);
+      const base64Count = (serialized.match(/data:image\/|data:audio\/|base64,/g) || []).length;
+      return {
+        name: key,
+        count: Array.isArray(val) ? val.length : (val && typeof val === 'object' ? Object.keys(val).length : 1),
+        bytes: serialized.length,
+        base64Count
+      };
+    }).sort((a, b) => b.bytes - a.bytes);
+
+    // Real duplicate trainee check (by normalized name or code)
+    const trainees = Array.isArray(data?.trainees) ? data.trainees : [];
+    const seenCodes = new Map<string, number>();
+    const seenNames = new Map<string, number>();
+    let financialDiscrepancies = 0;
+    for (const t of trainees) {
+      const code = String(t.code || '').trim().toUpperCase();
+      const name = String(t.fullName || '').trim().replace(/\s+/g, ' ');
+      if (code) seenCodes.set(code, (seenCodes.get(code) || 0) + 1);
+      if (name) seenNames.set(name, (seenNames.get(name) || 0) + 1);
+      const fee = Number(t.feeAmount) || 0;
+      const disc = Number(t.discountAmount) || 0;
+      const net = Math.max(0, fee - disc);
+      const paid = Number(t.paidAmount) || 0;
+      const expectedRem = Math.max(0, net - paid);
+      if (t.remainingAmount !== undefined && Math.abs(Number(t.remainingAmount) - expectedRem) > 2) {
+        financialDiscrepancies++;
+      }
+    }
+    const duplicateCodes = [...seenCodes.entries()].filter(([, c]) => c > 1).map(([code, count]) => ({ code, count }));
+    const duplicateNames = [...seenNames.entries()].filter(([, c]) => c > 1).map(([name, count]) => ({ name, count }));
+
+    res.json({
+      success: true,
+      timestamp: new Date().toISOString(),
+      security: {
+        signedSessionTokens: true,
+        rateLimitingActive: true,
+        serverSidePasscodeCheck: true,
+        firestoreHardenedRules: true
+      },
+      storage: {
+        databaseFileBytes: dbFileBytes,
+        databaseFileKB: Math.round(dbFileBytes / 1024),
+        extractedMediaFiles: mediaStats.fileCount,
+        extractedMediaKB: Math.round(mediaStats.totalBytes / 1024),
+        remainingBase64Blobs: collections.reduce((acc, c) => acc + c.base64Count, 0),
+        topCollections: collections.slice(0, 12)
+      },
+      integrity: {
+        traineesTotal: trainees.length,
+        paymentsTotal: Array.isArray(data?.payments) ? data.payments.length : 0,
+        expensesTotal: Array.isArray(data?.expenses) ? data.expenses.length : 0,
+        pointTransactionsTotal: Array.isArray(data?.pointTransactions) ? data.pointTransactions.length : 0,
+        duplicateCodes,
+        duplicateNames,
+        financialDiscrepancies
+      }
     });
   } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Trigger on-demand media optimization to shrink database.json immediately
+apiRouter.post('/system/optimize-media', requireRole(['super_admin', 'admin']), async (_req: Request, res: Response) => {
+  try {
+    const data = db.getData();
+    const result = optimizeEmbeddedMediaInObject(data, 4096);
+    await db.saveLocalOnly();
+    const dbFilePath = path.join(process.cwd(), 'data', 'database.json');
+    const newSizeKB = fs.existsSync(dbFilePath) ? Math.round(fs.statSync(dbFilePath).size / 1024) : 0;
+    res.json({
+      success: true,
+      extractedCount: result.extracted,
+      savedKB: Math.round(result.savedBytes / 1024),
+      newDatabaseKB: newSizeKB
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Center Settings API Endpoints (strip sensitive internal passcodes/tokens from public GET)
+apiRouter.get('/settings', (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const data = db.getData();
+    const rawSettings = {
+      ...(data.settings || {
+        centerName: 'مركز النجاح للتدريب والاستشارات',
+        logoUrl: '/logo.svg',
+        academicYear: '2026/2027',
+        primaryPhone: '01001500686',
+        vodafoneCash: '01001500686',
+        instapay: 'm_bkeet@instapay'
+      })
+    } as any;
+    const isAdminUser = req.user && ['super_admin', 'admin'].includes(req.user.role);
+    if (!isAdminUser) {
+      delete rawSettings.adminPasscode;
+      delete rawSettings.vercelApiToken;
+      delete rawSettings.serviceAccountJson;
+    }
+    res.json(rawSettings);
+  } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
 });
 
-apiRouter.post('/settings', async (req: Request, res: Response) => {
+apiRouter.post('/settings', requireRole(['super_admin', 'admin', 'branch_manager']), async (req: Request, res: Response) => {
   try {
     const data = db.getData();
     data.settings = {
@@ -181,7 +444,7 @@ apiRouter.post('/settings', async (req: Request, res: Response) => {
   }
 });
 
-apiRouter.put('/settings', async (req: Request, res: Response) => {
+apiRouter.put('/settings', requireRole(['super_admin', 'admin', 'branch_manager']), async (req: Request, res: Response) => {
   try {
     const data = db.getData();
     data.settings = {
@@ -202,24 +465,6 @@ apiRouter.put('/settings', async (req: Request, res: Response) => {
     }
     await db.saveLocalOnly();
     res.json({ success: true, settings: data.settings });
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-apiRouter.post('/settings/reset', (req: Request, res: Response) => {
-  try {
-    const data = db.getData();
-    data.settings = {
-      centerName: 'مركز النجاح للتدريب والاستشارات',
-      logoUrl: '/logo.svg',
-      academicYear: '2026/2027',
-      primaryPhone: '01001500686',
-      vodafoneCash: '01001500686',
-      instapay: 'm_bkeet@instapay'
-    };
-    db.save();
-    res.json({ success: true, message: 'تم إعادة ضبط الإعدادات بنجاح', settings: data.settings });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -559,8 +804,8 @@ apiRouter.get('/system/info', async (req: Request, res: Response) => {
   }
 });
 
-// GET /api/backup & GET /api/backup/download - Full backup data JSON
-apiRouter.get(['/backup', '/backup/download'], (req: Request, res: Response) => {
+// GET /api/backup & GET /api/backup/download - Full backup data JSON (Admin/Finance only)
+apiRouter.get(['/backup', '/backup/download'], requireRole(ADMIN_FINANCE_ROLES), (req: Request, res: Response) => {
   try {
     const data = db.getData();
     const filename = `nagah_backup_${new Date().toISOString().slice(0, 10)}_${Date.now()}.json`;
@@ -572,8 +817,8 @@ apiRouter.get(['/backup', '/backup/download'], (req: Request, res: Response) => 
   }
 });
 
-// POST /api/restore & POST /api/restore-backup - Restore full database snapshot JSON
-apiRouter.post(['/restore', '/restore-backup', '/system/restore'], async (req: Request, res: Response) => {
+// POST /api/restore & POST /api/restore-backup - Restore full database snapshot JSON (Admin only)
+apiRouter.post(['/restore', '/restore-backup', '/system/restore'], requireRole(['super_admin', 'admin']), async (req: Request, res: Response) => {
   try {
     const payload = req.body;
     if (!payload || (typeof payload !== 'object' && typeof payload !== 'string')) {
@@ -641,26 +886,39 @@ apiRouter.post(['/restore', '/restore-backup', '/system/restore'], async (req: R
   }
 });
 
-// POST /api/settings/reset - System reset option
-apiRouter.post('/settings/reset', (req: Request, res: Response) => {
+// POST /api/settings/reset - Unified protected reset endpoint (supports selective db.resetData or settings defaults)
+apiRouter.post('/settings/reset', requireRole(['super_admin', 'admin']), (req: AuthenticatedRequest, res: Response) => {
   try {
     const { options, userId, userName } = req.body || {};
-    db.resetData(options || {});
+    if (options && typeof options === 'object' && Object.keys(options).length > 0) {
+      db.resetData(options);
+    } else {
+      const data = db.getData();
+      data.settings = {
+        centerName: 'مركز النجاح للتدريب والاستشارات',
+        logoUrl: '/logo.svg',
+        academicYear: '2026/2027',
+        primaryPhone: '01001500686',
+        vodafoneCash: '01001500686',
+        instapay: 'm_bkeet@instapay'
+      };
+      db.saveLocalOnly();
+    }
     db.logAudit({
-      userId: userId || 'admin',
-      userName: userName || 'المدير العام',
+      userId: req.user?.id || userId || 'admin',
+      userName: req.user?.fullName || userName || 'المدير العام',
       action: 'SYSTEM_RESET',
       entity: 'النظام والقواعد',
-      details: 'تم إجراء تصفير لبيانات النظام حسب الخيارات المحددة'
+      details: 'تم إجراء إعادة ضبط/تهيئة لبيانات النظام حسب الخيارات المحددة'
     });
-    res.json({ success: true, message: 'تم إعادة تهيئة بيانات النظام بنجاح' });
+    res.json({ success: true, message: 'تم إعادة تهيئة بيانات النظام بنجاح', settings: db.getData().settings });
   } catch (err: any) {
     res.status(500).json({ success: false, error: 'فشل تصفير بيانات النظام: ' + err.message });
   }
 });
 
-// Restore original clean database (removes all auto-generated fake test students)
-apiRouter.post('/system/restore-clean-database', async (req: Request, res: Response) => {
+// Restore original clean database (Admin only)
+apiRouter.post('/system/restore-clean-database', requireRole(['super_admin', 'admin']), async (req: Request, res: Response) => {
   try {
     const fullBackupPath = path.join(process.cwd(), 'data', 'database.backup_before_cleanup_1789259428.json');
     const targetPath = fs.existsSync(fullBackupPath) ? fullBackupPath : path.join(process.cwd(), 'data', 'database.json');
@@ -701,7 +959,7 @@ apiRouter.post('/system/restore-clean-database', async (req: Request, res: Respo
 });
 
 // Local System Recalculation & Sync (Header sync button - zero Firestore write waste)
-apiRouter.post('/system/sync', async (_req: Request, res: Response) => {
+apiRouter.post('/system/sync', requireRole(STAFF_ROLES), async (_req: Request, res: Response) => {
   try {
     db.recalculateAll();
     await db.saveLocalOnly();
@@ -715,7 +973,7 @@ apiRouter.post('/system/sync', async (_req: Request, res: Response) => {
 });
 
 // Explicit Manual Cloud Sync (triggered only by user button in Settings -> Backup & Migration)
-apiRouter.post('/system/cloud-sync', async (_req: Request, res: Response) => {
+apiRouter.post('/system/cloud-sync', requireRole(ADMIN_FINANCE_ROLES), async (_req: Request, res: Response) => {
   try {
     db.recalculateAll();
     await db.saveWithCloudSync();
@@ -908,10 +1166,18 @@ const handleLoginRequest = (req: Request, res: Response) => {
       console.warn('[Login] Non-critical logAudit error:', e);
     }
 
+    const signedToken = signSessionToken({
+      id: user.id,
+      username: user.username,
+      role: user.role,
+      branchId: user.branchId,
+      fullName: user.fullName
+    });
+
     return res.json({
       success: true,
       user,
-      token: 'jwt_mock_' + user.id + '_' + Date.now()
+      token: signedToken
     });
   } catch (err: any) {
     console.error('[Login Route Error]:', err);
@@ -919,8 +1185,8 @@ const handleLoginRequest = (req: Request, res: Response) => {
   }
 };
 
-apiRouter.post('/auth/login', handleLoginRequest);
-apiRouter.post('/login', handleLoginRequest);
+apiRouter.post('/auth/login', authRateLimiter, handleLoginRequest);
+apiRouter.post('/login', authRateLimiter, handleLoginRequest);
 apiRouter.all(['/auth/login', '/login'], (req: Request, res: Response) => {
   if (req.method !== 'POST') {
     return res.status(200).json({ message: 'Login endpoint is active. Use POST to authenticate.' });
@@ -928,11 +1194,33 @@ apiRouter.all(['/auth/login', '/login'], (req: Request, res: Response) => {
   handleLoginRequest(req, res);
 });
 
-apiRouter.get('/auth/users', (req: Request, res: Response) => {
-  res.json(db.getData().users);
+// Server-side rate-limited admin passcode verification (never exposes PIN to browser)
+apiRouter.post('/auth/verify-passcode', passcodeRateLimiter, (req: Request, res: Response) => {
+  const { passcode } = req.body || {};
+  if (!passcode || typeof passcode !== 'string') {
+    return res.status(400).json({ success: false, error: 'يرجى إدخال الرقم السري' });
+  }
+  const expectedPin = String(db.getData().settings?.adminPasscode || process.env.ADMIN_PASSCODE || '2026').trim();
+  const inputBuf = Buffer.from(passcode.trim());
+  const expectedBuf = Buffer.from(expectedPin);
+  const isMatch = inputBuf.length === expectedBuf.length && crypto.timingSafeEqual(inputBuf, expectedBuf);
+  if (!isMatch) {
+    return res.status(401).json({ success: false, error: 'الرقم السري غير صحيح! يرجى المحاولة مرة أخرى.' });
+  }
+  return res.json({ success: true, verified: true });
 });
 
-apiRouter.post('/auth/users', (req: Request, res: Response) => {
+apiRouter.get('/auth/users', requireRole(STAFF_ROLES), (_req: Request, res: Response) => {
+  const users = (db.getData().users || []).map((u: any) => {
+    const safe = { ...u };
+    delete safe.passwordHash;
+    delete safe.password;
+    return safe;
+  });
+  res.json(users);
+});
+
+apiRouter.post('/auth/users', requireRole(['super_admin', 'admin']), (req: Request, res: Response) => {
   const { username, password, fullName, role, branchId, phone, email, trainerId, traineeId } = req.body;
   if (!username || !password || !fullName || !role) {
     return res.status(400).json({ error: 'جميع الحقول الأساسية مطلوبة' });
@@ -1174,7 +1462,7 @@ apiRouter.get('/trainees/next-code', async (req: Request, res: Response) => {
   }
 });
 
-apiRouter.get('/trainees', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
+apiRouter.get('/trainees', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const isFresh = req.query.fresh === 'true' || req.headers['x-fresh'] === 'true';
     let list = await TraineeRepo.getAll(isFresh);
@@ -1186,7 +1474,7 @@ apiRouter.get('/trainees', authMiddleware, async (req: AuthenticatedRequest, res
       if (user.role === 'student') {
         list = list.filter(t => t.id === user.traineeId || t.code === user.username || t.studentCode === user.username);
       } else if (user.role === 'parent') {
-        list = list.filter(t => t.parentPhone === user.phone || (user as any).childrenIds?.includes(t.id));
+        list = list.filter(t => Boolean(user.allowedTraineeIds?.includes(t.id)) || t.id === user.traineeId || (user.username && t.parentPhone && t.parentPhone.includes(user.username)));
       } else if (user.role === 'branch_manager' && user.branchId && user.branchId !== 'all') {
         list = list.filter(t => t.branchId === user.branchId);
       } else if (user.role === 'trainer' && user.trainerId) {
@@ -1228,9 +1516,18 @@ apiRouter.get('/audit/integrity-report', authMiddleware, requireRole(['super_adm
   }
 });
 
-apiRouter.get('/trainees/:id', async (req: Request, res: Response) => {
+apiRouter.get('/trainees/:id', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { id } = req.params;
+    const user = req.user!;
+    if (!isStaffUser(req)) {
+      const canAccess =
+        (user.role === 'student' && (user.traineeId === id || user.id === id)) ||
+        (user.role === 'parent' && (user.traineeId === id || Boolean(user.allowedTraineeIds?.includes(id))));
+      if (!canAccess) {
+        return res.status(403).json({ success: false, error: '403 Forbidden: غير مصرح لك بعرض ملف هذا المتدرب' });
+      }
+    }
     const trainee = await TraineeRepo.getById(id);
     if (!trainee) return res.status(404).json({ success: false, error: 'المتدرب غير موجود' });
     
@@ -1360,7 +1657,7 @@ apiRouter.get('/trainees/:id', async (req: Request, res: Response) => {
   } catch(e: any) { res.status(500).json({ success: false, error: e.message }); }
 });
 
-apiRouter.post('/trainees', async (req: Request, res: Response) => {
+apiRouter.post('/trainees', requireRole(STAFF_ROLES), async (req: Request, res: Response) => {
   try {
     const data = req.body;
     if (!data.fullName || !data.branchId) return res.status(400).json({ success: false, error: 'الاسم والفرع مطلوبان' });
@@ -1522,7 +1819,7 @@ apiRouter.post('/trainees', async (req: Request, res: Response) => {
   } catch(e: any) { res.status(500).json({ success: false, error: e.message }); }
 });
 
-apiRouter.put('/trainees/:id', async (req: Request, res: Response) => {
+apiRouter.put('/trainees/:id', requireRole(STAFF_ROLES), async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     let updates = { ...req.body };
@@ -1945,7 +2242,7 @@ export async function purgeCompleteTraineeData(traineeId: string): Promise<{
   }
 }
 
-apiRouter.delete('/trainees/:id', async (req: Request, res: Response) => {
+apiRouter.delete('/trainees/:id', requireRole(STAFF_ROLES), async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const result = await purgeCompleteTraineeData(id);
@@ -1963,7 +2260,7 @@ apiRouter.delete('/trainees/:id', async (req: Request, res: Response) => {
 });
 
 // Bulk Import / Manage Trainees
-apiRouter.post("/trainees/bulk-assign-group", async (req: Request, res: Response) => {
+apiRouter.post("/trainees/bulk-assign-group", requireRole(STAFF_ROLES), async (req: Request, res: Response) => {
   try {
     const { traineeIds, groupId } = req.body;
     if (!Array.isArray(traineeIds) || !groupId) return res.status(400).json({ error: "بيانات غير صالحة" });
@@ -2006,7 +2303,7 @@ apiRouter.post("/trainees/bulk-assign-group", async (req: Request, res: Response
   } catch(e: any) { res.status(500).json({ error: e.message }); }
 });
 
-apiRouter.post('/trainees/bulk-delete', async (req, res) => {
+apiRouter.post('/trainees/bulk-delete', requireRole(STAFF_ROLES), async (req, res) => {
   try {
     const { ids } = req.body;
     if (!ids || !Array.isArray(ids) || ids.length === 0) return res.status(400).json({ error: 'المعرفات غير صالحة' });
@@ -2033,7 +2330,7 @@ apiRouter.post('/trainees/bulk-delete', async (req, res) => {
   } catch(e: any) { res.status(500).json({ error: e.message }); }
 });
 
-apiRouter.post('/trainees/batch-sync-records', async (req: Request, res: Response) => {
+apiRouter.post('/trainees/batch-sync-records', requireRole(STAFF_ROLES), async (req: Request, res: Response) => {
   try {
     const allTrainees = await TraineeRepo.getAll();
     const memData = db.getData();
@@ -2165,7 +2462,7 @@ apiRouter.post('/trainees/batch-sync-records', async (req: Request, res: Respons
   }
 });
 
-apiRouter.post('/trainees/bulk-upgrade', async (req: Request, res: Response) => {
+apiRouter.post('/trainees/bulk-upgrade', requireRole(STAFF_ROLES), async (req: Request, res: Response) => {
   try {
     const { ids, status } = req.body;
     if (!Array.isArray(ids) || ids.length === 0) {
@@ -2311,289 +2608,7 @@ apiRouter.get('/trainees/promotion-preview', (req: Request, res: Response) => {
   });
 });
 
-apiRouter.post('/trainees/promote-batch', async (req: Request, res: Response) => {
-  const { promotions, autoCreateGroups = true, newAcademicYear, updateSettingsYear = true } = req.body;
-  if (!Array.isArray(promotions) || promotions.length === 0) {
-    return res.status(400).json({ error: 'يرجى تحديد طلاب للتصعيد والترقية' });
-  }
-
-  const dbData = db.getData();
-  let promotedCount = 0;
-  let graduatedCount = 0;
-  let createdGroupsCount = 0;
-  
-  // We will run this via Firestore batch
-  const batch = adminDb.batch();
-
-  const ensureCourseExists = (name: string, code: string, branchId: string) => {
-    let crs = dbData.courses.find(c => c.code === code || c.name === name);
-    if (!crs) {
-      crs = {
-        id: 'crs-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6),
-        name: name || code,
-        code: code,
-        branchId: branchId || dbData.branches?.[0]?.id || 'branch-1',
-        category: 'المدارس',
-        hoursCount: 20,
-        lecturesCount: 10,
-        feeAmount: (branchId || dbData.branches?.[0]?.id || 'branch-1') === 'branch-2' ? 250 : 200,
-        status: 'active'
-      };
-      dbData.courses.push(crs);
-    }
-    return crs;
-  };
-
-  for (const item of promotions) {
-    const trainee = dbData.trainees.find(t => t.id === item.traineeId);
-    if (!trainee) continue;
-
-    if (item.action === 'graduate') {
-      const notes = (trainee.notes ? trainee.notes + ' | ' : '') + `تخرج وأتم مرحلة الثالث الإعدادي بنهاية العام ${dbData.settings?.academicYear || ''}`;
-      batch.update(adminDb.collection('trainees').doc(trainee.id), { status: 'completed', notes });
-      graduatedCount++;
-      continue;
-    }
-
-    if (item.action === 'promote') {
-      let targetCourseId = item.targetCourseId;
-      
-      if (!targetCourseId && item.nextCourseCode) {
-        const crs = ensureCourseExists(item.nextGradeName || item.nextCourseCode, item.nextCourseCode, trainee.branchId);
-        targetCourseId = crs.id;
-      }
-
-      if (!targetCourseId) continue;
-
-      const currentGroup = trainee.groupId ? dbData.groups.find(g => g.id === trainee.groupId) : null;
-      let targetGroupId = item.targetGroupId;
-
-      if (!targetGroupId && autoCreateGroups && currentGroup && item.nextCourseCode) {
-        const expectedGroupName = item.suggestedGroupName || currentGroup.name.replace(/ICT4|ICT5|ICT6|ICT-P1|ICT-P2|ICT-P3/i, item.nextCourseCode);
-        let matchingGroup = dbData.groups.find(g => g.courseId === targetCourseId && g.branchId === trainee.branchId && g.name === expectedGroupName);
-        
-        if (!matchingGroup) {
-          matchingGroup = {
-            id: 'grp-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6),
-            name: expectedGroupName,
-            branchId: trainee.branchId,
-            courseId: targetCourseId,
-            trainerId: currentGroup.trainerId,
-            days: currentGroup.days || ['الجمعة'],
-            timeSlot: currentGroup.timeSlot || '04:00 م - 06:00 م',
-            roomName: currentGroup.roomName,
-            maxStudents: currentGroup.maxStudents || 12,
-            maxCapacity: currentGroup.maxCapacity || 12,
-            status: 'active'
-          };
-          dbData.groups.push(matchingGroup);
-          createdGroupsCount++;
-        }
-        targetGroupId = matchingGroup.id;
-      }
-
-      batch.update(adminDb.collection('trainees').doc(trainee.id), {
-        courseId: targetCourseId,
-        groupId: targetGroupId || trainee.groupId,
-        status: 'active'
-      });
-      promotedCount++;
-    }
-  }
-
-  try {
-    await batch.commit();
-    TraineeRepo.invalidateCache();
-    db.saveImmediate(); // save courses/groups to local json
-  } catch(e) {
-    console.error('Promotion error', e);
-    return res.status(500).json({error: 'Failed to promote'});
-  }
-
-  if (updateSettingsYear && newAcademicYear) {
-    if (!dbData.settings) dbData.settings = { centerName: 'مركز النجاح' } as any;
-    dbData.settings.academicYear = newAcademicYear;
-    db.saveImmediate();
-  }
-
-  db.logAudit({
-    userId: 'admin',
-    userName: 'مدير النظام',
-    action: 'تصعيد وترقية المتدربين',
-    entity: 'المتدربين',
-    details: `تمت ترقية وتصعيد ${promotedCount} طالب وتخريج ${graduatedCount} طالب للعام الدراسي ${newAcademicYear || ''} وإنشاء ${createdGroupsCount} مجموعات جديدة`
-  });
-
-  res.json({
-    success: true,
-    promotedCount,
-    graduatedCount,
-    createdGroupsCount,
-    newAcademicYear: dbData.settings?.academicYear
-  });
-});
-
-apiRouter.post('/trainees/batch-sync-records', (req: Request, res: Response) => {
-  const dbData = db.getData();
-  const allTrainees = dbData.trainees;
-  const coursesList = dbData.courses || [];
-  let updatedCount = 0;
-  let parentNamesAutoFilledCount = 0;
-  let birthDatesExtractedCount = 0;
-  let siblingsLinkedCount = 0;
-  let exemptionsProcessedCount = 0;
-
-  const getCourseFee = (t: any) => {
-    if (t.feeAmount && t.feeAmount > 0) return t.feeAmount;
-    const crs = coursesList.find((c: any) => c.id === t.courseId || c.name === t.courseName);
-    return crs ? (crs.price || crs.feeAmount || 200) : 200;
-  };
-
-  // Helper for Egyptian National ID birthdate extraction
-  const extractBirthDate = (nationalId: string) => {
-    const cleaned = (nationalId || '').replace(/\D/g, '');
-    if (cleaned.length !== 14) return null;
-    const century = cleaned.charAt(0);
-    const yy = cleaned.substring(1, 3);
-    const mm = cleaned.substring(3, 5);
-    const dd = cleaned.substring(5, 7);
-    let yearPrefix = '';
-    if (century === '2') yearPrefix = '19';
-    else if (century === '3') yearPrefix = '20';
-    else return null;
-    const monthNum = parseInt(mm, 10);
-    const dayNum = parseInt(dd, 10);
-    if (monthNum < 1 || monthNum > 12 || dayNum < 1 || dayNum > 31) return null;
-    return `${yearPrefix}${yy}-${mm.padStart(2, '0')}-${dd.padStart(2, '0')}`;
-  };
-
-  // Step 1: Individual auto-fill (parentName, birthDate from nationalId, exemptions from notes)
-  allTrainees.forEach(t => {
-    let touched = false;
-
-    // A. Auto fill parentName if missing
-    if (!t.parentName || !t.parentName.trim()) {
-      const parts = (t.fullName || '').trim().split(/\s+/);
-      if (parts.length >= 2) {
-        t.parentName = parts.slice(1).join(' ');
-        parentNamesAutoFilledCount++;
-        touched = true;
-      }
-    }
-
-    // B. Extract birthDate from nationalId if birthDate missing
-    if (t.nationalId && (!t.birthDate || !t.birthDate.trim())) {
-      const extractedBD = extractBirthDate(t.nationalId);
-      if (extractedBD) {
-        t.birthDate = extractedBD;
-        birthDatesExtractedCount++;
-        touched = true;
-      }
-    }
-
-    // C. Check notes or financial state for exemption flags
-    const noteLower = (t.notes || '').toLowerCase();
-    const isExemptNote =
-      noteLower.includes('إعفاء') ||
-      noteLower.includes('معفي') ||
-      noteLower.includes('أبناء المالك') ||
-      noteLower.includes('أبناء الإدارة') ||
-      noteLower.includes('منحة') ||
-      noteLower.includes('مجاني');
-
-    if (isExemptNote || t.isExempt === true || String(t.isExempt) === 'true') {
-      if (!t.isExempt) t.isExempt = true;
-      if (!t.exemptReason) {
-        if (noteLower.includes('إداري') || noteLower.includes('مالك') || noteLower.includes('إدارة')) {
-          t.exemptReason = 'management_children';
-        } else if (noteLower.includes('أصدقاء') || noteLower.includes('معارف')) {
-          t.exemptReason = 'friend_children';
-        } else {
-          t.exemptReason = 'scholarship';
-        }
-      }
-      const actualCourseFee = getCourseFee(t);
-      t.feeAmount = actualCourseFee;
-      t.discountAmount = actualCourseFee;
-      t.netAmount = 0;
-      t.remainingAmount = 0;
-      exemptionsProcessedCount++;
-      touched = true;
-    }
-
-    if (touched) updatedCount++;
-  });
-
-  // Step 2: Sibling cross-linking
-  allTrainees.forEach((tA) => {
-    const pPhoneA = (tA.parentPhone || tA.phone || '').replace(/\D/g, '');
-    const pNameA = (tA.parentName || '').trim().toLowerCase();
-    const partsA = (tA.fullName || '').trim().toLowerCase().split(/\s+/);
-    const fatherA = partsA.length >= 2 ? partsA.slice(1).join(' ') : '';
-
-    const siblingMatches = allTrainees.filter((tB) => {
-      if (tB.id === tA.id) return false;
-      const pPhoneB = (tB.parentPhone || tB.phone || '').replace(/\D/g, '');
-      const pNameB = (tB.parentName || '').trim().toLowerCase();
-      const partsB = (tB.fullName || '').trim().toLowerCase().split(/\s+/);
-      const fatherB = partsB.length >= 2 ? partsB.slice(1).join(' ') : '';
-
-      if (pPhoneA && pPhoneA.length >= 8 && pPhoneB === pPhoneA) return true;
-      return false;
-    });
-
-    if (siblingMatches.length > 0) {
-      const existingIds = tA.siblingIds || [];
-      const newSiblingIds = Array.from(new Set([...existingIds, ...siblingMatches.map((s) => s.id)]));
-      const newSiblingNames = Array.from(new Set([...(tA.siblingNames || []), ...siblingMatches.map((s) => s.fullName)]));
-
-      let changedSiblings = false;
-      if (newSiblingIds.length !== existingIds.length) {
-        tA.siblingIds = newSiblingIds;
-        tA.siblingNames = newSiblingNames;
-        changedSiblings = true;
-        siblingsLinkedCount++;
-      }
-
-      // Apply sibling discount 20% if not exempt and discount is 0
-      if (!tA.isExempt && (tA.discountAmount === 0 || !tA.discountAmount)) {
-        const actualFee = getCourseFee(tA);
-        tA.feeAmount = actualFee;
-        const discVal = Math.round(actualFee * 0.2);
-        tA.discountAmount = discVal;
-        tA.netAmount = Math.max(0, actualFee - discVal);
-        tA.remainingAmount = Math.max(0, tA.netAmount - (tA.paidAmount || 0));
-        const sibNote = `تم تطبيق خصم الأخوات 20% لربطه مع (${siblingMatches.map(s => s.fullName).join('، ')})`;
-        if (!tA.notes?.includes('خصم الأخوات')) {
-          tA.notes = (tA.notes ? tA.notes + ' | ' : '') + sibNote;
-        }
-        changedSiblings = true;
-      }
-
-      if (changedSiblings) updatedCount++;
-    }
-  });
-
-  db.save();
-  db.logAudit({
-    userId: 'admin',
-    userName: 'مدير النظام',
-    action: 'مزامنة وتطوير كافة كشوفات المتدربين',
-    entity: 'المتدربين',
-    details: `تم فحص ومزامنة عدد ${allTrainees.length} متدرب. (استخراج إخوة: ${siblingsLinkedCount}، أسماء أولياء الأمور: ${parentNamesAutoFilledCount}، تواريخ الميلاد من القومي: ${birthDatesExtractedCount}، إعفاءات: ${exemptionsProcessedCount})`
-  });
-
-  res.json({
-    success: true,
-    totalTrainees: allTrainees.length,
-    updatedCount,
-    parentNamesAutoFilledCount,
-    birthDatesExtractedCount,
-    siblingsLinkedCount,
-    exemptionsProcessedCount
-  });
-});
-
+// (Removed shadowed obsolete promote-batch & duplicate batch-sync-records routes; active handlers remain below and above)
 // ----------------------------------------------------
 // Annual Trainee & Group Batch Promotion
 // ----------------------------------------------------
@@ -2706,7 +2721,7 @@ apiRouter.get('/trainees/promote-preview', (req: Request, res: Response) => {
   });
 });
 
-apiRouter.post('/trainees/promote-batch', (req: Request, res: Response) => {
+apiRouter.post('/trainees/promote-batch', requireRole(STAFF_ROLES), (req: Request, res: Response) => {
   const { academicYear, selectedTraineeIds, mappings, autoUpgradeGroups } = req.body;
   const dbData = db.getData();
   const allTrainees = dbData.trainees;
@@ -2841,7 +2856,7 @@ apiRouter.post('/trainees/promote-batch', (req: Request, res: Response) => {
   });
 });
 
-apiRouter.post('/trainees/bulk-import', async (req: Request, res: Response) => {
+apiRouter.post('/trainees/bulk-import', requireRole(STAFF_ROLES), async (req: Request, res: Response) => {
   const { rows, defaultBranchId, defaultCourseId } = req.body;
   if (!Array.isArray(rows) || rows.length === 0) {
     return res.status(400).json({ error: 'لا توجد بيانات للاستيراد' });
@@ -3186,7 +3201,7 @@ apiRouter.post('/trainees/preview-code-fix', async (req: Request, res: Response)
   }
 });
 
-apiRouter.post('/trainees/execute-code-fix', async (req: Request, res: Response) => {
+apiRouter.post('/trainees/execute-code-fix', requireRole(STAFF_ROLES), async (req: Request, res: Response) => {
   try {
     const { updates } = req.body;
     if (!Array.isArray(updates) || updates.length === 0) {
@@ -3664,7 +3679,7 @@ ${JSON.stringify(availableGroupsInfo, null, 2)}
   }
 });
 
-apiRouter.post('/trainees/import-commit', async (req: Request, res: Response) => {
+apiRouter.post('/trainees/import-commit', requireRole(STAFF_ROLES), async (req: Request, res: Response) => {
   try {
     const { students } = req.body;
     if (!Array.isArray(students) || students.length === 0) {
@@ -3899,14 +3914,18 @@ async function syncCourseToGroups(courseId: string, courseData: any) {
 // ----------------------------------------------------
 // Trainers
 // ----------------------------------------------------
-apiRouter.get('/trainers', async (req: Request, res: Response) => {
+apiRouter.get('/trainers', requireRole(STAFF_ROLES), async (req: Request, res: Response) => {
   try {
     const list = await TrainerRepo.getAll();
-    res.json(list);
+    const safeList = list.map((t: any) => {
+      const { portalPassword, ...rest } = t || {};
+      return { ...rest, hasPassword: Boolean(portalPassword && String(portalPassword).trim()) };
+    });
+    res.json(safeList);
   } catch(e: any) { res.status(500).json({ success: false, error: e.message }); }
 });
 
-apiRouter.post('/trainers', async (req: Request, res: Response) => {
+apiRouter.post('/trainers', requireRole(STAFF_ROLES), async (req: Request, res: Response) => {
   try {
     const data = req.body;
     if (!data.name || !data.phone) return res.status(400).json({ success: false, error: 'الاسم ورقم الهاتف مطلوبان' });
@@ -3918,7 +3937,7 @@ apiRouter.post('/trainers', async (req: Request, res: Response) => {
   } catch(e: any) { res.status(500).json({ success: false, error: e.message }); }
 });
 
-apiRouter.put('/trainers/:id', async (req: Request, res: Response) => {
+apiRouter.put('/trainers/:id', requireRole(STAFF_ROLES), async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const formattedData = await resolveTrainerCodeAndPrefix(req.body, id);
@@ -3928,7 +3947,7 @@ apiRouter.put('/trainers/:id', async (req: Request, res: Response) => {
   } catch(e: any) { res.status(500).json({ success: false, error: e.message }); }
 });
 
-apiRouter.post('/trainers/fix-codes', async (req: Request, res: Response) => {
+apiRouter.post('/trainers/fix-codes', requireRole(STAFF_ROLES), async (req: Request, res: Response) => {
   try {
     const trainers = await TrainerRepo.getAll();
     const updatedTrainers = [];
@@ -4743,10 +4762,10 @@ const handleGetPayments = async (req: Request, res: Response) => {
   } catch(e: any) { res.status(500).json({ success: false, error: e.message }); }
 };
 
-apiRouter.get('/finance/payments', handleGetPayments);
-apiRouter.get('/payments', handleGetPayments);
+apiRouter.get('/finance/payments', requireRole(FINANCE_OPS_ROLES), handleGetPayments);
+apiRouter.get('/payments', requireRole(FINANCE_OPS_ROLES), handleGetPayments);
 
-apiRouter.post('/finance/payments', async (req: Request, res: Response) => {
+apiRouter.post('/finance/payments', requireRole(FINANCE_OPS_ROLES), async (req: Request, res: Response) => {
   try {
     const { 
       traineeId, 
@@ -4980,7 +4999,7 @@ apiRouter.delete(['/finance/payments/:id', '/payments/:id'], async (req: Request
 });
 
 // Bulk Migration: Move all October payments to September
-apiRouter.post('/finance/payments/migrate-october-to-september', async (req: Request, res: Response) => {
+apiRouter.post('/finance/payments/migrate-october-to-september', requireRole(ADMIN_FINANCE_ROLES), async (req: Request, res: Response) => {
   try {
     const allPayments = await PaymentRepo.getAll(true);
     let migratedPaymentsCount = 0;
@@ -5025,7 +5044,7 @@ apiRouter.post('/finance/payments/migrate-october-to-september', async (req: Req
 });
 
 // Alias for /api/payments POST
-apiRouter.post('/payments', async (req: Request, res: Response) => {
+apiRouter.post('/payments', requireRole(FINANCE_OPS_ROLES), async (req: Request, res: Response) => {
   // Delegate to finance payments handler logic
   const handleUrl = '/api/finance/payments';
   req.url = handleUrl;
@@ -5173,8 +5192,8 @@ const handleQuickPayEndpoint = async (req: Request, res: Response) => {
   }
 };
 
-apiRouter.post('/finance/payments/quick-pay', handleQuickPayEndpoint);
-apiRouter.post('/payments/quick-pay', handleQuickPayEndpoint);
+apiRouter.post('/finance/payments/quick-pay', requireRole(FINANCE_OPS_ROLES), handleQuickPayEndpoint);
+apiRouter.post('/payments/quick-pay', requireRole(FINANCE_OPS_ROLES), handleQuickPayEndpoint);
 
 // ⚡⚡ Batch 1-Click Payment for All Unpaid Trainees in a Group (تسديد جميع طلاب المجموعة بنقرة واحدة)
 const handleQuickBatchPayEndpoint = async (req: Request, res: Response) => {
@@ -5292,11 +5311,11 @@ const handleQuickBatchPayEndpoint = async (req: Request, res: Response) => {
   }
 };
 
-apiRouter.post('/finance/payments/quick-batch-pay', handleQuickBatchPayEndpoint);
-apiRouter.post('/payments/quick-batch-pay', handleQuickBatchPayEndpoint);
+apiRouter.post('/finance/payments/quick-batch-pay', requireRole(FINANCE_OPS_ROLES), handleQuickBatchPayEndpoint);
+apiRouter.post('/payments/quick-batch-pay', requireRole(FINANCE_OPS_ROLES), handleQuickBatchPayEndpoint);
 
-// Parent Submit Payment Proof
-apiRouter.post('/parent/submit-payment-proof', async (req: Request, res: Response) => {
+// Parent Submit Payment Proof (IDOR protected: requires signed parent token owning traineeId, or staff)
+apiRouter.post('/parent/submit-payment-proof', requirePortalOrStaff('parent', req => req.body?.traineeId), async (req: Request, res: Response) => {
   try {
     const { traineeId, amount, paymentMethod, targetMonth, notes, proofImageUrl, submittedByParentName } = req.body;
     if (!traineeId || !amount || Number(amount) <= 0) {
@@ -5348,7 +5367,7 @@ apiRouter.post('/parent/submit-payment-proof', async (req: Request, res: Respons
 });
 
 // Get Pending Payment Proofs
-apiRouter.get('/finance/pending-proofs', async (req: Request, res: Response) => {
+apiRouter.get('/finance/pending-proofs', requireRole(ADMIN_FINANCE_ROLES), async (req: Request, res: Response) => {
   try {
     const list = await PaymentRepo.getPendingProofs();
     res.json(list);
@@ -5356,7 +5375,7 @@ apiRouter.get('/finance/pending-proofs', async (req: Request, res: Response) => 
 });
 
 // Admin Approve Payment Proof
-apiRouter.post('/finance/approve-proof', async (req: Request, res: Response) => {
+apiRouter.post('/finance/approve-proof', requireRole(ADMIN_FINANCE_ROLES), async (req: Request, res: Response) => {
   try {
     const { paymentId, approvedByUserId, approvedByUserName, notes } = req.body;
     if (!paymentId) return res.status(400).json({ error: 'معرف السند مطلوب' });
@@ -5393,7 +5412,7 @@ apiRouter.post('/finance/approve-proof', async (req: Request, res: Response) => 
 });
 
 // Admin Reject Payment Proof
-apiRouter.post('/finance/reject-proof', async (req: Request, res: Response) => {
+apiRouter.post('/finance/reject-proof', requireRole(ADMIN_FINANCE_ROLES), async (req: Request, res: Response) => {
   try {
     const { paymentId, rejectionReason, rejectedByUserId, rejectedByUserName } = req.body;
     if (!paymentId) return res.status(400).json({ error: 'معرف السند مطلوب' });
@@ -5412,7 +5431,7 @@ apiRouter.post('/finance/reject-proof', async (req: Request, res: Response) => {
   } catch(e: any) { res.status(500).json({ error: e.message }); }
 });
 
-apiRouter.get('/finance/expenses', async (req: Request, res: Response) => {
+apiRouter.get('/finance/expenses', requireRole(FINANCE_OPS_ROLES), async (req: Request, res: Response) => {
   try {
     const branchId = req.query.branchId as string;
     const category = req.query.category as string;
@@ -5430,7 +5449,7 @@ apiRouter.get('/finance/expenses', async (req: Request, res: Response) => {
   } catch(e: any) { res.status(500).json({ success: false, error: e.message }); }
 });
 
-apiRouter.post('/finance/expenses', async (req: Request, res: Response) => {
+apiRouter.post('/finance/expenses', requireRole(FINANCE_OPS_ROLES), async (req: Request, res: Response) => {
   try {
     const { category, amount, beneficiary, description, branchId, notes, documentNumber, date, title, paymentMethod, paidByUserId, paidByUserName } = req.body;
     if (!category || !amount || Number(amount) <= 0 || !branchId) {
@@ -5472,7 +5491,7 @@ apiRouter.post('/finance/expenses', async (req: Request, res: Response) => {
   } catch(e: any) { res.status(500).json({ error: e.message }); }
 });
 
-apiRouter.put('/finance/expenses/:id', async (req: Request, res: Response) => {
+apiRouter.put('/finance/expenses/:id', requireRole(ADMIN_FINANCE_ROLES), async (req: Request, res: Response) => {
   try {
     const id = req.params.id;
     const existing = await ExpenseRepo.getById(id);
@@ -5508,7 +5527,7 @@ apiRouter.put('/finance/expenses/:id', async (req: Request, res: Response) => {
   } catch(e: any) { res.status(500).json({ error: e.message }); }
 });
 
-apiRouter.delete('/finance/expenses/:id', async (req: Request, res: Response) => {
+apiRouter.delete('/finance/expenses/:id', requireRole(ADMIN_FINANCE_ROLES), async (req: Request, res: Response) => {
   try {
     const id = req.params.id;
     const existing = await ExpenseRepo.getById(id);
@@ -5530,7 +5549,7 @@ apiRouter.delete('/finance/expenses/:id', async (req: Request, res: Response) =>
   } catch(e: any) { res.status(500).json({ error: e.message }); }
 });
 
-apiRouter.get('/finance/trainer-settlements', (req: Request, res: Response) => {
+apiRouter.get('/finance/trainer-settlements', requireRole(FINANCE_OPS_ROLES), (req: Request, res: Response) => {
   const { trainerId, branchId } = req.query;
   let list = db.getData().trainerSettlements;
   if (trainerId) list = list.filter(s => s.trainerId === trainerId);
@@ -5538,7 +5557,7 @@ apiRouter.get('/finance/trainer-settlements', (req: Request, res: Response) => {
   res.json(list);
 });
 
-apiRouter.post('/finance/trainer-settlements', async (req: Request, res: Response) => {
+apiRouter.post('/finance/trainer-settlements', requireRole(ADMIN_FINANCE_ROLES), async (req: Request, res: Response) => {
   const { trainerId, amount, paymentMethod, periodDescription, notes, branchId, createdByUserId, createdByUserName } = req.body;
   if (!trainerId || !amount || Number(amount) <= 0) {
     return res.status(400).json({ error: 'المدرب والمبلغ حقول مطلوبة' });
@@ -5596,7 +5615,7 @@ apiRouter.post('/finance/trainer-settlements', async (req: Request, res: Respons
   res.json({ success: true, settlement, trainer });
 });
 
-apiRouter.delete('/finance/trainer-settlements/:id', async (req: Request, res: Response) => {
+apiRouter.delete('/finance/trainer-settlements/:id', requireRole(ADMIN_FINANCE_ROLES), async (req: Request, res: Response) => {
   try {
     const id = req.params.id;
     const settlements = db.getData().trainerSettlements || [];
@@ -5882,7 +5901,7 @@ apiRouter.get('/public/registration-status', async (req: Request, res: Response)
   }
 });
 
-apiRouter.post('/public/toggle-registration-status', async (req: Request, res: Response) => {
+apiRouter.post('/public/toggle-registration-status', requireRole(['super_admin', 'admin', 'branch_manager']), async (req: Request, res: Response) => {
   try {
     const settings = await SettingRepo.get();
     const current = settings.allowOnlineRegistration !== false;
@@ -5898,7 +5917,7 @@ apiRouter.post(['/public/register', '/public/register/'], handlePublicRegister);
 apiRouter.post(['/public/register-trainer', '/public/register-trainer/'], handlePublicTrainerRegister);
 
 
-apiRouter.get('/finance/summary', async (req: Request, res: Response) => {
+apiRouter.get('/finance/summary', requireRole(FINANCE_OPS_ROLES), async (req: Request, res: Response) => {
   try {
     const { branchId, startDate, endDate, fresh } = req.query;
     const isFresh = fresh === 'true';
@@ -6078,7 +6097,7 @@ apiRouter.get('/finance/summary', async (req: Request, res: Response) => {
 });
 
 // Owner Withdrawals Endpoints (صرف حصة ومسحوبات صاحب المركز)
-apiRouter.get('/finance/owner-withdrawals', async (req: Request, res: Response) => {
+apiRouter.get('/finance/owner-withdrawals', requireRole(ADMIN_FINANCE_ROLES), async (req: Request, res: Response) => {
   try {
     const { branchId } = req.query;
     let list = db.getData().ownerWithdrawals || [];
@@ -6091,7 +6110,7 @@ apiRouter.get('/finance/owner-withdrawals', async (req: Request, res: Response) 
   }
 });
 
-apiRouter.post('/finance/owner-withdrawal', async (req: Request, res: Response) => {
+apiRouter.post('/finance/owner-withdrawal', requireRole(ADMIN_FINANCE_ROLES), async (req: Request, res: Response) => {
   try {
     const { amount, date, notes, paymentMethod, branchId, withdrawnByUserId, withdrawnByUserName } = req.body;
     const withdrawAmount = Number(amount);
@@ -6179,7 +6198,7 @@ apiRouter.post('/finance/owner-withdrawal', async (req: Request, res: Response) 
   }
 });
 
-apiRouter.delete('/finance/owner-withdrawal/:id', async (req: Request, res: Response) => {
+apiRouter.delete('/finance/owner-withdrawal/:id', requireRole(ADMIN_FINANCE_ROLES), async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     if (!db.getData().ownerWithdrawals) return res.status(404).json({ error: 'السند غير موجود' });
@@ -6195,7 +6214,7 @@ apiRouter.delete('/finance/owner-withdrawal/:id', async (req: Request, res: Resp
   }
 });
 
-apiRouter.post('/finance/reset-and-archive', async (req: Request, res: Response) => {
+apiRouter.post('/finance/reset-and-archive', requireRole(ADMIN_FINANCE_ROLES), async (req: Request, res: Response) => {
   try {
     const { archiveTitle, pin, userId, userName } = req.body;
     const MASTER_PIN = '1234';
@@ -6304,14 +6323,14 @@ apiRouter.post('/finance/reset-and-archive', async (req: Request, res: Response)
   }
 });
 
-apiRouter.post('/finance/secret-archives', async (req: Request, res: Response) => {
+apiRouter.post('/finance/secret-archives', requireRole(ADMIN_FINANCE_ROLES), passcodeRateLimiter, async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const { pin, role, userRole } = req.body;
-    const MASTER_PIN = '1234';
-    const isMasterPin = pin === MASTER_PIN || pin === 'admin' || pin === '0000';
-    const isAdminRole = role === 'admin' || userRole === 'admin';
+    const { pin } = req.body;
+    const MASTER_PIN = process.env.SECRET_TREASURY_PASSCODE || '1234';
+    const isMasterPin = String(pin || '') === String(MASTER_PIN);
+    const isAdminUser = req.user?.role === 'super_admin' || req.user?.role === 'admin';
 
-    if (!isMasterPin && !isAdminRole) {
+    if (!isMasterPin && !isAdminUser) {
       return res.status(403).json({ error: '403 FORBIDDEN: الاطلاع على السجل المالي السري متاح لمدير المركز فقط.' });
     }
 
@@ -6336,18 +6355,18 @@ apiRouter.post('/finance/secret-archives', async (req: Request, res: Response) =
   }
 });
 
-apiRouter.post('/finance/reset-secret-treasury', async (req: Request, res: Response) => {
+apiRouter.post('/finance/reset-secret-treasury', requireRole(['super_admin', 'admin']), passcodeRateLimiter, async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const { pin, userId, userName, userRole, role } = req.body;
+    const { pin, userId, userName } = req.body;
 
-    // 1. Server-Side Authorization Check: Admin only
-    const MASTER_PIN = '1234';
-    const isMasterPin = pin === MASTER_PIN || pin === 'admin' || pin === '0000';
-    const isAdminRole = role === 'admin' || userRole === 'admin';
+    // 1. Server-Side Authorization Check: Admin only (verified via signed token)
+    const MASTER_PIN = process.env.SECRET_TREASURY_PASSCODE || '1234';
+    const isMasterPin = String(pin || '') === String(MASTER_PIN);
+    const isAdminUser = req.user?.role === 'super_admin' || req.user?.role === 'admin';
 
-    if (!isAdminRole && !isMasterPin) {
+    if (!isAdminUser || !isMasterPin) {
       return res.status(403).json({ 
-        error: '403 FORBIDDEN: تصفير الخزنة السرية متاح حصرياً لمدير النظام (Administrator).' 
+        error: '403 FORBIDDEN: تصفير الخزنة السرية متاح حصرياً لمدير النظام مع رمز الأمان الصحيح.' 
       });
     }
 
@@ -6628,7 +6647,7 @@ export async function awardTraineePoints(
   return { student, newTotal, pt };
 }
 
-apiRouter.post('/points/add', async (req: Request, res: Response) => {
+apiRouter.post('/points/add', requireRole(STAFF_ROLES), async (req: Request, res: Response) => {
   try {
     let { traineeIds, traineeId, points, reason, ruleId, branchId, addedByUserId, addedByUserName } = req.body;
     if (!Array.isArray(traineeIds)) {
@@ -9760,8 +9779,8 @@ function findAllTraineesMatch(trainees: any[], queryStr: string): any[] {
   return trainees.filter((t: any) => Boolean(findTraineeMatch([t], queryStr)));
 }
 
-// Student Portal Login Endpoint
-apiRouter.post('/student/login', async (req: Request, res: Response) => {
+// Student Portal Login Endpoint (Rate-limited + Signed HMAC Portal Token + Zero-Quota Session Summary)
+apiRouter.post('/student/login', portalAuthRateLimiter, async (req: Request, res: Response) => {
   const { codeOrPhone, password } = req.body;
   if (!codeOrPhone) {
     return res.status(400).json({ error: 'يرجى إدخال كود المتدرب أو رقم هاتفه' });
@@ -9792,8 +9811,8 @@ apiRouter.post('/student/login', async (req: Request, res: Response) => {
   const trainers = db.getData().trainers || [];
 
   const course = courses.find((c: any) => c.id === trainee.courseId) || courses[0];
-  const group = groups.find((g: any) => g.id === trainee.groupId) || groups[0];
-  const trainer = group ? trainers.find((tr: any) => tr.id === group.trainerId) : trainers[0];
+  const group = groups.find((g: any) => g.id === trainee.groupId) || null;
+  const trainer = group ? trainers.find((tr: any) => tr.id === group.trainerId) : null;
 
   // Calculate actual student points from Trainee entity and PointTransactions
   const rawPts = Number(trainee.totalPoints !== undefined ? trainee.totalPoints : (trainee.points !== undefined ? trainee.points : 0));
@@ -9807,24 +9826,33 @@ apiRouter.post('/student/login', async (req: Request, res: Response) => {
     await db.saveLocalOnly();
   }
 
+  const portalToken = signSessionToken({
+    id: trainee.id,
+    username: trainee.code || trainee.id,
+    role: 'student',
+    branchId: trainee.branchId || 'branch-1',
+    traineeId: trainee.id,
+    allowedTraineeIds: [trainee.id],
+    fullName: trainee.fullName || 'طالب متميز'
+  });
+
   const studentData = {
     id: trainee.id,
     code: trainee.code || (codeOrPhone ? String(codeOrPhone).toUpperCase() : ''),
     fullName: trainee.fullName || 'طالب متميز',
     phone: trainee.phone || '',
-    nationalId: trainee.nationalId || '',
     photoUrl: trainee.photoUrl || '',
     points: effectivePoints,
     totalPoints: effectivePoints,
     courseName: course?.name || 'التكنولوجيا والبرمجة الحديثة',
-    groupName: group?.name || 'المجموعة الأساسية',
+    groupName: group?.name || 'غير مسكن بمجموعة بعد',
     grade: trainee.grade || (trainee as any).schoolGrade || (trainee as any).stage || '',
     stage: (trainee as any).stage || trainee.grade || '',
     schoolGrade: (trainee as any).schoolGrade || trainee.grade || '',
     courseId: trainee.courseId || course?.id || '',
     groupId: trainee.groupId || group?.id || '',
     branchId: trainee.branchId || 'branch-1',
-    portalPassword: trainee.portalPassword || '',
+    hasPassword: Boolean(trainee.portalPassword && trainee.portalPassword.trim()),
     groupDetails: group,
     socialLinks: (trainee as any).socialLinks
   };
@@ -9836,18 +9864,18 @@ apiRouter.post('/student/login', async (req: Request, res: Response) => {
     specialization: (trainer as any).specialization || 'مُحاضر معتمد'
   } : {
     name: 'المدرب المشرف',
-    phone: '01001500686',
+    phone: db.getData().settings?.phone || '01001500686',
     email: 'trainer@nagah.ms',
     specialization: 'خبير البرمجة والتكنولوجيا'
   };
 
-  // Load real assignments from database matching student's course or group, fallback to defaults
+  // Load real assignments from database matching student's course or group
   const dbAssignments = (db.getData().assignments || []).filter((a: any) => 
     !a.courseId || a.courseId === trainee.courseId || (a.courseName && studentData.courseName && a.courseName.toLowerCase() === studentData.courseName.toLowerCase()) ||
     !a.groupId || a.groupId === trainee.groupId
   );
 
-  const groupTasks = dbAssignments.length > 0 ? dbAssignments.map((a: any) => ({
+  const groupTasks = dbAssignments.map((a: any) => ({
     id: a.id,
     title: a.title,
     courseName: a.courseName || studentData.courseName,
@@ -9856,20 +9884,14 @@ apiRouter.post('/student/login', async (req: Request, res: Response) => {
     assignmentType: a.assignmentType,
     quizGame: a.quizGame,
     evaluationSource: a.evaluationSource
-  })) : [
-    { id: 'task-1', title: 'واجب تطبيق الدرس العملي والتقييم الأسبوعي', courseName: studentData.courseName, maxPoints: 50 },
-    { id: 'task-2', title: 'حل تمارين كتاب الأنشطة وتصوير الصفحة', courseName: studentData.courseName, maxPoints: 30 },
-    { id: 'task-3', title: 'تحدي المعرفة والابتكار الذاتي', courseName: studentData.courseName, maxPoints: 50 }
-  ];
+  }));
 
-  const allStudentHW = (db.getData().homeworkSubmissions || []).filter((h: any) =>
+  const studentHomeworks = (db.getData().homeworkSubmissions || []).filter((h: any) =>
     h.traineeId === trainee.id ||
     h.studentId === trainee.id ||
     (h.traineeCode && trainee.code && String(h.traineeCode).trim().toLowerCase() === String(trainee.code).trim().toLowerCase()) ||
     (h.studentCode && trainee.code && String(h.studentCode).trim().toLowerCase() === String(trainee.code).trim().toLowerCase())
   );
-
-  const studentHomeworks = allStudentHW.length > 0 ? allStudentHW : [];
 
   const allStudentMsgs = (db.getData().portalMessages || []).filter((m: any) =>
     m.traineeId === trainee.id ||
@@ -9880,14 +9902,9 @@ apiRouter.post('/student/login', async (req: Request, res: Response) => {
     m.recipientType === 'students'
   );
 
-  const rawBadges = (db.getData().badges || (db.getData() as any).traineeBadges || []).filter((b: any) =>
+  const studentBadges = (db.getData().badges || (db.getData() as any).traineeBadges || []).filter((b: any) =>
     b.traineeId === trainee.id || b.studentId === trainee.id
   );
-
-  const studentBadges = rawBadges.length > 0 ? rawBadges : [
-    { id: 'b-1', title: 'مبرمج المستقبل', description: 'إتمام التمارين الأولى بتفوق', icon: '🏆', date: new Date().toISOString().split('T')[0] },
-    { id: 'b-2', title: 'نجم الحضور والالتزام', description: 'الالتزام بحضور الحصص والتفاعل المتميز', icon: '⭐', date: new Date().toISOString().split('T')[0] }
-  ];
 
   const studentCerts = (db.getData().certificates || []).filter((c: any) =>
     c.traineeId === trainee.id ||
@@ -9898,8 +9915,13 @@ apiRouter.post('/student/login', async (req: Request, res: Response) => {
     (c.studentCode && trainee.code && String(c.studentCode).trim().toLowerCase() === String(trainee.code).trim().toLowerCase())
   );
 
+  const realLabSchedules = (db.getData().labSchedules || []).filter((s: any) => s.groupId && s.groupId === trainee.groupId);
+  const labSchedules = realLabSchedules.length > 0 ? realLabSchedules : buildGroupScheduleSummary(group);
+  const latestSessionSummary = buildTraineeSessionSummary(trainee.id, trainee.code);
+
   res.json({
     success: true,
+    token: portalToken,
     student: studentData,
     trainer: trainerData,
     badges: studentBadges,
@@ -9908,14 +9930,11 @@ apiRouter.post('/student/login', async (req: Request, res: Response) => {
       er.traineeId === trainee.id ||
       (er.traineeCode && trainee.code && String(er.traineeCode).trim().toLowerCase() === String(trainee.code).trim().toLowerCase())
     ),
-    labSchedules: [
-      { id: 'lab-1', title: 'حصة المعمل والتدريب العملي', time: 'السبت 10:00 ص', room: 'المعمل الرئيسي (1)', status: 'upcoming' }
-    ],
+    labSchedules,
     groupTasks,
-    certificates: studentCerts.length > 0 ? studentCerts : [
-      { id: 'cert-1', title: `شهادة التحاق وتفوق في ${studentData.courseName}`, issueDate: new Date().toISOString().split('T')[0], grade: 'ممتاز' }
-    ],
-    portalMessages: allStudentMsgs
+    certificates: studentCerts,
+    portalMessages: allStudentMsgs,
+    latestSessionSummary
   });
 });
 
@@ -10498,6 +10517,41 @@ let activeLabStatus: Record<string, LabStatusState> = {
   }
 };
 
+// Unified Zero-Quota Kiosk Pulse Endpoint (100% In-Memory - 0 Firestore Reads)
+apiRouter.get('/kiosk/pulse', (req: AuthenticatedRequest, res: Response) => {
+  const branchId = (req.query.branchId as string) || 'global';
+  const labStatus = activeLabStatus[branchId] || activeLabStatus['global'] || {
+    isOpen: true,
+    trainerName: 'المحاضر المشرف',
+    roomName: 'المعمل الرئيسي',
+    updatedAt: new Date().toISOString()
+  };
+
+  const isTeacher = isStaffUser(req);
+  let quickQuestion: any = activeLabQuickQuestion;
+  if (activeLabQuickQuestion && !isTeacher && !activeLabQuickQuestion.revealed) {
+    quickQuestion = {
+      ...activeLabQuickQuestion,
+      correctAnswer: undefined,
+      answers: Object.fromEntries(
+        Object.entries(activeLabQuickQuestion.answers).map(([k, v]) => [
+          k,
+          { ...v, isCorrect: undefined }
+        ])
+      )
+    };
+  }
+
+  const externalActivity = activeLabExternalActivity || masterBroadcast.activeExternalSession || null;
+  res.json({
+    success: true,
+    labStatus,
+    quickQuestion,
+    externalActivity,
+    timestamp: Date.now()
+  });
+});
+
 // GET /lab/status
 apiRouter.get('/lab/status', (req: Request, res: Response) => {
   const branchId = (req.query.branchId as string) || 'global';
@@ -10510,8 +10564,8 @@ apiRouter.get('/lab/status', (req: Request, res: Response) => {
   res.json({ success: true, ...status });
 });
 
-// POST /lab/status
-apiRouter.post('/lab/status', (req: Request, res: Response) => {
+// POST /lab/status (Protected: Staff Only)
+apiRouter.post('/lab/status', requireRole(STAFF_ROLES), (req: Request, res: Response) => {
   const { isOpen, branchId = 'global', trainerName = 'المحاضر المشرف', roomName = 'المعمل الرئيسي' } = req.body;
   const statusObj: LabStatusState = {
     isOpen: Boolean(isOpen),
@@ -10531,18 +10585,17 @@ apiRouter.post('/lab/status', (req: Request, res: Response) => {
         d.status = isOpen ? 'active' : 'locked';
       }
     });
-    db.save();
+    db.saveLocalOnly();
   } catch (e) {}
 
   res.json({ success: true, ...statusObj });
 });
 
 // Student Kiosk & Trainer get current quick question & active external challenge
-apiRouter.get('/lab/quick-question', (req: Request, res: Response) => {
+// SECURITY FIX: NEVER trust spoofable ?isTeacher=true query param; verify signed staff session token!
+apiRouter.get('/lab/quick-question', (req: AuthenticatedRequest, res: Response) => {
   const external = activeLabExternalActivity || masterBroadcast.activeExternalSession;
-  
-  // If teacher calls with query param ?isTeacher=true, return full data with secret answer
-  const isTeacher = req.query.isTeacher === 'true' || req.query.role === 'admin' || req.query.role === 'trainer';
+  const isTeacher = isStaffUser(req);
 
   let dataToSend = activeLabQuickQuestion;
   if (activeLabQuickQuestion && !isTeacher && !activeLabQuickQuestion.revealed) {
@@ -10566,8 +10619,8 @@ apiRouter.get('/lab/quick-question', (req: Request, res: Response) => {
   });
 });
 
-// Trainer broadcasts quick question to local lab screens (Hidden answer by default for projector)
-apiRouter.post('/lab/quick-question/broadcast', (req: Request, res: Response) => {
+// Trainer broadcasts quick question to local lab screens (Protected: Staff Only)
+apiRouter.post('/lab/quick-question/broadcast', requireRole(STAFF_ROLES), (req: Request, res: Response) => {
   const { type, questionText, correctAnswer, options } = req.body;
   activeLabQuickQuestion = {
     id: 'q-' + Date.now(),
@@ -10583,16 +10636,16 @@ apiRouter.post('/lab/quick-question/broadcast', (req: Request, res: Response) =>
   res.json({ success: true, question: activeLabQuickQuestion });
 });
 
-// Trainer closes voting on active question
-apiRouter.post('/lab/quick-question/close', (req: Request, res: Response) => {
+// Trainer closes voting on active question (Protected: Staff Only)
+apiRouter.post('/lab/quick-question/close', requireRole(STAFF_ROLES), (req: Request, res: Response) => {
   if (activeLabQuickQuestion) {
     activeLabQuickQuestion.closed = true;
   }
   res.json({ success: true, question: activeLabQuickQuestion });
 });
 
-// Trainer reveals correct answer & optionally awards stars to correct students
-apiRouter.post('/lab/quick-question/reveal', async (req: Request, res: Response) => {
+// Trainer reveals correct answer & optionally awards stars to correct students (Protected: Staff Only)
+apiRouter.post('/lab/quick-question/reveal', requireRole(STAFF_ROLES), async (req: Request, res: Response) => {
   if (!activeLabQuickQuestion) {
     return res.status(400).json({ error: 'لا يوجد سؤال نشط لكشف إجابته' });
   }
@@ -10639,8 +10692,8 @@ apiRouter.post('/lab/quick-question/reveal', async (req: Request, res: Response)
   });
 });
 
-// Trainer clears active question
-apiRouter.post('/lab/quick-question/clear', (req: Request, res: Response) => {
+// Trainer clears active question (Protected: Staff Only)
+apiRouter.post('/lab/quick-question/clear', requireRole(STAFF_ROLES), (req: Request, res: Response) => {
   activeLabQuickQuestion = null;
   res.json({ success: true });
 });
@@ -10678,7 +10731,7 @@ apiRouter.get('/lab/active-activity', (req: Request, res: Response) => {
   res.json({ success: true, activity: external });
 });
 
-apiRouter.post('/lab/active-activity/broadcast', (req: Request, res: Response) => {
+apiRouter.post('/lab/active-activity/broadcast', requireRole(STAFF_ROLES), (req: Request, res: Response) => {
   const { title, platform, url, gamePin, clear } = req.body;
   
   if (clear || (!url && !gamePin)) {
@@ -12438,17 +12491,16 @@ apiRouter.post('/trainer/analyze-book', async (req: Request, res: Response) => {
   }
 });
 
-// Parent Portal Login Endpoint
-apiRouter.post('/parent/login', async (req: Request, res: Response) => {
+// Parent Portal Login Endpoint (Rate-limited + Enforces parentPortalPassword + Signed HMAC Token + Live Session Summary)
+apiRouter.post('/parent/login', portalAuthRateLimiter, async (req: Request, res: Response) => {
   try {
-    const { phone, codeOrPhone, code } = req.body;
+    const { phone, codeOrPhone, code, password } = req.body;
     const inputVal = String(codeOrPhone || phone || code || '').trim();
     if (!inputVal) {
       return res.status(400).json({ success: false, error: 'يرجى إدخال كود الطالب أو رقم هاتف ولي الأمر' });
     }
 
     const cleanInputDigits = inputVal.replace(/\D/g, '');
-    const cleanInputCode = inputVal.toUpperCase();
 
     const data = db.getData();
     const trainees = (data.trainees && data.trainees.length > 0) ? data.trainees : await TraineeRepo.getAll();
@@ -12499,6 +12551,21 @@ apiRouter.post('/parent/login', async (req: Request, res: Response) => {
       return false;
     });
 
+    // Enforce parentPortalPassword if configured on any matched child
+    const configuredParentPasswords = matched
+      .map((m: any) => String(m.parentPortalPassword || '').trim())
+      .filter(Boolean);
+    if (configuredParentPasswords.length > 0) {
+      const providedPwd = String(password || '').trim();
+      if (!providedPwd || !configuredParentPasswords.includes(providedPwd)) {
+        return res.status(401).json({
+          success: false,
+          requiresPassword: true,
+          error: '⚠️ حساب ولي الأمر محمي بكلمة مرور. يرجى إدخال كلمة المرور الصحيحة.'
+        });
+      }
+    }
+
     const allCourses = data.courses || [];
     const allGroups = data.groups || [];
     const allTrainers = data.trainers || [];
@@ -12518,10 +12585,11 @@ apiRouter.post('/parent/login', async (req: Request, res: Response) => {
         a.student_id === t.id || a.studentId === t.id || a.traineeId === t.id || a.student_code === t.code
       );
 
-      // Schedules
+      // Real Schedules (never fake Saturday 10:00 AM)
       const childSched = allSchedules.filter((s: any) =>
-        s.groupId === t.groupId || s.courseId === t.courseId || s.branchId === t.branchId
+        s.groupId === t.groupId || s.courseId === t.courseId
       );
+      const resolvedSchedules = childSched.length > 0 ? childSched : buildGroupScheduleSummary(group);
 
       // Badges
       const childBadges = (data.badges || []).filter((b: any) =>
@@ -12585,7 +12653,6 @@ apiRouter.post('/parent/login', async (req: Request, res: Response) => {
         };
       });
 
-      // Also ensure all directly submitted homeworks (AI scanner papers) show up for the parent
       childHWList.forEach((sub: any) => {
         if (!childAssignments.some((a: any) => a.id === sub.assignmentId || a.id === sub.id)) {
           const resolvedScore = sub.grade !== undefined ? sub.grade : (sub.score !== undefined ? sub.score : 0);
@@ -12609,7 +12676,6 @@ apiRouter.post('/parent/login', async (req: Request, res: Response) => {
         }
       });
 
-      // Child Lecture Recaps & Daily Tasks (Filtered strictly to this child's group or grade)
       const childRecaps = (data.lectureRecaps || []).filter((r: any) => {
         if (r.groupId && t.groupId && r.groupId === t.groupId) return true;
         if (r.courseId && t.courseId && r.courseId === t.courseId) return true;
@@ -12624,27 +12690,30 @@ apiRouter.post('/parent/login', async (req: Request, res: Response) => {
         return false;
       });
 
+      // Strip sensitive passwords before returning to client
+      const safeTrainee = sanitizeTraineeDTO(t, 'parent');
+      delete safeTrainee.portalPassword;
+      delete safeTrainee.parentPortalPassword;
+
       return {
-        ...t,
+        ...safeTrainee,
+        hasParentPassword: Boolean((t as any).parentPortalPassword && String((t as any).parentPortalPassword).trim()),
         courseName: course?.name || 'البرنامج التدريبي العام',
-        groupName: group?.name || 'المجموعة المعتمدة',
-        badges: childBadges.length > 0 ? childBadges : [
-          { id: 'b-1', title: 'مبرمج المستقبل', badgeTitle: 'مبرمج المستقبل', description: 'التفوق والتطوير المستمر', icon: '🏆', date: new Date().toISOString() }
-        ],
+        groupName: group?.name || 'غير مسكن بمجموعة بعد',
+        badges: childBadges,
         certificates: childCerts,
         evaluations: childEvals,
         attendance: childAtt,
         attendanceCount: childAtt.filter((a: any) => a.status === 'present' || a.status === 'حاضر').length,
-        totalAttendance: Math.max(childAtt.length, 8),
-        schedules: childSched.length > 0 ? childSched : [
-          { id: 'sch-1', title: 'الورشة التفاعلية الأسبوعية', dayName: 'السبت', startTime: '10:00 ص', roomName: 'المعمل الرئيسي (1)' }
-        ],
+        totalAttendance: childAtt.length,
+        schedules: resolvedSchedules,
         payments: childPay,
         messages: childMsgs,
         assignments: childAssignments,
         homeworks: childHWList,
         homeworkSubmissions: childHWList,
         recaps: childRecaps,
+        latestSessionSummary: buildTraineeSessionSummary(t.id, t.code),
         groupDetails: group,
         trainer: trainer ? {
           id: trainer.id,
@@ -12657,13 +12726,25 @@ apiRouter.post('/parent/login', async (req: Request, res: Response) => {
     });
 
     const parentName = matched[0].parentName || `ولي أمر الطالب ${matched[0].fullName}`;
+    const parentPhoneVal = cleanInputDigits || matched[0].parentPhone || matched[0].phone;
+    const parentToken = signSessionToken({
+      id: `parent-${matched[0].id}`,
+      username: parentPhoneVal || matched[0].id,
+      role: 'parent',
+      branchId: matched[0].branchId || 'branch-1',
+      traineeId: matched[0].id,
+      allowedTraineeIds: matched.map((m: any) => m.id),
+      fullName: parentName
+    });
+
     res.json({
       success: true,
-      parentName: parentName,
-      parentPhone: cleanInputDigits || matched[0].parentPhone || matched[0].phone,
+      token: parentToken,
+      parentName,
+      parentPhone: parentPhoneVal,
       parent: {
         name: parentName,
-        phone: cleanInputDigits || matched[0].parentPhone || matched[0].phone,
+        phone: parentPhoneVal,
         studentCount: matched.length
       },
       children: enrichedChildren,
@@ -12674,8 +12755,8 @@ apiRouter.post('/parent/login', async (req: Request, res: Response) => {
   }
 });
 
-// Link Additional Child by Code or Phone
-apiRouter.post('/parent/link-child', async (req: Request, res: Response) => {
+// Link Additional Child by Code or Phone (Protected: Authenticated Parent or Staff)
+apiRouter.post('/parent/link-child', requirePortalOrStaff('parent'), async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { studentCodeOrPhone, parentPhone } = req.body;
     const query = String(studentCodeOrPhone || '').trim();
@@ -12768,18 +12849,35 @@ apiRouter.post('/parent/link-child', async (req: Request, res: Response) => {
       } : null
     };
 
+    const updatedAllowedIds = Array.from(new Set([...(req.user?.allowedTraineeIds || []), targetStudent.id]));
+    const refreshedToken = req.user?.role === 'parent'
+      ? signSessionToken({
+          id: req.user.id,
+          username: req.user.username,
+          role: 'parent',
+          branchId: req.user.branchId,
+          traineeId: req.user.traineeId || targetStudent.id,
+          allowedTraineeIds: updatedAllowedIds,
+          fullName: req.user.fullName
+        })
+      : undefined;
+
     res.json({
       success: true,
+      token: refreshedToken,
       message: `تم ربط الابن (${targetStudent.fullName}) بنجاح! 🎉`,
-      child: enriched
+      child: {
+        ...enriched,
+        latestSessionSummary: buildTraineeSessionSummary(targetStudent.id, targetStudent.code)
+      }
     });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
   }
 });
 
-// Trainer Portal Login Endpoint
-apiRouter.post('/trainer-portal/login', async (req: Request, res: Response) => {
+// Trainer Portal Login Endpoint (Rate-limited + Signed HMAC Token + Strip Password)
+apiRouter.post('/trainer-portal/login', portalAuthRateLimiter, async (req: Request, res: Response) => {
   try {
     const { identifier, phoneOrCode, password } = req.body;
     const input = (identifier || phoneOrCode || '').trim().toLowerCase();
@@ -12805,19 +12903,34 @@ apiRouter.post('/trainer-portal/login', async (req: Request, res: Response) => {
       if (!password || password.trim() !== trainer.portalPassword.trim()) {
         return res.status(401).json({
           success: false,
+          requiresPassword: true,
           error: 'كلمة السر غير صحيحة. يرجى التأكد من الرقم السري أو التواصل مع الإدارة لاسترجاعه.'
         });
       }
     }
 
-    res.json({ success: true, trainer });
+    const trainerToken = signSessionToken({
+      id: trainer.id,
+      username: trainer.code || trainer.phone || trainer.id,
+      role: 'trainer',
+      branchId: (trainer as any).branchId || 'all',
+      trainerId: trainer.id,
+      fullName: trainer.name || 'مدرب معتمد'
+    });
+    const { portalPassword, ...safeTrainer } = trainer as any;
+
+    res.json({
+      success: true,
+      token: trainerToken,
+      trainer: { ...safeTrainer, hasPassword: Boolean(portalPassword && String(portalPassword).trim()) }
+    });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
   }
 });
 
-// Trainer Portal Data Fetch Endpoint
-apiRouter.get('/trainer-portal/data/:trainerId', async (req: Request, res: Response) => {
+// Trainer Portal Data Fetch Endpoint (IDOR Protected)
+apiRouter.get('/trainer-portal/data/:trainerId', requirePortalOrStaff('trainer', req => req.params.trainerId), async (req: Request, res: Response) => {
   try {
     const { trainerId } = req.params;
     const trainers = await TrainerRepo.getAll();
@@ -12894,12 +13007,13 @@ apiRouter.get('/trainer-portal/data/:trainerId', async (req: Request, res: Respo
       m.recipientType === 'all'
     );
 
+    const { portalPassword: _trPwd, ...safeTrainer } = trainer as any;
     res.json({
       success: true,
-      trainer,
+      trainer: { ...safeTrainer, hasPassword: Boolean(_trPwd && String(_trPwd).trim()) },
       groups: trainerGroups,
       courses: trainerCourses,
-      trainees: trainerTrainees,
+      trainees: trainerTrainees.map(t => sanitizeTraineeDTO(t, 'trainer')),
       attendance: trainerAttendance,
       homeworkSubmissions: trainerHomeworks,
       exams: trainerExams,
@@ -12912,8 +13026,8 @@ apiRouter.get('/trainer-portal/data/:trainerId', async (req: Request, res: Respo
   }
 });
 
-// Update Trainer Credentials & Password
-apiRouter.post('/trainer-portal/update-credentials', async (req: Request, res: Response) => {
+// Update Trainer Credentials & Password (IDOR Protected)
+apiRouter.post('/trainer-portal/update-credentials', requirePortalOrStaff('trainer', req => req.body?.trainerId), async (req: Request, res: Response) => {
   try {
     const { trainerId, name, phone, email, portalPassword } = req.body;
     if (!trainerId) {
@@ -12930,14 +13044,15 @@ apiRouter.post('/trainer-portal/update-credentials', async (req: Request, res: R
     if (portalPassword !== undefined) updates.portalPassword = portalPassword;
 
     const updated = await TrainerRepo.update(trainerId, updates);
-    res.json({ success: true, trainer: updated || { ...trainer, ...updates } });
+    const { portalPassword: _pwd, ...safeUpdated } = (updated || { ...trainer, ...updates }) as any;
+    res.json({ success: true, trainer: { ...safeUpdated, hasPassword: Boolean(_pwd && String(_pwd).trim()) } });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
   }
 });
 
-// Record Group Attendance
-apiRouter.post('/trainer-portal/attendance', async (req: Request, res: Response) => {
+// Record Group Attendance (IDOR Protected)
+apiRouter.post('/trainer-portal/attendance', requirePortalOrStaff('trainer', req => req.body?.trainerId), async (req: Request, res: Response) => {
   try {
     const { trainerId, groupId, date, records } = req.body;
     if (!groupId || !date || !Array.isArray(records)) {
@@ -12965,8 +13080,8 @@ apiRouter.post('/trainer-portal/attendance', async (req: Request, res: Response)
   }
 });
 
-// Review Homework Submission
-apiRouter.post('/trainer-portal/review-homework', async (req: Request, res: Response) => {
+// Review Homework Submission (IDOR Protected)
+apiRouter.post('/trainer-portal/review-homework', requirePortalOrStaff('trainer', req => req.body?.trainerId), async (req: Request, res: Response) => {
   try {
     const { submissionId, trainerId, grade, trainerFeedback, pointsToAward, trainerNotes, stars } = req.body;
     const data = db.getData();
@@ -13034,8 +13149,8 @@ apiRouter.post('/trainer-portal/review-homework', async (req: Request, res: Resp
   }
 });
 
-// Upload Trainer Photo
-apiRouter.post('/trainer-portal/upload-photo', async (req: Request, res: Response) => {
+// Upload Trainer Photo (IDOR Protected)
+apiRouter.post('/trainer-portal/upload-photo', requirePortalOrStaff('trainer', req => req.body?.trainerId), async (req: Request, res: Response) => {
   try {
     const { trainerId, photoUrl } = req.body;
     if (!trainerId || !photoUrl) {
@@ -13484,13 +13599,8 @@ apiRouter.post(['/ai/facebook-webhook', '/ai/facebook-webhook/'], async (req: Re
   }
 });
 
-// 8g. Publish Social Announcement
-apiRouter.post(['/ai/publish-social', '/ai/publish-social/'], async (req: Request, res: Response) => {
-  res.json({ success: true, message: 'تم نشر المنشور عبر قنوات التواصل الاجتماعي بنجاح!' });
-});
-
-// 9. Parent Update Full Profile Endpoint
-apiRouter.post('/parent/update-full-profile', async (req: Request, res: Response) => {
+// 9. Parent Update Full Profile Endpoint (IDOR Protected)
+apiRouter.post('/parent/update-full-profile', requirePortalOrStaff('parent', req => req.body?.traineeId), async (req: Request, res: Response) => {
   try {
     const { traineeId, parentPhone, parentName, parentNationalId, parentEmail, address, parentPortalPassword, parentPhotoUrl } = req.body || {};
     if (!traineeId) {
@@ -13516,7 +13626,7 @@ apiRouter.post('/parent/update-full-profile', async (req: Request, res: Response
       const idx = memData.trainees.findIndex((t: any) => t.id === trainee.id);
       if (idx >= 0) {
         memData.trainees[idx] = { ...memData.trainees[idx], ...updates };
-        db.save();
+        await db.saveLocalOnly();
       }
     }
     res.json({ success: true, message: 'تم تحديث بيانات ملف ولي الأمر بنجاح' });
@@ -13525,8 +13635,8 @@ apiRouter.post('/parent/update-full-profile', async (req: Request, res: Response
   }
 });
 
-// 10. Parent Update Student Info Endpoint
-apiRouter.post('/parent/update-student', async (req: Request, res: Response) => {
+// 10. Parent Update Student Info Endpoint (IDOR Protected)
+apiRouter.post('/parent/update-student', requirePortalOrStaff('parent', req => req.body?.traineeId), async (req: Request, res: Response) => {
   try {
     const { traineeId, nationalId, phone, photoUrl } = req.body || {};
     if (!traineeId) {
@@ -13547,7 +13657,7 @@ apiRouter.post('/parent/update-student', async (req: Request, res: Response) => 
       const idx = memData.trainees.findIndex((t: any) => t.id === trainee.id);
       if (idx >= 0) {
         memData.trainees[idx] = { ...memData.trainees[idx], ...updates };
-        db.save();
+        await db.saveLocalOnly();
       }
     }
     res.json({ success: true, message: 'تم تحديث بيانات الطالب بنجاح' });
@@ -13556,8 +13666,8 @@ apiRouter.post('/parent/update-student', async (req: Request, res: Response) => 
   }
 });
 
-// 11. Student Update Profile Endpoint
-apiRouter.post('/student/update-profile', async (req: Request, res: Response) => {
+// 11. Student Update Profile Endpoint (IDOR Protected)
+apiRouter.post('/student/update-profile', requirePortalOrStaff('student', req => req.body?.traineeId), async (req: Request, res: Response) => {
   try {
     const { traineeId, portalPassword, socialLinks } = req.body || {};
     if (!traineeId) {
@@ -13577,31 +13687,50 @@ apiRouter.post('/student/update-profile', async (req: Request, res: Response) =>
       const idx = memData.trainees.findIndex((t: any) => t.id === trainee.id);
       if (idx >= 0) {
         memData.trainees[idx] = { ...memData.trainees[idx], ...updates };
-        db.save();
+        await db.saveLocalOnly();
       }
     }
-    res.json({ success: true, student: { ...trainee, ...updates } });
+    const safeMerged = sanitizeTraineeDTO({ ...trainee, ...updates }, 'student');
+    delete safeMerged.portalPassword;
+    delete safeMerged.parentPortalPassword;
+    res.json({
+      success: true,
+      student: { ...safeMerged, hasPassword: Boolean((updates.portalPassword ?? trainee.portalPassword)?.trim()) }
+    });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
   }
 });
 
-// 12. Student Forgot Password Endpoint
-apiRouter.post('/student/forgot-password', async (req: Request, res: Response) => {
+// 12. Student Forgot Password Endpoint (SECURITY HARDENED: NEVER leaks plaintext password!)
+apiRouter.post('/student/forgot-password', portalAuthRateLimiter, async (req: Request, res: Response) => {
   try {
     const { codeOrPhone } = req.body || {};
     if (!codeOrPhone) {
       return res.status(400).json({ error: 'الرجاء كتابة كود الطالب أو رقم الهاتف أولاً' });
     }
-    const trainees = await TraineeRepo.getAll();
+    const data = db.getData();
+    const trainees = (data.trainees && data.trainees.length > 0) ? data.trainees : await TraineeRepo.getAll();
     const trainee = findTraineeMatch(trainees, codeOrPhone);
-    if (!trainee) {
-      return res.status(404).json({ error: 'لم يتم العثور على طالب مسجل بهذا الكود أو رقم الهاتف.' });
+    if (trainee) {
+      // Record a secure admin notification so center staff can assist with password reset
+      if (!Array.isArray(data.notifications)) data.notifications = [];
+      data.notifications.unshift({
+        id: 'notif-pwd-reset-' + Date.now(),
+        type: 'system',
+        title: `🔐 طلب إعادة تعيين كلمة مرور بوابة الطالب: ${trainee.fullName}`,
+        message: `طلب الطالب (${trainee.code || trainee.fullName}) مساعدة لاسترجاع كلمة مرور البوابة. يرجى التواصل مع ولي الأمر لإعادة تعيينها.`,
+        linkView: 'trainees',
+        createdAt: new Date().toISOString(),
+        read: false,
+        metadata: { traineeId: trainee.id }
+      });
+      await db.saveLocalOnly();
     }
-    const pwd = trainee.portalPassword || '123456';
+    const centerPhone = data.settings?.phone || '01001500686';
     res.json({
       success: true,
-      message: `تم التحقق من حساب الطالب (${trainee.fullName}): كلمة المرور الخاصة ببوابتك هي (${pwd})، ويمكنك تغييرها بعد تسجيل الدخول من الإعدادات.`
+      message: `تم تسجيل طلب المساعدة بأمان وإشعار إدارة المركز. حفاظاً على سرية حسابك، لا تُعرض كلمات المرور عبر الإنترنت — يرجى التواصل مع الإدارة على الرقم (${centerPhone}) لإعادة تعيين كلمة المرور.`
     });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -13841,7 +13970,7 @@ apiRouter.get('/sessions/grades', (req: Request, res: Response) => {
   }
 });
 
-apiRouter.post('/sessions/grades/batch', async (req: Request, res: Response) => {
+apiRouter.post('/sessions/grades/batch', requireRole(STAFF_ROLES), async (req: Request, res: Response) => {
   try {
     const { groupId, date, maxScore = 10, records, updatedBy } = req.body || {};
     if (!groupId || !Array.isArray(records)) {

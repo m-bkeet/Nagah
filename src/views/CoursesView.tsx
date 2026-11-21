@@ -1370,18 +1370,27 @@ export const CoursesView: React.FC = () => {
                   }
                   setIsPostingToFb(true);
                   try {
-                    await new Promise(r => setTimeout(r, 1200));
-                    showToast('🚀 تم ربط صفحة فيسبوك، نشر الإعلان، وتفعيل الرد الآلي بنجاح!', 'success');
+                    const courseObj = courses.find((c: any) => c.id === selectedCourseForFb);
+                    const regLink = `${window.location.origin}/?view=register`;
+                    const adCopy = [
+                      `📢 فتح باب الحجز في دورة: ${courseObj?.name || 'دورة تدريبية جديدة'}`,
+                      fbAutoReplyText?.trim() || '',
+                      `📝 رابط التسجيل المباشر: ${regLink}`
+                    ].filter(Boolean).join('\n\n');
+                    await navigator.clipboard.writeText(adCopy);
+                    const shareUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(regLink)}&quote=${encodeURIComponent(adCopy)}`;
+                    window.open(shareUrl, '_blank', 'noopener,noreferrer');
+                    showToast('📋 تم نسخ نص الإعلان وفتح نافذة المشاركة على فيسبوك!', 'success');
                     setIsFbModalOpen(false);
-                  } catch (err: any) {
-                    showToast('فشل ربط فيسبوك', 'error');
+                  } catch {
+                    showToast('تعذر نسخ النص تلقائياً، يرجى نسخه يدوياً', 'warning');
                   } finally {
                     setIsPostingToFb(false);
                   }
                 }}
                 className="px-5 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-blue-600/30 flex items-center gap-1.5 disabled:opacity-50"
               >
-                <span>{isPostingToFb ? 'جاري الربط والنشر...' : '🚀 تفعيل الربط ونشر الإعلان تلقائياً'}</span>
+                <span>{isPostingToFb ? 'جاري التجهيز...' : '📋 نسخ الإعلان وفتح مشاركة فيسبوك'}</span>
               </button>
             </div>
           </div>

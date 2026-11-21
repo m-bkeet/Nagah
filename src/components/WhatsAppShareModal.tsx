@@ -44,8 +44,16 @@ export const WhatsAppShareModal: React.FC<ShareModalProps> = ({
   const handleToggleRegistration = async () => {
     setIsTogglingRegistration(true);
     try {
+      const staffToken =
+        sessionStorage.getItem('success_v7_token') ||
+        localStorage.getItem('success_v7_token') ||
+        localStorage.getItem('token');
       const res = await fetch(`${window.location.origin}/api/public/toggle-registration-status`, {
-        method: 'POST'
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(staffToken ? { Authorization: `Bearer ${staffToken}` } : {})
+        }
       });
       const data = await res.json();
       if (data && data.success) {
@@ -56,6 +64,8 @@ export const WhatsAppShareModal: React.FC<ShareModalProps> = ({
             : 'تم إغلاق باب التسجيل الخارجي (اكتمل العدد) 🔒',
           'info'
         );
+      } else {
+        showToast(data?.error || 'يتطلب صلاحية إدارية لتغيير حالة التسجيل', 'error');
       }
     } catch (err) {
       showToast('حدث خطأ أثناء تغيير حالة التسجيل', 'error');

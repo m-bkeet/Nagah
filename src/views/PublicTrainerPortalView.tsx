@@ -165,6 +165,20 @@ export const PublicTrainerPortalView: React.FC<PublicTrainerPortalViewProps> = (
     }
   };
 
+  const getTrainerAuthHeaders = (withJson = true): Record<string, string> => {
+    const token =
+      typeof window !== 'undefined'
+        ? sessionStorage.getItem('nagah_trainer_portal_token') ||
+          localStorage.getItem('nagah_trainer_portal_token') ||
+          sessionStorage.getItem('success_v7_token') ||
+          localStorage.getItem('success_v7_token')
+        : null;
+    return {
+      ...(withJson ? { 'Content-Type': 'application/json' } : {}),
+      ...(token ? { Authorization: `Bearer ${token}` } : {})
+    };
+  };
+
   const handleUpdateCredentials = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!trainer) return;
@@ -172,7 +186,7 @@ export const PublicTrainerPortalView: React.FC<PublicTrainerPortalViewProps> = (
     try {
       const res = await fetch('/api/trainer-portal/update-credentials', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getTrainerAuthHeaders(true),
         body: JSON.stringify({
           trainerId: trainer.id,
           name: newName,
@@ -182,7 +196,7 @@ export const PublicTrainerPortalView: React.FC<PublicTrainerPortalViewProps> = (
         })
       });
       const data = await res.json();
-      if (data.success) {
+      if (res.ok && data.success) {
         setTrainer(data.trainer);
         showToast('تم تحديث بيانات الدخول وكلمة السر بنجاح 🔐', 'success');
       } else {
@@ -255,12 +269,15 @@ export const PublicTrainerPortalView: React.FC<PublicTrainerPortalViewProps> = (
     }
   }, []);
 
-  const loadTrainerData = async (trainerId: string) => {
+  const loadTrainerData = async (trainerId: string, overrideToken?: string) => {
     setIsLoadingData(true);
     try {
-      const res = await fetch(`/api/trainer-portal/data/${trainerId}`);
+      const headers = overrideToken
+        ? { Authorization: `Bearer ${overrideToken}` }
+        : getTrainerAuthHeaders(false);
+      const res = await fetch(`/api/trainer-portal/data/${trainerId}`, { headers });
       const data = await res.json();
-      if (data.success && data.trainer) {
+      if (res.ok && data.success && data.trainer) {
         setTrainer(data.trainer);
         setGroups(data.groups || []);
         setCourses(data.courses || []);
@@ -279,7 +296,11 @@ export const PublicTrainerPortalView: React.FC<PublicTrainerPortalViewProps> = (
         }
       } else {
         localStorage.removeItem('nagah_active_trainer_id');
-        setLoginError(data.error || 'تعذر تحميل بيانات المدرب');
+        if (res.status === 401 || res.status === 403) {
+          localStorage.removeItem('nagah_trainer_portal_token');
+          sessionStorage.removeItem('nagah_trainer_portal_token');
+        }
+        setLoginError(data.error || 'تعذر تحميل بيانات المدرب، يرجى تسجيل الدخول');
       }
     } catch (err: any) {
       setLoginError('تعذر الاتصال بالخادم، تأكد من اتصال الإنترنت');
@@ -294,7 +315,9 @@ export const PublicTrainerPortalView: React.FC<PublicTrainerPortalViewProps> = (
     const fetchPortalData = async () => {
       if (typeof document !== 'undefined' && document.hidden) return;
       try {
-        const res = await fetch(`/api/trainer-portal/data/${trainer.id}`);
+        const res = await fetch(`/api/trainer-portal/data/${trainer.id}`, {
+          headers: getTrainerAuthHeaders(false)
+        });
         if (res.ok) {
           const data = await res.json();
           if (data.success && Array.isArray(data.portalMessages)) {
@@ -318,7 +341,7 @@ export const PublicTrainerPortalView: React.FC<PublicTrainerPortalViewProps> = (
     try {
       const res = await fetch('/api/messages/send-portal-message', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getTrainerAuthHeaders(true),
         body: JSON.stringify({
           traineeId: targetTraineeId,
           recipientType: 'student',
@@ -332,7 +355,9 @@ export const PublicTrainerPortalView: React.FC<PublicTrainerPortalViewProps> = (
       if (data.success) {
         showToast('تم إرسال الرد بنجاح للواجهة وللطالب! 📬', 'success');
         setTrainerReplyInput('');
-        const reloadRes = await fetch(`/api/trainer-portal/data/${trainer.id}`);
+        const reloadRes = await fetch(`/api/trainer-portal/data/${trainer.id}`, {
+          headers: getTrainerAuthHeaders(false)
+        });
         const reloadData = await reloadRes.json();
         if (reloadData.success && Array.isArray(reloadData.portalMessages)) {
           setPortalMessages(reloadData.portalMessages);
@@ -365,8 +390,12 @@ export const PublicTrainerPortalView: React.FC<PublicTrainerPortalViewProps> = (
         })
       });
       const data = await res.json();
-      if (data.success && data.trainer) {
-        loadTrainerData(data.trainer.id);
+      if (res.ok && data.success && data.trainer) {
+        if (data.token) {
+          sessionStorage.setItem('nagah_trainer_portal_token', data.token);
+          localStorage.setItem('nagah_trainer_portal_token', data.token);
+        }
+        loadTrainerData(data.trainer.id, data.token);
       } else {
         setLoginError(data.error || 'لم يتم العثور على المدرب أو كلمة السر غير صحيحة. تأكد من رقم الهاتف/الكود والرقم السري.');
       }
@@ -379,6 +408,8 @@ export const PublicTrainerPortalView: React.FC<PublicTrainerPortalViewProps> = (
 
   const handleLogout = () => {
     localStorage.removeItem('nagah_active_trainer_id');
+    localStorage.removeItem('nagah_trainer_portal_token');
+    sessionStorage.removeItem('nagah_trainer_portal_token');
     setTrainer(null);
     setPhoneOrCodeInput('');
   };
@@ -422,7 +453,7 @@ export const PublicTrainerPortalView: React.FC<PublicTrainerPortalViewProps> = (
 
       const res = await fetch('/api/trainer-portal/attendance', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getTrainerAuthHeaders(true),
         body: JSON.stringify({
           trainerId: trainer.id,
           groupId: selectedGroupId,
@@ -432,7 +463,7 @@ export const PublicTrainerPortalView: React.FC<PublicTrainerPortalViewProps> = (
       });
 
       const resData = await res.json();
-      if (resData.success) {
+      if (res.ok && resData.success) {
         showToast('تم حفظ الحضور والغياب بنجاح في قاعدة البيانات ✅', 'success');
         loadTrainerData(trainer.id);
       } else {
@@ -460,7 +491,7 @@ export const PublicTrainerPortalView: React.FC<PublicTrainerPortalViewProps> = (
     try {
       const res = await fetch('/api/trainer-portal/review-homework', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getTrainerAuthHeaders(true),
         body: JSON.stringify({
           submissionId: reviewModalSubmission.id,
           trainerId: trainer.id,
@@ -471,7 +502,7 @@ export const PublicTrainerPortalView: React.FC<PublicTrainerPortalViewProps> = (
         })
       });
       const data = await res.json();
-      if (data.success) {
+      if (res.ok && data.success) {
         showToast('تم حفظ تقييم الواجب ورصد النقاط والنجوم بنجاح 🎉', 'success');
         setReviewModalSubmission(null);
         loadTrainerData(trainer.id);

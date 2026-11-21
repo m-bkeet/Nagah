@@ -131,6 +131,10 @@ export const UnifiedStudentParentPortalView: React.FC<UnifiedStudentParentPortal
 
         if (res.ok && data.success && data.student) {
           localStorage.setItem('student_session_code', cleanInput);
+          if (data.token) {
+            sessionStorage.setItem('nagah_student_portal_token', data.token);
+            localStorage.setItem('nagah_student_portal_token', data.token);
+          }
           if (password.trim()) {
             localStorage.setItem('student_session_password', password.trim());
           }
@@ -152,6 +156,10 @@ export const UnifiedStudentParentPortalView: React.FC<UnifiedStudentParentPortal
 
         if (res.ok && data.success && data.children && data.children.length > 0) {
           localStorage.setItem('parent_session_code', cleanInput);
+          if (data.token) {
+            sessionStorage.setItem('nagah_parent_portal_token', data.token);
+            localStorage.setItem('nagah_parent_portal_token', data.token);
+          }
           if (password.trim()) {
             localStorage.setItem('parent_session_password', password.trim());
           }
@@ -173,7 +181,7 @@ export const UnifiedStudentParentPortalView: React.FC<UnifiedStudentParentPortal
 
   const handleSendInquiryWhatsApp = () => {
     if (!inquiryName.trim() || !inquiryPhone.trim()) {
-      alert('يرجى كتابة الاسم ورقم الهاتف أولاً');
+      setErrorMessage('يرجى كتابة الاسم ورقم الهاتف أولاً لإرسال الاستفسار');
       return;
     }
     const centerPhone = settings?.phone || '01001500686';

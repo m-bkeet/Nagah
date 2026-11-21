@@ -310,17 +310,46 @@ export const CenterProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   // Ref tracking pending optimistic updates to avoid being overwritten by incoming listeners
   const pendingUpdatesRef = useRef<Set<string>>(new Set());
 
-  // Toast notification helper
-  const showToast = useCallback((text: string, type: 'success' | 'error' | 'info' | 'warning' = 'success') => {
-    const id = 'toast-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4);
-    setToasts(prev => [...prev, { id, type, text }]);
-    setTimeout(() => {
-      setToasts(prev => prev.filter(t => t.id !== id));
-    }, 4500);
-  }, []);
+  // Toast notification helper (slim, non-stacking, auto-coalescing)
+  const toastTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
   const removeToast = useCallback((id: string) => {
+    const existingTimer = toastTimersRef.current.get(id);
+    if (existingTimer) {
+      clearTimeout(existingTimer);
+      toastTimersRef.current.delete(id);
+    }
     setToasts(prev => prev.filter(t => t.id !== id));
+  }, []);
+
+  const showToast = useCallback((text: string, type: 'success' | 'error' | 'info' | 'warning' = 'success') => {
+    const id = 'toast-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6);
+    const duration = type === 'error' || type === 'warning' ? 3200 : 1900;
+
+    setToasts(prev => {
+      // Drop identical or rapid consecutive success/info toasts so clicking +10 multiple times never stacks a tower
+      const filtered = prev.filter(t => {
+        if (t.text === text) return false;
+        if ((type === 'success' || type === 'info') && t.type === type && prev.length >= 1) {
+          const oldTimer = toastTimersRef.current.get(t.id);
+          if (oldTimer) {
+            clearTimeout(oldTimer);
+            toastTimersRef.current.delete(t.id);
+          }
+          return false;
+        }
+        return true;
+      });
+      // Keep max 2 toasts at any moment
+      const trimmed = filtered.slice(-1);
+      return [...trimmed, { id, type, text }];
+    });
+
+    const timer = setTimeout(() => {
+      toastTimersRef.current.delete(id);
+      setToasts(prev => prev.filter(t => t.id !== id));
+    }, duration);
+    toastTimersRef.current.set(id, timer);
   }, []);
 
   // Sync lab active state on branch change or custom event

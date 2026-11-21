@@ -8,22 +8,25 @@ export const ToastContainer: React.FC = () => {
   if (toasts.length === 0) return null;
 
   return (
-    <div className="fixed bottom-5 left-5 z-50 flex flex-col gap-2 max-w-md w-full pointer-events-none no-print toast-container">
+    <div
+      dir="rtl"
+      className="fixed top-3 left-1/2 -translate-x-1/2 z-[75] flex flex-col items-center gap-1.5 max-w-md w-auto px-3 pointer-events-none no-print toast-container"
+    >
       {toasts.map((toast) => {
-        let bg = 'bg-white border-slate-200 text-slate-900 dark:bg-slate-850 dark:border-slate-700 dark:text-slate-100 shadow-xl';
+        let bg = 'bg-white/95 border-slate-200 text-slate-800 dark:bg-slate-900/95 dark:border-slate-700 dark:text-slate-100';
         let Icon = Info;
         let iconColor = 'text-blue-600 dark:text-blue-400';
 
         if (toast.type === 'success') {
-          bg = 'bg-emerald-50 border-emerald-300 text-emerald-950 dark:bg-emerald-950/90 dark:border-emerald-700/80 dark:text-emerald-100 shadow-xl';
+          bg = 'bg-emerald-50/95 border-emerald-300/80 text-emerald-950 dark:bg-emerald-950/95 dark:border-emerald-700/80 dark:text-emerald-100';
           Icon = CheckCircle2;
           iconColor = 'text-emerald-600 dark:text-emerald-400';
         } else if (toast.type === 'error') {
-          bg = 'bg-rose-50 border-rose-300 text-rose-950 dark:bg-rose-950/90 dark:border-rose-700/80 dark:text-rose-100 shadow-xl';
+          bg = 'bg-rose-50/95 border-rose-300/80 text-rose-950 dark:bg-rose-950/95 dark:border-rose-700/80 dark:text-rose-100';
           Icon = AlertCircle;
           iconColor = 'text-rose-600 dark:text-rose-400';
         } else if (toast.type === 'warning') {
-          bg = 'bg-amber-50 border-amber-300 text-amber-950 dark:bg-amber-950/90 dark:border-amber-700/80 dark:text-amber-100 shadow-xl';
+          bg = 'bg-amber-50/95 border-amber-300/80 text-amber-950 dark:bg-amber-950/95 dark:border-amber-700/80 dark:text-amber-100';
           Icon = AlertTriangle;
           iconColor = 'text-amber-600 dark:text-amber-400';
         }
@@ -32,18 +35,22 @@ export const ToastContainer: React.FC = () => {
           <div
             key={toast.id}
             id={toast.id}
-            className={`pointer-events-auto flex items-center justify-between p-4 rounded-2xl border backdrop-blur-md transition-all duration-300 transform translate-y-0 ${bg}`}
+            onClick={() => removeToast(toast.id)}
+            title="اضغط للإخفاء فوراً"
+            className={`pointer-events-auto cursor-pointer flex items-center gap-2 px-3.5 py-2 rounded-full border shadow-lg backdrop-blur-md transition-all duration-200 ${bg}`}
           >
-            <div className="flex items-center gap-3">
-              <Icon className={`w-5 h-5 shrink-0 ${iconColor}`} />
-              <p className="text-sm font-bold leading-relaxed">{toast.text}</p>
-            </div>
+            <Icon className={`w-4 h-4 shrink-0 ${iconColor}`} />
+            <p className="text-xs font-bold leading-snug max-w-[320px] truncate">{toast.text}</p>
             <button
-              onClick={() => removeToast(toast.id)}
-              className="p-1 hover:bg-black/5 dark:hover:bg-white/10 rounded-lg text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors shrink-0 mr-2 cursor-pointer"
-              title="إغلاق"
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                removeToast(toast.id);
+              }}
+              className="p-0.5 hover:bg-black/5 dark:hover:bg-white/10 rounded-full text-slate-400 hover:text-slate-700 dark:hover:text-white transition-colors shrink-0 cursor-pointer"
+              aria-label="إغلاق"
             >
-              <X className="w-4 h-4" />
+              <X className="w-3.5 h-3.5" />
             </button>
           </div>
         );

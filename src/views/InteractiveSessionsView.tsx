@@ -48,11 +48,13 @@ import {
   Crown,
   PartyPopper,
   FolderOpen,
-  HardDrive
+  HardDrive,
+  RotateCw
 } from 'lucide-react';
 import { Trainer, Group, Course, Trainee, AttendanceStatus } from '../types';
 import { formatArabicDate, formatArabicTime } from '../utils/timeFormat';
 import { SmartWhiteboardModal } from '../components/SmartWhiteboardModal';
+import { SmartFortuneWheelModal } from '../components/SmartFortuneWheelModal';
 import { CelebrationBalloonsOverlay } from '../components/CelebrationBalloonsOverlay';
 import { AllInOneLessonPlanModal } from '../components/trainer/AllInOneLessonPlanModal';
 import { LectureRecapManager } from '../components/homeworks/LectureRecapManager';
@@ -89,6 +91,7 @@ export const InteractiveSessionsView: React.FC<InteractiveSessionsViewProps> = (
     addPointsOptimistic
   } = useCenter();
   const [isWhiteboardOpen, setIsWhiteboardOpen] = useState(false);
+  const [isFortuneWheelOpen, setIsFortuneWheelOpen] = useState(false);
   const [isAllInOneModalOpen, setIsAllInOneModalOpen] = useState(false);
   const [isCeremonyModalOpen, setIsCeremonyModalOpen] = useState(false);
   const [showCurriculumPlanModal, setShowCurriculumPlanModal] = useState(false);
@@ -170,6 +173,18 @@ export const InteractiveSessionsView: React.FC<InteractiveSessionsViewProps> = (
   const [sessionMaxScore, setSessionMaxScore] = useState<number>(10);
   const [laptopStatus, setLaptopStatus] = useState<LaptopStorageStatus | null>(null);
 
+  // Custom Points + Custom Reason Modal State & Lightweight Per-Card Flash Badge
+  const [customPointsTarget, setCustomPointsTarget] = useState<Trainee | null>(null);
+  const [customPointsValue, setCustomPointsValue] = useState<string>('10');
+  const [customPointsReason, setCustomPointsReason] = useState<string>('');
+  const [recentPointFlash, setRecentPointFlash] = useState<Record<string, { delta: number; timer?: ReturnType<typeof setTimeout> }>>({});
+
+  const openCustomPointsModal = (trainee: Trainee) => {
+    setCustomPointsTarget(trainee);
+    setCustomPointsValue('10');
+    setCustomPointsReason('');
+  };
+
   // Load Lab Devices
   const loadDevices = useCallback(async () => {
     try {
@@ -214,11 +229,26 @@ export const InteractiveSessionsView: React.FC<InteractiveSessionsViewProps> = (
     }
   }, [ctxGroups, loadDevices, refreshLaptopStatus]);
 
-  // Poll current active Question & External Activity from Server
+  const getStaffAuthHeaders = useCallback((withJson = false): Record<string, string> => {
+    const token =
+      typeof window !== 'undefined'
+        ? sessionStorage.getItem('success_v7_token') ||
+          localStorage.getItem('success_v7_token') ||
+          localStorage.getItem('token')
+        : null;
+    return {
+      ...(withJson ? { 'Content-Type': 'application/json' } : {}),
+      ...(token ? { Authorization: `Bearer ${token}` } : {})
+    };
+  }, []);
+
+  // Poll current active Question & External Activity from Server (authenticated as staff via signed Bearer token)
   const fetchActiveLabState = useCallback(async () => {
     if (typeof document !== 'undefined' && document.hidden) return;
     try {
-      const res = await fetch('/api/lab/quick-question?isTeacher=true');
+      const res = await fetch('/api/lab/quick-question', {
+        headers: getStaffAuthHeaders(false)
+      });
       const json = await res.json();
       if (json) {
         setActiveQuickQuestion(json.data || null);
@@ -756,11 +786,28 @@ export const InteractiveSessionsView: React.FC<InteractiveSessionsViewProps> = (
       setCtxTrainees(updateFn);
     }
 
+    // Lightweight inline accumulating badge on the student's card (never blocks screen)
+    setRecentPointFlash(prev => {
+      const existing = prev[trainee.id];
+      if (existing?.timer) clearTimeout(existing.timer);
+      const accumulated = (existing?.delta || 0) + pVal;
+      const timer = setTimeout(() => {
+        setRecentPointFlash(cur => {
+          const next = { ...cur };
+          delete next[trainee.id];
+          return next;
+        });
+      }, 1500);
+      return { ...prev, [trainee.id]: { delta: accumulated, timer } };
+    });
+
     if (pVal > 0) {
       audioService.playStarSuccess();
-      showToast(`⭐ تم منح +${pVal} نقطة للطالب ${trainee.fullName} فوراً!`, 'success');
+      const shortName = (trainee.fullName || '').split(' ').slice(0, 2).join(' ');
+      showToast(`⭐ +${pVal} لـ ${shortName}${reason && reason !== 'تفاعل وتميز بالحصة التدريبية' ? ` (${reason})` : ''}`, 'success');
     } else {
-      showToast(`⚠️ تم خصم ${Math.abs(pVal)} نقطة من الطالب ${trainee.fullName}`, 'warning');
+      const shortName = (trainee.fullName || '').split(' ').slice(0, 2).join(' ');
+      showToast(`⚠️ ${pVal} من ${shortName}`, 'warning');
     }
 
     try {
@@ -842,7 +889,7 @@ export const InteractiveSessionsView: React.FC<InteractiveSessionsViewProps> = (
     try {
       const res = await fetch('/api/lab/active-activity/broadcast', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getStaffAuthHeaders(true),
         body: JSON.stringify({
           title: `مسابقة ${externalPlatform} الحية`,
           platform: externalPlatform,
@@ -867,7 +914,7 @@ export const InteractiveSessionsView: React.FC<InteractiveSessionsViewProps> = (
     try {
       await fetch('/api/lab/active-activity/broadcast', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getStaffAuthHeaders(true),
         body: JSON.stringify({ title: '', platform: '', url: '', gamePin: '' })
       });
       setActiveBroadcast(null);
@@ -881,7 +928,7 @@ export const InteractiveSessionsView: React.FC<InteractiveSessionsViewProps> = (
     try {
       const res = await fetch('/api/lab/quick-question/broadcast', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getStaffAuthHeaders(true),
         body: JSON.stringify({
           type: 'choices',
           questionText: qText,
@@ -911,7 +958,7 @@ export const InteractiveSessionsView: React.FC<InteractiveSessionsViewProps> = (
     try {
       const res = await fetch('/api/lab/quick-question/broadcast', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getStaffAuthHeaders(true),
         body: JSON.stringify({
           type: 'true_false',
           questionText: qText,
@@ -936,7 +983,10 @@ export const InteractiveSessionsView: React.FC<InteractiveSessionsViewProps> = (
   // 3. Close Voting
   const handleCloseVoting = async () => {
     try {
-      const res = await fetch('/api/lab/quick-question/close', { method: 'POST' });
+      const res = await fetch('/api/lab/quick-question/close', {
+        method: 'POST',
+        headers: getStaffAuthHeaders(false)
+      });
       const data = await res.json();
       if (data.success) {
         setActiveQuickQuestion(data.question);
@@ -951,7 +1001,7 @@ export const InteractiveSessionsView: React.FC<InteractiveSessionsViewProps> = (
     try {
       const res = await fetch('/api/lab/quick-question/reveal', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getStaffAuthHeaders(true),
         body: JSON.stringify({
           correctAnswer: choiceKey,
           pointsToAward: pointsReward
@@ -980,7 +1030,10 @@ export const InteractiveSessionsView: React.FC<InteractiveSessionsViewProps> = (
   // 5. Clear Question
   const handleClearQuestion = async () => {
     try {
-      await fetch('/api/lab/quick-question/clear', { method: 'POST' });
+      await fetch('/api/lab/quick-question/clear', {
+        method: 'POST',
+        headers: getStaffAuthHeaders(false)
+      });
       setActiveQuickQuestion(null);
       setCustomQuestionInput('');
       showToast('تم إنهاء السؤال وتجهيز المعمل للسؤال التالي', 'info');
@@ -1055,10 +1108,20 @@ export const InteractiveSessionsView: React.FC<InteractiveSessionsViewProps> = (
         {/* Top Actions & Tools */}
         <div className="flex items-center gap-2.5 flex-wrap">
           
+          {/* Smart Fortune Wheel Button (Large Studio Modal) */}
+          <button
+            onClick={() => setIsFortuneWheelOpen(true)}
+            className="px-4 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs sm:text-sm rounded-2xl flex items-center gap-2 shadow-lg shadow-amber-500/25 transition-all active:scale-95 cursor-pointer border border-amber-400 whitespace-nowrap shrink-0"
+            title="فتح عجلة الحظ التفاعلية الكبيرة بأسماء الحاضرين بالمعمل وأرقام الأسئلة ونطق الأسماء ومنح النقاط"
+          >
+            <RotateCw className="w-4 h-4 text-slate-950" />
+            <span>عجلة الحظ 🎡</span>
+          </button>
+
           {/* Smart Whiteboard Button */}
           <button
             onClick={() => setIsWhiteboardOpen(true)}
-            className="px-4 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-black text-xs sm:text-sm rounded-2xl flex items-center gap-2 shadow-lg shadow-indigo-600/25 transition-all active:scale-95 cursor-pointer border border-indigo-400/50"
+            className="px-4 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-black text-xs sm:text-sm rounded-2xl flex items-center gap-2 shadow-lg shadow-indigo-600/25 transition-all active:scale-95 cursor-pointer border border-indigo-400/50 whitespace-nowrap shrink-0"
             title="فتح السبورة الذكية للشرح التفاعلي بالرسم والأشكال"
           >
             <Sparkles className="w-4 h-4 text-white" />
@@ -1236,6 +1299,31 @@ export const InteractiveSessionsView: React.FC<InteractiveSessionsViewProps> = (
       {/* 3. TAB 1: ACTIVITIES & PROJECTOR PRESENTATION */}
       {activeTab === 'activities' && (
         <div className="space-y-6 animate-fadeIn">
+
+          {/* FORTUNE WHEEL FEATURED LAUNCHER CARD */}
+          <div className="bg-white dark:bg-slate-900 border border-amber-300 dark:border-amber-500/40 rounded-3xl p-5 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-3.5">
+              <div className="w-12 h-12 rounded-2xl bg-amber-500 text-slate-950 flex items-center justify-center shrink-0 shadow-md">
+                <RotateCw className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-base sm:text-lg font-black text-slate-900 dark:text-white">
+                  عجلة الحظ التفاعلية بالمعمل (عرض البروجكتور الكبير) 🎡
+                </h3>
+                <p className="text-xs text-slate-600 dark:text-slate-400 font-medium mt-0.5">
+                  تجمع الحاضرين والأجهزة المتصلة بالمعمل تلقائياً بدون غائبين · نطق الاسم صوتياً · منح نقاط فور الإجابة
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsFortuneWheelOpen(true)}
+              className="px-6 py-3 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-sm rounded-2xl shadow-lg shadow-amber-500/25 flex items-center justify-center gap-2 transition-all active:scale-95 cursor-pointer whitespace-nowrap shrink-0"
+            >
+              <RotateCw className="w-4 h-4" />
+              <span>تشغيل عجلة الحظ الآن 🚀</span>
+            </button>
+          </div>
           
           {/* SECTION A: CLASSPOINT, KAHOOT & QUIZIZZ BROADCAST BAR */}
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 sm:p-6 shadow-sm dark:shadow-xl space-y-4">
@@ -2051,10 +2139,18 @@ export const InteractiveSessionsView: React.FC<InteractiveSessionsViewProps> = (
                                   <button
                                     type="button"
                                     onClick={() => handleAwardPoints(trainee, 5, 'تفاعل وتميز بالحصة')}
-                                    className="px-1.5 py-0.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg font-black text-xs border border-indigo-200"
+                                    className="px-1.5 py-0.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg font-black text-xs border border-indigo-200 cursor-pointer"
                                     title="منح +5 نجوم"
                                   >
                                     +5
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => openCustomPointsModal(trainee)}
+                                    className="px-1.5 py-0.5 bg-amber-50 hover:bg-amber-100 text-amber-700 rounded-lg font-black text-[11px] border border-amber-200 cursor-pointer"
+                                    title="منح نقاط مخصصة مع جملة/سبب"
+                                  >
+                                    مخصص ✏️
                                   </button>
                                 </div>
                               </td>
@@ -2238,10 +2334,25 @@ export const InteractiveSessionsView: React.FC<InteractiveSessionsViewProps> = (
 
                           {/* Points Buttons */}
                           <div className="flex items-center justify-between gap-1 pt-1 border-t border-slate-100 dark:border-slate-800">
-                            <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 shrink-0">
-                              رصد التميز:
-                            </span>
-                            <div className="flex items-center gap-1">
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400">
+                                رصد التميز:
+                              </span>
+                              {recentPointFlash[trainee.id] && (
+                                <span
+                                  className={`px-1.5 py-0.5 rounded-md text-[10px] font-black animate-bounce ${
+                                    recentPointFlash[trainee.id].delta > 0
+                                      ? 'bg-emerald-500 text-white'
+                                      : 'bg-rose-500 text-white'
+                                  }`}
+                                >
+                                  {recentPointFlash[trainee.id].delta > 0
+                                    ? `+${recentPointFlash[trainee.id].delta} ⭐`
+                                    : recentPointFlash[trainee.id].delta}
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-1 flex-wrap justify-end">
                               <button
                                 type="button"
                                 onClick={() => handleAwardPoints(trainee, 1, 'إجابة متميزة')}
@@ -2265,6 +2376,14 @@ export const InteractiveSessionsView: React.FC<InteractiveSessionsViewProps> = (
                                 title="منح +10 نقاط"
                               >
                                 +10 🏆
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => openCustomPointsModal(trainee)}
+                                className="px-2 py-1 bg-amber-50 hover:bg-amber-100 dark:bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-500/40 rounded-lg text-[11px] font-black transition-all active:scale-90 cursor-pointer"
+                                title="منح نقاط مخصصة مع جملة تشجيعية أو سبب"
+                              >
+                                مخصص ✏️
                               </button>
                               <button
                                 type="button"
@@ -2707,6 +2826,147 @@ export const InteractiveSessionsView: React.FC<InteractiveSessionsViewProps> = (
         courses={courses}
         groups={groups}
       />
+
+      {/* Smart Fortune Wheel Studio Modal */}
+      <SmartFortuneWheelModal
+        isOpen={isFortuneWheelOpen}
+        onClose={() => setIsFortuneWheelOpen(false)}
+        trainees={trainees}
+        groups={groups}
+        labSchedules={labSchedules}
+        devices={devices}
+        attendanceMap={attendanceMap}
+        attendanceDetails={attendanceDetails}
+        activeBranchId={activeBranchId}
+        selectedGroupId={selectedGroupId}
+        onSelectGroupId={(gid) => setSelectedGroupId(gid)}
+        onToggleAttendance={(tId, nextStatus) => handleStatusChange(tId, nextStatus)}
+        onAwardPoints={(trainee, pts, reason) => handleAwardPoints(trainee, pts, reason)}
+      />
+
+      {/* Custom Points & Custom Message Modal */}
+      {customPointsTarget && (
+        <div
+          className="fixed inset-0 z-[80] bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-4"
+          dir="rtl"
+          onClick={() => setCustomPointsTarget(null)}
+        >
+          <div
+            className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-3xl shadow-2xl max-w-md w-full p-5 space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+              <div>
+                <h3 className="text-base font-black text-slate-900 dark:text-white flex items-center gap-2">
+                  <span>⭐ منح نقاط مخصصة</span>
+                </h3>
+                <p className="text-xs font-bold text-indigo-600 dark:text-indigo-400 mt-0.5">
+                  {customPointsTarget.fullName} {customPointsTarget.code ? `(${customPointsTarget.code})` : ''}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setCustomPointsTarget(null)}
+                className="p-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-slate-500 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                const num = Number(customPointsValue);
+                if (!num || isNaN(num)) return;
+                const finalReason = customPointsReason.trim() || (num > 0 ? 'تميز وتفوق مخصص بالحصة' : 'ملاحظة سلوكية / انضباط');
+                handleAwardPoints(customPointsTarget, num, finalReason);
+                setCustomPointsTarget(null);
+              }}
+              className="space-y-4"
+            >
+              <div>
+                <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-2">
+                  عدد النقاط (موجب للمنح أو سالب للخصم)
+                </label>
+                <div className="flex flex-wrap gap-1.5 mb-2.5">
+                  {[2, 3, 5, 10, 15, 20, 30, 50, -5].map((preset) => (
+                    <button
+                      key={preset}
+                      type="button"
+                      onClick={() => setCustomPointsValue(String(preset))}
+                      className={`px-2.5 py-1 rounded-xl text-xs font-black border transition-all cursor-pointer ${
+                        Number(customPointsValue) === preset
+                          ? preset > 0
+                            ? 'bg-indigo-600 text-white border-indigo-600'
+                            : 'bg-rose-600 text-white border-rose-600'
+                          : 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700 hover:border-indigo-400'
+                      }`}
+                    >
+                      {preset > 0 ? `+${preset}` : preset}
+                    </button>
+                  ))}
+                </div>
+                <input
+                  type="number"
+                  required
+                  value={customPointsValue}
+                  onChange={(e) => setCustomPointsValue(e.target.value)}
+                  placeholder="أدخل عدد النقاط..."
+                  className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-2xl px-4 py-2.5 text-center text-lg font-black text-slate-900 dark:text-white tabular-nums focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-2">
+                  جملة تشجيعية أو سبب المنح (تظهر للطالب وولي الأمر)
+                </label>
+                <div className="flex flex-wrap gap-1.5 mb-2">
+                  {[
+                    'إجابة عبقرية وسريعة 💡',
+                    'أسرع بطل في التطبيق العملي ⚡',
+                    'مساعدة زملائه وروح الفريق 🤝',
+                    'انضباط وتركيز مثالي 🎯',
+                    'واجب مكتمل ومنظم 📘'
+                  ].map((phrase) => (
+                    <button
+                      key={phrase}
+                      type="button"
+                      onClick={() => setCustomPointsReason(phrase)}
+                      className="px-2.5 py-1 rounded-xl text-[11px] font-bold bg-indigo-50/80 hover:bg-indigo-100 dark:bg-indigo-500/15 dark:hover:bg-indigo-500/25 text-indigo-700 dark:text-indigo-300 border border-indigo-200/70 dark:border-indigo-500/30 cursor-pointer"
+                    >
+                      {phrase}
+                    </button>
+                  ))}
+                </div>
+                <input
+                  type="text"
+                  autoFocus
+                  value={customPointsReason}
+                  onChange={(e) => setCustomPointsReason(e.target.value)}
+                  placeholder="اكتب أي جملة أو سبب مخصص للطالب..."
+                  className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-2xl px-3.5 py-2.5 text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <div className="flex items-center gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setCustomPointsTarget(null)}
+                  className="flex-1 py-2.5 rounded-2xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-bold cursor-pointer"
+                >
+                  إلغاء
+                </button>
+                <button
+                  type="submit"
+                  className="flex-[2] py-2.5 rounded-2xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white text-xs font-black shadow-lg shadow-indigo-500/20 cursor-pointer"
+                >
+                  تأكيد ومنح النقاط ⭐
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

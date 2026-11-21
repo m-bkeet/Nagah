@@ -790,6 +790,40 @@ export class AudioController {
   }
 
   /**
+   * Play crisp tactile peg click for the Fortune Wheel as slices pass the top needle
+   */
+  public playWheelTick(progressRatio = 0.5): void {
+    this.unlockAudio();
+    const ctx = this.getAudioContext();
+    if (!ctx) return;
+
+    try {
+      const now = ctx.currentTime;
+      const clamped = Math.max(0, Math.min(1, progressRatio));
+      // Frequency rises gently as wheel slows toward final stop for authentic suspense
+      const freq = 520 + clamped * 280;
+
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(freq, now);
+      osc.frequency.exponentialRampToValueAtTime(Math.max(180, freq * 0.45), now + 0.032);
+
+      gain.gain.setValueAtTime(0.22, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.035);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.038);
+      this.activeOscillators.add(osc);
+      osc.onended = () => {
+        this.activeOscillators.delete(osc);
+      };
+    } catch (e) {}
+  }
+
+  /**
    * Custom chime frequencies with safe default
    */
   public playChime(freqs: number[] = [523.25, 659.25, 783.99]): void {

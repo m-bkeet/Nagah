@@ -7,6 +7,7 @@ import { sessionEventsService, SessionEvent } from '../services/sessionEventsSer
 import { SessionCelebrationOverlay } from '../components/SessionCelebrationOverlay';
 import { AudioAutoplayUnlockBanner } from '../components/AudioAutoplayUnlockBanner';
 import { audioService } from '../services/audioService';
+import { LatestSessionSummaryCard, TraineeSessionSummary } from '../components/LatestSessionSummaryCard';
 
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { detectCurriculum, getGradeLessonsList } from '../domain/curriculumRegistry';
@@ -213,9 +214,12 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
     setStudentCodeInput('');
     localStorage.removeItem('nagah_student_active_session');
     localStorage.removeItem('nagah_student_cache');
+    localStorage.removeItem('nagah_student_portal_token');
+    sessionStorage.removeItem('nagah_student_portal_token');
     localStorage.removeItem('student_session_code');
     localStorage.removeItem('student_session_password');
     sessionStorage.removeItem('nagah_student_tab_session');
+    setLatestSessionSummary(null);
     try {
       resilientOfflineService.saveToCache('student', null);
     } catch (e) {}
@@ -241,6 +245,7 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
   const [groupTasks, setGroupTasks] = useState<any[]>(() => initialSession?.groupTasks || []);
   const [certificates, setCertificates] = useState<any[]>(() => initialSession?.certificates || []);
   const [portalMessages, setPortalMessages] = useState<any[]>(() => initialSession?.portalMessages || []);
+  const [latestSessionSummary, setLatestSessionSummary] = useState<TraineeSessionSummary | null>(() => initialSession?.latestSessionSummary || null);
   const [activeMessageModal, setActiveMessageModal] = useState<any | null>(null);
   const [isPhotoStudioOpen, setIsPhotoStudioOpen] = useState(false);
   const [isVoiceSummaryModalOpen, setIsVoiceSummaryModalOpen] = useState(false);
@@ -416,6 +421,13 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
             setGroupTasks(data.groupTasks || []);
             setCertificates(data.certificates || []);
             setPortalMessages(data.portalMessages || []);
+            if (data.latestSessionSummary) {
+              setLatestSessionSummary(data.latestSessionSummary);
+            }
+            if (data.token) {
+              sessionStorage.setItem('nagah_student_portal_token', data.token);
+              localStorage.setItem('nagah_student_portal_token', data.token);
+            }
             setIsLoggedIn(true);
             sessionStorage.setItem('nagah_student_tab_session', JSON.stringify(data));
             localStorage.setItem('nagah_student_active_session', JSON.stringify(data));
@@ -426,6 +438,8 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
             localStorage.removeItem('student_session_code');
             localStorage.removeItem('student_session_password');
             localStorage.removeItem('nagah_student_active_session');
+            localStorage.removeItem('nagah_student_portal_token');
+            sessionStorage.removeItem('nagah_student_portal_token');
             sessionStorage.removeItem('nagah_student_tab_session');
             setIsLoggedIn(false);
             setStudent(null);
@@ -810,22 +824,19 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
     const inputDigits = cleanPhoneDigits(rawInput);
     const isPhone = inputDigits.length >= 8;
 
-    // --- Layer 1: Try Backend Express API ---
-    let apiAttemptSuccessful = false;
+    // --- Layer 1: Authenticated Backend Express API ---
     try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 4000);
-
-      const data = await request<any>('/student/login', {
+      const res = await fetch('/api/student/login', {
         method: 'POST',
-        body: JSON.stringify({ 
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           codeOrPhone: rawInput,
           password: studentPasswordInput.trim()
         })
       });
+      const data = await res.json().catch(() => null);
 
-      if (data && data.success) {
-        apiAttemptSuccessful = true;
+      if (res.ok && data && data.success && data.student) {
         const s = data.student;
         const cachedPhoto = localStorage.getItem('student_session_photo_' + s.id) || localStorage.getItem('student_session_photo_' + s.code);
         const studentObj = { ...s, photoUrl: s.photoUrl || cachedPhoto || '' };
@@ -839,7 +850,13 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
         setGroupTasks(data.groupTasks || []);
         setCertificates(data.certificates || []);
         setPortalMessages(data.portalMessages || []);
-        
+        setLatestSessionSummary(data.latestSessionSummary || null);
+
+        if (data.token) {
+          sessionStorage.setItem('nagah_student_portal_token', data.token);
+          localStorage.setItem('nagah_student_portal_token', data.token);
+        }
+
         resilientOfflineService.saveToCache('student', data);
         sessionStorage.setItem('nagah_student_tab_session', JSON.stringify(data));
         localStorage.setItem('nagah_student_active_session', JSON.stringify(data));
@@ -853,173 +870,27 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
         }
 
         setIsLoggedIn(true);
+        setIsLoggingIn(false);
         return;
-      } else if (data?.requiresPassword) {
+      }
+
+      if (data?.requiresPassword) {
         setRequiresPassword(true);
         setLoginError(data.error || 'هذا الحساب محمي بكلمة مرور. يرجى إدخال كلمة المرور.');
+        setIsLoggingIn(false);
+        return;
+      }
+
+      if (res.status === 404 || res.status === 401 || res.status === 429) {
+        setLoginError(data?.error || 'لم يتم العثور على طالب مسجل بهذا الكود أو رقم الهاتف.');
+        setIsLoggingIn(false);
         return;
       }
     } catch (apiErr) {
-      console.warn('[Student Portal] API route unreachable, attempting Cloud Firestore & local resilience...', apiErr);
+      console.warn('[Student Portal] Server unreachable, checking local offline cache...', apiErr);
     }
 
-    if (apiAttemptSuccessful) return;
-
-    // --- Layer 2: Cloud Firestore (cloudDb) Real-Time Database Fallback ---
-    try {
-      console.log('[Student Portal] Checking Cloud Firestore for student credentials...');
-      const [cloudTrainees, cloudCourses, cloudGroups, cloudTrainers] = await Promise.all([
-        api.getTrainees().catch(() => []),
-        api.getCourses().catch(() => []),
-        api.getGroups().catch(() => []),
-        api.getTrainers().catch(() => [])
-      ]);
-
-      const normalizePrefix = (letter: string) => {
-        const l = (letter || '').trim().toLowerCase();
-        if (l === 'أ' || l === 'ا' || l === 'إ' || l === 'آ' || l === 'a') return 'a';
-        if (l === 'ب' || l === 'b') return 'b';
-        if (l === 'ج' || l === 'c') return 'c';
-        if (l === 'د' || l === 'd') return 'd';
-        if (l === 'ه' || l === 'هـ' || l === 'e') return 'e';
-        if (l === 'م' || l === 'tr') return 'tr';
-        return l;
-      };
-
-      const matchedTrainee = cloudTrainees.find(t => {
-        if (!t) return false;
-        const normQ = normalizeDigits(rawInput).trim().toLowerCase();
-        const cleanQ = normQ.replace(/[\s\-_]/g, '');
-        const digitsQ = normQ.replace(/\D/g, '');
-        const qLetter = cleanQ.replace(/[0-9]/g, '');
-        const qNumStr = cleanQ.replace(/\D/g, '');
-
-        const tCode = normalizeDigits(t.code || '').trim().toLowerCase();
-        const cleanCode = tCode.replace(/[\s\-_]/g, '');
-        const cLetter = cleanCode.replace(/[0-9]/g, '');
-        const cNumStr = cleanCode.replace(/\D/g, '');
-
-        const tNatId = normalizeDigits(t.nationalId || '').trim().toLowerCase();
-        const tId = (t.id || '').trim().toLowerCase();
-        const tName = normalizeDigits(t.fullName || '').trim().toLowerCase();
-
-        // 1. Exact Matches
-        if (tCode === normQ || cleanCode === cleanQ || tNatId === normQ || tId === normQ) return true;
-
-        // 2. Strict Letter Prefix + Number Match (e.g. C036 matches c36, ج36, C-036, but NEVER A036 or B036)
-        if (qNumStr && cNumStr) {
-          const qNum = parseInt(qNumStr, 10);
-          const cNum = parseInt(cNumStr, 10);
-          if (!isNaN(qNum) && !isNaN(cNum) && qNum === cNum) {
-            const qL = normalizePrefix(qLetter);
-            const cL = normalizePrefix(cLetter);
-            if (qL && cL) {
-              if (qL === cL) return true;
-            } else if (!qL && !cL) {
-              return true;
-            }
-          }
-        }
-
-        // 3. Phone Match (>= 8 digits)
-        if (digitsQ.length >= 8) {
-          const tPhoneDigits = cleanPhoneDigits(t.phone || '');
-          const pPhoneDigits = cleanPhoneDigits(t.parentPhone || '');
-          if (tPhoneDigits && (tPhoneDigits === digitsQ || tPhoneDigits.endsWith(digitsQ) || digitsQ.endsWith(tPhoneDigits))) return true;
-          if (pPhoneDigits && (pPhoneDigits === digitsQ || pPhoneDigits.endsWith(digitsQ) || digitsQ.endsWith(pPhoneDigits))) return true;
-        }
-
-        // 4. Full Name match
-        if (normQ.length >= 4 && tName === normQ) return true;
-
-        return false;
-      });
-
-      if (matchedTrainee) {
-        // Password validation
-        if (matchedTrainee.portalPassword && matchedTrainee.portalPassword.trim() !== '') {
-          if (!studentPasswordInput.trim() || studentPasswordInput.trim() !== matchedTrainee.portalPassword.trim()) {
-            setRequiresPassword(true);
-            setLoginError('⚠️ هذا الحساب محمي بكلمة مرور. يرجى إدخال كلمة المرور للمتابعة.');
-            return;
-          }
-        }
-
-        const course = cloudCourses.find(c => c.id === matchedTrainee.courseId);
-        const group = cloudGroups.find(g => g.id === matchedTrainee.groupId);
-        const trainer = group ? cloudTrainers.find(tr => tr.id === group.trainerId) : null;
-
-        const groupTasks = [
-          { id: 'task-1', title: 'واجب تطبيق الدرس العملي والمشروع الرئيسي', courseName: course?.name || 'الدورة التدريبية', maxPoints: 50 },
-          { id: 'task-2', title: 'حل تمارين كتاب الأنشطة وتصوير الصفحة', courseName: course?.name || 'الدورة التدريبية', maxPoints: 30 },
-          { id: 'task-3', title: 'مشروع الابتكار والتطبيق الذاتي البرمجي', courseName: course?.name || 'الدورة التدريبية', maxPoints: 50 }
-        ];
-
-        const cachedPhoto = localStorage.getItem('student_session_photo_' + matchedTrainee.id) || localStorage.getItem('student_session_photo_' + matchedTrainee.code);
-        const studentData: StudentData = {
-          id: matchedTrainee.id,
-          code: matchedTrainee.code,
-          fullName: matchedTrainee.fullName,
-          phone: matchedTrainee.phone,
-          nationalId: matchedTrainee.nationalId,
-          photoUrl: matchedTrainee.photoUrl || (matchedTrainee as any).photo || cachedPhoto || '',
-          points: matchedTrainee.points || 0,
-          totalPoints: matchedTrainee.totalPoints || matchedTrainee.points || 0,
-          courseName: course?.name || 'الدورة التدريبية',
-          groupName: group?.name || 'المجموعة التدريبية',
-          grade: matchedTrainee.grade || (matchedTrainee as any).schoolGrade || (matchedTrainee as any).stage || '',
-          stage: (matchedTrainee as any).stage || matchedTrainee.grade || '',
-          schoolGrade: (matchedTrainee as any).schoolGrade || matchedTrainee.grade || '',
-          courseId: matchedTrainee.courseId || course?.id || '',
-          groupId: matchedTrainee.groupId || group?.id || '',
-          branchId: matchedTrainee.branchId,
-          portalPassword: matchedTrainee.portalPassword,
-          groupDetails: group,
-          socialLinks: (matchedTrainee as any).socialLinks
-        };
-
-        const trainerData: TrainerData | null = trainer ? {
-          name: trainer.name,
-          phone: trainer.phone,
-          email: trainer.email,
-          specialization: (trainer as any).specialization || 'مُحاضر معتمد'
-        } : null;
-
-        const sessionPayload = {
-          student: studentData,
-          trainer: trainerData,
-          badges: [],
-          homeworks: [],
-          labSchedules: [],
-          groupTasks,
-          certificates: [],
-          portalMessages: []
-        };
-
-        setStudent(studentData);
-        setTrainer(trainerData);
-        setBadges([]);
-        setHomeworks([]);
-        setLabSchedules([]);
-        setGroupTasks(groupTasks);
-        setCertificates([]);
-        setPortalMessages([]);
-
-        resilientOfflineService.saveToCache('student', sessionPayload);
-        localStorage.setItem('nagah_student_active_session', JSON.stringify(sessionPayload));
-        setIsOfflineFallbackData(true);
-
-        localStorage.setItem('student_session_code', rawInput);
-        localStorage.setItem('student_session_password', studentPasswordInput.trim());
-
-        setIsLoggedIn(true);
-        return;
-      }
-    } catch (cloudErr) {
-      console.warn('[Student Portal] Cloud Firestore query fallback failed:', cloudErr);
-    }
-
-    // --- Layer 3: Local Offline-First Cache Fallback ---
+    // --- Layer 2: Local Offline-First Cache Fallback (device-local only, zero DB dump) ---
     const cachedData = resilientOfflineService.getFromCache('student');
     if (cachedData && cachedData.student) {
       const cCode = normalizeDigits(cachedData.student.code || '').toLowerCase();
@@ -1033,9 +904,11 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
         setGroupTasks(cachedData.groupTasks || []);
         setCertificates(cachedData.certificates || []);
         setPortalMessages(cachedData.portalMessages || []);
+        setLatestSessionSummary(cachedData.latestSessionSummary || null);
         
         setIsOfflineFallbackData(true);
         setIsLoggedIn(true);
+        setIsLoggingIn(false);
         return;
       }
     }
@@ -1123,9 +996,17 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
 
     setSaveProfileLoading(true);
     try {
+      const portalToken =
+        sessionStorage.getItem('nagah_student_portal_token') ||
+        localStorage.getItem('nagah_student_portal_token') ||
+        sessionStorage.getItem('success_v7_token') ||
+        localStorage.getItem('success_v7_token');
       const res = await fetch('/api/student/update-profile', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(portalToken ? { Authorization: `Bearer ${portalToken}` } : {})
+        },
         body: JSON.stringify({
           traineeId: student.id,
           portalPassword: portalPasswordForm,
@@ -1140,10 +1021,12 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
         })
       });
       const data = await res.json();
-      if (data.success) {
+      if (res.ok && data.success) {
         setStudent(data.student);
         setIsProfileSettingsOpen(false);
         showPortalToast('🎉 تم تحديث بيانات الحساب الشخصي وتأمين البوابة بنجاح!', 'success');
+      } else {
+        showPortalToast(data.error || 'تعذر حفظ الملف الشخصي، يرجى تسجيل الدخول مجدداً', 'error');
       }
     } catch (err) {
       console.error("Error updating profile:", err);
@@ -1868,6 +1751,16 @@ export const PublicStudentPortalView: React.FC<PublicStudentPortalViewProps> = (
 
               </div>
             </div>
+
+            {/* Live Interconnectivity Card: Latest Session Attendance, Local Grade & Encouraging Point Awards */}
+            {student?.id && (
+              <LatestSessionSummaryCard
+                traineeId={student.id}
+                initialSummary={latestSessionSummary}
+                portalRole="student"
+                studentName={student.fullName}
+              />
+            )}
 
             {/* Profile Settings Modal */}
             {isProfileSettingsOpen && (

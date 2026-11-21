@@ -23,17 +23,18 @@ export class GoogleMeetService {
   }): Promise<GoogleMeetSpace> {
     const token = await GoogleDriveService.requestAccessToken();
 
-    // In case of local preview without active Google login token:
+    const instantMeetFallback = (): GoogleMeetSpace => ({
+      name: `spaces/instant-${Date.now()}`,
+      meetingUri: 'https://meet.google.com/new',
+      meetingCode: 'new',
+      config: {
+        accessType: options?.accessType || 'OPEN'
+      }
+    });
+
+    // Without an active Google OAuth token, open Google Meet's official instant-create URL
     if (!token) {
-      const randomCode = `${Math.random().toString(36).substring(2, 5)}-${Math.random().toString(36).substring(2, 6)}-${Math.random().toString(36).substring(2, 5)}`;
-      return {
-        name: `spaces/nagah-${Date.now()}`,
-        meetingUri: `https://meet.google.com/${randomCode}`,
-        meetingCode: randomCode,
-        config: {
-          accessType: options?.accessType || 'OPEN'
-        }
-      };
+      return instantMeetFallback();
     }
 
     try {
@@ -52,33 +53,20 @@ export class GoogleMeetService {
 
       if (!response.ok) {
         const errText = await response.text();
-        console.warn('[GoogleMeet] Direct API response error, falling back to Instant Meet generator:', errText);
-        const randomCode = `${Math.random().toString(36).substring(2, 5)}-${Math.random().toString(36).substring(2, 6)}-${Math.random().toString(36).substring(2, 5)}`;
-        return {
-          name: `spaces/nagah-${Date.now()}`,
-          meetingUri: `https://meet.google.com/${randomCode}`,
-          meetingCode: randomCode,
-          config: {
-            accessType: options?.accessType || 'OPEN'
-          }
-        };
+        console.warn('[GoogleMeet] Direct API response error, falling back to meet.google.com/new:', errText);
+        return instantMeetFallback();
       }
 
       const data = await response.json();
       return {
         name: data.name || '',
-        meetingUri: data.meetingUri || `https://meet.google.com/${data.meetingCode || ''}`,
-        meetingCode: data.meetingCode || '',
+        meetingUri: data.meetingUri || (data.meetingCode ? `https://meet.google.com/${data.meetingCode}` : 'https://meet.google.com/new'),
+        meetingCode: data.meetingCode || 'new',
         config: data.config
       };
     } catch (err: any) {
       console.warn('[GoogleMeet] Exception creating space:', err);
-      const randomCode = `${Math.random().toString(36).substring(2, 5)}-${Math.random().toString(36).substring(2, 6)}-${Math.random().toString(36).substring(2, 5)}`;
-      return {
-        name: `spaces/nagah-${Date.now()}`,
-        meetingUri: `https://meet.google.com/${randomCode}`,
-        meetingCode: randomCode
-      };
+      return instantMeetFallback();
     }
   }
 

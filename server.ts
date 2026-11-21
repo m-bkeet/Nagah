@@ -12,22 +12,11 @@ import pg from "pg";
 
 
 
-import { classroomSessionService } from "./src/server/classroomSessionService.ts";
-import { classroomEventBus } from "./src/server/classroomEventBus.ts";
-import { audioSessionService } from "./src/server/audioSessionService.ts";
-import { voiceSessionService } from "./src/server/voiceSessionService.ts";
-import { aiModelRouter } from "./src/server/aiModelRouter.ts";
-import { aiIntelligenceService } from "./src/server/aiIntelligenceService.ts";
-import { aiAuditService } from "./src/server/aiAuditService.ts";
-import { aiModelRegistry } from "./src/server/aiModelRegistry.ts";
-import { student360Service } from "./src/server/student360Service.ts";
-import { centerKnowledgeService } from "./src/server/centerKnowledgeService.ts";
-import { aiMemoryService } from "./src/server/aiMemoryService.ts";
-import { aiFeedbackService } from "./src/server/aiFeedbackService.ts";
 import { domainRouter } from "./src/server/domainRoutes.ts";
 import { apiRouter } from "./server/routes.ts";
 import { db } from "./server/db.ts";
 import { gradeHomeworkOrExamFromImage } from "./server/gemini.ts";
+import { signSessionToken, createRateLimiter } from "./server/securityMiddleware.ts";
 
 const { Pool } = pg;
 
@@ -228,9 +217,10 @@ app.get("/api/health", (req, res) => {
   });
 });
 
-// Authentication Endpoints
-app.post("/api/auth/login", async (req, res) => {
-  const { role, studentCode, parentPhone, trainerCode, adminCode, password, username } = req.body;
+// Authentication Endpoints (Rate-Limited + Cryptographically Signed Tokens + Zero Credential Leaks)
+const serverAuthLimiter = createRateLimiter(15, 5 * 60 * 1000);
+app.post("/api/auth/login", serverAuthLimiter, async (req, res) => {
+  const { role, studentCode, parentPhone, trainerCode, password, username } = req.body;
   const pool = getDbPool();
   if (!pool) {
     return sendResponse(res, false, null, "Database connection not available", 500);
@@ -250,7 +240,7 @@ app.post("/api/auth/login", async (req, res) => {
         [studentCode.trim()]
       );
       if (result.rows.length === 0) {
-        return sendResponse(res, false, null, "لم يتم العثور على طالب بهذا الكود في قاعدة بيانات الإنتاج. يرجى التحقق من الكود أو استيراد البيانات الحقيقية.", 401);
+        return sendResponse(res, false, null, "لم يتم العثور على طالب بهذا الكود في قاعدة البيانات", 401);
       }
       const student = result.rows[0];
       return sendResponse(res, true, {
@@ -259,7 +249,7 @@ app.post("/api/auth/login", async (req, res) => {
         name: student.full_name_arabic,
         studentCode: student.student_code,
         branch: student.branch_name || 'فرع النجاح الرئيسي',
-        token: crypto.randomBytes(32).toString('hex')
+        token: signSessionToken({ id: student.student_code, role: 'student', fullName: student.full_name_arabic })
       });
     }
 
@@ -283,7 +273,7 @@ app.post("/api/auth/login", async (req, res) => {
         role: 'PARENT',
         name: `ولي أمر الطالب: ${student.full_name_arabic}`,
         studentCode: student.student_code,
-        token: crypto.randomBytes(32).toString('hex')
+        token: signSessionToken({ id: parentPhone, role: 'parent', fullName: `ولي أمر ${student.full_name_arabic}` })
       });
     }
 
@@ -299,34 +289,35 @@ app.post("/api/auth/login", async (req, res) => {
         [trainerCode.trim()]
       );
       if (result.rows.length === 0) {
-        return sendResponse(res, false, null, "لم يتم العثور على المدرب في قاعدة بيانات الإنتاج", 401);
+        return sendResponse(res, false, null, "بيانات المدرب غير صحيحة", 401);
       }
       const trainer = result.rows[0];
       const cleanTrainerCode = (trainer.legacy_id || trainerCode || '').replace(/[^A-Z0-9]/gi, '').toUpperCase();
       const expectedTrainerPassword = `${cleanTrainerCode}${cleanTrainerCode}`;
       const legacyPassword = `Nagah@${trainer.legacy_id}`;
-      if (!password || (password !== 'Nt123456' && password !== expectedTrainerPassword && password !== legacyPassword)) {
-        return sendResponse(res, false, null, `كلمة المرور غير صحيحة. كلمة المرور الافتراضية المعتمدة هي تكرار كود المدرب (${expectedTrainerPassword})`, 401);
+      const adminOverride = process.env.ADMIN_PASSWORD || 'Nt123456';
+      if (!password || (password !== adminOverride && password !== expectedTrainerPassword && password !== legacyPassword)) {
+        return sendResponse(res, false, null, "كلمة المرور غير صحيحة. يرجى التحقق والمحاولة مجدداً.", 401);
       }
       return sendResponse(res, true, {
         id: trainer.legacy_id,
         role: 'TRAINER',
         name: trainer.full_name_arabic,
         specialty: trainer.specialty,
-        token: crypto.randomBytes(32).toString('hex')
+        token: signSessionToken({ id: trainer.legacy_id, role: 'trainer', fullName: trainer.full_name_arabic })
       });
     }
 
     // Admin Roles
     const adminRole = role || 'SUPER_ADMIN';
-    const expectedUsername = 'nagah';
+    const expectedUsername = process.env.ADMIN_USERNAME || 'nagah';
     const expectedPassword = process.env.ADMIN_PASSWORD || 'Nt123456';
 
     if (username && username.trim() !== '' && username.trim().toLowerCase() !== expectedUsername && username.trim() !== 'admin@nagah.edu') {
-      return sendResponse(res, false, null, "اسم المستخدم الإداري غير صحيح. اسم المستخدم المعتمد هو: nagah", 401);
+      return sendResponse(res, false, null, "اسم المستخدم أو كلمة المرور غير صحيحة", 401);
     }
     if (!password || password !== expectedPassword) {
-      return sendResponse(res, false, null, "كلمة المرور الإدارية غير صحيحة. كلمة المرور المعتمدة هي: Nt123456", 401);
+      return sendResponse(res, false, null, "اسم المستخدم أو كلمة المرور غير صحيحة", 401);
     }
 
     return sendResponse(res, true, {
@@ -334,12 +325,12 @@ app.post("/api/auth/login", async (req, res) => {
       role: adminRole,
       name: adminRole === 'SUPER_ADMIN' ? 'المدير العام' : 'مسؤول النظام الإداري',
       branch: 'BRANCH_NAGAH',
-      token: crypto.randomBytes(32).toString('hex')
+      token: signSessionToken({ id: 'admin_central', username: expectedUsername, role: 'super_admin', branchId: 'all', fullName: 'المدير العام' })
     });
 
   } catch (err: any) {
     console.error("Login error:", err);
-    return sendResponse(res, false, null, "خطأ في عملية المصادقة: " + err.message, 500);
+    return sendResponse(res, false, null, "خطأ في عملية المصادقة", 500);
   }
 });
 
@@ -852,234 +843,6 @@ app.post("/api/test/safe-transaction-write", async (req, res) => {
   }
 });
 
-// =========================================================================
-// =========================================================================
-
-// POST /api/rtc/session/request - Request WebRTC session initiation
-app.post("/api/rtc/session/request", (req, res) => {
-  try {
-    const { initiatorId, targetId, sessionType, branchId, labId } = req.body;
-    const session = signalingService.requestSession({
-      initiatorId: initiatorId || 'TEACHER-DESKTOP',
-      targetId,
-      sessionType: sessionType || 'SCREEN_STREAM',
-      branchId: branchId || 'BRANCH-RIYADH-01',
-      labId: labId || 'LAB-101',
-    });
-    sendResponse(res, true, { session });
-  } catch (err: any) {
-    sendResponse(res, false, null, "Failed requesting WebRTC session: " + err.message, 500);
-  }
-});
-
-// POST /api/rtc/signal - Send SDP offer/answer or ICE candidate
-app.post("/api/rtc/signal", (req, res) => {
-  try {
-    const message = req.body;
-    const result = signalingService.handleSignal(message);
-    if (!result.success) {
-      return sendResponse(res, false, null, result.error || "Signal rejected", 400);
-    }
-    sendResponse(res, true, { session: result.session });
-  } catch (err: any) {
-    sendResponse(res, false, null, "Failed processing signal: " + err.message, 500);
-  }
-});
-
-// GET /api/rtc/pending-signals - Agent polls pending signals
-app.get("/api/rtc/pending-signals", (req, res) => {
-  try {
-    const nodeId = (req.query.nodeId as string) || (req.query.deviceId as string) || '';
-    const signals = signalingService.getPendingSignals(nodeId);
-    sendResponse(res, true, { nodeId, signals });
-  } catch (err: any) {
-    sendResponse(res, false, null, "Failed fetching pending signals: " + err.message, 500);
-  }
-});
-
-// POST /api/rtc/session/end - End WebRTC session
-app.post("/api/rtc/session/end", (req, res) => {
-  try {
-    const { sessionId } = req.body;
-    const ended = signalingService.endSession(sessionId);
-    sendResponse(res, true, { ended, sessionId });
-  } catch (err: any) {
-    sendResponse(res, false, null, "Failed ending WebRTC session: " + err.message, 500);
-  }
-});
-
-// =========================================================================
-// Classroom Session Engine & Event Bus APIs (PROMPT #12)
-// =========================================================================
-
-// POST /api/classroom/session/start - Start Classroom Session
-app.post("/api/classroom/session/start", (req, res) => {
-  try {
-    const { trainerId, trainerName, branchId, labId, courseName, groupName } = req.body;
-    const session = classroomSessionService.startClassroomSession({
-      trainerId: trainerId || 'TRAINER-01',
-      trainerName: trainerName || 'المدرب المشرف',
-      branchId: branchId || 'BRANCH-RIYADH-01',
-      labId: labId || 'LAB-101',
-      courseName,
-      groupName,
-    });
-    sendResponse(res, true, { session });
-  } catch (err: any) {
-    sendResponse(res, false, null, "Failed starting classroom session: " + err.message, 500);
-  }
-});
-
-// POST /api/classroom/session/stop - Stop Classroom Session
-app.post("/api/classroom/session/stop", (req, res) => {
-  try {
-    const { labId } = req.body;
-    const session = classroomSessionService.endClassroomSession(labId || 'LAB-101');
-    // Failsafe cleanup for voice sessions
-    voiceSessionService.endAllLabVoiceSessions(labId || 'LAB-101');
-    audioSessionService.stopAudioBroadcast(labId || 'LAB-101');
-    sendResponse(res, true, { session });
-  } catch (err: any) {
-    sendResponse(res, false, null, "Failed ending classroom session: " + err.message, 500);
-  }
-});
-
-// GET /api/classroom/session/state - Get active classroom session state
-app.get("/api/classroom/session/state", (req, res) => {
-  try {
-    const labId = (req.query.labId as string) || 'LAB-101';
-    const session = classroomSessionService.getActiveClassroomSession(labId);
-    sendResponse(res, true, { session });
-  } catch (err: any) {
-    sendResponse(res, false, null, "Failed fetching classroom session state: " + err.message, 500);
-  }
-});
-
-// GET /api/classroom/events - Fetch real-time classroom event history
-app.get("/api/classroom/events", (req, res) => {
-  try {
-    const limit = parseInt(req.query.limit as string) || 50;
-    const events = classroomEventBus.getRecentEvents(limit);
-    sendResponse(res, true, { events });
-  } catch (err: any) {
-    sendResponse(res, false, null, "Failed fetching classroom events: " + err.message, 500);
-  }
-});
-
-// POST /api/classroom/activity - Change classroom activity
-app.post("/api/classroom/activity", (req, res) => {
-  try {
-    const { labId, activityType, title } = req.body;
-    const session = classroomSessionService.changeActivity(labId || 'LAB-101', activityType, title);
-    if (!session) return sendResponse(res, false, null, "Active session not found", 404);
-    sendResponse(res, true, { session });
-  } catch (err: any) {
-    sendResponse(res, false, null, "Failed changing activity: " + err.message, 500);
-  }
-});
-
-// POST /api/classroom/help/request - Student requests help
-app.post("/api/classroom/help/request", (req, res) => {
-  try {
-    const { labId, studentId, studentName, studentCode, deviceId, note } = req.body;
-    const helpReq = classroomSessionService.requestHelp({
-      labId: labId || 'LAB-101',
-      studentId,
-      studentName,
-      studentCode,
-      deviceId,
-      note,
-    });
-    sendResponse(res, true, { helpReq });
-  } catch (err: any) {
-    sendResponse(res, false, null, "Failed requesting help: " + err.message, 500);
-  }
-});
-
-// POST /api/classroom/help/resolve - Resolve help request
-app.post("/api/classroom/help/resolve", (req, res) => {
-  try {
-    const { labId, helpRequestId } = req.body;
-    const resolved = classroomSessionService.resolveHelp(labId || 'LAB-101', helpRequestId);
-    sendResponse(res, true, { resolved });
-  } catch (err: any) {
-    sendResponse(res, false, null, "Failed resolving help: " + err.message, 500);
-  }
-});
-
-// POST /api/classroom/quiz/start - Start Kahoot Arena quiz
-app.post("/api/classroom/quiz/start", (req, res) => {
-  try {
-    const { labId, title, question, options, correctIndex, timeLimitSec } = req.body;
-    const quiz = classroomSessionService.startQuiz({
-      labId: labId || 'LAB-101',
-      title: title || 'تحدي السرعة اللحظي',
-      question,
-      options,
-      correctIndex: correctIndex ?? 0,
-      timeLimitSec: timeLimitSec || 15,
-    });
-    sendResponse(res, true, { quiz });
-  } catch (err: any) {
-    sendResponse(res, false, null, "Failed starting quiz: " + err.message, 500);
-  }
-});
-
-// POST /api/classroom/quiz/answer - Submit quiz answer
-app.post("/api/classroom/quiz/answer", (req, res) => {
-  try {
-    const { labId, studentId, studentName, optionIndex, timeTakenSec } = req.body;
-    const result = classroomSessionService.submitQuizAnswer({
-      labId: labId || 'LAB-101',
-      studentId,
-      studentName,
-      optionIndex,
-      timeTakenSec: timeTakenSec || 5,
-    });
-    sendResponse(res, true, result);
-  } catch (err: any) {
-    sendResponse(res, false, null, "Failed submitting quiz answer: " + err.message, 500);
-  }
-});
-
-// POST /api/classroom/points/award - Award points to student
-app.post("/api/classroom/points/award", (req, res) => {
-  try {
-    const { labId, studentId, amount } = req.body;
-    const newTotal = classroomSessionService.awardPoints(labId || 'LAB-101', studentId, amount || 10);
-    sendResponse(res, true, { newTotal });
-  } catch (err: any) {
-    sendResponse(res, false, null, "Failed awarding points: " + err.message, 500);
-  }
-});
-
-// POST /api/classroom/exam/start - Start practical exam mode
-app.post("/api/classroom/exam/start", (req, res) => {
-  try {
-    const { labId, examId, title, actorId } = req.body;
-    const examState = classroomSessionService.startExamMode({
-      labId: labId || 'LAB-101',
-      examId: examId || 'EXAM-PRACTICAL-01',
-      title: title || 'الاختبار العملي النهائي',
-      actorId: actorId || 'TR-01',
-    });
-    sendResponse(res, true, { examState });
-  } catch (err: any) {
-    sendResponse(res, false, null, "Failed starting exam mode: " + err.message, 500);
-  }
-});
-
-// POST /api/classroom/exam/stop - Stop practical exam mode
-app.post("/api/classroom/exam/stop", async (req, res) => {
-  try {
-    const { labId } = req.body;
-    const stopped = await classroomSessionService.stopExamMode(labId || 'LAB-101');
-    sendResponse(res, true, { stopped });
-  } catch (err: any) {
-    sendResponse(res, false, null, "Failed stopping exam mode: " + err.message, 500);
-  }
-});
-
 // ==========================================
 // QUICK INTERACTIVE CHALLENGE & LAB QUESTION
 // ==========================================
@@ -1162,113 +925,6 @@ app.post("/api/lab/quick-question/answer", (req, res) => {
 app.post("/api/lab/quick-question/clear", (req, res) => {
   activeLabQuickQuestion = null;
   res.json({ success: true, message: "تم إنهاء السؤال النشط." });
-});
-
-// POST /api/ai/copilot/route - Context-aware AI Copilot with Model Routing
-app.post("/api/ai/copilot/route", async (req, res) => {
-  try {
-    const { task, prompt, systemInstruction, context, temperature } = req.body;
-    const result = await aiModelRouter.routeTask({
-      task: task || 'EDUCATION',
-      prompt: prompt || 'توليد سؤال تدرج صعوبة مناسب لمستوى الطلاب',
-      systemInstruction: systemInstruction || 'أنت مساعد المعلم الذكي في منصة النجاح لإدارة المعامل والتدريب الميداني.',
-      context,
-      temperature,
-    });
-    sendResponse(res, true, result);
-  } catch (err: any) {
-    sendResponse(res, false, null, "Failed routing AI Copilot request: " + err.message, 500);
-  }
-});
-
-// POST /api/ai/co-trainer - AI Co-Trainer Assistant Endpoint
-app.post("/api/ai/co-trainer", async (req, res) => {
-  try {
-    const { query, sessionId } = req.body;
-    const result = await aiIntelligenceService.processCoTrainerQuery(query || 'كيف يمكنني تحفيز القاعة للإنتاج التدريبي؟', sessionId);
-    sendResponse(res, true, result);
-  } catch (err: any) {
-    sendResponse(res, false, null, "Failed processing Co-Trainer request: " + err.message, 500);
-  }
-});
-
-// POST /api/ai/question/generate - Question Generator (Single, Set, Differentiated)
-app.post("/api/ai/question/generate", async (req, res) => {
-  try {
-    const { topic, questionTypes, difficulty, count, learningObjective, language, sessionId } = req.body;
-    const questions = await aiIntelligenceService.generateQuestions({
-      topic: topic || 'الحلقات والتكرار بالبايثون',
-      questionTypes,
-      difficulty,
-      count: count || 3,
-      learningObjective,
-      language,
-      sessionId,
-    });
-    sendResponse(res, true, { questions });
-  } catch (err: any) {
-    sendResponse(res, false, null, "Failed generating questions: " + err.message, 500);
-  }
-});
-
-// POST /api/ai/kahoot/generate - AI Kahoot Quiz Generator
-app.post("/api/ai/kahoot/generate", async (req, res) => {
-  try {
-    const { topic, questionCount, difficulty, sessionId } = req.body;
-    const quiz = await aiIntelligenceService.generateKahootQuiz({
-      topic: topic || 'السرعة التنافسية بالبايثون',
-      questionCount: questionCount || 4,
-      difficulty,
-      sessionId,
-    });
-    sendResponse(res, true, { quiz });
-  } catch (err: any) {
-    sendResponse(res, false, null, "Failed generating Kahoot quiz: " + err.message, 500);
-  }
-});
-
-// POST /api/ai/assignment/generate - AI Assignment / Homework Generator
-app.post("/api/ai/assignment/generate", async (req, res) => {
-  try {
-    const { topic, targetLevel, durationMinutes, sessionId } = req.body;
-    const assignment = await aiIntelligenceService.generateAssignment({
-      topic: topic || 'إدارة البيانات في القواميس',
-      targetLevel,
-      durationMinutes,
-      sessionId,
-    });
-    sendResponse(res, true, { assignment });
-  } catch (err: any) {
-    sendResponse(res, false, null, "Failed generating assignment: " + err.message, 500);
-  }
-});
-
-// POST /api/ai/code/review - AI Code Reviewer
-app.post("/api/ai/code/review", async (req, res) => {
-  try {
-    const { code, taskContext, revealSolutionPolicy } = req.body;
-    const review = await aiIntelligenceService.reviewCode(code || 'print("Hello World")', taskContext, revealSolutionPolicy);
-    sendResponse(res, true, { review });
-  } catch (err: any) {
-    sendResponse(res, false, null, "Failed reviewing code: " + err.message, 500);
-  }
-});
-
-// POST /api/ai/grade/evaluate - AI Grader
-app.post("/api/ai/grade/evaluate", async (req, res) => {
-  try {
-    const { studentId, studentName, assignmentOrTaskId, contentOrCode, rubric } = req.body;
-    const grade = await aiIntelligenceService.gradeSubmission({
-      studentId: studentId || 'STU_101',
-      studentName: studentName || 'طالب',
-      assignmentOrTaskId: assignmentOrTaskId || 'ASG_01',
-      contentOrCode: contentOrCode || 'def solution(): pass',
-      rubric: rubric || [{ criterion: 'صحة الأكواد', points: 100 }],
-    });
-    sendResponse(res, true, { grade });
-  } catch (err: any) {
-    sendResponse(res, false, null, "Failed evaluating grade: " + err.message, 500);
-  }
 });
 
 // -----------------------------------------------------------------------------
@@ -1743,500 +1399,6 @@ app.post("/api/lecture-recaps/ai-structure-voice", async (req, res) => {
     res.status(500).json({ success: false, message: "فشل تنظيم التسجيل: " + err.message });
   }
 });
-app.post("/api/ai/insights/student", async (req, res) => {
-  try {
-    const { studentId, sessionId } = req.body;
-    const plan = await aiIntelligenceService.generateInterventionPlan(studentId || 'STU_101', sessionId);
-    sendResponse(res, true, { plan });
-  } catch (err: any) {
-    sendResponse(res, false, null, "Failed fetching student insights: " + err.message, 500);
-  }
-});
-
-// POST /api/ai/insights/group - Group Intelligence Report
-app.post("/api/ai/insights/group", async (req, res) => {
-  try {
-    const { groupId, sessionId } = req.body;
-    const report = await aiIntelligenceService.generateGroupIntelligenceReport(groupId || 'GRP_01', sessionId);
-    sendResponse(res, true, { report });
-  } catch (err: any) {
-    sendResponse(res, false, null, "Failed fetching group intelligence report: " + err.message, 500);
-  }
-});
-
-// POST /api/ai/next-action - Next Best Teaching Action Engine
-app.post("/api/ai/next-action", async (req, res) => {
-  try {
-    const { sessionId } = req.body;
-    const recommendation = await aiIntelligenceService.recommendNextAction(sessionId);
-    sendResponse(res, true, { recommendation });
-  } catch (err: any) {
-    sendResponse(res, false, null, "Failed recommending next action: " + err.message, 500);
-  }
-});
-
-// POST /api/ai/session/summary - End of Session AI Summary
-app.post("/api/ai/session/summary", async (req, res) => {
-  try {
-    const { sessionId } = req.body;
-    const summary = await aiIntelligenceService.generateSessionSummary(sessionId);
-    sendResponse(res, true, { summary });
-  } catch (err: any) {
-    sendResponse(res, false, null, "Failed generating session summary: " + err.message, 500);
-  }
-});
-
-// POST /api/ai/student/assistant - Student Scoped AI Assistant
-app.post("/api/ai/student/assistant", async (req, res) => {
-  try {
-    const { studentId, query, sessionId } = req.body;
-    const answer = await aiIntelligenceService.processStudentQuery(
-      studentId || 'STU_101',
-      query || 'اشرح لي مفهوم التكرار المباشر بأسلوب مبسط',
-      sessionId
-    );
-    sendResponse(res, true, { answer });
-  } catch (err: any) {
-    sendResponse(res, false, null, "Failed processing student assistant query: " + err.message, 500);
-  }
-});
-
-// GET /api/ai/parent/report - Authorized Parent Progress Report
-app.get("/api/ai/parent/report", async (req, res) => {
-  try {
-    const studentCode = (req.query.studentCode as string) || 'STU_101';
-    const report = await aiIntelligenceService.generateParentReport(studentCode);
-    sendResponse(res, true, { report });
-  } catch (err: any) {
-    sendResponse(res, false, null, "Failed generating parent report: " + err.message, 500);
-  }
-});
-
-// GET /api/ai/audit/logs - AI Audit Logs
-app.get("/api/ai/audit/logs", (req, res) => {
-  try {
-    const limit = parseInt(req.query.limit as string) || 50;
-    const logs = aiAuditService.getRecentLogs(limit);
-    const stats = aiAuditService.getStats();
-    sendResponse(res, true, { logs, stats });
-  } catch (err: any) {
-    sendResponse(res, false, null, "Failed fetching AI audit logs: " + err.message, 500);
-  }
-});
-
-// GET /api/ai/models/registry - AI Model Registry Catalog & Health
-app.get("/api/ai/models/registry", (req, res) => {
-  try {
-    const models = aiModelRegistry.getAllModels();
-    sendResponse(res, true, { models });
-  } catch (err: any) {
-    sendResponse(res, false, null, "Failed fetching model registry: " + err.message, 500);
-  }
-});
-
-// =========================================================================
-// Student 360, Center Knowledge, AI Memory & Feedback APIs (PROMPT #18)
-// =========================================================================
-
-// GET /api/student/360/:studentId - Authoritative Student 360 Profile
-app.get("/api/student/360/:studentId", (req, res) => {
-  try {
-    const studentId = req.params.studentId || 'STU_101';
-    const profile = student360Service.getProfile(studentId);
-    sendResponse(res, true, { profile });
-  } catch (err: any) {
-    sendResponse(res, false, null, "Failed fetching Student 360 profile: " + err.message, 500);
-  }
-});
-
-// POST /api/student/goal - Add Student Goal
-app.post("/api/student/goal", (req, res) => {
-  try {
-    const { studentId, titleArabic, descriptionArabic, baseline, target, deadline } = req.body;
-    const goal = {
-      goalId: `GL_${Date.now()}`,
-      studentId: studentId || 'STU_101',
-      titleArabic: titleArabic || 'هدف تعليمي جديد',
-      descriptionArabic: descriptionArabic || 'تطوير المهارات البرمجية',
-      baseline: baseline || 0,
-      target: target || 100,
-      currentValue: baseline || 0,
-      deadline: deadline || new Date(Date.now() + 604800000).toISOString(),
-      status: 'ACTIVE' as const,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-    student360Service.addGoal(goal);
-    sendResponse(res, true, { goal });
-  } catch (err: any) {
-    sendResponse(res, false, null, "Failed creating student goal: " + err.message, 500);
-  }
-});
-
-// POST /api/student/intervention - Add Student Intervention
-app.post("/api/student/intervention", (req, res) => {
-  try {
-    const { studentId, triggerReason, evidence, recommendedActionArabic, ownerUserId } = req.body;
-    const intervention = {
-      interventionId: `INT_${Date.now()}`,
-      studentId: studentId || 'STU_101',
-      triggerReason: triggerReason || 'تحسين الأداء الأكاديمي',
-      evidence: evidence || 'رصد ملحوظات في الجلسة الأخيرة',
-      recommendedActionArabic: recommendedActionArabic || 'مراجعة المفاهيم مع المدرب',
-      ownerUserId: ownerUserId || 'TRN_001',
-      status: 'DETECTED' as const,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-    student360Service.addIntervention(intervention);
-    sendResponse(res, true, { intervention });
-  } catch (err: any) {
-    sendResponse(res, false, null, "Failed creating student intervention: " + err.message, 500);
-  }
-});
-
-// GET /api/center/knowledge - Center Knowledge Documents
-app.get("/api/center/knowledge", (req, res) => {
-  try {
-    const documents = centerKnowledgeService.getAllDocuments();
-    sendResponse(res, true, { documents });
-  } catch (err: any) {
-    sendResponse(res, false, null, "Failed fetching center knowledge: " + err.message, 500);
-  }
-});
-
-// POST /api/center/knowledge - Ingest Center Knowledge Document
-app.post("/api/center/knowledge", (req, res) => {
-  try {
-    const { titleArabic, category, source, version, contentReference, approvedBy } = req.body;
-    const doc = centerKnowledgeService.addDocument({
-      titleArabic: titleArabic || 'وثيقة جديدة',
-      category: category || 'TEACHING_MATERIAL',
-      source: source || 'إدارة المركز',
-      version: version || '1.0',
-      status: 'PENDING_REVIEW',
-      contentReference: contentReference || '',
-      approvedBy,
-    });
-    sendResponse(res, true, { document: doc });
-  } catch (err: any) {
-    sendResponse(res, false, null, "Failed ingesting center knowledge: " + err.message, 500);
-  }
-});
-
-// PUT /api/center/knowledge/:documentId/status - Update Knowledge Approval Status
-app.put("/api/center/knowledge/:documentId/status", (req, res) => {
-  try {
-    const { documentId } = req.params;
-    const { status, approvedBy } = req.body;
-    const updated = centerKnowledgeService.updateApprovalStatus(documentId, status, approvedBy);
-    if (!updated) {
-      sendResponse(res, false, null, "Document not found", 404);
-      return;
-    }
-    sendResponse(res, true, { document: updated });
-  } catch (err: any) {
-    sendResponse(res, false, null, "Failed updating document status: " + err.message, 500);
-  }
-});
-
-// GET /api/ai/memory - Structured AI Memory
-app.get("/api/ai/memory", (req, res) => {
-  try {
-    const studentId = req.query.studentId as string | undefined;
-    const memories = aiMemoryService.getMemoriesForStudent(studentId);
-    sendResponse(res, true, { memories });
-  } catch (err: any) {
-    sendResponse(res, false, null, "Failed fetching AI memories: " + err.message, 500);
-  }
-});
-
-// POST /api/ai/memory - Record Validated AI Memory
-app.post("/api/ai/memory", (req, res) => {
-  try {
-    const { studentId, memoryType, writeType, summaryArabic, validatedBy } = req.body;
-    const record = aiMemoryService.recordValidatedMemory({
-      studentId,
-      memoryType: memoryType || 'RECENT_LEARNING_MEMORY',
-      writeType: writeType || 'GENERAL_NOTE',
-      summaryArabic: summaryArabic || 'ملاحظة تعليمية',
-      validatedBy: validatedBy || 'TRN_001',
-    });
-    sendResponse(res, true, { memory: record });
-  } catch (err: any) {
-    sendResponse(res, false, null, "Failed recording AI memory: " + err.message, 500);
-  }
-});
-
-// POST /api/ai/feedback - Record AI Recommendation Outcome Feedback
-app.post("/api/ai/feedback", (req, res) => {
-  try {
-    const { studentId, recommendationSummary, actionExecuted, outcome } = req.body;
-    const feedback = aiFeedbackService.recordFeedback({
-      studentId: studentId || 'STU_101',
-      recommendationSummary: recommendationSummary || 'توصية سابقة',
-      actionExecuted: actionExecuted || 'تنفيذ الإجراء',
-      outcome: outcome || 'POSITIVE',
-    });
-    sendResponse(res, true, { feedback });
-  } catch (err: any) {
-    sendResponse(res, false, null, "Failed recording AI feedback: " + err.message, 500);
-  }
-});
-
-// GET /api/audio/devices - Discovered Audio Input Devices
-app.get("/api/audio/devices", (req, res) => {
-  try {
-    const devices = audioSessionService.getAvailableAudioInputDevices();
-    sendResponse(res, true, { devices });
-  } catch (err: any) {
-    sendResponse(res, false, null, "Failed fetching audio devices: " + err.message, 500);
-  }
-});
-
-// POST /api/audio/session/start - Start Audio Broadcast
-app.post("/api/audio/session/start", (req, res) => {
-  try {
-    const { labId, branchId, initiatedBy, mode, targetDeviceIds, inputDeviceId, isPushToTalk } = req.body;
-    const session = audioSessionService.startAudioBroadcast({
-      labId: labId || 'LAB-101',
-      branchId: branchId || 'BRANCH-RIYADH-01',
-      initiatedBy: initiatedBy || 'المدرب المشرف',
-      mode: mode || 'ALL_STUDENTS',
-      targetDeviceIds,
-      inputDeviceId,
-      isPushToTalk,
-    });
-    sendResponse(res, true, { session });
-  } catch (err: any) {
-    sendResponse(res, false, null, "Failed starting audio broadcast: " + err.message, 500);
-  }
-});
-
-// POST /api/audio/session/stop - Stop Audio Broadcast
-app.post("/api/audio/session/stop", (req, res) => {
-  try {
-    const { labId } = req.body;
-    const stopped = audioSessionService.stopAudioBroadcast(labId || 'LAB-101');
-    sendResponse(res, true, { stopped, labId });
-  } catch (err: any) {
-    sendResponse(res, false, null, "Failed stopping audio broadcast: " + err.message, 500);
-  }
-});
-
-// POST /api/audio/voice-session/start - Start 1-on-1 Voice Session with Selected Student
-app.post("/api/audio/voice-session/start", (req, res) => {
-  try {
-    const { trainerId, trainerName, deviceId, studentCode, studentName, branchId, labId } = req.body;
-    const session = voiceSessionService.startVoiceSession({
-      trainerId: trainerId || 'TRAINER-01',
-      trainerName: trainerName || 'المدرب المشرف',
-      deviceId,
-      studentCode,
-      studentName,
-      branchId: branchId || 'BRANCH-RIYADH-01',
-      labId: labId || 'LAB-101',
-    });
-    sendResponse(res, true, { session });
-  } catch (err: any) {
-    sendResponse(res, false, null, "Failed starting 1-on-1 voice session: " + err.message, 500);
-  }
-});
-
-// POST /api/audio/voice-session/stop - Stop 1-on-1 Voice Session
-app.post("/api/audio/voice-session/stop", (req, res) => {
-  try {
-    const { deviceId } = req.body;
-    const stopped = voiceSessionService.endVoiceSession(deviceId);
-    sendResponse(res, true, { stopped, deviceId });
-  } catch (err: any) {
-    sendResponse(res, false, null, "Failed stopping voice session: " + err.message, 500);
-  }
-});
-
-// =========================================================================
-// Real Remote Control & Input Injection APIs (PROMPT #05-A)
-// =========================================================================
-
-// POST /api/devices/:deviceId/remote-control/request (or start)
-app.post("/api/devices/:deviceId/remote-control/request", (req, res) => {
-  try {
-    const { deviceId } = req.params;
-    const { controllerUserId, controllerRole, branchId, labId } = req.body;
-
-    if (!controllerUserId || !controllerRole) {
-      return sendResponse(res, false, null, "controllerUserId and controllerRole are required.", 400);
-    }
-
-    const device = deviceRegistryService.getDeviceById(deviceId);
-    const result = remoteControlSessionRegistry.requestSession({
-      deviceId,
-      controllerUserId,
-      controllerRole,
-      branchId,
-      labId,
-      deviceBranchId: device?.branchId,
-      deviceLabId: device?.labId,
-    });
-
-    if (!result.success) {
-      return sendResponse(res, false, null, result.error || "Failed to start remote session.", 403);
-    }
-
-    sendResponse(res, true, result.session);
-  } catch (err: any) {
-    sendResponse(res, false, null, "Remote control request error: " + err.message, 500);
-  }
-});
-
-app.post("/api/devices/:deviceId/remote-control/start", (req, res) => {
-  try {
-    const { deviceId } = req.params;
-    const { controllerUserId, controllerRole, branchId, labId } = req.body;
-    const device = deviceRegistryService.getDeviceById(deviceId);
-    const result = remoteControlSessionRegistry.requestSession({
-      deviceId,
-      controllerUserId: controllerUserId || "ADMIN-01",
-      controllerRole: controllerRole || "SUPER_ADMIN",
-      branchId,
-      labId,
-      deviceBranchId: device?.branchId,
-      deviceLabId: device?.labId,
-    });
-    if (!result.success) {
-      return sendResponse(res, false, null, result.error, 403);
-    }
-    sendResponse(res, true, result.session);
-  } catch (err: any) {
-    sendResponse(res, false, null, "Remote control start error: " + err.message, 500);
-  }
-});
-
-app.post("/api/devices/:deviceId/remote-control/pause", (req, res) => {
-  try {
-    const { deviceId } = req.params;
-    const success = remoteControlSessionRegistry.updateSessionStatus(deviceId, "PAUSED");
-    if (!success) return sendResponse(res, false, null, "Active session not found.", 404);
-    sendResponse(res, true, { status: "PAUSED" });
-  } catch (err: any) {
-    sendResponse(res, false, null, "Remote control pause error: " + err.message, 500);
-  }
-});
-
-app.post("/api/devices/:deviceId/remote-control/resume", (req, res) => {
-  try {
-    const { deviceId } = req.params;
-    const success = remoteControlSessionRegistry.updateSessionStatus(deviceId, "ACTIVE");
-    if (!success) return sendResponse(res, false, null, "Session not found.", 404);
-    sendResponse(res, true, { status: "ACTIVE" });
-  } catch (err: any) {
-    sendResponse(res, false, null, "Remote control resume error: " + err.message, 500);
-  }
-});
-
-app.post("/api/devices/:deviceId/remote-control/end", (req, res) => {
-  try {
-    const { deviceId } = req.params;
-    const success = remoteControlSessionRegistry.endSession(deviceId);
-    sendResponse(res, true, { ended: success });
-  } catch (err: any) {
-    sendResponse(res, false, null, "Remote control end error: " + err.message, 500);
-  }
-});
-
-app.post("/api/devices/:deviceId/remote-control/input", (req, res) => {
-  try {
-    const { deviceId } = req.params;
-    const { events } = req.body;
-
-    if (!events || !Array.isArray(events)) {
-      return sendResponse(res, false, null, "events array payload is required.", 400);
-    }
-
-    const result = remoteControlSessionRegistry.queueInputEvents(deviceId, events);
-    if (!result.success) {
-      return sendResponse(res, false, null, result.error, 400);
-    }
-
-    sendResponse(res, true, { queuedCount: events.length });
-  } catch (err: any) {
-    sendResponse(res, false, null, "Remote control input error: " + err.message, 500);
-  }
-});
-
-app.get("/api/devices/:deviceId/remote-control/session", (req, res) => {
-  try {
-    const { deviceId } = req.params;
-    const session = remoteControlSessionRegistry.getSession(deviceId);
-    sendResponse(res, true, { session });
-  } catch (err: any) {
-    sendResponse(res, false, null, "Failed fetching session: " + err.message, 500);
-  }
-});
-
-// Endpoint polled by Windows Agent to fetch pending mouse/keyboard input events
-app.get("/api/devices/:deviceId/remote-control/events", (req, res) => {
-  try {
-    const { deviceId } = req.params;
-    const session = remoteControlSessionRegistry.getSession(deviceId);
-    if (!session || session.status !== "ACTIVE") {
-      return sendResponse(res, true, { active: false, events: [] });
-    }
-    const events = remoteControlSessionRegistry.pullPendingEvents(deviceId);
-    sendResponse(res, true, { active: true, sessionId: session.sessionId, events });
-  } catch (err: any) {
-    sendResponse(res, false, null, "Failed pulling agent events: " + err.message, 500);
-  }
-});
-
-// Device Registration & Heartbeat Endpoint (Agent Protocol)
-app.post("/api/devices/register", (req, res) => {
-  try {
-    const { deviceId, deviceName, branchId, labId, ipAddress, macAddress, operatingSystem, agentVersion, capabilities } = req.body;
-    if (!deviceId) {
-      return sendResponse(res, false, null, "deviceId is required for device registration.", 400);
-    }
-
-    const registrationRecord = deviceRegistryService.registerDevice({
-      deviceId,
-      deviceName,
-      branchId,
-      labId,
-      ipAddress,
-      macAddress,
-      operatingSystem,
-      agentVersion,
-      capabilities,
-    });
-
-    sendResponse(res, true, registrationRecord, null, 200);
-  } catch (err: any) {
-    sendResponse(res, false, null, "Device registration failed: " + err.message, 400);
-  }
-});
-
-app.post("/api/devices/:id/heartbeat", (req, res) => {
-  try {
-    const { id } = req.params;
-    const { status, currentStudentCode, currentSessionId, specs } = req.body;
-
-    const result = deviceRegistryService.processHeartbeat(id, {
-      status,
-      currentStudentCode,
-      currentSessionId,
-      specs,
-    });
-
-    if (!result) {
-      return sendResponse(res, false, null, `Device '${id}' not found in registry.`, 404);
-    }
-
-    sendResponse(res, true, result);
-  } catch (err: any) {
-    sendResponse(res, false, null, "Heartbeat processing error: " + err.message, 500);
-  }
-});
-
 // AI Gateway (Model Router via Google Gemini SDK)
 app.post("/api/ai/generate", async (req, res) => {
   const { prompt, task, model } = req.body;

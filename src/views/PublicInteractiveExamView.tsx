@@ -219,41 +219,24 @@ export const PublicInteractiveExamView: React.FC<PublicInteractiveExamViewProps>
           setQuestions(loadedQuestions);
           setPhase('welcome');
         } else {
-          // If not in db, find in available curriculum exams or fallback
+          // If it matches one of the official curriculum lobby exams, load that curriculum exam; otherwise show an honest error
           const matched = availablePublicExams.find(e => e.id === examId);
           if (matched) {
             handleSelectLobbyExam(matched);
           } else {
-            const fallbackQuestions = getCurriculumExamQuestions('سادس', 'ar', examId);
-            setExamData({
-              id: examId,
-              title: `اختبار التحدي التفاعلي (${examId})`,
-              courseName: 'تكنولوجيا المعلومات والاتصالات',
-              durationMinutes: 30,
-              totalMarks: 100,
-              passingMarks: 60,
-              instructions: 'يرجى قراءة الأسئلة بدقة واختيار الإجابة الصحيحة.'
-            });
-            setQuestions(fallbackQuestions);
-            setTimeLeftSeconds(30 * 60);
-            setPhase('welcome');
+            setErrorMessage(res.error || `عذراً، لم يتم العثور على اختبار بهذا الكود (${examId}). يرجى التأكد من الرابط أو اختيار اختبار من القائمة.`);
+            setPhase('error');
           }
         }
       } catch (err: any) {
         console.error('Error loading public exam:', err);
-        const fallbackQuestions = getCurriculumExamQuestions('سادس', 'ar', examId);
-        setExamData({
-          id: examId,
-          title: 'اختبار تكنولوجيا المعلومات والاتصالات - الصف السادس الابتدائي',
-          courseName: 'تكنولوجيا المعلومات والاتصالات',
-          durationMinutes: 30,
-          totalMarks: 100,
-          passingMarks: 60,
-          instructions: 'يرجى قراءة الأسئلة بدقة واختيار الإجابة الصحيحة.'
-        });
-        setQuestions(fallbackQuestions);
-        setTimeLeftSeconds(30 * 60);
-        setPhase('welcome');
+        const matched = availablePublicExams.find(e => e.id === examId);
+        if (matched) {
+          handleSelectLobbyExam(matched);
+        } else {
+          setErrorMessage('تعذر الاتصال بالخادم لتحميل الاختبار. يرجى التحقق من اتصال الإنترنت والمحاولة مجدداً.');
+          setPhase('error');
+        }
       }
     };
 

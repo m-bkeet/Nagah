@@ -53,7 +53,6 @@ const CoursesView = lazyWithRetry(() => import('./views/CoursesView').then(m => 
 const GroupsView = lazyWithRetry(() => import('./views/GroupsView').then(m => ({ default: m.GroupsView })));
 const LabScheduleView = lazyWithRetry(() => import('./views/LabScheduleView').then(m => ({ default: m.LabScheduleView })));
 const FinanceView = lazyWithRetry(() => import('./views/FinanceView').then(m => ({ default: m.FinanceView })));
-const ExpensesView = lazyWithRetry(() => import('./views/ExpensesView').then(m => ({ default: m.ExpensesView })));
 const PointsView = lazyWithRetry(() => import('./views/PointsView').then(m => ({ default: m.PointsView })));
 const ExamsView = lazyWithRetry(() => import('./views/ExamsView').then(m => ({ default: m.ExamsView })));
 const HomeworksView = lazyWithRetry(() => import('./views/HomeworksView').then(m => ({ default: m.HomeworksView })));
@@ -441,8 +440,8 @@ const AppContent: React.FC = () => {
         onClose={() => setIsAiModalOpen(false)} 
         initialTab={aiModalTab} 
       />
-      {/* Conditional Floating Tools (Only on Main Dashboard and Trainer Portal) */}
-      {(activeTab === 'dashboard' || activeTab === 'trainer_portal') && (
+      {/* Conditional Floating Tools (Dashboard, Trainer Portal, and Interactive Sessions / Attendance) */}
+      {(activeTab === 'dashboard' || activeTab === 'trainer_portal' || activeTab === 'interactive' || activeTab === 'attendance') && (
         <FloatingTeachingToolsOverlay />
       )}
       <AudioAutoplayUnlockBanner />
